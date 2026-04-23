@@ -1,0 +1,1506 @@
+Already on 'fix/issue-788-extract-form-xobject-images'
+Your branch is up to date with 'origin/fix/issue-788-extract-form-xobject-images'.
+HEAD is now at 9777848b5 chore: regenerate all bindings with correct Java paths and PDF image limit
+Auto-merging Cargo.lock
+CONFLICT (content): Merge conflict in Cargo.lock
+Auto-merging crates/kreuzberg-ffi/build.rs
+CONFLICT (content): Merge conflict in crates/kreuzberg-ffi/build.rs
+Auto-merging crates/kreuzberg-ffi/cbindgen.toml
+CONFLICT (content): Merge conflict in crates/kreuzberg-ffi/cbindgen.toml
+Auto-merging crates/kreuzberg-ffi/src/lib.rs
+CONFLICT (content): Merge conflict in crates/kreuzberg-ffi/src/lib.rs
+Auto-merging crates/kreuzberg-node/index.d.ts
+CONFLICT (content): Merge conflict in crates/kreuzberg-node/index.d.ts
+Auto-merging crates/kreuzberg-node/src/lib.rs
+CONFLICT (content): Merge conflict in crates/kreuzberg-node/src/lib.rs
+Auto-merging crates/kreuzberg-php/src/lib.rs
+CONFLICT (content): Merge conflict in crates/kreuzberg-php/src/lib.rs
+Auto-merging crates/kreuzberg-py/src/lib.rs
+CONFLICT (content): Merge conflict in crates/kreuzberg-py/src/lib.rs
+Auto-merging crates/kreuzberg-wasm/Cargo.toml
+CONFLICT (content): Merge conflict in crates/kreuzberg-wasm/Cargo.toml
+Auto-merging crates/kreuzberg-wasm/src/lib.rs
+CONFLICT (content): Merge conflict in crates/kreuzberg-wasm/src/lib.rs
+Auto-merging packages/csharp/Directory.Build.props
+CONFLICT (content): Merge conflict in packages/csharp/Directory.Build.props
+Auto-merging packages/csharp/src/Kreuzberg/AccelerationConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/AccelerationConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/AnchorProperties.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/AnchorProperties.cs
+Auto-merging packages/csharp/src/Kreuzberg/AnnotationKind.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/AnnotationKind.cs
+Auto-merging packages/csharp/src/Kreuzberg/ApiDoc.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ApiDoc.cs
+Auto-merging packages/csharp/src/Kreuzberg/ApiState.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ApiState.cs
+Auto-merging packages/csharp/src/Kreuzberg/ArchiveEntry.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ArchiveEntry.cs
+Auto-merging packages/csharp/src/Kreuzberg/ArchiveMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ArchiveMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/BBox.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/BBox.cs
+Auto-merging packages/csharp/src/Kreuzberg/BatchExtractFilesParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/BatchExtractFilesParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/BibtexMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/BibtexMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/BlockType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/BlockType.cs
+Auto-merging packages/csharp/src/Kreuzberg/ByteBufferPool.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ByteBufferPool.cs
+Auto-merging packages/csharp/src/Kreuzberg/CacheClearResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CacheClearResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/CacheException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CacheException.cs
+Auto-merging packages/csharp/src/Kreuzberg/CacheStatsResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CacheStatsResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/CacheWarmParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CacheWarmParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/CancelledException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CancelledException.cs
+Auto-merging packages/csharp/src/Kreuzberg/Chunk.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Chunk.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkRequest.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkRequest.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkSizing.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkSizing.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkTextParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkTextParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkType.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkerType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkerType.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkingConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkingConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/ChunkingResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ChunkingResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/CitationMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CitationMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/CodeContentMode.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CodeContentMode.cs
+Auto-merging packages/csharp/src/Kreuzberg/CommonPdfMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CommonPdfMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ContentFilterConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ContentFilterConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/ContentLayer.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ContentLayer.cs
+Auto-merging packages/csharp/src/Kreuzberg/ContributorRole.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ContributorRole.cs
+Auto-merging packages/csharp/src/Kreuzberg/CsvMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CsvMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/CustomProperties.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/CustomProperties.cs
+Auto-merging packages/csharp/src/Kreuzberg/DbfFieldInfo.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DbfFieldInfo.cs
+Auto-merging packages/csharp/src/Kreuzberg/DbfMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DbfMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/DetectMimeTypeParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DetectMimeTypeParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/DetectResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DetectResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/DetectedBoundary.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DetectedBoundary.cs
+Auto-merging packages/csharp/src/Kreuzberg/DetectionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DetectionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/DjotContent.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DjotContent.cs
+Auto-merging packages/csharp/src/Kreuzberg/DjotImage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DjotImage.cs
+Auto-merging packages/csharp/src/Kreuzberg/DjotLink.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DjotLink.cs
+Auto-merging packages/csharp/src/Kreuzberg/DoclingCompatResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DoclingCompatResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/DocumentNode.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DocumentNode.cs
+Auto-merging packages/csharp/src/Kreuzberg/DocumentRelationship.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DocumentRelationship.cs
+Auto-merging packages/csharp/src/Kreuzberg/DocumentStructure.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DocumentStructure.cs
+Auto-merging packages/csharp/src/Kreuzberg/DocxMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/DocxMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/Drawing.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Drawing.cs
+Auto-merging packages/csharp/src/Kreuzberg/Element.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Element.cs
+Auto-merging packages/csharp/src/Kreuzberg/ElementMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ElementMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ElementType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ElementType.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmailAttachment.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmailAttachment.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmailConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmailConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmailExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmailExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmailMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmailMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmbedRequest.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmbedRequest.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmbedResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmbedResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmbedTextParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmbedTextParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmbeddedFile.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmbeddedFile.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmbeddingConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmbeddingConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmbeddingException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmbeddingException.cs
+Auto-merging packages/csharp/src/Kreuzberg/EmbeddingModelType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EmbeddingModelType.cs
+Auto-merging packages/csharp/src/Kreuzberg/EpubMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/EpubMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ErrorMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ErrorMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExcelMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExcelMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExcelSheet.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExcelSheet.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExcelWorkbook.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExcelWorkbook.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExecutionProviderType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExecutionProviderType.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractBytesParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractBytesParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractFileParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractFileParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractStructuredParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractStructuredParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractedImage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractedImage.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractedInlineImage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractedInlineImage.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractionConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractionConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/ExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/FictionBookMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/FictionBookMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/FileExtractionConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/FileExtractionConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/Footnote.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Footnote.cs
+Auto-merging packages/csharp/src/Kreuzberg/FormatMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/FormatMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/FormattedBlock.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/FormattedBlock.cs
+Auto-merging packages/csharp/src/Kreuzberg/FracType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/FracType.cs
+Auto-merging packages/csharp/src/Kreuzberg/GridCell.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/GridCell.cs
+Auto-merging packages/csharp/src/Kreuzberg/HeaderFooter.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HeaderFooter.cs
+Auto-merging packages/csharp/src/Kreuzberg/HeaderMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HeaderMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/HeadingContext.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HeadingContext.cs
+Auto-merging packages/csharp/src/Kreuzberg/HeadingLevel.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HeadingLevel.cs
+Auto-merging packages/csharp/src/Kreuzberg/HealthResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HealthResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/HierarchicalBlock.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HierarchicalBlock.cs
+Auto-merging packages/csharp/src/Kreuzberg/HierarchyConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HierarchyConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/HtmlExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HtmlExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/HtmlMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HtmlMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/HtmlOutputConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HtmlOutputConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/HtmlTheme.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/HtmlTheme.cs
+Auto-merging packages/csharp/src/Kreuzberg/ImageExtractionConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ImageExtractionConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/ImageMetadataType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ImageMetadataType.cs
+Auto-merging packages/csharp/src/Kreuzberg/ImageOcrResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ImageOcrResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/ImagePreprocessingConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ImagePreprocessingConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/ImagePreprocessingMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ImagePreprocessingMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ImageProcessingException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ImageProcessingException.cs
+Auto-merging packages/csharp/src/Kreuzberg/ImageType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ImageType.cs
+Auto-merging packages/csharp/src/Kreuzberg/InfoResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/InfoResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/InlineElement.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/InlineElement.cs
+Auto-merging packages/csharp/src/Kreuzberg/InlineType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/InlineType.cs
+Auto-merging packages/csharp/src/Kreuzberg/IoException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/IoException.cs
+Auto-merging packages/csharp/src/Kreuzberg/JatsMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/JatsMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/Keyword.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Keyword.cs
+Auto-merging packages/csharp/src/Kreuzberg/KeywordAlgorithm.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/KeywordAlgorithm.cs
+Auto-merging packages/csharp/src/Kreuzberg/KeywordConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/KeywordConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/KreuzbergErrorException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/KreuzbergErrorException.cs
+Auto-merging packages/csharp/src/Kreuzberg/KreuzbergException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/KreuzbergException.cs
+Auto-merging packages/csharp/src/Kreuzberg/KreuzbergLib.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/KreuzbergLib.cs
+Auto-merging packages/csharp/src/Kreuzberg/LanguageDetectionConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LanguageDetectionConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/LayoutClass.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LayoutClass.cs
+Auto-merging packages/csharp/src/Kreuzberg/LayoutDetection.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LayoutDetection.cs
+Auto-merging packages/csharp/src/Kreuzberg/LayoutDetectionConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LayoutDetectionConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/LayoutRegion.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LayoutRegion.cs
+Auto-merging packages/csharp/src/Kreuzberg/LinkMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LinkMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/LinkType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LinkType.cs
+Auto-merging packages/csharp/src/Kreuzberg/LlmConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LlmConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/LlmUsage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LlmUsage.cs
+Auto-merging packages/csharp/src/Kreuzberg/LockPoisonedException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/LockPoisonedException.cs
+Auto-merging packages/csharp/src/Kreuzberg/ManifestEntryResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ManifestEntryResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/ManifestResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ManifestResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/MergedChunk.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/MergedChunk.cs
+Auto-merging packages/csharp/src/Kreuzberg/Metadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Metadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/MissingDependencyException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/MissingDependencyException.cs
+Auto-merging packages/csharp/src/Kreuzberg/ModelPaths.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ModelPaths.cs
+Auto-merging packages/csharp/src/Kreuzberg/NativeMethods.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/NativeMethods.cs
+Auto-merging packages/csharp/src/Kreuzberg/NodeContent.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/NodeContent.cs
+Auto-merging packages/csharp/src/Kreuzberg/Note.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Note.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrBackendType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrBackendType.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrBoundingGeometry.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrBoundingGeometry.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrCacheStats.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrCacheStats.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrConfidence.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrConfidence.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrElement.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrElement.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrElementConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrElementConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrElementLevel.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrElementLevel.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrException.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrPipelineConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrPipelineConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrPipelineStage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrPipelineStage.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrQualityThresholds.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrQualityThresholds.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrRotation.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrRotation.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrTable.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrTable.cs
+Auto-merging packages/csharp/src/Kreuzberg/OcrTableBoundingBox.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OcrTableBoundingBox.cs
+Auto-merging packages/csharp/src/Kreuzberg/OdtProperties.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OdtProperties.cs
+Auto-merging packages/csharp/src/Kreuzberg/OpenWebDocumentResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OpenWebDocumentResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/OrientationResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OrientationResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/OtherException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/OtherException.cs
+Auto-merging packages/csharp/src/Kreuzberg/PaddleLanguage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PaddleLanguage.cs
+Auto-merging packages/csharp/src/Kreuzberg/PaddleOcrConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PaddleOcrConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageBoundary.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageBoundary.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageContent.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageContent.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageHierarchy.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageHierarchy.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageInfo.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageInfo.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageLayoutResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageLayoutResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageMarginsPoints.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageMarginsPoints.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageStructure.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageStructure.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageTiming.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageTiming.cs
+Auto-merging packages/csharp/src/Kreuzberg/PageUnitType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PageUnitType.cs
+Auto-merging packages/csharp/src/Kreuzberg/ParsingException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ParsingException.cs
+Auto-merging packages/csharp/src/Kreuzberg/PdfAnnotation.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PdfAnnotation.cs
+Auto-merging packages/csharp/src/Kreuzberg/PdfAnnotationType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PdfAnnotationType.cs
+Auto-merging packages/csharp/src/Kreuzberg/PdfBackend.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PdfBackend.cs
+Auto-merging packages/csharp/src/Kreuzberg/PdfConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PdfConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/PdfImage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PdfImage.cs
+Auto-merging packages/csharp/src/Kreuzberg/PdfUnifiedExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PdfUnifiedExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/PluginException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PluginException.cs
+Auto-merging packages/csharp/src/Kreuzberg/PoolError.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PoolError.cs
+Auto-merging packages/csharp/src/Kreuzberg/PostProcessorConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PostProcessorConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/PptxAppProperties.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PptxAppProperties.cs
+Auto-merging packages/csharp/src/Kreuzberg/PptxExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PptxExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/PptxMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PptxMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/ProcessingStage.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ProcessingStage.cs
+Auto-merging packages/csharp/src/Kreuzberg/ProcessingWarning.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ProcessingWarning.cs
+Auto-merging packages/csharp/src/Kreuzberg/PsmMode.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PsmMode.cs
+Auto-merging packages/csharp/src/Kreuzberg/PstMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/PstMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/RakeParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/RakeParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/RecognizedTable.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/RecognizedTable.cs
+Auto-merging packages/csharp/src/Kreuzberg/ReductionLevel.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ReductionLevel.cs
+Auto-merging packages/csharp/src/Kreuzberg/RelationshipKind.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/RelationshipKind.cs
+Auto-merging packages/csharp/src/Kreuzberg/ResolvedStyle.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ResolvedStyle.cs
+Auto-merging packages/csharp/src/Kreuzberg/SecurityException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/SecurityException.cs
+Auto-merging packages/csharp/src/Kreuzberg/SerializationException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/SerializationException.cs
+Auto-merging packages/csharp/src/Kreuzberg/ServerConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ServerConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/StreamReader.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StreamReader.cs
+Auto-merging packages/csharp/src/Kreuzberg/StringBufferPool.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StringBufferPool.cs
+Auto-merging packages/csharp/src/Kreuzberg/StructuredData.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StructuredData.cs
+Auto-merging packages/csharp/src/Kreuzberg/StructuredDataResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StructuredDataResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/StructuredDataType.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StructuredDataType.cs
+Auto-merging packages/csharp/src/Kreuzberg/StructuredExtractionConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StructuredExtractionConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/StructuredExtractionResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StructuredExtractionResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/StyleDefinition.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/StyleDefinition.cs
+Auto-merging packages/csharp/src/Kreuzberg/SupportedFormat.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/SupportedFormat.cs
+Auto-merging packages/csharp/src/Kreuzberg/TableModel.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TableModel.cs
+Auto-merging packages/csharp/src/Kreuzberg/TableProperties.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TableProperties.cs
+Auto-merging packages/csharp/src/Kreuzberg/TessdataManager.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TessdataManager.cs
+Auto-merging packages/csharp/src/Kreuzberg/TesseractConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TesseractConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/TextAnnotation.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TextAnnotation.cs
+Auto-merging packages/csharp/src/Kreuzberg/TextDirection.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TextDirection.cs
+Auto-merging packages/csharp/src/Kreuzberg/TextExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TextExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/TextMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TextMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/TimeoutException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TimeoutException.cs
+Auto-merging packages/csharp/src/Kreuzberg/TokenReductionConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TokenReductionConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/TokenReductionOptions.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TokenReductionOptions.cs
+Auto-merging packages/csharp/src/Kreuzberg/TracingLayer.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TracingLayer.cs
+Auto-merging packages/csharp/src/Kreuzberg/TreeSitterConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TreeSitterConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/TreeSitterProcessConfig.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/TreeSitterProcessConfig.cs
+Auto-merging packages/csharp/src/Kreuzberg/UnsupportedFormatException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/UnsupportedFormatException.cs
+Auto-merging packages/csharp/src/Kreuzberg/Uri.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/Uri.cs
+Auto-merging packages/csharp/src/Kreuzberg/UriKind.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/UriKind.cs
+Auto-merging packages/csharp/src/Kreuzberg/ValidationException.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ValidationException.cs
+Auto-merging packages/csharp/src/Kreuzberg/VersionResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/VersionResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/WarmRequest.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/WarmRequest.cs
+Auto-merging packages/csharp/src/Kreuzberg/WarmResponse.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/WarmResponse.cs
+Auto-merging packages/csharp/src/Kreuzberg/XlsxAppProperties.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/XlsxAppProperties.cs
+Auto-merging packages/csharp/src/Kreuzberg/XmlExtractionResult.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/XmlExtractionResult.cs
+Auto-merging packages/csharp/src/Kreuzberg/XmlMetadata.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/XmlMetadata.cs
+Auto-merging packages/csharp/src/Kreuzberg/YakeParams.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/YakeParams.cs
+Auto-merging packages/csharp/src/Kreuzberg/YearRange.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/YearRange.cs
+Auto-merging packages/csharp/src/Kreuzberg/ZipBombValidator.cs
+CONFLICT (content): Merge conflict in packages/csharp/src/Kreuzberg/ZipBombValidator.cs
+Auto-merging packages/dart/rust/Cargo.toml
+CONFLICT (content): Merge conflict in packages/dart/rust/Cargo.toml
+Auto-merging packages/dart/rust/src/lib.rs
+Auto-merging packages/elixir/lib/kreuzberg.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg.ex
+Auto-merging packages/elixir/lib/kreuzberg/acceleration_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/acceleration_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/anchor_properties.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/anchor_properties.ex
+Auto-merging packages/elixir/lib/kreuzberg/annotation_kind.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/annotation_kind.ex
+Auto-merging packages/elixir/lib/kreuzberg/api_state.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/api_state.ex
+Auto-merging packages/elixir/lib/kreuzberg/archive_entry.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/archive_entry.ex
+Auto-merging packages/elixir/lib/kreuzberg/archive_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/archive_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/b_box.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/b_box.ex
+Auto-merging packages/elixir/lib/kreuzberg/batch_extract_files_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/batch_extract_files_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/bibtex_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/bibtex_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/block_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/block_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/cache_clear_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/cache_clear_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/cache_stats_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/cache_stats_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/cache_warm_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/cache_warm_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunk.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunk.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunk_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunk_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunk_request.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunk_request.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunk_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunk_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunk_sizing.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunk_sizing.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunk_text_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunk_text_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunk_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunk_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunker_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunker_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunking_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunking_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/chunking_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/chunking_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/citation_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/citation_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/code_content_mode.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/code_content_mode.ex
+Auto-merging packages/elixir/lib/kreuzberg/common_pdf_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/common_pdf_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/content_filter_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/content_filter_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/content_layer.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/content_layer.ex
+Auto-merging packages/elixir/lib/kreuzberg/contributor_role.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/contributor_role.ex
+Auto-merging packages/elixir/lib/kreuzberg/csv_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/csv_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/dbf_field_info.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/dbf_field_info.ex
+Auto-merging packages/elixir/lib/kreuzberg/dbf_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/dbf_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/detect_mime_type_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/detect_mime_type_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/detect_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/detect_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/detected_boundary.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/detected_boundary.ex
+Auto-merging packages/elixir/lib/kreuzberg/detection_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/detection_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/djot_content.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/djot_content.ex
+Auto-merging packages/elixir/lib/kreuzberg/djot_image.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/djot_image.ex
+Auto-merging packages/elixir/lib/kreuzberg/djot_link.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/djot_link.ex
+Auto-merging packages/elixir/lib/kreuzberg/docling_compat_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/docling_compat_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/document_node.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/document_node.ex
+Auto-merging packages/elixir/lib/kreuzberg/document_relationship.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/document_relationship.ex
+Auto-merging packages/elixir/lib/kreuzberg/document_structure.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/document_structure.ex
+Auto-merging packages/elixir/lib/kreuzberg/docx_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/docx_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/drawing.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/drawing.ex
+Auto-merging packages/elixir/lib/kreuzberg/element.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/element.ex
+Auto-merging packages/elixir/lib/kreuzberg/element_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/element_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/element_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/element_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/email_attachment.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/email_attachment.ex
+Auto-merging packages/elixir/lib/kreuzberg/email_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/email_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/email_extraction_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/email_extraction_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/email_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/email_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/embed_request.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/embed_request.ex
+Auto-merging packages/elixir/lib/kreuzberg/embed_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/embed_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/embed_text_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/embed_text_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/embedded_file.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/embedded_file.ex
+Auto-merging packages/elixir/lib/kreuzberg/embedding_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/embedding_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/embedding_model_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/embedding_model_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/epub_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/epub_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/error_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/error_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/excel_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/excel_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/excel_sheet.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/excel_sheet.ex
+Auto-merging packages/elixir/lib/kreuzberg/excel_workbook.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/excel_workbook.ex
+Auto-merging packages/elixir/lib/kreuzberg/execution_provider_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/execution_provider_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/extract_bytes_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/extract_bytes_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/extract_file_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/extract_file_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/extract_structured_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/extract_structured_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/extracted_image.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/extracted_image.ex
+Auto-merging packages/elixir/lib/kreuzberg/extracted_inline_image.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/extracted_inline_image.ex
+Auto-merging packages/elixir/lib/kreuzberg/extraction_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/extraction_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/extraction_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/extraction_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/fiction_book_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/fiction_book_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/file_extraction_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/file_extraction_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/footnote.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/footnote.ex
+Auto-merging packages/elixir/lib/kreuzberg/format_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/format_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/formatted_block.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/formatted_block.ex
+Auto-merging packages/elixir/lib/kreuzberg/frac_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/frac_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/grid_cell.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/grid_cell.ex
+Auto-merging packages/elixir/lib/kreuzberg/header_footer.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/header_footer.ex
+Auto-merging packages/elixir/lib/kreuzberg/header_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/header_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/heading_context.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/heading_context.ex
+Auto-merging packages/elixir/lib/kreuzberg/heading_level.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/heading_level.ex
+Auto-merging packages/elixir/lib/kreuzberg/health_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/health_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/hierarchical_block.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/hierarchical_block.ex
+Auto-merging packages/elixir/lib/kreuzberg/hierarchy_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/hierarchy_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/html_extraction_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/html_extraction_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/html_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/html_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/html_output_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/html_output_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/html_theme.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/html_theme.ex
+Auto-merging packages/elixir/lib/kreuzberg/image_extraction_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/image_extraction_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/image_metadata_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/image_metadata_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/image_ocr_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/image_ocr_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/image_preprocessing_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/image_preprocessing_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/image_preprocessing_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/image_preprocessing_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/image_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/image_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/info_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/info_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/inline_element.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/inline_element.ex
+Auto-merging packages/elixir/lib/kreuzberg/inline_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/inline_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/jats_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/jats_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/keyword.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/keyword.ex
+Auto-merging packages/elixir/lib/kreuzberg/keyword_algorithm.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/keyword_algorithm.ex
+Auto-merging packages/elixir/lib/kreuzberg/keyword_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/keyword_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/language_detection_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/language_detection_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/layout_class.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/layout_class.ex
+Auto-merging packages/elixir/lib/kreuzberg/layout_detection.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/layout_detection.ex
+Auto-merging packages/elixir/lib/kreuzberg/layout_detection_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/layout_detection_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/layout_region.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/layout_region.ex
+Auto-merging packages/elixir/lib/kreuzberg/link_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/link_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/link_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/link_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/llm_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/llm_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/llm_usage.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/llm_usage.ex
+Auto-merging packages/elixir/lib/kreuzberg/manifest_entry_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/manifest_entry_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/manifest_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/manifest_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/merged_chunk.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/merged_chunk.ex
+Auto-merging packages/elixir/lib/kreuzberg/metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/model_paths.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/model_paths.ex
+Auto-merging packages/elixir/lib/kreuzberg/native.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/native.ex
+Auto-merging packages/elixir/lib/kreuzberg/node_content.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/node_content.ex
+Auto-merging packages/elixir/lib/kreuzberg/note.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/note.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_backend_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_backend_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_bounding_geometry.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_bounding_geometry.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_cache_stats.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_cache_stats.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_confidence.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_confidence.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_element.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_element.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_element_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_element_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_element_level.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_element_level.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_extraction_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_extraction_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_pipeline_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_pipeline_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_pipeline_stage.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_pipeline_stage.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_quality_thresholds.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_quality_thresholds.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_rotation.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_rotation.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_table.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_table.ex
+Auto-merging packages/elixir/lib/kreuzberg/ocr_table_bounding_box.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/ocr_table_bounding_box.ex
+Auto-merging packages/elixir/lib/kreuzberg/odt_properties.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/odt_properties.ex
+Auto-merging packages/elixir/lib/kreuzberg/open_web_document_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/open_web_document_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/orientation_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/orientation_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/paddle_language.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/paddle_language.ex
+Auto-merging packages/elixir/lib/kreuzberg/paddle_ocr_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/paddle_ocr_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_boundary.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_boundary.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_content.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_content.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_hierarchy.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_hierarchy.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_info.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_info.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_layout_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_layout_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_margins_points.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_margins_points.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_structure.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_structure.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_timing.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_timing.ex
+Auto-merging packages/elixir/lib/kreuzberg/page_unit_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/page_unit_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/pdf_annotation.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pdf_annotation.ex
+Auto-merging packages/elixir/lib/kreuzberg/pdf_annotation_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pdf_annotation_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/pdf_backend.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pdf_backend.ex
+Auto-merging packages/elixir/lib/kreuzberg/pdf_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pdf_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/pdf_image.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pdf_image.ex
+Auto-merging packages/elixir/lib/kreuzberg/pool_error.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pool_error.ex
+Auto-merging packages/elixir/lib/kreuzberg/post_processor_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/post_processor_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/pptx_app_properties.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pptx_app_properties.ex
+Auto-merging packages/elixir/lib/kreuzberg/pptx_extraction_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pptx_extraction_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/pptx_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pptx_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/processing_stage.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/processing_stage.ex
+Auto-merging packages/elixir/lib/kreuzberg/processing_warning.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/processing_warning.ex
+Auto-merging packages/elixir/lib/kreuzberg/psm_mode.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/psm_mode.ex
+Auto-merging packages/elixir/lib/kreuzberg/pst_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/pst_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/rake_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/rake_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/recognized_table.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/recognized_table.ex
+Auto-merging packages/elixir/lib/kreuzberg/reduction_level.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/reduction_level.ex
+Auto-merging packages/elixir/lib/kreuzberg/relationship_kind.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/relationship_kind.ex
+Auto-merging packages/elixir/lib/kreuzberg/resolved_style.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/resolved_style.ex
+Auto-merging packages/elixir/lib/kreuzberg/server_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/server_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/structured_data.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/structured_data.ex
+Auto-merging packages/elixir/lib/kreuzberg/structured_data_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/structured_data_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/structured_data_type.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/structured_data_type.ex
+Auto-merging packages/elixir/lib/kreuzberg/structured_extraction_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/structured_extraction_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/structured_extraction_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/structured_extraction_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/style_definition.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/style_definition.ex
+Auto-merging packages/elixir/lib/kreuzberg/supported_format.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/supported_format.ex
+Auto-merging packages/elixir/lib/kreuzberg/table_model.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/table_model.ex
+Auto-merging packages/elixir/lib/kreuzberg/table_properties.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/table_properties.ex
+Auto-merging packages/elixir/lib/kreuzberg/tesseract_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/tesseract_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/text_annotation.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/text_annotation.ex
+Auto-merging packages/elixir/lib/kreuzberg/text_direction.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/text_direction.ex
+Auto-merging packages/elixir/lib/kreuzberg/text_extraction_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/text_extraction_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/text_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/text_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/token_reduction_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/token_reduction_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/token_reduction_options.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/token_reduction_options.ex
+Auto-merging packages/elixir/lib/kreuzberg/tree_sitter_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/tree_sitter_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/tree_sitter_process_config.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/tree_sitter_process_config.ex
+Auto-merging packages/elixir/lib/kreuzberg/uri.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/uri.ex
+Auto-merging packages/elixir/lib/kreuzberg/uri_kind.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/uri_kind.ex
+Auto-merging packages/elixir/lib/kreuzberg/version_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/version_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/warm_request.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/warm_request.ex
+Auto-merging packages/elixir/lib/kreuzberg/warm_response.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/warm_response.ex
+Auto-merging packages/elixir/lib/kreuzberg/xlsx_app_properties.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/xlsx_app_properties.ex
+Auto-merging packages/elixir/lib/kreuzberg/xml_extraction_result.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/xml_extraction_result.ex
+Auto-merging packages/elixir/lib/kreuzberg/xml_metadata.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/xml_metadata.ex
+Auto-merging packages/elixir/lib/kreuzberg/yake_params.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/yake_params.ex
+Auto-merging packages/elixir/lib/kreuzberg/year_range.ex
+CONFLICT (content): Merge conflict in packages/elixir/lib/kreuzberg/year_range.ex
+Auto-merging packages/elixir/native/kreuzberg_nif/src/lib.rs
+CONFLICT (content): Merge conflict in packages/elixir/native/kreuzberg_nif/src/lib.rs
+Auto-merging packages/go/binding.go
+CONFLICT (content): Merge conflict in packages/go/binding.go
+Auto-merging packages/go/trait_bridges.go
+CONFLICT (content): Merge conflict in packages/go/trait_bridges.go
+Auto-merging packages/java/src/main/java/dev/kreuzberg/AccelerationConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/AccelerationConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/AccelerationConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/AccelerationConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/AnchorProperties.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/AnchorProperties.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/AnchorPropertiesBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/AnchorPropertiesBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/AnnotationKind.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/AnnotationKind.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ApiDoc.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ApiDoc.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ApiState.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ApiState.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ArchiveEntry.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ArchiveEntry.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ArchiveMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ArchiveMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ArchiveMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ArchiveMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/BBox.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/BBox.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/BatchExtractFilesParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/BatchExtractFilesParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/BibtexMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/BibtexMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/BibtexMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/BibtexMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/BlockType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/BlockType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ByteBufferPool.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ByteBufferPool.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CacheClearResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CacheClearResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CacheException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CacheException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CacheStatsResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CacheStatsResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CacheWarmParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CacheWarmParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CancelledException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CancelledException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Chunk.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Chunk.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkRequest.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkRequest.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkSizing.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkSizing.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkTextParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkTextParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkerType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkerType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkingConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkingConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkingConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkingConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ChunkingResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ChunkingResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CitationMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CitationMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CitationMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CitationMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CodeContentMode.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CodeContentMode.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CommonPdfMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CommonPdfMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ContentFilterConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ContentFilterConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ContentFilterConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ContentFilterConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ContentLayer.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ContentLayer.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ContributorRole.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ContributorRole.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CsvMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CsvMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CsvMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CsvMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/CustomProperties.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/CustomProperties.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DbfFieldInfo.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DbfFieldInfo.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DbfMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DbfMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DbfMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DbfMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DetectMimeTypeParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DetectMimeTypeParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DetectResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DetectResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DetectedBoundary.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DetectedBoundary.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DetectionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DetectionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DjotContent.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DjotContent.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DjotImage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DjotImage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DjotLink.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DjotLink.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DoclingCompatResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DoclingCompatResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DocumentNode.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DocumentNode.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DocumentRelationship.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DocumentRelationship.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DocumentStructure.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DocumentStructure.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DocumentStructureBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DocumentStructureBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DocxMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DocxMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DocxMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DocxMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Drawing.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Drawing.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/DrawingBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/DrawingBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Element.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Element.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ElementMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ElementMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ElementType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ElementType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmailAttachment.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmailAttachment.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmailConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmailConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmailConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmailConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmailExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmailExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmailMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmailMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmailMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmailMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbedRequest.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbedRequest.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbedResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbedResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbedTextParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbedTextParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbeddedFile.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbeddedFile.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbeddingConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbeddingConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbeddingConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbeddingConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbeddingException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbeddingException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EmbeddingModelType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EmbeddingModelType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EpubMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EpubMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/EpubMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/EpubMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ErrorMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ErrorMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExcelMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExcelMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExcelMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExcelMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExcelSheet.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExcelSheet.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExcelWorkbook.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExcelWorkbook.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExecutionProviderType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExecutionProviderType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractBytesParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractBytesParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractFileParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractFileParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractStructuredParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractStructuredParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractedImage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractedImage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractedInlineImage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractedInlineImage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractionConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractionConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractionConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractionConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ExtractionResultBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ExtractionResultBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/FictionBookMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/FictionBookMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/FictionBookMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/FictionBookMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/FileExtractionConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/FileExtractionConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/FileExtractionConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/FileExtractionConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Footnote.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Footnote.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/FormatMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/FormatMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/FormattedBlock.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/FormattedBlock.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/FracType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/FracType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/GridCell.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/GridCell.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HeaderFooter.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HeaderFooter.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HeaderFooterBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HeaderFooterBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HeaderMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HeaderMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HeadingContext.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HeadingContext.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HeadingLevel.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HeadingLevel.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HealthResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HealthResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HierarchicalBlock.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HierarchicalBlock.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HierarchyConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HierarchyConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HierarchyConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HierarchyConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HtmlExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HtmlExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HtmlMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HtmlMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HtmlMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HtmlMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HtmlOutputConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HtmlOutputConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HtmlOutputConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HtmlOutputConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/HtmlTheme.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/HtmlTheme.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImageExtractionConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImageExtractionConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImageExtractionConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImageExtractionConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImageMetadataType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImageMetadataType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImageOcrResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImageOcrResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImagePreprocessingConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImagePreprocessingConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImagePreprocessingConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImagePreprocessingConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImagePreprocessingMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImagePreprocessingMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImageProcessingException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImageProcessingException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ImageType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ImageType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/InfoResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/InfoResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/InlineElement.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/InlineElement.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/InlineType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/InlineType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/IoException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/IoException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/JatsMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/JatsMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/JatsMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/JatsMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Keyword.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Keyword.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/KeywordAlgorithm.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/KeywordAlgorithm.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/KeywordConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/KeywordConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/KeywordConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/KeywordConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Kreuzberg.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Kreuzberg.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/KreuzbergErrorException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/KreuzbergErrorException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/KreuzbergRs.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/KreuzbergRs.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/KreuzbergRsException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/KreuzbergRsException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LanguageDetectionConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LanguageDetectionConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LayoutClass.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LayoutClass.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LayoutDetection.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LayoutDetection.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LayoutDetectionConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LayoutDetectionConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LayoutDetectionConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LayoutDetectionConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LayoutRegion.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LayoutRegion.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LayoutRegionBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LayoutRegionBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LinkMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LinkMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LinkType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LinkType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LlmConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LlmConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LlmConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LlmConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LlmUsage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LlmUsage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LlmUsageBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LlmUsageBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/LockPoisonedException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/LockPoisonedException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ManifestEntryResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ManifestEntryResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ManifestResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ManifestResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/MergedChunk.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/MergedChunk.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Metadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Metadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/MetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/MetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/MissingDependencyException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/MissingDependencyException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ModelPaths.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ModelPaths.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/NativeLib.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/NativeLib.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/NodeContent.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/NodeContent.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Note.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Note.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrBackendType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrBackendType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrBoundingGeometry.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrBoundingGeometry.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrCacheStats.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrCacheStats.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrCacheStatsBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrCacheStatsBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrConfidence.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrConfidence.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrConfidenceBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrConfidenceBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrElement.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrElement.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrElementBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrElementBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrElementConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrElementConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrElementConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrElementConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrElementLevel.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrElementLevel.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrPipelineConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrPipelineConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrPipelineStage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrPipelineStage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrQualityThresholds.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrQualityThresholds.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrQualityThresholdsBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrQualityThresholdsBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrRotation.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrRotation.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrTable.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrTable.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OcrTableBoundingBox.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OcrTableBoundingBox.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OdtProperties.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OdtProperties.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OdtPropertiesBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OdtPropertiesBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OpenWebDocumentResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OpenWebDocumentResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OrientationResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OrientationResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/OtherException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/OtherException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PSMMode.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PSMMode.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PaddleLanguage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PaddleLanguage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PaddleOcrConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PaddleOcrConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PaddleOcrConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PaddleOcrConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageBoundary.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageBoundary.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageContent.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageContent.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageHierarchy.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageHierarchy.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageInfo.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageInfo.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageLayoutResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageLayoutResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageMarginsPoints.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageMarginsPoints.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageMarginsPointsBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageMarginsPointsBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageStructure.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageStructure.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageTiming.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageTiming.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PageUnitType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PageUnitType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ParsingException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ParsingException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PdfAnnotation.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PdfAnnotation.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PdfAnnotationType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PdfAnnotationType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PdfBackend.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PdfBackend.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PdfConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PdfConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PdfConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PdfConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PdfImage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PdfImage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PdfUnifiedExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PdfUnifiedExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PluginException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PluginException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PoolError.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PoolError.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PostProcessorConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PostProcessorConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PostProcessorConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PostProcessorConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PptxAppProperties.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PptxAppProperties.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PptxAppPropertiesBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PptxAppPropertiesBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PptxExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PptxExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PptxMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PptxMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PptxMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PptxMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ProcessingStage.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ProcessingStage.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ProcessingWarning.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ProcessingWarning.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PstMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PstMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/PstMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/PstMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/RakeParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/RakeParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/RakeParamsBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/RakeParamsBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/RecognizedTable.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/RecognizedTable.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ReductionLevel.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ReductionLevel.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/RelationshipKind.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/RelationshipKind.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ResolvedStyle.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ResolvedStyle.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ResolvedStyleBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ResolvedStyleBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/SecurityException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/SecurityException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/SerializationException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/SerializationException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ServerConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ServerConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ServerConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ServerConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StreamReader.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StreamReader.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StringBufferPool.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StringBufferPool.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StructuredData.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StructuredData.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StructuredDataResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StructuredDataResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StructuredDataType.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StructuredDataType.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StructuredExtractionConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StructuredExtractionConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StructuredExtractionResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StructuredExtractionResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/StyleDefinition.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/StyleDefinition.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/SupportedFormat.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/SupportedFormat.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TableModel.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TableModel.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TableProperties.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TableProperties.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TablePropertiesBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TablePropertiesBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TessdataManager.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TessdataManager.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TesseractConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TesseractConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TesseractConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TesseractConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TextAnnotation.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TextAnnotation.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TextDirection.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TextDirection.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TextExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TextExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TextMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TextMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TextMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TextMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TimeoutException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TimeoutException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TokenReductionConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TokenReductionConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TokenReductionConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TokenReductionConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TokenReductionOptions.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TokenReductionOptions.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TracingLayer.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TracingLayer.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TreeSitterConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TreeSitterConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TreeSitterConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TreeSitterConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TreeSitterProcessConfig.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TreeSitterProcessConfig.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/TreeSitterProcessConfigBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/TreeSitterProcessConfigBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/UnsupportedFormatException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/UnsupportedFormatException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/Uri.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/Uri.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/UriKind.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/UriKind.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ValidationException.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ValidationException.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/VersionResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/VersionResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/WarmRequest.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/WarmRequest.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/WarmRequestBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/WarmRequestBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/WarmResponse.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/WarmResponse.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/XlsxAppProperties.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/XlsxAppProperties.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/XlsxAppPropertiesBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/XlsxAppPropertiesBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/XmlExtractionResult.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/XmlExtractionResult.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/XmlMetadata.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/XmlMetadata.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/XmlMetadataBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/XmlMetadataBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/YakeParams.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/YakeParams.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/YakeParamsBuilder.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/YakeParamsBuilder.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/YearRange.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/YearRange.java
+Auto-merging packages/java/src/main/java/dev/kreuzberg/ZipBombValidator.java
+CONFLICT (content): Merge conflict in packages/java/src/main/java/dev/kreuzberg/ZipBombValidator.java
+Auto-merging packages/php/src/Kreuzberg.php
+CONFLICT (content): Merge conflict in packages/php/src/Kreuzberg.php
+Auto-merging packages/php/stubs/kreuzberg_extension.php
+CONFLICT (content): Merge conflict in packages/php/stubs/kreuzberg_extension.php
+Auto-merging packages/python/kreuzberg/__init__.py
+CONFLICT (content): Merge conflict in packages/python/kreuzberg/__init__.py
+Auto-merging packages/python/kreuzberg/_kreuzberg.pyi
+CONFLICT (content): Merge conflict in packages/python/kreuzberg/_kreuzberg.pyi
+Auto-merging packages/python/kreuzberg/api.py
+CONFLICT (content): Merge conflict in packages/python/kreuzberg/api.py
+Auto-merging packages/python/kreuzberg/exceptions.py
+CONFLICT (content): Merge conflict in packages/python/kreuzberg/exceptions.py
+Auto-merging packages/python/kreuzberg/options.py
+CONFLICT (content): Merge conflict in packages/python/kreuzberg/options.py
+Auto-merging packages/r/src/rust/src/kreuzberg.R
+CONFLICT (content): Merge conflict in packages/r/src/rust/src/kreuzberg.R
+Auto-merging packages/r/src/rust/src/lib.rs
+CONFLICT (content): Merge conflict in packages/r/src/rust/src/lib.rs
+Auto-merging packages/ruby/ext/kreuzberg_rb/src/kreuzberg.rb
+CONFLICT (content): Merge conflict in packages/ruby/ext/kreuzberg_rb/src/kreuzberg.rb
+Auto-merging packages/ruby/ext/kreuzberg_rb/src/kreuzberg/version.rb
+CONFLICT (content): Merge conflict in packages/ruby/ext/kreuzberg_rb/src/kreuzberg/version.rb
+Auto-merging packages/ruby/ext/kreuzberg_rb/src/lib.rs
+CONFLICT (content): Merge conflict in packages/ruby/ext/kreuzberg_rb/src/lib.rs
+Auto-merging packages/swift/rust/Cargo.toml
+CONFLICT (content): Merge conflict in packages/swift/rust/Cargo.toml
+Auto-merging packages/swift/rust/src/lib.rs
+Auto-merging packages/typescript/src/index.ts
+CONFLICT (content): Merge conflict in packages/typescript/src/index.ts
+Auto-merging packages/wasm/src/index.ts
+CONFLICT (content): Merge conflict in packages/wasm/src/index.ts
+error: could not apply 8b6010e11... fix: make inject_placeholders Option<bool> so language bindings default to true
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: "git add/rm <conflicted_files>", then run "git rebase --continue".
+hint: You can instead skip this commit: run "git rebase --skip".
+hint: To abort and get back to the state before "git rebase", run "git rebase --abort".
+hint: Disable this message with "git config set advice.mergeConflict false"
+Could not apply 8b6010e11... # fix: make inject_placeholders Option<bool> so language bindings default to true

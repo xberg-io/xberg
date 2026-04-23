@@ -2,10 +2,10 @@
 
 package dev.kreuzberg.kt
 
+import dev.kreuzberg.Kreuzberg as Bridge
+import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.nio.file.Path
-import dev.kreuzberg.Kreuzberg as Bridge
 
 typealias AccelerationConfig = dev.kreuzberg.AccelerationConfig
 typealias ContentFilterConfig = dev.kreuzberg.ContentFilterConfig
@@ -226,18 +226,26 @@ object Kreuzberg {
     /**
      * Hash arbitrary bytes with blake3, returning a 32-char hex string.
      */
-    fun blake3HashBytes(data: ByteArray): String = Bridge.blake3HashBytes(data)
+    fun blake3HashBytes(data: ByteArray): String {
+        return Bridge.blake3HashBytes(data)
+    }
 
     /**
      * Hash a file's content with blake3 using streaming 64 KiB reads.
      *
      * Returns a 32-char hex string (128 bits of blake3 output).
      */
-    fun blake3HashFile(path: Path): String = Bridge.blake3HashFile(path)
+    fun blake3HashFile(path: Path): String {
+        return Bridge.blake3HashFile(path)
+    }
 
-    fun fastHash(data: ByteArray): Long = Bridge.fastHash(data)
+    fun fastHash(data: ByteArray): Long {
+        return Bridge.fastHash(data)
+    }
 
-    fun validateCacheKey(key: String): Boolean = Bridge.validateCacheKey(key)
+    fun validateCacheKey(key: String): Boolean {
+        return Bridge.validateCacheKey(key)
+    }
 
     /**
      * Validate a port number for server configuration.
@@ -249,7 +257,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
      */
-    fun validatePort(port: Short) {
+    fun validatePort(port: Short): Unit {
         Bridge.validatePort(port)
     }
 
@@ -263,7 +271,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
      */
-    fun validateHost(host: String) {
+    fun validateHost(host: String): Unit {
         Bridge.validateHost(host)
     }
 
@@ -277,7 +285,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
      */
-    fun validateCorsOrigin(origin: String) {
+    fun validateCorsOrigin(origin: String): Unit {
         Bridge.validateCorsOrigin(origin)
     }
 
@@ -290,7 +298,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
      */
-    fun validateUploadSize(size: Long) {
+    fun validateUploadSize(size: Long): Unit {
         Bridge.validateUploadSize(size)
     }
 
@@ -301,7 +309,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
      */
-    fun validateBinarizationMethod(method: String) {
+    fun validateBinarizationMethod(method: String): Unit {
         Bridge.validateBinarizationMethod(method)
     }
 
@@ -312,7 +320,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
      */
-    fun validateTokenReductionLevel(level: String) {
+    fun validateTokenReductionLevel(level: String): Unit {
         Bridge.validateTokenReductionLevel(level)
     }
 
@@ -323,7 +331,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
      */
-    fun validateOcrBackend(backend: String) {
+    fun validateOcrBackend(backend: String): Unit {
         Bridge.validateOcrBackend(backend)
     }
 
@@ -337,7 +345,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
      */
-    fun validateLanguageCode(code: String) {
+    fun validateLanguageCode(code: String): Unit {
         Bridge.validateLanguageCode(code)
     }
 
@@ -348,7 +356,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
      */
-    fun validateTesseractPsm(psm: Int) {
+    fun validateTesseractPsm(psm: Int): Unit {
         Bridge.validateTesseractPsm(psm)
     }
 
@@ -359,7 +367,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
      */
-    fun validateTesseractOem(oem: Int) {
+    fun validateTesseractOem(oem: Int): Unit {
         Bridge.validateTesseractOem(oem)
     }
 
@@ -376,7 +384,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
      */
-    fun validateOutputFormat(format: String) {
+    fun validateOutputFormat(format: String): Unit {
         Bridge.validateOutputFormat(format)
     }
 
@@ -389,7 +397,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
      */
-    fun validateConfidence(confidence: Double) {
+    fun validateConfidence(confidence: Double): Unit {
         Bridge.validateConfidence(confidence)
     }
 
@@ -402,7 +410,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
      */
-    fun validateDpi(dpi: Int) {
+    fun validateDpi(dpi: Int): Unit {
         Bridge.validateDpi(dpi)
     }
 
@@ -415,10 +423,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
      */
-    fun validateChunkingParams(
-        maxChars: Long,
-        maxOverlap: Long,
-    ) {
+    fun validateChunkingParams(maxChars: Long, maxOverlap: Long): Unit {
         Bridge.validateChunkingParams(maxChars, maxOverlap)
     }
 
@@ -429,7 +434,7 @@ object Kreuzberg {
      *
      * `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
      */
-    fun validateLlmConfigModel(model: String) {
+    fun validateLlmConfigModel(model: String): Unit {
         Bridge.validateLlmConfigModel(model)
     }
 
@@ -452,14 +457,11 @@ object Kreuzberg {
      * Returns `KreuzbergError.Validation` if MIME type is invalid.
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
-    suspend fun extractBytes(
-        content: ByteArray,
-        mimeType: String,
-        config: ExtractionConfig,
-    ): ExtractionResult =
-        withContext(Dispatchers.IO) {
+    suspend fun extractBytes(content: ByteArray, mimeType: String, config: ExtractionConfig): ExtractionResult {
+        return withContext(Dispatchers.IO) {
             Bridge.extractBytes(content, mimeType, config)
         }
+    }
 
     /**
      * Extract content from a file.
@@ -481,14 +483,11 @@ object Kreuzberg {
      * Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
-    suspend fun extractFile(
-        path: Path,
-        mimeType: String?,
-        config: ExtractionConfig,
-    ): ExtractionResult =
-        withContext(Dispatchers.IO) {
+    suspend fun extractFile(path: Path, mimeType: String?, config: ExtractionConfig): ExtractionResult {
+        return withContext(Dispatchers.IO) {
             Bridge.extractFile(path, mimeType, config)
         }
+    }
 
     /**
      * Synchronous wrapper for `extract_file`.
@@ -502,11 +501,9 @@ object Kreuzberg {
      * This function is only available with the `tokio-runtime` feature. For WASM targets,
      * use a truly synchronous extraction approach instead.
      */
-    fun extractFileSync(
-        path: Path,
-        mimeType: String?,
-        config: ExtractionConfig,
-    ): ExtractionResult = Bridge.extractFileSync(path, mimeType, config)
+    fun extractFileSync(path: Path, mimeType: String?, config: ExtractionConfig): ExtractionResult {
+        return Bridge.extractFileSync(path, mimeType, config)
+    }
 
     /**
      * Synchronous wrapper for `extract_bytes`.
@@ -517,11 +514,9 @@ object Kreuzberg {
      * With the `tokio-runtime` feature, this blocks the current thread using the global
      * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
      */
-    fun extractBytesSync(
-        content: ByteArray,
-        mimeType: String,
-        config: ExtractionConfig,
-    ): ExtractionResult = Bridge.extractBytesSync(content, mimeType, config)
+    fun extractBytesSync(content: ByteArray, mimeType: String, config: ExtractionConfig): ExtractionResult {
+        return Bridge.extractBytesSync(content, mimeType, config)
+    }
 
     /**
      * Synchronous wrapper for `batch_extract_file`.
@@ -529,10 +524,9 @@ object Kreuzberg {
      * Uses the global Tokio runtime for optimal performance.
      * Only available with `tokio-runtime` (WASM has no filesystem).
      */
-    fun batchExtractFileSync(
-        items: List<String>,
-        config: ExtractionConfig,
-    ): List<ExtractionResult> = Bridge.batchExtractFileSync(items, config)
+    fun batchExtractFileSync(items: List<String>, config: ExtractionConfig): List<ExtractionResult> {
+        return Bridge.batchExtractFileSync(items, config)
+    }
 
     /**
      * Synchronous wrapper for `batch_extract_bytes`.
@@ -542,10 +536,9 @@ object Kreuzberg {
      * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
      * that iterates through items and calls `extract_bytes_sync()`.
      */
-    fun batchExtractBytesSync(
-        items: List<String>,
-        config: ExtractionConfig,
-    ): List<ExtractionResult> = Bridge.batchExtractBytesSync(items, config)
+    fun batchExtractBytesSync(items: List<String>, config: ExtractionConfig): List<ExtractionResult> {
+        return Bridge.batchExtractBytesSync(items, config)
+    }
 
     /**
      * Extract content from multiple files concurrently.
@@ -577,13 +570,11 @@ object Kreuzberg {
      *
      * Per-file configuration overrides:
      */
-    suspend fun batchExtractFile(
-        items: List<String>,
-        config: ExtractionConfig,
-    ): List<ExtractionResult> =
-        withContext(Dispatchers.IO) {
+    suspend fun batchExtractFile(items: List<String>, config: ExtractionConfig): List<ExtractionResult> {
+        return withContext(Dispatchers.IO) {
             Bridge.batchExtractFile(items, config)
         }
+    }
 
     /**
      * Extract content from multiple byte arrays concurrently.
@@ -606,13 +597,11 @@ object Kreuzberg {
      *
      * Per-item configuration overrides:
      */
-    suspend fun batchExtractBytes(
-        items: List<String>,
-        config: ExtractionConfig,
-    ): List<ExtractionResult> =
-        withContext(Dispatchers.IO) {
+    suspend fun batchExtractBytes(items: List<String>, config: ExtractionConfig): List<ExtractionResult> {
+        return withContext(Dispatchers.IO) {
             Bridge.batchExtractBytes(items, config)
         }
+    }
 
     /**
      * Validates whether a field name is in the known formats registry.
@@ -624,7 +613,9 @@ object Kreuzberg {
      *
      * `true` if the field is in KNOWN_FORMATS, `false` otherwise.
      */
-    fun isValidFormatField(field: String): Boolean = Bridge.isValidFormatField(field)
+    fun isValidFormatField(field: String): Boolean {
+        return Bridge.isValidFormatField(field)
+    }
 
     /**
      * Validate that a MIME type is supported.
@@ -637,7 +628,9 @@ object Kreuzberg {
      *
      * Returns `KreuzbergError.UnsupportedFormat` if not supported.
      */
-    fun validateMimeType(mimeType: String): String = Bridge.validateMimeType(mimeType)
+    fun validateMimeType(mimeType: String): String {
+        return Bridge.validateMimeType(mimeType)
+    }
 
     /**
      * Detect or validate MIME type.
@@ -648,10 +641,9 @@ object Kreuzberg {
      *
      * The validated MIME type string.
      */
-    fun detectOrValidate(
-        path: String?,
-        mimeType: String?,
-    ): String = Bridge.detectOrValidate(path, mimeType)
+    fun detectOrValidate(path: String?, mimeType: String?): String {
+        return Bridge.detectOrValidate(path, mimeType)
+    }
 
     /**
      * Detect MIME type from raw file bytes.
@@ -670,7 +662,9 @@ object Kreuzberg {
      *
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type cannot be determined.
      */
-    fun detectMimeTypeFromBytes(content: ByteArray): String = Bridge.detectMimeTypeFromBytes(content)
+    fun detectMimeTypeFromBytes(content: ByteArray): String {
+        return Bridge.detectMimeTypeFromBytes(content)
+    }
 
     /**
      * Get file extensions for a given MIME type.
@@ -681,7 +675,9 @@ object Kreuzberg {
      *
      * A vector of file extensions (without leading dot) for the MIME type.
      */
-    fun getExtensionsForMime(mimeType: String): List<String> = Bridge.getExtensionsForMime(mimeType)
+    fun getExtensionsForMime(mimeType: String): List<String> {
+        return Bridge.getExtensionsForMime(mimeType)
+    }
 
     /**
      * List all supported document formats.
@@ -691,12 +687,14 @@ object Kreuzberg {
      *
      * The list is sorted alphabetically by file extension.
      */
-    fun listSupportedFormats(): List<SupportedFormat> = Bridge.listSupportedFormats()
+    fun listSupportedFormats(): List<SupportedFormat> {
+        return Bridge.listSupportedFormats()
+    }
 
     /**
      * Clear the processor cache (primarily for testing when registry changes).
      */
-    fun clearProcessorCache() {
+    fun clearProcessorCache(): Unit {
         Bridge.clearProcessorCache()
     }
 
@@ -720,16 +718,16 @@ object Kreuzberg {
      *
      * A vector of Elements with proper semantic types and metadata.
      */
-    fun transformExtractionResultToElements(result: ExtractionResult): List<Element> = Bridge.transformExtractionResultToElements(result)
+    fun transformExtractionResultToElements(result: ExtractionResult): List<Element> {
+        return Bridge.transformExtractionResultToElements(result)
+    }
 
     /**
      * Extract email content from either .eml or .msg format
      */
-    fun extractEmailContent(
-        data: ByteArray,
-        mimeType: String,
-        fallbackCodepage: Int?,
-    ): EmailExtractionResult = Bridge.extractEmailContent(data, mimeType, fallbackCodepage)
+    fun extractEmailContent(data: ByteArray, mimeType: String, fallbackCodepage: Int?): EmailExtractionResult {
+        return Bridge.extractEmailContent(data, mimeType, fallbackCodepage)
+    }
 
     /**
      * Converts a 2D vector of cell strings into a GitHub-Flavored Markdown table.
@@ -759,9 +757,13 @@ object Kreuzberg {
      *
      * A `String` containing the plain text table representation
      */
-    fun cellsToText(cells: List<List<String>>): String = Bridge.cellsToText(cells)
+    fun cellsToText(cells: List<List<String>>): String {
+        return Bridge.cellsToText(cells)
+    }
 
-    fun cellsToMarkdown(cells: List<List<String>>): String = Bridge.cellsToMarkdown(cells)
+    fun cellsToMarkdown(cells: List<List<String>>): String {
+        return Bridge.cellsToMarkdown(cells)
+    }
 
     /**
      * Render djot content to HTML.
@@ -773,13 +775,17 @@ object Kreuzberg {
      *
      * A `Result` containing the rendered HTML string
      */
-    fun djotToHtml(djotSource: String): String = Bridge.djotToHtml(djotSource)
+    fun djotToHtml(djotSource: String): String {
+        return Bridge.djotToHtml(djotSource)
+    }
 
     /**
      * Deduplicate a list of text strings while preserving order.
      * Adjacent duplicates and near-duplicates are removed.
      */
-    fun dedupText(texts: List<String>): List<String> = Bridge.dedupText(texts)
+    fun dedupText(texts: List<String>): List<String> {
+        return Bridge.dedupText(texts)
+    }
 
     /**
      * Normalize whitespace in a string.
@@ -790,7 +796,9 @@ object Kreuzberg {
      * - Trims leading/trailing whitespace from each line
      * - Trims leading/trailing blank lines
      */
-    fun normalizeWhitespace(s: String): String = Bridge.normalizeWhitespace(s)
+    fun normalizeWhitespace(s: String): String {
+        return Bridge.normalizeWhitespace(s)
+    }
 
     /**
      * Register all built-in extractors with the global registry.
@@ -801,26 +809,28 @@ object Kreuzberg {
      * **Note:** This is called automatically on first extraction operation.
      * Explicit calling is optional.
      */
-    fun registerDefaultExtractors() {
+    fun registerDefaultExtractors(): Unit {
         Bridge.registerDefaultExtractors()
     }
 
     /**
      * Unregister a document extractor by name.
      */
-    fun unregisterExtractor(name: String) {
+    fun unregisterExtractor(name: String): Unit {
         Bridge.unregisterExtractor(name)
     }
 
     /**
      * List names of all registered document extractors.
      */
-    fun listExtractors(): List<String> = Bridge.listExtractors()
+    fun listExtractors(): List<String> {
+        return Bridge.listExtractors()
+    }
 
     /**
      * Remove all registered document extractors.
      */
-    fun clearExtractors() {
+    fun clearExtractors(): Unit {
         Bridge.clearExtractors()
     }
 
@@ -834,7 +844,7 @@ object Kreuzberg {
      * - `Ok(())` if the backend was unregistered or didn't exist
      * - `Err(...)` if the shutdown method failed
      */
-    fun unregisterOcrBackend(name: String) {
+    fun unregisterOcrBackend(name: String): Unit {
         Bridge.unregisterOcrBackend(name)
     }
 
@@ -847,7 +857,9 @@ object Kreuzberg {
      *
      * A vector of OCR backend names.
      */
-    fun listOcrBackends(): List<String> = Bridge.listOcrBackends()
+    fun listOcrBackends(): List<String> {
+        return Bridge.listOcrBackends()
+    }
 
     /**
      * Clear all OCR backends from the global registry.
@@ -859,7 +871,7 @@ object Kreuzberg {
      * - `Ok(())` if all backends were cleared successfully
      * - `Err(...)` if any shutdown method failed
      */
-    fun clearOcrBackends() {
+    fun clearOcrBackends(): Unit {
         Bridge.clearOcrBackends()
     }
 
@@ -874,36 +886,42 @@ object Kreuzberg {
      * - `Ok(Vec<String>)` - Vector of post-processor names
      * - `Err(...)` if the registry lock is poisoned
      */
-    fun listPostProcessors(): List<String> = Bridge.listPostProcessors()
+    fun listPostProcessors(): List<String> {
+        return Bridge.listPostProcessors()
+    }
 
     /**
      * Unregister a renderer by name.
      */
-    fun unregisterRenderer(name: String) {
+    fun unregisterRenderer(name: String): Unit {
         Bridge.unregisterRenderer(name)
     }
 
     /**
      * List names of all registered renderers.
      */
-    fun listRenderers(): List<String> = Bridge.listRenderers()
+    fun listRenderers(): List<String> {
+        return Bridge.listRenderers()
+    }
 
     /**
      * Remove all registered renderers.
      */
-    fun clearRenderers() {
+    fun clearRenderers(): Unit {
         Bridge.clearRenderers()
     }
 
     /**
      * List names of all registered validators.
      */
-    fun listValidators(): List<String> = Bridge.listValidators()
+    fun listValidators(): List<String> {
+        return Bridge.listValidators()
+    }
 
     /**
      * Remove all registered validators.
      */
-    fun clearValidators() {
+    fun clearValidators(): Unit {
         Bridge.clearValidators()
     }
 
@@ -912,7 +930,9 @@ object Kreuzberg {
      *
      * Prevents PII from appearing in traces.
      */
-    fun sanitizeFilename(path: Path): String = Bridge.sanitizeFilename(path)
+    fun sanitizeFilename(path: Path): String {
+        return Bridge.sanitizeFilename(path)
+    }
 
     /**
      * Sanitize a file path to return only the filename.
@@ -920,7 +940,9 @@ object Kreuzberg {
      * Prevents PII (personally identifiable information) from appearing in
      * traces by only recording filenames instead of full paths.
      */
-    fun sanitizePath(path: Path): String = Bridge.sanitizePath(path)
+    fun sanitizePath(path: Path): String {
+        return Bridge.sanitizePath(path)
+    }
 
     /**
      * Validates bytes as UTF-8 without conversion to string slice.
@@ -936,9 +958,13 @@ object Kreuzberg {
      *
      * This function is optimized for early exit on invalid sequences.
      */
-    fun isValidUtf8(bytes: ByteArray): Boolean = Bridge.isValidUtf8(bytes)
+    fun isValidUtf8(bytes: ByteArray): Boolean {
+        return Bridge.isValidUtf8(bytes)
+    }
 
-    fun cleanExtractedText(text: String): String = Bridge.cleanExtractedText(text)
+    fun cleanExtractedText(text: String): String {
+        return Bridge.cleanExtractedText(text)
+    }
 
     /**
      * Reduces token count in text while preserving meaning and structure.
@@ -955,11 +981,9 @@ object Kreuzberg {
      *
      * Returns an error if the language hint is invalid or stopwords cannot be loaded.
      */
-    fun reduceTokens(
-        text: String,
-        config: TokenReductionConfig,
-        languageHint: String?,
-    ): String = Bridge.reduceTokens(text, config, languageHint)
+    fun reduceTokens(text: String, config: TokenReductionConfig, languageHint: String?): String {
+        return Bridge.reduceTokens(text, config, languageHint)
+    }
 
     /**
      * Reduces token count for multiple texts efficiently using parallel processing.
@@ -976,103 +1000,86 @@ object Kreuzberg {
      *
      * Returns an error if the language hint is invalid or stopwords cannot be loaded.
      */
-    fun batchReduceTokens(
-        texts: List<String>,
-        config: TokenReductionConfig,
-        languageHint: String?,
-    ): List<String> = Bridge.batchReduceTokens(texts, config, languageHint)
+    fun batchReduceTokens(texts: List<String>, config: TokenReductionConfig, languageHint: String?): List<String> {
+        return Bridge.batchReduceTokens(texts, config, languageHint)
+    }
 
     /**
      * Create a bold annotation for the given byte range.
      */
-    fun bold(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.bold(start, end)
+    fun bold(start: Int, end: Int): TextAnnotation {
+        return Bridge.bold(start, end)
+    }
 
     /**
      * Create an italic annotation for the given byte range.
      */
-    fun italic(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.italic(start, end)
+    fun italic(start: Int, end: Int): TextAnnotation {
+        return Bridge.italic(start, end)
+    }
 
     /**
      * Create an underline annotation for the given byte range.
      */
-    fun underline(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.underline(start, end)
+    fun underline(start: Int, end: Int): TextAnnotation {
+        return Bridge.underline(start, end)
+    }
 
     /**
      * Create a link annotation for the given byte range.
      */
-    fun link(
-        start: Int,
-        end: Int,
-        url: String,
-        title: String?,
-    ): TextAnnotation = Bridge.link(start, end, url, title)
+    fun link(start: Int, end: Int, url: String, title: String?): TextAnnotation {
+        return Bridge.link(start, end, url, title)
+    }
 
     /**
      * Create a code (inline) annotation for the given byte range.
      */
-    fun code(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.code(start, end)
+    fun code(start: Int, end: Int): TextAnnotation {
+        return Bridge.code(start, end)
+    }
 
     /**
      * Create a strikethrough annotation for the given byte range.
      */
-    fun strikethrough(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.strikethrough(start, end)
+    fun strikethrough(start: Int, end: Int): TextAnnotation {
+        return Bridge.strikethrough(start, end)
+    }
 
     /**
      * Create a subscript annotation for the given byte range.
      */
-    fun subscript(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.subscript(start, end)
+    fun subscript(start: Int, end: Int): TextAnnotation {
+        return Bridge.subscript(start, end)
+    }
 
     /**
      * Create a superscript annotation for the given byte range.
      */
-    fun superscript(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.superscript(start, end)
+    fun superscript(start: Int, end: Int): TextAnnotation {
+        return Bridge.superscript(start, end)
+    }
 
     /**
      * Create a font size annotation for the given byte range.
      */
-    fun fontSize(
-        start: Int,
-        end: Int,
-        value: String,
-    ): TextAnnotation = Bridge.fontSize(start, end, value)
+    fun fontSize(start: Int, end: Int, value: String): TextAnnotation {
+        return Bridge.fontSize(start, end, value)
+    }
 
     /**
      * Create a color annotation for the given byte range.
      */
-    fun color(
-        start: Int,
-        end: Int,
-        value: String,
-    ): TextAnnotation = Bridge.color(start, end, value)
+    fun color(start: Int, end: Int, value: String): TextAnnotation {
+        return Bridge.color(start, end, value)
+    }
 
     /**
      * Create a highlight annotation for the given byte range.
      */
-    fun highlight(
-        start: Int,
-        end: Int,
-    ): TextAnnotation = Bridge.highlight(start, end)
+    fun highlight(start: Int, end: Int): TextAnnotation {
+        return Bridge.highlight(start, end)
+    }
 
     /**
      * Classify a URL string into the appropriate `UriKind`.
@@ -1081,7 +1088,9 @@ object Kreuzberg {
      * - `#` prefix → `Anchor`
      * - everything else → `Hyperlink`
      */
-    fun classifyUri(url: String): UriKind = Bridge.classifyUri(url)
+    fun classifyUri(url: String): UriKind {
+        return Bridge.classifyUri(url)
+    }
 
     /**
      * Decode raw bytes into UTF-8, using heuristics and fallback encodings when necessary.
@@ -1090,10 +1099,9 @@ object Kreuzberg {
      * an encoding detector, and finally tries a small curated list before returning a
      * mojibake-cleaned string.
      */
-    fun safeDecode(
-        byteData: ByteArray,
-        encoding: String?,
-    ): String = Bridge.safeDecode(byteData, encoding)
+    fun safeDecode(byteData: ByteArray, encoding: String?): String {
+        return Bridge.safeDecode(byteData, encoding)
+    }
 
     /**
      * Estimate how trustworthy a decoded string is on a 0.0–1.0 scale.
@@ -1101,7 +1109,9 @@ object Kreuzberg {
      * Scores close to 1.0 indicate mostly printable characters, whereas lower scores
      * point to mojibake, control characters, or suspicious character mixes.
      */
-    fun calculateTextConfidence(text: String): Double = Bridge.calculateTextConfidence(text)
+    fun calculateTextConfidence(text: String): Double {
+        return Bridge.calculateTextConfidence(text)
+    }
 
     /**
      * Create a pre-configured string buffer pool for batch processing.
@@ -1110,10 +1120,9 @@ object Kreuzberg {
      *
      * A pool configured for text accumulation with reasonable defaults.
      */
-    fun createStringBufferPool(
-        poolSize: Long,
-        bufferCapacity: Long,
-    ): StringBufferPool = Bridge.createStringBufferPool(poolSize, bufferCapacity)
+    fun createStringBufferPool(poolSize: Long, bufferCapacity: Long): StringBufferPool {
+        return Bridge.createStringBufferPool(poolSize, bufferCapacity)
+    }
 
     /**
      * Create a pre-configured byte buffer pool for batch processing.
@@ -1122,17 +1131,18 @@ object Kreuzberg {
      *
      * A pool configured for binary data handling with reasonable defaults.
      */
-    fun createByteBufferPool(
-        poolSize: Long,
-        bufferCapacity: Long,
-    ): ByteBufferPool = Bridge.createByteBufferPool(poolSize, bufferCapacity)
+    fun createByteBufferPool(poolSize: Long, bufferCapacity: Long): ByteBufferPool {
+        return Bridge.createByteBufferPool(poolSize, bufferCapacity)
+    }
 
     /**
      * Generate OpenAPI JSON schema.
      *
      * Returns the complete OpenAPI 3.1 specification as a JSON string.
      */
-    fun openapiJson(): String = Bridge.openapiJson()
+    fun openapiJson(): String {
+        return Bridge.openapiJson()
+    }
 
     /**
      * Start the API server with default host and port.
@@ -1142,10 +1152,11 @@ object Kreuzberg {
      * Uses config file discovery (searches current/parent directories for kreuzberg.toml/yaml/json).
      * Validates plugins at startup to help diagnose configuration issues.
      */
-    suspend fun serveDefault(): Unit =
-        withContext(Dispatchers.IO) {
+    suspend fun serveDefault(): Unit {
+        return withContext(Dispatchers.IO) {
             Bridge.serveDefault()
         }
+    }
 
     /**
      * Split text into chunks with optional page boundary tracking.
@@ -1157,11 +1168,9 @@ object Kreuzberg {
      *
      * A ChunkingResult containing all chunks and their metadata.
      */
-    fun chunkText(
-        text: String,
-        config: ChunkingConfig,
-        pageBoundaries: List<PageBoundary>?,
-    ): ChunkingResult = Bridge.chunkText(text, config, pageBoundaries)
+    fun chunkText(text: String, config: ChunkingConfig, pageBoundaries: List<PageBoundary>?): ChunkingResult {
+        return Bridge.chunkText(text, config, pageBoundaries)
+    }
 
     /**
      * Chunk text with an optional separate markdown source for heading context resolution.
@@ -1170,12 +1179,9 @@ object Kreuzberg {
      * heading map. This is needed when `text` is plain text (no markdown headings) but
      * the original document had headings that were stripped during rendering.
      */
-    fun chunkTextWithHeadingSource(
-        text: String,
-        config: ChunkingConfig,
-        pageBoundaries: List<PageBoundary>?,
-        headingSource: String?,
-    ): ChunkingResult = Bridge.chunkTextWithHeadingSource(text, config, pageBoundaries, headingSource)
+    fun chunkTextWithHeadingSource(text: String, config: ChunkingConfig, pageBoundaries: List<PageBoundary>?, headingSource: String?): ChunkingResult {
+        return Bridge.chunkTextWithHeadingSource(text, config, pageBoundaries, headingSource)
+    }
 
     /**
      * Batch process multiple texts with the same configuration.
@@ -1191,10 +1197,9 @@ object Kreuzberg {
      *
      * Returns an error if chunking any individual text fails.
      */
-    fun chunkTextsBatch(
-        texts: List<String>,
-        config: ChunkingConfig,
-    ): List<ChunkingResult> = Bridge.chunkTextsBatch(texts, config)
+    fun chunkTextsBatch(texts: List<String>, config: ChunkingConfig): List<ChunkingResult> {
+        return Bridge.chunkTextsBatch(texts, config)
+    }
 
     /**
      * Split text into semantically coherent chunks.
@@ -1203,26 +1208,30 @@ object Kreuzberg {
      * embedding-based) topic boundaries, then merges segments into chunks that
      * respect those boundaries and the configured size budget.
      */
-    fun chunkSemantic(
-        text: String,
-        config: ChunkingConfig,
-        pageBoundaries: List<PageBoundary>?,
-    ): ChunkingResult = Bridge.chunkSemantic(text, config, pageBoundaries)
+    fun chunkSemantic(text: String, config: ChunkingConfig, pageBoundaries: List<PageBoundary>?): ChunkingResult {
+        return Bridge.chunkSemantic(text, config, pageBoundaries)
+    }
 
     /**
      * L2-normalize a vector.
      */
-    fun normalize(v: List<Float>): List<Float> = Bridge.normalize(v)
+    fun normalize(v: List<Float>): List<Float> {
+        return Bridge.normalize(v)
+    }
 
     /**
      * Get a preset by name.
      */
-    fun getPreset(name: String): String? = Bridge.getPreset(name)
+    fun getPreset(name: String): String? {
+        return Bridge.getPreset(name)
+    }
 
     /**
      * List all available preset names.
      */
-    fun listPresets(): List<String> = Bridge.listPresets()
+    fun listPresets(): List<String> {
+        return Bridge.listPresets()
+    }
 
     /**
      * Eagerly download and cache an embedding model without returning the handle.
@@ -1235,10 +1244,7 @@ object Kreuzberg {
      * requires ONNX Runtime and uses significant memory. For download-only
      * scenarios (e.g., init containers), use `download_model` instead.
      */
-    fun warmModel(
-        modelType: EmbeddingModelType,
-        cacheDir: Path?,
-    ) {
+    fun warmModel(modelType: EmbeddingModelType, cacheDir: Path?): Unit {
         Bridge.warmModel(modelType, cacheDir)
     }
 
@@ -1252,24 +1258,16 @@ object Kreuzberg {
      * This is ideal for init containers or CI environments where you want to
      * pre-populate the cache without loading models into memory.
      */
-    fun downloadModel(
-        modelType: EmbeddingModelType,
-        cacheDir: Path?,
-    ) {
+    fun downloadModel(modelType: EmbeddingModelType, cacheDir: Path?): Unit {
         Bridge.downloadModel(modelType, cacheDir)
     }
 
     /**
      * Calculate optimal DPI with min/max constraints
      */
-    fun calculateOptimalDpi(
-        pageWidth: Double,
-        pageHeight: Double,
-        targetDpi: Int,
-        maxDimension: Int,
-        minDpi: Int,
-        maxDpi: Int,
-    ): Int = Bridge.calculateOptimalDpi(pageWidth, pageHeight, targetDpi, maxDimension, minDpi, maxDpi)
+    fun calculateOptimalDpi(pageWidth: Double, pageHeight: Double, targetDpi: Int, maxDimension: Int, minDpi: Int, maxDpi: Int): Int {
+        return Bridge.calculateOptimalDpi(pageWidth, pageHeight, targetDpi, maxDimension, minDpi, maxDpi)
+    }
 
     /**
      * Detect languages in text using whatlang.
@@ -1277,10 +1275,9 @@ object Kreuzberg {
      * Returns a list of detected language codes (ISO 639-3 format).
      * Returns `null` if no languages could be detected with sufficient confidence.
      */
-    fun detectLanguages(
-        text: String,
-        config: LanguageDetectionConfig,
-    ): List<String>? = Bridge.detectLanguages(text, config)
+    fun detectLanguages(text: String, config: LanguageDetectionConfig): List<String>? {
+        return Bridge.detectLanguages(text, config)
+    }
 
     /**
      * Extract keywords from text using the specified algorithm.
@@ -1298,17 +1295,18 @@ object Kreuzberg {
      * - The specified algorithm feature is not enabled
      * - Keyword extraction fails
      */
-    fun extractKeywords(
-        text: String,
-        config: KeywordConfig,
-    ): List<Keyword> = Bridge.extractKeywords(text, config)
+    fun extractKeywords(text: String, config: KeywordConfig): List<Keyword> {
+        return Bridge.extractKeywords(text, config)
+    }
 
     /**
      * Compute a blake3 hash string from input data.
      *
      * Returns a 32-character hex string (128 bits of blake3 output).
      */
-    fun computeHash(data: String): String = Bridge.computeHash(data)
+    fun computeHash(data: String): String {
+        return Bridge.computeHash(data)
+    }
 
     /**
      * Render a single PDF page to a PNG-encoded byte buffer.
@@ -1318,14 +1316,13 @@ object Kreuzberg {
      * Returns an error if the PDF is invalid, the page index is out of bounds,
      * or if the page fails to render.
      */
-    fun renderPdfPageToPng(
-        pdfBytes: ByteArray,
-        pageIndex: Long,
-        dpi: Int?,
-        password: String?,
-    ): ByteArray = Bridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password)
+    fun renderPdfPageToPng(pdfBytes: ByteArray, pageIndex: Long, dpi: Int?, password: String?): ByteArray {
+        return Bridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password)
+    }
 
-    fun extractTextFromPdf(pdfBytes: ByteArray): String = Bridge.extractTextFromPdf(pdfBytes)
+    fun extractTextFromPdf(pdfBytes: ByteArray): String {
+        return Bridge.extractTextFromPdf(pdfBytes)
+    }
 
     /**
      * Serialize an `ExtractionResult` to TOON (Token-Oriented Object Notation).
@@ -1333,10 +1330,15 @@ object Kreuzberg {
      * TOON is a token-efficient alternative to JSON for LLM prompts.
      * Losslessly convertible to/from JSON but uses fewer tokens.
      */
-    fun serializeToToon(result: ExtractionResult): String = Bridge.serializeToToon(result)
+    fun serializeToToon(result: ExtractionResult): String {
+        return Bridge.serializeToToon(result)
+    }
 
     /**
      * Serialize an `ExtractionResult` to pretty-printed JSON.
      */
-    fun serializeToJson(result: ExtractionResult): String = Bridge.serializeToJson(result)
+    fun serializeToJson(result: ExtractionResult): String {
+        return Bridge.serializeToJson(result)
+    }
+
 }

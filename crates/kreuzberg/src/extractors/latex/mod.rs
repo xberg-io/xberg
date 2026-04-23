@@ -1114,7 +1114,7 @@ impl DocumentExtractor for LatexExtractor {
         let inject_placeholders = config
             .images
             .as_ref()
-            .map(|img| img.inject_placeholders)
+            .and_then(|img| img.inject_placeholders)
             .unwrap_or(true);
         let latex_str = String::from_utf8_lossy(content).into_owned();
         let (_text, metadata, _tables) = Self::extract_from_latex(&latex_str);

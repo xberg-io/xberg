@@ -1200,7 +1200,7 @@ impl DocumentExtractor for DocbookExtractor {
         let inject_placeholders = config
             .images
             .as_ref()
-            .map(|img| img.inject_placeholders)
+            .and_then(|img| img.inject_placeholders)
             .unwrap_or(true);
         let mut budget2 = SecurityBudget::from_config(config);
         let mut doc = build_docbook_internal_document(&docbook_content, inject_placeholders, &mut budget2)?;

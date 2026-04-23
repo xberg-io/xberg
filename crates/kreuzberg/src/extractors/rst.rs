@@ -1455,7 +1455,7 @@ impl DocumentExtractor for RstExtractor {
         let inject_placeholders = config
             .images
             .as_ref()
-            .map(|img| img.inject_placeholders)
+            .and_then(|img| img.inject_placeholders)
             .unwrap_or(true);
         let text = String::from_utf8_lossy(content).into_owned();
 
