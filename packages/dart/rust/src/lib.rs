@@ -96,7 +96,7 @@ pub struct ImageExtractionConfig {
     pub extract_images: bool,
     pub target_dpi: i64,
     pub max_image_dimension: i64,
-    pub inject_placeholders: bool,
+    pub inject_placeholders: Option<bool>,
     pub auto_adjust_dpi: bool,
     pub min_dpi: i64,
     pub max_dpi: i64,

@@ -470,7 +470,7 @@ impl SyncExtractor for HtmlExtractor {
         let inject_placeholders = config
             .images
             .as_ref()
-            .map(|img| img.inject_placeholders)
+            .and_then(|img| img.inject_placeholders)
             .unwrap_or(true);
 
         let mut doc = if let Some(ref structure) = doc_structure {

@@ -26,8 +26,12 @@ pub struct ImageExtractionConfig {
     /// When `true` (default), image references like `![Image 1](embedded:p1_i0)`
     /// are appended to the markdown. Set to `false` to extract images as data
     /// without polluting the markdown output.
-    #[serde(default = "default_true")]
-    pub inject_placeholders: bool,
+    ///
+    /// `None` means use the default (`true`). This allows language bindings to
+    /// omit the field entirely and get the correct default without explicitly
+    /// sending `false`.
+    #[serde(default)]
+    pub inject_placeholders: Option<bool>,
 
     /// Automatically adjust DPI based on image content
     #[serde(default = "default_true")]
@@ -145,7 +149,7 @@ mod tests {
     #[test]
     fn test_max_images_per_page_absent_in_json_deserializes_as_none() {
         let json = r#"{"extract_images":true,"target_dpi":300,"max_image_dimension":4096,
-                       "inject_placeholders":true,"auto_adjust_dpi":true,
+                       "inject_placeholders":null,"auto_adjust_dpi":true,
                        "min_dpi":72,"max_dpi":600}"#;
         let config: ImageExtractionConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.max_images_per_page, None);
