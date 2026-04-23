@@ -11,12 +11,17 @@ members = [
     "crates/kreuzberg-tesseract",
     "crates/kreuzberg-wasm",
     "packages/dart/rust",
-    "packages/elixir/native/kreuzberg_nif",
     "packages/swift/rust",
+
     "tools/benchmark-harness",
     "tools/snippet-runner",
 ]
-exclude = ["e2e/rust", "packages/r/src/rust", "packages/ruby/ext/kreuzberg_rb"]
+exclude = [
+    "e2e/rust",
+    "packages/elixir/native/kreuzberg_nif",
+    "packages/r/src/rust",
+    "packages/ruby/ext/kreuzberg_rb",
+]
 default-members = ["crates/kreuzberg", "crates/kreuzberg-cli"]
 resolver = "2"
 
