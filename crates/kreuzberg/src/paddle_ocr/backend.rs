@@ -468,7 +468,12 @@ impl OcrBackend for PaddleOcrBackend {
         let effective_accel = self.resolve_acceleration(config.acceleration.as_ref());
 
         let (text, ocr_elements) = self
-            .do_ocr(&ocr_image_bytes, paddle_lang, Arc::clone(&effective_config), effective_accel.as_ref())
+            .do_ocr(
+                &ocr_image_bytes,
+                paddle_lang,
+                Arc::clone(&effective_config),
+                effective_accel.as_ref(),
+            )
             .await?;
 
         let text_blocks_count = ocr_elements.len();

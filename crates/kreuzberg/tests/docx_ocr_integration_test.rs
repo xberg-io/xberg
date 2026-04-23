@@ -13,7 +13,7 @@
 mod helpers;
 
 use helpers::*;
-use kreuzberg::core::config::{ExtractionConfig, OcrConfig, ImageExtractionConfig};
+use kreuzberg::core::config::{ExtractionConfig, ImageExtractionConfig, OcrConfig};
 use kreuzberg::extract_file_sync;
 
 #[test]
@@ -54,7 +54,9 @@ fn test_docx_ocr_content_injection() {
 
     // Check if any image has an OCR result.
     let has_ocr_content = images.iter().any(|img| {
-        img.ocr_result.as_ref().map_or(false, |ocr| !ocr.content.trim().is_empty())
+        img.ocr_result
+            .as_ref()
+            .map_or(false, |ocr| !ocr.content.trim().is_empty())
     });
 
     // If Tesseract actually worked and produced text, it MUST be in the top-level content.
@@ -68,7 +70,10 @@ fn test_docx_ocr_content_injection() {
                 }
             }
         }
-        assert!(found_in_content, "OCR content from images must be present in the final document content");
+        assert!(
+            found_in_content,
+            "OCR content from images must be present in the final document content"
+        );
     } else {
         // If no OCR content was produced (e.g. empty images or Tesseract failure),
         // we can't fully verify the injection logic here without mocking,
