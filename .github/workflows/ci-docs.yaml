@@ -52,7 +52,7 @@ jobs:
         with:
           python-version: "3.13"
           cache-prefix: docs-build
-          install-command: "uv sync --group docs --no-install-project --no-install-workspace --frozen"
+          install-command: "uv sync --group doc --no-install-project --no-install-workspace --frozen"
 
       - name: Build docs (strict)
         run: scripts/ci/docs/build.sh --strict
