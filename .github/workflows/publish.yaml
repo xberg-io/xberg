@@ -1383,6 +1383,16 @@ jobs:
           echo "=== Native libraries ==="
           find lib -name '*.so' -o -name '*.bundle' -o -name '*.dylib' 2>/dev/null | head -20
 
+      - name: Remove staged PDFium runtime artifacts
+        shell: bash
+        working-directory: packages/ruby
+        run: |
+          # libpdfium.dylib/.so/.dll was staged into lib/ for the Rust build to embed via
+          # include_bytes!. Now that compilation is done it is baked into kreuzberg_rb.bundle
+          # and the original file in lib/ is redundant. Remove it so it is not packaged into
+          # the gem, saving ~5 MB per install.
+          rm -f lib/libpdfium.dylib lib/libpdfium.so lib/pdfium.dll
+
       - name: Build platform gem
         shell: bash
         working-directory: packages/ruby
