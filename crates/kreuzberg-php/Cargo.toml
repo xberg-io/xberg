@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 async-trait = "0.1"
 ext-php-rs = "0.15"
-kreuzberg = { path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "layout-detection", "embeddings", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "tokio-runtime", "api", "mcp", "liter-llm"] }
+kreuzberg = { path = "../kreuzberg", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

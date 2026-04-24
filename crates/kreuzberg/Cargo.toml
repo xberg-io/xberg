@@ -30,6 +30,8 @@ crate-type = ["rlib"]
 [features]
 default = ["tokio-runtime", "simd-utf8"]
 
+# Build-time only: enables pprof flamegraph profiling. No #[cfg] gates —
+# activates the pprof dependency (non-Windows, non-WASM only).
 profiling = ["dep:pprof"]
 
 pool-metrics = []
@@ -43,6 +45,8 @@ pdf = ["dep:pdfium-render", "dep:lopdf", "dep:image", "dep:flate2", "html"]
 # Provides cleaner word spacing for PDFs with broken font CMaps.
 # Requires 'pdf' feature. Not included in 'full' — opt-in only.
 pdf-oxide = ["pdf", "dep:pdf_oxide"]
+# Build-time only: controls PDFium linking strategy via build.rs/pdfium-render.
+# No #[cfg] gates in kreuzberg source — effect is purely at link time.
 static-pdfium = ["pdf"]
 bundled-pdfium = ["pdf"]
 system-pdfium = ["pdf"]
@@ -108,6 +112,8 @@ paddle-ocr = [
 # Bundle ORT binaries via the official Microsoft release (includes CoreML on macOS, CUDA on Linux).
 # When active, no system ORT library is required and ort_discovery is skipped.
 ort-bundled = ["ort/download-binaries", "ort/tls-native"]
+# Build-time only: configures ORT to load ONNX Runtime dynamically at runtime.
+# No #[cfg] gates — passed through to the `ort` crate.
 ort-dynamic = ["ort/load-dynamic"]
 # Layout detection via ONNX Runtime (YOLO + RT-DETR)
 # Document orientation detection using PP-LCNet for auto_rotate
@@ -178,52 +184,34 @@ wasm-target = [
     "archives",
     "tree-sitter-wasm",
 ]
+# WASM only: enables wasm-bindgen-rayon for multi-threaded WASM builds.
+# No #[cfg] gates — activates the wasm-bindgen-rayon dependency.
 wasm-threads = ["dep:wasm-bindgen-rayon"]
 
+# --- Aggregate features ---
+
+# Document format extractors only — no infrastructure or text analysis.
 formats = [
-    "pdf",
-    "excel",
-    "office",
-    "hwp",
-    "iwork",
-    "email",
-    "html",
-    "xml",
-    "archives",
-    "language-detection",
-    "chunking",
-    "quality",
-    "keywords",
-    "mdx",
-    "api",
-    "mcp",
-    "otel",
-    "chunking-tokenizers",
+    "pdf", "excel", "office", "hwp", "iwork",
+    "email", "html", "xml", "archives", "mdx",
 ]
+# Text processing and analysis capabilities.
+analysis = ["language-detection", "chunking", "quality", "keywords"]
+# Network services and observability infrastructure.
+services = ["api", "mcp", "otel"]
+# Everything — all formats, analysis, services, OCR, ML, and code intelligence.
 full = [
-    "formats",
-    "ocr",
-    "paddle-ocr",
-    "layout-detection",
-    "embeddings",
-    "api",
-    "mcp",
-    "otel",
-    "tree-sitter",
-    "liter-llm",
+    "formats", "analysis", "services",
+    "ocr", "paddle-ocr", "layout-detection", "embeddings",
+    "chunking-tokenizers", "tree-sitter", "liter-llm", "tokio-runtime",
 ]
+# Server deployment preset — formats + analysis + services + OCR.
 server = [
-    "pdf",
-    "excel",
-    "html",
-    "ocr",
-    "paddle-ocr",
-    "layout-detection",
-    "chunking",
-    "api",
-    "mcp",
+    "formats", "analysis", "services",
+    "ocr", "paddle-ocr", "layout-detection",
 ]
-cli = ["api", "mcp", "chunking"]
+# CLI-only features (thin gate for kreuzberg-cli).
+cli = ["services", "chunking"]
 
 [dependencies]
 ahash = { workspace = true }

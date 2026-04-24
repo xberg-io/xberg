@@ -8,7 +8,7 @@ license = "Elastic-2.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-kreuzberg = { path = "../../../../crates/kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "layout-detection", "embeddings", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "tokio-runtime", "api", "mcp", "liter-llm"] }
+kreuzberg = { path = "../../../../crates/kreuzberg", features = ["full"] }
 rustler = "0.37"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

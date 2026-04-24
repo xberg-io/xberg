@@ -28,7 +28,6 @@ kreuzberg = { path = "../kreuzberg", features = [
     "html",
     "xml",
     "archives",
-    "embeddings",
     "language-detection",
     "chunking",
     "quality",
@@ -38,8 +37,6 @@ kreuzberg = { path = "../kreuzberg", features = [
     "tree-sitter-wasm",
     "liter-llm",
     "stopwords",
-    "api",
-    "mcp",
 ] }
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"

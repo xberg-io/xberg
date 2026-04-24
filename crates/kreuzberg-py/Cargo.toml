@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 async-trait = "0.1"
-kreuzberg = { path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "layout-detection", "embeddings", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "tokio-runtime", "api", "mcp", "liter-llm"] }
+kreuzberg = { path = "../kreuzberg", features = ["full"] }
 pyo3 = { version = "0.28", features = ["extension-module"] }
 pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 serde = { version = "1", features = ["derive"] }
