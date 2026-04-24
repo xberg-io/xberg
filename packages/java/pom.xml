@@ -46,7 +46,7 @@
         <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
         <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
         <maven-install-plugin.version>3.1.3</maven-install-plugin.version>
-        <maven-deploy-plugin.version>3.1.3</maven-deploy-plugin.version>
+        <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
         <maven-site-plugin.version>4.0.0</maven-site-plugin.version>
         <central-publishing-plugin.version>0.10.0</central-publishing-plugin.version>
         <spotless-maven-plugin.version>3.4.0</spotless-maven-plugin.version>
