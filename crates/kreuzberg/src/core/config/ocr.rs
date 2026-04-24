@@ -310,6 +310,7 @@ impl OcrConfig {
     ///
     /// Typos in backend names are caught at configuration validation time, not at runtime.
     /// Also validates pipeline stage backends when a pipeline is configured.
+    #[cfg(test)]
     pub(crate) fn validate(&self) -> Result<(), KreuzbergError> {
         validate_ocr_backend(&self.backend)?;
         // When backend is "vlm", vlm_config must be present.

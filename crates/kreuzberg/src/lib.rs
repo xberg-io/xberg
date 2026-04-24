@@ -42,7 +42,6 @@ pub mod error;
 pub mod extraction;
 pub mod extractors;
 pub mod model_cache;
-pub mod panic_context;
 pub mod plugins;
 pub mod rendering;
 pub mod telemetry;

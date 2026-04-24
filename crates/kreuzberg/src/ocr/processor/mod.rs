@@ -93,6 +93,7 @@ impl OcrProcessor {
         self.cache.clear()
     }
 
+    #[cfg(test)]
     pub(crate) fn get_cache_stats(&self) -> Result<super::cache::OcrCacheStats, OcrError> {
         self.cache.get_stats()
     }
@@ -122,6 +123,7 @@ impl OcrProcessor {
     ///
     /// This method processes OCR operations in parallel across CPU cores for improved throughput.
     /// Results are returned in the same order as the input file paths.
+    #[cfg(test)]
     pub(crate) fn process_image_files_batch(
         &self,
         file_paths: Vec<String>,

@@ -87,6 +87,7 @@ impl OcrBoundingGeometry {
     }
 
     /// Check if this geometry overlaps with another.
+    #[cfg(test)]
     pub(crate) fn overlaps(&self, other: &Self) -> bool {
         let (l1, t1, w1, h1) = self.to_aabb();
         let (l2, t2, w2, h2) = other.to_aabb();
@@ -290,6 +291,7 @@ impl OcrElement {
     }
 
     /// Set rotation information.
+    #[cfg(test)]
     pub(crate) fn with_rotation(mut self, rotation: OcrRotation) -> Self {
         self.rotation = Some(rotation);
         self

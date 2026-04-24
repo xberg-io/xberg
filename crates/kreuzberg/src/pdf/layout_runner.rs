@@ -507,63 +507,6 @@ pub(crate) fn detect_layout_for_document(
     Ok((all_results, report, all_images))
 }
 
-/// Run layout detection on pre-rendered images.
-///
-/// Returns pixel-space [`DetectionResult`]s — no PDF coordinate conversion.
-/// Use this when images are already available (e.g., from the OCR rendering
-/// path) to avoid redundant PDF re-rendering.
-pub(crate) fn detect_layout_for_images(
-    images: &[image::DynamicImage],
-    engine: &mut LayoutEngine,
-) -> Result<Vec<DetectionResult>> {
-    const LAYOUT_BATCH_SIZE: usize = 4;
-
-    // Pre-convert any non-RGB8 images once so we can borrow them in chunks.
-    let rgb_owned: Vec<Option<image::RgbImage>> = images
-        .iter()
-        .map(|img| match img {
-            image::DynamicImage::ImageRgb8(_) => None,
-            other => Some(other.to_rgb8()),
-        })
-        .collect();
-    let rgb_refs: Vec<&image::RgbImage> = images
-        .iter()
-        .zip(rgb_owned.iter())
-        .map(|(img, owned)| match owned {
-            Some(r) => r,
-            None => match img {
-                image::DynamicImage::ImageRgb8(r) => r,
-                _ => unreachable!(),
-            },
-        })
-        .collect();
-
-    let mut results = Vec::with_capacity(images.len());
-
-    for (chunk_start, chunk) in rgb_refs.chunks(LAYOUT_BATCH_SIZE).enumerate() {
-        let page_base = chunk_start * LAYOUT_BATCH_SIZE;
-        let batch_results = engine.detect_batch(chunk).map_err(|e| {
-            crate::pdf::error::PdfError::RenderingFailed(format!(
-                "Layout detection failed on pages {}–{}: {}",
-                page_base,
-                page_base + chunk.len() - 1,
-                e
-            ))
-        })?;
-
-        for (offset, (detection, _timings)) in batch_results.into_iter().enumerate() {
-            tracing::debug!(
-                page = page_base + offset,
-                detections = detection.detections.len(),
-                "Layout detection complete for pre-rendered page"
-            );
-            results.push(detection);
-        }
-    }
-
-    Ok(results)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

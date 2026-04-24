@@ -27,6 +27,7 @@ impl BBox {
         self.width() * self.height()
     }
 
+    #[cfg(test)]
     pub(crate) fn center(&self) -> (f32, f32) {
         ((self.x1 + self.x2) / 2.0, (self.y1 + self.y2) / 2.0)
     }
@@ -168,6 +169,7 @@ impl LayoutClass {
     /// Map from PubLayNet class ID (0-4) to LayoutClass.
     ///
     /// PubLayNet classes: Text, Title, List, Table, Figure.
+    #[cfg(test)]
     pub(crate) fn from_publaynet_id(id: i64) -> Option<Self> {
         match id {
             0 => Some(Self::Text),
@@ -202,6 +204,7 @@ impl LayoutClass {
     }
 
     /// Whether this class is a "wrapper" type that can contain child elements.
+    #[cfg(test)]
     pub(crate) fn is_wrapper(&self) -> bool {
         matches!(
             self,

@@ -238,6 +238,7 @@ impl DocumentStructureBuilder {
     }
 
     /// Push a page break marker (always root-level, never nested under sections).
+    #[cfg(test)]
     pub(crate) fn push_page_break(&mut self, page: Option<u32>) -> NodeIndex {
         let content = NodeContent::PageBreak;
         // PageBreak is always root-level

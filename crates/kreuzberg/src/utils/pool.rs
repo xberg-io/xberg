@@ -64,6 +64,7 @@ impl PoolMetrics {
     }
 
     /// Calculate the cache hit rate as a percentage (0.0-100.0).
+    #[cfg(test)]
     pub(crate) fn hit_rate(&self) -> f64 {
         let acquires = self.total_acquires.load(Ordering::Relaxed);
         if acquires == 0 {
@@ -73,6 +74,7 @@ impl PoolMetrics {
     }
 
     /// Get all metrics as a struct for reporting.
+    #[cfg(test)]
     pub(crate) fn snapshot(&self) -> PoolMetricsSnapshot {
         PoolMetricsSnapshot {
             total_acquires: self.total_acquires.load(Ordering::Relaxed),
@@ -83,6 +85,7 @@ impl PoolMetrics {
     }
 
     /// Reset all metrics to zero.
+    #[cfg(test)]
     pub(crate) fn reset(&self) {
         self.total_acquires.store(0, Ordering::Relaxed);
         self.total_cache_hits.store(0, Ordering::Relaxed);
@@ -217,7 +220,7 @@ impl<T: Recyclable> Pool<T> {
     }
 
     /// Get a reference to the pool metrics (only available with `pool-metrics` feature).
-    #[cfg(feature = "pool-metrics")]
+    #[cfg(all(feature = "pool-metrics", test))]
     pub(crate) fn metrics(&self) -> &PoolMetrics {
         &self.metrics
     }

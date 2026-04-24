@@ -73,12 +73,14 @@ impl ExtractionServiceBuilder {
     }
 
     /// Add a per-request timeout.
+    #[cfg(test)]
     pub(crate) fn with_timeout(mut self, duration: Duration) -> Self {
         self.timeout = Some(duration);
         self
     }
 
     /// Limit concurrent in-flight extractions.
+    #[cfg(test)]
     pub(crate) fn with_concurrency_limit(mut self, max: usize) -> Self {
         self.concurrency_limit = Some(max);
         self

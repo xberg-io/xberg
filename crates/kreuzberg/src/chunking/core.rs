@@ -222,6 +222,7 @@ fn split_with_config<'a, S: ChunkSizer>(
 /// # Ok(())
 /// # }
 /// ```
+#[cfg(test)]
 pub(crate) fn chunk_text_with_type(
     text: &str,
     max_characters: usize,

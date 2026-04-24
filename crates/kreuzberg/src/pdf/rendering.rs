@@ -119,40 +119,6 @@ impl PdfRenderer<'_> {
         Ok(DynamicImage::ImageRgb8(image))
     }
 
-    pub(crate) fn render_all_pages(&self, pdf_bytes: &[u8], options: &PageRenderOptions) -> Result<Vec<DynamicImage>> {
-        self.render_all_pages_with_password(pdf_bytes, options, None)
-    }
-
-    pub(crate) fn render_all_pages_with_password(
-        &self,
-        pdf_bytes: &[u8],
-        options: &PageRenderOptions,
-        password: Option<&str>,
-    ) -> Result<Vec<DynamicImage>> {
-        let document = self
-            .pdfium
-            .load_pdf_from_byte_slice(pdf_bytes, password)
-            .map_err(|e| super::error::classify_pdfium_load_error(e, password))?;
-
-        let page_count = document.pages().len() as usize;
-        let mut images = Vec::with_capacity(page_count);
-
-        for page_index in 0..page_count {
-            let image = self.render_page_from_document(&document, page_index, options)?;
-            images.push(image);
-        }
-
-        Ok(images)
-    }
-}
-
-pub(crate) fn render_page_to_image(
-    pdf_bytes: &[u8],
-    page_index: usize,
-    options: &PageRenderOptions,
-) -> Result<DynamicImage> {
-    let renderer = PdfRenderer::new()?;
-    renderer.render_page_to_image(pdf_bytes, page_index, options)
 }
 
 /// Default DPI for page rendering. 150 balances legibility for vision-model
@@ -440,23 +406,6 @@ mod tests {
         let renderer = PdfRenderer::new().unwrap();
         let options = PageRenderOptions::default();
         let result = renderer.render_page_to_image_with_password(b"not a pdf", 0, &options, None);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    #[serial]
-    fn test_render_all_pages_with_password_none() {
-        let renderer = PdfRenderer::new().unwrap();
-        let options = PageRenderOptions::default();
-        let result = renderer.render_all_pages_with_password(b"not a pdf", &options, None);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    #[serial]
-    fn test_render_page_to_image_function() {
-        let options = PageRenderOptions::default();
-        let result = render_page_to_image(b"not a pdf", 0, &options);
         assert!(result.is_err());
     }
 

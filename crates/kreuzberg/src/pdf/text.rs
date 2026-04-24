@@ -114,54 +114,11 @@ impl PdfTextExtractor<'_> {
         Ok(content)
     }
 
-    pub(crate) fn extract_text_with_passwords(&self, pdf_bytes: &[u8], passwords: &[&str]) -> Result<String> {
-        let mut last_error = None;
-
-        for password in passwords {
-            match self.extract_text_with_password(pdf_bytes, Some(password)) {
-                Ok(text) => return Ok(text),
-                Err(e) => {
-                    last_error = Some(e);
-                    continue;
-                }
-            }
-        }
-
-        if let Some(err) = last_error {
-            return Err(err);
-        }
-
-        self.extract_text(pdf_bytes)
-    }
-
-    pub(crate) fn get_page_count(&self, pdf_bytes: &[u8]) -> Result<usize> {
-        let document = self.pdfium.load_pdf_from_byte_slice(pdf_bytes, None).map_err(|e| {
-            let err_msg = super::error::format_pdfium_error(e);
-            if err_msg.contains("password") || err_msg.contains("Password") {
-                PdfError::PasswordRequired
-            } else {
-                PdfError::InvalidPdf(err_msg)
-            }
-        })?;
-
-        Ok(document.pages().len() as usize)
-    }
 }
 
 pub fn extract_text_from_pdf(pdf_bytes: &[u8]) -> Result<String> {
     let extractor = PdfTextExtractor::new()?;
     extractor.extract_text(pdf_bytes)
-}
-
-pub(crate) fn extract_text_from_pdf_with_password(pdf_bytes: &[u8], password: &str) -> Result<String> {
-    let extractor = PdfTextExtractor::new()?;
-    extractor.extract_text_with_password(pdf_bytes, Some(password))
-}
-
-pub(crate) fn extract_text_from_pdf_with_passwords(pdf_bytes: &[u8], passwords: &[String]) -> Result<String> {
-    let extractor = PdfTextExtractor::new()?;
-    let pw_refs: Vec<&str> = passwords.iter().map(|s| s.as_str()).collect();
-    extractor.extract_text_with_passwords(pdf_bytes, &pw_refs)
 }
 
 /// Result type for unified PDF text and metadata extraction.
@@ -666,14 +623,6 @@ mod tests {
         if let Err(err) = result {
             assert!(matches!(err, PdfError::PasswordRequired | PdfError::InvalidPdf(_)));
         }
-    }
-
-    #[test]
-    #[serial]
-    fn test_extract_text_with_passwords_empty_list() {
-        let extractor = PdfTextExtractor::new().unwrap();
-        let result = extractor.extract_text_with_passwords(b"not a pdf", &[]);
-        assert!(result.is_err());
     }
 
     #[test]

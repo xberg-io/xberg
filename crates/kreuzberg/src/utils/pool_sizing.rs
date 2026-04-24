@@ -52,6 +52,7 @@ pub struct PoolSizeHint {
     pub byte_buffer_capacity: usize,
 }
 
+#[cfg(test)]
 impl PoolSizeHint {
     /// Calculate the estimated string pool memory in bytes.
     ///
@@ -91,6 +92,7 @@ impl PoolSizeHint {
 /// # Returns
 ///
 /// A ratio between 0.0 and 1.0 representing the expected extraction ratio
+#[cfg(test)]
 #[inline]
 fn get_format_ratio(mime_type: &str) -> f64 {
     match mime_type {
@@ -141,6 +143,7 @@ fn get_format_ratio(mime_type: &str) -> f64 {
 /// # Returns
 ///
 /// A tuple of (base_buffer_count, base_buffer_capacity)
+#[cfg(test)]
 #[inline]
 fn get_format_base_config(mime_type: &str) -> (usize, usize) {
     match mime_type {
@@ -188,6 +191,7 @@ fn get_format_base_config(mime_type: &str) -> (usize, usize) {
 /// # Returns
 ///
 /// Adjusted buffer count considering file size
+#[cfg(test)]
 #[inline]
 fn adjust_for_file_size(file_size: u64, base_count: usize) -> usize {
     match file_size {
@@ -210,6 +214,7 @@ fn adjust_for_file_size(file_size: u64, base_count: usize) -> usize {
 /// # Returns
 ///
 /// Recommended buffer capacity in bytes
+#[cfg(test)]
 #[inline]
 fn estimate_buffer_capacity(file_size: u64) -> usize {
     match file_size {
@@ -245,6 +250,7 @@ fn estimate_buffer_capacity(file_size: u64) -> usize {
 /// // PDF at 5MB gets 10 string buffers (base 6 + 4 for size)
 /// // of 65KB each (for 1-10MB files)
 /// ```
+#[cfg(test)]
 #[inline]
 pub(crate) fn estimate_pool_size(file_size: u64, mime_type: &str) -> PoolSizeHint {
     let format_ratio = get_format_ratio(mime_type);

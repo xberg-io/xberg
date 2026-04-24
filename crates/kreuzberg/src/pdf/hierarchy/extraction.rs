@@ -7,7 +7,6 @@
 use serde::{Deserialize, Serialize};
 
 use super::bounding_box::BoundingBox;
-use super::clustering::FontSizeCluster;
 use crate::pdf::error::{PdfError, Result};
 use pdfium_render::prelude::*;
 
@@ -32,12 +31,6 @@ pub struct CharData {
     pub width: f32,
     /// Character height in PDF units
     pub height: f32,
-    /// Whether the font is bold (from pdfium force-bold flag)
-    pub is_bold: bool,
-    /// Whether the font is italic
-    pub is_italic: bool,
-    /// Baseline Y position (from character origin, falls back to bounds bottom)
-    pub baseline_y: f32,
 }
 
 /// A block of text with spatial and semantic information.
@@ -93,21 +86,6 @@ pub struct HierarchyBlock {
     pub font_size: f32,
     /// The hierarchy level of this block (H1-H6 or Body)
     pub hierarchy_level: HierarchyLevel,
-}
-
-impl HierarchyLevel {
-    /// Convert a numeric level to HierarchyLevel.
-    pub(crate) fn from_level(level: usize) -> Self {
-        match level {
-            1 => HierarchyLevel::H1,
-            2 => HierarchyLevel::H2,
-            3 => HierarchyLevel::H3,
-            4 => HierarchyLevel::H4,
-            5 => HierarchyLevel::H5,
-            6 => HierarchyLevel::H6,
-            _ => HierarchyLevel::Body,
-        }
-    }
 }
 
 /// Assign hierarchy levels to text blocks based on KMeans clustering results.
@@ -188,67 +166,6 @@ pub(crate) fn assign_hierarchy_levels(blocks: &[TextBlock], kmeans_result: &KMea
         .collect()
 }
 
-/// Assign hierarchy levels to text blocks based on font size clusters.
-///
-/// Maps font size clusters to heading levels (H1-H6) and body text.
-/// Larger font sizes are assigned higher hierarchy levels.
-///
-/// # Arguments
-///
-/// * `blocks` - Vector of TextBlock objects to assign levels to
-/// * `clusters` - Vector of FontSizeCluster objects from clustering
-///
-/// # Returns
-///
-/// Vector of tuples containing (TextBlock, HierarchyLevel).
-/// If blocks is empty or clusters is empty, returns empty vector.
-/// All blocks get Body level if only one cluster exists.
-pub(crate) fn assign_hierarchy_levels_from_clusters(
-    blocks: &[TextBlock],
-    clusters: &[FontSizeCluster],
-) -> Vec<(TextBlock, HierarchyLevel)> {
-    // Edge cases: empty inputs
-    if blocks.is_empty() || clusters.is_empty() {
-        return Vec::new();
-    }
-
-    // If only one cluster, all text is body
-    if clusters.len() == 1 {
-        return blocks.iter().map(|b| (b.clone(), HierarchyLevel::Body)).collect();
-    }
-
-    // Map clusters (sorted by centroid) to hierarchy levels
-    // We assign up to 6 heading levels, rest are body
-    let max_heading_levels = 6;
-    let num_headings = (clusters.len() - 1).min(max_heading_levels);
-
-    // Create a mapping from centroid to hierarchy level
-    let mut result = Vec::new();
-
-    for block in blocks {
-        // Find which cluster this block belongs to
-        let mut assigned_level = HierarchyLevel::Body;
-
-        for (idx, cluster) in clusters.iter().enumerate() {
-            // Check if block's font size is close to this cluster's centroid
-            let font_size = block.font_size;
-            if (font_size - cluster.centroid).abs() < 1.0 || cluster.members.contains(block) {
-                // Map cluster index to hierarchy level (largest centroid = H1)
-                if idx < num_headings {
-                    assigned_level = HierarchyLevel::from_level(idx + 1);
-                } else {
-                    assigned_level = HierarchyLevel::Body;
-                }
-                break;
-            }
-        }
-
-        result.push((block.clone(), assigned_level));
-    }
-
-    result
-}
-
 /// Extract characters with fonts from a PDF page.
 ///
 /// Iterates through all characters on a page, extracting text, position,
@@ -308,40 +225,6 @@ pub(crate) fn extract_chars_with_fonts(page: &PdfPage) -> Result<Vec<CharData>> 
             continue;
         };
 
-        // Extract font style flags from descriptor, then check font name as fallback.
-        // Many PDFs encode bold/italic in font name ("TimesNewRoman-Bold") without
-        // setting descriptor flags. We check per-attribute independently so that
-        // e.g. a font with bold flag but no italic flag still gets italic from name.
-        let (font_name, is_bold_flag, is_italic_flag) = pdf_char.font_info();
-
-        // Only check font name/weight if at least one attribute is missing from flags
-        let (bold_from_name, italic_from_name, bold_from_weight) = if !is_bold_flag || !is_italic_flag {
-            let name_lower = font_name.to_lowercase();
-            let bold_n = name_lower.contains("bold");
-            let italic_n = name_lower.contains("italic") || name_lower.contains("oblique");
-            let bold_w = pdf_char
-                .font_weight()
-                .map(|w| {
-                    matches!(
-                        w,
-                        PdfFontWeight::Weight700Bold | PdfFontWeight::Weight800 | PdfFontWeight::Weight900
-                    )
-                })
-                .unwrap_or(false);
-            (bold_n, italic_n, bold_w)
-        } else {
-            (false, false, false)
-        };
-
-        let is_bold = is_bold_flag || bold_from_name || bold_from_weight;
-        let is_italic = is_italic_flag || italic_from_name;
-
-        // Extract baseline Y from character origin, fall back to bounds bottom
-        let baseline_y = pdf_char
-            .origin()
-            .map(|(_x, y)| y.value)
-            .unwrap_or(bounds.bottom().value);
-
         // Extract position and size information
         let char_data = CharData {
             text: ch.to_string(),
@@ -350,9 +233,6 @@ pub(crate) fn extract_chars_with_fonts(page: &PdfPage) -> Result<Vec<CharData>> 
             width: bounds.width().value,
             height: bounds.height().value,
             font_size,
-            is_bold,
-            is_italic,
-            baseline_y,
         };
 
         char_data_list.push(char_data);
@@ -393,146 +273,6 @@ pub struct SegmentData {
     pub assigned_role: Option<u8>,
 }
 
-/// Extract text segments from a PDF page using pdfium's segment merging.
-///
-/// Instead of extracting individual characters and reconstructing words from gap heuristics,
-/// this function uses pdfium's `PdfPageTextSegments` which automatically merge characters
-/// sharing the same baseline and font settings into contiguous text runs.
-///
-/// Font metadata (bold, italic, font size) is sampled from the first character of each segment.
-///
-/// # Performance
-///
-/// Typically 10-50x fewer items than character-level extraction, with far fewer FFI calls
-/// per item (one segment.text() + one segment.chars() sample vs N chars with 4+ FFI calls each).
-pub(crate) fn extract_segments_from_page(page: &PdfPage) -> Result<Vec<SegmentData>> {
-    let page_text = page
-        .text()
-        .map_err(|e| PdfError::TextExtractionFailed(format!("Failed to get page text: {}", e)))?;
-
-    let segments = page_text.segments();
-    let seg_count = segments.len();
-    let mut segment_data_list = Vec::with_capacity(seg_count);
-
-    for i in 0..seg_count {
-        let Ok(segment) = segments.get(i) else {
-            continue;
-        };
-
-        let text = segment.text();
-        // Skip empty/whitespace-only segments
-        if text.trim().is_empty() {
-            continue;
-        }
-
-        let bounds = segment.bounds();
-        let seg_left = bounds.left().value;
-        let seg_bottom = bounds.bottom().value;
-        let seg_width = bounds.width().value;
-        let seg_height = bounds.height().value;
-
-        // Sample font metadata from the first non-whitespace character in the segment
-        let chars = match segment.chars() {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
-        let char_count = chars.len();
-        let mut font_size = DEFAULT_FONT_SIZE;
-        let mut is_bold = false;
-        let mut is_italic = false;
-        let mut is_monospace = false;
-        let mut baseline_y = seg_bottom;
-        let mut sampled = false;
-
-        for ci in 0..char_count {
-            let Ok(ch) = chars.get(ci) else { continue };
-            let Some(uc) = ch.unicode_char() else { continue };
-            if uc.is_whitespace() || uc.is_control() {
-                continue;
-            }
-
-            let fs = ch.unscaled_font_size().value;
-            font_size = if fs > 0.0 { fs } else { DEFAULT_FONT_SIZE };
-
-            let (font_name, is_bold_flag, is_italic_flag) = ch.font_info();
-
-            // Cache font name analysis to avoid repeated to_lowercase() calls.
-            // Most pages use 2-5 fonts, so this eliminates ~95% of allocations.
-            let name_lower = font_name.to_lowercase();
-            let (bold_from_name, italic_from_name, bold_from_weight) = if !is_bold_flag || !is_italic_flag {
-                let bold_n = name_lower.contains("bold");
-                let italic_n = name_lower.contains("italic") || name_lower.contains("oblique");
-                let bold_w = ch
-                    .font_weight()
-                    .map(|w| {
-                        matches!(
-                            w,
-                            PdfFontWeight::Weight700Bold | PdfFontWeight::Weight800 | PdfFontWeight::Weight900
-                        )
-                    })
-                    .unwrap_or(false);
-                (bold_n, italic_n, bold_w)
-            } else {
-                (false, false, false)
-            };
-
-            is_bold = is_bold_flag || bold_from_name || bold_from_weight;
-            is_italic = is_italic_flag || italic_from_name;
-            is_monospace = is_monospace_font(&name_lower);
-
-            baseline_y = ch.origin().map(|(_x, y)| y.value).unwrap_or(seg_bottom);
-
-            sampled = true;
-            break;
-        }
-
-        if !sampled {
-            continue;
-        }
-
-        segment_data_list.push(SegmentData {
-            text,
-            x: seg_left,
-            y: seg_bottom,
-            width: seg_width,
-            height: seg_height,
-            font_size,
-            is_bold,
-            is_italic,
-            is_monospace,
-            baseline_y,
-            assigned_role: None,
-        });
-    }
-
-    Ok(segment_data_list)
-}
-
-/// Check if a lowercase font name indicates a monospace font.
-fn is_monospace_font(name_lower: &str) -> bool {
-    const MONOSPACE_PATTERNS: &[&str] = &[
-        "mono",
-        "courier",
-        "consolas",
-        "menlo",
-        "source code",
-        "inconsolata",
-        "fira code",
-        "liberation mono",
-        "lucida console",
-        "andale mono",
-        "dejavu sans mono",
-        "roboto mono",
-        "noto mono",
-        "ibm plex mono",
-        "jetbrains mono",
-        "cascadia",
-        "hack",
-    ];
-    MONOSPACE_PATTERNS.iter().any(|p| name_lower.contains(p))
-}
-
 /// Merge characters into text blocks using a greedy clustering algorithm.
 ///
 /// Groups characters based on spatial proximity using weighted distance and
@@ -551,7 +291,7 @@ fn is_monospace_font(name_lower: &str) -> bool {
 ///
 /// The function uses a greedy approach:
 /// 1. Create bounding boxes for each character
-/// 2. Use weighted_distance (5.0 * dx + 1.0 * dy) with maximum threshold of ~2.5x font size
+/// 2. Use per-axis distance thresholds based on font size
 /// 3. Use intersection_ratio to detect overlapping or very close characters
 /// 4. Merge characters into blocks based on proximity thresholds
 /// 5. Return sorted blocks by position (top to bottom, left to right)
@@ -689,9 +429,6 @@ mod tests {
             font_size: 12.0,
             width: 10.0,
             height: 12.0,
-            is_bold: true,
-            is_italic: false,
-            baseline_y: 48.0,
         };
 
         assert_eq!(char_data.text, "A");
@@ -700,9 +437,6 @@ mod tests {
         assert_eq!(char_data.font_size, 12.0);
         assert_eq!(char_data.width, 10.0);
         assert_eq!(char_data.height, 12.0);
-        assert!(char_data.is_bold);
-        assert!(!char_data.is_italic);
-        assert_eq!(char_data.baseline_y, 48.0);
     }
 
     #[test]
@@ -714,16 +448,10 @@ mod tests {
             font_size: 14.0,
             width: 8.0,
             height: 14.0,
-            is_bold: false,
-            is_italic: true,
-            baseline_y: 98.0,
         };
 
         let cloned = char_data.clone();
         assert_eq!(cloned.text, char_data.text);
         assert_eq!(cloned.font_size, char_data.font_size);
-        assert_eq!(cloned.is_bold, char_data.is_bold);
-        assert_eq!(cloned.is_italic, char_data.is_italic);
-        assert_eq!(cloned.baseline_y, char_data.baseline_y);
     }
 }

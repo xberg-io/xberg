@@ -44,16 +44,4 @@ impl Instant {
         self.elapsed_secs_f64() * 1000.0
     }
 
-    /// Milliseconds elapsed as `u128` (mirrors `Duration::as_millis`).
-    #[inline]
-    pub(crate) fn elapsed_millis(&self) -> u128 {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.inner.elapsed().as_millis()
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            0
-        }
-    }
 }

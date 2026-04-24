@@ -111,6 +111,36 @@ impl PaddleOcrConfig {
         }
     }
 
+    /// Resolves the cache directory, checking in order:
+    /// 1. Configured `cache_dir` if set
+    /// 2. `KREUZBERG_CACHE_DIR` environment variable + `/paddle-ocr`
+    /// 3. Default: `.kreuzberg/paddle-ocr/` (consistent with other cache types)
+    ///
+    /// # Returns
+    ///
+    /// The resolved cache directory path
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use kreuzberg::PaddleOcrConfig;
+    ///
+    /// let config = PaddleOcrConfig::new("en");
+    /// let cache_dir = config.resolve_cache_dir();
+    /// println!("Cache directory: {:?}", cache_dir);
+    /// ```
+    pub(crate) fn resolve_cache_dir(&self) -> PathBuf {
+        // First check if cache_dir is explicitly set
+        if let Some(path) = &self.cache_dir {
+            return path.clone();
+        }
+
+        crate::cache_dir::resolve_cache_dir("paddle-ocr")
+    }
+}
+
+#[cfg(test)]
+impl PaddleOcrConfig {
     /// Sets a custom cache directory for model files.
     ///
     /// # Arguments
@@ -238,33 +268,6 @@ impl PaddleOcrConfig {
     pub(crate) fn with_model_tier(mut self, tier: impl Into<String>) -> Self {
         self.model_tier = tier.into();
         self
-    }
-
-    /// Resolves the cache directory, checking in order:
-    /// 1. Configured `cache_dir` if set
-    /// 2. `KREUZBERG_CACHE_DIR` environment variable + `/paddle-ocr`
-    /// 3. Default: `.kreuzberg/paddle-ocr/` (consistent with other cache types)
-    ///
-    /// # Returns
-    ///
-    /// The resolved cache directory path
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use kreuzberg::PaddleOcrConfig;
-    ///
-    /// let config = PaddleOcrConfig::new("en");
-    /// let cache_dir = config.resolve_cache_dir();
-    /// println!("Cache directory: {:?}", cache_dir);
-    /// ```
-    pub(crate) fn resolve_cache_dir(&self) -> PathBuf {
-        // First check if cache_dir is explicitly set
-        if let Some(path) = &self.cache_dir {
-            return path.clone();
-        }
-
-        crate::cache_dir::resolve_cache_dir("paddle-ocr")
     }
 }
 

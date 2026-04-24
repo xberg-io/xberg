@@ -59,6 +59,7 @@ impl Keyword {
     }
 
     /// Create a new keyword with positions.
+    #[cfg(test)]
     pub(crate) fn with_positions(text: String, score: f32, algorithm: KeywordAlgorithm, positions: Vec<usize>) -> Self {
         Self {
             text,

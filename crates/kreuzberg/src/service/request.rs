@@ -66,6 +66,7 @@ impl ExtractionRequest {
     }
 
     /// Set per-file overrides on this request.
+    #[cfg(test)]
     pub(crate) fn with_overrides(mut self, overrides: FileExtractionConfig) -> Self {
         self.file_overrides = Some(overrides);
         self

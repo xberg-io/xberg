@@ -191,6 +191,7 @@ impl RendererRegistry {
     }
 
     /// Clear all renderers and re-register the built-in defaults.
+    #[cfg(test)]
     pub(crate) fn reset_to_defaults(&mut self) -> Result<()> {
         self.renderers.clear();
         self.register_builtins();

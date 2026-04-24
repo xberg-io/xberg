@@ -43,6 +43,7 @@ impl TesseractBackend {
     }
 
     /// Create a new Tesseract backend with custom cache directory.
+    #[cfg(test)]
     pub(crate) fn with_cache_dir(cache_dir: std::path::PathBuf) -> Result<Self> {
         let processor = OcrProcessor::new(Some(cache_dir)).map_err(|e| crate::KreuzbergError::Ocr {
             message: format!("Failed to create Tesseract processor: {}", e),

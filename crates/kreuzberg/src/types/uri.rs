@@ -103,6 +103,7 @@ impl Uri {
     }
 
     /// Create a new email URI.
+    #[cfg(test)]
     pub(crate) fn email(url: impl Into<String>, label: Option<String>) -> Self {
         Self {
             url: url.into(),
@@ -113,6 +114,7 @@ impl Uri {
     }
 
     /// Create a new reference URI.
+    #[cfg(test)]
     pub(crate) fn reference(url: impl Into<String>, label: Option<String>) -> Self {
         Self {
             url: url.into(),

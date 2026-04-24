@@ -87,6 +87,7 @@ impl PostProcessorConfig {
     ///
     /// This method converts the enabled/disabled processor Vec to HashSet
     /// for constant-time lookups in the pipeline.
+    #[cfg(test)]
     pub(crate) fn build_lookup_sets(&mut self) {
         if let Some(ref enabled) = self.enabled_processors {
             self.enabled_set = Some(enabled.iter().cloned().collect());
@@ -191,6 +192,7 @@ impl ChunkingConfig {
     /// Create a new `ChunkingConfig` with the given max characters, overlap, and trim settings.
     ///
     /// Other fields are set to their defaults. Use the setter methods to customize further.
+    #[cfg(test)]
     pub(crate) fn new(max_characters: usize, overlap: usize, trim: bool) -> Self {
         Self {
             max_characters,
@@ -206,18 +208,21 @@ impl ChunkingConfig {
     }
 
     /// Set the chunker type.
+    #[cfg(test)]
     pub(crate) fn with_chunker_type(mut self, chunker_type: ChunkerType) -> Self {
         self.chunker_type = chunker_type;
         self
     }
 
     /// Set the sizing strategy.
+    #[cfg(test)]
     pub(crate) fn with_sizing(mut self, sizing: ChunkSizing) -> Self {
         self.sizing = sizing;
         self
     }
 
     /// Enable or disable prepending heading context to chunk content.
+    #[cfg(test)]
     pub(crate) fn with_prepend_heading_context(mut self, prepend: bool) -> Self {
         self.prepend_heading_context = prepend;
         self
@@ -228,6 +233,7 @@ impl ChunkingConfig {
     /// # Panics
     ///
     /// Panics if `threshold` is outside `[0.0, 1.0]`.
+    #[cfg(test)]
     pub(crate) fn with_topic_threshold(mut self, threshold: f32) -> Self {
         assert!(
             (0.0..=1.0).contains(&threshold),

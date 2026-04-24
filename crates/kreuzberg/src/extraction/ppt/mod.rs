@@ -43,6 +43,7 @@ const RT_NOTES: u16 = 0x03F0; // Notes container
 ///
 /// When `include_master_slides` is `true`, master slide content (placeholder text
 /// like "Click to edit Master title style") is included instead of being skipped.
+#[cfg(test)]
 pub(crate) fn extract_ppt_text(content: &[u8]) -> Result<PptExtractionResult> {
     extract_ppt_text_with_options(content, false)
 }

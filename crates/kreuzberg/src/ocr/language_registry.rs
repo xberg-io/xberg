@@ -26,6 +26,7 @@ use std::sync::OnceLock;
 use super::backends;
 
 /// Global language registry instance (lazy initialized)
+#[cfg(test)]
 static LANGUAGE_REGISTRY: OnceLock<LanguageRegistry> = OnceLock::new();
 
 /// Language support registry for OCR backends.
@@ -37,6 +38,7 @@ pub struct LanguageRegistry {
     backends: AHashMap<String, Vec<String>>,
 }
 
+#[cfg(test)]
 impl LanguageRegistry {
     /// Create a new language registry with all supported backends.
     ///
@@ -138,6 +140,7 @@ impl LanguageRegistry {
     }
 }
 
+#[cfg(test)]
 impl Default for LanguageRegistry {
     fn default() -> Self {
         Self::new()

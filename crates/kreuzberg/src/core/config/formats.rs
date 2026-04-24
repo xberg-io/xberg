@@ -36,6 +36,7 @@ pub enum OutputFormat {
     Custom(String),
 }
 
+#[cfg(test)]
 impl OutputFormat {
     /// Get the renderer name for this format.
     /// Returns `None` for formats that don't use the renderer registry

@@ -1824,7 +1824,7 @@ impl ServerConfig {
             max_request_body_bytes: self.max_request_body_bytes,
             max_multipart_field_bytes: self.max_multipart_field_bytes,
         };
-        core_self.listen_addr()
+        core_self.listen_addr().into()
     }
 
     #[pyo3(signature = ())]
@@ -5155,7 +5155,7 @@ impl HtmlMetadata {
     #[pyo3(signature = (metadata))]
     pub fn from(metadata: HtmlMetadata) -> HtmlMetadata {
         let metadata_core: kreuzberg::HtmlMetadata = metadata.into();
-        metadata_core.into()
+        kreuzberg::HtmlMetadata::from(metadata_core).into()
     }
 }
 
@@ -8342,7 +8342,7 @@ pub enum LayoutClass {
 #[pyfunction]
 #[pyo3(signature = (data))]
 pub fn blake3_hash_bytes(data: Vec<u8>) -> String {
-    kreuzberg::cache::blake3_hash_bytes(&data)
+    kreuzberg::cache::blake3_hash_bytes(&data).into()
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -8350,7 +8350,7 @@ pub fn blake3_hash_bytes(data: Vec<u8>) -> String {
 #[pyo3(signature = (path))]
 pub fn blake3_hash_file(path: String) -> PyResult<String> {
     kreuzberg::cache::blake3_hash_file(std::path::Path::new(&path))
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8539,7 +8539,7 @@ pub fn extract_file_sync(
     let config_core: kreuzberg::ExtractionConfig =
         serde_json::from_str(&config_json).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     kreuzberg::extract_file_sync(path, mime_type.as_deref(), &config_core)
-        .map(ExtractionResult::from)
+        .map(|val| ExtractionResult::from(val))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8552,7 +8552,7 @@ pub fn extract_bytes_sync(content: Vec<u8>, mime_type: String, config: Extractio
     let config_core: kreuzberg::ExtractionConfig =
         serde_json::from_str(&config_json).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     kreuzberg::extract_bytes_sync(&content, &mime_type, &config_core)
-        .map(ExtractionResult::from)
+        .map(|val| ExtractionResult::from(val))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8655,7 +8655,7 @@ pub fn is_valid_format_field(field: String) -> bool {
 #[pyo3(signature = (mime_type))]
 pub fn validate_mime_type(mime_type: String) -> PyResult<String> {
     kreuzberg::validate_mime_type(&mime_type)
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8664,7 +8664,7 @@ pub fn validate_mime_type(mime_type: String) -> PyResult<String> {
 #[pyo3(signature = (path=None, mime_type=None))]
 pub fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> PyResult<String> {
     kreuzberg::detect_or_validate(path.as_deref(), mime_type.as_deref())
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8673,7 +8673,7 @@ pub fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> Py
 #[pyo3(signature = (content))]
 pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> PyResult<String> {
     kreuzberg::detect_mime_type_from_bytes(&content)
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8682,7 +8682,7 @@ pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> PyResult<String> {
 #[pyo3(signature = (mime_type))]
 pub fn get_extensions_for_mime(mime_type: String) -> PyResult<Vec<String>> {
     kreuzberg::get_extensions_for_mime(&mime_type)
-        .map(|val| val.into_iter().collect())
+        .map(|val| val.into_iter().map(Into::into).collect())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8726,13 +8726,13 @@ pub fn extract_email_content(
 #[pyfunction]
 #[pyo3(signature = (cells))]
 pub fn cells_to_text(cells: Vec<Vec<String>>) -> String {
-    kreuzberg::extraction::cells_to_text(&cells)
+    kreuzberg::extraction::cells_to_text(&cells).into()
 }
 
 #[pyfunction]
 #[pyo3(signature = (cells))]
 pub fn cells_to_markdown(cells: Vec<Vec<String>>) -> String {
-    kreuzberg::extraction::cells_to_markdown(&cells)
+    kreuzberg::extraction::cells_to_markdown(&cells).into()
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -8740,20 +8740,23 @@ pub fn cells_to_markdown(cells: Vec<Vec<String>>) -> String {
 #[pyo3(signature = (djot_source))]
 pub fn djot_to_html(djot_source: String) -> PyResult<String> {
     kreuzberg::extractors::djot_format::djot_to_html(&djot_source)
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
 #[pyo3(signature = (texts))]
 pub fn dedup_text(texts: Vec<String>) -> Vec<String> {
-    kreuzberg::extractors::iwork::dedup_text(texts).into_iter().collect()
+    kreuzberg::extractors::iwork::dedup_text(texts)
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 #[pyfunction]
 #[pyo3(signature = (s))]
 pub fn normalize_whitespace(s: String) -> String {
-    kreuzberg::extractors::rtf::normalize_whitespace(&s)
+    kreuzberg::extractors::rtf::normalize_whitespace(&s).into()
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -8777,7 +8780,7 @@ pub fn unregister_ocr_backend(name: String) -> PyResult<()> {
 #[pyo3(signature = ())]
 pub fn list_ocr_backends() -> PyResult<Vec<String>> {
     kreuzberg::plugins::list_ocr_backends()
-        .map(|val| val.into_iter().collect())
+        .map(|val| val.into_iter().map(Into::into).collect())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8793,7 +8796,7 @@ pub fn clear_ocr_backends() -> PyResult<()> {
 #[pyo3(signature = ())]
 pub fn list_post_processors() -> PyResult<Vec<String>> {
     kreuzberg::plugins::list_post_processors()
-        .map(|val| val.into_iter().collect())
+        .map(|val| val.into_iter().map(Into::into).collect())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8806,7 +8809,7 @@ pub fn sanitize_filename(path: String) -> String {
 #[pyfunction]
 #[pyo3(signature = (path))]
 pub fn sanitize_path(path: String) -> String {
-    kreuzberg::telemetry::spans::sanitize_path(std::path::Path::new(&path))
+    kreuzberg::telemetry::spans::sanitize_path(std::path::Path::new(&path)).into()
 }
 
 #[pyfunction]
@@ -8818,7 +8821,7 @@ pub fn is_valid_utf8(bytes: Vec<u8>) -> bool {
 #[pyfunction]
 #[pyo3(signature = (text))]
 pub fn clean_extracted_text(text: String) -> String {
-    kreuzberg::text::quality::clean_extracted_text(&text)
+    kreuzberg::text::quality::clean_extracted_text(&text).into()
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -8830,7 +8833,7 @@ pub fn reduce_tokens(text: String, config: TokenReductionConfig, language_hint: 
     let config_core: kreuzberg::TokenReductionConfig =
         serde_json::from_str(&config_json).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     kreuzberg::text::reduce_tokens(&text, &config_core, language_hint.as_deref())
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8909,7 +8912,7 @@ pub fn classify_uri(url: String) -> UriKind {
 #[pyfunction]
 #[pyo3(signature = (byte_data, encoding=None))]
 pub fn safe_decode(byte_data: Vec<u8>, encoding: Option<String>) -> String {
-    kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref())
+    kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref()).into()
 }
 
 #[pyfunction]
@@ -8943,7 +8946,7 @@ pub fn create_byte_buffer_pool(pool_size: usize, buffer_capacity: usize) -> Byte
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn openapi_json() -> String {
-    kreuzberg::api::openapi::openapi_json()
+    kreuzberg::api::openapi::openapi_json().into()
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -8966,7 +8969,7 @@ pub fn chunk_text(
         })
         .transpose()?;
     kreuzberg::chunking::chunk_text(&text, &config_core, page_boundaries_core.as_deref())
-        .map(ChunkingResult::from)
+        .map(|val| ChunkingResult::from(val))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -8996,7 +8999,7 @@ pub fn chunk_text_with_heading_source(
         page_boundaries_core.as_deref(),
         heading_source.as_deref(),
     )
-    .map(ChunkingResult::from)
+    .map(|val| ChunkingResult::from(val))
     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -9020,7 +9023,7 @@ pub fn chunk_semantic(
         })
         .transpose()?;
     kreuzberg::chunking::semantic::chunk_semantic(&text, &config_core, page_boundaries_core.as_deref())
-        .map(ChunkingResult::from)
+        .map(|val| ChunkingResult::from(val))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -9110,7 +9113,7 @@ pub fn extract_keywords(text: String, config: KeywordConfig) -> PyResult<Vec<Key
 #[pyfunction]
 #[pyo3(signature = (data))]
 pub fn compute_hash(data: String) -> String {
-    kreuzberg::ocr::compute_hash(&data)
+    kreuzberg::ocr::compute_hash(&data).into()
 }
 
 #[allow(clippy::missing_errors_doc)]
@@ -9123,7 +9126,7 @@ pub fn render_pdf_page_to_png(
     password: Option<String>,
 ) -> PyResult<Vec<u8>> {
     kreuzberg::pdf::rendering::render_pdf_page_to_png(&pdf_bytes, page_index, dpi, password.as_deref())
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -9132,7 +9135,7 @@ pub fn render_pdf_page_to_png(
 #[pyo3(signature = (pdf_bytes))]
 pub fn extract_text_from_pdf(pdf_bytes: Vec<u8>) -> PyResult<String> {
     kreuzberg::pdf::extract_text_from_pdf(&pdf_bytes)
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -9145,7 +9148,7 @@ pub fn serialize_to_toon(result: ExtractionResult) -> PyResult<String> {
     let result_core: kreuzberg::ExtractionResult =
         serde_json::from_str(&result_json).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     kreuzberg::serialize_to_toon(&result_core)
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -9158,7 +9161,7 @@ pub fn serialize_to_json(result: ExtractionResult) -> PyResult<String> {
     let result_core: kreuzberg::ExtractionResult =
         serde_json::from_str(&result_json).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     kreuzberg::serialize_to_json(&result_core)
-        .map(|val| val)
+        .map(|val| val.into())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 

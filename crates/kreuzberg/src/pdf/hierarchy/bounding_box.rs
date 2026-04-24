@@ -5,10 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 
-// Constants for weighted distance calculation
-const WEIGHTED_DISTANCE_X_WEIGHT: f32 = 5.0;
-const WEIGHTED_DISTANCE_Y_WEIGHT: f32 = 1.0;
-
 /// A bounding box for text or elements.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct BoundingBox {
@@ -106,52 +102,6 @@ impl BoundingBox {
         self.bottom - self.top
     }
 
-    /// Calculate the Intersection over Union (IOU) between this bounding box and another.
-    ///
-    /// IOU = intersection_area / union_area
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The other bounding box to compare with
-    ///
-    /// # Returns
-    ///
-    /// The IOU value between 0.0 and 1.0
-    pub(crate) fn iou(&self, other: &BoundingBox) -> f32 {
-        let intersection_area = self.calculate_intersection_area(other);
-        let self_area = self.calculate_area();
-        let other_area = other.calculate_area();
-        let union_area = self_area + other_area - intersection_area;
-
-        if union_area <= 0.0 {
-            0.0
-        } else {
-            intersection_area / union_area
-        }
-    }
-
-    /// Calculate the weighted distance between the centers of two bounding boxes.
-    ///
-    /// The distance is weighted with X-axis having weight 5.0 and Y-axis having weight 1.0.
-    /// This reflects the greater importance of horizontal distance in text layout.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The other bounding box to compare with
-    ///
-    /// # Returns
-    ///
-    /// The weighted distance value
-    pub(crate) fn weighted_distance(&self, other: &BoundingBox) -> f32 {
-        let (self_center_x, self_center_y) = self.center();
-        let (other_center_x, other_center_y) = other.center();
-
-        let dx = (self_center_x - other_center_x).abs();
-        let dy = (self_center_y - other_center_y).abs();
-
-        dx * WEIGHTED_DISTANCE_X_WEIGHT + dy * WEIGHTED_DISTANCE_Y_WEIGHT
-    }
-
     /// Calculate the intersection ratio relative to this bounding box's area.
     ///
     /// intersection_ratio = intersection_area / self_area
@@ -174,51 +124,9 @@ impl BoundingBox {
         }
     }
 
-    /// Check if this bounding box contains another bounding box.
-    pub(crate) fn contains(&self, other: &BoundingBox) -> bool {
-        other.left >= self.left && other.right <= self.right && other.top >= self.top && other.bottom <= self.bottom
-    }
-
     /// Calculate the center coordinates of this bounding box.
     pub(crate) fn center(&self) -> (f32, f32) {
         ((self.left + self.right) / 2.0, (self.top + self.bottom) / 2.0)
-    }
-
-    /// Merge this bounding box with another, creating a box that contains both.
-    pub(crate) fn merge(&self, other: &BoundingBox) -> BoundingBox {
-        BoundingBox {
-            left: self.left.min(other.left),
-            top: self.top.min(other.top),
-            right: self.right.max(other.right),
-            bottom: self.bottom.max(other.bottom),
-        }
-    }
-
-    /// Calculate a relaxed IOU with an expansion factor.
-    pub(crate) fn relaxed_iou(&self, other: &BoundingBox, relaxation: f32) -> f32 {
-        let self_width = self.right - self.left;
-        let self_height = self.bottom - self.top;
-        let self_expansion = relaxation * self_width.min(self_height).max(0.0);
-
-        let other_width = other.right - other.left;
-        let other_height = other.bottom - other.top;
-        let other_expansion = relaxation * other_width.min(other_height).max(0.0);
-
-        let expanded_self = BoundingBox {
-            left: (self.left - self_expansion).max(0.0),
-            top: (self.top - self_expansion).max(0.0),
-            right: self.right + self_expansion,
-            bottom: self.bottom + self_expansion,
-        };
-
-        let expanded_other = BoundingBox {
-            left: (other.left - other_expansion).max(0.0),
-            top: (other.top - other_expansion).max(0.0),
-            right: other.right + other_expansion,
-            bottom: other.bottom + other_expansion,
-        };
-
-        expanded_self.iou(&expanded_other)
     }
 
     /// Calculate the area of this bounding box.

@@ -114,6 +114,7 @@ impl TatrClass {
     }
 
     /// Human-readable label.
+    #[cfg(test)]
     pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Table => "table",

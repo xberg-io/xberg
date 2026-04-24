@@ -236,51 +236,6 @@ fn read_varint(data: &[u8], pos: usize) -> Option<(u64, usize)> {
     }
 }
 
-/// Extract all text from an iWork ZIP archive by reading specified IWA entries.
-///
-/// `iwa_paths` should list the IWA file paths to read (e.g. `["Index/Document.iwa"]`).
-/// Returns a flat joined string of all text found across all IWA files.
-pub(crate) fn extract_text_from_iwa_files(content: &[u8], iwa_paths: &[String]) -> Result<String> {
-    let cursor = Cursor::new(content);
-    let mut archive =
-        zip::ZipArchive::new(cursor).map_err(|e| KreuzbergError::parsing(format!("Failed to open iWork ZIP: {e}")))?;
-
-    let mut all_text: Vec<String> = Vec::new();
-
-    for path in iwa_paths {
-        // Some IWA files might not exist in all documents — skip missing ones gracefully
-        match archive.by_name(path) {
-            Ok(mut file) => {
-                let compressed_size = file.size() as usize;
-                let mut compressed = Vec::with_capacity(compressed_size.min(MAX_IWA_DECOMPRESSED_SIZE));
-
-                if file.read_to_end(&mut compressed).is_err() {
-                    continue;
-                }
-
-                // Apple uses raw Snappy without framing headers
-                let mut decoder = snap::raw::Decoder::new();
-                let Ok(decompressed) = decoder.decompress_vec(&compressed) else {
-                    continue;
-                };
-
-                if decompressed.len() > MAX_IWA_DECOMPRESSED_SIZE {
-                    continue;
-                }
-
-                let texts = extract_text_from_proto(&decompressed);
-                all_text.extend(texts);
-            }
-            Err(_) => {
-                // File not in archive — skip gracefully
-                continue;
-            }
-        }
-    }
-
-    Ok(all_text.join("\n"))
-}
-
 /// Extract metadata from an iWork ZIP archive.
 ///
 /// Attempts to read `Metadata/Properties.plist` and

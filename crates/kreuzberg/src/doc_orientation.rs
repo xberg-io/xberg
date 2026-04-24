@@ -55,16 +55,6 @@ pub struct DocOrientationDetector {
 }
 
 impl DocOrientationDetector {
-    /// Creates a new detector with the given cache directory.
-    /// The model is loaded lazily on first use.
-    pub(crate) fn new(cache_dir: PathBuf) -> Self {
-        Self {
-            session: once_cell::sync::OnceCell::new(),
-            cache_dir,
-            acceleration: None,
-        }
-    }
-
     /// Creates a new detector with the given cache directory and acceleration config.
     pub(crate) fn with_acceleration(
         cache_dir: PathBuf,

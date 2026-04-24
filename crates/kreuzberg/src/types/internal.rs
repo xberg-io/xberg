@@ -343,6 +343,7 @@ impl InternalElement {
     }
 
     /// Set the content layer.
+    #[cfg(test)]
     pub(crate) fn with_layer(mut self, layer: ContentLayer) -> Self {
         self.layer = layer;
         self
@@ -485,6 +486,7 @@ impl ElementKind {
     }
 
     /// Returns the matching end marker for a container start, if applicable.
+    #[cfg(test)]
     pub(crate) fn matching_end(&self) -> Option<ElementKind> {
         match self {
             Self::ListStart { .. } => Some(Self::ListEnd),

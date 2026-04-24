@@ -19,12 +19,14 @@ pub struct HocrWord {
 
 impl HocrWord {
     /// Get the right edge position.
+    #[cfg(test)]
     #[inline]
     pub(crate) fn right(&self) -> u32 {
         self.left + self.width
     }
 
     /// Get the bottom edge position.
+    #[cfg(test)]
     #[inline]
     pub(crate) fn bottom(&self) -> u32 {
         self.top + self.height
@@ -37,6 +39,7 @@ impl HocrWord {
     }
 
     /// Get the horizontal center position.
+    #[cfg(test)]
     #[inline]
     pub(crate) fn x_center(&self) -> f64 {
         self.left as f64 + (self.width as f64 / 2.0)

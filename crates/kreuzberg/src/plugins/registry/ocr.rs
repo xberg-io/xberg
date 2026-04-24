@@ -187,6 +187,7 @@ impl OcrBackendRegistry {
     /// # Returns
     ///
     /// The first backend supporting the language, or an error if none found.
+    #[cfg(test)]
     pub(crate) fn get_for_language(&self, language: &str) -> Result<Arc<dyn OcrBackend>> {
         self.backends
             .values()
@@ -223,6 +224,7 @@ impl OcrBackendRegistry {
     }
 
     /// Shutdown all backends and re-register the built-in defaults.
+    #[cfg(test)]
     pub(crate) fn reset_to_defaults(&mut self) -> Result<()> {
         self.shutdown_all()?;
         let fresh = Self::new();

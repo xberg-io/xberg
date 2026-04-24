@@ -18,6 +18,7 @@ pub enum PSMMode {
     SingleChar = 10,
 }
 
+#[cfg(test)]
 impl PSMMode {
     pub(crate) fn from_u8(value: u8) -> Result<Self, String> {
         match value {

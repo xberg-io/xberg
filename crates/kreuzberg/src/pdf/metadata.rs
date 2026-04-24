@@ -83,6 +83,7 @@ pub struct PdfExtractionMetadata {
 /// Extract PDF-specific metadata from raw bytes.
 ///
 /// Returns only PDF-specific metadata (version, producer, encryption status, dimensions).
+#[cfg(test)]
 pub(crate) fn extract_metadata(pdf_bytes: &[u8]) -> Result<PdfMetadata> {
     extract_metadata_with_password(pdf_bytes, None)
 }
@@ -90,6 +91,7 @@ pub(crate) fn extract_metadata(pdf_bytes: &[u8]) -> Result<PdfMetadata> {
 /// Extract PDF-specific metadata from raw bytes with optional password.
 ///
 /// Returns only PDF-specific metadata (version, producer, encryption status, dimensions).
+#[cfg(test)]
 pub(crate) fn extract_metadata_with_password(pdf_bytes: &[u8], password: Option<&str>) -> Result<PdfMetadata> {
     let pdfium = bind_pdfium(PdfError::MetadataExtractionFailed, "metadata extraction", None)?;
 
@@ -107,6 +109,7 @@ pub(crate) fn extract_metadata_with_password(pdf_bytes: &[u8], password: Option<
     extract_pdf_specific_metadata(&document)
 }
 
+#[cfg(test)]
 pub(crate) fn extract_metadata_with_passwords(pdf_bytes: &[u8], passwords: &[&str]) -> Result<PdfMetadata> {
     let mut last_error = None;
 
@@ -145,6 +148,7 @@ pub(crate) fn extract_metadata_with_passwords(pdf_bytes: &[u8], passwords: &[&st
 ///
 /// Returns a `PdfExtractionMetadata` struct containing all extracted metadata,
 /// including page structure if boundaries were provided.
+#[cfg(test)]
 pub(crate) fn extract_metadata_from_document(
     document: &PdfDocument<'_>,
     page_boundaries: Option<&[PageBoundary]>,

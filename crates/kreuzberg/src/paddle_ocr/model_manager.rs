@@ -288,6 +288,7 @@ impl ModelManager {
     }
 
     /// Gets the cache directory path.
+    #[cfg(test)]
     pub(crate) fn cache_dir(&self) -> &PathBuf {
         &self.cache_dir
     }
@@ -344,6 +345,7 @@ impl ModelManager {
     }
 
     /// Returns the path for a model type directory (det, cls).
+    #[cfg(test)]
     pub(crate) fn model_path(&self, model_type: &str) -> PathBuf {
         self.cache_dir.join(model_type)
     }
@@ -354,6 +356,7 @@ impl ModelManager {
     }
 
     /// Returns the full path to the ONNX model file for a given type.
+    #[cfg(test)]
     fn model_file_path(&self, model_type: &str) -> PathBuf {
         self.model_path(model_type).join("model.onnx")
     }
@@ -403,6 +406,7 @@ impl ModelManager {
     }
 
     /// Checks if shared models (det + cls) are cached locally.
+    #[cfg(test)]
     pub(crate) fn are_shared_models_cached(&self) -> bool {
         SHARED_MODELS.iter().all(|model| {
             let f = self.model_file_path(model.model_type);
@@ -411,12 +415,14 @@ impl ModelManager {
     }
 
     /// Checks if a recognition model for the given family is cached.
+    #[cfg(test)]
     pub(crate) fn is_rec_model_cached(&self, family: &str) -> bool {
         let rec_dir = self.rec_family_path(family);
         rec_dir.join("model.onnx").exists() && rec_dir.join("dict.txt").exists()
     }
 
     /// Checks if all required models are cached (shared + English v2 rec).
+    #[cfg(test)]
     pub(crate) fn are_models_cached(&self) -> bool {
         let v2_rec_dir = self.cache_dir.join("v2").join("rec").join("unified_server");
         self.are_shared_models_cached()
@@ -425,6 +431,7 @@ impl ModelManager {
     }
 
     /// Clears all cached models from the cache directory.
+    #[cfg(test)]
     pub(crate) fn clear_cache(&self) -> Result<(), KreuzbergError> {
         if self.cache_dir.exists() {
             fs::remove_dir_all(&self.cache_dir)?;
@@ -434,6 +441,7 @@ impl ModelManager {
     }
 
     /// Returns statistics about the current cache.
+    #[cfg(test)]
     pub(crate) fn cache_stats(&self) -> Result<CacheStats, KreuzbergError> {
         let mut total_size = 0u64;
         let mut model_count = 0usize;
