@@ -400,7 +400,7 @@ impl PdfImageExtractor {
         Ok(Self { document: doc })
     }
 
-    pub(crate) fn extract_images(&self) -> Result<Vec<PdfImage>> {
+    pub(crate) fn extract_images(&self, max_images_per_page: Option<u32>) -> Result<Vec<PdfImage>> {
         let mut all_images = Vec::new();
         let pages = self.document.get_pages();
 
@@ -409,6 +409,18 @@ impl PdfImageExtractor {
                 .document
                 .get_page_images(*page_id)
                 .map_err(|e| PdfError::MetadataExtractionFailed(format!("Failed to get page images: {}", e)))?;
+
+            if let Some(cap) = max_images_per_page {
+                if images.len() > cap as usize {
+                    tracing::warn!(
+                        page_number = *page_num,
+                        image_count = images.len(),
+                        cap,
+                        "PDF page exceeds max_images_per_page; skipping image extraction for this page"
+                    );
+                    continue;
+                }
+            }
 
             for (img_index, img) in images.iter().enumerate() {
                 let filters = img.filters.clone().unwrap_or_default();
@@ -449,11 +461,76 @@ impl PdfImageExtractor {
 
         Ok(all_images)
     }
+
+    pub(crate) fn extract_images_from_page(&self, page_number: u32) -> Result<Vec<PdfImage>> {
+        let pages = self.document.get_pages();
+        let page_id = pages
+            .get(&page_number)
+            .ok_or(PdfError::PageNotFound(page_number as usize))?;
+
+        let images = self
+            .document
+            .get_page_images(*page_id)
+            .map_err(|e| PdfError::MetadataExtractionFailed(format!("Failed to get page images: {}", e)))?;
+
+        let mut page_images = Vec::new();
+        for (img_index, img) in images.iter().enumerate() {
+            let filters = img.filters.clone().unwrap_or_default();
+
+            #[cfg(feature = "pdf")]
+            let (palette, palette_base_channels) = extract_indexed_palette(img.origin_dict, &self.document)
+                .map(|(p, ch)| (Some(p), ch))
+                .unwrap_or((None, 0));
+
+            #[cfg(feature = "pdf")]
+            let (data, decoded_format) = decode_image_data(
+                img.content,
+                &filters,
+                img.color_space.as_deref(),
+                img.width,
+                img.height,
+                img.bits_per_component,
+                palette.as_deref(),
+                palette_base_channels,
+            );
+
+            #[cfg(not(feature = "pdf"))]
+            let (data, decoded_format) = (Bytes::from(img.content.to_vec()), "raw".to_string());
+
+            page_images.push(PdfImage {
+                page_number: page_number as usize,
+                image_index: img_index + 1,
+                width: img.width,
+                height: img.height,
+                color_space: img.color_space.clone(),
+                bits_per_component: img.bits_per_component,
+                filters,
+                data,
+                decoded_format,
+            });
+        }
+
+        Ok(page_images)
+    }
+
+    pub(crate) fn get_image_count(&self) -> Result<usize> {
+        let images = self.extract_images(None)?;
+        Ok(images.len())
+    }
 }
 
-pub(crate) fn extract_images_from_pdf(pdf_bytes: &[u8]) -> Result<Vec<PdfImage>> {
+pub(crate) fn extract_images_from_pdf(pdf_bytes: &[u8], max_images_per_page: Option<u32>) -> Result<Vec<PdfImage>> {
     let extractor = PdfImageExtractor::new(pdf_bytes)?;
-    extractor.extract_images()
+    extractor.extract_images(max_images_per_page)
+}
+
+pub(crate) fn extract_images_from_pdf_with_password(
+    pdf_bytes: &[u8],
+    password: &str,
+    max_images_per_page: Option<u32>,
+) -> Result<Vec<PdfImage>> {
+    let extractor = PdfImageExtractor::new_with_password(pdf_bytes, Some(password))?;
+    extractor.extract_images(max_images_per_page)
 }
 
 /// Re-extract images that have unusable formats (`"raw"`, `"ccitt"`, `"jbig2"`) by
@@ -538,13 +615,13 @@ mod tests {
 
     #[test]
     fn test_extract_images_invalid_pdf() {
-        let result = extract_images_from_pdf(b"not a pdf");
+        let result = extract_images_from_pdf(b"not a pdf", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_extract_images_empty_pdf() {
-        let result = extract_images_from_pdf(b"");
+        let result = extract_images_from_pdf(b"", None);
         assert!(result.is_err());
     }
 
@@ -673,6 +750,108 @@ mod tests {
             data.starts_with(b"\x89PNG\r\n\x1a\n"),
             "Decoded data should be a valid PNG"
         );
+    }
+
+    /// Regression test for issue #789: `max_images_per_page` must be enforced
+    /// in the lopdf extraction path so pages with thousands of image objects
+    /// do not cause an indefinite hang.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn test_max_images_per_page_cap_skips_dense_page() {
+        use flate2::Compression;
+        use flate2::write::ZlibEncoder;
+        use lopdf::{Document, Object, Stream, dictionary};
+        use std::io::Write;
+
+        // Build a PDF with two pages:
+        //   page 1 → 3 images (below cap of 2 → wait, cap is 2 so 3 > 2 → skipped)
+        //   page 2 → 1 image  (below cap → extracted)
+        // After applying max_images_per_page = 2, only page 2's image is returned.
+
+        let make_compressed_pixel = || {
+            let raw = vec![255u8, 0u8, 0u8]; // 1×1 DeviceRGB
+            let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
+            enc.write_all(&raw).unwrap();
+            enc.finish().unwrap()
+        };
+
+        let mut doc = Document::with_version("1.4");
+
+        // Helper: add an Image XObject and return its id.
+        let mut add_image = |doc: &mut Document| {
+            let stream = Stream::new(
+                dictionary! {
+                    "Type" => Object::Name(b"XObject".to_vec()),
+                    "Subtype" => Object::Name(b"Image".to_vec()),
+                    "Width" => 1i64,
+                    "Height" => 1i64,
+                    "ColorSpace" => Object::Name(b"DeviceRGB".to_vec()),
+                    "BitsPerComponent" => 8i64,
+                    "Filter" => Object::Name(b"FlateDecode".to_vec())
+                },
+                make_compressed_pixel(),
+            );
+            doc.add_object(stream)
+        };
+
+        // Page 1: 3 images (will be skipped when cap = 2)
+        let img1a = add_image(&mut doc);
+        let img1b = add_image(&mut doc);
+        let img1c = add_image(&mut doc);
+
+        // Page 2: 1 image (below cap → extracted)
+        let img2a = add_image(&mut doc);
+
+        let pages_id = doc.new_object_id();
+
+        let page1_id = doc.add_object(dictionary! {
+            "Type" => Object::Name(b"Page".to_vec()),
+            "Parent" => Object::Reference(pages_id),
+            "MediaBox" => Object::Array(vec![0i64.into(), 0i64.into(), 100i64.into(), 100i64.into()]),
+            "Resources" => dictionary! {
+                "XObject" => dictionary! {
+                    "Im0" => Object::Reference(img1a),
+                    "Im1" => Object::Reference(img1b),
+                    "Im2" => Object::Reference(img1c)
+                }
+            }
+        });
+        let page2_id = doc.add_object(dictionary! {
+            "Type" => Object::Name(b"Page".to_vec()),
+            "Parent" => Object::Reference(pages_id),
+            "MediaBox" => Object::Array(vec![0i64.into(), 0i64.into(), 100i64.into(), 100i64.into()]),
+            "Resources" => dictionary! {
+                "XObject" => dictionary! {
+                    "Im0" => Object::Reference(img2a)
+                }
+            }
+        });
+
+        doc.set_object(
+            pages_id,
+            dictionary! {
+                "Type" => Object::Name(b"Pages".to_vec()),
+                "Kids" => Object::Array(vec![Object::Reference(page1_id), Object::Reference(page2_id)]),
+                "Count" => 2i64
+            },
+        );
+        let catalog_id = doc.add_object(dictionary! {
+            "Type" => Object::Name(b"Catalog".to_vec()),
+            "Pages" => Object::Reference(pages_id)
+        });
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+
+        let mut pdf_bytes = Vec::new();
+        doc.save_to(&mut pdf_bytes).unwrap();
+
+        // No cap: all 4 images extracted.
+        let all = extract_images_from_pdf(&pdf_bytes, None).expect("should parse");
+        assert_eq!(all.len(), 4, "without cap: all images extracted");
+
+        // Cap of 2: page 1 has 3 images → skipped; page 2 has 1 image → extracted.
+        let capped = extract_images_from_pdf(&pdf_bytes, Some(2)).expect("should parse");
+        assert_eq!(capped.len(), 1, "with cap=2: only page-2 image extracted");
+        assert_eq!(capped[0].width, 1);
     }
 
     #[cfg(feature = "pdf")]
