@@ -6,7 +6,7 @@
 		"typecheck": "pnpm -r --if-present run typecheck"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.12",
+		"@biomejs/biome": "^2.4.13",
 		"@emnapi/core": "^1.10.0",
 		"@emnapi/runtime": "1.10.0",
 		"@textlint-rule/textlint-rule-no-invalid-control-character": "^3.0.0",
