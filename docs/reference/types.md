@@ -385,7 +385,6 @@ Image extraction configuration.
 | `auto_adjust_dpi` | `bool` | — | Automatically adjust DPI based on image content |
 | `min_dpi` | `i32` | — | Minimum DPI threshold |
 | `max_dpi` | `i32` | — | Maximum DPI threshold |
-| `max_images_per_page` | `Option<u32>` | `Default::default()` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdfium FFI. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `None` (default) means no limit — all images are extracted. |
 
 ---
 
@@ -546,7 +545,6 @@ OCR configuration.
 | `auto_rotate` | `bool` | `false` | Enable automatic page rotation based on orientation detection. When enabled, uses Tesseract's `DetectOrientationScript()` to detect page orientation (0/90/180/270 degrees) before OCR. If the page is rotated with high confidence, the image is corrected before recognition. This is critical for handling rotated scanned documents. |
 | `vlm_config` | `Option<LlmConfig>` | `None` | VLM (Vision Language Model) OCR configuration. Required when `backend` is `"vlm"`. Uses liter-llm to send page images to a vision model for text extraction. |
 | `vlm_prompt` | `Option<String>` | `None` | Custom Jinja2 prompt template for VLM OCR. When `None`, uses the default template. Available variables: - `{{ language }}` — The document language code (e.g., "eng", "deu"). |
-| `acceleration` | `Option<AccelerationConfig>` | `None` | Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection). Not user-configurable via config files — injected at runtime from `ExtractionConfig.acceleration` before each `process_image` call. |
 
 ---
 
@@ -659,7 +657,6 @@ Requires the `embeddings` feature to be enabled.
 | `show_download_progress` | `bool` | `false` | Show model download progress |
 | `cache_dir` | `Option<PathBuf>` | `None` | Custom cache directory for model files Defaults to `~/.cache/kreuzberg/embeddings/` if not specified. Allows full customization of model download location. |
 | `acceleration` | `Option<AccelerationConfig>` | `None` | Hardware acceleration for the embedding ONNX model. When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for inference. Defaults to `None` (auto-select per platform). |
-| `max_embed_duration_secs` | `Option<u64>` | `Default::default()` | Maximum wall-clock duration (in seconds) for a single `embed()` call when using `EmbeddingModelType.Plugin`. Applies only to the in-process plugin path — protects against hung host-language backends (e.g. a Python callback deadlocked on the GIL, a model stuck on CUDA OOM retries, etc.). On timeout, the dispatcher returns `crate.KreuzbergError.Plugin` instead of blocking forever. `None` disables the timeout. The default (60 seconds) is conservative for common in-process inference; increase for large batches on slow hardware. |
 
 ---
 
@@ -1068,7 +1065,7 @@ with confidence scores and spatial positions.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `class_name` | `String` | — | Layout class name (e.g. "picture", "table", "text", "section_header"). |
+| `class` | `String` | — | Layout class name (e.g. "picture", "table", "text", "section_header"). |
 | `confidence` | `f64` | — | Confidence score from the layout detection model (0.0 to 1.0). |
 | `bounding_box` | `String` | — | Bounding box in document coordinate space. |
 | `area_fraction` | `f64` | — | Fraction of the page area covered by this region (0.0 to 1.0). |
@@ -1124,7 +1121,7 @@ Keyword extraction configuration.
 | `algorithm` | `KeywordAlgorithm` | `KeywordAlgorithm::Yake` | Algorithm to use for extraction. |
 | `max_keywords` | `usize` | `10` | Maximum number of keywords to extract (default: 10). |
 | `min_score` | `f32` | `0` | Minimum score threshold (0.0-1.0, default: 0.0). Keywords with scores below this threshold are filtered out. Note: Score ranges differ between algorithms. |
-| `ngram_range` | `Vec<usize>` | `vec![]` | N-gram range for keyword extraction (min, max). (1, 1) = unigrams only (1, 2) = unigrams and bigrams (1, 3) = unigrams, bigrams, and trigrams (default) |
+| `ngram_range` | `String` | — | N-gram range for keyword extraction (min, max). (1, 1) = unigrams only (1, 2) = unigrams and bigrams (1, 3) = unigrams, bigrams, and trigrams (default) |
 | `language` | `Option<String>` | `Default::default()` | Language code for stopword filtering (e.g., "en", "de", "fr"). If None, no stopword filtering is applied. |
 | `yake_params` | `Option<YakeParams>` | `None` | YAKE-specific tuning parameters. |
 | `rake_params` | `Option<RakeParams>` | `None` | RAKE-specific tuning parameters. |
@@ -1206,13 +1203,13 @@ including DPI normalization, resizing, and resampling.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `original_dimensions` | `Vec<usize>` | — | Original image dimensions (width, height) in pixels |
-| `original_dpi` | `Vec<f64>` | — | Original image DPI (horizontal, vertical) |
+| `original_dimensions` | `String` | — | Original image dimensions (width, height) in pixels |
+| `original_dpi` | `String` | — | Original image DPI (horizontal, vertical) |
 | `target_dpi` | `i32` | — | Target DPI from configuration |
 | `scale_factor` | `f64` | — | Scaling factor applied to the image |
 | `auto_adjusted` | `bool` | — | Whether DPI was auto-adjusted based on content |
 | `final_dpi` | `i32` | — | Final DPI after processing |
-| `new_dimensions` | `Vec<usize>` | `None` | New dimensions after resizing (if resized) |
+| `new_dimensions` | `Option<String>` | `None` | New dimensions after resizing (if resized) |
 | `resample_method` | `String` | — | Resampling algorithm used ("LANCZOS3", "CATMULLROM", etc.) |
 | `dimension_clamped` | `bool` | — | Whether dimensions were clamped to max_image_dimension |
 | `calculated_dpi` | `Option<i32>` | `None` | Calculated optimal DPI (if auto_adjust_dpi enabled) |
@@ -1371,7 +1368,7 @@ Image element metadata.
 | `src` | `String` | — | Image source (URL, data URI, or SVG content) |
 | `alt` | `Option<String>` | `None` | Alternative text from alt attribute |
 | `title` | `Option<String>` | `None` | Title attribute |
-| `dimensions` | `Vec<u32>` | `None` | Image dimensions as (width, height) if available |
+| `dimensions` | `Option<String>` | `None` | Image dimensions as (width, height) if available |
 | `image_type` | `ImageType` | — | Image type classification |
 | `attributes` | `Vec<String>` | — | Additional attributes as key-value pairs |
 
@@ -1482,7 +1479,7 @@ BibTeX bibliography metadata.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `entry_count` | `usize` | — | Number of entries in the bibliography. |
+| `entry_count` | `usize` | — | Number of entries |
 | `citation_keys` | `Vec<String>` | `vec![]` | Citation keys |
 | `authors` | `Vec<String>` | `vec![]` | Authors |
 | `year_range` | `Option<YearRange>` | `Default::default()` | Year range (year range) |
@@ -1585,32 +1582,9 @@ Common metadata fields extracted from a PDF.
 
 ### Document Structure
 
-#### DocumentExtractor
+#### TableValidator
 
-Trait for document extractor plugins.
-
-Implement this trait to add support for new document formats or to override
-built-in extraction behavior with custom logic.
-
-# Return Type
-
-Extractors return `InternalDocument`, a flat intermediate representation.
-The pipeline converts this into the public `ExtractionResult` via the
-derivation step.
-
-# Priority System
-
-When multiple extractors support the same MIME type, the registry selects
-the extractor with the highest priority value. Use this to:
-- Override built-in extractors (priority > 50)
-- Provide fallback extractors (priority < 50)
-- Implement specialized extractors for specific use cases
-
-Default priority is 50.
-
-# Thread Safety
-
-Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
+Helper struct for validating table cell counts.
 
 *Opaque type — fields are not directly accessible.*
 
@@ -1736,20 +1710,14 @@ A single backend stage in the OCR pipeline.
 
 ---
 
-#### OcrBackend
+#### OcrFallbackDecision
 
-Trait for OCR backend plugins.
-
-Implement this trait to add custom OCR capabilities. OCR backends can be:
-- Native Rust implementations (like Tesseract)
-- FFI bridges to Python libraries (like EasyOCR, PaddleOCR)
-- Cloud-based OCR services (Google Vision, AWS Textract, etc.)
-
-# Thread Safety
-
-OCR backends must be thread-safe (`Send + Sync`) to support concurrent processing.
-
-*Opaque type — fields are not directly accessible.*
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `stats` | `String` | — | Stats |
+| `avg_non_whitespace` | `f64` | — | Avg non whitespace |
+| `avg_alnum` | `f64` | — | Avg alnum |
+| `fallback` | `bool` | — | Fallback |
 
 ---
 
@@ -1795,7 +1763,7 @@ Extracted inline image with metadata.
 | `format` | `String` | — | Format |
 | `filename` | `Option<String>` | `None` | Filename |
 | `description` | `Option<String>` | `None` | Human-readable description |
-| `dimensions` | `Vec<u32>` | `None` | Dimensions |
+| `dimensions` | `Option<String>` | `None` | Dimensions |
 | `attributes` | `Vec<String>` | — | Attributes |
 
 ---
@@ -1869,41 +1837,35 @@ Helper struct for validating ZIP archives for security issues.
 
 #### EmbeddingBackend
 
-Trait for in-process embedding backend plugins.
+---
 
-Async to match the convention used by `crate.plugins.OcrBackend`,
-`crate.plugins.DocumentExtractor`, and `crate.plugins.PostProcessor`.
-Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
-C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
-equivalent to satisfy the async signature.
+#### StringGrowthValidator
 
-# Thread safety
+Helper struct for tracking and validating string growth.
 
-Backends must be `Send + Sync + 'static`. They are stored in
-`Arc<dyn EmbeddingBackend>` and called concurrently from kreuzberg's chunking
-pipeline. If the backend's underlying model isn't thread-safe, the backend
-itself must serialize access internally (e.g. via `Mutex<Inner>`).
+*Opaque type — fields are not directly accessible.*
 
-# Contract
+---
 
-- `embed(texts)` MUST return exactly `texts.len()` vectors, each of length
-  `self.dimensions()`. The dispatcher in `crate.embeddings.embed_texts`
-  validates this before returning to downstream consumers; a non-conforming
-  backend surfaces as a `KreuzbergError.Validation`, not a panic.
-- `embed` may be called from any thread. Its future must be `Send`
-  (enforced by `async_trait` when `#[async_trait]` is used on non-WASM targets).
-- `dimensions()` is called exactly once at registration, immediately after
-  `initialize()` succeeds. The returned value is cached by the registry and
-  used for all subsequent shape validation. Lazy-loading implementations can
-  defer model loading into `initialize()` and report the real dimension
-  afterwards. Later mutations of the backend's reported dimension are not
-  observed by kreuzberg — implementations that need to change dimension
-  must unregister and re-register.
-- `shutdown()` (inherited from `crate.plugins.Plugin`) may be invoked
-  concurrently with an in-flight `embed()` call. Implementations must
-  tolerate this — e.g. by letting in-flight calls finish using resources
-  held via the `Arc<dyn EmbeddingBackend>` reference, and only releasing
-  shared state that isn't needed by `embed`.
+#### IterationValidator
+
+Helper struct for validating iteration counts.
+
+*Opaque type — fields are not directly accessible.*
+
+---
+
+#### DepthValidator
+
+Helper struct for validating nesting depth.
+
+*Opaque type — fields are not directly accessible.*
+
+---
+
+#### EntityValidator
+
+Helper struct for validating entity/string length.
 
 # Runtime
 
@@ -1963,37 +1925,6 @@ identification, and metadata.
 # Thread Safety
 
 All plugins must be `Send + Sync` to support concurrent usage across threads.
-
-*Opaque type — fields are not directly accessible.*
-
----
-
-#### Validator
-
-Trait for validator plugins.
-
-Validators check extraction results for quality, completeness, or correctness.
-Unlike post-processors, validator errors **fail fast** - if a validator returns
-an error, the extraction fails immediately.
-
-# Use Cases
-
-- **Quality Gates**: Ensure extracted content meets minimum quality standards
-- **Compliance**: Verify content meets regulatory requirements
-- **Content Filtering**: Reject documents containing unwanted content
-- **Format Validation**: Verify extracted content structure
-- **Security Checks**: Scan for malicious content
-
-# Error Handling
-
-Validator errors are **fatal** - they cause the extraction to fail and bubble up
-to the caller. Use validators for hard requirements that must be met.
-
-For non-fatal checks, use post-processors instead.
-
-# Thread Safety
-
-Validators must be thread-safe (`Send + Sync`).
 
 *Opaque type — fields are not directly accessible.*
 
@@ -2373,7 +2304,7 @@ and visibility state (for presentations).
 |-------|------|---------|-------------|
 | `number` | `usize` | — | Page number (1-indexed) |
 | `title` | `Option<String>` | `None` | Page title (usually for presentations) |
-| `dimensions` | `Vec<f64>` | `None` | Dimensions in points (PDF) or pixels (images): (width, height) |
+| `dimensions` | `Option<String>` | `None` | Dimensions in points (PDF) or pixels (images): (width, height) |
 | `image_count` | `Option<usize>` | `None` | Number of images on this page |
 | `table_count` | `Option<usize>` | `None` | Number of tables on this page |
 | `hidden` | `Option<bool>` | `None` | Whether this page is hidden (e.g., in presentations) |
@@ -2436,7 +2367,7 @@ font size clustering and hierarchical analysis.
 | `text` | `String` | — | The text content of this block |
 | `font_size` | `f32` | — | The font size of the text in this block |
 | `level` | `String` | — | The hierarchy level of this block (H1-H6 or Body) Levels correspond to HTML heading tags: - "h1": Top-level heading - "h2": Secondary heading - "h3": Tertiary heading - "h4": Quaternary heading - "h5": Quinary heading - "h6": Senary heading - "body": Body text (no heading level) |
-| `bbox` | `Vec<f32>` | `None` | Bounding box information for the block Contains coordinates as (left, top, right, bottom) in PDF units. |
+| `bbox` | `Option<String>` | `None` | Bounding box information for the block Contains coordinates as (left, top, right, bottom) in PDF units. |
 
 ---
 
@@ -2775,7 +2706,6 @@ Request parameters for embedding generation.
 | `preset` | `Option<String>` | `None` | Embedding preset name (default: "balanced"). Available: "speed", "balanced", "quality" |
 | `model` | `Option<String>` | `None` | LLM model for provider-hosted embeddings (e.g., "openai/text-embedding-3-small"). When set, overrides preset and uses liter-llm for embedding generation. |
 | `api_key` | `Option<String>` | `None` | API key for the LLM provider (optional, falls back to env). |
-| `embedding_plugin` | `Option<String>` | `None` | Name of a pre-registered in-process embedding plugin backend. When set, overrides both preset and model and dispatches to the registered callback. Requires a prior call to `kreuzberg.plugins.register_embedding_backend`. |
 
 ---
 
@@ -2886,7 +2816,7 @@ A single layout detection result.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `class_name` | `LayoutClass` | — | Class name (layout class) |
+| `class` | `LayoutClass` | — | Class (layout class) |
 | `confidence` | `f32` | — | Confidence |
 | `bbox` | `BBox` | — | Bbox (b box) |
 
@@ -2901,6 +2831,48 @@ Embedded file descriptor extracted from the PDF name tree.
 | `name` | `String` | — | The filename as stored in the PDF name tree. |
 | `data` | `Vec<u8>` | — | Raw file bytes from the embedded stream. |
 | `mime_type` | `Option<String>` | `None` | MIME type if specified in the filespec, otherwise `None`. |
+
+---
+
+#### FontSizeCluster
+
+A cluster of text blocks with the same font size characteristics.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `centroid` | `f32` | — | The centroid (mean) font size of this cluster |
+| `members` | `Vec<String>` | — | The text blocks that belong to this cluster |
+
+---
+
+#### CharData
+
+Character information extracted from PDF with font metrics.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `text` | `String` | — | The character text content |
+| `x` | `f32` | — | X position in PDF units |
+| `y` | `f32` | — | Y position in PDF units |
+| `font_size` | `f32` | — | Font size in points |
+| `width` | `f32` | — | Character width in PDF units |
+| `height` | `f32` | — | Character height in PDF units |
+| `is_bold` | `bool` | — | Whether the font is bold (from pdfium force-bold flag) |
+| `is_italic` | `bool` | — | Whether the font is italic |
+| `baseline_y` | `f32` | — | Baseline Y position (from character origin, falls back to bounds bottom) |
+
+---
+
+#### HierarchyBlock
+
+A TextBlock with hierarchy level assignment.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `text` | `String` | — | The text content |
+| `bbox` | `String` | — | The bounding box of the block |
+| `font_size` | `f32` | — | The font size of the text in this block |
+| `hierarchy_level` | `String` | — | The hierarchy level of this block (H1-H6 or Body) |
 
 ---
 

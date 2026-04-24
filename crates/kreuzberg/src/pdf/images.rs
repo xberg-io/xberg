@@ -414,13 +414,7 @@ impl PdfImageExtractor {
                 Err(_) => continue,
             };
             let mut img_index = 0usize;
-            self.collect_images_from_resources(
-                resources,
-                *page_num as usize,
-                &mut img_index,
-                &mut all_images,
-                0,
-            );
+            self.collect_images_from_resources(resources, *page_num as usize, &mut img_index, &mut all_images, 0);
         }
 
         Ok(all_images)
@@ -469,7 +463,11 @@ impl PdfImageExtractor {
                 Ok(id) => id,
                 Err(_) => continue,
             };
-            let stream = match self.document.get_object(id).and_then(|o| o.as_stream().map(|s| s.clone())) {
+            let stream = match self
+                .document
+                .get_object(id)
+                .and_then(|o| o.as_stream().map(|s| s.clone()))
+            {
                 Ok(s) => s,
                 Err(_) => continue,
             };
@@ -492,10 +490,7 @@ impl PdfImageExtractor {
                 };
                 let color_space = match dict.get(b"ColorSpace") {
                     Ok(cs) => match cs {
-                        Object::Array(array) => array[0]
-                            .as_name()
-                            .ok()
-                            .map(|n| String::from_utf8_lossy(n).to_string()),
+                        Object::Array(array) => array[0].as_name().ok().map(|n| String::from_utf8_lossy(n).to_string()),
                         Object::Name(name) => Some(String::from_utf8_lossy(name).to_string()),
                         _ => None,
                     },
@@ -554,13 +549,7 @@ impl PdfImageExtractor {
             } else if subtype == b"Form" {
                 // Recurse into the Form XObject's own resource dictionary.
                 if let Ok(form_resources) = dict.get(b"Resources").and_then(|r| r.as_dict()) {
-                    self.collect_images_from_resources(
-                        form_resources,
-                        page_number,
-                        img_index,
-                        out,
-                        depth + 1,
-                    );
+                    self.collect_images_from_resources(form_resources, page_number, img_index, out, depth + 1);
                 }
             }
         }
@@ -646,14 +635,7 @@ pub(crate) fn reextract_raw_images_via_pdfium(pdf_bytes: &[u8], images: &mut [Pd
         let mut found = false;
 
         'outer: for obj in page.objects().iter() {
-            if collect_image_from_pdfium_obj(
-                &obj,
-                &document,
-                target_index,
-                &mut current_image,
-                img,
-                &mut reextracted,
-            ) {
+            if collect_image_from_pdfium_obj(&obj, &document, target_index, &mut current_image, img, &mut reextracted) {
                 found = true;
                 break 'outer;
             }
@@ -954,11 +936,7 @@ mod tests {
         doc.save_to(&mut pdf_bytes).unwrap();
 
         let images = extract_images_from_pdf(&pdf_bytes).expect("should parse PDF");
-        assert_eq!(
-            images.len(),
-            1,
-            "image nested inside Form XObject must be found"
-        );
+        assert_eq!(images.len(), 1, "image nested inside Form XObject must be found");
         assert_eq!(images[0].width, 1);
         assert_eq!(images[0].height, 1);
     }
