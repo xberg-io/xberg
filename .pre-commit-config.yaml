@@ -6,7 +6,7 @@ exclude: ^docs/snippets/|vendor/|node_modules/|target/|invalid*|dist/|artifacts/
 repos:
   # AI-Rulez: auto-generate AI assistant configuration files
   - repo: https://github.com/Goldziher/ai-rulez
-    rev: v4.0.5
+    rev: v4.0.6
     hooks:
       - id: ai-rulez-generate
 
@@ -42,7 +42,7 @@ repos:
       - id: pyproject-fmt
 
   - repo: https://github.com/DevinR528/cargo-sort
-    rev: "v2.1.3"
+    rev: "v2.1.4"
     hooks:
       - id: cargo-sort
         args: [-w]
@@ -115,7 +115,7 @@ repos:
 
   # Alef: format and lint all binding languages, verify bindings, sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.7.7
+    rev: v0.7.10
     hooks:
       - id: alef-fmt
       - id: alef-lint

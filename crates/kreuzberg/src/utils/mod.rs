@@ -22,10 +22,8 @@ pub mod xml_utils;
 #[cfg(feature = "quality")]
 pub use string_utils::{calculate_text_confidence, fix_mojibake, safe_decode};
 
-#[cfg(test)]
-pub(crate) use pool_sizing::{PoolSizeHint, estimate_pool_size};
-
 pub use json_utils::{camel_to_snake, snake_to_camel};
+pub(crate) use xml_utils::xml_tag_name;
 
 use std::borrow::Cow;
 

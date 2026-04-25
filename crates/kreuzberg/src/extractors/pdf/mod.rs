@@ -19,6 +19,8 @@ use std::path::Path;
 #[cfg(feature = "pdf")]
 use crate::pdf::error::PdfError;
 
+#[cfg(feature = "ocr")]
+use ocr::evaluate_per_page_ocr;
 
 #[cfg(feature = "pdf")]
 use pdfium_render::prelude::{PdfDocument, Pdfium};

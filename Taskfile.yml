@@ -4,16 +4,24 @@ version: "3"
 # kreuzberg — Root Taskfile
 # ============================================================================
 # Primary development interface. Rust core tasks delegate to .task/languages/rust.yml.
-# All binding language operations (setup, build, test, lint, format, clean, update)
-# are handled by alef v0.7.2.
+# All binding language operations (setup, build, test, lint, format, clean,
+# update, upgrade, publish) are handled by alef v0.7.9.
 #
 # Command patterns:
 #   task setup         -> install all dependencies
-#   task build         -> build core + bindings
+#   task build         -> build core + bindings (debug)
+#   task build:release -> build core + bindings (release)
 #   task test          -> run all tests
-#   task lint          -> run all linters via prek
-#   task fmt           -> format all code
-#   task rust:build    -> Rust-specific tasks
+#   task test:e2e      -> generate + run e2e tests for all bindings
+#   task test:cov      -> tests with coverage
+#   task format        -> format all code (cargo fmt + alef fmt)
+#   task lint          -> lint via prek (full pre-commit chain)
+#   task update        -> compatible dependency updates everywhere
+#   task upgrade       -> aggressive upgrades (cargo upgrade --incompatible,
+#                         pnpm up --latest, uv sync --upgrade, bundle update, etc.)
+#   task clean         -> remove all build artifacts
+#   task publish:*     -> alef publish validate/prepare/build/package
+#   task rust:*        -> Rust-specific tasks
 # ============================================================================
 
 includes:
@@ -48,20 +56,16 @@ tasks:
 
   # === Build ===
   build:
-    desc: "Build core Rust library and all language bindings"
-    cmds:
-      - task: rust:build
-      - alef build
-
-  build:dev:
-    desc: "Build all in debug mode"
+    desc: "Build core Rust library and all language bindings (debug)"
     cmds:
       - task: rust:build:dev
+      - alef build
 
   build:release:
-    desc: "Build all in release mode"
+    desc: "Build core Rust library and all language bindings (release)"
     cmds:
       - task: rust:build:release
+      - alef build --release
 
   build:ci:
     desc: "Build all in CI mode"
@@ -85,7 +89,7 @@ tasks:
 
   # === Test ===
   test:
-    desc: "Run all test suites across all languages"
+    desc: "Run all test suites (Rust core + bindings)"
     cmds:
       - task: rust:test
       - alef test
@@ -95,11 +99,22 @@ tasks:
     cmds:
       - alef test
 
-  test:ci:
-    desc: "Run all tests with coverage (CI mode)"
+  test:e2e:
+    desc: "Generate and run e2e tests across all bindings"
+    cmds:
+      - alef e2e generate
+      - alef test --e2e
+
+  test:cov:
+    desc: "Run all tests with coverage"
     cmds:
       - task: rust:test:ci
       - alef test --coverage
+
+  test:ci:
+    desc: "Run all tests with coverage (CI mode, alias for test:cov)"
+    cmds:
+      - task: test:cov
 
   # === Lint & Format ===
   lint:
@@ -108,20 +123,21 @@ tasks:
       - prek run --all-files
 
   lint:check:
-    desc: "Lint all code WITHOUT auto-fix (check-only)"
+    desc: "Lint all code WITHOUT auto-fix (check-only, Rust + bindings)"
     cmds:
       - task: rust:lint:check
+      - alef lint
 
-  fmt:
-    desc: "Format all code"
+  format:
+    desc: "Format all code (Rust + all bindings)"
     cmds:
       - cargo fmt --all
       - alef fmt
 
-  format:
-    desc: "Format all code (alias for fmt)"
+  fmt:
+    desc: "Format all code (alias for format)"
     cmds:
-      - task: fmt
+      - task: format
 
   format:check:
     desc: "Check code formatting without modifications"
@@ -134,12 +150,20 @@ tasks:
       - task: format:check
       - task: lint:check
 
-  # === Update ===
+  # === Update / Upgrade ===
   update:
-    desc: "Update all dependencies across all languages"
+    desc: "Update dependencies (compatible only)"
     cmds:
       - task: rust:update
       - alef update
+      - prek autoupdate
+
+  upgrade:
+    desc: "Upgrade dependencies aggressively (cargo upgrade --incompatible, pnpm up --latest, uv sync --upgrade, etc.)"
+    cmds:
+      - rustup update stable
+      - task: rust:upgrade
+      - alef update --latest
       - prek autoupdate
 
   # === Coverage ===
@@ -193,9 +217,9 @@ tasks:
       - alef e2e generate
 
   e2e:test:
-    desc: "Run E2E tests for all languages"
+    desc: "Run E2E tests for all languages (alias for test:e2e)"
     cmds:
-      - alef test --e2e
+      - task: test:e2e
 
   # === Publish ===
   publish:validate:
@@ -222,5 +246,6 @@ tasks:
   clean:
     desc: "Remove build artifacts across all languages"
     cmds:
-      - task: rust:clean
+      - cargo clean
       - alef clean
+      - rm -rf coverage.lcov dist/ .alef/

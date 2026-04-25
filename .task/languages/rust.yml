@@ -21,7 +21,7 @@ tasks:
       - cmd: rustup component add llvm-tools
         platforms: [windows]
       - cargo install cargo-llvm-cov --locked
-      - cargo install cargo-upgrades --locked
+      - cargo install cargo-edit --locked
       - cargo --version
       - rustc --version
 
@@ -187,14 +187,21 @@ tasks:
         ignore_error: true
 
   update:
-    desc: "Update Rust dependencies (cargo-upgrades + cargo update)"
+    desc: "Update Rust dependencies (compatible only)"
     cmds:
-      - echo "Updating Rust dependencies (main workspace)..."
+      - cargo update
+      - cmd: cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
+        ignore_error: true
+
+  upgrade:
+    desc: "Upgrade Rust dependencies aggressively (cargo upgrade --incompatible)"
+    cmds:
       - cargo upgrade --incompatible
       - cargo update
-      - echo "Updating Rust dependencies (Ruby native crate)..."
-      - cargo upgrade --incompatible --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
-      - cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
+      - cmd: cargo upgrade --incompatible --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
+        ignore_error: true
+      - cmd: cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
+        ignore_error: true
 
   e2e:format:
     desc: "Format generated Rust E2E sources"
