@@ -1,6 +1,7 @@
 use super::error::{PdfError, Result};
 use bytes::Bytes;
 use lopdf::Document;
+use pdfium_render::prelude::PdfPageObjectsCommon;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,7 +95,7 @@ fn encode_grayscale_as_png(
     height: i64,
     bits: Option<i64>,
 ) -> std::result::Result<Vec<u8>, ()> {
-    use image::{ColorType, ImageEncoder, png::PngEncoder};
+    use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
 
     let color_type = match bits {
         Some(1) => ColorType::L8, // We'll expand 1-bit to 8-bit for simplicity
@@ -130,7 +131,7 @@ fn encode_indexed_as_png(
     base_channels: u32,
     bits: Option<i64>,
 ) -> std::result::Result<Vec<u8>, ()> {
-    use image::{ColorType, ImageEncoder, png::PngEncoder};
+    use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
 
     // Expand indices if they are sub-byte.
     let expanded_indices = match bits {
@@ -440,7 +441,7 @@ pub(crate) fn reextract_raw_images_via_pdfium(pdf_bytes: &[u8], images: &mut [Pd
             continue;
         }
 
-        let page = match doc.pages().get((image.page_number - 1) as u16) {
+        let page = match doc.pages().get((image.page_number - 1) as i32) {
             Ok(p) => p,
             Err(_) => continue,
         };
@@ -461,7 +462,7 @@ pub(crate) fn reextract_raw_images_via_pdfium(pdf_bytes: &[u8], images: &mut [Pd
 
         if let Some(bitmap) = found_bitmap {
             let mut png_bytes = Vec::new();
-            let encoder = image::png::PngEncoder::new(&mut png_bytes);
+            let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
             if encoder
                 .write_image(
                     bitmap.as_byte_slice(),
