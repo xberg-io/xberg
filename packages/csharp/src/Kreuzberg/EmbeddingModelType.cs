@@ -100,45 +100,45 @@ internal sealed class EmbeddingModelTypeJsonConverter : JsonConverter<EmbeddingM
         switch (value)
         {
             case EmbeddingModelType.Preset v:
-            {
-                var doc = JsonSerializer.SerializeToDocument(v, options);
-                writer.WriteStartObject();
-                writer.WriteString("type", "preset");
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                    if (prop.Name != "type") prop.WriteTo(writer);
-                writer.WriteEndObject();
-                break;
-            }
+                {
+                    var doc = JsonSerializer.SerializeToDocument(v, options);
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "preset");
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                        if (prop.Name != "type") prop.WriteTo(writer);
+                    writer.WriteEndObject();
+                    break;
+                }
             case EmbeddingModelType.Custom v:
-            {
-                var doc = JsonSerializer.SerializeToDocument(v, options);
-                writer.WriteStartObject();
-                writer.WriteString("type", "custom");
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                    if (prop.Name != "type") prop.WriteTo(writer);
-                writer.WriteEndObject();
-                break;
-            }
+                {
+                    var doc = JsonSerializer.SerializeToDocument(v, options);
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "custom");
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                        if (prop.Name != "type") prop.WriteTo(writer);
+                    writer.WriteEndObject();
+                    break;
+                }
             case EmbeddingModelType.Llm v:
-            {
-                var doc = JsonSerializer.SerializeToDocument(v.Value, options);
-                writer.WriteStartObject();
-                writer.WriteString("type", "llm");
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                    if (prop.Name != "type") prop.WriteTo(writer);
-                writer.WriteEndObject();
-                break;
-            }
+                {
+                    var doc = JsonSerializer.SerializeToDocument(v.Value, options);
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "llm");
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                        if (prop.Name != "type") prop.WriteTo(writer);
+                    writer.WriteEndObject();
+                    break;
+                }
             case EmbeddingModelType.Plugin v:
-            {
-                var doc = JsonSerializer.SerializeToDocument(v, options);
-                writer.WriteStartObject();
-                writer.WriteString("type", "plugin");
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                    if (prop.Name != "type") prop.WriteTo(writer);
-                writer.WriteEndObject();
-                break;
-            }
+                {
+                    var doc = JsonSerializer.SerializeToDocument(v, options);
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "plugin");
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                        if (prop.Name != "type") prop.WriteTo(writer);
+                    writer.WriteEndObject();
+                    break;
+                }
             default: throw new JsonException($"Unknown EmbeddingModelType subtype: {value.GetType().Name}");
         }
     }

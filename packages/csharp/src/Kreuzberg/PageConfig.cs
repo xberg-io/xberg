@@ -40,7 +40,8 @@ public sealed class PageConfig
     [JsonPropertyName("marker_format")]
     public string MarkerFormat { get; set; } = "
 
-<!-- PAGE {page_num} -->
+< !--PAGE {page_num
+} -->
 
 ";
 

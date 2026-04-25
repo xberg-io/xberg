@@ -202,6 +202,7 @@ fn config_for_preset(preset: &EmbeddingPreset, batch_size: usize) -> EmbeddingCo
         show_download_progress: false,
         cache_dir: None,
         acceleration: None,
+        max_embed_duration_secs: None,
     }
 }
 

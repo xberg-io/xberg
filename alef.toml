@@ -1193,6 +1193,11 @@ trait_name = "EmbeddingBackend"
 super_trait = "kreuzberg::plugins::Plugin"
 registry_getter = "kreuzberg::plugins::registry::get_embedding_backend_registry"
 register_fn = "register_embedding_backend"
+# Elixir bridge produces code that holds rustler::OwnedEnv / SavedTerm — those
+# embed `*mut ErlNifEnv` raw pointers that are not Sync, so the generated
+# `RustlerEmbeddingBackendBridge` cannot satisfy `Plugin: Send + Sync + 'static`.
+# Mirrors the existing exclusions for OcrBackend / PostProcessor / Validator.
+exclude_languages = ["elixir"]
 
 # TODO: add PostProcessor and Validator bridges once OcrBackend is proven
 # [[trait_bridges]]
