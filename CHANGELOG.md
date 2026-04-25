@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- **#768**: In-process embedding backend plugin. Callers that already own an embedder (sentence-transformers, llama-cpp-python, a tuned ONNX session, etc.) can register it once via `kreuzberg::plugins::register_embedding_backend(Arc::new(MyEmbedder))` and route kreuzberg's chunking and standalone embed paths into it through the new `EmbeddingModelType::Plugin { name }` config variant. Reachable from REST, MCP (`embedding_plugin`), CLI (`--provider plugin --plugin NAME`), and the `KREUZBERG_EMBEDDING_PLUGIN_NAME` environment variable; registry pre-flight returns the available backends list when the name isn't found. A new `EmbeddingConfig.max_embed_duration_secs` field bounds the wait on a hung backend (default 60s; `None` disables, `Some(0)` is treated as disabled). Host-side `registerEmbeddingBackend` is wired through Python (PyO3), Node (NAPI-RS), PHP (ext-php-rs), WASM (wasm-bindgen), Ruby (Magnus), Elixir (Rustler), R (extendr), Go (cgo), C# (P/Invoke), and the C FFI (`kreuzberg_register_embedding_backend`); Java's Panama backend can round-trip the `Plugin` config but does not yet emit plugin bridges. Adds fork-safety guidance for Python users running native-backed embedders under prefork servers (`os.register_at_fork`).
+- **#794**: Fix Helm chart default install broken by two conflicts: (1) the cache init container ran as `root` while `podSecurityContext.runAsNonRoot: true` is the default, causing kubelet to reject the pod; (2) Kubernetes service discovery injects `KREUZBERG_PORT=tcp://...` when the release is named `kreuzberg`, which the binary parses as a `u16` and panics. Fixed by adding `runAsNonRoot: false` to the init container's `securityContext`, a new `cache.initChown` toggle (default `true`, set to `false` on fsGroup-aware storage to skip the init container entirely), and defaulting `enableServiceLinks: false` in the pod spec.
 
 ---
 
