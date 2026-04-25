@@ -134,6 +134,29 @@ pub fn clear_command(cache_dir: Option<PathBuf>, format: WireFormat) -> Result<(
 
 /// Execute cache manifest command - outputs expected model files with checksums.
 pub fn manifest_command(format: WireFormat) -> Result<()> {
+    // Without at least one model-providing feature, every `extend` call
+    // below is `#[cfg]`-stripped and `entries: Vec<_>` has no anchor for
+    // type inference — `e.size_bytes` on the closure further down then
+    // fails compilation with E0282. Bail with a clear error instead so
+    // the build with `--no-default-features --features "bundled-pdfium"`
+    // (or similar minimal configurations) succeeds.
+    #[cfg(not(any(feature = "paddle-ocr", feature = "layout-detection")))]
+    {
+        let _ = format;
+        anyhow::bail!(
+            "manifest command unavailable: build kreuzberg-cli with at least one of \
+             --features \"paddle-ocr\" or --features \"layout-detection\""
+        );
+    }
+
+    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection"))]
+    {
+        manifest_command_inner(format)
+    }
+}
+
+#[cfg(any(feature = "paddle-ocr", feature = "layout-detection"))]
+fn manifest_command_inner(format: WireFormat) -> Result<()> {
     let mut entries = Vec::new();
 
     #[cfg(feature = "paddle-ocr")]
