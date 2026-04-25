@@ -453,11 +453,7 @@ class ImageExtractionConfig {
   /// When `true` (default), image references like `![Image 1](embedded:p1_i0)`
   /// are appended to the markdown. Set to `false` to extract images as data
   /// without polluting the markdown output.
-  ///
-  /// `None` means use the default (`true`). This allows language bindings to
-  /// omit the field entirely and get the correct default without explicitly
-  /// sending `false`.
-  final bool? injectPlaceholders;
+  final bool injectPlaceholders;
   /// Automatically adjust DPI based on image content
   final bool autoAdjustDpi;
   /// Minimum DPI threshold

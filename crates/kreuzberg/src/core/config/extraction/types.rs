@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Image extraction configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageExtractionConfig {
     /// Extract images from documents
     #[serde(default = "default_true")]
@@ -26,12 +26,8 @@ pub struct ImageExtractionConfig {
     /// When `true` (default), image references like `![Image 1](embedded:p1_i0)`
     /// are appended to the markdown. Set to `false` to extract images as data
     /// without polluting the markdown output.
-    ///
-    /// `None` means use the default (`true`). This allows language bindings to
-    /// omit the field entirely and get the correct default without explicitly
-    /// sending `false`.
-    #[serde(default)]
-    pub inject_placeholders: Option<bool>,
+    #[serde(default = "default_true")]
+    pub inject_placeholders: bool,
 
     /// Automatically adjust DPI based on image content
     #[serde(default = "default_true")]
@@ -86,6 +82,21 @@ pub struct LanguageDetectionConfig {
     pub detect_multiple: bool,
 }
 
+impl Default for ImageExtractionConfig {
+    fn default() -> Self {
+        Self {
+            extract_images: true,
+            target_dpi: 300,
+            max_image_dimension: 4096,
+            inject_placeholders: true,
+            auto_adjust_dpi: true,
+            min_dpi: 72,
+            max_dpi: 600,
+            max_images_per_page: None,
+        }
+    }
+}
+
 // Default value functions
 fn default_true() -> bool {
     true
@@ -120,6 +131,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_image_extraction_config_default_booleans_are_true() {
+        let cfg = ImageExtractionConfig::default();
+        assert!(cfg.extract_images, "extract_images must default to true");
+        assert!(cfg.inject_placeholders, "inject_placeholders must default to true");
+        assert!(cfg.auto_adjust_dpi, "auto_adjust_dpi must default to true");
+        assert_eq!(cfg.target_dpi, 300);
+        assert_eq!(cfg.max_image_dimension, 4096);
+        assert_eq!(cfg.min_dpi, 72);
+        assert_eq!(cfg.max_dpi, 600);
+    }
+
+    #[test]
+    fn test_image_extraction_config_explicit_false_disables_placeholders() {
+        let cfg = ImageExtractionConfig {
+            inject_placeholders: false,
+            ..ImageExtractionConfig::default()
+        };
+        assert!(!cfg.inject_placeholders);
+        assert!(cfg.extract_images);
+    }
+
+    #[test]
+    fn test_image_extraction_config_absent_json_fields_get_canonical_defaults() {
+        let json = r#"{"extract_images": true}"#;
+        let cfg: ImageExtractionConfig = serde_json::from_str(json).unwrap();
+        assert!(
+            cfg.inject_placeholders,
+            "absent inject_placeholders must deserialize to true"
+        );
+        assert!(cfg.auto_adjust_dpi, "absent auto_adjust_dpi must deserialize to true");
+        assert_eq!(cfg.target_dpi, 300);
+    }
+
+    #[test]
     fn test_max_images_per_page_defaults_none() {
         let config = ImageExtractionConfig::default();
         assert_eq!(config.max_images_per_page, None);
@@ -149,7 +194,7 @@ mod tests {
     #[test]
     fn test_max_images_per_page_absent_in_json_deserializes_as_none() {
         let json = r#"{"extract_images":true,"target_dpi":300,"max_image_dimension":4096,
-                       "inject_placeholders":null,"auto_adjust_dpi":true,
+                       "inject_placeholders":true,"auto_adjust_dpi":true,
                        "min_dpi":72,"max_dpi":600}"#;
         let config: ImageExtractionConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.max_images_per_page, None);

@@ -43,7 +43,7 @@ fn test_inject_placeholders_false_removes_image_refs() {
         output_format: OutputFormat::Markdown,
         use_cache: false,
         images: Some(ImageExtractionConfig {
-            inject_placeholders: Some(false),
+            inject_placeholders: false,
             ..Default::default()
         }),
         ..Default::default()
@@ -88,7 +88,7 @@ fn test_inject_placeholders_false_preserves_text_content() {
         output_format: OutputFormat::Markdown,
         use_cache: false,
         images: Some(ImageExtractionConfig {
-            inject_placeholders: Some(false),
+            inject_placeholders: false,
             ..Default::default()
         }),
         ..Default::default()
@@ -141,7 +141,7 @@ fn test_configs_produce_different_output() {
             output_format: OutputFormat::Markdown,
             use_cache: false,
             images: Some(ImageExtractionConfig {
-                inject_placeholders: Some(false),
+                inject_placeholders: false,
                 ..Default::default()
             }),
             ..Default::default()

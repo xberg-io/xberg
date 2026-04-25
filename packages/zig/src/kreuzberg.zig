@@ -181,7 +181,7 @@ pub const ImageExtractionConfig = struct {
     extract_images: bool,
     target_dpi: i32,
     max_image_dimension: i32,
-    inject_placeholders: ?bool,
+    inject_placeholders: bool,
     auto_adjust_dpi: bool,
     min_dpi: i32,
     max_dpi: i32,
