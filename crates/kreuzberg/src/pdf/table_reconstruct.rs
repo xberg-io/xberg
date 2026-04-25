@@ -13,6 +13,7 @@ pub(crate) use crate::table_core::{HocrWord, reconstruct_table, table_to_markdow
 ///
 /// `SegmentData` uses PDF coordinates (y=0 at bottom, increases upward).
 /// `HocrWord` uses image coordinates (y=0 at top, increases downward).
+#[cfg(feature = "pdf-oxide")]
 pub(crate) fn segment_to_hocr_word(seg: &SegmentData, page_height: f32) -> HocrWord {
     let top_image = (page_height - (seg.y + seg.height)).round().max(0.0) as u32;
     HocrWord {
@@ -34,6 +35,7 @@ pub(crate) fn segment_to_hocr_word(seg: &SegmentData, page_height: f32) -> HocrW
 /// Single-word segments use `segment_to_hocr_word` directly (fast path).
 /// Multi-word segments get proportional bbox estimation per word based on
 /// byte offset within the segment text.
+#[cfg(feature = "pdf-oxide")]
 pub(crate) fn split_segment_to_words(seg: &SegmentData, page_height: f32) -> Vec<HocrWord> {
     let trimmed = seg.text.trim();
     if trimmed.is_empty() {
@@ -84,6 +86,7 @@ pub(crate) fn split_segment_to_words(seg: &SegmentData, page_height: f32) -> Vec
 ///
 /// Splits multi-word segments into individual words with proportional bounding
 /// boxes, ensuring each word can be independently matched to table cells.
+#[cfg(feature = "pdf-oxide")]
 pub(crate) fn segments_to_words(segments: &[SegmentData], page_height: f32) -> Vec<HocrWord> {
     segments
         .iter()
@@ -780,6 +783,7 @@ fn normalize_data_cell(cell: &mut String) {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "pdf-oxide")]
     fn make_seg(text: &str, x: f32, y: f32, width: f32, height: f32) -> SegmentData {
         SegmentData {
             text: text.to_string(),
@@ -796,6 +800,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "pdf-oxide")]
     #[test]
     fn test_split_single_word() {
         let seg = make_seg("Hello", 100.0, 500.0, 50.0, 12.0);
@@ -805,6 +810,7 @@ mod tests {
         assert_eq!(words[0].left, 100);
     }
 
+    #[cfg(feature = "pdf-oxide")]
     #[test]
     fn test_split_two_words() {
         let seg = make_seg("Col A", 100.0, 500.0, 100.0, 12.0);
@@ -817,6 +823,7 @@ mod tests {
         assert_eq!(words[1].left, 180);
     }
 
+    #[cfg(feature = "pdf-oxide")]
     #[test]
     fn test_split_empty_segment() {
         let seg = make_seg("   ", 100.0, 500.0, 50.0, 12.0);
@@ -824,6 +831,7 @@ mod tests {
         assert!(words.is_empty());
     }
 
+    #[cfg(feature = "pdf-oxide")]
     #[test]
     fn test_split_many_words() {
         let seg = make_seg("a b c d", 0.0, 0.0, 700.0, 12.0);
@@ -839,6 +847,7 @@ mod tests {
         assert!(words[3].left > words[2].left);
     }
 
+    #[cfg(feature = "pdf-oxide")]
     #[test]
     fn test_split_y_coordinate_conversion() {
         // Segment at y=500 (PDF bottom-up), height=12, page_height=800
@@ -849,6 +858,7 @@ mod tests {
         assert_eq!(words[0].height, 12);
     }
 
+    #[cfg(feature = "pdf-oxide")]
     #[test]
     fn test_segments_to_words_multiple() {
         let segs = vec![

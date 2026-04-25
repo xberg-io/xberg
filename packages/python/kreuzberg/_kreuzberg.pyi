@@ -2534,9 +2534,7 @@ class EmbeddingModelTypeLlmVariant(TypedDict):
     type: Literal["llm"]
     llm: LlmConfig
 
-EmbeddingModelType: TypeAlias = (
-    EmbeddingModelTypePresetVariant | EmbeddingModelTypeCustomVariant | EmbeddingModelTypeLlmVariant
-)
+EmbeddingModelType: TypeAlias = EmbeddingModelTypePresetVariant | EmbeddingModelTypeCustomVariant | EmbeddingModelTypeLlmVariant
 
 class CodeContentMode:
     Chunks: CodeContentMode = ...

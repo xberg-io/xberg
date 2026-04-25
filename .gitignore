@@ -67,6 +67,7 @@ vendor/
 php-kreuzberg.ini
 packages/php/php-kreuzberg.ini
 packages/php/tests.xml
+packages/php/var/
 .php-cs-fixer.cache
 
 # Java / C# / .NET
@@ -159,9 +160,6 @@ tests/e2e/test_report.json
 temp-test-*
 packages/csharp/test_html_debug.cs
 
-# WASM build artifacts
-libpdfium.a
-
 # Pdfium test artifacts
 crates/kreuzberg-pdfium-render/*.jpg
 
@@ -197,9 +195,7 @@ visualizations/
 
 
 # Additional generated artifacts
-.remote-cache/
 .alef/
-.gemini/
 *.pyd
 .gems/
 vendor/bundle/
@@ -213,14 +209,9 @@ pkg/
 
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .agents/
-.claude/
-.codex/
 .cursor/
 .github/agents/
 .github/commands/
 .github/copilot-instructions.md
 .github/skills/
-AGENTS.md
-CLAUDE.md
-GEMINI.md
 # END ai-rulez

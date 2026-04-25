@@ -6,7 +6,7 @@ exclude: ^docs/snippets/|vendor/|node_modules/|target/|invalid*|dist/|artifacts/
 repos:
   # AI-Rulez: auto-generate AI assistant configuration files
   - repo: https://github.com/Goldziher/ai-rulez
-    rev: v4.0.4
+    rev: v4.0.5
     hooks:
       - id: ai-rulez-generate
 
@@ -115,7 +115,7 @@ repos:
 
   # Alef: format and lint all binding languages, verify bindings, sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.7.6
+    rev: v0.7.7
     hooks:
       - id: alef-fmt
       - id: alef-lint
