@@ -334,7 +334,7 @@ impl DocumentExtractor for PptxExtractor {
         let inject_placeholders = config
             .images
             .as_ref()
-            .and_then(|img| img.inject_placeholders)
+            .map(|img| img.inject_placeholders)
             .unwrap_or(true);
         let plain = matches!(config.output_format, crate::core::config::OutputFormat::Plain);
 
@@ -428,7 +428,7 @@ impl DocumentExtractor for PptxExtractor {
         let inject_placeholders = config
             .images
             .as_ref()
-            .and_then(|img| img.inject_placeholders)
+            .map(|img| img.inject_placeholders)
             .unwrap_or(true);
         let plain = matches!(config.output_format, crate::core::config::OutputFormat::Plain);
 

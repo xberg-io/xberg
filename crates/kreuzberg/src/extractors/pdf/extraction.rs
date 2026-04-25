@@ -121,11 +121,7 @@ pub(crate) fn extract_all_from_document(
             .map(|cf| (cf.strip_repeating_text, cf.include_headers, cf.include_footers))
             .unwrap_or((true, false, false)); // defaults match current behavior
 
-        let inject_placeholders = config
-            .images
-            .as_ref()
-            .and_then(|c| c.inject_placeholders)
-            .unwrap_or(true);
+        let inject_placeholders = config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(true);
 
         tracing::debug!(
             k_clusters = k,
