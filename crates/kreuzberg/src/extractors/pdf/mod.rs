@@ -849,7 +849,10 @@ impl PdfExtractor {
                         .collect();
                     (Some(extracted), warning)
                 }
-                Err(_) => (Some(vec![]), None),
+                Err(e) => {
+                    tracing::warn!(error = %e, "PDF image extraction failed");
+                    (Some(vec![]), None)
+                }
             }
         } else {
             (None, None)
