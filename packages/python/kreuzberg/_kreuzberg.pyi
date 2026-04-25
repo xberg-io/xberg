@@ -2519,7 +2519,7 @@ class ChunkSizingTokenizerVariant(TypedDict):
     model: str
     cache_dir: str | None
 
-ChunkSizing: TypeAlias = ChunkSizingCharactersVariant | ChunkSizingTokenizerVariant
+ChunkSizing = ChunkSizingCharactersVariant | ChunkSizingTokenizerVariant
 
 class EmbeddingModelTypePresetVariant(TypedDict):
     type: Literal["preset"]
@@ -2534,7 +2534,7 @@ class EmbeddingModelTypeLlmVariant(TypedDict):
     type: Literal["llm"]
     llm: LlmConfig
 
-EmbeddingModelType: TypeAlias = EmbeddingModelTypePresetVariant | EmbeddingModelTypeCustomVariant | EmbeddingModelTypeLlmVariant
+EmbeddingModelType = EmbeddingModelTypePresetVariant | EmbeddingModelTypeCustomVariant | EmbeddingModelTypeLlmVariant
 
 class CodeContentMode:
     Chunks: CodeContentMode = ...
@@ -2723,7 +2723,7 @@ class NodeContentMetadataBlockVariant(TypedDict):
     node_type: Literal["metadata_block"]
     entries: list[str]
 
-NodeContent: TypeAlias = (
+NodeContent = (
     NodeContentTitleVariant
     | NodeContentHeadingVariant
     | NodeContentParagraphVariant
@@ -2788,7 +2788,7 @@ class AnnotationKindCustomVariant(TypedDict):
     name: str
     value: str | None
 
-AnnotationKind: TypeAlias = (
+AnnotationKind = (
     AnnotationKindBoldVariant
     | AnnotationKindItalicVariant
     | AnnotationKindUnderlineVariant
@@ -2913,7 +2913,7 @@ class FormatMetadataCodeVariant(TypedDict):
     format_type: Literal["code"]
     _0: str
 
-FormatMetadata: TypeAlias = (
+FormatMetadata = (
     FormatMetadataPdfVariant
     | FormatMetadataDocxVariant
     | FormatMetadataExcelVariant
@@ -2975,7 +2975,7 @@ class OcrBoundingGeometryQuadrilateralVariant(TypedDict):
     type: Literal["quadrilateral"]
     points: str
 
-OcrBoundingGeometry: TypeAlias = OcrBoundingGeometryRectangleVariant | OcrBoundingGeometryQuadrilateralVariant
+OcrBoundingGeometry = OcrBoundingGeometryRectangleVariant | OcrBoundingGeometryQuadrilateralVariant
 
 class OcrElementLevel:
     Word: OcrElementLevel = ...

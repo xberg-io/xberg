@@ -9214,7 +9214,7 @@ impl WasmHtmlMetadata {
     #[wasm_bindgen]
     pub fn from(metadata: WasmHtmlMetadata) -> WasmHtmlMetadata {
         let metadata_core: kreuzberg::HtmlMetadata = metadata.into();
-        metadata_core.into()
+        kreuzberg::HtmlMetadata::from(metadata_core).into()
     }
 }
 
