@@ -130,6 +130,19 @@ cache:
   # -- Access modes for the cache PVC
   accessModes:
     - ReadWriteOnce
+  # -- Run an init container to chown the cache directory to UID 1000.
+  # Most block-backed storage classes (EBS, GKE PD, Azure Disk) handle
+  # ownership automatically via the pod's fsGroup, so you can set this
+  # to false there. Set to true for NFS or other storage that does not
+  # honour fsGroup on mount.
+  initChown: true
+
+# -- Disable Kubernetes service-discovery environment variable injection.
+# Kubernetes injects {SVCNAME}_PORT=tcp://<clusterIP>:<port> for every
+# Service in the namespace. When the release is named "kreuzberg" this
+# injects KREUZBERG_PORT which the binary parses as a u16 and panics.
+# CoreDNS makes these variables unnecessary in all modern clusters.
+enableServiceLinks: false
 
 podDisruptionBudget:
   # -- Enable PodDisruptionBudget

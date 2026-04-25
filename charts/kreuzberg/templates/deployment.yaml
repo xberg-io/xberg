@@ -25,15 +25,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "kreuzberg.serviceAccountName" . }}
+      enableServiceLinks: {{ .Values.enableServiceLinks }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if .Values.cache.enabled }}
+      {{- if and .Values.cache.enabled .Values.cache.initChown }}
       initContainers:
         - name: init-cache
           image: busybox:1.37-glibc
           command: ['sh', '-c', 'mkdir -p /app/.kreuzberg && chown -R 1000:1000 /app/.kreuzberg']
           securityContext:
             runAsUser: 0
+            runAsNonRoot: false
           volumeMounts:
             - name: cache
               mountPath: /app/.kreuzberg
