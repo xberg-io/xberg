@@ -128,7 +128,7 @@ pub type ImageExtractionConfig {
     extract_images: Bool,
     target_dpi: Int,
     max_image_dimension: Int,
-    inject_placeholders: Option(Bool),
+    inject_placeholders: Bool,
     auto_adjust_dpi: Bool,
     min_dpi: Int,
     max_dpi: Int,

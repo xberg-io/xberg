@@ -173,7 +173,7 @@ mod ffi {
             extract_images: bool,
             target_dpi: i32,
             max_image_dimension: i32,
-            inject_placeholders: Option<bool>,
+            inject_placeholders: bool,
             auto_adjust_dpi: bool,
             min_dpi: i32,
             max_dpi: i32,
@@ -182,7 +182,7 @@ mod ffi {
         fn extract_images(&self) -> bool;
         fn target_dpi(&self) -> i32;
         fn max_image_dimension(&self) -> i32;
-        fn inject_placeholders(&self) -> Option<bool>;
+        fn inject_placeholders(&self) -> bool;
         fn auto_adjust_dpi(&self) -> bool;
         fn min_dpi(&self) -> i32;
         fn max_dpi(&self) -> i32;
@@ -3181,7 +3181,7 @@ impl ImageExtractionConfig {
         extract_images: bool,
         target_dpi: i32,
         max_image_dimension: i32,
-        inject_placeholders: Option<bool>,
+        inject_placeholders: bool,
         auto_adjust_dpi: bool,
         min_dpi: i32,
         max_dpi: i32,
@@ -3216,12 +3216,11 @@ impl ImageExtractionConfig {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn inject_placeholders(&self) -> Option<bool> {
-        self.0.inject_placeholders.as_ref().and_then(|v| {
-            ::serde_json::to_value(v)
-                .ok()
-                .and_then(|j| ::serde_json::from_value(j).ok())
-        })
+    pub fn inject_placeholders(&self) -> bool {
+        ::serde_json::to_value(&self.0.inject_placeholders)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
     }
     pub fn auto_adjust_dpi(&self) -> bool {
         ::serde_json::to_value(&self.0.auto_adjust_dpi)
