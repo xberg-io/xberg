@@ -3645,13 +3645,13 @@ impl Default for LayoutClass {
 
 #[rustler::nif]
 pub fn blake3_hash_bytes(data: Vec<u8>) -> String {
-    kreuzberg::cache::blake3_hash_bytes(&data).into()
+    kreuzberg::cache::blake3_hash_bytes(&data)
 }
 
 #[rustler::nif]
 pub fn blake3_hash_file(path: String) -> Result<String, String> {
     let result = kreuzberg::cache::blake3_hash_file(&std::path::PathBuf::from(path)).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
@@ -3848,19 +3848,19 @@ pub fn is_valid_format_field(field: String) -> bool {
 #[rustler::nif]
 pub fn validate_mime_type(mime_type: String) -> Result<String, String> {
     let result = kreuzberg::validate_mime_type(&mime_type).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
 pub fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> Result<String, String> {
     let result = kreuzberg::detect_or_validate(path.as_deref(), mime_type.as_deref()).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
 pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String> {
     let result = kreuzberg::detect_mime_type_from_bytes(&content).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
@@ -3896,18 +3896,18 @@ pub fn extract_email_content(
 
 #[rustler::nif]
 pub fn cells_to_text(cells: Vec<Vec<String>>) -> String {
-    kreuzberg::extraction::cells_to_text(&cells).into()
+    kreuzberg::extraction::cells_to_text(&cells)
 }
 
 #[rustler::nif]
 pub fn cells_to_markdown(cells: Vec<Vec<String>>) -> String {
-    kreuzberg::extraction::cells_to_markdown(&cells).into()
+    kreuzberg::extraction::cells_to_markdown(&cells)
 }
 
 #[rustler::nif]
 pub fn djot_to_html(djot_source: String) -> Result<String, String> {
     let result = kreuzberg::extractors::djot_format::djot_to_html(&djot_source).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
@@ -3917,7 +3917,7 @@ pub fn dedup_text(texts: Vec<String>) -> Vec<String> {
 
 #[rustler::nif]
 pub fn normalize_whitespace(s: String) -> String {
-    kreuzberg::extractors::rtf::normalize_whitespace(&s).into()
+    kreuzberg::extractors::rtf::normalize_whitespace(&s)
 }
 
 #[rustler::nif]
@@ -3951,7 +3951,7 @@ pub fn sanitize_filename(path: String) -> String {
 
 #[rustler::nif]
 pub fn sanitize_path(path: String) -> String {
-    kreuzberg::telemetry::spans::sanitize_path(&std::path::PathBuf::from(path)).into()
+    kreuzberg::telemetry::spans::sanitize_path(&std::path::PathBuf::from(path))
 }
 
 #[rustler::nif]
@@ -3961,7 +3961,7 @@ pub fn is_valid_utf8(bytes: Vec<u8>) -> bool {
 
 #[rustler::nif]
 pub fn clean_extracted_text(text: String) -> String {
-    kreuzberg::text::quality::clean_extracted_text(&text).into()
+    kreuzberg::text::quality::clean_extracted_text(&text)
 }
 
 #[rustler::nif]
@@ -3976,7 +3976,7 @@ pub fn reduce_tokens(text: String, config: Option<String>, language_hint: Option
         language_hint.as_deref(),
     )
     .map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
@@ -4060,7 +4060,7 @@ pub fn classify_uri(url: String) -> UriKind {
 
 #[rustler::nif]
 pub fn safe_decode(byte_data: Vec<u8>, encoding: Option<String>) -> String {
-    kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref()).into()
+    kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref())
 }
 
 #[rustler::nif]
@@ -4090,7 +4090,7 @@ pub fn create_byte_buffer_pool(pool_size: usize, buffer_capacity: usize) -> Reso
 
 #[rustler::nif]
 pub fn openapi_json() -> String {
-    kreuzberg::api::openapi::openapi_json().into()
+    kreuzberg::api::openapi::openapi_json()
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -4158,7 +4158,7 @@ pub fn extract_keywords(text: String, config: Option<String>) -> Result<Vec<Keyw
 
 #[rustler::nif]
 pub fn compute_hash(data: String) -> String {
-    kreuzberg::ocr::compute_hash(&data).into()
+    kreuzberg::ocr::compute_hash(&data)
 }
 
 #[rustler::nif]
@@ -4170,13 +4170,13 @@ pub fn render_pdf_page_to_png(
 ) -> Result<Vec<u8>, String> {
     let result = kreuzberg::pdf::rendering::render_pdf_page_to_png(&pdf_bytes, page_index, dpi, password.as_deref())
         .map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
 pub fn extract_text_from_pdf(pdf_bytes: Vec<u8>) -> Result<String, String> {
     let result = kreuzberg::pdf::extract_text_from_pdf(&pdf_bytes).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
@@ -4187,7 +4187,7 @@ pub fn serialize_to_toon(result: Option<String>) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let result =
         kreuzberg::serialize_to_toon(result_core.as_ref().unwrap_or(&Default::default())).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
@@ -4198,7 +4198,7 @@ pub fn serialize_to_json(result: Option<String>) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let result =
         kreuzberg::serialize_to_json(result_core.as_ref().unwrap_or(&Default::default())).map_err(|e| e.to_string())?;
-    Ok(result.into())
+    Ok(result)
 }
 
 #[rustler::nif]
@@ -4283,7 +4283,7 @@ pub fn serverconfig_default() -> ServerConfig {
 
 #[rustler::nif]
 pub fn serverconfig_listen_addr(obj: ServerConfig) -> String {
-    kreuzberg::ServerConfig::from(obj).listen_addr().into()
+    kreuzberg::ServerConfig::from(obj).listen_addr()
 }
 
 #[rustler::nif]
