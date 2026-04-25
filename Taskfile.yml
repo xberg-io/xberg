@@ -21,7 +21,6 @@ includes:
 
 vars:
   RUST_LOG: info
-  ALEF: cargo run --manifest-path {{.ROOT_DIR}}/../alef/Cargo.toml --release -p alef-cli --
 
 tasks:
   setup:
@@ -29,17 +28,21 @@ tasks:
     cmds:
       - echo "Installing Rust tools..."
       - task: rust:install
+      - alef setup
+      - task: pre-commit:install
       - echo "Setup complete"
 
   build:
     desc: Build core Rust libraries
     cmds:
       - task: rust:build
+      - alef build
 
   test:
     desc: Run Rust test suite
     cmds:
       - task: rust:test
+      - alef test
 
   check:
     desc: Run all linting and formatting checks via prek
@@ -51,6 +54,7 @@ tasks:
     cmds:
       - echo "Updating Rust dependencies..."
       - task: rust:update
+      - alef update
       - echo "Updating prek dependencies..."
       - prek autoupdate
       - echo "All dependencies updated"
@@ -59,47 +63,85 @@ tasks:
     desc: Clean all build artifacts
     cmds:
       - task: rust:clean
+      - alef clean
 
   lint:
     desc: Run all linters and formatters via prek (pre-commit framework)
     cmds:
       - prek run --all-files
 
+  build:bindings:
+    desc: "Build all language bindings (skip Rust core)"
+    cmds:
+      - alef build
+
+  test:bindings:
+    desc: "Run binding test suites only (skip Rust core)"
+    cmds:
+      - alef test
+
+  test:ci:
+    desc: "Run all tests with coverage (CI mode)"
+    cmds:
+      - task: rust:test:ci
+      - alef test --coverage
+
+  fmt:
+    desc: "Format all code"
+    cmds:
+      - cargo fmt --all
+      - alef fmt
+
+  format:
+    desc: "Format all code (alias for fmt)"
+    cmds:
+      - task: fmt
+
+  format:check:
+    desc: "Check code formatting without modifications"
+    cmds:
+      - task: rust:format:check
+
+  versions:sync:
+    desc: "Synchronize version from Cargo.toml to all package manifests"
+    cmds:
+      - alef sync-versions
+
   # Alef binding generation tasks
   alef:generate:
     desc: Generate all bindings, stubs, scaffolding, and README via alef
     cmds:
-      - "{{.ALEF}} all --clean"
+      - alef all --clean
 
   alef:verify:
     desc: Verify all generated bindings are up to date (CI mode)
     cmds:
-      - "{{.ALEF}} verify --exit-code"
+      - alef verify --exit-code
 
   alef:build:
     desc: Build all language bindings
     cmds:
-      - "{{.ALEF}} build"
+      - alef build
 
   alef:e2e:generate:
     desc: Generate e2e tests from fixtures
     cmds:
-      - "{{.ALEF}} e2e generate"
+      - alef e2e generate
 
   alef:e2e:test:
     desc: Run e2e tests for all languages
     cmds:
-      - "{{.ALEF}} test --e2e"
+      - alef test --e2e
 
   alef:sync:
     desc: Sync version from Cargo.toml to all package manifests
     cmds:
-      - "{{.ALEF}} sync-versions"
+      - alef sync-versions
 
   alef:docs:
     desc: Generate API reference documentation
     cmds:
-      - "{{.ALEF}} docs --output docs/reference/"
+      - alef docs --output docs/reference/
 
   publish:validate:
     desc: "Validate publish manifests are consistent"

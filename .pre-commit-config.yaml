@@ -47,12 +47,6 @@ repos:
       - id: cargo-sort
         args: [-w]
 
-  - repo: https://github.com/ComPWA/taplo-pre-commit
-    rev: v0.9.3
-    hooks:
-      - id: taplo-format
-        exclude: "pyproject.toml|Cargo.toml"
-
   # Python: ruff (linting + formatting) + mypy (type checking)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12
@@ -155,6 +149,8 @@ repos:
   - repo: https://github.com/kreuzberg-dev/alef
     rev: v0.7.2
     hooks:
+      - id: alef-fmt
+      - id: alef-lint
       - id: alef-verify
       - id: alef-sync-versions
 
