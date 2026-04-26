@@ -1,0 +1,8 @@
+name = "e2e_gleam"
+version = "0.1.0"
+target = "erlang"
+
+[dependencies]
+kreuzberg = { path = "../../packages/gleam" }
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
+gleeunit = ">= 1.0.0 and < 2.0.0"

@@ -10,7 +10,9 @@ members = [
     "crates/kreuzberg-py",
     "crates/kreuzberg-tesseract",
     "crates/kreuzberg-wasm",
+    "packages/dart/rust",
     "packages/elixir/native/kreuzberg_nif",
+    "packages/swift/rust",
     "tools/benchmark-harness",
     "tools/snippet-runner",
 ]

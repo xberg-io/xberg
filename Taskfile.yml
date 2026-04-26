@@ -275,6 +275,114 @@ tasks:
       - phpstan analyse
     dir: packages/php
 
+  csharp:format:
+    desc: "Format C# binding with dotnet format"
+    cmds:
+      - dotnet format
+    dir: packages/csharp
+
+  csharp:lint:
+    desc: "Lint C# binding with dotnet format --verify-no-changes"
+    cmds:
+      - dotnet format --verify-no-changes
+    dir: packages/csharp
+
+  kotlin:format:
+    desc: "Format Kotlin binding with ktlint via gradle"
+    cmds:
+      - gradle ktlintFormat --no-daemon
+    dir: packages/kotlin
+
+  kotlin:lint:
+    desc: "Lint Kotlin binding with ktlint via gradle"
+    cmds:
+      - gradle ktlintCheck --no-daemon
+    dir: packages/kotlin
+
+  kotlin:test:
+    desc: "Run Kotlin binding tests"
+    cmds:
+      - cargo build --release -p kreuzberg-ffi
+      - gradle test --no-daemon
+    dir: packages/kotlin
+
+  swift:format:
+    desc: "Format Swift binding with swift format"
+    cmds:
+      - swift format --in-place --recursive Sources
+    dir: packages/swift
+
+  swift:lint:
+    desc: "Lint Swift binding with swift format lint"
+    cmds:
+      - swift format lint --recursive Sources
+    dir: packages/swift
+
+  swift:test:
+    desc: "Run Swift binding tests"
+    cmds:
+      - cargo build --release --manifest-path packages/swift/rust/Cargo.toml
+      - swift test
+    dir: packages/swift
+
+  dart:format:
+    desc: "Format Dart binding with dart format"
+    cmds:
+      - dart format .
+    dir: packages/dart
+
+  dart:lint:
+    desc: "Lint Dart binding with dart analyze"
+    cmds:
+      - dart analyze
+    dir: packages/dart
+
+  dart:test:
+    desc: "Run Dart binding tests"
+    cmds:
+      - cargo build --release --manifest-path packages/dart/rust/Cargo.toml
+      - dart pub get
+      - dart test
+    dir: packages/dart
+
+  gleam:format:
+    desc: "Format Gleam binding with gleam format"
+    cmds:
+      - gleam format
+    dir: packages/gleam
+
+  gleam:lint:
+    desc: "Lint Gleam binding with gleam format --check"
+    cmds:
+      - gleam format --check
+    dir: packages/gleam
+
+  gleam:test:
+    desc: "Run Gleam binding tests"
+    cmds:
+      - cd ../elixir && mix deps.get && mix compile
+      - cd ../gleam && gleam test
+    dir: packages/gleam
+
+  zig:format:
+    desc: "Format Zig binding with zig fmt"
+    cmds:
+      - zig fmt src
+    dir: packages/zig
+
+  zig:lint:
+    desc: "Check Zig formatting with zig fmt --check"
+    cmds:
+      - zig fmt --check src
+    dir: packages/zig
+
+  zig:test:
+    desc: "Run Zig binding tests"
+    cmds:
+      - cargo build --release -p kreuzberg-ffi
+      - zig build test
+    dir: packages/zig
+
   # === Clean ===
   clean:
     desc: "Remove build artifacts across all languages"

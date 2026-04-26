@@ -1,0 +1,2 @@
+rust_root: .
+dart_output: ../lib/src/kreuzberg_bridge_generated

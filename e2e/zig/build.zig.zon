@@ -1,0 +1,13 @@
+.{
+    .name = "e2e_zig",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.13.0",
+    .dependencies = .{
+        .kreuzberg = .{ .path = "../../packages/zig" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

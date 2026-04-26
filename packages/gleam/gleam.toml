@@ -1,0 +1,9 @@
+name = "kreuzberg"
+version = "4.9.5"
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
