@@ -1,0 +1,512 @@
+/**
+ * WASM Type Adapter
+ *
+ * This module provides type adapters for converting between JavaScript/TypeScript
+ * types and WASM-compatible types, handling File/Blob conversions, config normalization,
+ * and result parsing.
+ *
+ * @example File Conversion
+ * ```typescript
+ * import { fileToUint8Array } from '@kreuzberg/wasm/adapters/wasm-adapter';
+ *
+ * const file = event.target.files[0];
+ * const bytes = await fileToUint8Array(file);
+ * const result = await extractBytes(bytes, file.type);
+ * ```
+ *
+ * @example Config Normalization
+ * ```typescript
+ * import { configToJS } from '@kreuzberg/wasm/adapters/wasm-adapter';
+ *
+ * const config = {
+ *   ocr: { backend: 'tesseract', language: 'eng' },
+ *   chunking: { maxChars: 1000 }
+ * };
+ * const normalized = configToJS(config);
+ * ```
+ */
+
+import type {
+	Chunk,
+	DocumentStructure,
+	Element,
+	ExtractedImage,
+	ExtractedKeyword,
+	ExtractionConfig,
+	ExtractionResult,
+	Metadata,
+	OcrElement,
+	PageContent,
+	PdfAnnotation,
+	ProcessingWarning,
+	Table,
+} from "../types.js";
+
+/**
+ * Maximum file size for processing (512 MB)
+ *
+ * @internal
+ */
+const MAX_FILE_SIZE = 512 * 1024 * 1024;
+
+/**
+ * Type predicate to validate numeric value or null
+ *
+ * @internal
+ */
+function isNumberOrNull(value: unknown): value is number | null {
+	return typeof value === "number" || value === null || value === undefined;
+}
+
+/**
+ * Type predicate to validate string value or null
+ *
+ * @internal
+ */
+function isStringOrNull(value: unknown): value is string | null {
+	return typeof value === "string" || value === null || value === undefined;
+}
+
+/**
+ * Type predicate to validate boolean value
+ *
+ * @internal
+ */
+function isBoolean(value: unknown): value is boolean {
+	return typeof value === "boolean" || value === undefined;
+}
+
+/**
+ * Convert a File or Blob to Uint8Array
+ *
+ * Handles both browser File API and server-side Blob-like objects,
+ * providing a unified interface for reading binary data.
+ *
+ * @param file - The File or Blob to convert
+ * @returns Promise resolving to the byte array
+ * @throws {Error} If the file cannot be read or exceeds size limit
+ *
+ * @example
+ * ```typescript
+ * const file = document.getElementById('input').files[0];
+ * const bytes = await fileToUint8Array(file);
+ * const result = await extractBytes(bytes, 'application/pdf');
+ * ```
+ */
+export async function fileToUint8Array(file: File | Blob): Promise<Uint8Array> {
+	try {
+		if (file.size > MAX_FILE_SIZE) {
+			throw new Error(
+				`File size (${file.size} bytes) exceeds maximum (${MAX_FILE_SIZE} bytes). Maximum file size is 512 MB.`,
+			);
+		}
+
+		const arrayBuffer = await file.arrayBuffer();
+		return new Uint8Array(arrayBuffer);
+	} catch (error) {
+		throw new Error(`Failed to read file: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+
+/**
+ * Normalize ExtractionConfig for WASM processing
+ *
+ * Converts TypeScript configuration objects to a WASM-compatible format,
+ * handling null values, undefined properties, and nested structures.
+ *
+ * @param config - The extraction configuration or null
+ * @returns Normalized configuration object suitable for WASM
+ *
+ * @example
+ * ```typescript
+ * const config: ExtractionConfig = {
+ *   ocr: { backend: 'tesseract' },
+ *   chunking: { maxChars: 1000 }
+ * };
+ * const wasmConfig = configToJS(config);
+ * ```
+ */
+export function configToJS(config: ExtractionConfig | null): Record<string, unknown> {
+	if (!config) {
+		return {};
+	}
+
+	// Convert camelCase key to snake_case to match Rust serde field names.
+	const toSnakeCase = (str: string): string => str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+
+	const normalizeValue = (value: unknown): unknown => {
+		if (value === null || value === undefined) {
+			return null;
+		}
+		if (typeof value === "object") {
+			if (Array.isArray(value)) {
+				return value.map(normalizeValue);
+			}
+			const obj = value as Record<string, unknown>;
+			const normalized: Record<string, unknown> = {};
+			for (const [key, val] of Object.entries(obj)) {
+				const normalizedVal = normalizeValue(val);
+				if (normalizedVal !== null && normalizedVal !== undefined) {
+					normalized[toSnakeCase(key)] = normalizedVal;
+				}
+			}
+			return Object.keys(normalized).length > 0 ? normalized : null;
+		}
+		return value;
+	};
+
+	const normalized: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(config)) {
+		const normalizedValue = normalizeValue(value);
+		if (normalizedValue !== null && normalizedValue !== undefined) {
+			normalized[toSnakeCase(key)] = normalizedValue;
+		}
+	}
+
+	return normalized;
+}
+
+/**
+ * Parse WASM extraction result and convert to TypeScript type
+ *
+ * Handles conversion of WASM-returned objects to proper ExtractionResult types,
+ * including proper array conversions and type assertions for tables, chunks, and images.
+ *
+ * @param jsValue - The raw WASM result value
+ * @returns Properly typed ExtractionResult
+ * @throws {Error} If the result structure is invalid
+ *
+ * @example
+ * ```typescript
+ * const wasmResult = await wasmExtract(bytes, mimeType, config);
+ * const result = jsToExtractionResult(wasmResult);
+ * console.log(result.content);
+ * ```
+ */
+export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
+	if (!jsValue || typeof jsValue !== "object") {
+		throw new Error("Invalid extraction result: value is not an object");
+	}
+
+	const result = jsValue as Record<string, unknown>;
+	const mimeType =
+		typeof result.mimeType === "string"
+			? result.mimeType
+			: typeof result.mime_type === "string"
+				? result.mime_type
+				: null;
+
+	if (typeof result.content !== "string") {
+		throw new Error("Invalid extraction result: missing or invalid content");
+	}
+	if (typeof mimeType !== "string") {
+		throw new Error("Invalid extraction result: missing or invalid mimeType");
+	}
+	if (!result.metadata || typeof result.metadata !== "object") {
+		throw new Error("Invalid extraction result: missing or invalid metadata");
+	}
+
+	const tables: Table[] = [];
+	if (Array.isArray(result.tables)) {
+		for (const table of result.tables) {
+			if (table && typeof table === "object") {
+				const t = table as Record<string, unknown>;
+				const pageNumber =
+					typeof t.pageNumber === "number" ? t.pageNumber : typeof t.page_number === "number" ? t.page_number : 0;
+				if (
+					Array.isArray(t.cells) &&
+					t.cells.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string")) &&
+					typeof t.markdown === "string"
+				) {
+					tables.push({
+						cells: t.cells as string[][],
+						markdown: t.markdown,
+						pageNumber,
+					});
+				}
+			}
+		}
+	}
+
+	const chunks: Chunk[] | null = Array.isArray(result.chunks)
+		? result.chunks.map((chunk) => {
+				if (!chunk || typeof chunk !== "object") {
+					throw new Error("Invalid chunk structure");
+				}
+				const c = chunk as Record<string, unknown>;
+				if (typeof c.content !== "string") {
+					throw new Error("Invalid chunk: missing content");
+				}
+				if (!c.metadata || typeof c.metadata !== "object") {
+					throw new Error("Invalid chunk: missing metadata");
+				}
+				const metadata = c.metadata as Record<string, unknown>;
+
+				let embedding: number[] | null = null;
+				if (Array.isArray(c.embedding)) {
+					if (!c.embedding.every((item) => typeof item === "number")) {
+						throw new Error("Invalid chunk: embedding must contain only numbers");
+					}
+					embedding = c.embedding;
+				}
+
+				// Coerce numeric values - handle BigInt, strings, and numbers
+				const coerceToNumber = (value: unknown, fieldName: string): number => {
+					if (typeof value === "number") {
+						return value;
+					}
+					if (typeof value === "bigint") {
+						return Number(value);
+					}
+					if (typeof value === "string") {
+						const parsed = parseInt(value, 10);
+						if (Number.isNaN(parsed)) {
+							throw new Error(`Invalid chunk metadata: ${fieldName} must be a valid number, got "${value}"`);
+						}
+						return parsed;
+					}
+					throw new Error(`Invalid chunk metadata: ${fieldName} must be a number, got ${typeof value}`);
+				};
+
+				// The Rust code uses snake_case field names (byte_start, byte_end, etc)
+				// but TypeScript expects camelCase (charStart, charEnd, etc)
+				// For now, treat byte offsets as character offsets since the content is UTF-8
+				const charStart = coerceToNumber(
+					metadata.charStart ?? metadata.char_start ?? metadata.byteStart ?? metadata.byte_start,
+					"charStart",
+				);
+				const charEnd = coerceToNumber(
+					metadata.charEnd ?? metadata.char_end ?? metadata.byteEnd ?? metadata.byte_end,
+					"charEnd",
+				);
+				const chunkIndex = coerceToNumber(metadata.chunkIndex ?? metadata.chunk_index, "chunkIndex");
+				const totalChunks = coerceToNumber(metadata.totalChunks ?? metadata.total_chunks, "totalChunks");
+
+				let tokenCount: number | null = null;
+				const tokenCountValue = metadata.tokenCount ?? metadata.token_count;
+				if (tokenCountValue !== null && tokenCountValue !== undefined) {
+					tokenCount = coerceToNumber(tokenCountValue, "tokenCount");
+				}
+
+				let firstPage: number | null = null;
+				const firstPageValue = metadata.firstPage ?? metadata.first_page;
+				if (firstPageValue !== null && firstPageValue !== undefined) {
+					firstPage = coerceToNumber(firstPageValue, "firstPage");
+				}
+
+				let lastPage: number | null = null;
+				const lastPageValue = metadata.lastPage ?? metadata.last_page;
+				if (lastPageValue !== null && lastPageValue !== undefined) {
+					lastPage = coerceToNumber(lastPageValue, "lastPage");
+				}
+
+				const rawHc = (metadata["heading_context"] ?? metadata["headingContext"]) as
+					| Record<string, unknown>
+					| null
+					| undefined;
+				let headingContext: import("../types.js").HeadingContext | null = null;
+				if (rawHc && typeof rawHc === "object") {
+					const rawHeadings = rawHc["headings"];
+					if (Array.isArray(rawHeadings)) {
+						headingContext = {
+							headings: rawHeadings.map((h: unknown) => {
+								const heading = h as Record<string, unknown>;
+								return {
+									level: (heading["level"] as number) ?? 0,
+									text: (heading["text"] as string) ?? "",
+								};
+							}),
+						};
+					}
+				}
+
+				return {
+					content: c.content,
+					embedding,
+					metadata: {
+						byteStart: charStart,
+						byteEnd: charEnd,
+						charStart,
+						charEnd,
+						tokenCount,
+						chunkIndex,
+						totalChunks,
+						firstPage,
+						lastPage,
+						headingContext,
+					},
+				};
+			})
+		: null;
+
+	const images: ExtractedImage[] | null = Array.isArray(result.images)
+		? result.images.map((image) => {
+				if (!image || typeof image !== "object") {
+					throw new Error("Invalid image structure");
+				}
+				const img = image as Record<string, unknown>;
+				let imageData: Uint8Array;
+				if (img.data instanceof Uint8Array) {
+					imageData = img.data;
+				} else if (Array.isArray(img.data)) {
+					imageData = new Uint8Array(img.data as number[]);
+				} else {
+					throw new Error("Invalid image: data must be Uint8Array or array");
+				}
+				if (typeof img.format !== "string") {
+					throw new Error("Invalid image: missing format");
+				}
+
+				// Support both camelCase and snake_case field names (Rust serde uses snake_case)
+				const imageIndex = img.imageIndex ?? img.image_index;
+				const pageNumber = img.pageNumber ?? img.page_number;
+				const bitsPerComponent = img.bitsPerComponent ?? img.bits_per_component;
+				const isMask = img.isMask ?? img.is_mask;
+				const ocrResult = img.ocrResult ?? img.ocr_result;
+
+				if (typeof imageIndex !== "number") {
+					throw new Error("Invalid image: imageIndex must be a number");
+				}
+				if (!isNumberOrNull(pageNumber)) {
+					throw new Error("Invalid image: pageNumber must be a number or null");
+				}
+				if (!isNumberOrNull(img.width)) {
+					throw new Error("Invalid image: width must be a number or null");
+				}
+				if (!isNumberOrNull(img.height)) {
+					throw new Error("Invalid image: height must be a number or null");
+				}
+				if (!isNumberOrNull(bitsPerComponent)) {
+					throw new Error("Invalid image: bitsPerComponent must be a number or null");
+				}
+
+				if (!isBoolean(isMask)) {
+					throw new Error("Invalid image: isMask must be a boolean");
+				}
+
+				if (!isStringOrNull(img.colorspace)) {
+					throw new Error("Invalid image: colorspace must be a string or null");
+				}
+				if (!isStringOrNull(img.description)) {
+					throw new Error("Invalid image: description must be a string or null");
+				}
+
+				return {
+					data: imageData,
+					format: img.format,
+					imageIndex: imageIndex,
+					pageNumber: pageNumber ?? null,
+					width: (img.width as number) ?? null,
+					height: (img.height as number) ?? null,
+					colorspace: (img.colorspace as string) ?? null,
+					bitsPerComponent: bitsPerComponent ?? null,
+					isMask: isMask ?? false,
+					description: (img.description as string) ?? null,
+					ocrResult: ocrResult ? jsToExtractionResult(ocrResult) : null,
+				};
+			})
+		: null;
+
+	let detectedLanguages: string[] | null = null;
+	const detectedLanguagesRaw = Array.isArray(result.detectedLanguages)
+		? result.detectedLanguages
+		: result.detected_languages;
+	if (Array.isArray(detectedLanguagesRaw)) {
+		if (!detectedLanguagesRaw.every((lang) => typeof lang === "string")) {
+			throw new Error("Invalid result: detectedLanguages must contain only strings");
+		}
+		detectedLanguages = detectedLanguagesRaw;
+	}
+
+	const extractedKeywords = (result.extractedKeywords ?? result.extracted_keywords ?? null) as
+		| ExtractedKeyword[]
+		| null;
+	const qualityScore =
+		typeof (result.qualityScore ?? result.quality_score) === "number"
+			? ((result.qualityScore ?? result.quality_score) as number)
+			: null;
+	const processingWarnings = (result.processingWarnings ?? result.processing_warnings ?? null) as
+		| ProcessingWarning[]
+		| null;
+	const elements = (result.elements ?? null) as Element[] | null;
+	const ocrElements = (result.ocrElements ?? result.ocr_elements ?? null) as OcrElement[] | null;
+	const document = (result.document ?? null) as DocumentStructure | null;
+	const pages = (result.pages ?? null) as PageContent[] | null;
+	const annotations = (result.annotations ?? null) as PdfAnnotation[] | null;
+
+	return {
+		content: result.content,
+		mimeType,
+		metadata: (result.metadata ?? {}) as Metadata,
+		tables,
+		detectedLanguages,
+		chunks,
+		images,
+		pages,
+		extractedKeywords,
+		qualityScore,
+		processingWarnings,
+		elements,
+		ocrElements,
+		document,
+		annotations,
+	};
+}
+
+/**
+ * Wrap and format WASM errors with context
+ *
+ * Converts WASM error messages to JavaScript Error objects with proper context
+ * and stack trace information when available.
+ *
+ * @param error - The error from WASM
+ * @param context - Additional context about what operation failed
+ * @returns A formatted Error object
+ *
+ * @internal
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await wasmExtract(bytes, mimeType);
+ * } catch (error) {
+ *   throw wrapWasmError(error, 'extracting document');
+ * }
+ * ```
+ */
+export function wrapWasmError(error: unknown, context: string): Error {
+	if (error instanceof Error) {
+		return new Error(`Error ${context}: ${error.message}`, {
+			cause: error,
+		});
+	}
+
+	const message = String(error);
+	return new Error(`Error ${context}: ${message}`);
+}
+
+/**
+ * Validate that a WASM-returned value conforms to ExtractionResult structure
+ *
+ * Performs structural validation without full type checking,
+ * useful for runtime validation of WASM output.
+ *
+ * @param value - The value to validate
+ * @returns True if value appears to be a valid ExtractionResult
+ *
+ * @internal
+ */
+export function isValidExtractionResult(value: unknown): value is ExtractionResult {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const obj = value as Record<string, unknown>;
+	return (
+		typeof obj.content === "string" &&
+		(typeof obj.mimeType === "string" || typeof obj.mime_type === "string") &&
+		obj.metadata !== null &&
+		typeof obj.metadata === "object" &&
+		Array.isArray(obj.tables)
+	);
+}

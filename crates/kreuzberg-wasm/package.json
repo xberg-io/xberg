@@ -10,6 +10,14 @@
     "directory": "crates/kreuzberg-wasm"
   },
   "type": "module",
+  "browser": {
+    "node:module": false,
+    "node:fs/promises": false,
+    "node:path": false,
+    "node:url": false,
+    "node:worker_threads": false,
+    "worker_threads": false
+  },
   "files": [
     "pkg",
     "*.wasm",
