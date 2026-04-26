@@ -9,12 +9,10 @@ defmodule Kreuzberg.Native do
   use RustlerPrecompiled,
     otp_app: :kreuzberg,
     crate: "kreuzberg_nif",
-    base_url:
-      "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v#{Mix.Project.config()[:version]}",
+    base_url: "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v#{Mix.Project.config()[:version]}",
     version: Mix.Project.config()[:version],
     force_build: System.get_env("KREUZBERG_BUILD") in ["1", "true"] or Mix.env() in [:test, :dev],
-    targets:
-      ~w(aarch64-apple-darwin aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu x86_64-pc-windows-gnu),
+    targets: ~w(aarch64-apple-darwin aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu x86_64-pc-windows-gnu),
     nif_versions: ["2.16", "2.17"]
 
   def blake3_hash_bytes(_data), do: :erlang.nif_error(:nif_not_loaded)
