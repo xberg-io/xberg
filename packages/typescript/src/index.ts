@@ -99,7 +99,7 @@ export {
   validateTokenReductionLevel,
   validateUploadSize,
   warmModel,
-} from "kreuzberg";
+} from 'kreuzberg';
 
 export type {
   JsAccelerationConfig,
@@ -309,4 +309,4 @@ export type {
   JsYakeParams,
   JsYearRange,
   JsZipBombValidator,
-} from "kreuzberg";
+} from 'kreuzberg';
