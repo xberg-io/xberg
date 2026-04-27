@@ -3690,7 +3690,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-dart"
-version = "0.7.11"
+version = "4.9.5"
 dependencies = [
  "anyhow",
  "async-trait",

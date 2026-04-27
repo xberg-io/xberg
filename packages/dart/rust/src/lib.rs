@@ -2288,7 +2288,7 @@ pub async fn extract_file(
     mime_type: Option<String>,
     config: kreuzberg::ExtractionConfig,
 ) -> Result<kreuzberg::ExtractionResult, String> {
-    kreuzberg::extract_file(path, mime_type.as_deref(), &config)
+    kreuzberg::extract_file(std::path::PathBuf::from(path), mime_type.as_deref(), &config)
         .await
         .map(|v| v)
         .map_err(|e| e.to_string())
@@ -2309,7 +2309,7 @@ pub fn extract_file_sync(
     mime_type: Option<String>,
     config: kreuzberg::ExtractionConfig,
 ) -> Result<kreuzberg::ExtractionResult, String> {
-    kreuzberg::extract_file_sync(path, mime_type.as_deref(), &config)
+    kreuzberg::extract_file_sync(std::path::PathBuf::from(path), mime_type.as_deref(), &config)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }

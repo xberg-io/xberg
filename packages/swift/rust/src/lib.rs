@@ -10354,7 +10354,7 @@ pub fn extract_file(
         .build()
         .expect("build tokio runtime")
         .block_on(async {
-            kreuzberg::extract_file(path, mime_type.as_deref(), &config.0)
+            kreuzberg::extract_file(std::path::PathBuf::from(path), mime_type.as_deref(), &config.0)
                 .await
                 .map_err(|e| e.to_string())
                 .map(ExtractionResult)
@@ -10366,7 +10366,7 @@ pub fn extract_file_sync(
     mime_type: Option<String>,
     config: ExtractionConfig,
 ) -> Result<ExtractionResult, String> {
-    kreuzberg::extract_file_sync(path, mime_type.as_deref(), &config.0)
+    kreuzberg::extract_file_sync(std::path::PathBuf::from(path), mime_type.as_deref(), &config.0)
         .map_err(|e| e.to_string())
         .map(ExtractionResult)
 }

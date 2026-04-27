@@ -482,7 +482,7 @@ object Kreuzberg {
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
     suspend fun extractFile(
-        path: String,
+        path: Path,
         mimeType: String?,
         config: ExtractionConfig,
     ): ExtractionResult =
@@ -503,7 +503,7 @@ object Kreuzberg {
      * use a truly synchronous extraction approach instead.
      */
     fun extractFileSync(
-        path: String,
+        path: Path,
         mimeType: String?,
         config: ExtractionConfig,
     ): ExtractionResult = Bridge.extractFileSync(path, mimeType, config)

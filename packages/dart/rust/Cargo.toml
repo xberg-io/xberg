@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-dart"
-version = "0.7.11"
+version = "4.9.5"
 edition = "2024"
 
 [lib]
