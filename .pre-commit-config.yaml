@@ -283,14 +283,14 @@ repos:
       # Kotlin
       - id: kotlin-format
         name: Kotlin formatting (ktlint via gradle)
-        entry: bash -c 'command -v gradle >/dev/null 2>&1 && cd packages/kotlin && gradle ktlintFormat --no-daemon || echo "skip: gradle missing"'
+        entry: bash -c 'command -v gradle >/dev/null 2>&1 && cd packages/kotlin && gradle ktlintFormat --no-daemon || echo "skip - gradle missing"'
         language: system
         files: ^packages/kotlin/.*\.kt$
         pass_filenames: false
 
       - id: kotlin-lint
         name: Kotlin linting (ktlint via gradle)
-        entry: bash -c 'command -v gradle >/dev/null 2>&1 && cd packages/kotlin && gradle ktlintCheck --no-daemon || echo "skip: gradle missing"'
+        entry: bash -c 'command -v gradle >/dev/null 2>&1 && cd packages/kotlin && gradle ktlintCheck --no-daemon || echo "skip - gradle missing"'
         language: system
         files: ^packages/kotlin/.*\.kt$
         pass_filenames: false
@@ -298,14 +298,14 @@ repos:
       # Swift
       - id: swift-format
         name: Swift formatting (swift format)
-        entry: bash -c 'command -v swift >/dev/null 2>&1 && swift format --in-place --recursive packages/swift/Sources || echo "skip: swift missing"'
+        entry: bash -c 'command -v swift >/dev/null 2>&1 && swift format --in-place --recursive packages/swift/Sources || echo "skip - swift missing"'
         language: system
         files: ^packages/swift/.*\.swift$
         pass_filenames: false
 
       - id: swift-lint
         name: Swift linting (swift format lint)
-        entry: bash -c 'command -v swift >/dev/null 2>&1 && swift format lint --recursive packages/swift/Sources || echo "skip: swift missing"'
+        entry: bash -c 'command -v swift >/dev/null 2>&1 && swift format lint --recursive packages/swift/Sources || echo "skip - swift missing"'
         language: system
         files: ^packages/swift/.*\.swift$
         pass_filenames: false
@@ -313,14 +313,14 @@ repos:
       # Dart
       - id: dart-format
         name: Dart formatting (dart format)
-        entry: bash -c 'command -v dart >/dev/null 2>&1 && cd packages/dart && dart format . || echo "skip: dart missing"'
+        entry: bash -c 'command -v dart >/dev/null 2>&1 && cd packages/dart && dart format . || echo "skip - dart missing"'
         language: system
         files: ^packages/dart/.*\.dart$
         pass_filenames: false
 
       - id: dart-lint
         name: Dart linting (dart analyze)
-        entry: bash -c 'command -v dart >/dev/null 2>&1 && cd packages/dart && dart analyze || echo "skip: dart missing"'
+        entry: bash -c 'command -v dart >/dev/null 2>&1 && cd packages/dart && dart analyze || echo "skip - dart missing"'
         language: system
         files: ^packages/dart/.*\.dart$
         pass_filenames: false
@@ -328,14 +328,14 @@ repos:
       # Gleam
       - id: gleam-format
         name: Gleam formatting (gleam format)
-        entry: bash -c 'command -v gleam >/dev/null 2>&1 && cd packages/gleam && gleam format || echo "skip: gleam missing"'
+        entry: bash -c 'command -v gleam >/dev/null 2>&1 && cd packages/gleam && gleam format || echo "skip - gleam missing"'
         language: system
         files: ^packages/gleam/.*\.gleam$
         pass_filenames: false
 
       - id: gleam-lint
         name: Gleam check (gleam format --check)
-        entry: bash -c 'command -v gleam >/dev/null 2>&1 && cd packages/gleam && gleam format --check || echo "skip: gleam missing"'
+        entry: bash -c 'command -v gleam >/dev/null 2>&1 && cd packages/gleam && gleam format --check || echo "skip - gleam missing"'
         language: system
         files: ^packages/gleam/.*\.gleam$
         pass_filenames: false
@@ -343,14 +343,14 @@ repos:
       # Zig
       - id: zig-format
         name: Zig formatting (zig fmt)
-        entry: bash -c 'command -v zig >/dev/null 2>&1 && cd packages/zig && zig fmt src || echo "skip: zig missing"'
+        entry: bash -c 'command -v zig >/dev/null 2>&1 && cd packages/zig && zig fmt src || echo "skip - zig missing"'
         language: system
         files: ^packages/zig/.*\.zig$
         pass_filenames: false
 
       - id: zig-lint
         name: Zig check (zig fmt --check)
-        entry: bash -c 'command -v zig >/dev/null 2>&1 && cd packages/zig && zig fmt --check src || echo "skip: zig missing"'
+        entry: bash -c 'command -v zig >/dev/null 2>&1 && cd packages/zig && zig fmt --check src || echo "skip - zig missing"'
         language: system
         files: ^packages/zig/.*\.zig$
         pass_filenames: false
