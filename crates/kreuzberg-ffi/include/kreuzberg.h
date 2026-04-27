@@ -11581,9 +11581,9 @@ KREUZBERGExtractionResult *kreuzberg_extract_bytes(const uint8_t *content,
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-KREUZBERGExtractionResult *kreuzberg_extract_file(const char *path,
-                                                  const char *mime_type,
-                                                  const KREUZBERGExtractionConfig *config);
+KREUZBERGExtractionResult *kreuzberg_extract_file(const char *_path,
+                                                  const char *_mime_type,
+                                                  const KREUZBERGExtractionConfig *_config);
 
 /**
  * Synchronous wrapper for `extract_file`.
@@ -11612,9 +11612,9 @@ KREUZBERGExtractionResult *kreuzberg_extract_file(const char *path,
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-KREUZBERGExtractionResult *kreuzberg_extract_file_sync(const char *path,
-                                                       const char *mime_type,
-                                                       const KREUZBERGExtractionConfig *config);
+KREUZBERGExtractionResult *kreuzberg_extract_file_sync(const char *_path,
+                                                       const char *_mime_type,
+                                                       const KREUZBERGExtractionConfig *_config);
 
 /**
  * Synchronous wrapper for `extract_bytes`.
@@ -11672,8 +11672,8 @@ KREUZBERGExtractionResult *kreuzberg_extract_bytes_sync(const uint8_t *content,
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_batch_extract_file_sync(const char *items,
-                                        const KREUZBERGExtractionConfig *config);
+char *kreuzberg_batch_extract_file_sync(const char *_items,
+                                        const KREUZBERGExtractionConfig *_config);
 
 /**
  * Synchronous wrapper for `batch_extract_bytes`.
@@ -11703,8 +11703,8 @@ char *kreuzberg_batch_extract_file_sync(const char *items,
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_batch_extract_bytes_sync(const char *items,
-                                         const KREUZBERGExtractionConfig *config);
+char *kreuzberg_batch_extract_bytes_sync(const char *_items,
+                                         const KREUZBERGExtractionConfig *_config);
 
 /**
  * Extract content from multiple files concurrently.
@@ -11777,8 +11777,8 @@ char *kreuzberg_batch_extract_bytes_sync(const char *items,
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_batch_extract_file(const char *items,
-                                   const KREUZBERGExtractionConfig *config);
+char *kreuzberg_batch_extract_file(const char *_items,
+                                   const KREUZBERGExtractionConfig *_config);
 
 /**
  * Extract content from multiple byte arrays concurrently.
@@ -11843,8 +11843,8 @@ char *kreuzberg_batch_extract_file(const char *items,
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_batch_extract_bytes(const char *items,
-                                    const KREUZBERGExtractionConfig *config);
+char *kreuzberg_batch_extract_bytes(const char *_items,
+                                    const KREUZBERGExtractionConfig *_config);
 
 /**
  * Validates whether a field name is in the known formats registry.

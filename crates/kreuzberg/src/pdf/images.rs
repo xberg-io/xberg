@@ -21,7 +21,8 @@ pub struct PdfImage {
 
 #[derive(Debug)]
 pub struct PdfImageExtractor {
-    document: Document,
+    pub(crate) document: Document,
+    pub(crate) max_images_per_page: Option<u32>,
 }
 
 /// Decode raw PDF image stream bytes according to PDF filter(s).
@@ -397,7 +398,10 @@ impl PdfImageExtractor {
             }
         }
 
-        Ok(Self { document: doc })
+        Ok(Self {
+            document: doc,
+            max_images_per_page: None,
+        })
     }
 
     pub(crate) fn extract_images(&self) -> Result<Vec<PdfImage>> {
@@ -415,7 +419,16 @@ impl PdfImageExtractor {
             };
             let mut img_index = 0usize;
             let mut visited = std::collections::HashSet::new();
-            self.collect_images_from_resources(resources, *page_num as usize, &mut img_index, &mut all_images, 0, &mut visited);
+            let mut page_image_count = 0u32;
+            self.collect_images_from_resources(
+                resources,
+                *page_num as usize,
+                &mut img_index,
+                &mut all_images,
+                0,
+                &mut visited,
+                &mut page_image_count,
+            );
         }
 
         Ok(all_images)
@@ -441,6 +454,7 @@ impl PdfImageExtractor {
         out: &mut Vec<PdfImage>,
         depth: usize,
         visited: &mut std::collections::HashSet<lopdf::ObjectId>,
+        page_image_count: &mut u32,
     ) {
         // Guard against pathological or cyclic Form XObject chains.
         const MAX_FORM_DEPTH: usize = 8;
@@ -459,6 +473,14 @@ impl PdfImageExtractor {
         };
 
         for (_, xvalue) in xobject_dict.iter() {
+            if self.max_images_per_page.is_some_and(|cap| *page_image_count >= cap) {
+                tracing::warn!(
+                    page_number,
+                    cap = self.max_images_per_page.unwrap(),
+                    "PDF image extraction: max images per page reached, skipping remaining objects on this page"
+                );
+                return;
+            }
             use lopdf::Object;
 
             let id = match xvalue.as_reference() {
@@ -542,6 +564,7 @@ impl PdfImageExtractor {
                 #[cfg(not(feature = "pdf"))]
                 let (data, decoded_format) = (Bytes::from(stream.content.clone()), "raw".to_string());
 
+                *page_image_count += 1;
                 *img_index += 1;
                 out.push(PdfImage {
                     page_number,
@@ -557,7 +580,15 @@ impl PdfImageExtractor {
             } else if subtype == b"Form" {
                 // Recurse into the Form XObject's own resource dictionary.
                 if let Ok(form_resources) = dict.get(b"Resources").and_then(|r| r.as_dict()) {
-                    self.collect_images_from_resources(form_resources, page_number, img_index, out, depth + 1, visited);
+                    self.collect_images_from_resources(
+                        form_resources,
+                        page_number,
+                        img_index,
+                        out,
+                        depth + 1,
+                        visited,
+                        page_image_count,
+                    );
                 }
             }
         }
@@ -581,7 +612,16 @@ impl PdfImageExtractor {
         let mut page_images = Vec::new();
         let mut img_index = 0usize;
         let mut visited = std::collections::HashSet::new();
-        self.collect_images_from_resources(resources, page_number as usize, &mut img_index, &mut page_images, 0, &mut visited);
+        let mut page_image_count = 0u32;
+        self.collect_images_from_resources(
+            resources,
+            page_number as usize,
+            &mut img_index,
+            &mut page_images,
+            0,
+            &mut visited,
+            &mut page_image_count,
+        );
         Ok(page_images)
     }
 
@@ -591,13 +631,19 @@ impl PdfImageExtractor {
     }
 }
 
-pub(crate) fn extract_images_from_pdf(pdf_bytes: &[u8]) -> Result<Vec<PdfImage>> {
-    let extractor = PdfImageExtractor::new(pdf_bytes)?;
+pub(crate) fn extract_images_from_pdf(pdf_bytes: &[u8], max_images_per_page: Option<u32>) -> Result<Vec<PdfImage>> {
+    let mut extractor = PdfImageExtractor::new(pdf_bytes)?;
+    extractor.max_images_per_page = max_images_per_page;
     extractor.extract_images()
 }
 
-pub(crate) fn extract_images_from_pdf_with_password(pdf_bytes: &[u8], password: &str) -> Result<Vec<PdfImage>> {
-    let extractor = PdfImageExtractor::new_with_password(pdf_bytes, Some(password))?;
+pub(crate) fn extract_images_from_pdf_with_password(
+    pdf_bytes: &[u8],
+    password: &str,
+    max_images_per_page: Option<u32>,
+) -> Result<Vec<PdfImage>> {
+    let mut extractor = PdfImageExtractor::new_with_password(pdf_bytes, Some(password))?;
+    extractor.max_images_per_page = max_images_per_page;
     extractor.extract_images()
 }
 
@@ -644,7 +690,15 @@ pub(crate) fn reextract_raw_images_via_pdfium(pdf_bytes: &[u8], images: &mut [Pd
         let mut found = false;
 
         'outer: for obj in page.objects().iter() {
-            if collect_image_from_pdfium_obj(&obj, &document, target_index, &mut current_image, img, &mut reextracted, 0) {
+            if collect_image_from_pdfium_obj(
+                &obj,
+                &document,
+                target_index,
+                &mut current_image,
+                img,
+                &mut reextracted,
+                0,
+            ) {
                 found = true;
                 break 'outer;
             }
@@ -710,7 +764,15 @@ fn collect_image_from_pdfium_obj(
                 return false;
             }
             for child in form_obj.iter() {
-                if collect_image_from_pdfium_obj(&child, document, target_index, current_image, img, reextracted, depth + 1) {
+                if collect_image_from_pdfium_obj(
+                    &child,
+                    document,
+                    target_index,
+                    current_image,
+                    img,
+                    reextracted,
+                    depth + 1,
+                ) {
                     return true;
                 }
             }
@@ -733,13 +795,13 @@ mod tests {
 
     #[test]
     fn test_extract_images_invalid_pdf() {
-        let result = extract_images_from_pdf(b"not a pdf");
+        let result = extract_images_from_pdf(b"not a pdf", None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_extract_images_empty_pdf() {
-        let result = extract_images_from_pdf(b"");
+        let result = extract_images_from_pdf(b"", None);
         assert!(result.is_err());
     }
 
@@ -949,7 +1011,7 @@ mod tests {
         let mut pdf_bytes = Vec::new();
         doc.save_to(&mut pdf_bytes).unwrap();
 
-        let images = extract_images_from_pdf(&pdf_bytes).expect("should parse PDF");
+        let images = extract_images_from_pdf(&pdf_bytes, None).expect("should parse PDF");
         assert_eq!(images.len(), 1, "image nested inside Form XObject must be found");
         assert_eq!(images[0].width, 1);
         assert_eq!(images[0].height, 1);
@@ -1026,9 +1088,10 @@ mod tests {
         let mut pdf_bytes = Vec::new();
         doc.save_to(&mut pdf_bytes).unwrap();
 
-        let images = extract_images_from_pdf(&pdf_bytes).expect("should parse PDF");
+        let images = extract_images_from_pdf(&pdf_bytes, None).expect("should parse PDF");
         assert_eq!(
-            images.len(), 1,
+            images.len(),
+            1,
             "Form XObject referenced twice must yield exactly one image, not two"
         );
     }
@@ -1123,7 +1186,7 @@ mod tests {
         let mut pdf_bytes = Vec::new();
         doc.save_to(&mut pdf_bytes).unwrap();
 
-        let images = extract_images_from_pdf(&pdf_bytes).expect("should parse PDF");
+        let images = extract_images_from_pdf(&pdf_bytes, None).expect("should parse PDF");
         assert_eq!(images.len(), 1, "image at depth-2 Form nesting must be extracted");
         assert_eq!(images[0].width, 1);
         assert_eq!(images[0].height, 1);
