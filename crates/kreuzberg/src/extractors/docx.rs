@@ -979,16 +979,34 @@ impl DocumentExtractor for DocxExtractor {
                 let span = tracing::Span::current();
                 tokio::task::spawn_blocking(move || {
                     let _guard = span.entered();
-                    parse_docx_core(&content_owned, include_doc_structure, output_format, inject_placeholders, budget)
+                    parse_docx_core(
+                        &content_owned,
+                        include_doc_structure,
+                        output_format,
+                        inject_placeholders,
+                        budget,
+                    )
                 })
                 .await
                 .map_err(|e| crate::error::KreuzbergError::parsing(format!("DOCX extraction task failed: {}", e)))??
             } else {
-                parse_docx_core(content, include_doc_structure, output_format, inject_placeholders, budget)?
+                parse_docx_core(
+                    content,
+                    include_doc_structure,
+                    output_format,
+                    inject_placeholders,
+                    budget,
+                )?
             }
 
             #[cfg(not(feature = "tokio-runtime"))]
-            parse_docx_core(content, include_doc_structure, output_format, inject_placeholders, budget)?
+            parse_docx_core(
+                content,
+                include_doc_structure,
+                output_format,
+                inject_placeholders,
+                budget,
+            )?
         };
 
         let mut archive = {
@@ -1765,17 +1783,34 @@ mod tests {
             ..Default::default()
         };
 
-        let internal_doc = extractor.extract_bytes(&data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", &config).await.expect("Extraction failed");
-        
-        let result = crate::extraction::derive::derive_extraction_result(internal_doc, true, crate::core::config::OutputFormat::Markdown);
-        
+        let internal_doc = extractor
+            .extract_bytes(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await
+            .expect("Extraction failed");
+
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal_doc,
+            true,
+            crate::core::config::OutputFormat::Markdown,
+        );
+
         // Verify that the image element is present in the document structure
         let doc = result.document.as_ref().expect("DocumentStructure should be present");
         let has_image = doc.nodes.iter().any(|n| matches!(n.content, NodeContent::Image { .. }));
-        assert!(has_image, "Image node should be present when inject_placeholders is true");
+        assert!(
+            has_image,
+            "Image node should be present when inject_placeholders is true"
+        );
 
         // Verify that the placeholder is present in the markdown content
-        let formatted = result.formatted_content.as_ref().expect("Formatted content should be present");
+        let formatted = result
+            .formatted_content
+            .as_ref()
+            .expect("Formatted content should be present");
         assert!(
             formatted.contains("![A test image](media/image1.png)"),
             "Markdown should contain image placeholder. Content: {}",
@@ -1838,17 +1873,34 @@ mod tests {
             ..Default::default()
         };
 
-        let internal_doc = extractor.extract_bytes(&data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", &config).await.expect("Extraction failed");
-        
-        let result = crate::extraction::derive::derive_extraction_result(internal_doc, true, crate::core::config::OutputFormat::Markdown);
-        
+        let internal_doc = extractor
+            .extract_bytes(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await
+            .expect("Extraction failed");
+
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal_doc,
+            true,
+            crate::core::config::OutputFormat::Markdown,
+        );
+
         // Verify that the image element is NOT present in the document structure
         let doc = result.document.as_ref().expect("DocumentStructure should be present");
         let has_image = doc.nodes.iter().any(|n| matches!(n.content, NodeContent::Image { .. }));
-        assert!(!has_image, "Image node should NOT be present when inject_placeholders is false");
+        assert!(
+            !has_image,
+            "Image node should NOT be present when inject_placeholders is false"
+        );
 
         // Verify that the placeholder is NOT present in the markdown content
-        let formatted = result.formatted_content.as_ref().expect("Formatted content should be present");
+        let formatted = result
+            .formatted_content
+            .as_ref()
+            .expect("Formatted content should be present");
         assert!(
             !formatted.contains("![A test image](media/image1.png)"),
             "Markdown should NOT contain image placeholder. Content: {}",
