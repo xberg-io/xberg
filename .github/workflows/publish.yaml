@@ -935,6 +935,13 @@ jobs:
         shell: bash
         run: scripts/publish/node/build-native-module.sh
 
+      - name: Verify glibc floor (linux-gnu)
+        if: ${{ matrix.settings.use_zigbuild }}
+        env:
+          TARGET: ${{ matrix.settings.target }}
+        shell: bash
+        run: scripts/publish/node/verify-glibc-floor.sh
+
       - name: Build native module (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -3201,16 +3208,85 @@ jobs:
         if: ${{ steps.recheck.outputs.exists == 'true' }}
         run: echo "Gem kreuzberg@${{ needs.prepare.outputs.version }} already published on RubyGems — skipped." >> "$GITHUB_STEP_SUMMARY"
 
+  node-smoke-glibc-2-28:
+    name: Smoke @kreuzberg/node on glibc 2.28 (${{ matrix.platform_dir }})
+    needs: [prepare, node-bindings]
+    if: |
+      always() &&
+      needs.prepare.outputs.release_node == 'true' &&
+      needs.node-bindings.result == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            platform_dir: linux-x64-gnu
+            docker_platform: linux/amd64
+          - target: aarch64-unknown-linux-gnu
+            platform_dir: linux-arm64-gnu
+            docker_platform: linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+
+      - name: Set up QEMU (for arm64 emulation)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Download node bindings artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: node-bindings-${{ matrix.target }}
+          path: node-artifact
+
+      - name: Extract artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p extracted
+          tar -xzf "node-artifact/node-bindings-${{ matrix.target }}.tar.gz" -C extracted
+          ls -lh "extracted/${{ matrix.platform_dir }}/"
+
+      - name: Run smoke inside redhat/ubi8 (glibc 2.28)
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_FILE="extracted/${{ matrix.platform_dir }}/kreuzberg-node.${{ matrix.platform_dir }}.node"
+          if [ ! -f "$NODE_FILE" ]; then
+            echo "Expected ${NODE_FILE} not found in artifact" >&2
+            ls -lhR extracted >&2
+            exit 1
+          fi
+          docker run --rm \
+            --platform "${{ matrix.docker_platform }}" \
+            -v "$PWD/scripts/publish/node/smoke-glibc-2-28.mjs:/smoke.mjs:ro" \
+            -v "$PWD/${NODE_FILE}:/native.node:ro" \
+            -e NODE_PATH=/native.node \
+            registry.access.redhat.com/ubi8/nodejs-22:latest \
+            node /smoke.mjs
+
+      - name: Confirm host glibc version (sanity)
+        if: failure()
+        run: |
+          docker run --rm --platform "${{ matrix.docker_platform }}" \
+            registry.access.redhat.com/ubi8/nodejs-22:latest ldd --version | head -1 || true
+
   publish-node:
     name: Publish Node packages
-    needs: [prepare, validate-versions, check-npm, node-bindings]
+    needs: [prepare, validate-versions, check-npm, node-bindings, node-smoke-glibc-2-28]
     if: |
       always() &&
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_node == 'true' &&
       needs.check-npm.outputs.exists != 'true' &&
-      needs.node-bindings.result == 'success'
+      needs.node-bindings.result == 'success' &&
+      needs.node-smoke-glibc-2-28.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
