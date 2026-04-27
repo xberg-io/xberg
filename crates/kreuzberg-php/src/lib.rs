@@ -6619,14 +6619,27 @@ pub struct TessdataManager {
 
 #[php_impl]
 impl TessdataManager {
+    /**
+     * Get the cache directory path.
+     */
     pub fn cache_dir(&self) -> String {
         self.inner.cache_dir().to_string_lossy().to_string()
     }
 
+    /**
+     * Check if a specific language traineddata file is cached.
+     */
     pub fn is_language_cached(&self, lang: String) -> bool {
         self.inner.is_language_cached(&lang)
     }
 
+    /**
+     * Downloads all tessdata_fast traineddata files to the cache directory.
+     *
+     * Skips files that already exist. Returns the count of newly downloaded files.
+     *
+     * Requires the `paddle-ocr` feature for HTTP download support (ureq).
+     */
     pub fn ensure_all_languages(&self) -> PhpResult<i64> {
         let result = self
             .inner
@@ -6920,6 +6933,9 @@ impl PaddleOcrConfig {
         core_self.with_model_tier(tier).into()
     }
 
+    /**
+     * Creates a default configuration with English language support.
+     */
     #[allow(clippy::should_implement_trait)]
     pub fn default() -> PaddleOcrConfig {
         kreuzberg::PaddleOcrConfig::default().into()
@@ -7596,10 +7612,18 @@ pub struct KreuzbergApi;
 
 #[php_impl]
 impl KreuzbergApi {
+    /**
+     * Hash arbitrary bytes with blake3, returning a 32-char hex string.
+     */
     pub fn blake3_hash_bytes(data: Vec<u8>) -> String {
         kreuzberg::cache::blake3_hash_bytes(&data)
     }
 
+    /**
+     * Hash a file's content with blake3 using streaming 64 KiB reads.
+     *
+     * Returns a 32-char hex string (128 bits of blake3 output).
+     */
     pub fn blake3_hash_file(path: String) -> PhpResult<String> {
         let result = kreuzberg::cache::blake3_hash_file(std::path::Path::new(&path))
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
@@ -7614,96 +7638,495 @@ impl KreuzbergApi {
         kreuzberg::cache::validate_cache_key(&key)
     }
 
+    /**
+     * Validate a port number for server configuration.
+     *
+     * Port must be in the range 1-65535. While ports 1-1023 are privileged and may require
+     * special permissions on some systems, they are still valid port numbers.
+     *
+     * # Arguments
+     *
+     * * `port` - The port number to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_port;
+     *
+     * assert!(validate_port(8000).is_ok());
+     * assert!(validate_port(80).is_ok());
+     * assert!(validate_port(1).is_ok());
+     * assert!(validate_port(65535).is_ok());
+     * assert!(validate_port(0).is_err());
+     * ```
+     */
     pub fn validate_port(port: u16) -> PhpResult<()> {
         let result = kreuzberg::core::config_validation::validate_port(port)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a host/IP address string for server configuration.
+     *
+     * Accepts valid IPv4 addresses (e.g., "127.0.0.1", "0.0.0.0"), valid IPv6 addresses
+     * (e.g., "::1", "::"), and hostnames (e.g., "localhost", "example.com").
+     *
+     * # Arguments
+     *
+     * * `host` - The host/IP address string to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_host;
+     *
+     * assert!(validate_host("127.0.0.1").is_ok());
+     * assert!(validate_host("0.0.0.0").is_ok());
+     * assert!(validate_host("::1").is_ok());
+     * assert!(validate_host("::").is_ok());
+     * assert!(validate_host("localhost").is_ok());
+     * assert!(validate_host("example.com").is_ok());
+     * assert!(validate_host("").is_err());
+     * ```
+     */
     pub fn validate_host(host: String) -> PhpResult<()> {
         let result = kreuzberg::core::config_validation::validate_host(&host)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a CORS (Cross-Origin Resource Sharing) origin URL.
+     *
+     * Accepts valid HTTP/HTTPS URLs (e.g., "https://example.com") or the wildcard "*"
+     * to allow all origins. URLs must start with "http://" or "https://", or be exactly "*".
+     *
+     * # Arguments
+     *
+     * * `origin` - The CORS origin URL to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_cors_origin;
+     *
+     * assert!(validate_cors_origin("https://example.com").is_ok());
+     * assert!(validate_cors_origin("http://localhost:3000").is_ok());
+     * assert!(validate_cors_origin("*").is_ok());
+     * assert!(validate_cors_origin("not-a-url").is_err());
+     * assert!(validate_cors_origin("ftp://example.com").is_err());
+     * ```
+     */
     pub fn validate_cors_origin(origin: String) -> PhpResult<()> {
         let result = kreuzberg::core::config_validation::validate_cors_origin(&origin)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate an upload size limit for server configuration.
+     *
+     * Upload size must be greater than 0 (measured in bytes).
+     *
+     * # Arguments
+     *
+     * * `size` - The maximum upload size in bytes to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_upload_size;
+     *
+     * assert!(validate_upload_size(1024).is_ok());
+     * assert!(validate_upload_size(1_000_000).is_ok());
+     * assert!(validate_upload_size(0).is_err());
+     * ```
+     */
     pub fn validate_upload_size(size: i64) -> PhpResult<()> {
         let result = kreuzberg::core::config_validation::validate_upload_size(size as usize)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a binarization method string.
+     *
+     * # Arguments
+     *
+     * * `method` - The binarization method to validate (e.g., "otsu", "adaptive", "sauvola")
+     *
+     * # Returns
+     *
+     * `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_binarization_method;
+     *
+     * assert!(validate_binarization_method("otsu").is_ok());
+     * assert!(validate_binarization_method("adaptive").is_ok());
+     * assert!(validate_binarization_method("invalid").is_err());
+     * ```
+     */
     pub fn validate_binarization_method(method: String) -> PhpResult<()> {
         let result = kreuzberg::core::validate_binarization_method(&method)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a token reduction level string.
+     *
+     * # Arguments
+     *
+     * * `level` - The token reduction level to validate (e.g., "off", "light", "moderate")
+     *
+     * # Returns
+     *
+     * `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_token_reduction_level;
+     *
+     * assert!(validate_token_reduction_level("off").is_ok());
+     * assert!(validate_token_reduction_level("moderate").is_ok());
+     * assert!(validate_token_reduction_level("extreme").is_err());
+     * ```
+     */
     pub fn validate_token_reduction_level(level: String) -> PhpResult<()> {
         let result = kreuzberg::core::validate_token_reduction_level(&level)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate an OCR backend string.
+     *
+     * # Arguments
+     *
+     * * `backend` - The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr")
+     *
+     * # Returns
+     *
+     * `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_ocr_backend;
+     *
+     * assert!(validate_ocr_backend("tesseract").is_ok());
+     * assert!(validate_ocr_backend("easyocr").is_ok());
+     * assert!(validate_ocr_backend("invalid").is_err());
+     * ```
+     */
     pub fn validate_ocr_backend(backend: String) -> PhpResult<()> {
         let result = kreuzberg::core::validate_ocr_backend(&backend)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a language code (ISO 639-1 or 639-3 format).
+     *
+     * Accepts both 2-letter ISO 639-1 codes (e.g., "en", "de") and
+     * 3-letter ISO 639-3 codes (e.g., "eng", "deu") for broader compatibility.
+     *
+     * # Arguments
+     *
+     * * `code` - The language code to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_language_code;
+     *
+     * assert!(validate_language_code("en").is_ok());
+     * assert!(validate_language_code("eng").is_ok());
+     * assert!(validate_language_code("de").is_ok());
+     * assert!(validate_language_code("deu").is_ok());
+     * assert!(validate_language_code("invalid").is_err());
+     * ```
+     */
     pub fn validate_language_code(code: String) -> PhpResult<()> {
         let result = kreuzberg::core::validate_language_code(&code)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a tesseract Page Segmentation Mode (PSM).
+     *
+     * # Arguments
+     *
+     * * `psm` - The PSM value to validate (0-13)
+     *
+     * # Returns
+     *
+     * `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_tesseract_psm;
+     *
+     * assert!(validate_tesseract_psm(3).is_ok());  // Fully automatic
+     * assert!(validate_tesseract_psm(6).is_ok());  // Single block of text
+     * assert!(validate_tesseract_psm(14).is_err()); // Out of range
+     * ```
+     */
     pub fn validate_tesseract_psm(psm: i32) -> PhpResult<()> {
         let result = kreuzberg::core::validate_tesseract_psm(psm)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a tesseract OCR Engine Mode (OEM).
+     *
+     * # Arguments
+     *
+     * * `oem` - The OEM value to validate (0-3)
+     *
+     * # Returns
+     *
+     * `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_tesseract_oem;
+     *
+     * assert!(validate_tesseract_oem(1).is_ok());  // Neural nets (LSTM)
+     * assert!(validate_tesseract_oem(2).is_ok());  // Legacy + LSTM
+     * assert!(validate_tesseract_oem(4).is_err()); // Out of range
+     * ```
+     */
     pub fn validate_tesseract_oem(oem: i32) -> PhpResult<()> {
         let result = kreuzberg::core::validate_tesseract_oem(oem)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a document extraction output format.
+     *
+     * Accepts the following formats and aliases:
+     * - "plain" or "text" for plain text output
+     * - "markdown" or "md" for Markdown output
+     * - "djot" for Djot markup format
+     * - "html" for HTML output
+     *
+     * # Arguments
+     *
+     * * `format` - The output format to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_output_format;
+     *
+     * assert!(validate_output_format("text").is_ok());
+     * assert!(validate_output_format("plain").is_ok());
+     * assert!(validate_output_format("markdown").is_ok());
+     * assert!(validate_output_format("md").is_ok());
+     * assert!(validate_output_format("djot").is_ok());
+     * assert!(validate_output_format("html").is_ok());
+     * assert!(validate_output_format("json").is_ok());
+     * ```
+     */
     pub fn validate_output_format(format: String) -> PhpResult<()> {
         let result = kreuzberg::core::validate_output_format(&format)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a confidence threshold value.
+     *
+     * Confidence thresholds should be between 0.0 and 1.0 inclusive.
+     *
+     * # Arguments
+     *
+     * * `confidence` - The confidence threshold to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_confidence;
+     *
+     * assert!(validate_confidence(0.5).is_ok());
+     * assert!(validate_confidence(0.0).is_ok());
+     * assert!(validate_confidence(1.0).is_ok());
+     * assert!(validate_confidence(1.5).is_err());
+     * assert!(validate_confidence(-0.1).is_err());
+     * ```
+     */
     pub fn validate_confidence(confidence: f64) -> PhpResult<()> {
         let result = kreuzberg::core::validate_confidence(confidence)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate a DPI (dots per inch) value.
+     *
+     * DPI should be a positive integer, typically 72-600.
+     *
+     * # Arguments
+     *
+     * * `dpi` - The DPI value to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_dpi;
+     *
+     * assert!(validate_dpi(96).is_ok());
+     * assert!(validate_dpi(300).is_ok());
+     * assert!(validate_dpi(0).is_err());
+     * assert!(validate_dpi(-1).is_err());
+     * ```
+     */
     pub fn validate_dpi(dpi: i32) -> PhpResult<()> {
         let result = kreuzberg::core::validate_dpi(dpi)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate chunk size parameters.
+     *
+     * Checks that max_chars > 0 and max_overlap < max_chars.
+     *
+     * # Arguments
+     *
+     * * `max_chars` - The maximum characters per chunk
+     * * `max_overlap` - The maximum overlap between chunks
+     *
+     * # Returns
+     *
+     * `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_chunking_params;
+     *
+     * assert!(validate_chunking_params(1000, 200).is_ok());
+     * assert!(validate_chunking_params(500, 50).is_ok());
+     * assert!(validate_chunking_params(0, 100).is_err()); // max_chars must be > 0
+     * assert!(validate_chunking_params(100, 150).is_err()); // overlap >= max_chars
+     * ```
+     */
     pub fn validate_chunking_params(max_chars: i64, max_overlap: i64) -> PhpResult<()> {
         let result = kreuzberg::core::validate_chunking_params(max_chars as usize, max_overlap as usize)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Validate that an [`LlmConfig`](crate::core::config::LlmConfig) has a non-empty model string.
+     *
+     * # Arguments
+     *
+     * * `model` - The model string to validate
+     *
+     * # Returns
+     *
+     * `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::core::config_validation::validate_llm_config_model;
+     *
+     * assert!(validate_llm_config_model("openai/gpt-4o").is_ok());
+     * assert!(validate_llm_config_model("").is_err());
+     * ```
+     */
     pub fn validate_llm_config_model(model: String) -> PhpResult<()> {
         let result = kreuzberg::core::config_validation::validate_llm_config_model(&model)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Extract content from a byte array.
+     *
+     * This is the main entry point for in-memory extraction. It performs the following steps:
+     * 1. Validate MIME type
+     * 2. Handle legacy format conversion if needed
+     * 3. Select appropriate extractor from registry
+     * 4. Extract content
+     * 5. Run post-processing pipeline
+     *
+     * # Arguments
+     *
+     * * `content` - The byte array to extract
+     * * `mime_type` - MIME type of the content
+     * * `config` - Extraction configuration
+     *
+     * # Returns
+     *
+     * An `ExtractionResult` containing the extracted content and metadata.
+     *
+     * # Errors
+     *
+     * Returns `KreuzbergError::Validation` if MIME type is invalid.
+     * Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::extract_bytes;
+     * use kreuzberg::core::config::ExtractionConfig;
+     *
+     * # async fn example() -> kreuzberg::Result<()> {
+     * let config = ExtractionConfig::default();
+     * let bytes = b"Hello, world!";
+     * let result = extract_bytes(bytes, "text/plain", &config).await?;
+     * println!("Content: {}", result.content);
+     * # Ok(())
+     * # }
+     * ```
+     */
     pub fn extract_bytes_async(
         content: Vec<u8>,
         mime_type: String,
@@ -7720,6 +8143,46 @@ impl KreuzbergApi {
         })
     }
 
+    /**
+     * Extract content from a file.
+     *
+     * This is the main entry point for file-based extraction. It performs the following steps:
+     * 1. Check cache for existing result (if caching enabled)
+     * 2. Detect or validate MIME type
+     * 3. Select appropriate extractor from registry
+     * 4. Extract content
+     * 5. Run post-processing pipeline
+     * 6. Store result in cache (if caching enabled)
+     *
+     * # Arguments
+     *
+     * * `path` - Path to the file to extract
+     * * `mime_type` - Optional MIME type override. If None, will be auto-detected
+     * * `config` - Extraction configuration
+     *
+     * # Returns
+     *
+     * An `ExtractionResult` containing the extracted content and metadata.
+     *
+     * # Errors
+     *
+     * Returns `KreuzbergError::Io` if the file doesn't exist (NotFound) or for other file I/O errors.
+     * Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::extract_file;
+     * use kreuzberg::core::config::ExtractionConfig;
+     *
+     * # async fn example() -> kreuzberg::Result<()> {
+     * let config = ExtractionConfig::default();
+     * let result = extract_file("document.pdf", None, &config).await?;
+     * println!("Content: {}", result.content);
+     * # Ok(())
+     * # }
+     * ```
+     */
     pub fn extract_file_async(
         path: String,
         mime_type: Option<String>,
@@ -7736,6 +8199,30 @@ impl KreuzbergApi {
         })
     }
 
+    /**
+     * Synchronous wrapper for `extract_file`.
+     *
+     * This is a convenience function that blocks the current thread until extraction completes.
+     * For async code, use `extract_file` directly.
+     *
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating
+     * a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
+     *
+     * This function is only available with the `tokio-runtime` feature. For WASM targets,
+     * use a truly synchronous extraction approach instead.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::extract_file_sync;
+     * use kreuzberg::core::config::ExtractionConfig;
+     *
+     * let config = ExtractionConfig::default();
+     * let result = extract_file_sync("document.pdf", None, &config)?;
+     * println!("Content: {}", result.content);
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * ```
+     */
     pub fn extract_file_sync(
         path: String,
         mime_type: Option<String>,
@@ -7749,6 +8236,28 @@ impl KreuzbergApi {
         Ok(result.into())
     }
 
+    /**
+     * Synchronous wrapper for `extract_bytes`.
+     *
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating
+     * a new runtime per call.
+     *
+     * With the `tokio-runtime` feature, this blocks the current thread using the global
+     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::extract_bytes_sync;
+     * use kreuzberg::core::config::ExtractionConfig;
+     *
+     * let config = ExtractionConfig::default();
+     * let bytes = b"Hello, world!";
+     * let result = extract_bytes_sync(bytes, "text/plain", &config)?;
+     * println!("Content: {}", result.content);
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * ```
+     */
     pub fn extract_bytes_sync(
         content: Vec<u8>,
         mime_type: String,
@@ -7762,6 +8271,29 @@ impl KreuzbergApi {
         Ok(result.into())
     }
 
+    /**
+     * Synchronous wrapper for `batch_extract_file`.
+     *
+     * Uses the global Tokio runtime for optimal performance.
+     * Only available with `tokio-runtime` (WASM has no filesystem).
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::batch_extract_file_sync;
+     * use kreuzberg::core::config::ExtractionConfig;
+     * use kreuzberg::FileExtractionConfig;
+     * use std::path::PathBuf;
+     *
+     * let config = ExtractionConfig::default();
+     * let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
+     *     ("doc1.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+     *     ("doc2.pdf".into(), None),
+     * ];
+     * let results = batch_extract_file_sync(items, &config)?;
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * ```
+     */
     pub fn batch_extract_file_sync(items: Vec<String>, config: &ExtractionConfig) -> PhpResult<Vec<ExtractionResult>> {
         let items_core: Vec<_> = items
             .into_iter()
@@ -7777,6 +8309,31 @@ impl KreuzbergApi {
         Ok(result.into_iter().map(Into::into).collect())
     }
 
+    /**
+     * Synchronous wrapper for `batch_extract_bytes`.
+     *
+     * Uses the global Tokio runtime for optimal performance.
+     * With the `tokio-runtime` feature, this blocks the current thread using the global
+     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
+     * that iterates through items and calls `extract_bytes_sync()`.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::batch_extract_bytes_sync;
+     * use kreuzberg::core::config::ExtractionConfig;
+     * use kreuzberg::FileExtractionConfig;
+     *
+     * let config = ExtractionConfig::default();
+     * let items = vec![
+     *     (b"content".to_vec(), "text/plain".to_string(), None),
+     *     (b"other".to_vec(), "text/plain".to_string(),
+     *      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+     * ];
+     * let results = batch_extract_bytes_sync(items, &config)?;
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * ```
+     */
     pub fn batch_extract_bytes_sync(items: Vec<String>, config: &ExtractionConfig) -> PhpResult<Vec<ExtractionResult>> {
         let items_core: Vec<_> = items
             .into_iter()
@@ -7792,6 +8349,74 @@ impl KreuzbergApi {
         Ok(result.into_iter().map(Into::into).collect())
     }
 
+    /**
+     * Extract content from multiple files concurrently.
+     *
+     * This function processes multiple files in parallel, automatically managing
+     * concurrency to prevent resource exhaustion. The concurrency limit can be
+     * configured via `ExtractionConfig::max_concurrent_extractions` or defaults
+     * to `(num_cpus * 1.5).ceil()`.
+     *
+     * Each file can optionally specify a [`FileExtractionConfig`] that overrides specific
+     * fields from the batch-level `config`. Pass `None` for a file to use the batch defaults.
+     * Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
+     * taken from the batch-level `config`.
+     *
+     * # Arguments
+     *
+     * * `items` - Vector of `(path, optional_file_config)` tuples. Pass `None` as the
+     *   config to use the batch-level defaults for that file.
+     * * `config` - Batch-level extraction configuration (provides defaults and batch settings)
+     *
+     * # Returns
+     *
+     * A vector of `ExtractionResult` in the same order as the input items.
+     *
+     * # Errors
+     *
+     * Individual file errors are captured in the result metadata. System errors
+     * (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
+     *
+     * # Examples
+     *
+     * Simple usage with no per-file overrides:
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::batch_extract_file;
+     * use kreuzberg::core::config::ExtractionConfig;
+     * use std::path::PathBuf;
+     *
+     * # async fn example() -> kreuzberg::Result<()> {
+     * let config = ExtractionConfig::default();
+     * let items: Vec<(PathBuf, Option<kreuzberg::FileExtractionConfig>)> = vec![
+     *     ("doc1.pdf".into(), None),
+     *     ("doc2.pdf".into(), None),
+     * ];
+     * let results = batch_extract_file(items, &config).await?;
+     * println!("Processed {} files", results.len());
+     * # Ok(())
+     * # }
+     * ```
+     *
+     * Per-file configuration overrides:
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::batch_extract_file;
+     * use kreuzberg::core::config::ExtractionConfig;
+     * use kreuzberg::FileExtractionConfig;
+     * use std::path::PathBuf;
+     *
+     * # async fn example() -> kreuzberg::Result<()> {
+     * let config = ExtractionConfig::default();
+     * let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
+     *     ("scan.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+     *     ("notes.txt".into(), None),
+     * ];
+     * let results = batch_extract_file(items, &config).await?;
+     * # Ok(())
+     * # }
+     * ```
+     */
     pub fn batch_extract_file_async(items: Vec<String>, config: &ExtractionConfig) -> PhpResult<Vec<ExtractionResult>> {
         let items_core: Vec<_> = items
             .into_iter()
@@ -7810,6 +8435,66 @@ impl KreuzbergApi {
         })
     }
 
+    /**
+     * Extract content from multiple byte arrays concurrently.
+     *
+     * This function processes multiple byte arrays in parallel, automatically managing
+     * concurrency to prevent resource exhaustion. The concurrency limit can be
+     * configured via `ExtractionConfig::max_concurrent_extractions` or defaults
+     * to `(num_cpus * 1.5).ceil()`.
+     *
+     * Each item can optionally specify a [`FileExtractionConfig`] that overrides specific
+     * fields from the batch-level `config`. Pass `None` as the config to use
+     * the batch-level defaults for that item.
+     *
+     * # Arguments
+     *
+     * * `items` - Vector of `(bytes, mime_type, optional_file_config)` tuples
+     * * `config` - Batch-level extraction configuration
+     *
+     * # Returns
+     *
+     * A vector of `ExtractionResult` in the same order as the input items.
+     *
+     * # Examples
+     *
+     * Simple usage with no per-item overrides:
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::batch_extract_bytes;
+     * use kreuzberg::core::config::ExtractionConfig;
+     *
+     * # async fn example() -> kreuzberg::Result<()> {
+     * let config = ExtractionConfig::default();
+     * let items = vec![
+     *     (b"content 1".to_vec(), "text/plain".to_string(), None),
+     *     (b"content 2".to_vec(), "text/plain".to_string(), None),
+     * ];
+     * let results = batch_extract_bytes(items, &config).await?;
+     * println!("Processed {} items", results.len());
+     * # Ok(())
+     * # }
+     * ```
+     *
+     * Per-item configuration overrides:
+     *
+     * ```rust,no_run
+     * use kreuzberg::core::extractor::batch_extract_bytes;
+     * use kreuzberg::core::config::ExtractionConfig;
+     * use kreuzberg::FileExtractionConfig;
+     *
+     * # async fn example() -> kreuzberg::Result<()> {
+     * let config = ExtractionConfig::default();
+     * let items = vec![
+     *     (b"content".to_vec(), "text/plain".to_string(), None),
+     *     (b"<html>test</html>".to_vec(), "text/html".to_string(),
+     *      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+     * ];
+     * let results = batch_extract_bytes(items, &config).await?;
+     * # Ok(())
+     * # }
+     * ```
+     */
     pub fn batch_extract_bytes_async(
         items: Vec<String>,
         config: &ExtractionConfig,
@@ -7831,34 +8516,151 @@ impl KreuzbergApi {
         })
     }
 
+    /**
+     * Validates whether a field name is in the known formats registry.
+     *
+     * This uses a pre-built hash set for O(1) lookups instead of linear search,
+     * providing significant performance improvements for repeated validations.
+     *
+     * # Arguments
+     *
+     * * `field` - The field name to validate
+     *
+     * # Returns
+     *
+     * `true` if the field is in KNOWN_FORMATS, `false` otherwise.
+     *
+     * # Example
+     *
+     * ```rust
+     * use kreuzberg::core::formats::is_valid_format_field;
+     *
+     * assert!(is_valid_format_field("title"));
+     * assert!(is_valid_format_field("creation_date"));
+     * assert!(!is_valid_format_field("invalid_field"));
+     * ```
+     */
     pub fn is_valid_format_field(field: String) -> bool {
         kreuzberg::is_valid_format_field(&field)
     }
 
+    /**
+     * Validate that a MIME type is supported.
+     *
+     * # Arguments
+     *
+     * * `mime_type` - The MIME type to validate
+     *
+     * # Returns
+     *
+     * The validated MIME type (may be normalized).
+     *
+     * # Errors
+     *
+     * Returns `KreuzbergError::UnsupportedFormat` if not supported.
+     */
     pub fn validate_mime_type(mime_type: String) -> PhpResult<String> {
         let result = kreuzberg::validate_mime_type(&mime_type)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Detect or validate MIME type.
+     *
+     * If `mime_type` is provided, validates it. Otherwise, detects from `path`.
+     *
+     * # Arguments
+     *
+     * * `path` - Optional path to detect MIME type from
+     * * `mime_type` - Optional explicit MIME type to validate
+     *
+     * # Returns
+     *
+     * The validated MIME type string.
+     */
     pub fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> PhpResult<String> {
         let result = kreuzberg::detect_or_validate(path.as_deref(), mime_type.as_deref())
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Detect MIME type from raw file bytes.
+     *
+     * Uses magic byte signatures to detect file type from content.
+     * Falls back to `infer` crate for comprehensive detection.
+     *
+     * For ZIP-based files, inspects contents to distinguish Office Open XML
+     * formats (DOCX, XLSX, PPTX) from plain ZIP archives.
+     *
+     * # Arguments
+     *
+     * * `content` - Raw file bytes
+     *
+     * # Returns
+     *
+     * The detected MIME type string.
+     *
+     * # Errors
+     *
+     * Returns `KreuzbergError::UnsupportedFormat` if MIME type cannot be determined.
+     */
     pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> PhpResult<String> {
         let result = kreuzberg::detect_mime_type_from_bytes(&content)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Get file extensions for a given MIME type.
+     *
+     * Returns all known file extensions that map to the specified MIME type.
+     *
+     * # Arguments
+     *
+     * * `mime_type` - The MIME type to look up
+     *
+     * # Returns
+     *
+     * A vector of file extensions (without leading dot) for the MIME type.
+     *
+     * # Example
+     *
+     * ```
+     * use kreuzberg::core::mime::get_extensions_for_mime;
+     *
+     * let extensions = get_extensions_for_mime("application/pdf").unwrap();
+     * assert_eq!(extensions, vec!["pdf"]);
+     *
+     * let doc_extensions = get_extensions_for_mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document").unwrap();
+     * assert!(doc_extensions.contains(&"docx".to_string()));
+     * ```
+     */
     pub fn get_extensions_for_mime(mime_type: String) -> PhpResult<Vec<String>> {
         let result = kreuzberg::get_extensions_for_mime(&mime_type)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * List all supported document formats.
+     *
+     * Returns a list of all file extensions and their corresponding MIME types
+     * that Kreuzberg can process. Derived from the centralized [`FORMATS`] registry.
+     *
+     * The list is sorted alphabetically by file extension.
+     *
+     * # Example
+     *
+     * ```
+     * use kreuzberg::core::mime::list_supported_formats;
+     *
+     * let formats = list_supported_formats();
+     * assert!(!formats.is_empty());
+     * assert!(formats.iter().any(|f| f.extension == "pdf"));
+     * ```
+     */
     pub fn list_supported_formats() -> Vec<SupportedFormat> {
         kreuzberg::list_supported_formats()
             .into_iter()
@@ -7866,12 +8668,39 @@ impl KreuzbergApi {
             .collect()
     }
 
+    /**
+     * Clear the processor cache (primarily for testing when registry changes).
+     */
     pub fn clear_processor_cache() -> PhpResult<()> {
         let result = kreuzberg::core::pipeline::clear_processor_cache()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Transform an extraction result into semantic elements.
+     *
+     * This function takes a reference to an ExtractionResult and generates
+     * a vector of Element structs representing semantic blocks in the document.
+     * It detects content sections, list items, page breaks, and other structural
+     * elements to create an Unstructured-compatible element-based output.
+     *
+     * Handles:
+     * - PDF hierarchy → Title/Heading elements
+     * - Multi-page documents with correct page numbers
+     * - Table and Image extraction
+     * - PageBreak interleaving
+     * - Bounding box coordinates
+     * - Paragraph detection for NarrativeText
+     *
+     * # Arguments
+     *
+     * * `result` - Reference to the ExtractionResult to transform
+     *
+     * # Returns
+     *
+     * A vector of Elements with proper semantic types and metadata.
+     */
     pub fn transform_extraction_result_to_elements(result: &ExtractionResult) -> Vec<Element> {
         let result_core: kreuzberg::ExtractionResult = result.clone().into();
         kreuzberg::extraction::transform::transform_extraction_result_to_elements(&result_core)
@@ -7880,6 +8709,9 @@ impl KreuzbergApi {
             .collect()
     }
 
+    /**
+     * Extract email content from either .eml or .msg format
+     */
     pub fn extract_email_content(
         data: Vec<u8>,
         mime_type: String,
@@ -7890,6 +8722,57 @@ impl KreuzbergApi {
         Ok(result.into())
     }
 
+    /**
+     * Converts a 2D vector of cell strings into a GitHub-Flavored Markdown table.
+     *
+     * # Behavior
+     *
+     * - The first row is treated as the header row
+     * - A separator row is inserted after the header
+     * - Pipe characters (`|`) in cell content are automatically escaped with backslash
+     * - Irregular tables (rows with varying column counts) are padded with empty cells to match the header
+     * - Returns an empty string for empty input
+     *
+     * # Arguments
+     *
+     * * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
+     *
+     * # Returns
+     *
+     * A `String` containing the GFM markdown table representation
+     *
+     * # Examples
+     *
+     * ```
+     * # use kreuzberg::extraction::cells_to_markdown;
+     * let cells = vec![
+     *     vec!["Name".to_string(), "Age".to_string()],
+     *     vec!["Alice".to_string(), "30".to_string()],
+     *     vec!["Bob".to_string(), "25".to_string()],
+     * ];
+     *
+     * let markdown = cells_to_markdown(&cells);
+     * assert!(markdown.contains("| Name | Age |"));
+     * assert!(markdown.contains("|------|------|"));
+     * ```
+     *
+     * Converts a 2D vector of cell strings into plain text with tab-separated columns.
+     *
+     * # Behavior
+     *
+     * - Rows are separated by newlines
+     * - Cells within a row are separated by tab characters
+     * - No pipe delimiters or separator rows (unlike markdown tables)
+     * - Returns an empty string for empty input
+     *
+     * # Arguments
+     *
+     * * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
+     *
+     * # Returns
+     *
+     * A `String` containing the plain text table representation
+     */
     pub fn cells_to_text(cells: Vec<Vec<String>>) -> String {
         kreuzberg::extraction::cells_to_text(&cells[..])
     }
@@ -7898,106 +8781,310 @@ impl KreuzbergApi {
         kreuzberg::extraction::cells_to_markdown(&cells[..])
     }
 
+    /**
+     * Render djot content to HTML.
+     *
+     * This function takes djot source text and renders it to HTML using jotdown's
+     * built-in HTML renderer.
+     *
+     * # Arguments
+     *
+     * * `djot_source` - The djot markup text to render
+     *
+     * # Returns
+     *
+     * A `Result` containing the rendered HTML string
+     *
+     * # Example
+     *
+     * ```ignore
+     * let djot = "# Hello\n\nThis is *bold* and _italic_.";
+     * let html = djot_to_html(djot)?;
+     * assert!(html.contains("<h1>"));
+     * assert!(html.contains("<strong>"));
+     * assert!(html.contains("<em>"));
+     * ```
+     */
     pub fn djot_to_html(djot_source: String) -> PhpResult<String> {
         let result = kreuzberg::extractors::djot_format::djot_to_html(&djot_source)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Deduplicate a list of text strings while preserving order.
+     * Adjacent duplicates and near-duplicates are removed.
+     */
     pub fn dedup_text(texts: Vec<String>) -> Vec<String> {
         kreuzberg::extractors::iwork::dedup_text(texts)
     }
 
+    /**
+     * Normalize whitespace in a string.
+     *
+     * - Collapses multiple consecutive spaces/tabs into a single space
+     * - Preserves single newlines (paragraph breaks from \par)
+     * - Collapses multiple consecutive newlines into a double newline
+     * - Trims leading/trailing whitespace from each line
+     * - Trims leading/trailing blank lines
+     */
     pub fn normalize_whitespace(s: String) -> String {
         kreuzberg::extractors::rtf::normalize_whitespace(&s)
     }
 
+    /**
+     * Register all built-in extractors with the global registry.
+     *
+     * This function should be called once at application startup to register
+     * the default extractors (PlainText, Markdown, XML, etc.).
+     *
+     * **Note:** This is called automatically on first extraction operation.
+     * Explicit calling is optional.
+     *
+     * # Example
+     *
+     * ```rust
+     * use kreuzberg::extractors::register_default_extractors;
+     *
+     * # fn main() -> kreuzberg::Result<()> {
+     * register_default_extractors()?;
+     * # Ok(())
+     * # }
+     * ```
+     */
     pub fn register_default_extractors() -> PhpResult<()> {
         let result = kreuzberg::extractors::register_default_extractors()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Unregister a document extractor by name.
+     */
     pub fn unregister_extractor(name: String) -> PhpResult<()> {
         let result = kreuzberg::plugins::unregister_extractor(&name)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * List names of all registered document extractors.
+     */
     pub fn list_extractors() -> PhpResult<Vec<String>> {
         let result = kreuzberg::plugins::list_extractors()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Remove all registered document extractors.
+     */
     pub fn clear_extractors() -> PhpResult<()> {
         let result = kreuzberg::plugins::clear_extractors()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Unregister an OCR backend by name.
+     *
+     * Removes the OCR backend from the global registry and calls its `shutdown()` method.
+     *
+     * # Arguments
+     *
+     * * `name` - Name of the OCR backend to unregister
+     *
+     * # Returns
+     *
+     * - `Ok(())` if the backend was unregistered or didn't exist
+     * - `Err(...)` if the shutdown method failed
+     *
+     * # Example
+     *
+     * ```rust
+     * use kreuzberg::plugins::unregister_ocr_backend;
+     *
+     * # tokio_test::block_on(async {
+     * unregister_ocr_backend("custom-ocr")?;
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * # });
+     * ```
+     */
     pub fn unregister_ocr_backend(name: String) -> PhpResult<()> {
         let result = kreuzberg::plugins::unregister_ocr_backend(&name)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * List all registered OCR backends.
+     *
+     * Returns the names of all OCR backends currently registered in the global registry.
+     *
+     * # Returns
+     *
+     * A vector of OCR backend names.
+     *
+     * # Example
+     *
+     * ```rust
+     * use kreuzberg::plugins::list_ocr_backends;
+     *
+     * # tokio_test::block_on(async {
+     * let backends = list_ocr_backends()?;
+     * for name in backends {
+     *     println!("Registered OCR backend: {}", name);
+     * }
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * # });
+     * ```
+     */
     pub fn list_ocr_backends() -> PhpResult<Vec<String>> {
         let result = kreuzberg::plugins::list_ocr_backends()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Clear all OCR backends from the global registry.
+     *
+     * Removes all OCR backends and calls their `shutdown()` methods.
+     *
+     * # Returns
+     *
+     * - `Ok(())` if all backends were cleared successfully
+     * - `Err(...)` if any shutdown method failed
+     *
+     * # Example
+     *
+     * ```rust
+     * use kreuzberg::plugins::clear_ocr_backends;
+     *
+     * # tokio_test::block_on(async {
+     * clear_ocr_backends()?;
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * # });
+     * ```
+     */
     pub fn clear_ocr_backends() -> PhpResult<()> {
         let result = kreuzberg::plugins::clear_ocr_backends()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * List all registered post-processor names.
+     *
+     * Returns a vector of all post-processor names currently registered in the
+     * global registry.
+     *
+     * # Returns
+     *
+     * - `Ok(Vec<String>)` - Vector of post-processor names
+     * - `Err(...)` if the registry lock is poisoned
+     *
+     * # Example
+     *
+     * ```rust
+     * use kreuzberg::plugins::list_post_processors;
+     *
+     * # tokio_test::block_on(async {
+     * let processors = list_post_processors()?;
+     * for name in processors {
+     *     println!("Registered post-processor: {}", name);
+     * }
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * # });
+     * ```
+     */
     pub fn list_post_processors() -> PhpResult<Vec<String>> {
         let result = kreuzberg::plugins::list_post_processors()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Unregister a renderer by name.
+     */
     pub fn unregister_renderer(name: String) -> PhpResult<()> {
         let result = kreuzberg::plugins::unregister_renderer(&name)
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * List names of all registered renderers.
+     */
     pub fn list_renderers() -> PhpResult<Vec<String>> {
         let result = kreuzberg::plugins::list_renderers()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Remove all registered renderers.
+     */
     pub fn clear_renderers() -> PhpResult<()> {
         let result = kreuzberg::plugins::clear_renderers()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * List names of all registered validators.
+     */
     pub fn list_validators() -> PhpResult<Vec<String>> {
         let result = kreuzberg::plugins::list_validators()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Remove all registered validators.
+     */
     pub fn clear_validators() -> PhpResult<()> {
         let result = kreuzberg::plugins::clear_validators()
             .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result)
     }
 
+    /**
+     * Sanitize a file path to return only the filename (no directory).
+     *
+     * Prevents PII from appearing in traces.
+     */
     pub fn sanitize_filename(path: String) -> String {
         kreuzberg::telemetry::conventions::sanitize_filename(std::path::Path::new(&path)).into()
     }
 
+    /**
+     * Sanitize a file path to return only the filename.
+     *
+     * Prevents PII (personally identifiable information) from appearing in
+     * traces by only recording filenames instead of full paths.
+     */
     pub fn sanitize_path(path: String) -> String {
         kreuzberg::telemetry::spans::sanitize_path(std::path::Path::new(&path))
     }
 
+    /**
+     * Validates bytes as UTF-8 without conversion to string slice.
+     *
+     * Returns `true` if the bytes represent valid UTF-8, `false` otherwise.
+     * This is useful when you only need to check validity without constructing a string.
+     *
+     * # Arguments
+     *
+     * * `bytes` - The byte slice to validate
+     *
+     * # Returns
+     *
+     * `true` if valid UTF-8, `false` otherwise.
+     *
+     * # Performance
+     *
+     * This function is optimized for early exit on invalid sequences.
+     */
     pub fn is_valid_utf8(bytes: Vec<u8>) -> bool {
         kreuzberg::text::utf8_validation::is_valid_utf8(&bytes)
     }
@@ -8006,6 +9093,39 @@ impl KreuzbergApi {
         kreuzberg::text::quality::clean_extracted_text(&text)
     }
 
+    /**
+     * Reduces token count in text while preserving meaning and structure.
+     *
+     * This function removes stopwords, redundancy, and applies compression techniques
+     * based on the specified reduction level. Supports 64 languages with automatic
+     * stopword removal and optional semantic clustering.
+     *
+     * # Arguments
+     *
+     * * `text` - The input text to reduce
+     * * `config` - Configuration specifying reduction level and options
+     * * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
+     *
+     * # Returns
+     *
+     * Returns the reduced text with preserved structure (markdown, code blocks).
+     *
+     * # Errors
+     *
+     * Returns an error if the language hint is invalid or stopwords cannot be loaded.
+     *
+     * # Examples
+     *
+     * ```rust
+     * use kreuzberg::text::token_reduction::{reduce_tokens, TokenReductionConfig, ReductionLevel};
+     *
+     * let text = "This is a simple example text with some stopwords.";
+     * let config = TokenReductionConfig::default();
+     * let reduced = reduce_tokens(text, &config, Some("eng"))?;
+     * println!("Reduced: {}", reduced);
+     * # Ok::<(), kreuzberg::error::KreuzbergError>(())
+     * ```
+     */
     pub fn reduce_tokens(
         text: String,
         config: &TokenReductionConfig,
@@ -8019,62 +9139,137 @@ impl KreuzbergApi {
         Ok(result)
     }
 
+    /**
+     * Create a bold annotation for the given byte range.
+     */
     pub fn bold(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::bold(start, end).into()
     }
 
+    /**
+     * Create an italic annotation for the given byte range.
+     */
     pub fn italic(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::italic(start, end).into()
     }
 
+    /**
+     * Create an underline annotation for the given byte range.
+     */
     pub fn underline(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::underline(start, end).into()
     }
 
+    /**
+     * Create a link annotation for the given byte range.
+     */
     pub fn link(start: u32, end: u32, url: String, title: Option<String>) -> TextAnnotation {
         kreuzberg::builder::link(start, end, &url, title.as_deref()).into()
     }
 
+    /**
+     * Create a code (inline) annotation for the given byte range.
+     */
     pub fn code(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::code(start, end).into()
     }
 
+    /**
+     * Create a strikethrough annotation for the given byte range.
+     */
     pub fn strikethrough(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::strikethrough(start, end).into()
     }
 
+    /**
+     * Create a subscript annotation for the given byte range.
+     */
     pub fn subscript(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::subscript(start, end).into()
     }
 
+    /**
+     * Create a superscript annotation for the given byte range.
+     */
     pub fn superscript(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::superscript(start, end).into()
     }
 
+    /**
+     * Create a font size annotation for the given byte range.
+     */
     pub fn font_size(start: u32, end: u32, value: String) -> TextAnnotation {
         kreuzberg::builder::font_size(start, end, &value).into()
     }
 
+    /**
+     * Create a color annotation for the given byte range.
+     */
     pub fn color(start: u32, end: u32, value: String) -> TextAnnotation {
         kreuzberg::builder::color(start, end, &value).into()
     }
 
+    /**
+     * Create a highlight annotation for the given byte range.
+     */
     pub fn highlight(start: u32, end: u32) -> TextAnnotation {
         kreuzberg::builder::highlight(start, end).into()
     }
 
+    /**
+     * Classify a URL string into the appropriate `UriKind`.
+     *
+     * - `mailto:` → `Email`
+     * - `#` prefix → `Anchor`
+     * - everything else → `Hyperlink`
+     */
     pub fn classify_uri(url: String) -> String {
         format!("{:?}", kreuzberg::classify_uri(&url))
     }
 
+    /**
+     * Decode raw bytes into UTF-8, using heuristics and fallback encodings when necessary.
+     *
+     * The function prefers an explicit `encoding`, falls back to the cached guess, probes
+     * an encoding detector, and finally tries a small curated list before returning a
+     * mojibake-cleaned string.
+     */
     pub fn safe_decode(byte_data: Vec<u8>, encoding: Option<String>) -> String {
         kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref())
     }
 
+    /**
+     * Estimate how trustworthy a decoded string is on a 0.0–1.0 scale.
+     *
+     * Scores close to 1.0 indicate mostly printable characters, whereas lower scores
+     * point to mojibake, control characters, or suspicious character mixes.
+     */
     pub fn calculate_text_confidence(text: String) -> f64 {
         kreuzberg::utils::calculate_text_confidence(&text)
     }
 
+    /**
+     * Create a pre-configured string buffer pool for batch processing.
+     *
+     * # Arguments
+     *
+     * * `pool_size` - Maximum number of buffers to keep in the pool
+     * * `buffer_capacity` - Initial capacity for each buffer in bytes
+     *
+     * # Returns
+     *
+     * A pool configured for text accumulation with reasonable defaults.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::utils::pool::create_string_buffer_pool;
+     *
+     * let pool = create_string_buffer_pool(10, 8192);
+     * let mut buffer = pool.acquire().unwrap();
+     * buffer.push_str("content");
+     * ```
+     */
     pub fn create_string_buffer_pool(pool_size: i64, buffer_capacity: i64) -> StringBufferPool {
         StringBufferPool {
             inner: Arc::new(kreuzberg::utils::pool::create_string_buffer_pool(
@@ -8084,6 +9279,28 @@ impl KreuzbergApi {
         }
     }
 
+    /**
+     * Create a pre-configured byte buffer pool for batch processing.
+     *
+     * # Arguments
+     *
+     * * `pool_size` - Maximum number of buffers to keep in the pool
+     * * `buffer_capacity` - Initial capacity for each buffer in bytes
+     *
+     * # Returns
+     *
+     * A pool configured for binary data handling with reasonable defaults.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::utils::pool::create_byte_buffer_pool;
+     *
+     * let pool = create_byte_buffer_pool(10, 65536);
+     * let mut buffer = pool.acquire().unwrap();
+     * buffer.extend_from_slice(b"binary data");
+     * ```
+     */
     pub fn create_byte_buffer_pool(pool_size: i64, buffer_capacity: i64) -> ByteBufferPool {
         ByteBufferPool {
             inner: Arc::new(kreuzberg::utils::pool::create_byte_buffer_pool(
@@ -8093,10 +9310,32 @@ impl KreuzbergApi {
         }
     }
 
+    /**
+     * Generate OpenAPI JSON schema.
+     *
+     * Returns the complete OpenAPI 3.1 specification as a JSON string.
+     *
+     * # Examples
+     *
+     * ```no_run
+     * use kreuzberg::api::openapi::openapi_json;
+     *
+     * let schema = openapi_json();
+     * println!("{}", schema);
+     * ```
+     */
     pub fn openapi_json() -> String {
         kreuzberg::api::openapi::openapi_json()
     }
 
+    /**
+     * Start the API server with default host and port.
+     *
+     * Defaults: host = "127.0.0.1", port = 8000
+     *
+     * Uses config file discovery (searches current/parent directories for kreuzberg.toml/yaml/json).
+     * Validates plugins at startup to help diagnose configuration issues.
+     */
     pub fn serve_default_async() -> PhpResult<()> {
         WORKER_RUNTIME.block_on(async {
             let result = kreuzberg::api::serve_default()
@@ -8106,14 +9345,31 @@ impl KreuzbergApi {
         })
     }
 
+    /**
+     * L2-normalize a vector.
+     */
     pub fn normalize(v: Vec<f32>) -> Vec<f32> {
         kreuzberg::embeddings::engine::normalize(&v[..])
     }
 
+    /**
+     * List all available preset names.
+     */
     pub fn list_presets() -> Vec<String> {
         kreuzberg::list_presets().into_iter().map(Into::into).collect()
     }
 
+    /**
+     * Eagerly download and cache an embedding model without returning the handle.
+     *
+     * This triggers the same download and initialization as `get_or_init_engine`
+     * but discards the result, making it suitable for cache-warming scenarios
+     * where the caller doesn't need to use the model immediately.
+     *
+     * **Note**: This function downloads AND initializes the ONNX model, which
+     * requires ONNX Runtime and uses significant memory. For download-only
+     * scenarios (e.g., init containers), use [`download_model`] instead.
+     */
     pub fn warm_model(model_type: String, cache_dir: Option<String>) -> PhpResult<()> {
         let model_type_json = serde_json::to_string(&model_type).map_err(|e| format!("{e}"))?;
         let model_type_core: kreuzberg::EmbeddingModelType =
@@ -8123,6 +9379,16 @@ impl KreuzbergApi {
         Ok(result)
     }
 
+    /**
+     * Download an embedding model's files without initializing ONNX Runtime.
+     *
+     * Downloads the model files (ONNX model, tokenizer, config) from HuggingFace
+     * to the cache directory. Subsequent calls to `warm_model` or
+     * `get_or_init_engine` will find the files cached and skip the download step.
+     *
+     * This is ideal for init containers or CI environments where you want to
+     * pre-populate the cache without loading models into memory.
+     */
     pub fn download_model(model_type: String, cache_dir: Option<String>) -> PhpResult<()> {
         let model_type_json = serde_json::to_string(&model_type).map_err(|e| format!("{e}"))?;
         let model_type_core: kreuzberg::EmbeddingModelType =
@@ -8132,6 +9398,9 @@ impl KreuzbergApi {
         Ok(result)
     }
 
+    /**
+     * Calculate optimal DPI with min/max constraints
+     */
     pub fn calculate_optimal_dpi(
         page_width: f64,
         page_height: f64,
@@ -8143,6 +9412,33 @@ impl KreuzbergApi {
         kreuzberg::image::calculate_optimal_dpi(page_width, page_height, target_dpi, max_dimension, min_dpi, max_dpi)
     }
 
+    /**
+     * Detect languages in text using whatlang.
+     *
+     * Returns a list of detected language codes (ISO 639-3 format).
+     * Returns `None` if no languages could be detected with sufficient confidence.
+     *
+     * # Arguments
+     *
+     * * `text` - The text to analyze for language detection
+     * * `config` - Optional configuration for language detection
+     *
+     * # Example
+     *
+     * ```rust
+     * use kreuzberg::language_detection::detect_languages;
+     * use kreuzberg::core::config::LanguageDetectionConfig;
+     *
+     * let text = "Hello world! This is English text.";
+     * let config = LanguageDetectionConfig {
+     *     enabled: true,
+     *     min_confidence: 0.8,
+     *     detect_multiple: false,
+     * };
+     * let languages = detect_languages(text, &config).expect("language detection succeeded");
+     * println!("Detected languages: {:?}", languages);
+     * ```
+     */
     pub fn detect_languages(text: String, config: &LanguageDetectionConfig) -> PhpResult<Option<Vec<String>>> {
         let config_json = serde_json::to_string(&config).map_err(|e| format!("{e}"))?;
         let config_core: kreuzberg::LanguageDetectionConfig =
@@ -8152,6 +9448,44 @@ impl KreuzbergApi {
         Ok(result)
     }
 
+    /**
+     * Extract keywords from text using the specified algorithm.
+     *
+     * This is the unified entry point for keyword extraction. The algorithm
+     * used is determined by `config.algorithm`.
+     *
+     * # Arguments
+     *
+     * * `text` - The text to extract keywords from
+     * * `config` - Keyword extraction configuration
+     *
+     * # Returns
+     *
+     * A vector of keywords sorted by relevance (highest score first).
+     *
+     * # Errors
+     *
+     * Returns an error if:
+     * - The specified algorithm feature is not enabled
+     * - Keyword extraction fails
+     *
+     * # Examples
+     *
+     * ```rust,no_run
+     * # use kreuzberg::keywords::{extract_keywords, KeywordConfig};
+     * let text = "Document intelligence with Rust provides memory safety.";
+     * let config = KeywordConfig::default()
+     *     .with_max_keywords(10)
+     *     .with_language("en");
+     *
+     * let keywords = extract_keywords(text, &config)?;
+     *
+     * for keyword in keywords {
+     *     println!("{}: {:.3}", keyword.text, keyword.score);
+     * }
+     * # Ok::<(), kreuzberg::KreuzbergError>(())
+     * ```
+     */
     pub fn extract_keywords(text: String, config: &KeywordConfig) -> PhpResult<Vec<Keyword>> {
         let config_json = serde_json::to_string(&config).map_err(|e| format!("{e}"))?;
         let config_core: kreuzberg::KeywordConfig = serde_json::from_str(&config_json).map_err(|e| format!("{e}"))?;
@@ -8160,10 +9494,36 @@ impl KreuzbergApi {
         Ok(result.into_iter().map(Into::into).collect())
     }
 
+    /**
+     * Compute a blake3 hash string from input data.
+     *
+     * Returns a 32-character hex string (128 bits of blake3 output).
+     */
     pub fn compute_hash(data: String) -> String {
         kreuzberg::ocr::compute_hash(&data)
     }
 
+    /**
+     * Render a single PDF page to a PNG-encoded byte buffer.
+     *
+     * # Errors
+     *
+     * Returns an error if the PDF is invalid, the page index is out of bounds,
+     * or if the page fails to render.
+     *
+     * # Example
+     *
+     * ```rust,no_run
+     * use kreuzberg::pdf::render_pdf_page_to_png;
+     *
+     * # fn example() -> kreuzberg::pdf::error::Result<()> {
+     * let pdf_bytes = std::fs::read("document.pdf")?;
+     * let png = render_pdf_page_to_png(&pdf_bytes, 0, Some(150), None)?;
+     * std::fs::write("page_0.png", png)?;
+     * # Ok(())
+     * # }
+     * ```
+     */
     pub fn render_pdf_page_to_png(
         pdf_bytes: Vec<u8>,
         page_index: i64,
@@ -8186,6 +9546,12 @@ impl KreuzbergApi {
         Ok(result)
     }
 
+    /**
+     * Serialize an [`ExtractionResult`] to TOON (Token-Oriented Object Notation).
+     *
+     * TOON is a token-efficient alternative to JSON for LLM prompts.
+     * Losslessly convertible to/from JSON but uses fewer tokens.
+     */
     pub fn serialize_to_toon(result: &ExtractionResult) -> PhpResult<String> {
         let result_json = serde_json::to_string(&result).map_err(|e| format!("{e}"))?;
         let result_core: kreuzberg::ExtractionResult =
@@ -8195,6 +9561,9 @@ impl KreuzbergApi {
         Ok(result)
     }
 
+    /**
+     * Serialize an [`ExtractionResult`] to pretty-printed JSON.
+     */
     pub fn serialize_to_json(result: &ExtractionResult) -> PhpResult<String> {
         let result_json = serde_json::to_string(&result).map_err(|e| format!("{e}"))?;
         let result_core: kreuzberg::ExtractionResult =

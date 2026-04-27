@@ -22,17 +22,7 @@ import RustBridge
 ///     ..Default::default()
 /// };
 /// ```
-public struct AccelerationConfig: Codable {
-  /// Execution provider to use for ONNX inference.
-  public let provider: ExecutionProviderType
-  /// GPU device ID (for CUDA/TensorRT). Ignored for CPU/CoreML/Auto.
-  public let deviceId: UInt32
-
-  public init(provider: ExecutionProviderType, deviceId: UInt32) {
-    self.provider = provider
-    self.deviceId = deviceId
-  }
-}
+public typealias AccelerationConfig = RustBridge.AccelerationConfig
 
 /// Cross-extractor content filtering configuration.
 ///
@@ -43,86 +33,10 @@ public struct AccelerationConfig: Codable {
 ///
 /// When `None` on `ExtractionConfig`, each extractor uses its current
 /// default behavior unchanged.
-public struct ContentFilterConfig: Codable {
-  /// Include running headers in extraction output.
-  ///
-  /// - PDF: Disables top-margin furniture stripping and prevents the layout
-  ///   model from treating `PageHeader`-classified regions as furniture.
-  /// - DOCX: Includes document headers in text output.
-  /// - RTF/ODT: Headers already included; this is a no-op when true.
-  /// - HTML/EPUB: Keeps `<header>` element content.
-  ///
-  /// Default: `false` (headers are stripped or excluded).
-  public let includeHeaders: Bool
-  /// Include running footers in extraction output.
-  ///
-  /// - PDF: Disables bottom-margin furniture stripping and prevents the layout
-  ///   model from treating `PageFooter`-classified regions as furniture.
-  /// - DOCX: Includes document footers in text output.
-  /// - RTF/ODT: Footers already included; this is a no-op when true.
-  /// - HTML/EPUB: Keeps `<footer>` element content.
-  ///
-  /// Default: `false` (footers are stripped or excluded).
-  public let includeFooters: Bool
-  /// Enable the heuristic cross-page repeating text detector.
-  ///
-  /// When `true` (default), text that repeats verbatim across a supermajority
-  /// of pages is classified as furniture and stripped.  Disable this if brand
-  /// names or repeated headings are being incorrectly removed by the heuristic.
-  ///
-  /// Note: when a layout-detection model is active, the model may independently
-  /// classify page-header / page-footer regions as furniture on a per-page basis.
-  /// To preserve those regions, set `include_headers = true` and/or
-  /// `include_footers = true` in addition to disabling this flag.
-  ///
-  /// Primarily affects PDF extraction.
-  ///
-  /// Default: `true`.
-  public let stripRepeatingText: Bool
-  /// Include watermark text in extraction output.
-  ///
-  /// - PDF: Keeps watermark artifacts and arXiv identifiers.
-  /// - Other formats: No effect currently.
-  ///
-  /// Default: `false` (watermarks are stripped).
-  public let includeWatermarks: Bool
-
-  public init(
-    includeHeaders: Bool, includeFooters: Bool, stripRepeatingText: Bool, includeWatermarks: Bool
-  ) {
-    self.includeHeaders = includeHeaders
-    self.includeFooters = includeFooters
-    self.stripRepeatingText = stripRepeatingText
-    self.includeWatermarks = includeWatermarks
-  }
-}
+public typealias ContentFilterConfig = RustBridge.ContentFilterConfig
 
 /// Configuration for email extraction.
-public struct EmailConfig: Codable {
-  /// Windows codepage number to use when an MSG file contains no codepage property.
-  /// Defaults to `None`, which falls back to windows-1252.
-  ///
-  /// If an unrecognized or invalid codepage number is supplied (including 0),
-  /// the behavior silently falls back to windows-1252 — the same as when the
-  /// MSG file itself contains an unrecognized codepage. No error or warning is
-  /// emitted. Users should verify output when supplying unusual values.
-  ///
-  /// Common values:
-  /// - 1250: Central European (Polish, Czech, Hungarian, etc.)
-  /// - 1251: Cyrillic (Russian, Ukrainian, Bulgarian, etc.)
-  /// - 1252: Western European (default)
-  /// - 1253: Greek
-  /// - 1254: Turkish
-  /// - 1255: Hebrew
-  /// - 1256: Arabic
-  /// - 932:  Japanese (Shift-JIS)
-  /// - 936:  Simplified Chinese (GBK)
-  public let msgFallbackCodepage: UInt32?
-
-  public init(msgFallbackCodepage: UInt32?) {
-    self.msgFallbackCodepage = msgFallbackCodepage
-  }
-}
+public typealias EmailConfig = RustBridge.EmailConfig
 
 /// Main extraction configuration.
 ///
@@ -140,222 +54,7 @@ public struct EmailConfig: Codable {
 /// // Load from TOML file
 /// // let config = ExtractionConfig::from_toml_file("kreuzberg.toml")?;
 /// ```
-public struct ExtractionConfig: Codable {
-  /// Enable caching of extraction results
-  public let useCache: Bool
-  /// Enable quality post-processing
-  public let enableQualityProcessing: Bool
-  /// OCR configuration (None = OCR disabled)
-  public let ocr: OcrConfig?
-  /// Force OCR even for searchable PDFs
-  public let forceOcr: Bool
-  /// Force OCR on specific pages only (1-indexed page numbers, must be >= 1).
-  ///
-  /// When set, only the listed pages are OCR'd regardless of text layer quality.
-  /// Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`.
-  /// Only applies to PDF documents. Duplicates are automatically deduplicated.
-  /// An `ocr` config is recommended for backend/language selection; defaults are used if absent.
-  public let forceOcrPages: [UInt]?
-  /// Disable OCR entirely, even for images.
-  ///
-  /// When `true`, OCR is skipped for all document types. Images return metadata
-  /// only (dimensions, format, EXIF) without text extraction. PDFs use only
-  /// native text extraction without OCR fallback.
-  ///
-  /// Cannot be `true` simultaneously with `force_ocr`.
-  ///
-  /// *Added in v4.7.0.*
-  public let disableOcr: Bool
-  /// Text chunking configuration (None = chunking disabled)
-  public let chunking: ChunkingConfig?
-  /// Content filtering configuration (None = use extractor defaults).
-  ///
-  /// Controls whether document "furniture" (headers, footers, watermarks,
-  /// repeating text) is included in or stripped from extraction results.
-  /// See [`ContentFilterConfig`] for per-field documentation.
-  public let contentFilter: ContentFilterConfig?
-  /// Image extraction configuration (None = no image extraction)
-  public let images: ImageExtractionConfig?
-  /// PDF-specific options (None = use defaults)
-  public let pdfOptions: PdfConfig?
-  /// Token reduction configuration (None = no token reduction)
-  public let tokenReduction: TokenReductionOptions?
-  /// Language detection configuration (None = no language detection)
-  public let languageDetection: LanguageDetectionConfig?
-  /// Page extraction configuration (None = no page tracking)
-  public let pages: PageConfig?
-  /// Post-processor configuration (None = use defaults)
-  public let postprocessor: PostProcessorConfig?
-  /// HTML to Markdown conversion options (None = use defaults)
-  ///
-  /// Configure how HTML documents are converted to Markdown, including heading styles,
-  /// list formatting, code block styles, and preprocessing options.
-  public let htmlOptions: String?
-  /// Styled HTML output configuration.
-  ///
-  /// When set alongside `output_format = OutputFormat::Html`, the extraction
-  /// pipeline uses [`StyledHtmlRenderer`](crate::rendering::StyledHtmlRenderer)
-  /// which emits stable `kb-*` CSS class hooks on every structural element
-  /// and optionally embeds theme CSS or user-supplied CSS in a `<style>` block.
-  ///
-  /// When `None`, the existing plain comrak-based HTML renderer is used.
-  public let htmlOutput: HtmlOutputConfig?
-  /// Default per-file timeout in seconds for batch extraction.
-  ///
-  /// When set, each file in a batch will be canceled after this duration
-  /// unless overridden by [`FileExtractionConfig::timeout_secs`].
-  /// `None` means no timeout (unbounded extraction time).
-  public let extractionTimeoutSecs: UInt64?
-  /// Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()).
-  ///
-  /// Limits parallelism to prevent resource exhaustion when processing
-  /// large batches. Defaults to (num_cpus × 1.5).ceil() when not set.
-  public let maxConcurrentExtractions: UInt?
-  /// Result structure format
-  ///
-  /// Controls whether results are returned in unified format (default) with all
-  /// content in the `content` field, or element-based format with semantic
-  /// elements (for Unstructured-compatible output).
-  public let resultFormat: String
-  /// Security limits for archive extraction.
-  ///
-  /// Controls maximum archive size, compression ratio, file count, and other
-  /// security thresholds to prevent decompression bomb attacks. Also caps
-  /// nesting depth, iteration count, entity / token length, cumulative
-  /// content size, and table cell count for every extraction path that
-  /// ingests user-controlled bytes.
-  /// When `None`, default limits are used.
-  public let securityLimits: String?
-  /// Content text format (default: Plain).
-  ///
-  /// Controls the format of the extracted content:
-  /// - `Plain`: Raw extracted text (default)
-  /// - `Markdown`: Markdown formatted output
-  /// - `Djot`: Djot markup format (requires djot feature)
-  /// - `Html`: HTML formatted output
-  ///
-  /// When set to a structured format, extraction results will include
-  /// formatted output. The `formatted_content` field may be populated
-  /// when format conversion is applied.
-  public let outputFormat: String
-  /// Layout detection configuration (None = layout detection disabled).
-  ///
-  /// When set, PDF pages and images are analyzed for document structure
-  /// (headings, code, formulas, tables, figures, etc.) using RT-DETR models
-  /// via ONNX Runtime. For PDFs, layout hints override paragraph classification
-  /// in the markdown pipeline. For images, per-region OCR is performed with
-  /// markdown formatting based on detected layout classes.
-  /// Requires the `layout-detection` feature.
-  public let layout: LayoutDetectionConfig?
-  /// Enable structured document tree output.
-  ///
-  /// When true, populates the `document` field on `ExtractionResult` with a
-  /// hierarchical `DocumentStructure` containing heading-driven section nesting,
-  /// table grids, content layer classification, and inline annotations.
-  ///
-  /// Independent of `result_format` — can be combined with Unified or ElementBased.
-  public let includeDocumentStructure: Bool
-  /// Hardware acceleration configuration for ONNX Runtime models.
-  ///
-  /// Controls execution provider selection for layout detection and embedding
-  /// models. When `None`, uses platform defaults (CoreML on macOS, CUDA on
-  /// Linux, CPU on Windows).
-  public let acceleration: AccelerationConfig?
-  /// Cache namespace for tenant isolation.
-  ///
-  /// When set, cache entries are stored under `{cache_dir}/{namespace}/`.
-  /// Must be alphanumeric, hyphens, or underscores only (max 64 chars).
-  /// Different namespaces have isolated cache spaces on the same filesystem.
-  public let cacheNamespace: String?
-  /// Per-request cache TTL in seconds.
-  ///
-  /// Overrides the global `max_age_days` for this specific extraction.
-  /// When `0`, caching is completely skipped (no read or write).
-  /// When `None`, the global TTL applies.
-  public let cacheTtlSecs: UInt64?
-  /// Email extraction configuration (None = use defaults).
-  ///
-  /// Currently supports configuring the fallback codepage for MSG files
-  /// that do not specify one. See [`crate::core::config::EmailConfig`] for details.
-  public let email: EmailConfig?
-  /// Concurrency limits for constrained environments (None = use defaults).
-  ///
-  /// Controls Rayon thread pool size, ONNX Runtime intra-op threads, and
-  /// (when `max_concurrent_extractions` is unset) the batch concurrency
-  /// semaphore. See [`crate::core::config::ConcurrencyConfig`] for details.
-  public let concurrency: String?
-  /// Maximum recursion depth for archive extraction (default: 3).
-  /// Set to 0 to disable recursive extraction (legacy behavior).
-  public let maxArchiveDepth: UInt
-  /// Tree-sitter language pack configuration (None = tree-sitter disabled).
-  ///
-  /// When set, enables code file extraction using tree-sitter parsers.
-  /// Controls grammar download behavior and code analysis options.
-  public let treeSitter: TreeSitterConfig?
-  /// Structured extraction via LLM (None = disabled).
-  ///
-  /// When set, the extracted document content is sent to an LLM with the
-  /// provided JSON schema. The structured response is stored in
-  /// `ExtractionResult::structured_output`.
-  public let structuredExtraction: StructuredExtractionConfig?
-  /// Cancellation token for this extraction (None = no external cancellation).
-  ///
-  /// Pass a [`CancellationToken`] clone here and call [`CancellationToken::cancel`]
-  /// from another thread / task to abort the extraction in progress. The extractor
-  /// checks the token at safe checkpoints (before lock acquisition, between pages,
-  /// between batch items) and returns [`KreuzbergError::Cancelled`] when set.
-  ///
-  /// The field is excluded from serialization because `CancellationToken` is a
-  /// runtime handle, not a configuration value.
-  public let cancelToken: String?
-
-  public init(
-    useCache: Bool, enableQualityProcessing: Bool, ocr: OcrConfig?, forceOcr: Bool,
-    forceOcrPages: [UInt]?, disableOcr: Bool, chunking: ChunkingConfig?,
-    contentFilter: ContentFilterConfig?, images: ImageExtractionConfig?, pdfOptions: PdfConfig?,
-    tokenReduction: TokenReductionOptions?, languageDetection: LanguageDetectionConfig?,
-    pages: PageConfig?, postprocessor: PostProcessorConfig?, htmlOptions: String?,
-    htmlOutput: HtmlOutputConfig?, extractionTimeoutSecs: UInt64?, maxConcurrentExtractions: UInt?,
-    resultFormat: String, securityLimits: String?, outputFormat: String,
-    layout: LayoutDetectionConfig?, includeDocumentStructure: Bool,
-    acceleration: AccelerationConfig?, cacheNamespace: String?, cacheTtlSecs: UInt64?,
-    email: EmailConfig?, concurrency: String?, maxArchiveDepth: UInt, treeSitter: TreeSitterConfig?,
-    structuredExtraction: StructuredExtractionConfig?, cancelToken: String?
-  ) {
-    self.useCache = useCache
-    self.enableQualityProcessing = enableQualityProcessing
-    self.ocr = ocr
-    self.forceOcr = forceOcr
-    self.forceOcrPages = forceOcrPages
-    self.disableOcr = disableOcr
-    self.chunking = chunking
-    self.contentFilter = contentFilter
-    self.images = images
-    self.pdfOptions = pdfOptions
-    self.tokenReduction = tokenReduction
-    self.languageDetection = languageDetection
-    self.pages = pages
-    self.postprocessor = postprocessor
-    self.htmlOptions = htmlOptions
-    self.htmlOutput = htmlOutput
-    self.extractionTimeoutSecs = extractionTimeoutSecs
-    self.maxConcurrentExtractions = maxConcurrentExtractions
-    self.resultFormat = resultFormat
-    self.securityLimits = securityLimits
-    self.outputFormat = outputFormat
-    self.layout = layout
-    self.includeDocumentStructure = includeDocumentStructure
-    self.acceleration = acceleration
-    self.cacheNamespace = cacheNamespace
-    self.cacheTtlSecs = cacheTtlSecs
-    self.email = email
-    self.concurrency = concurrency
-    self.maxArchiveDepth = maxArchiveDepth
-    self.treeSitter = treeSitter
-    self.structuredExtraction = structuredExtraction
-    self.cancelToken = cancelToken
-  }
-}
+public typealias ExtractionConfig = RustBridge.ExtractionConfig
 
 /// Per-file extraction configuration overrides for batch processing.
 ///
@@ -384,165 +83,16 @@ public struct ExtractionConfig: Codable {
 ///     ..Default::default()
 /// };
 /// ```
-public struct FileExtractionConfig: Codable {
-  /// Override quality post-processing for this file.
-  public let enableQualityProcessing: Bool?
-  /// Override OCR configuration for this file (None in the Option = use batch default).
-  public let ocr: OcrConfig?
-  /// Override force OCR for this file.
-  public let forceOcr: Bool?
-  /// Override force OCR pages for this file (1-indexed page numbers).
-  public let forceOcrPages: [UInt]?
-  /// Override disable OCR for this file.
-  public let disableOcr: Bool?
-  /// Override chunking configuration for this file.
-  public let chunking: ChunkingConfig?
-  /// Override content filtering configuration for this file.
-  public let contentFilter: ContentFilterConfig?
-  /// Override image extraction configuration for this file.
-  public let images: ImageExtractionConfig?
-  /// Override PDF options for this file.
-  public let pdfOptions: PdfConfig?
-  /// Override token reduction for this file.
-  public let tokenReduction: TokenReductionOptions?
-  /// Override language detection for this file.
-  public let languageDetection: LanguageDetectionConfig?
-  /// Override page extraction for this file.
-  public let pages: PageConfig?
-  /// Override post-processor for this file.
-  public let postprocessor: PostProcessorConfig?
-  /// Override HTML conversion options for this file.
-  public let htmlOptions: String?
-  /// Override result format for this file.
-  public let resultFormat: String?
-  /// Override output content format for this file.
-  public let outputFormat: String?
-  /// Override document structure output for this file.
-  public let includeDocumentStructure: Bool?
-  /// Override layout detection for this file.
-  public let layout: LayoutDetectionConfig?
-  /// Override per-file extraction timeout in seconds.
-  ///
-  /// When set, the extraction for this file will be canceled after the
-  /// specified duration. A timed-out file produces an error result without
-  /// affecting other files in the batch.
-  public let timeoutSecs: UInt64?
-  /// Override tree-sitter configuration for this file.
-  public let treeSitter: TreeSitterConfig?
-  /// Override structured extraction configuration for this file.
-  ///
-  /// When set, enables LLM-based structured extraction with a JSON schema
-  /// for this specific file. The extracted content is sent to a VLM/LLM
-  /// and the response is parsed according to the provided schema.
-  public let structuredExtraction: StructuredExtractionConfig?
-
-  public init(
-    enableQualityProcessing: Bool?, ocr: OcrConfig?, forceOcr: Bool?, forceOcrPages: [UInt]?,
-    disableOcr: Bool?, chunking: ChunkingConfig?, contentFilter: ContentFilterConfig?,
-    images: ImageExtractionConfig?, pdfOptions: PdfConfig?, tokenReduction: TokenReductionOptions?,
-    languageDetection: LanguageDetectionConfig?, pages: PageConfig?,
-    postprocessor: PostProcessorConfig?, htmlOptions: String?, resultFormat: String?,
-    outputFormat: String?, includeDocumentStructure: Bool?, layout: LayoutDetectionConfig?,
-    timeoutSecs: UInt64?, treeSitter: TreeSitterConfig?,
-    structuredExtraction: StructuredExtractionConfig?
-  ) {
-    self.enableQualityProcessing = enableQualityProcessing
-    self.ocr = ocr
-    self.forceOcr = forceOcr
-    self.forceOcrPages = forceOcrPages
-    self.disableOcr = disableOcr
-    self.chunking = chunking
-    self.contentFilter = contentFilter
-    self.images = images
-    self.pdfOptions = pdfOptions
-    self.tokenReduction = tokenReduction
-    self.languageDetection = languageDetection
-    self.pages = pages
-    self.postprocessor = postprocessor
-    self.htmlOptions = htmlOptions
-    self.resultFormat = resultFormat
-    self.outputFormat = outputFormat
-    self.includeDocumentStructure = includeDocumentStructure
-    self.layout = layout
-    self.timeoutSecs = timeoutSecs
-    self.treeSitter = treeSitter
-    self.structuredExtraction = structuredExtraction
-  }
-}
+public typealias FileExtractionConfig = RustBridge.FileExtractionConfig
 
 /// Image extraction configuration.
-public struct ImageExtractionConfig: Codable {
-  /// Extract images from documents
-  public let extractImages: Bool
-  /// Target DPI for image normalization
-  public let targetDpi: Int32
-  /// Maximum dimension for images (width or height)
-  public let maxImageDimension: Int32
-  /// Whether to inject image reference placeholders into markdown output.
-  /// When `true` (default), image references like `![Image 1](embedded:p1_i0)`
-  /// are appended to the markdown. Set to `false` to extract images as data
-  /// without polluting the markdown output.
-  public let injectPlaceholders: Bool
-  /// Automatically adjust DPI based on image content
-  public let autoAdjustDpi: Bool
-  /// Minimum DPI threshold
-  public let minDpi: Int32
-  /// Maximum DPI threshold
-  public let maxDpi: Int32
-  /// Maximum number of image objects to extract per PDF page.
-  ///
-  /// Some PDFs (e.g. technical diagrams stored as thousands of raster fragments)
-  /// can trigger extremely long or indefinite extraction times when every image
-  /// object on a dense page is decoded individually via pdfium FFI. Setting this
-  /// limit causes kreuzberg to stop collecting individual images once the count
-  /// per page reaches the cap and emit a warning instead.
-  ///
-  /// `None` (default) means no limit — all images are extracted.
-  public let maxImagesPerPage: UInt32?
-
-  public init(
-    extractImages: Bool, targetDpi: Int32, maxImageDimension: Int32, injectPlaceholders: Bool,
-    autoAdjustDpi: Bool, minDpi: Int32, maxDpi: Int32, maxImagesPerPage: UInt32?
-  ) {
-    self.extractImages = extractImages
-    self.targetDpi = targetDpi
-    self.maxImageDimension = maxImageDimension
-    self.injectPlaceholders = injectPlaceholders
-    self.autoAdjustDpi = autoAdjustDpi
-    self.minDpi = minDpi
-    self.maxDpi = maxDpi
-    self.maxImagesPerPage = maxImagesPerPage
-  }
-}
+public typealias ImageExtractionConfig = RustBridge.ImageExtractionConfig
 
 /// Token reduction configuration.
-public struct TokenReductionOptions: Codable {
-  /// Reduction mode: "off", "light", "moderate", "aggressive", "maximum"
-  public let mode: String
-  /// Preserve important words (capitalized, technical terms)
-  public let preserveImportantWords: Bool
-
-  public init(mode: String, preserveImportantWords: Bool) {
-    self.mode = mode
-    self.preserveImportantWords = preserveImportantWords
-  }
-}
+public typealias TokenReductionOptions = RustBridge.TokenReductionOptions
 
 /// Language detection configuration.
-public struct LanguageDetectionConfig: Codable {
-  /// Enable language detection
-  public let enabled: Bool
-  /// Minimum confidence threshold (0.0-1.0)
-  public let minConfidence: Double
-  /// Detect multiple languages in the document
-  public let detectMultiple: Bool
-
-  public init(enabled: Bool, minConfidence: Double, detectMultiple: Bool) {
-    self.enabled = enabled
-    self.minConfidence = minConfidence
-    self.detectMultiple = detectMultiple
-  }
-}
+public typealias LanguageDetectionConfig = RustBridge.LanguageDetectionConfig
 
 /// Configuration for styled HTML output.
 ///
@@ -562,67 +112,14 @@ public struct LanguageDetectionConfig: Codable {
 ///     ..Default::default()
 /// };
 /// ```
-public struct HtmlOutputConfig: Codable {
-  /// Inline CSS string injected into the output after the theme stylesheet.
-  /// Concatenated after `css_file` content when both are set.
-  public let css: String?
-  /// Path to a CSS file loaded once at renderer construction time.
-  /// Concatenated before `css` when both are set.
-  public let cssFile: URL?
-  /// Built-in colour/typography theme. Default: [`HtmlTheme::Unstyled`].
-  public let theme: HtmlTheme
-  /// CSS class prefix applied to every emitted class name.
-  ///
-  /// Default: `"kb-"`. Change this if your host application already uses
-  /// classes that start with `kb-`.
-  public let classPrefix: String
-  /// When `true` (default), write the resolved CSS into a `<style>` block
-  /// immediately after the opening `<div class="{prefix}doc">`.
-  ///
-  /// Set to `false` to emit only the structural markup and wire up your
-  /// own stylesheet targeting the `kb-*` class names.
-  public let embedCss: Bool
-
-  public init(css: String?, cssFile: URL?, theme: HtmlTheme, classPrefix: String, embedCss: Bool) {
-    self.css = css
-    self.cssFile = cssFile
-    self.theme = theme
-    self.classPrefix = classPrefix
-    self.embedCss = embedCss
-  }
-}
+public typealias HtmlOutputConfig = RustBridge.HtmlOutputConfig
 
 /// Layout detection configuration.
 ///
 /// Controls layout detection behavior in the extraction pipeline.
 /// When set on [`ExtractionConfig`](super::ExtractionConfig), layout detection
 /// is enabled for PDF extraction.
-public struct LayoutDetectionConfig: Codable {
-  /// Confidence threshold override (None = use model default).
-  public let confidenceThreshold: Float?
-  /// Whether to apply postprocessing heuristics (default: true).
-  public let applyHeuristics: Bool
-  /// Table structure recognition model.
-  ///
-  /// Controls which model is used for table cell detection within layout-detected
-  /// table regions. Defaults to [`TableModel::Tatr`].
-  public let tableModel: TableModel
-  /// Hardware acceleration for ONNX models (layout detection + table structure).
-  ///
-  /// When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
-  /// is used for inference. Defaults to `None` (auto-select per platform).
-  public let acceleration: AccelerationConfig?
-
-  public init(
-    confidenceThreshold: Float?, applyHeuristics: Bool, tableModel: TableModel,
-    acceleration: AccelerationConfig?
-  ) {
-    self.confidenceThreshold = confidenceThreshold
-    self.applyHeuristics = applyHeuristics
-    self.tableModel = tableModel
-    self.acceleration = acceleration
-  }
-}
+public typealias LayoutDetectionConfig = RustBridge.LayoutDetectionConfig
 
 /// Configuration for an LLM provider/model via liter-llm.
 ///
@@ -636,39 +133,7 @@ public struct LayoutDetectionConfig: Codable {
 /// model = "openai/gpt-4o"
 /// api_key = "sk-..."  # or use KREUZBERG_LLM_API_KEY env var
 /// ```
-public struct LlmConfig: Codable {
-  /// Provider/model string using liter-llm routing format.
-  ///
-  /// Examples: `"openai/gpt-4o"`, `"anthropic/claude-sonnet-4-20250514"`,
-  /// `"groq/llama-3.1-70b-versatile"`.
-  public let model: String
-  /// API key for the provider. When `None`, liter-llm falls back to
-  /// the provider's standard environment variable (e.g., `OPENAI_API_KEY`).
-  public let apiKey: String?
-  /// Custom base URL override for the provider endpoint.
-  public let baseUrl: String?
-  /// Request timeout in seconds (default: 60).
-  public let timeoutSecs: UInt64?
-  /// Maximum retry attempts (default: 3).
-  public let maxRetries: UInt32?
-  /// Sampling temperature for generation tasks.
-  public let temperature: Double?
-  /// Maximum tokens to generate.
-  public let maxTokens: UInt64?
-
-  public init(
-    model: String, apiKey: String?, baseUrl: String?, timeoutSecs: UInt64?, maxRetries: UInt32?,
-    temperature: Double?, maxTokens: UInt64?
-  ) {
-    self.model = model
-    self.apiKey = apiKey
-    self.baseUrl = baseUrl
-    self.timeoutSecs = timeoutSecs
-    self.maxRetries = maxRetries
-    self.temperature = temperature
-    self.maxTokens = maxTokens
-  }
-}
+public typealias LlmConfig = RustBridge.LlmConfig
 
 /// Configuration for LLM-based structured data extraction.
 ///
@@ -691,224 +156,26 @@ public struct LlmConfig: Codable {
 /// [structured_extraction.llm]
 /// model = "openai/gpt-4o"
 /// ```
-public struct StructuredExtractionConfig: Codable {
-  /// JSON Schema defining the desired output structure.
-  public let schema: String
-  /// Schema name passed to the LLM's structured output mode.
-  public let schemaName: String
-  /// Optional schema description for the LLM.
-  public let schemaDescription: String?
-  /// Enable strict mode — output must exactly match the schema.
-  public let strict: Bool
-  /// Custom Jinja2 extraction prompt template. When `None`, a default template is used.
-  ///
-  /// Available template variables:
-  /// - `{{ content }}` — The extracted document text.
-  /// - `{{ schema }}` — The JSON schema as a formatted string.
-  /// - `{{ schema_name }}` — The schema name.
-  /// - `{{ schema_description }}` — The schema description (may be empty).
-  public let prompt: String?
-  /// LLM configuration for the extraction.
-  public let llm: LlmConfig
-
-  public init(
-    schema: String, schemaName: String, schemaDescription: String?, strict: Bool, prompt: String?,
-    llm: LlmConfig
-  ) {
-    self.schema = schema
-    self.schemaName = schemaName
-    self.schemaDescription = schemaDescription
-    self.strict = strict
-    self.prompt = prompt
-    self.llm = llm
-  }
-}
+public typealias StructuredExtractionConfig = RustBridge.StructuredExtractionConfig
 
 /// Quality thresholds for OCR fallback decisions and pipeline quality gating.
 ///
 /// All fields default to the values that match the previous hardcoded behavior,
 /// so `OcrQualityThresholds::default()` preserves existing semantics exactly.
-public struct OcrQualityThresholds: Codable {
-  /// Minimum total non-whitespace characters to consider text substantive.
-  public let minTotalNonWhitespace: UInt
-  /// Minimum non-whitespace characters per page on average.
-  public let minNonWhitespacePerPage: Double
-  /// Minimum character count for a word to be "meaningful".
-  public let minMeaningfulWordLen: UInt
-  /// Minimum count of meaningful words before text is accepted.
-  public let minMeaningfulWords: UInt
-  /// Minimum alphanumeric ratio (non-whitespace chars that are alphanumeric).
-  public let minAlnumRatio: Double
-  /// Minimum Unicode replacement characters (U+FFFD) to trigger OCR fallback.
-  public let minGarbageChars: UInt
-  /// Maximum fraction of short (1-2 char) words before text is considered fragmented.
-  public let maxFragmentedWordRatio: Double
-  /// Critical fragmentation threshold — triggers OCR regardless of meaningful words.
-  /// Normal English text has ~20-30% short words. 80%+ is definitive garbage.
-  public let criticalFragmentedWordRatio: Double
-  /// Minimum average word length. Below this with enough words indicates garbled extraction.
-  public let minAvgWordLength: Double
-  /// Minimum word count before average word length check applies.
-  public let minWordsForAvgLengthCheck: UInt
-  /// Minimum consecutive word repetition ratio to detect column scrambling.
-  public let minConsecutiveRepeatRatio: Double
-  /// Minimum word count before consecutive repetition check is applied.
-  public let minWordsForRepeatCheck: UInt
-  /// Minimum character count for "substantive markdown" OCR skip gate.
-  public let substantiveMinChars: UInt
-  /// Minimum character count for "non-text content" OCR skip gate.
-  public let nonTextMinChars: UInt
-  /// Alphanumeric+whitespace ratio threshold for skip decisions.
-  public let alnumWsRatioThreshold: Double
-  /// Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted.
-  /// If the result from a backend scores below this, try the next backend.
-  public let pipelineMinQuality: Double
-
-  public init(
-    minTotalNonWhitespace: UInt, minNonWhitespacePerPage: Double, minMeaningfulWordLen: UInt,
-    minMeaningfulWords: UInt, minAlnumRatio: Double, minGarbageChars: UInt,
-    maxFragmentedWordRatio: Double, criticalFragmentedWordRatio: Double, minAvgWordLength: Double,
-    minWordsForAvgLengthCheck: UInt, minConsecutiveRepeatRatio: Double,
-    minWordsForRepeatCheck: UInt, substantiveMinChars: UInt, nonTextMinChars: UInt,
-    alnumWsRatioThreshold: Double, pipelineMinQuality: Double
-  ) {
-    self.minTotalNonWhitespace = minTotalNonWhitespace
-    self.minNonWhitespacePerPage = minNonWhitespacePerPage
-    self.minMeaningfulWordLen = minMeaningfulWordLen
-    self.minMeaningfulWords = minMeaningfulWords
-    self.minAlnumRatio = minAlnumRatio
-    self.minGarbageChars = minGarbageChars
-    self.maxFragmentedWordRatio = maxFragmentedWordRatio
-    self.criticalFragmentedWordRatio = criticalFragmentedWordRatio
-    self.minAvgWordLength = minAvgWordLength
-    self.minWordsForAvgLengthCheck = minWordsForAvgLengthCheck
-    self.minConsecutiveRepeatRatio = minConsecutiveRepeatRatio
-    self.minWordsForRepeatCheck = minWordsForRepeatCheck
-    self.substantiveMinChars = substantiveMinChars
-    self.nonTextMinChars = nonTextMinChars
-    self.alnumWsRatioThreshold = alnumWsRatioThreshold
-    self.pipelineMinQuality = pipelineMinQuality
-  }
-}
+public typealias OcrQualityThresholds = RustBridge.OcrQualityThresholds
 
 /// A single backend stage in the OCR pipeline.
-public struct OcrPipelineStage: Codable {
-  /// Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name.
-  public let backend: String
-  /// Priority weight (higher = tried first). Stages are sorted by priority descending.
-  public let priority: UInt32
-  /// Language override for this stage (None = use parent OcrConfig.language).
-  public let language: String?
-  /// Tesseract-specific config override for this stage.
-  public let tesseractConfig: TesseractConfig?
-  /// PaddleOCR-specific config for this stage.
-  public let paddleOcrConfig: String?
-  /// VLM config override for this pipeline stage.
-  public let vlmConfig: LlmConfig?
-
-  public init(
-    backend: String, priority: UInt32, language: String?, tesseractConfig: TesseractConfig?,
-    paddleOcrConfig: String?, vlmConfig: LlmConfig?
-  ) {
-    self.backend = backend
-    self.priority = priority
-    self.language = language
-    self.tesseractConfig = tesseractConfig
-    self.paddleOcrConfig = paddleOcrConfig
-    self.vlmConfig = vlmConfig
-  }
-}
+public typealias OcrPipelineStage = RustBridge.OcrPipelineStage
 
 /// Multi-backend OCR pipeline with quality-based fallback.
 ///
 /// Backends are tried in priority order (highest first). After each backend
 /// produces output, quality is evaluated. If it meets `quality_thresholds.pipeline_min_quality`,
 /// the result is accepted. Otherwise the next backend is tried.
-public struct OcrPipelineConfig: Codable {
-  /// Ordered list of backends to try. Sorted by priority (descending) at runtime.
-  public let stages: [OcrPipelineStage]
-  /// Quality thresholds for deciding whether to accept a result or try the next backend.
-  public let qualityThresholds: OcrQualityThresholds
-
-  public init(stages: [OcrPipelineStage], qualityThresholds: OcrQualityThresholds) {
-    self.stages = stages
-    self.qualityThresholds = qualityThresholds
-  }
-}
+public typealias OcrPipelineConfig = RustBridge.OcrPipelineConfig
 
 /// OCR configuration.
-public struct OcrConfig: Codable {
-  /// Whether OCR is enabled.
-  ///
-  /// Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent
-  /// [`ExtractionConfig`](crate::core::config::ExtractionConfig). Images return
-  /// metadata only; PDFs use native text extraction without OCR fallback.
-  ///
-  /// Defaults to `true`. When `false`, all other OCR settings are ignored.
-  public let enabled: Bool
-  /// OCR backend: tesseract, easyocr, paddleocr
-  public let backend: String
-  /// Language code (e.g., "eng", "deu")
-  public let language: String
-  /// Tesseract-specific configuration (optional)
-  public let tesseractConfig: TesseractConfig?
-  /// Output format for OCR results (optional, for format conversion)
-  public let outputFormat: String?
-  /// PaddleOCR-specific configuration (optional, JSON passthrough)
-  public let paddleOcrConfig: String?
-  /// OCR element extraction configuration
-  public let elementConfig: OcrElementConfig?
-  /// Quality thresholds for the native-text-to-OCR fallback decision.
-  /// When None, uses compiled defaults (matching previous hardcoded behavior).
-  public let qualityThresholds: OcrQualityThresholds?
-  /// Multi-backend OCR pipeline configuration. When set, enables weighted
-  /// fallback across multiple OCR backends based on output quality.
-  /// When None, uses the single `backend` field (same as today).
-  public let pipeline: OcrPipelineConfig?
-  /// Enable automatic page rotation based on orientation detection.
-  ///
-  /// When enabled, uses Tesseract's `DetectOrientationScript()` to detect
-  /// page orientation (0/90/180/270 degrees) before OCR. If the page is
-  /// rotated with high confidence, the image is corrected before recognition.
-  /// This is critical for handling rotated scanned documents.
-  public let autoRotate: Bool
-  /// VLM (Vision Language Model) OCR configuration.
-  ///
-  /// Required when `backend` is `"vlm"`. Uses liter-llm to send page
-  /// images to a vision model for text extraction.
-  public let vlmConfig: LlmConfig?
-  /// Custom Jinja2 prompt template for VLM OCR.
-  ///
-  /// When `None`, uses the default template. Available variables:
-  /// - `{{ language }}` — The document language code (e.g., "eng", "deu").
-  public let vlmPrompt: String?
-  /// Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection).
-  ///
-  /// Not user-configurable via config files — injected at runtime from
-  /// `ExtractionConfig::acceleration` before each `process_image` call.
-  public let acceleration: AccelerationConfig?
-
-  public init(
-    enabled: Bool, backend: String, language: String, tesseractConfig: TesseractConfig?,
-    outputFormat: String?, paddleOcrConfig: String?, elementConfig: OcrElementConfig?,
-    qualityThresholds: OcrQualityThresholds?, pipeline: OcrPipelineConfig?, autoRotate: Bool,
-    vlmConfig: LlmConfig?, vlmPrompt: String?, acceleration: AccelerationConfig?
-  ) {
-    self.enabled = enabled
-    self.backend = backend
-    self.language = language
-    self.tesseractConfig = tesseractConfig
-    self.outputFormat = outputFormat
-    self.paddleOcrConfig = paddleOcrConfig
-    self.elementConfig = elementConfig
-    self.qualityThresholds = qualityThresholds
-    self.pipeline = pipeline
-    self.autoRotate = autoRotate
-    self.vlmConfig = vlmConfig
-    self.vlmPrompt = vlmPrompt
-    self.acceleration = acceleration
-  }
-}
+public typealias OcrConfig = RustBridge.OcrConfig
 
 /// Page extraction and tracking configuration.
 ///
@@ -917,123 +184,20 @@ public struct OcrConfig: Codable {
 ///
 /// Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
 /// when page boundaries are available and chunking is configured.
-public struct PageConfig: Codable {
-  /// Extract pages as separate array (ExtractionResult.pages)
-  public let extractPages: Bool
-  /// Insert page markers in main content string
-  public let insertPageMarkers: Bool
-  /// Page marker format (use {page_num} placeholder)
-  /// Default: "\n\n<!-- PAGE {page_num} -->\n\n"
-  public let markerFormat: String
-
-  public init(extractPages: Bool, insertPageMarkers: Bool, markerFormat: String) {
-    self.extractPages = extractPages
-    self.insertPageMarkers = insertPageMarkers
-    self.markerFormat = markerFormat
-  }
-}
+public typealias PageConfig = RustBridge.PageConfig
 
 /// PDF-specific configuration.
-public struct PdfConfig: Codable {
-  /// PDF extraction backend. Default: `Pdfium`.
-  public let backend: PdfBackend
-  /// Extract images from PDF
-  public let extractImages: Bool
-  /// List of passwords to try when opening encrypted PDFs
-  public let passwords: [String]?
-  /// Extract PDF metadata
-  public let extractMetadata: Bool
-  /// Hierarchy extraction configuration (None = hierarchy extraction disabled)
-  public let hierarchy: HierarchyConfig?
-  /// Extract PDF annotations (text notes, highlights, links, stamps).
-  /// Default: false
-  public let extractAnnotations: Bool
-  /// Top margin fraction (0.0–1.0) of page height to exclude headers/running heads.
-  /// Default: 0.06 (6%)
-  public let topMarginFraction: Float?
-  /// Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers.
-  /// Default: 0.05 (5%)
-  public let bottomMarginFraction: Float?
-  /// Allow single-column pseudo tables in extraction results.
-  ///
-  /// By default, tables with fewer than 2 columns (layout-guided) or 3 columns
-  /// (heuristic) are rejected. When `true`, the minimum column count is relaxed
-  /// to 1, allowing single-column structured data (glossaries, itemized lists)
-  /// to be emitted as tables. Other quality filters (density, sparsity, prose
-  /// detection) still apply.
-  public let allowSingleColumnTables: Bool
-
-  public init(
-    backend: PdfBackend, extractImages: Bool, passwords: [String]?, extractMetadata: Bool,
-    hierarchy: HierarchyConfig?, extractAnnotations: Bool, topMarginFraction: Float?,
-    bottomMarginFraction: Float?, allowSingleColumnTables: Bool
-  ) {
-    self.backend = backend
-    self.extractImages = extractImages
-    self.passwords = passwords
-    self.extractMetadata = extractMetadata
-    self.hierarchy = hierarchy
-    self.extractAnnotations = extractAnnotations
-    self.topMarginFraction = topMarginFraction
-    self.bottomMarginFraction = bottomMarginFraction
-    self.allowSingleColumnTables = allowSingleColumnTables
-  }
-}
+public typealias PdfConfig = RustBridge.PdfConfig
 
 /// Hierarchy extraction configuration for PDF text structure analysis.
 ///
 /// Enables extraction of document hierarchy levels (H1-H6) based on font size
 /// clustering and semantic analysis. When enabled, hierarchical blocks are
 /// included in page content.
-public struct HierarchyConfig: Codable {
-  /// Enable hierarchy extraction
-  public let enabled: Bool
-  /// Number of font size clusters to use for hierarchy levels (1-7)
-  ///
-  /// Default: 6, which provides H1-H6 heading levels with body text.
-  /// Larger values create more fine-grained hierarchy levels.
-  public let kClusters: UInt
-  /// Include bounding box information in hierarchy blocks
-  public let includeBbox: Bool
-  /// OCR coverage threshold for smart OCR triggering (0.0-1.0)
-  ///
-  /// Determines when OCR should be triggered based on text block coverage.
-  /// OCR is triggered when text blocks cover less than this fraction of the page.
-  /// Default: 0.5 (trigger OCR if less than 50% of page has text)
-  public let ocrCoverageThreshold: Float?
-
-  public init(enabled: Bool, kClusters: UInt, includeBbox: Bool, ocrCoverageThreshold: Float?) {
-    self.enabled = enabled
-    self.kClusters = kClusters
-    self.includeBbox = includeBbox
-    self.ocrCoverageThreshold = ocrCoverageThreshold
-  }
-}
+public typealias HierarchyConfig = RustBridge.HierarchyConfig
 
 /// Post-processor configuration.
-public struct PostProcessorConfig: Codable {
-  /// Enable post-processors
-  public let enabled: Bool
-  /// Whitelist of processor names to run (None = all enabled)
-  public let enabledProcessors: [String]?
-  /// Blacklist of processor names to skip (None = none disabled)
-  public let disabledProcessors: [String]?
-  /// Pre-computed AHashSet for O(1) enabled processor lookup
-  public let enabledSet: String?
-  /// Pre-computed AHashSet for O(1) disabled processor lookup
-  public let disabledSet: String?
-
-  public init(
-    enabled: Bool, enabledProcessors: [String]?, disabledProcessors: [String]?, enabledSet: String?,
-    disabledSet: String?
-  ) {
-    self.enabled = enabled
-    self.enabledProcessors = enabledProcessors
-    self.disabledProcessors = disabledProcessors
-    self.enabledSet = enabledSet
-    self.disabledSet = disabledSet
-  }
-}
+public typealias PostProcessorConfig = RustBridge.PostProcessorConfig
 
 /// Chunking configuration.
 ///
@@ -1048,118 +212,13 @@ public struct PostProcessorConfig: Codable {
 ///     ..Default::default()
 /// };
 /// ```
-public struct ChunkingConfig: Codable {
-  /// Maximum size per chunk (in units determined by `sizing`).
-  ///
-  /// When `sizing` is `Characters` (default), this is the max character count.
-  /// When using token-based sizing, this is the max token count.
-  ///
-  /// Default: 1000
-  public let maxCharacters: UInt
-  /// Overlap between chunks (in units determined by `sizing`).
-  ///
-  /// Default: 200
-  public let overlap: UInt
-  /// Whether to trim whitespace from chunk boundaries.
-  ///
-  /// Default: true
-  public let trim: Bool
-  /// Type of chunker to use (Text or Markdown).
-  ///
-  /// Default: Text
-  public let chunkerType: ChunkerType
-  /// Optional embedding configuration for chunk embeddings.
-  public let embedding: EmbeddingConfig?
-  /// Use a preset configuration (overrides individual settings if provided).
-  public let preset: String?
-  /// How to measure chunk size.
-  ///
-  /// Default: `Characters` (Unicode character count).
-  /// Enable `chunking-tiktoken` or `chunking-tokenizers` features for token-based sizing.
-  public let sizing: ChunkSizing
-  /// When `true` and `chunker_type` is `Markdown`, prepend the heading hierarchy
-  /// path (e.g. `"# Title > ## Section\n\n"`) to each chunk's content string.
-  ///
-  /// This is useful for RAG pipelines where each chunk needs self-contained
-  /// context about its position in the document structure.
-  ///
-  /// Default: `false`
-  public let prependHeadingContext: Bool
-  /// Optional cosine similarity threshold for semantic topic boundary detection.
-  ///
-  /// Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is
-  /// provided. You almost never need to set this. When omitted, defaults to
-  /// `0.75` which works well for most documents. Lower values detect more
-  /// topic boundaries (more, smaller chunks); higher values detect fewer.
-  /// Range: `0.0..=1.0`.
-  public let topicThreshold: Float?
-
-  public init(
-    maxCharacters: UInt, overlap: UInt, trim: Bool, chunkerType: ChunkerType,
-    embedding: EmbeddingConfig?, preset: String?, sizing: ChunkSizing, prependHeadingContext: Bool,
-    topicThreshold: Float?
-  ) {
-    self.maxCharacters = maxCharacters
-    self.overlap = overlap
-    self.trim = trim
-    self.chunkerType = chunkerType
-    self.embedding = embedding
-    self.preset = preset
-    self.sizing = sizing
-    self.prependHeadingContext = prependHeadingContext
-    self.topicThreshold = topicThreshold
-  }
-}
+public typealias ChunkingConfig = RustBridge.ChunkingConfig
 
 /// Embedding configuration for text chunks.
 ///
 /// Configures embedding generation using ONNX models via the vendored embedding engine.
 /// Requires the `embeddings` feature to be enabled.
-public struct EmbeddingConfig: Codable {
-  /// The embedding model to use (defaults to "balanced" preset if not specified)
-  public let model: EmbeddingModelType
-  /// Whether to normalize embedding vectors (recommended for cosine similarity)
-  public let normalize: Bool
-  /// Batch size for embedding generation
-  public let batchSize: UInt
-  /// Show model download progress
-  public let showDownloadProgress: Bool
-  /// Custom cache directory for model files
-  ///
-  /// Defaults to `~/.cache/kreuzberg/embeddings/` if not specified.
-  /// Allows full customization of model download location.
-  public let cacheDir: URL?
-  /// Hardware acceleration for the embedding ONNX model.
-  ///
-  /// When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
-  /// is used for inference. Defaults to `None` (auto-select per platform).
-  public let acceleration: AccelerationConfig?
-  /// Maximum wall-clock duration (in seconds) for a single `embed()` call when
-  /// using [`EmbeddingModelType::Plugin`].
-  ///
-  /// Applies only to the in-process plugin path — protects against hung
-  /// host-language backends (e.g. a Python callback deadlocked on the GIL,
-  /// a model stuck on CUDA OOM retries, etc.). On timeout, the dispatcher
-  /// returns [`crate::KreuzbergError::Plugin`] instead of blocking forever.
-  ///
-  /// `None` disables the timeout. The default (60 seconds) is conservative
-  /// for common in-process inference; increase for large batches on slow
-  /// hardware.
-  public let maxEmbedDurationSecs: UInt64?
-
-  public init(
-    model: EmbeddingModelType, normalize: Bool, batchSize: UInt, showDownloadProgress: Bool,
-    cacheDir: URL?, acceleration: AccelerationConfig?, maxEmbedDurationSecs: UInt64?
-  ) {
-    self.model = model
-    self.normalize = normalize
-    self.batchSize = batchSize
-    self.showDownloadProgress = showDownloadProgress
-    self.cacheDir = cacheDir
-    self.acceleration = acceleration
-    self.maxEmbedDurationSecs = maxEmbedDurationSecs
-  }
-}
+public typealias EmbeddingConfig = RustBridge.EmbeddingConfig
 
 /// Configuration for tree-sitter language pack integration.
 ///
@@ -1177,88 +236,17 @@ public struct EmbeddingConfig: Codable {
 /// comments = true
 /// docstrings = true
 /// ```
-public struct TreeSitterConfig: Codable {
-  /// Enable code intelligence processing (default: true).
-  ///
-  /// When `false`, tree-sitter analysis is completely skipped even if
-  /// the config section is present.
-  public let enabled: Bool
-  /// Custom cache directory for downloaded grammars.
-  ///
-  /// When `None`, uses the default: `~/.cache/tree-sitter-language-pack/v{version}/libs/`.
-  public let cacheDir: URL?
-  /// Languages to pre-download on init (e.g., `["python", "rust"]`).
-  public let languages: [String]?
-  /// Language groups to pre-download (e.g., `["web", "systems", "scripting"]`).
-  public let groups: [String]?
-  /// Processing options for code analysis.
-  public let process: TreeSitterProcessConfig
-
-  public init(
-    enabled: Bool, cacheDir: URL?, languages: [String]?, groups: [String]?,
-    process: TreeSitterProcessConfig
-  ) {
-    self.enabled = enabled
-    self.cacheDir = cacheDir
-    self.languages = languages
-    self.groups = groups
-    self.process = process
-  }
-}
+public typealias TreeSitterConfig = RustBridge.TreeSitterConfig
 
 /// Processing options for tree-sitter code analysis.
 ///
 /// Controls which analysis features are enabled when extracting code files.
-public struct TreeSitterProcessConfig: Codable {
-  /// Extract structural items (functions, classes, structs, etc.). Default: true.
-  public let structure: Bool
-  /// Extract import statements. Default: true.
-  public let imports: Bool
-  /// Extract export statements. Default: true.
-  public let exports: Bool
-  /// Extract comments. Default: false.
-  public let comments: Bool
-  /// Extract docstrings. Default: false.
-  public let docstrings: Bool
-  /// Extract symbol definitions. Default: false.
-  public let symbols: Bool
-  /// Include parse diagnostics. Default: false.
-  public let diagnostics: Bool
-  /// Maximum chunk size in bytes. `None` disables chunking.
-  public let chunkMaxSize: UInt?
-  /// Content rendering mode for code extraction.
-  public let contentMode: CodeContentMode
-
-  public init(
-    structure: Bool, imports: Bool, exports: Bool, comments: Bool, docstrings: Bool, symbols: Bool,
-    diagnostics: Bool, chunkMaxSize: UInt?, contentMode: CodeContentMode
-  ) {
-    self.structure = structure
-    self.imports = imports
-    self.exports = exports
-    self.comments = comments
-    self.docstrings = docstrings
-    self.symbols = symbols
-    self.diagnostics = diagnostics
-    self.chunkMaxSize = chunkMaxSize
-    self.contentMode = contentMode
-  }
-}
+public typealias TreeSitterProcessConfig = RustBridge.TreeSitterProcessConfig
 
 /// A supported document format entry.
 ///
 /// Represents a file extension and its corresponding MIME type that Kreuzberg can process.
-public struct SupportedFormat: Codable {
-  /// File extension (without leading dot), e.g., "pdf", "docx"
-  public let extension_: String
-  /// MIME type string, e.g., "application/pdf"
-  public let mimeType: String
-
-  public init(extension_: String, mimeType: String) {
-    self.extension_ = extension_
-    self.mimeType = mimeType
-  }
-}
+public typealias SupportedFormat = RustBridge.SupportedFormat
 
 /// API server configuration.
 ///
@@ -1272,434 +260,64 @@ public struct SupportedFormat: Codable {
 /// - `cors_origins`: empty vector (allows all origins)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
-public struct ServerConfig: Codable {
-  /// Server host address (e.g., "127.0.0.1", "0.0.0.0")
-  public let host: String
-  /// Server port number
-  public let port: UInt16
-  /// CORS allowed origins. Empty vector means allow all origins.
-  ///
-  /// If this is an empty vector, the server will accept requests from any origin.
-  /// If populated with specific origins (e.g., ["https://example.com"]), only
-  /// those origins will be allowed.
-  public let corsOrigins: [String]
-  /// Maximum size of request body in bytes (default: 100 MB)
-  public let maxRequestBodyBytes: UInt
-  /// Maximum size of multipart fields in bytes (default: 100 MB)
-  public let maxMultipartFieldBytes: UInt
+public typealias ServerConfig = RustBridge.ServerConfig
 
-  public init(
-    host: String, port: UInt16, corsOrigins: [String], maxRequestBodyBytes: UInt,
-    maxMultipartFieldBytes: UInt
-  ) {
-    self.host = host
-    self.port = port
-    self.corsOrigins = corsOrigins
-    self.maxRequestBodyBytes = maxRequestBodyBytes
-    self.maxMultipartFieldBytes = maxMultipartFieldBytes
-  }
-}
+public typealias StructuredDataResult = RustBridge.StructuredDataResult
 
-public struct StructuredDataResult: Codable {
-  public let content: String
-  public let format: String
-  public let metadata: [String: String]
-  public let textFields: [String]
-
-  public init(content: String, format: String, metadata: [String: String], textFields: [String]) {
-    self.content = content
-    self.format = format
-    self.metadata = metadata
-    self.textFields = textFields
-  }
-}
-
-public struct StreamReader {}
+public typealias StreamReader = RustBridge.StreamReader
 
 /// Result of OCR extraction from an image with optional page tracking.
-public struct ImageOcrResult {
-  /// Extracted text content
-  public let content: String
-  /// Character byte boundaries per frame (for multi-frame TIFFs)
-  public let boundaries: [PageBoundary]?
-  /// Per-frame content information
-  public let pageContents: [PageContent]?
-
-  public init(content: String, boundaries: [PageBoundary]?, pageContents: [PageContent]?) {
-    self.content = content
-    self.boundaries = boundaries
-    self.pageContents = pageContents
-  }
-}
+public typealias ImageOcrResult = RustBridge.ImageOcrResult
 
 /// Result of HTML extraction with optional images and warnings.
-public struct HtmlExtractionResult: Codable {
-  public let markdown: String
-  public let images: [ExtractedInlineImage]
-  public let warnings: [String]
-
-  public init(markdown: String, images: [ExtractedInlineImage], warnings: [String]) {
-    self.markdown = markdown
-    self.images = images
-    self.warnings = warnings
-  }
-}
+public typealias HtmlExtractionResult = RustBridge.HtmlExtractionResult
 
 /// Extracted inline image with metadata.
-public struct ExtractedInlineImage: Codable {
-  /// Uses `bytes::Bytes` for cheap cloning of large buffers.
-  public let data: Data
-  public let format: String
-  public let filename: String?
-  public let description: String?
-  public let dimensions: [UInt32]?
-  public let attributes: [String]
-
-  public init(
-    data: Data, format: String, filename: String?, description: String?, dimensions: [UInt32]?,
-    attributes: [String]
-  ) {
-    self.data = data
-    self.format = format
-    self.filename = filename
-    self.description = description
-    self.dimensions = dimensions
-    self.attributes = attributes
-  }
-}
+public typealias ExtractedInlineImage = RustBridge.ExtractedInlineImage
 
 /// A drawing object extracted from `<w:drawing>`.
-public struct Drawing: Codable {
-  public let drawingType: String
-  public let extent: String?
-  public let docProperties: String?
-  public let imageRef: String?
-
-  public init(drawingType: String, extent: String?, docProperties: String?, imageRef: String?) {
-    self.drawingType = drawingType
-    self.extent = extent
-    self.docProperties = docProperties
-    self.imageRef = imageRef
-  }
-}
+public typealias Drawing = RustBridge.Drawing
 
 /// Properties for anchored drawings.
-public struct AnchorProperties: Codable {
-  public let behindDoc: Bool
-  public let layoutInCell: Bool
-  public let relativeHeight: Int64?
-  public let positionH: String?
-  public let positionV: String?
-  public let wrapType: String
+public typealias AnchorProperties = RustBridge.AnchorProperties
 
-  public init(
-    behindDoc: Bool, layoutInCell: Bool, relativeHeight: Int64?, positionH: String?,
-    positionV: String?, wrapType: String
-  ) {
-    self.behindDoc = behindDoc
-    self.layoutInCell = layoutInCell
-    self.relativeHeight = relativeHeight
-    self.positionH = positionH
-    self.positionV = positionV
-    self.wrapType = wrapType
-  }
-}
+public typealias HeaderFooter = RustBridge.HeaderFooter
 
-public struct HeaderFooter {
-  public let paragraphs: [String]
-  public let tables: [String]
-  public let headerType: String
-
-  public init(paragraphs: [String], tables: [String], headerType: String) {
-    self.paragraphs = paragraphs
-    self.tables = tables
-    self.headerType = headerType
-  }
-}
-
-public struct Note {
-  public let id: String
-  public let noteType: String
-  public let paragraphs: [String]
-
-  public init(id: String, noteType: String, paragraphs: [String]) {
-    self.id = id
-    self.noteType = noteType
-    self.paragraphs = paragraphs
-  }
-}
+public typealias Note = RustBridge.Note
 
 /// Page margins converted to points (1/72 inch).
-public struct PageMarginsPoints {
-  public let top: Double?
-  public let right: Double?
-  public let bottom: Double?
-  public let left: Double?
-  public let header: Double?
-  public let footer: Double?
-  public let gutter: Double?
-
-  public init(
-    top: Double?, right: Double?, bottom: Double?, left: Double?, header: Double?, footer: Double?,
-    gutter: Double?
-  ) {
-    self.top = top
-    self.right = right
-    self.bottom = bottom
-    self.left = left
-    self.header = header
-    self.footer = footer
-    self.gutter = gutter
-  }
-}
+public typealias PageMarginsPoints = RustBridge.PageMarginsPoints
 
 /// A single style definition parsed from `<w:style>` in `word/styles.xml`.
-public struct StyleDefinition {
-  /// The style ID (`w:styleId` attribute).
-  public let id: String
-  /// Human-readable name (`<w:name w:val="..."/>`).
-  public let name: String?
-  /// Style type: paragraph, character, table, or numbering.
-  public let styleType: String
-  /// ID of the parent style (`<w:basedOn w:val="..."/>`).
-  public let basedOn: String?
-  /// ID of the style to apply to the next paragraph (`<w:next w:val="..."/>`).
-  public let nextStyle: String?
-  /// Whether this is the default style for its type.
-  public let isDefault: Bool
-  /// Paragraph properties defined directly on this style.
-  public let paragraphProperties: String
-  /// Run properties defined directly on this style.
-  public let runProperties: String
-
-  public init(
-    id: String, name: String?, styleType: String, basedOn: String?, nextStyle: String?,
-    isDefault: Bool, paragraphProperties: String, runProperties: String
-  ) {
-    self.id = id
-    self.name = name
-    self.styleType = styleType
-    self.basedOn = basedOn
-    self.nextStyle = nextStyle
-    self.isDefault = isDefault
-    self.paragraphProperties = paragraphProperties
-    self.runProperties = runProperties
-  }
-}
+public typealias StyleDefinition = RustBridge.StyleDefinition
 
 /// Fully resolved (flattened) style after walking the inheritance chain.
-public struct ResolvedStyle {
-  public let paragraphProperties: String
-  public let runProperties: String
-
-  public init(paragraphProperties: String, runProperties: String) {
-    self.paragraphProperties = paragraphProperties
-    self.runProperties = runProperties
-  }
-}
+public typealias ResolvedStyle = RustBridge.ResolvedStyle
 
 /// Table-level properties from `<w:tblPr>`.
-public struct TableProperties: Codable {
-  public let styleId: String?
-  public let width: String?
-  public let alignment: String?
-  public let layout: String?
-  public let look: String?
-  public let borders: String?
-  public let cellMargins: String?
-  public let indent: String?
-  public let caption: String?
-
-  public init(
-    styleId: String?, width: String?, alignment: String?, layout: String?, look: String?,
-    borders: String?, cellMargins: String?, indent: String?, caption: String?
-  ) {
-    self.styleId = styleId
-    self.width = width
-    self.alignment = alignment
-    self.layout = layout
-    self.look = look
-    self.borders = borders
-    self.cellMargins = cellMargins
-    self.indent = indent
-    self.caption = caption
-  }
-}
+public typealias TableProperties = RustBridge.TableProperties
 
 /// Application properties from docProps/app.xml for XLSX
 ///
 /// Contains Excel-specific document metadata.
-public struct XlsxAppProperties {
-  /// Application name (e.g., "Microsoft Excel")
-  public let application: String?
-  /// Application version
-  public let appVersion: String?
-  /// Document security level
-  public let docSecurity: Int32?
-  /// Scale crop flag
-  public let scaleCrop: Bool?
-  /// Links up to date flag
-  public let linksUpToDate: Bool?
-  /// Shared document flag
-  public let sharedDoc: Bool?
-  /// Hyperlinks changed flag
-  public let hyperlinksChanged: Bool?
-  /// Company name
-  public let company: String?
-  /// Worksheet names
-  public let worksheetNames: [String]
-
-  public init(
-    application: String?, appVersion: String?, docSecurity: Int32?, scaleCrop: Bool?,
-    linksUpToDate: Bool?, sharedDoc: Bool?, hyperlinksChanged: Bool?, company: String?,
-    worksheetNames: [String]
-  ) {
-    self.application = application
-    self.appVersion = appVersion
-    self.docSecurity = docSecurity
-    self.scaleCrop = scaleCrop
-    self.linksUpToDate = linksUpToDate
-    self.sharedDoc = sharedDoc
-    self.hyperlinksChanged = hyperlinksChanged
-    self.company = company
-    self.worksheetNames = worksheetNames
-  }
-}
+public typealias XlsxAppProperties = RustBridge.XlsxAppProperties
 
 /// Application properties from docProps/app.xml for PPTX
 ///
 /// Contains PowerPoint-specific document metadata.
-public struct PptxAppProperties {
-  /// Application name (e.g., "Microsoft Office PowerPoint")
-  public let application: String?
-  /// Application version
-  public let appVersion: String?
-  /// Total editing time in minutes
-  public let totalTime: Int32?
-  /// Company name
-  public let company: String?
-  /// Document security level
-  public let docSecurity: Int32?
-  /// Scale crop flag
-  public let scaleCrop: Bool?
-  /// Links up to date flag
-  public let linksUpToDate: Bool?
-  /// Shared document flag
-  public let sharedDoc: Bool?
-  /// Hyperlinks changed flag
-  public let hyperlinksChanged: Bool?
-  /// Number of slides
-  public let slides: Int32?
-  /// Number of notes
-  public let notes: Int32?
-  /// Number of hidden slides
-  public let hiddenSlides: Int32?
-  /// Number of multimedia clips
-  public let multimediaClips: Int32?
-  /// Presentation format (e.g., "Widescreen", "Standard")
-  public let presentationFormat: String?
-  /// Slide titles
-  public let slideTitles: [String]
-
-  public init(
-    application: String?, appVersion: String?, totalTime: Int32?, company: String?,
-    docSecurity: Int32?, scaleCrop: Bool?, linksUpToDate: Bool?, sharedDoc: Bool?,
-    hyperlinksChanged: Bool?, slides: Int32?, notes: Int32?, hiddenSlides: Int32?,
-    multimediaClips: Int32?, presentationFormat: String?, slideTitles: [String]
-  ) {
-    self.application = application
-    self.appVersion = appVersion
-    self.totalTime = totalTime
-    self.company = company
-    self.docSecurity = docSecurity
-    self.scaleCrop = scaleCrop
-    self.linksUpToDate = linksUpToDate
-    self.sharedDoc = sharedDoc
-    self.hyperlinksChanged = hyperlinksChanged
-    self.slides = slides
-    self.notes = notes
-    self.hiddenSlides = hiddenSlides
-    self.multimediaClips = multimediaClips
-    self.presentationFormat = presentationFormat
-    self.slideTitles = slideTitles
-  }
-}
+public typealias PptxAppProperties = RustBridge.PptxAppProperties
 
 /// Custom properties from docProps/custom.xml
 ///
 /// Maps property names to their values. Values are converted to JSON types
 /// based on the VT (Variant Type) specified in the XML.
-public struct CustomProperties {}
+public typealias CustomProperties = RustBridge.CustomProperties
 
 /// OpenDocument metadata from meta.xml
 ///
 /// Contains metadata fields defined by the OASIS OpenDocument Format standard.
 /// Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
-public struct OdtProperties {
-  /// Document title (dc:title)
-  public let title: String?
-  /// Document subject/topic (dc:subject)
-  public let subject: String?
-  /// Current document creator/author (dc:creator)
-  public let creator: String?
-  /// Initial creator of the document (meta:initial-creator)
-  public let initialCreator: String?
-  /// Keywords or tags (meta:keyword)
-  public let keywords: String?
-  /// Document description (dc:description)
-  public let description: String?
-  /// Current modification date (dc:date)
-  public let date: String?
-  /// Initial creation date (meta:creation-date)
-  public let creationDate: String?
-  /// Document language (dc:language)
-  public let language: String?
-  /// Generator/application that created the document (meta:generator)
-  public let generator: String?
-  /// Editing duration in ISO 8601 format (meta:editing-duration)
-  public let editingDuration: String?
-  /// Number of edits/revisions (meta:editing-cycles)
-  public let editingCycles: String?
-  /// Document statistics - page count (meta:page-count)
-  public let pageCount: Int32?
-  /// Document statistics - word count (meta:word-count)
-  public let wordCount: Int32?
-  /// Document statistics - character count (meta:character-count)
-  public let characterCount: Int32?
-  /// Document statistics - paragraph count (meta:paragraph-count)
-  public let paragraphCount: Int32?
-  /// Document statistics - table count (meta:table-count)
-  public let tableCount: Int32?
-  /// Document statistics - image count (meta:image-count)
-  public let imageCount: Int32?
-
-  public init(
-    title: String?, subject: String?, creator: String?, initialCreator: String?, keywords: String?,
-    description: String?, date: String?, creationDate: String?, language: String?,
-    generator: String?, editingDuration: String?, editingCycles: String?, pageCount: Int32?,
-    wordCount: Int32?, characterCount: Int32?, paragraphCount: Int32?, tableCount: Int32?,
-    imageCount: Int32?
-  ) {
-    self.title = title
-    self.subject = subject
-    self.creator = creator
-    self.initialCreator = initialCreator
-    self.keywords = keywords
-    self.description = description
-    self.date = date
-    self.creationDate = creationDate
-    self.language = language
-    self.generator = generator
-    self.editingDuration = editingDuration
-    self.editingCycles = editingCycles
-    self.pageCount = pageCount
-    self.wordCount = wordCount
-    self.characterCount = characterCount
-    self.paragraphCount = paragraphCount
-    self.tableCount = tableCount
-    self.imageCount = imageCount
-  }
-}
+public typealias OdtProperties = RustBridge.OdtProperties
 
 /// Trait for extractors that can work synchronously (WASM-compatible).
 ///
@@ -1734,10 +352,11 @@ public struct OdtProperties {
 ///     }
 /// }
 /// ```
-public struct SyncExtractor {}
+public struct SyncExtractor {
+}
 
 /// Helper struct for validating ZIP archives for security issues.
-public struct ZipBombValidator {}
+public typealias ZipBombValidator = RustBridge.ZipBombValidator
 
 /// Trait for in-process embedding backend plugins.
 ///
@@ -1784,7 +403,8 @@ public struct ZipBombValidator {}
 /// or `tokio::runtime::Builder::new_current_thread()`) must use
 /// [`crate::embed_texts_async`] instead, which awaits directly without
 /// `block_in_place`.
-public struct EmbeddingBackend {}
+public struct EmbeddingBackend {
+}
 
 /// Trait for document extractor plugins.
 ///
@@ -1849,7 +469,8 @@ public struct EmbeddingBackend {}
 ///     }
 /// }
 /// ```
-public struct DocumentExtractor {}
+public struct DocumentExtractor {
+}
 
 /// Trait for OCR backend plugins.
 ///
@@ -1906,7 +527,8 @@ public struct DocumentExtractor {}
 ///     }
 /// }
 /// ```
-public struct OcrBackend {}
+public struct OcrBackend {
+}
 
 /// Trait for post-processor plugins.
 ///
@@ -1971,7 +593,8 @@ public struct OcrBackend {}
 ///     }
 /// }
 /// ```
-public struct PostProcessor {}
+public struct PostProcessor {
+}
 
 /// Base trait that all plugins must implement.
 ///
@@ -2015,7 +638,8 @@ public struct PostProcessor {}
 ///     }
 /// }
 /// ```
-public struct Plugin {}
+public struct Plugin {
+}
 
 /// Trait for validator plugins.
 ///
@@ -2076,61 +700,13 @@ public struct Plugin {}
 ///     }
 /// }
 /// ```
-public struct Validator {}
-
-public struct TokenReductionConfig: Codable {
-  public let level: ReductionLevel
-  public let languageHint: String?
-  public let preserveMarkdown: Bool
-  public let preserveCode: Bool
-  public let semanticThreshold: Float
-  public let enableParallel: Bool
-  public let useSimd: Bool
-  public let customStopwords: [String: [String]]?
-  public let preservePatterns: [String]
-  public let targetReduction: Float?
-  public let enableSemanticClustering: Bool
-
-  public init(
-    level: ReductionLevel, languageHint: String?, preserveMarkdown: Bool, preserveCode: Bool,
-    semanticThreshold: Float, enableParallel: Bool, useSimd: Bool,
-    customStopwords: [String: [String]]?, preservePatterns: [String], targetReduction: Float?,
-    enableSemanticClustering: Bool
-  ) {
-    self.level = level
-    self.languageHint = languageHint
-    self.preserveMarkdown = preserveMarkdown
-    self.preserveCode = preserveCode
-    self.semanticThreshold = semanticThreshold
-    self.enableParallel = enableParallel
-    self.useSimd = useSimd
-    self.customStopwords = customStopwords
-    self.preservePatterns = preservePatterns
-    self.targetReduction = targetReduction
-    self.enableSemanticClustering = enableSemanticClustering
-  }
+public struct Validator {
 }
+
+public typealias TokenReductionConfig = RustBridge.TokenReductionConfig
 
 /// A PDF annotation extracted from a document page.
-public struct PdfAnnotation: Codable {
-  /// The type of annotation.
-  public let annotationType: PdfAnnotationType
-  /// Text content of the annotation (e.g., comment text, link URL).
-  public let content: String?
-  /// Page number where the annotation appears (1-indexed).
-  public let pageNumber: UInt
-  /// Bounding box of the annotation on the page.
-  public let boundingBox: String?
-
-  public init(
-    annotationType: PdfAnnotationType, content: String?, pageNumber: UInt, boundingBox: String?
-  ) {
-    self.annotationType = annotationType
-    self.content = content
-    self.pageNumber = pageNumber
-    self.boundingBox = boundingBox
-  }
-}
+public typealias PdfAnnotation = RustBridge.PdfAnnotation
 
 /// Comprehensive Djot document structure with semantic preservation.
 ///
@@ -2143,145 +719,26 @@ public struct PdfAnnotation: Codable {
 /// - Tables with full structure
 ///
 /// Available when the `djot` feature is enabled.
-public struct DjotContent: Codable {
-  /// Plain text representation for backwards compatibility
-  public let plainText: String
-  /// Structured block-level content
-  public let blocks: [FormattedBlock]
-  /// Metadata from YAML frontmatter
-  public let metadata: Metadata
-  /// Extracted tables as structured data
-  public let tables: [String]
-  /// Extracted images with metadata
-  public let images: [DjotImage]
-  /// Extracted links with URLs
-  public let links: [DjotLink]
-  /// Footnote definitions
-  public let footnotes: [Footnote]
-  /// Attributes mapped by element identifier (if present)
-  public let attributes: [String]
-
-  public init(
-    plainText: String, blocks: [FormattedBlock], metadata: Metadata, tables: [String],
-    images: [DjotImage], links: [DjotLink], footnotes: [Footnote], attributes: [String]
-  ) {
-    self.plainText = plainText
-    self.blocks = blocks
-    self.metadata = metadata
-    self.tables = tables
-    self.images = images
-    self.links = links
-    self.footnotes = footnotes
-    self.attributes = attributes
-  }
-}
+public typealias DjotContent = RustBridge.DjotContent
 
 /// Block-level element in a Djot document.
 ///
 /// Represents structural elements like headings, paragraphs, lists, code blocks, etc.
-public struct FormattedBlock: Codable {
-  /// Type of block element
-  public let blockType: BlockType
-  /// Heading level (1-6) for headings, or nesting level for lists
-  public let level: UInt?
-  /// Inline content within the block
-  public let inlineContent: [InlineElement]
-  /// Element attributes (classes, IDs, key-value pairs)
-  public let attributes: String?
-  /// Language identifier for code blocks
-  public let language: String?
-  /// Raw code content for code blocks
-  public let code: String?
-  /// Nested blocks for containers (blockquotes, list items, divs)
-  public let children: [FormattedBlock]
-
-  public init(
-    blockType: BlockType, level: UInt?, inlineContent: [InlineElement], attributes: String?,
-    language: String?, code: String?, children: [FormattedBlock]
-  ) {
-    self.blockType = blockType
-    self.level = level
-    self.inlineContent = inlineContent
-    self.attributes = attributes
-    self.language = language
-    self.code = code
-    self.children = children
-  }
-}
+public typealias FormattedBlock = RustBridge.FormattedBlock
 
 /// Inline element within a block.
 ///
 /// Represents text with formatting, links, images, etc.
-public struct InlineElement: Codable {
-  /// Type of inline element
-  public let elementType: InlineType
-  /// Text content
-  public let content: String
-  /// Element attributes
-  public let attributes: String?
-  /// Additional metadata (e.g., href for links, src/alt for images)
-  public let metadata: [String: String]?
-
-  public init(
-    elementType: InlineType, content: String, attributes: String?, metadata: [String: String]?
-  ) {
-    self.elementType = elementType
-    self.content = content
-    self.attributes = attributes
-    self.metadata = metadata
-  }
-}
+public typealias InlineElement = RustBridge.InlineElement
 
 /// Image element in Djot.
-public struct DjotImage: Codable {
-  /// Image source URL or path
-  public let src: String
-  /// Alternative text
-  public let alt: String
-  /// Optional title
-  public let title: String?
-  /// Element attributes
-  public let attributes: String?
-
-  public init(src: String, alt: String, title: String?, attributes: String?) {
-    self.src = src
-    self.alt = alt
-    self.title = title
-    self.attributes = attributes
-  }
-}
+public typealias DjotImage = RustBridge.DjotImage
 
 /// Link element in Djot.
-public struct DjotLink: Codable {
-  /// Link URL
-  public let url: String
-  /// Link text content
-  public let text: String
-  /// Optional title
-  public let title: String?
-  /// Element attributes
-  public let attributes: String?
-
-  public init(url: String, text: String, title: String?, attributes: String?) {
-    self.url = url
-    self.text = text
-    self.title = title
-    self.attributes = attributes
-  }
-}
+public typealias DjotLink = RustBridge.DjotLink
 
 /// Footnote in Djot.
-public struct Footnote: Codable {
-  /// Footnote label
-  public let label: String
-  /// Footnote content blocks
-  public let content: [FormattedBlock]
-
-  public init(label: String, content: [FormattedBlock]) {
-    self.label = label
-    self.content = content
-  }
-}
+public typealias Footnote = RustBridge.Footnote
 
 /// Top-level structured document representation.
 ///
@@ -2293,1908 +750,299 @@ public struct Footnote: Codable {
 ///
 /// Call `validate()` after construction to verify all node indices are in bounds
 /// and parent-child relationships are bidirectionally consistent.
-public struct DocumentStructure: Codable {
-  /// All nodes in document/reading order.
-  public let nodes: [DocumentNode]
-  /// Origin format identifier (e.g. "docx", "pptx", "html", "pdf").
-  ///
-  /// Allows renderers to apply format-aware heuristics when converting
-  /// the document tree to output formats.
-  public let sourceFormat: String?
-  /// Resolved relationships between nodes (footnote refs, citations, anchor links, etc.).
-  ///
-  /// Populated during derivation from the internal document representation.
-  /// Empty when no relationships are detected.
-  public let relationships: [DocumentRelationship]
-
-  public init(nodes: [DocumentNode], sourceFormat: String?, relationships: [DocumentRelationship]) {
-    self.nodes = nodes
-    self.sourceFormat = sourceFormat
-    self.relationships = relationships
-  }
-}
+public typealias DocumentStructure = RustBridge.DocumentStructure
 
 /// A resolved relationship between two nodes in the document tree.
-public struct DocumentRelationship: Codable {
-  /// Source node index (the referencing node).
-  public let source: UInt32
-  /// Target node index (the referenced node).
-  public let target: UInt32
-  /// Semantic kind of the relationship.
-  public let kind: RelationshipKind
-
-  public init(source: UInt32, target: UInt32, kind: RelationshipKind) {
-    self.source = source
-    self.target = target
-    self.kind = kind
-  }
-}
+public typealias DocumentRelationship = RustBridge.DocumentRelationship
 
 /// A single node in the document tree.
 ///
 /// Each node has deterministic `id`, typed `content`, optional `parent`/`children`
 /// for tree structure, and metadata like page number, bounding box, and content layer.
-public struct DocumentNode: Codable {
-  /// Deterministic identifier (hash of content + position).
-  public let id: String
-  /// Node content — tagged enum, type-specific data only.
-  public let content: NodeContent
-  /// Parent node index (`None` = root-level node).
-  public let parent: UInt32?
-  /// Child node indices in reading order.
-  public let children: [UInt32]
-  /// Content layer classification.
-  public let contentLayer: ContentLayer
-  /// Page number where this node starts (1-indexed).
-  public let page: UInt32?
-  /// Page number where this node ends (for multi-page tables/sections).
-  public let pageEnd: UInt32?
-  /// Bounding box in document coordinates.
-  public let bbox: String?
-  /// Inline annotations (formatting, links) on this node's text content.
-  ///
-  /// Only meaningful for text-carrying nodes; empty for containers.
-  public let annotations: [TextAnnotation]
-  /// Format-specific key-value attributes.
-  ///
-  /// Extensible bag for data that doesn't warrant a typed field: CSS classes,
-  /// LaTeX environment names, Excel cell formulas, slide layout names, etc.
-  public let attributes: [String: String]?
-
-  public init(
-    id: String, content: NodeContent, parent: UInt32?, children: [UInt32],
-    contentLayer: ContentLayer, page: UInt32?, pageEnd: UInt32?, bbox: String?,
-    annotations: [TextAnnotation], attributes: [String: String]?
-  ) {
-    self.id = id
-    self.content = content
-    self.parent = parent
-    self.children = children
-    self.contentLayer = contentLayer
-    self.page = page
-    self.pageEnd = pageEnd
-    self.bbox = bbox
-    self.annotations = annotations
-    self.attributes = attributes
-  }
-}
+public typealias DocumentNode = RustBridge.DocumentNode
 
 /// Individual grid cell with position and span metadata.
-public struct GridCell: Codable {
-  /// Cell text content.
-  public let content: String
-  /// Zero-indexed row position.
-  public let row: UInt32
-  /// Zero-indexed column position.
-  public let col: UInt32
-  /// Number of rows this cell spans.
-  public let rowSpan: UInt32
-  /// Number of columns this cell spans.
-  public let colSpan: UInt32
-  /// Whether this is a header cell.
-  public let isHeader: Bool
-  /// Bounding box for this cell (if available).
-  public let bbox: String?
-
-  public init(
-    content: String, row: UInt32, col: UInt32, rowSpan: UInt32, colSpan: UInt32, isHeader: Bool,
-    bbox: String?
-  ) {
-    self.content = content
-    self.row = row
-    self.col = col
-    self.rowSpan = rowSpan
-    self.colSpan = colSpan
-    self.isHeader = isHeader
-    self.bbox = bbox
-  }
-}
+public typealias GridCell = RustBridge.GridCell
 
 /// Inline text annotation — byte-range based formatting and links.
 ///
 /// Annotations reference byte offsets into the node's text content,
 /// enabling precise identification of formatted regions.
-public struct TextAnnotation: Codable {
-  /// Start byte offset in the node's text content (inclusive).
-  public let start: UInt32
-  /// End byte offset in the node's text content (exclusive).
-  public let end: UInt32
-  /// Annotation type.
-  public let kind: AnnotationKind
-
-  public init(start: UInt32, end: UInt32, kind: AnnotationKind) {
-    self.start = start
-    self.end = end
-    self.kind = kind
-  }
-}
+public typealias TextAnnotation = RustBridge.TextAnnotation
 
 /// General extraction result used by the core extraction API.
 ///
 /// This is the main result type returned by all extraction functions.
-public struct ExtractionResult: Codable {
-  public let content: String
-  public let mimeType: String
-  public let metadata: Metadata
-  public let tables: [String]
-  public let detectedLanguages: [String]?
-  /// Text chunks when chunking is enabled.
-  ///
-  /// When chunking configuration is provided, the content is split into
-  /// overlapping chunks for efficient processing. Each chunk contains the text,
-  /// optional embeddings (if enabled), and metadata about its position.
-  public let chunks: [Chunk]?
-  /// Extracted images from the document.
-  ///
-  /// When image extraction is enabled via `ImageExtractionConfig`, this field
-  /// contains all images found in the document with their raw data and metadata.
-  /// Each image may optionally contain a nested `ocr_result` if OCR was performed.
-  public let images: [ExtractedImage]?
-  /// Per-page content when page extraction is enabled.
-  ///
-  /// When page extraction is configured, the document is split into per-page content
-  /// with tables and images mapped to their respective pages.
-  public let pages: [PageContent]?
-  /// Semantic elements when element-based result format is enabled.
-  ///
-  /// When result_format is set to ElementBased, this field contains semantic
-  /// elements with type classification, unique identifiers, and metadata for
-  /// Unstructured-compatible element-based processing.
-  public let elements: [Element]?
-  /// Rich Djot content structure (when extracting Djot documents).
-  ///
-  /// When extracting Djot documents with structured extraction enabled,
-  /// this field contains the full semantic structure including:
-  /// - Block-level elements with nesting
-  /// - Inline formatting with attributes
-  /// - Links, images, footnotes
-  /// - Math expressions
-  /// - Complete attribute information
-  ///
-  /// The `content` field still contains plain text for backward compatibility.
-  ///
-  /// Always `None` for non-Djot documents.
-  public let djotContent: DjotContent?
-  /// OCR elements with full spatial and confidence metadata.
-  ///
-  /// When OCR is performed with element extraction enabled, this field contains
-  /// the structured representation of detected text including:
-  /// - Bounding geometry (rectangles or quadrilaterals)
-  /// - Confidence scores (detection and recognition)
-  /// - Rotation information
-  /// - Hierarchical relationships (Tesseract only)
-  ///
-  /// This field preserves all metadata that would otherwise be lost when
-  /// converting to plain text or markdown output formats.
-  ///
-  /// Only populated when `OcrElementConfig.include_elements` is true.
-  public let ocrElements: [OcrElement]?
-  /// Structured document tree (when document structure extraction is enabled).
-  ///
-  /// When `include_document_structure` is true in `ExtractionConfig`, this field
-  /// contains the full hierarchical representation of the document including:
-  /// - Heading-driven section nesting
-  /// - Table grids with cell-level metadata
-  /// - Content layer classification (body, header, footer, footnote)
-  /// - Inline text annotations (formatting, links)
-  /// - Bounding boxes and page numbers
-  ///
-  /// Independent of `result_format` — can be combined with Unified or ElementBased.
-  public let document: DocumentStructure?
-  /// Document quality score from quality analysis.
-  ///
-  /// A value between 0.0 and 1.0 indicating the overall text quality.
-  /// Previously stored in `metadata.additional["quality_score"]`.
-  public let qualityScore: Double?
-  /// Non-fatal warnings collected during processing pipeline stages.
-  ///
-  /// Captures errors from optional pipeline features (embedding, chunking,
-  /// language detection, output formatting) that don't prevent extraction
-  /// but may indicate degraded results.
-  /// Previously stored as individual keys in `metadata.additional`.
-  public let processingWarnings: [ProcessingWarning]
-  /// PDF annotations extracted from the document.
-  ///
-  /// When annotation extraction is enabled via `PdfConfig::extract_annotations`,
-  /// this field contains text notes, highlights, links, stamps, and other
-  /// annotations found in PDF documents.
-  public let annotations: [PdfAnnotation]?
-  /// Nested extraction results from archive contents.
-  ///
-  /// When extracting archives, each processable file inside produces its own
-  /// full extraction result. Set to `None` for non-archive formats.
-  /// Use `max_archive_depth` in config to control recursion depth.
-  public let children: [ArchiveEntry]?
-  /// URIs/links discovered during document extraction.
-  ///
-  /// Contains hyperlinks, image references, citations, email addresses, and
-  /// other URI-like references found in the document. Always extracted when
-  /// present in the source document.
-  public let uris: [Uri]?
-  /// Structured extraction output from LLM-based JSON schema extraction.
-  ///
-  /// When `structured_extraction` is configured in `ExtractionConfig`, the
-  /// extracted document content is sent to a VLM with the provided JSON schema.
-  /// The response is parsed and stored here as a JSON value matching the schema.
-  public let structuredOutput: String?
-  /// Code intelligence results from tree-sitter analysis.
-  ///
-  /// Populated when extracting source code files with the `tree-sitter` feature.
-  /// Contains metrics, structural analysis, imports/exports, comments,
-  /// docstrings, symbols, diagnostics, and optionally chunked code segments.
-  public let codeIntelligence: String?
-  /// LLM token usage and cost data for all LLM calls made during this extraction.
-  ///
-  /// Contains one entry per LLM call. Multiple entries are produced when
-  /// VLM OCR, structured extraction, and/or LLM embeddings all run during
-  /// the same extraction.
-  ///
-  /// `None` when no LLM was used.
-  public let llmUsage: [LlmUsage]?
-  /// Pre-rendered content in the requested output format.
-  ///
-  /// Populated during `derive_extraction_result` before tree derivation consumes
-  /// element data. `apply_output_format` swaps this into `content` at the end
-  /// of the pipeline, after post-processors have operated on plain text.
-  public let formattedContent: String?
-  /// Structured hOCR document for the OCR+layout pipeline.
-  ///
-  /// When tesseract produces hOCR output, the parsed `InternalDocument` carries
-  /// paragraph structure with bounding boxes and confidence scores. The layout
-  /// classification step enriches these elements before final rendering.
-  public let ocrInternalDocument: String?
-
-  public init(
-    content: String, mimeType: String, metadata: Metadata, tables: [String],
-    detectedLanguages: [String]?, chunks: [Chunk]?, images: [ExtractedImage]?,
-    pages: [PageContent]?, elements: [Element]?, djotContent: DjotContent?,
-    ocrElements: [OcrElement]?, document: DocumentStructure?, qualityScore: Double?,
-    processingWarnings: [ProcessingWarning], annotations: [PdfAnnotation]?,
-    children: [ArchiveEntry]?, uris: [Uri]?, structuredOutput: String?, codeIntelligence: String?,
-    llmUsage: [LlmUsage]?, formattedContent: String?, ocrInternalDocument: String?
-  ) {
-    self.content = content
-    self.mimeType = mimeType
-    self.metadata = metadata
-    self.tables = tables
-    self.detectedLanguages = detectedLanguages
-    self.chunks = chunks
-    self.images = images
-    self.pages = pages
-    self.elements = elements
-    self.djotContent = djotContent
-    self.ocrElements = ocrElements
-    self.document = document
-    self.qualityScore = qualityScore
-    self.processingWarnings = processingWarnings
-    self.annotations = annotations
-    self.children = children
-    self.uris = uris
-    self.structuredOutput = structuredOutput
-    self.codeIntelligence = codeIntelligence
-    self.llmUsage = llmUsage
-    self.formattedContent = formattedContent
-    self.ocrInternalDocument = ocrInternalDocument
-  }
-}
+public typealias ExtractionResult = RustBridge.ExtractionResult
 
 /// A single file extracted from an archive.
 ///
 /// When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
 /// enabled, each processable file produces its own full `ExtractionResult`.
-public struct ArchiveEntry: Codable {
-  /// Archive-relative file path (e.g. "folder/document.pdf").
-  public let path: String
-  /// Detected MIME type of the file.
-  public let mimeType: String
-  /// Full extraction result for this file.
-  public let result: ExtractionResult
-
-  public init(path: String, mimeType: String, result: ExtractionResult) {
-    self.path = path
-    self.mimeType = mimeType
-    self.result = result
-  }
-}
+public typealias ArchiveEntry = RustBridge.ArchiveEntry
 
 /// A non-fatal warning from a processing pipeline stage.
 ///
 /// Captures errors from optional features that don't prevent extraction
 /// but may indicate degraded results.
-public struct ProcessingWarning: Codable {
-  /// The pipeline stage or feature that produced this warning
-  /// (e.g., "embedding", "chunking", "language_detection", "output_format").
-  public let source: String
-  /// Human-readable description of what went wrong.
-  public let message: String
-
-  public init(source: String, message: String) {
-    self.source = source
-    self.message = message
-  }
-}
+public typealias ProcessingWarning = RustBridge.ProcessingWarning
 
 /// Token usage and cost data for a single LLM call made during extraction.
 ///
 /// Populated when VLM OCR, structured extraction, or LLM-based embeddings
 /// are used. Multiple entries may be present when multiple LLM calls occur
 /// within one extraction (e.g. VLM OCR + structured extraction).
-public struct LlmUsage: Codable {
-  /// The LLM model identifier (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514").
-  public let model: String
-  /// The pipeline stage that triggered this LLM call
-  /// (e.g. "vlm_ocr", "structured_extraction", "embeddings").
-  public let source: String
-  /// Number of input/prompt tokens consumed.
-  public let inputTokens: UInt64?
-  /// Number of output/completion tokens generated.
-  public let outputTokens: UInt64?
-  /// Total tokens (input + output).
-  public let totalTokens: UInt64?
-  /// Estimated cost in USD based on the provider's published pricing.
-  public let estimatedCost: Double?
-  /// Why the model stopped generating (e.g. "stop", "length", "content_filter").
-  public let finishReason: String?
-
-  public init(
-    model: String, source: String, inputTokens: UInt64?, outputTokens: UInt64?,
-    totalTokens: UInt64?, estimatedCost: Double?, finishReason: String?
-  ) {
-    self.model = model
-    self.source = source
-    self.inputTokens = inputTokens
-    self.outputTokens = outputTokens
-    self.totalTokens = totalTokens
-    self.estimatedCost = estimatedCost
-    self.finishReason = finishReason
-  }
-}
+public typealias LlmUsage = RustBridge.LlmUsage
 
 /// A text chunk with optional embedding and metadata.
 ///
 /// Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
 /// contains the text content, optional embedding vector (if embedding generation
 /// is configured), and metadata about its position in the document.
-public struct Chunk: Codable {
-  /// The text content of this chunk.
-  public let content: String
-  /// Semantic structural classification of this chunk.
-  ///
-  /// Assigned by the heuristic classifier based on content patterns and
-  /// heading context. Defaults to `ChunkType::Unknown` when no rule matches.
-  public let chunkType: ChunkType
-  /// Optional embedding vector for this chunk.
-  ///
-  /// Only populated when `EmbeddingConfig` is provided in chunking configuration.
-  /// The dimensionality depends on the chosen embedding model.
-  public let embedding: [Float]?
-  /// Metadata about this chunk's position and properties.
-  public let metadata: ChunkMetadata
-
-  public init(content: String, chunkType: ChunkType, embedding: [Float]?, metadata: ChunkMetadata) {
-    self.content = content
-    self.chunkType = chunkType
-    self.embedding = embedding
-    self.metadata = metadata
-  }
-}
+public typealias Chunk = RustBridge.Chunk
 
 /// Heading context for a chunk within a Markdown document.
 ///
 /// Contains the heading hierarchy from document root to this chunk's section.
-public struct HeadingContext: Codable {
-  /// The heading hierarchy from document root to this chunk's section.
-  /// Index 0 is the outermost (h1), last element is the most specific.
-  public let headings: [HeadingLevel]
-
-  public init(headings: [HeadingLevel]) {
-    self.headings = headings
-  }
-}
+public typealias HeadingContext = RustBridge.HeadingContext
 
 /// A single heading in the hierarchy.
-public struct HeadingLevel: Codable {
-  /// Heading depth (1 = h1, 2 = h2, etc.)
-  public let level: UInt8
-  /// The text content of the heading.
-  public let text: String
-
-  public init(level: UInt8, text: String) {
-    self.level = level
-    self.text = text
-  }
-}
+public typealias HeadingLevel = RustBridge.HeadingLevel
 
 /// Metadata about a chunk's position in the original document.
-public struct ChunkMetadata: Codable {
-  /// Byte offset where this chunk starts in the original text (UTF-8 valid boundary).
-  public let byteStart: UInt
-  /// Byte offset where this chunk ends in the original text (UTF-8 valid boundary).
-  public let byteEnd: UInt
-  /// Number of tokens in this chunk (if available).
-  ///
-  /// This is calculated by the embedding model's tokenizer if embeddings are enabled.
-  public let tokenCount: UInt?
-  /// Zero-based index of this chunk in the document.
-  public let chunkIndex: UInt
-  /// Total number of chunks in the document.
-  public let totalChunks: UInt
-  /// First page number this chunk spans (1-indexed).
-  ///
-  /// Only populated when page tracking is enabled in extraction configuration.
-  public let firstPage: UInt?
-  /// Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks).
-  ///
-  /// Only populated when page tracking is enabled in extraction configuration.
-  public let lastPage: UInt?
-  /// Heading context when using Markdown chunker.
-  ///
-  /// Contains the heading hierarchy this chunk falls under.
-  /// Only populated when `ChunkerType::Markdown` is used.
-  public let headingContext: HeadingContext?
-
-  public init(
-    byteStart: UInt, byteEnd: UInt, tokenCount: UInt?, chunkIndex: UInt, totalChunks: UInt,
-    firstPage: UInt?, lastPage: UInt?, headingContext: HeadingContext?
-  ) {
-    self.byteStart = byteStart
-    self.byteEnd = byteEnd
-    self.tokenCount = tokenCount
-    self.chunkIndex = chunkIndex
-    self.totalChunks = totalChunks
-    self.firstPage = firstPage
-    self.lastPage = lastPage
-    self.headingContext = headingContext
-  }
-}
+public typealias ChunkMetadata = RustBridge.ChunkMetadata
 
 /// Extracted image from a document.
 ///
 /// Contains raw image data, metadata, and optional nested OCR results.
 /// Raw bytes allow cross-language compatibility - users can convert to
 /// PIL.Image (Python), Sharp (Node.js), or other formats as needed.
-public struct ExtractedImage: Codable {
-  /// Raw image data (PNG, JPEG, WebP, etc. bytes).
-  /// Uses `bytes::Bytes` for cheap cloning of large buffers.
-  public let data: Data
-  /// Image format (e.g., "jpeg", "png", "webp")
-  /// Uses Cow<'static, str> to avoid allocation for static literals.
-  public let format: String
-  /// Zero-indexed position of this image in the document/page
-  public let imageIndex: UInt
-  /// Page/slide number where image was found (1-indexed)
-  public let pageNumber: UInt?
-  /// Image width in pixels
-  public let width: UInt32?
-  /// Image height in pixels
-  public let height: UInt32?
-  /// Colorspace information (e.g., "RGB", "CMYK", "Gray")
-  public let colorspace: String?
-  /// Bits per color component (e.g., 8, 16)
-  public let bitsPerComponent: UInt32?
-  /// Whether this image is a mask image
-  public let isMask: Bool
-  /// Optional description of the image
-  public let description: String?
-  /// Nested OCR extraction result (if image was OCRed)
-  ///
-  /// When OCR is performed on this image, the result is embedded here
-  /// rather than in a separate collection, making the relationship explicit.
-  public let ocrResult: ExtractionResult?
-  /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
-  /// Only populated for PDF-extracted images when position data is available from pdfium.
-  public let boundingBox: String?
-  /// Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
-  /// Used for rendering image references when the binary data is not extracted.
-  public let sourcePath: String?
-
-  public init(
-    data: Data, format: String, imageIndex: UInt, pageNumber: UInt?, width: UInt32?,
-    height: UInt32?, colorspace: String?, bitsPerComponent: UInt32?, isMask: Bool,
-    description: String?, ocrResult: ExtractionResult?, boundingBox: String?, sourcePath: String?
-  ) {
-    self.data = data
-    self.format = format
-    self.imageIndex = imageIndex
-    self.pageNumber = pageNumber
-    self.width = width
-    self.height = height
-    self.colorspace = colorspace
-    self.bitsPerComponent = bitsPerComponent
-    self.isMask = isMask
-    self.description = description
-    self.ocrResult = ocrResult
-    self.boundingBox = boundingBox
-    self.sourcePath = sourcePath
-  }
-}
+public typealias ExtractedImage = RustBridge.ExtractedImage
 
 /// Metadata for a semantic element.
-public struct ElementMetadata: Codable {
-  /// Page number (1-indexed)
-  public let pageNumber: UInt?
-  /// Source filename or document name
-  public let filename: String?
-  /// Bounding box coordinates if available
-  public let coordinates: String?
-  /// Position index in the element sequence
-  public let elementIndex: UInt?
-  /// Additional custom metadata
-  public let additional: [String: String]
-
-  public init(
-    pageNumber: UInt?, filename: String?, coordinates: String?, elementIndex: UInt?,
-    additional: [String: String]
-  ) {
-    self.pageNumber = pageNumber
-    self.filename = filename
-    self.coordinates = coordinates
-    self.elementIndex = elementIndex
-    self.additional = additional
-  }
-}
+public typealias ElementMetadata = RustBridge.ElementMetadata
 
 /// Semantic element extracted from document.
 ///
 /// Represents a logical unit of content with semantic classification,
 /// unique identifier, and metadata for tracking origin and position.
-public struct Element: Codable {
-  /// Unique element identifier
-  public let elementId: String
-  /// Semantic type of this element
-  public let elementType: ElementType
-  /// Text content of the element
-  public let text: String
-  /// Metadata about the element
-  public let metadata: ElementMetadata
-
-  public init(elementId: String, elementType: ElementType, text: String, metadata: ElementMetadata)
-  {
-    self.elementId = elementId
-    self.elementType = elementType
-    self.text = text
-    self.metadata = metadata
-  }
-}
+public typealias Element = RustBridge.Element
 
 /// Excel workbook representation.
 ///
 /// Contains all sheets from an Excel file (.xlsx, .xls, etc.) with
 /// extracted content and metadata.
-public struct ExcelWorkbook: Codable {
-  /// All sheets in the workbook
-  public let sheets: [ExcelSheet]
-  /// Workbook-level metadata (author, creation date, etc.)
-  public let metadata: [String: String]
-
-  public init(sheets: [ExcelSheet], metadata: [String: String]) {
-    self.sheets = sheets
-    self.metadata = metadata
-  }
-}
+public typealias ExcelWorkbook = RustBridge.ExcelWorkbook
 
 /// Single Excel worksheet.
 ///
 /// Represents one sheet from an Excel workbook with its content
 /// converted to Markdown format and dimensional statistics.
-public struct ExcelSheet: Codable {
-  /// Sheet name as it appears in Excel
-  public let name: String
-  /// Sheet content converted to Markdown tables
-  public let markdown: String
-  /// Number of rows
-  public let rowCount: UInt
-  /// Number of columns
-  public let colCount: UInt
-  /// Total number of non-empty cells
-  public let cellCount: UInt
-  /// Pre-extracted table cells (2D vector of cell values)
-  /// Populated during markdown generation to avoid re-parsing markdown.
-  /// None for empty sheets.
-  public let tableCells: [[String]]?
-
-  public init(
-    name: String, markdown: String, rowCount: UInt, colCount: UInt, cellCount: UInt,
-    tableCells: [[String]]?
-  ) {
-    self.name = name
-    self.markdown = markdown
-    self.rowCount = rowCount
-    self.colCount = colCount
-    self.cellCount = cellCount
-    self.tableCells = tableCells
-  }
-}
+public typealias ExcelSheet = RustBridge.ExcelSheet
 
 /// XML extraction result.
 ///
 /// Contains extracted text content from XML files along with
 /// structural statistics about the XML document.
-public struct XmlExtractionResult: Codable {
-  /// Extracted text content (XML structure filtered out)
-  public let content: String
-  /// Total number of XML elements processed
-  public let elementCount: UInt
-  /// List of unique element names found (sorted)
-  public let uniqueElements: [String]
-
-  public init(content: String, elementCount: UInt, uniqueElements: [String]) {
-    self.content = content
-    self.elementCount = elementCount
-    self.uniqueElements = uniqueElements
-  }
-}
+public typealias XmlExtractionResult = RustBridge.XmlExtractionResult
 
 /// Plain text and Markdown extraction result.
 ///
 /// Contains the extracted text along with statistics and,
 /// for Markdown files, structural elements like headers and links.
-public struct TextExtractionResult: Codable {
-  /// Extracted text content
-  public let content: String
-  /// Number of lines
-  public let lineCount: UInt
-  /// Number of words
-  public let wordCount: UInt
-  /// Number of characters
-  public let characterCount: UInt
-  /// Markdown headers (text only, Markdown files only)
-  public let headers: [String]?
-  /// Markdown links as (text, URL) tuples (Markdown files only)
-  public let links: [String]?
-  /// Code blocks as (language, code) tuples (Markdown files only)
-  public let codeBlocks: [String]?
-
-  public init(
-    content: String, lineCount: UInt, wordCount: UInt, characterCount: UInt, headers: [String]?,
-    links: [String]?, codeBlocks: [String]?
-  ) {
-    self.content = content
-    self.lineCount = lineCount
-    self.wordCount = wordCount
-    self.characterCount = characterCount
-    self.headers = headers
-    self.links = links
-    self.codeBlocks = codeBlocks
-  }
-}
+public typealias TextExtractionResult = RustBridge.TextExtractionResult
 
 /// PowerPoint (PPTX) extraction result.
 ///
 /// Contains extracted slide content, metadata, and embedded images/tables.
-public struct PptxExtractionResult: Codable {
-  /// Extracted text content from all slides
-  public let content: String
-  /// Presentation metadata
-  public let metadata: PptxMetadata
-  /// Total number of slides
-  public let slideCount: UInt
-  /// Total number of embedded images
-  public let imageCount: UInt
-  /// Total number of tables
-  public let tableCount: UInt
-  /// Extracted images from the presentation
-  public let images: [ExtractedImage]
-  /// Slide structure with boundaries (when page tracking is enabled)
-  public let pageStructure: PageStructure?
-  /// Per-slide content (when page tracking is enabled)
-  public let pageContents: [PageContent]?
-  /// Structured document representation
-  public let document: DocumentStructure?
-  /// Hyperlinks discovered in slides as (url, optional_label) pairs.
-  public let hyperlinks: [String]
-  /// Office metadata extracted from docProps/core.xml and docProps/app.xml.
-  ///
-  /// Contains keys like "title", "author", "created_by", "subject", "keywords",
-  /// "modified_by", "created_at", "modified_at", etc.
-  public let officeMetadata: [String: String]
-
-  public init(
-    content: String, metadata: PptxMetadata, slideCount: UInt, imageCount: UInt, tableCount: UInt,
-    images: [ExtractedImage], pageStructure: PageStructure?, pageContents: [PageContent]?,
-    document: DocumentStructure?, hyperlinks: [String], officeMetadata: [String: String]
-  ) {
-    self.content = content
-    self.metadata = metadata
-    self.slideCount = slideCount
-    self.imageCount = imageCount
-    self.tableCount = tableCount
-    self.images = images
-    self.pageStructure = pageStructure
-    self.pageContents = pageContents
-    self.document = document
-    self.hyperlinks = hyperlinks
-    self.officeMetadata = officeMetadata
-  }
-}
+public typealias PptxExtractionResult = RustBridge.PptxExtractionResult
 
 /// Email extraction result.
 ///
 /// Complete representation of an extracted email message (.eml or .msg)
 /// including headers, body content, and attachments.
-public struct EmailExtractionResult: Codable {
-  /// Email subject line
-  public let subject: String?
-  /// Sender email address
-  public let fromEmail: String?
-  /// Primary recipient email addresses
-  public let toEmails: [String]
-  /// CC recipient email addresses
-  public let ccEmails: [String]
-  /// BCC recipient email addresses
-  public let bccEmails: [String]
-  /// Email date/timestamp
-  public let date: String?
-  /// Message-ID header value
-  public let messageId: String?
-  /// Plain text version of the email body
-  public let plainText: String?
-  /// HTML version of the email body
-  public let htmlContent: String?
-  /// Cleaned/processed text content
-  public let cleanedText: String
-  /// List of email attachments
-  public let attachments: [EmailAttachment]
-  /// Additional email headers and metadata
-  public let metadata: [String: String]
-
-  public init(
-    subject: String?, fromEmail: String?, toEmails: [String], ccEmails: [String],
-    bccEmails: [String], date: String?, messageId: String?, plainText: String?,
-    htmlContent: String?, cleanedText: String, attachments: [EmailAttachment],
-    metadata: [String: String]
-  ) {
-    self.subject = subject
-    self.fromEmail = fromEmail
-    self.toEmails = toEmails
-    self.ccEmails = ccEmails
-    self.bccEmails = bccEmails
-    self.date = date
-    self.messageId = messageId
-    self.plainText = plainText
-    self.htmlContent = htmlContent
-    self.cleanedText = cleanedText
-    self.attachments = attachments
-    self.metadata = metadata
-  }
-}
+public typealias EmailExtractionResult = RustBridge.EmailExtractionResult
 
 /// Email attachment representation.
 ///
 /// Contains metadata and optionally the content of an email attachment.
-public struct EmailAttachment: Codable {
-  /// Attachment name (from Content-Disposition header)
-  public let name: String?
-  /// Filename of the attachment
-  public let filename: String?
-  /// MIME type of the attachment
-  public let mimeType: String?
-  /// Size in bytes
-  public let size: UInt?
-  /// Whether this attachment is an image
-  public let isImage: Bool
-  /// Attachment data (if extracted).
-  /// Uses `bytes::Bytes` for cheap cloning of large buffers.
-  public let data: Data?
-
-  public init(
-    name: String?, filename: String?, mimeType: String?, size: UInt?, isImage: Bool, data: Data?
-  ) {
-    self.name = name
-    self.filename = filename
-    self.mimeType = mimeType
-    self.size = size
-    self.isImage = isImage
-    self.data = data
-  }
-}
+public typealias EmailAttachment = RustBridge.EmailAttachment
 
 /// OCR extraction result.
 ///
 /// Result of performing OCR on an image or scanned document,
 /// including recognized text and detected tables.
-public struct OcrExtractionResult: Codable {
-  /// Recognized text content
-  public let content: String
-  /// Original MIME type of the processed image
-  public let mimeType: String
-  /// OCR processing metadata (confidence scores, language, etc.)
-  public let metadata: [String: String]
-  /// Tables detected and extracted via OCR
-  public let tables: [OcrTable]
-  /// Structured OCR elements with bounding boxes and confidence scores.
-  /// Available when TSV output is requested or table detection is enabled.
-  public let ocrElements: [OcrElement]?
-  /// Structured document produced from hOCR parsing.
-  /// Carries paragraph structure, bounding boxes, and confidence scores
-  /// that the flattened `content` string discards.
-  public let internalDocument: String?
-
-  public init(
-    content: String, mimeType: String, metadata: [String: String], tables: [OcrTable],
-    ocrElements: [OcrElement]?, internalDocument: String?
-  ) {
-    self.content = content
-    self.mimeType = mimeType
-    self.metadata = metadata
-    self.tables = tables
-    self.ocrElements = ocrElements
-    self.internalDocument = internalDocument
-  }
-}
+public typealias OcrExtractionResult = RustBridge.OcrExtractionResult
 
 /// Table detected via OCR.
 ///
 /// Represents a table structure recognized during OCR processing.
-public struct OcrTable: Codable {
-  /// Table cells as a 2D vector (rows × columns)
-  public let cells: [[String]]
-  /// Markdown representation of the table
-  public let markdown: String
-  /// Page number where the table was found (1-indexed)
-  public let pageNumber: UInt
-  /// Bounding box of the table in pixel coordinates (from OCR word positions).
-  public let boundingBox: OcrTableBoundingBox?
-
-  public init(
-    cells: [[String]], markdown: String, pageNumber: UInt, boundingBox: OcrTableBoundingBox?
-  ) {
-    self.cells = cells
-    self.markdown = markdown
-    self.pageNumber = pageNumber
-    self.boundingBox = boundingBox
-  }
-}
+public typealias OcrTable = RustBridge.OcrTable
 
 /// Bounding box for an OCR-detected table in pixel coordinates.
-public struct OcrTableBoundingBox: Codable {
-  /// Left x-coordinate (pixels)
-  public let left: UInt32
-  /// Top y-coordinate (pixels)
-  public let top: UInt32
-  /// Right x-coordinate (pixels)
-  public let right: UInt32
-  /// Bottom y-coordinate (pixels)
-  public let bottom: UInt32
-
-  public init(left: UInt32, top: UInt32, right: UInt32, bottom: UInt32) {
-    self.left = left
-    self.top = top
-    self.right = right
-    self.bottom = bottom
-  }
-}
+public typealias OcrTableBoundingBox = RustBridge.OcrTableBoundingBox
 
 /// Image preprocessing configuration for OCR.
 ///
 /// These settings control how images are preprocessed before OCR to improve
 /// text recognition quality. Different preprocessing strategies work better
 /// for different document types.
-public struct ImagePreprocessingConfig: Codable {
-  /// Target DPI for the image (300 is standard, 600 for small text).
-  public let targetDpi: Int32
-  /// Auto-detect and correct image rotation.
-  public let autoRotate: Bool
-  /// Correct skew (tilted images).
-  public let deskew: Bool
-  /// Remove noise from the image.
-  public let denoise: Bool
-  /// Enhance contrast for better text visibility.
-  public let contrastEnhance: Bool
-  /// Binarization method: "otsu", "sauvola", "adaptive".
-  public let binarizationMethod: String
-  /// Invert colors (white text on black → black on white).
-  public let invertColors: Bool
-
-  public init(
-    targetDpi: Int32, autoRotate: Bool, deskew: Bool, denoise: Bool, contrastEnhance: Bool,
-    binarizationMethod: String, invertColors: Bool
-  ) {
-    self.targetDpi = targetDpi
-    self.autoRotate = autoRotate
-    self.deskew = deskew
-    self.denoise = denoise
-    self.contrastEnhance = contrastEnhance
-    self.binarizationMethod = binarizationMethod
-    self.invertColors = invertColors
-  }
-}
+public typealias ImagePreprocessingConfig = RustBridge.ImagePreprocessingConfig
 
 /// Tesseract OCR configuration.
 ///
 /// Provides fine-grained control over Tesseract OCR engine parameters.
 /// Most users can use the defaults, but these settings allow optimization
 /// for specific document types (invoices, handwriting, etc.).
-public struct TesseractConfig: Codable {
-  /// Language code (e.g., "eng", "deu", "fra")
-  public let language: String
-  /// Page Segmentation Mode (0-13).
-  ///
-  /// Common values:
-  /// - 3: Fully automatic page segmentation (default)
-  /// - 6: Assume a single uniform block of text
-  /// - 11: Sparse text with no particular order
-  public let psm: Int32
-  /// Output format ("text" or "markdown")
-  public let outputFormat: String
-  /// OCR Engine Mode (0-3).
-  ///
-  /// - 0: Legacy engine only
-  /// - 1: Neural nets (LSTM) only (usually best)
-  /// - 2: Legacy + LSTM
-  /// - 3: Default (based on what's available)
-  public let oem: Int32
-  /// Minimum confidence threshold (0.0-100.0).
-  ///
-  /// Words with confidence below this threshold may be rejected or flagged.
-  public let minConfidence: Double
-  /// Image preprocessing configuration.
-  ///
-  /// Controls how images are preprocessed before OCR. Can significantly
-  /// improve quality for scanned documents or low-quality images.
-  public let preprocessing: ImagePreprocessingConfig?
-  /// Enable automatic table detection and reconstruction
-  public let enableTableDetection: Bool
-  /// Minimum confidence threshold for table detection (0.0-1.0)
-  public let tableMinConfidence: Double
-  /// Column threshold for table detection (pixels)
-  public let tableColumnThreshold: Int32
-  /// Row threshold ratio for table detection (0.0-1.0)
-  public let tableRowThresholdRatio: Double
-  /// Enable OCR result caching
-  public let useCache: Bool
-  /// Use pre-adapted templates for character classification
-  public let classifyUsePreAdaptedTemplates: Bool
-  /// Enable N-gram language model
-  public let languageModelNgramOn: Bool
-  /// Don't reject good words during block-level processing
-  public let tesseditDontBlkrejGoodWds: Bool
-  /// Don't reject good words during row-level processing
-  public let tesseditDontRowrejGoodWds: Bool
-  /// Enable dictionary correction
-  public let tesseditEnableDictCorrection: Bool
-  /// Whitelist of allowed characters (empty = all allowed)
-  public let tesseditCharWhitelist: String
-  /// Blacklist of forbidden characters (empty = none forbidden)
-  public let tesseditCharBlacklist: String
-  /// Use primary language params model
-  public let tesseditUsePrimaryParamsModel: Bool
-  /// Variable-width space detection
-  public let textordSpaceSizeIsVariable: Bool
-  /// Use adaptive thresholding method
-  public let thresholdingMethod: Bool
-
-  public init(
-    language: String, psm: Int32, outputFormat: String, oem: Int32, minConfidence: Double,
-    preprocessing: ImagePreprocessingConfig?, enableTableDetection: Bool,
-    tableMinConfidence: Double, tableColumnThreshold: Int32, tableRowThresholdRatio: Double,
-    useCache: Bool, classifyUsePreAdaptedTemplates: Bool, languageModelNgramOn: Bool,
-    tesseditDontBlkrejGoodWds: Bool, tesseditDontRowrejGoodWds: Bool,
-    tesseditEnableDictCorrection: Bool, tesseditCharWhitelist: String,
-    tesseditCharBlacklist: String, tesseditUsePrimaryParamsModel: Bool,
-    textordSpaceSizeIsVariable: Bool, thresholdingMethod: Bool
-  ) {
-    self.language = language
-    self.psm = psm
-    self.outputFormat = outputFormat
-    self.oem = oem
-    self.minConfidence = minConfidence
-    self.preprocessing = preprocessing
-    self.enableTableDetection = enableTableDetection
-    self.tableMinConfidence = tableMinConfidence
-    self.tableColumnThreshold = tableColumnThreshold
-    self.tableRowThresholdRatio = tableRowThresholdRatio
-    self.useCache = useCache
-    self.classifyUsePreAdaptedTemplates = classifyUsePreAdaptedTemplates
-    self.languageModelNgramOn = languageModelNgramOn
-    self.tesseditDontBlkrejGoodWds = tesseditDontBlkrejGoodWds
-    self.tesseditDontRowrejGoodWds = tesseditDontRowrejGoodWds
-    self.tesseditEnableDictCorrection = tesseditEnableDictCorrection
-    self.tesseditCharWhitelist = tesseditCharWhitelist
-    self.tesseditCharBlacklist = tesseditCharBlacklist
-    self.tesseditUsePrimaryParamsModel = tesseditUsePrimaryParamsModel
-    self.textordSpaceSizeIsVariable = textordSpaceSizeIsVariable
-    self.thresholdingMethod = thresholdingMethod
-  }
-}
+public typealias TesseractConfig = RustBridge.TesseractConfig
 
 /// Image preprocessing metadata.
 ///
 /// Tracks the transformations applied to an image during OCR preprocessing,
 /// including DPI normalization, resizing, and resampling.
-public struct ImagePreprocessingMetadata: Codable {
-  /// Original image dimensions (width, height) in pixels
-  public let originalDimensions: [UInt]
-  /// Original image DPI (horizontal, vertical)
-  public let originalDpi: [Double]
-  /// Target DPI from configuration
-  public let targetDpi: Int32
-  /// Scaling factor applied to the image
-  public let scaleFactor: Double
-  /// Whether DPI was auto-adjusted based on content
-  public let autoAdjusted: Bool
-  /// Final DPI after processing
-  public let finalDpi: Int32
-  /// New dimensions after resizing (if resized)
-  public let newDimensions: [UInt]?
-  /// Resampling algorithm used ("LANCZOS3", "CATMULLROM", etc.)
-  public let resampleMethod: String
-  /// Whether dimensions were clamped to max_image_dimension
-  public let dimensionClamped: Bool
-  /// Calculated optimal DPI (if auto_adjust_dpi enabled)
-  public let calculatedDpi: Int32?
-  /// Whether resize was skipped (dimensions already optimal)
-  public let skippedResize: Bool
-  /// Error message if resize failed
-  public let resizeError: String?
-
-  public init(
-    originalDimensions: [UInt], originalDpi: [Double], targetDpi: Int32, scaleFactor: Double,
-    autoAdjusted: Bool, finalDpi: Int32, newDimensions: [UInt]?, resampleMethod: String,
-    dimensionClamped: Bool, calculatedDpi: Int32?, skippedResize: Bool, resizeError: String?
-  ) {
-    self.originalDimensions = originalDimensions
-    self.originalDpi = originalDpi
-    self.targetDpi = targetDpi
-    self.scaleFactor = scaleFactor
-    self.autoAdjusted = autoAdjusted
-    self.finalDpi = finalDpi
-    self.newDimensions = newDimensions
-    self.resampleMethod = resampleMethod
-    self.dimensionClamped = dimensionClamped
-    self.calculatedDpi = calculatedDpi
-    self.skippedResize = skippedResize
-    self.resizeError = resizeError
-  }
-}
+public typealias ImagePreprocessingMetadata = RustBridge.ImagePreprocessingMetadata
 
 /// Extraction result metadata.
 ///
 /// Contains common fields applicable to all formats, format-specific metadata
 /// via a discriminated union, and additional custom fields from postprocessors.
-public struct Metadata: Codable {
-  /// Document title
-  public let title: String?
-  /// Document subject or description
-  public let subject: String?
-  /// Primary author(s) - always Vec for consistency
-  public let authors: [String]?
-  /// Keywords/tags - always Vec for consistency
-  public let keywords: [String]?
-  /// Primary language (ISO 639 code)
-  public let language: String?
-  /// Creation timestamp (ISO 8601 format)
-  public let createdAt: String?
-  /// Last modification timestamp (ISO 8601 format)
-  public let modifiedAt: String?
-  /// User who created the document
-  public let createdBy: String?
-  /// User who last modified the document
-  public let modifiedBy: String?
-  /// Page/slide/sheet structure with boundaries
-  public let pages: PageStructure?
-  /// Format-specific metadata (discriminated union)
-  ///
-  /// Contains detailed metadata specific to the document format.
-  /// Serializes with a `format_type` discriminator field.
-  public let format: FormatMetadata?
-  /// Image preprocessing metadata (when OCR preprocessing was applied)
-  public let imagePreprocessing: ImagePreprocessingMetadata?
-  /// JSON schema (for structured data extraction)
-  public let jsonSchema: String?
-  /// Error metadata (for batch operations)
-  public let error: ErrorMetadata?
-  /// Extraction duration in milliseconds (for benchmarking).
-  ///
-  /// This field is populated by batch extraction to provide per-file timing
-  /// information. It's `None` for single-file extraction (which uses external timing).
-  public let extractionDurationMs: UInt64?
-  /// Document category (from frontmatter or classification).
-  public let category: String?
-  /// Document tags (from frontmatter).
-  public let tags: [String]?
-  /// Document version string (from frontmatter).
-  public let documentVersion: String?
-  /// Abstract or summary text (from frontmatter).
-  public let abstractText: String?
-  /// Output format identifier (e.g., "markdown", "html", "text").
-  ///
-  /// Set by the output format pipeline stage when format conversion is applied.
-  /// Previously stored in `metadata.additional["output_format"]`.
-  public let outputFormat: String?
-  /// Additional custom fields from postprocessors.
-  ///
-  /// **Deprecated**: Prefer using typed fields on `ExtractionResult` and `Metadata`
-  /// instead of inserting into this map. Typed fields provide better cross-language
-  /// compatibility and type safety. This field will be removed in a future major version.
-  ///
-  /// This flattened map allows Python/TypeScript postprocessors to add
-  /// arbitrary fields (entity extraction, keyword extraction, etc.).
-  /// Fields are merged at the root level during serialization.
-  /// Uses `Cow<'static, str>` keys so static string keys avoid allocation.
-  public let additional: String
-
-  public init(
-    title: String?, subject: String?, authors: [String]?, keywords: [String]?, language: String?,
-    createdAt: String?, modifiedAt: String?, createdBy: String?, modifiedBy: String?,
-    pages: PageStructure?, format: FormatMetadata?, imagePreprocessing: ImagePreprocessingMetadata?,
-    jsonSchema: String?, error: ErrorMetadata?, extractionDurationMs: UInt64?, category: String?,
-    tags: [String]?, documentVersion: String?, abstractText: String?, outputFormat: String?,
-    additional: String
-  ) {
-    self.title = title
-    self.subject = subject
-    self.authors = authors
-    self.keywords = keywords
-    self.language = language
-    self.createdAt = createdAt
-    self.modifiedAt = modifiedAt
-    self.createdBy = createdBy
-    self.modifiedBy = modifiedBy
-    self.pages = pages
-    self.format = format
-    self.imagePreprocessing = imagePreprocessing
-    self.jsonSchema = jsonSchema
-    self.error = error
-    self.extractionDurationMs = extractionDurationMs
-    self.category = category
-    self.tags = tags
-    self.documentVersion = documentVersion
-    self.abstractText = abstractText
-    self.outputFormat = outputFormat
-    self.additional = additional
-  }
-}
+public typealias Metadata = RustBridge.Metadata
 
 /// Excel/spreadsheet metadata.
 ///
 /// Contains information about sheets in Excel, OpenDocument Calc, and other
 /// spreadsheet formats (.xlsx, .xls, .ods, etc.).
-public struct ExcelMetadata: Codable {
-  /// Total number of sheets in the workbook
-  public let sheetCount: UInt
-  /// Names of all sheets in order
-  public let sheetNames: [String]
-
-  public init(sheetCount: UInt, sheetNames: [String]) {
-    self.sheetCount = sheetCount
-    self.sheetNames = sheetNames
-  }
-}
+public typealias ExcelMetadata = RustBridge.ExcelMetadata
 
 /// Email metadata extracted from .eml and .msg files.
 ///
 /// Includes sender/recipient information, message ID, and attachment list.
-public struct EmailMetadata: Codable {
-  /// Sender's email address
-  public let fromEmail: String?
-  /// Sender's display name
-  public let fromName: String?
-  /// Primary recipients
-  public let toEmails: [String]
-  /// CC recipients
-  public let ccEmails: [String]
-  /// BCC recipients
-  public let bccEmails: [String]
-  /// Message-ID header value
-  public let messageId: String?
-  /// List of attachment filenames
-  public let attachments: [String]
-
-  public init(
-    fromEmail: String?, fromName: String?, toEmails: [String], ccEmails: [String],
-    bccEmails: [String], messageId: String?, attachments: [String]
-  ) {
-    self.fromEmail = fromEmail
-    self.fromName = fromName
-    self.toEmails = toEmails
-    self.ccEmails = ccEmails
-    self.bccEmails = bccEmails
-    self.messageId = messageId
-    self.attachments = attachments
-  }
-}
+public typealias EmailMetadata = RustBridge.EmailMetadata
 
 /// Archive (ZIP/TAR/7Z) metadata.
 ///
 /// Extracted from compressed archive files containing file lists and size information.
-public struct ArchiveMetadata: Codable {
-  /// Archive format ("ZIP", "TAR", "7Z", etc.)
-  public let format: String
-  /// Total number of files in the archive
-  public let fileCount: UInt
-  /// List of file paths within the archive
-  public let fileList: [String]
-  /// Total uncompressed size in bytes
-  public let totalSize: UInt
-  /// Compressed size in bytes (if available)
-  public let compressedSize: UInt?
-
-  public init(
-    format: String, fileCount: UInt, fileList: [String], totalSize: UInt, compressedSize: UInt?
-  ) {
-    self.format = format
-    self.fileCount = fileCount
-    self.fileList = fileList
-    self.totalSize = totalSize
-    self.compressedSize = compressedSize
-  }
-}
+public typealias ArchiveMetadata = RustBridge.ArchiveMetadata
 
 /// XML metadata extracted during XML parsing.
 ///
 /// Provides statistics about XML document structure.
-public struct XmlMetadata: Codable {
-  /// Total number of XML elements processed
-  public let elementCount: UInt
-  /// List of unique element tag names (sorted)
-  public let uniqueElements: [String]
-
-  public init(elementCount: UInt, uniqueElements: [String]) {
-    self.elementCount = elementCount
-    self.uniqueElements = uniqueElements
-  }
-}
+public typealias XmlMetadata = RustBridge.XmlMetadata
 
 /// Text/Markdown metadata.
 ///
 /// Extracted from plain text and Markdown files. Includes word counts and,
 /// for Markdown, structural elements like headers and links.
-public struct TextMetadata: Codable {
-  /// Number of lines in the document
-  public let lineCount: UInt
-  /// Number of words
-  public let wordCount: UInt
-  /// Number of characters
-  public let characterCount: UInt
-  /// Markdown headers (headings text only, for Markdown files)
-  public let headers: [String]?
-  /// Markdown links as (text, url) tuples (for Markdown files)
-  public let links: [String]?
-  /// Code blocks as (language, code) tuples (for Markdown files)
-  public let codeBlocks: [String]?
-
-  public init(
-    lineCount: UInt, wordCount: UInt, characterCount: UInt, headers: [String]?, links: [String]?,
-    codeBlocks: [String]?
-  ) {
-    self.lineCount = lineCount
-    self.wordCount = wordCount
-    self.characterCount = characterCount
-    self.headers = headers
-    self.links = links
-    self.codeBlocks = codeBlocks
-  }
-}
+public typealias TextMetadata = RustBridge.TextMetadata
 
 /// Header/heading element metadata.
-public struct HeaderMetadata: Codable {
-  /// Header level: 1 (h1) through 6 (h6)
-  public let level: UInt8
-  /// Normalized text content of the header
-  public let text: String
-  /// HTML id attribute if present
-  public let id: String?
-  /// Document tree depth at the header element
-  public let depth: UInt
-  /// Byte offset in original HTML document
-  public let htmlOffset: UInt
-
-  public init(level: UInt8, text: String, id: String?, depth: UInt, htmlOffset: UInt) {
-    self.level = level
-    self.text = text
-    self.id = id
-    self.depth = depth
-    self.htmlOffset = htmlOffset
-  }
-}
+public typealias HeaderMetadata = RustBridge.HeaderMetadata
 
 /// Link element metadata.
-public struct LinkMetadata: Codable {
-  /// The href URL value
-  public let href: String
-  /// Link text content (normalized)
-  public let text: String
-  /// Optional title attribute
-  public let title: String?
-  /// Link type classification
-  public let linkType: LinkType
-  /// Rel attribute values
-  public let rel: [String]
-  /// Additional attributes as key-value pairs
-  public let attributes: [String]
-
-  public init(
-    href: String, text: String, title: String?, linkType: LinkType, rel: [String],
-    attributes: [String]
-  ) {
-    self.href = href
-    self.text = text
-    self.title = title
-    self.linkType = linkType
-    self.rel = rel
-    self.attributes = attributes
-  }
-}
+public typealias LinkMetadata = RustBridge.LinkMetadata
 
 /// Image element metadata.
-public struct ImageMetadataType: Codable {
-  /// Image source (URL, data URI, or SVG content)
-  public let src: String
-  /// Alternative text from alt attribute
-  public let alt: String?
-  /// Title attribute
-  public let title: String?
-  /// Image dimensions as (width, height) if available
-  public let dimensions: [UInt32]?
-  /// Image type classification
-  public let imageType: ImageType
-  /// Additional attributes as key-value pairs
-  public let attributes: [String]
-
-  public init(
-    src: String, alt: String?, title: String?, dimensions: [UInt32]?, imageType: ImageType,
-    attributes: [String]
-  ) {
-    self.src = src
-    self.alt = alt
-    self.title = title
-    self.dimensions = dimensions
-    self.imageType = imageType
-    self.attributes = attributes
-  }
-}
+public typealias ImageMetadataType = RustBridge.ImageMetadataType
 
 /// Structured data (Schema.org, microdata, RDFa) block.
-public struct StructuredData: Codable {
-  /// Type of structured data
-  public let dataType: StructuredDataType
-  /// Raw JSON string representation
-  public let rawJson: String
-  /// Schema type if detectable (e.g., "Article", "Event", "Product")
-  public let schemaType: String?
-
-  public init(dataType: StructuredDataType, rawJson: String, schemaType: String?) {
-    self.dataType = dataType
-    self.rawJson = rawJson
-    self.schemaType = schemaType
-  }
-}
+public typealias StructuredData = RustBridge.StructuredData
 
 /// HTML metadata extracted from HTML documents.
 ///
 /// Includes document-level metadata, Open Graph data, Twitter Card metadata,
 /// and extracted structural elements (headers, links, images, structured data).
-public struct HtmlMetadata: Codable {
-  /// Document title from `<title>` tag
-  public let title: String?
-  /// Document description from `<meta name="description">` tag
-  public let description: String?
-  /// Document keywords from `<meta name="keywords">` tag, split on commas
-  public let keywords: [String]
-  /// Document author from `<meta name="author">` tag
-  public let author: String?
-  /// Canonical URL from `<link rel="canonical">` tag
-  public let canonicalUrl: String?
-  /// Base URL from `<base href="">` tag for resolving relative URLs
-  public let baseHref: String?
-  /// Document language from `lang` attribute
-  public let language: String?
-  /// Document text direction from `dir` attribute
-  public let textDirection: TextDirection?
-  /// Open Graph metadata (og:* properties) for social media
-  /// Keys like "title", "description", "image", "url", etc.
-  public let openGraph: [String: String]
-  /// Twitter Card metadata (twitter:* properties)
-  /// Keys like "card", "site", "creator", "title", "description", "image", etc.
-  public let twitterCard: [String: String]
-  /// Additional meta tags not covered by specific fields
-  /// Keys are meta name/property attributes, values are content
-  public let metaTags: [String: String]
-  /// Extracted header elements with hierarchy
-  public let headers: [HeaderMetadata]
-  /// Extracted hyperlinks with type classification
-  public let links: [LinkMetadata]
-  /// Extracted images with source and dimensions
-  public let images: [ImageMetadataType]
-  /// Extracted structured data blocks
-  public let structuredData: [StructuredData]
-
-  public init(
-    title: String?, description: String?, keywords: [String], author: String?,
-    canonicalUrl: String?, baseHref: String?, language: String?, textDirection: TextDirection?,
-    openGraph: [String: String], twitterCard: [String: String], metaTags: [String: String],
-    headers: [HeaderMetadata], links: [LinkMetadata], images: [ImageMetadataType],
-    structuredData: [StructuredData]
-  ) {
-    self.title = title
-    self.description = description
-    self.keywords = keywords
-    self.author = author
-    self.canonicalUrl = canonicalUrl
-    self.baseHref = baseHref
-    self.language = language
-    self.textDirection = textDirection
-    self.openGraph = openGraph
-    self.twitterCard = twitterCard
-    self.metaTags = metaTags
-    self.headers = headers
-    self.links = links
-    self.images = images
-    self.structuredData = structuredData
-  }
-}
+public typealias HtmlMetadata = RustBridge.HtmlMetadata
 
 /// OCR processing metadata.
 ///
 /// Captures information about OCR processing configuration and results.
-public struct OcrMetadata: Codable {
-  /// OCR language code(s) used
-  public let language: String
-  /// Tesseract Page Segmentation Mode (PSM)
-  public let psm: Int32
-  /// Output format (e.g., "text", "hocr")
-  public let outputFormat: String
-  /// Number of tables detected
-  public let tableCount: UInt
-  public let tableRows: UInt?
-  public let tableCols: UInt?
-
-  public init(
-    language: String, psm: Int32, outputFormat: String, tableCount: UInt, tableRows: UInt?,
-    tableCols: UInt?
-  ) {
-    self.language = language
-    self.psm = psm
-    self.outputFormat = outputFormat
-    self.tableCount = tableCount
-    self.tableRows = tableRows
-    self.tableCols = tableCols
-  }
-}
+public typealias OcrMetadata = RustBridge.OcrMetadata
 
 /// Error metadata (for batch operations).
-public struct ErrorMetadata: Codable {
-  public let errorType: String
-  public let message: String
-
-  public init(errorType: String, message: String) {
-    self.errorType = errorType
-    self.message = message
-  }
-}
+public typealias ErrorMetadata = RustBridge.ErrorMetadata
 
 /// PowerPoint presentation metadata.
 ///
 /// Extracted from PPTX files containing slide counts and presentation details.
-public struct PptxMetadata: Codable {
-  /// Total number of slides in the presentation
-  public let slideCount: UInt
-  /// Names of slides (if available)
-  public let slideNames: [String]
-  /// Number of embedded images
-  public let imageCount: UInt?
-  /// Number of tables
-  public let tableCount: UInt?
-
-  public init(slideCount: UInt, slideNames: [String], imageCount: UInt?, tableCount: UInt?) {
-    self.slideCount = slideCount
-    self.slideNames = slideNames
-    self.imageCount = imageCount
-    self.tableCount = tableCount
-  }
-}
+public typealias PptxMetadata = RustBridge.PptxMetadata
 
 /// Word document metadata.
 ///
 /// Extracted from DOCX files using shared Office Open XML metadata extraction.
 /// Integrates with `office_metadata` module for core/app/custom properties.
-public struct DocxMetadata: Codable {
-  /// Core properties from docProps/core.xml (Dublin Core metadata)
-  ///
-  /// Contains title, creator, subject, keywords, dates, etc.
-  /// Shared format across DOCX/PPTX/XLSX documents.
-  public let coreProperties: String?
-  /// Application properties from docProps/app.xml (Word-specific statistics)
-  ///
-  /// Contains word count, page count, paragraph count, editing time, etc.
-  /// DOCX-specific variant of Office application properties.
-  public let appProperties: String?
-  /// Custom properties from docProps/custom.xml (user-defined properties)
-  ///
-  /// Contains key-value pairs defined by users or applications.
-  /// Values can be strings, numbers, booleans, or dates.
-  public let customProperties: [String: String]?
-
-  public init(coreProperties: String?, appProperties: String?, customProperties: [String: String]?)
-  {
-    self.coreProperties = coreProperties
-    self.appProperties = appProperties
-    self.customProperties = customProperties
-  }
-}
+public typealias DocxMetadata = RustBridge.DocxMetadata
 
 /// CSV/TSV file metadata.
-public struct CsvMetadata: Codable {
-  public let rowCount: UInt
-  public let columnCount: UInt
-  public let delimiter: String?
-  public let hasHeader: Bool
-  public let columnTypes: [String]?
-
-  public init(
-    rowCount: UInt, columnCount: UInt, delimiter: String?, hasHeader: Bool, columnTypes: [String]?
-  ) {
-    self.rowCount = rowCount
-    self.columnCount = columnCount
-    self.delimiter = delimiter
-    self.hasHeader = hasHeader
-    self.columnTypes = columnTypes
-  }
-}
+public typealias CsvMetadata = RustBridge.CsvMetadata
 
 /// BibTeX bibliography metadata.
-public struct BibtexMetadata: Codable {
-  /// Number of entries in the bibliography.
-  public let entryCount: UInt
-  public let citationKeys: [String]
-  public let authors: [String]
-  public let yearRange: YearRange?
-  public let entryTypes: [String: UInt]?
-
-  public init(
-    entryCount: UInt, citationKeys: [String], authors: [String], yearRange: YearRange?,
-    entryTypes: [String: UInt]?
-  ) {
-    self.entryCount = entryCount
-    self.citationKeys = citationKeys
-    self.authors = authors
-    self.yearRange = yearRange
-    self.entryTypes = entryTypes
-  }
-}
+public typealias BibtexMetadata = RustBridge.BibtexMetadata
 
 /// Citation file metadata (RIS, PubMed, EndNote).
-public struct CitationMetadata: Codable {
-  public let citationCount: UInt
-  public let format: String?
-  public let authors: [String]
-  public let yearRange: YearRange?
-  public let dois: [String]
-  public let keywords: [String]
-
-  public init(
-    citationCount: UInt, format: String?, authors: [String], yearRange: YearRange?, dois: [String],
-    keywords: [String]
-  ) {
-    self.citationCount = citationCount
-    self.format = format
-    self.authors = authors
-    self.yearRange = yearRange
-    self.dois = dois
-    self.keywords = keywords
-  }
-}
+public typealias CitationMetadata = RustBridge.CitationMetadata
 
 /// Year range for bibliographic metadata.
-public struct YearRange: Codable {
-  public let min: UInt32?
-  public let max: UInt32?
-  public let years: [UInt32]
-
-  public init(min: UInt32?, max: UInt32?, years: [UInt32]) {
-    self.min = min
-    self.max = max
-    self.years = years
-  }
-}
+public typealias YearRange = RustBridge.YearRange
 
 /// FictionBook (FB2) metadata.
-public struct FictionBookMetadata: Codable {
-  public let genres: [String]
-  public let sequences: [String]
-  public let annotation: String?
-
-  public init(genres: [String], sequences: [String], annotation: String?) {
-    self.genres = genres
-    self.sequences = sequences
-    self.annotation = annotation
-  }
-}
+public typealias FictionBookMetadata = RustBridge.FictionBookMetadata
 
 /// dBASE (DBF) file metadata.
-public struct DbfMetadata: Codable {
-  public let recordCount: UInt
-  public let fieldCount: UInt
-  public let fields: [DbfFieldInfo]
-
-  public init(recordCount: UInt, fieldCount: UInt, fields: [DbfFieldInfo]) {
-    self.recordCount = recordCount
-    self.fieldCount = fieldCount
-    self.fields = fields
-  }
-}
+public typealias DbfMetadata = RustBridge.DbfMetadata
 
 /// dBASE field information.
-public struct DbfFieldInfo: Codable {
-  public let name: String
-  public let fieldType: String
-
-  public init(name: String, fieldType: String) {
-    self.name = name
-    self.fieldType = fieldType
-  }
-}
+public typealias DbfFieldInfo = RustBridge.DbfFieldInfo
 
 /// JATS (Journal Article Tag Suite) metadata.
-public struct JatsMetadata: Codable {
-  public let copyright: String?
-  public let license: String?
-  public let historyDates: [String: String]
-  public let contributorRoles: [ContributorRole]
-
-  public init(
-    copyright: String?, license: String?, historyDates: [String: String],
-    contributorRoles: [ContributorRole]
-  ) {
-    self.copyright = copyright
-    self.license = license
-    self.historyDates = historyDates
-    self.contributorRoles = contributorRoles
-  }
-}
+public typealias JatsMetadata = RustBridge.JatsMetadata
 
 /// JATS contributor with role.
-public struct ContributorRole: Codable {
-  public let name: String
-  public let role: String?
-
-  public init(name: String, role: String?) {
-    self.name = name
-    self.role = role
-  }
-}
+public typealias ContributorRole = RustBridge.ContributorRole
 
 /// EPUB metadata (Dublin Core extensions).
-public struct EpubMetadata: Codable {
-  public let coverage: String?
-  public let dcFormat: String?
-  public let relation: String?
-  public let source: String?
-  public let dcType: String?
-  public let coverImage: String?
-
-  public init(
-    coverage: String?, dcFormat: String?, relation: String?, source: String?, dcType: String?,
-    coverImage: String?
-  ) {
-    self.coverage = coverage
-    self.dcFormat = dcFormat
-    self.relation = relation
-    self.source = source
-    self.dcType = dcType
-    self.coverImage = coverImage
-  }
-}
+public typealias EpubMetadata = RustBridge.EpubMetadata
 
 /// Outlook PST archive metadata.
-public struct PstMetadata: Codable {
-  public let messageCount: UInt
-
-  public init(messageCount: UInt) {
-    self.messageCount = messageCount
-  }
-}
+public typealias PstMetadata = RustBridge.PstMetadata
 
 /// Confidence scores for an OCR element.
 ///
 /// Separates detection confidence (how confident that text exists at this location)
 /// from recognition confidence (how confident about the actual text content).
-public struct OcrConfidence: Codable {
-  /// Detection confidence: how confident the OCR engine is that text exists here.
-  ///
-  /// PaddleOCR provides this as `box_score`, Tesseract doesn't have a direct equivalent.
-  /// Range: 0.0 to 1.0 (or None if not available).
-  public let detection: Double?
-  /// Recognition confidence: how confident about the text content.
-  ///
-  /// Range: 0.0 to 1.0.
-  public let recognition: Double
-
-  public init(detection: Double?, recognition: Double) {
-    self.detection = detection
-    self.recognition = recognition
-  }
-}
+public typealias OcrConfidence = RustBridge.OcrConfidence
 
 /// Rotation information for an OCR element.
-public struct OcrRotation: Codable {
-  /// Rotation angle in degrees (0, 90, 180, 270 for PaddleOCR).
-  public let angleDegrees: Double
-  /// Confidence score for the rotation detection.
-  public let confidence: Double?
-
-  public init(angleDegrees: Double, confidence: Double?) {
-    self.angleDegrees = angleDegrees
-    self.confidence = confidence
-  }
-}
+public typealias OcrRotation = RustBridge.OcrRotation
 
 /// A unified OCR element representing detected text with full metadata.
 ///
 /// This is the primary type for structured OCR output, preserving all information
 /// from both Tesseract and PaddleOCR backends.
-public struct OcrElement: Codable {
-  /// The recognized text content.
-  public let text: String
-  /// Bounding geometry (rectangle or quadrilateral).
-  public let geometry: OcrBoundingGeometry
-  /// Confidence scores for detection and recognition.
-  public let confidence: OcrConfidence
-  /// Hierarchical level (word, line, block, page).
-  public let level: OcrElementLevel
-  /// Rotation information (if detected).
-  public let rotation: OcrRotation?
-  /// Page number (1-indexed).
-  public let pageNumber: UInt
-  /// Parent element ID for hierarchical relationships.
-  ///
-  /// Only used for Tesseract output which has word -> line -> block hierarchy.
-  public let parentId: String?
-  /// Backend-specific metadata that doesn't fit the unified schema.
-  public let backendMetadata: [String: String]
-
-  public init(
-    text: String, geometry: OcrBoundingGeometry, confidence: OcrConfidence, level: OcrElementLevel,
-    rotation: OcrRotation?, pageNumber: UInt, parentId: String?, backendMetadata: [String: String]
-  ) {
-    self.text = text
-    self.geometry = geometry
-    self.confidence = confidence
-    self.level = level
-    self.rotation = rotation
-    self.pageNumber = pageNumber
-    self.parentId = parentId
-    self.backendMetadata = backendMetadata
-  }
-}
+public typealias OcrElement = RustBridge.OcrElement
 
 /// Configuration for OCR element extraction.
 ///
 /// Controls how OCR elements are extracted and filtered.
-public struct OcrElementConfig: Codable {
-  /// Whether to include OCR elements in the extraction result.
-  ///
-  /// When true, the `ocr_elements` field in `ExtractionResult` will be populated.
-  public let includeElements: Bool
-  /// Minimum hierarchical level to include.
-  ///
-  /// Elements below this level (e.g., words when min_level is Line) will be excluded.
-  public let minLevel: OcrElementLevel
-  /// Minimum recognition confidence threshold (0.0-1.0).
-  ///
-  /// Elements with confidence below this threshold will be filtered out.
-  public let minConfidence: Double
-  /// Whether to build hierarchical relationships between elements.
-  ///
-  /// When true, `parent_id` fields will be populated based on spatial containment.
-  /// Only meaningful for Tesseract output.
-  public let buildHierarchy: Bool
-
-  public init(
-    includeElements: Bool, minLevel: OcrElementLevel, minConfidence: Double, buildHierarchy: Bool
-  ) {
-    self.includeElements = includeElements
-    self.minLevel = minLevel
-    self.minConfidence = minConfidence
-    self.buildHierarchy = buildHierarchy
-  }
-}
+public typealias OcrElementConfig = RustBridge.OcrElementConfig
 
 /// Unified page structure for documents.
 ///
 /// Supports different page types (PDF pages, PPTX slides, Excel sheets)
 /// with character offset boundaries for chunk-to-page mapping.
-public struct PageStructure: Codable {
-  /// Total number of pages/slides/sheets
-  public let totalCount: UInt
-  /// Type of paginated unit
-  public let unitType: PageUnitType
-  /// Character offset boundaries for each page
-  ///
-  /// Maps character ranges in the extracted content to page numbers.
-  /// Used for chunk page range calculation.
-  public let boundaries: [PageBoundary]?
-  /// Detailed per-page metadata (optional, only when needed)
-  public let pages: [PageInfo]?
-
-  public init(
-    totalCount: UInt, unitType: PageUnitType, boundaries: [PageBoundary]?, pages: [PageInfo]?
-  ) {
-    self.totalCount = totalCount
-    self.unitType = unitType
-    self.boundaries = boundaries
-    self.pages = pages
-  }
-}
+public typealias PageStructure = RustBridge.PageStructure
 
 /// Byte offset boundary for a page.
 ///
 /// Tracks where a specific page's content starts and ends in the main content string,
 /// enabling mapping from byte positions to page numbers. Offsets are guaranteed to be
 /// at valid UTF-8 character boundaries when using standard String methods (push_str, push, etc.).
-public struct PageBoundary: Codable {
-  /// Byte offset where this page starts in the content string (UTF-8 valid boundary, inclusive)
-  public let byteStart: UInt
-  /// Byte offset where this page ends in the content string (UTF-8 valid boundary, exclusive)
-  public let byteEnd: UInt
-  /// Page number (1-indexed)
-  public let pageNumber: UInt
-
-  public init(byteStart: UInt, byteEnd: UInt, pageNumber: UInt) {
-    self.byteStart = byteStart
-    self.byteEnd = byteEnd
-    self.pageNumber = pageNumber
-  }
-}
+public typealias PageBoundary = RustBridge.PageBoundary
 
 /// Metadata for individual page/slide/sheet.
 ///
 /// Captures per-page information including dimensions, content counts,
 /// and visibility state (for presentations).
-public struct PageInfo: Codable {
-  /// Page number (1-indexed)
-  public let number: UInt
-  /// Page title (usually for presentations)
-  public let title: String?
-  /// Dimensions in points (PDF) or pixels (images): (width, height)
-  public let dimensions: [Double]?
-  /// Number of images on this page
-  public let imageCount: UInt?
-  /// Number of tables on this page
-  public let tableCount: UInt?
-  /// Whether this page is hidden (e.g., in presentations)
-  public let hidden: Bool?
-  /// Whether this page is blank (no meaningful text, no images, no tables)
-  ///
-  /// A page is considered blank if it has fewer than 3 non-whitespace characters
-  /// and contains no tables or images. This is useful for filtering out empty pages
-  /// in scanned documents or PDFs with blank separator pages.
-  public let isBlank: Bool?
-
-  public init(
-    number: UInt, title: String?, dimensions: [Double]?, imageCount: UInt?, tableCount: UInt?,
-    hidden: Bool?, isBlank: Bool?
-  ) {
-    self.number = number
-    self.title = title
-    self.dimensions = dimensions
-    self.imageCount = imageCount
-    self.tableCount = tableCount
-    self.hidden = hidden
-    self.isBlank = isBlank
-  }
-}
+public typealias PageInfo = RustBridge.PageInfo
 
 /// Content for a single page/slide.
 ///
@@ -4210,812 +1058,174 @@ public struct PageInfo: Codable {
 ///
 /// This reduces memory overhead for documents with shared tables/images
 /// by avoiding redundant copies during serialization.
-public struct PageContent: Codable {
-  /// Page number (1-indexed)
-  public let pageNumber: UInt
-  /// Text content for this page
-  public let content: String
-  /// Tables found on this page (uses Arc for memory efficiency)
-  ///
-  /// Serializes as Vec<Table> for JSON compatibility while maintaining
-  /// Arc semantics in-memory for zero-copy sharing.
-  public let tables: [String]
-  /// Images found on this page (uses Arc for memory efficiency)
-  ///
-  /// Serializes as Vec<ExtractedImage> for JSON compatibility while maintaining
-  /// Arc semantics in-memory for zero-copy sharing.
-  public let images: [ExtractedImage]
-  /// Hierarchy information for the page (when hierarchy extraction is enabled)
-  ///
-  /// Contains text hierarchy levels (H1-H6) extracted from the page content.
-  public let hierarchy: PageHierarchy?
-  /// Whether this page is blank (no meaningful text content)
-  ///
-  /// Determined during extraction based on text content analysis.
-  /// A page is blank if it has fewer than 3 non-whitespace characters
-  /// and contains no tables or images.
-  public let isBlank: Bool?
-  /// Layout detection regions for this page (when layout detection is enabled).
-  ///
-  /// Contains detected layout regions with class, confidence, bounding box,
-  /// and area fraction. Only populated when layout detection is configured.
-  public let layoutRegions: [LayoutRegion]?
-
-  public init(
-    pageNumber: UInt, content: String, tables: [String], images: [ExtractedImage],
-    hierarchy: PageHierarchy?, isBlank: Bool?, layoutRegions: [LayoutRegion]?
-  ) {
-    self.pageNumber = pageNumber
-    self.content = content
-    self.tables = tables
-    self.images = images
-    self.hierarchy = hierarchy
-    self.isBlank = isBlank
-    self.layoutRegions = layoutRegions
-  }
-}
+public typealias PageContent = RustBridge.PageContent
 
 /// A detected layout region on a page.
 ///
 /// When layout detection is enabled, each page may have layout regions
 /// identifying different content types (text, pictures, tables, etc.)
 /// with confidence scores and spatial positions.
-public struct LayoutRegion: Codable {
-  /// Layout class name (e.g. "picture", "table", "text", "section_header").
-  public let className: String
-  /// Confidence score from the layout detection model (0.0 to 1.0).
-  public let confidence: Double
-  /// Bounding box in document coordinate space.
-  public let boundingBox: String
-  /// Fraction of the page area covered by this region (0.0 to 1.0).
-  public let areaFraction: Double
-
-  public init(className: String, confidence: Double, boundingBox: String, areaFraction: Double) {
-    self.className = className
-    self.confidence = confidence
-    self.boundingBox = boundingBox
-    self.areaFraction = areaFraction
-  }
-}
+public typealias LayoutRegion = RustBridge.LayoutRegion
 
 /// Page hierarchy structure containing heading levels and block information.
 ///
 /// Used when PDF text hierarchy extraction is enabled. Contains hierarchical
 /// blocks with heading levels (H1-H6) for semantic document structure.
-public struct PageHierarchy: Codable {
-  /// Number of hierarchy blocks on this page
-  public let blockCount: UInt
-  /// Hierarchical blocks with heading levels
-  public let blocks: [HierarchicalBlock]
-
-  public init(blockCount: UInt, blocks: [HierarchicalBlock]) {
-    self.blockCount = blockCount
-    self.blocks = blocks
-  }
-}
+public typealias PageHierarchy = RustBridge.PageHierarchy
 
 /// A text block with hierarchy level assignment.
 ///
 /// Represents a block of text with semantic heading information extracted from
 /// font size clustering and hierarchical analysis.
-public struct HierarchicalBlock: Codable {
-  /// The text content of this block
-  public let text: String
-  /// The font size of the text in this block
-  public let fontSize: Float
-  /// The hierarchy level of this block (H1-H6 or Body)
-  ///
-  /// Levels correspond to HTML heading tags:
-  /// - "h1": Top-level heading
-  /// - "h2": Secondary heading
-  /// - "h3": Tertiary heading
-  /// - "h4": Quaternary heading
-  /// - "h5": Quinary heading
-  /// - "h6": Senary heading
-  /// - "body": Body text (no heading level)
-  public let level: String
-  /// Bounding box information for the block
-  ///
-  /// Contains coordinates as (left, top, right, bottom) in PDF units.
-  public let bbox: [Float]?
-
-  public init(text: String, fontSize: Float, level: String, bbox: [Float]?) {
-    self.text = text
-    self.fontSize = fontSize
-    self.level = level
-    self.bbox = bbox
-  }
-}
+public typealias HierarchicalBlock = RustBridge.HierarchicalBlock
 
 /// A URI extracted from a document.
 ///
 /// Represents any link, reference, or resource pointer found during extraction.
 /// The `kind` field classifies the URI semantically, while `label` carries
 /// optional human-readable display text.
-public struct Uri: Codable {
-  /// The URL or path string.
-  public let url: String
-  /// Optional display text / label for the link.
-  public let label: String?
-  /// Optional page number where the URI was found (1-indexed).
-  public let page: UInt32?
-  /// Semantic classification of the URI.
-  public let kind: UriKind
-
-  public init(url: String, label: String?, page: UInt32?, kind: UriKind) {
-    self.url = url
-    self.label = label
-    self.page = page
-    self.kind = kind
-  }
-}
+public typealias Uri = RustBridge.Uri
 
 /// Trait for types that can be pooled and reused.
 ///
 /// Implementing this trait allows a type to be used with `Pool<T>`.
 /// The `reset()` method should clear the object's state for reuse.
-public struct Recyclable {}
+public struct Recyclable {
+}
 
 /// Convenience type alias for a pooled String.
-public struct StringBufferPool {}
+public typealias StringBufferPool = RustBridge.StringBufferPool
 
 /// Convenience type alias for a pooled Vec<u8>.
-public struct ByteBufferPool {}
+public typealias ByteBufferPool = RustBridge.ByteBufferPool
 
 /// A [`tower::Layer`] that wraps each extraction in a semantic tracing span.
-public struct TracingLayer {}
+public typealias TracingLayer = RustBridge.TracingLayer
 
 /// OpenAPI documentation structure.
 ///
 /// Defines all endpoints, request/response schemas, and examples
 /// for the Kreuzberg document extraction API.
-public struct ApiDoc {}
+public typealias ApiDoc = RustBridge.ApiDoc
 
 /// Health check response.
-public struct HealthResponse: Codable {
-  /// Health status
-  public let status: String
-  /// API version
-  public let version: String
-  /// Plugin status (optional)
-  public let plugins: String?
-
-  public init(status: String, version: String, plugins: String?) {
-    self.status = status
-    self.version = version
-    self.plugins = plugins
-  }
-}
+public typealias HealthResponse = RustBridge.HealthResponse
 
 /// Server information response.
-public struct InfoResponse: Codable {
-  /// API version
-  public let version: String
-  /// Whether using Rust backend
-  public let rustBackend: Bool
-
-  public init(version: String, rustBackend: Bool) {
-    self.version = version
-    self.rustBackend = rustBackend
-  }
-}
+public typealias InfoResponse = RustBridge.InfoResponse
 
 /// Extraction response (list of results).
-public struct ExtractResponse {}
+public typealias ExtractResponse = RustBridge.ExtractResponse
 
 /// API server state.
 ///
 /// Holds the default extraction configuration loaded from config file
 /// (via discovery or explicit path). Per-request configs override these defaults.
-public struct ApiState {
-  /// Default extraction configuration
-  public let defaultConfig: ExtractionConfig
-  /// Tower service for extraction requests.
-  ///
-  /// Wrapped in `Arc<Mutex>` because `BoxCloneService` is `Send` but not `Sync`,
-  /// while `ApiState` must be `Clone + Sync` for Axum's state requirement.
-  /// The lock is held only long enough to clone the service.
-  public let extractionService: String
-
-  public init(defaultConfig: ExtractionConfig, extractionService: String) {
-    self.defaultConfig = defaultConfig
-    self.extractionService = extractionService
-  }
-}
+public typealias ApiState = RustBridge.ApiState
 
 /// Cache statistics response.
-public struct CacheStatsResponse: Codable {
-  /// Cache directory path
-  public let directory: String
-  /// Total number of cache files
-  public let totalFiles: UInt
-  /// Total cache size in MB
-  public let totalSizeMb: Double
-  /// Available disk space in MB
-  public let availableSpaceMb: Double
-  /// Age of oldest file in days
-  public let oldestFileAgeDays: Double
-  /// Age of newest file in days
-  public let newestFileAgeDays: Double
-
-  public init(
-    directory: String, totalFiles: UInt, totalSizeMb: Double, availableSpaceMb: Double,
-    oldestFileAgeDays: Double, newestFileAgeDays: Double
-  ) {
-    self.directory = directory
-    self.totalFiles = totalFiles
-    self.totalSizeMb = totalSizeMb
-    self.availableSpaceMb = availableSpaceMb
-    self.oldestFileAgeDays = oldestFileAgeDays
-    self.newestFileAgeDays = newestFileAgeDays
-  }
-}
+public typealias CacheStatsResponse = RustBridge.CacheStatsResponse
 
 /// Cache clear response.
-public struct CacheClearResponse: Codable {
-  /// Cache directory path
-  public let directory: String
-  /// Number of files removed
-  public let removedFiles: UInt
-  /// Space freed in MB
-  public let freedMb: Double
-
-  public init(directory: String, removedFiles: UInt, freedMb: Double) {
-    self.directory = directory
-    self.removedFiles = removedFiles
-    self.freedMb = freedMb
-  }
-}
+public typealias CacheClearResponse = RustBridge.CacheClearResponse
 
 /// Embedding request for generating embeddings from text.
-public struct EmbedRequest: Codable {
-  /// Text strings to generate embeddings for (at least one non-empty string required)
-  public let texts: [String]
-  /// Optional embedding configuration (model, batch size, etc.)
-  public let config: EmbeddingConfig?
-
-  public init(texts: [String], config: EmbeddingConfig?) {
-    self.texts = texts
-    self.config = config
-  }
-}
+public typealias EmbedRequest = RustBridge.EmbedRequest
 
 /// Embedding response containing generated embeddings.
-public struct EmbedResponse: Codable {
-  /// Generated embeddings (one per input text)
-  public let embeddings: [[Float]]
-  /// Model used for embedding generation
-  public let model: String
-  /// Dimensionality of the embeddings
-  public let dimensions: UInt
-  /// Number of embeddings generated
-  public let count: UInt
-
-  public init(embeddings: [[Float]], model: String, dimensions: UInt, count: UInt) {
-    self.embeddings = embeddings
-    self.model = model
-    self.dimensions = dimensions
-    self.count = count
-  }
-}
+public typealias EmbedResponse = RustBridge.EmbedResponse
 
 /// Chunk request with text and configuration.
-public struct ChunkRequest: Codable {
-  /// Text to chunk (must not be empty)
-  public let text: String
-  /// Optional chunking configuration
-  public let config: String?
-  /// Chunker type (text, markdown, yaml, or semantic)
-  public let chunkerType: String
-
-  public init(text: String, config: String?, chunkerType: String) {
-    self.text = text
-    self.config = config
-    self.chunkerType = chunkerType
-  }
-}
+public typealias ChunkRequest = RustBridge.ChunkRequest
 
 /// Chunk response with chunks and metadata.
-public struct ChunkResponse: Codable {
-  /// List of chunks
-  public let chunks: [String]
-  /// Total number of chunks
-  public let chunkCount: UInt
-  /// Configuration used for chunking
-  public let config: String
-  /// Input text size in bytes
-  public let inputSizeBytes: UInt
-  /// Chunker type used for chunking
-  public let chunkerType: String
-
-  public init(
-    chunks: [String], chunkCount: UInt, config: String, inputSizeBytes: UInt, chunkerType: String
-  ) {
-    self.chunks = chunks
-    self.chunkCount = chunkCount
-    self.config = config
-    self.inputSizeBytes = inputSizeBytes
-    self.chunkerType = chunkerType
-  }
-}
+public typealias ChunkResponse = RustBridge.ChunkResponse
 
 /// Version response.
-public struct VersionResponse: Codable {
-  /// Kreuzberg version string
-  public let version: String
-
-  public init(version: String) {
-    self.version = version
-  }
-}
+public typealias VersionResponse = RustBridge.VersionResponse
 
 /// MIME type detection response.
-public struct DetectResponse: Codable {
-  /// Detected MIME type
-  public let mimeType: String
-  /// Original filename (if provided)
-  public let filename: String?
-
-  public init(mimeType: String, filename: String?) {
-    self.mimeType = mimeType
-    self.filename = filename
-  }
-}
+public typealias DetectResponse = RustBridge.DetectResponse
 
 /// Model manifest entry for cache management.
-public struct ManifestEntryResponse: Codable {
-  /// Relative path within the cache directory
-  public let relativePath: String
-  /// SHA256 checksum of the model file
-  public let sha256: String
-  /// Expected file size in bytes
-  public let sizeBytes: UInt64
-  /// HuggingFace source URL for downloading
-  public let sourceUrl: String
-
-  public init(relativePath: String, sha256: String, sizeBytes: UInt64, sourceUrl: String) {
-    self.relativePath = relativePath
-    self.sha256 = sha256
-    self.sizeBytes = sizeBytes
-    self.sourceUrl = sourceUrl
-  }
-}
+public typealias ManifestEntryResponse = RustBridge.ManifestEntryResponse
 
 /// Model manifest response.
-public struct ManifestResponse: Codable {
-  /// Kreuzberg version
-  public let kreuzbergVersion: String
-  /// Total size of all models in bytes
-  public let totalSizeBytes: UInt64
-  /// Number of models in the manifest
-  public let modelCount: UInt
-  /// Individual model entries
-  public let models: [ManifestEntryResponse]
-
-  public init(
-    kreuzbergVersion: String, totalSizeBytes: UInt64, modelCount: UInt,
-    models: [ManifestEntryResponse]
-  ) {
-    self.kreuzbergVersion = kreuzbergVersion
-    self.totalSizeBytes = totalSizeBytes
-    self.modelCount = modelCount
-    self.models = models
-  }
-}
+public typealias ManifestResponse = RustBridge.ManifestResponse
 
 /// Cache warm request.
-public struct WarmRequest: Codable {
-  /// Download all embedding model presets
-  public let allEmbeddings: Bool
-  /// Specific embedding model preset to download
-  public let embeddingModel: String?
-
-  public init(allEmbeddings: Bool, embeddingModel: String?) {
-    self.allEmbeddings = allEmbeddings
-    self.embeddingModel = embeddingModel
-  }
-}
+public typealias WarmRequest = RustBridge.WarmRequest
 
 /// Cache warm response.
-public struct WarmResponse: Codable {
-  /// Cache directory used
-  public let cacheDir: String
-  /// Models that were downloaded
-  public let downloaded: [String]
-  /// Models that were already cached
-  public let alreadyCached: [String]
-
-  public init(cacheDir: String, downloaded: [String], alreadyCached: [String]) {
-    self.cacheDir = cacheDir
-    self.downloaded = downloaded
-    self.alreadyCached = alreadyCached
-  }
-}
+public typealias WarmResponse = RustBridge.WarmResponse
 
 /// Response from structured extraction endpoint.
-public struct StructuredExtractionResponse: Codable {
-  /// Structured data conforming to the provided JSON schema
-  public let structuredOutput: String
-  /// Extracted document text content
-  public let content: String
-  /// Detected MIME type of the input file
-  public let mimeType: String
-
-  public init(structuredOutput: String, content: String, mimeType: String) {
-    self.structuredOutput = structuredOutput
-    self.content = content
-    self.mimeType = mimeType
-  }
-}
+public typealias StructuredExtractionResponse = RustBridge.StructuredExtractionResponse
 
 /// OpenWebUI "External" engine response format.
 ///
 /// Returned by `PUT /process` for the OpenWebUI external document loader.
-public struct OpenWebDocumentResponse: Codable {
-  /// Extracted text content
-  public let pageContent: String
-  /// Document metadata
-  public let metadata: String
-
-  public init(pageContent: String, metadata: String) {
-    self.pageContent = pageContent
-    self.metadata = metadata
-  }
-}
+public typealias OpenWebDocumentResponse = RustBridge.OpenWebDocumentResponse
 
 /// OpenWebUI "Docling" engine response format.
 ///
 /// Returned by `POST /v1/convert/file` for docling-serve compatibility.
-public struct DoclingCompatResponse: Codable {
-  /// Converted document content
-  public let document: String
-  /// Processing status
-  public let status: String
-
-  public init(document: String, status: String) {
-    self.document = document
-    self.status = status
-  }
-}
+public typealias DoclingCompatResponse = RustBridge.DoclingCompatResponse
 
 /// Request parameters for file extraction.
-public struct ExtractFileParams {
-  /// Path to the file to extract
-  public let path: String
-  /// Optional MIME type hint (auto-detected if not provided)
-  public let mimeType: String?
-  /// Extraction configuration (JSON object)
-  public let config: String?
-  /// Password for encrypted PDFs
-  public let pdfPassword: String?
-  /// Wire format for the response: "json" (default) or "toon"
-  public let responseFormat: String?
-
-  public init(
-    path: String, mimeType: String?, config: String?, pdfPassword: String?, responseFormat: String?
-  ) {
-    self.path = path
-    self.mimeType = mimeType
-    self.config = config
-    self.pdfPassword = pdfPassword
-    self.responseFormat = responseFormat
-  }
-}
+public typealias ExtractFileParams = RustBridge.ExtractFileParams
 
 /// Request parameters for bytes extraction.
-public struct ExtractBytesParams {
-  /// Base64-encoded file content
-  public let data: String
-  /// Optional MIME type hint (auto-detected if not provided)
-  public let mimeType: String?
-  /// Extraction configuration (JSON object)
-  public let config: String?
-  /// Password for encrypted PDFs
-  public let pdfPassword: String?
-  /// Wire format for the response: "json" (default) or "toon"
-  public let responseFormat: String?
-
-  public init(
-    data: String, mimeType: String?, config: String?, pdfPassword: String?, responseFormat: String?
-  ) {
-    self.data = data
-    self.mimeType = mimeType
-    self.config = config
-    self.pdfPassword = pdfPassword
-    self.responseFormat = responseFormat
-  }
-}
+public typealias ExtractBytesParams = RustBridge.ExtractBytesParams
 
 /// Request parameters for batch file extraction.
-public struct BatchExtractFilesParams {
-  /// Paths to files to extract
-  public let paths: [String]
-  /// Extraction configuration (JSON object)
-  public let config: String?
-  /// Password for encrypted PDFs
-  public let pdfPassword: String?
-  /// Per-file extraction configuration overrides (parallel array to paths).
-  /// Each entry is either null (use default) or a FileExtractionConfig JSON object.
-  public let fileConfigs: [String?]?
-  /// Wire format for the response: "json" (default) or "toon"
-  public let responseFormat: String?
-
-  public init(
-    paths: [String], config: String?, pdfPassword: String?, fileConfigs: [String?]?,
-    responseFormat: String?
-  ) {
-    self.paths = paths
-    self.config = config
-    self.pdfPassword = pdfPassword
-    self.fileConfigs = fileConfigs
-    self.responseFormat = responseFormat
-  }
-}
+public typealias BatchExtractFilesParams = RustBridge.BatchExtractFilesParams
 
 /// Request parameters for MIME type detection.
-public struct DetectMimeTypeParams {
-  /// Path to the file
-  public let path: String
-  /// Use content-based detection (default: true)
-  public let useContent: Bool
-
-  public init(path: String, useContent: Bool) {
-    self.path = path
-    self.useContent = useContent
-  }
-}
+public typealias DetectMimeTypeParams = RustBridge.DetectMimeTypeParams
 
 /// Request parameters for cache warm (model download).
-public struct CacheWarmParams {
-  /// Download all embedding model presets
-  public let allEmbeddings: Bool
-  /// Specific embedding preset name to download (e.g. "balanced", "speed", "quality")
-  public let embeddingModel: String?
-
-  public init(allEmbeddings: Bool, embeddingModel: String?) {
-    self.allEmbeddings = allEmbeddings
-    self.embeddingModel = embeddingModel
-  }
-}
+public typealias CacheWarmParams = RustBridge.CacheWarmParams
 
 /// Request parameters for embedding generation.
-public struct EmbedTextParams {
-  /// List of text strings to generate embeddings for
-  public let texts: [String]
-  /// Embedding preset name (default: "balanced"). Available: "speed", "balanced", "quality"
-  public let preset: String?
-  /// LLM model for provider-hosted embeddings (e.g., "openai/text-embedding-3-small").
-  /// When set, overrides preset and uses liter-llm for embedding generation.
-  public let model: String?
-  /// API key for the LLM provider (optional, falls back to env).
-  public let apiKey: String?
-  /// Name of a pre-registered in-process embedding plugin backend.
-  /// When set, overrides both preset and model and dispatches to the registered callback.
-  /// Requires a prior call to `kreuzberg::plugins::register_embedding_backend`.
-  public let embeddingPlugin: String?
-
-  public init(
-    texts: [String], preset: String?, model: String?, apiKey: String?, embeddingPlugin: String?
-  ) {
-    self.texts = texts
-    self.preset = preset
-    self.model = model
-    self.apiKey = apiKey
-    self.embeddingPlugin = embeddingPlugin
-  }
-}
+public typealias EmbedTextParams = RustBridge.EmbedTextParams
 
 /// Request parameters for LLM-based structured extraction.
-public struct ExtractStructuredParams {
-  /// File path to extract from
-  public let path: String
-  /// JSON schema for structured output
-  public let schema: String
-  /// LLM model (e.g., "openai/gpt-4o")
-  public let model: String
-  /// Schema name (default: "extraction")
-  public let schemaName: String
-  /// Schema description for the LLM
-  public let schemaDescription: String?
-  /// Custom Jinja2 prompt template
-  public let prompt: String?
-  /// API key (optional, falls back to env)
-  public let apiKey: String?
-  /// Enable strict mode
-  public let strict: Bool
-
-  public init(
-    path: String, schema: String, model: String, schemaName: String, schemaDescription: String?,
-    prompt: String?, apiKey: String?, strict: Bool
-  ) {
-    self.path = path
-    self.schema = schema
-    self.model = model
-    self.schemaName = schemaName
-    self.schemaDescription = schemaDescription
-    self.prompt = prompt
-    self.apiKey = apiKey
-    self.strict = strict
-  }
-}
+public typealias ExtractStructuredParams = RustBridge.ExtractStructuredParams
 
 /// Request parameters for text chunking.
-public struct ChunkTextParams {
-  /// Text content to split into chunks
-  public let text: String
-  /// Maximum characters per chunk (default: 2000)
-  public let maxCharacters: UInt?
-  /// Number of overlapping characters between chunks (default: 100)
-  public let overlap: UInt?
-  /// Chunker type: "text", "markdown", "yaml", or "semantic" (default: "text")
-  public let chunkerType: String?
-  /// Topic threshold for semantic chunking (0.0-1.0, default: 0.75)
-  public let topicThreshold: Float?
-
-  public init(
-    text: String, maxCharacters: UInt?, overlap: UInt?, chunkerType: String?, topicThreshold: Float?
-  ) {
-    self.text = text
-    self.maxCharacters = maxCharacters
-    self.overlap = overlap
-    self.chunkerType = chunkerType
-    self.topicThreshold = topicThreshold
-  }
-}
+public typealias ChunkTextParams = RustBridge.ChunkTextParams
 
 /// A detected structural boundary in the text.
-public struct DetectedBoundary: Codable {
-  /// Byte offset of the start of the line in the original text.
-  public let byteOffset: UInt
-  /// Whether this boundary looks like a header/section title.
-  public let isHeader: Bool
-
-  public init(byteOffset: UInt, isHeader: Bool) {
-    self.byteOffset = byteOffset
-    self.isHeader = isHeader
-  }
-}
+public typealias DetectedBoundary = RustBridge.DetectedBoundary
 
 /// Result of a text chunking operation.
 ///
 /// Contains the generated chunks and metadata about the chunking.
-public struct ChunkingResult: Codable {
-  /// List of text chunks
-  public let chunks: [Chunk]
-  /// Total number of chunks generated
-  public let chunkCount: UInt
-
-  public init(chunks: [Chunk], chunkCount: UInt) {
-    self.chunks = chunks
-    self.chunkCount = chunkCount
-  }
-}
+public typealias ChunkingResult = RustBridge.ChunkingResult
 
 /// A merged chunk produced by [`merge_segments`].
-public struct MergedChunk {
-  public let text: String
-  public let byteStart: UInt
-  public let byteEnd: UInt
-
-  public init(text: String, byteStart: UInt, byteEnd: UInt) {
-    self.text = text
-    self.byteStart = byteStart
-    self.byteEnd = byteEnd
-  }
-}
+public typealias MergedChunk = RustBridge.MergedChunk
 
 /// YAKE-specific parameters.
-public struct YakeParams: Codable {
-  /// Window size for co-occurrence analysis (default: 2).
-  ///
-  /// Controls the context window for computing co-occurrence statistics.
-  public let windowSize: UInt
-
-  public init(windowSize: UInt) {
-    self.windowSize = windowSize
-  }
-}
+public typealias YakeParams = RustBridge.YakeParams
 
 /// RAKE-specific parameters.
-public struct RakeParams: Codable {
-  /// Minimum word length to consider (default: 1).
-  public let minWordLength: UInt
-  /// Maximum words in a keyword phrase (default: 3).
-  public let maxWordsPerPhrase: UInt
-
-  public init(minWordLength: UInt, maxWordsPerPhrase: UInt) {
-    self.minWordLength = minWordLength
-    self.maxWordsPerPhrase = maxWordsPerPhrase
-  }
-}
+public typealias RakeParams = RustBridge.RakeParams
 
 /// Keyword extraction configuration.
-public struct KeywordConfig: Codable {
-  /// Algorithm to use for extraction.
-  public let algorithm: KeywordAlgorithm
-  /// Maximum number of keywords to extract (default: 10).
-  public let maxKeywords: UInt
-  /// Minimum score threshold (0.0-1.0, default: 0.0).
-  ///
-  /// Keywords with scores below this threshold are filtered out.
-  /// Note: Score ranges differ between algorithms.
-  public let minScore: Float
-  /// N-gram range for keyword extraction (min, max).
-  ///
-  /// (1, 1) = unigrams only
-  /// (1, 2) = unigrams and bigrams
-  /// (1, 3) = unigrams, bigrams, and trigrams (default)
-  public let ngramRange: [UInt]
-  /// Language code for stopword filtering (e.g., "en", "de", "fr").
-  ///
-  /// If None, no stopword filtering is applied.
-  public let language: String?
-  /// YAKE-specific tuning parameters.
-  public let yakeParams: YakeParams?
-  /// RAKE-specific tuning parameters.
-  public let rakeParams: RakeParams?
-
-  public init(
-    algorithm: KeywordAlgorithm, maxKeywords: UInt, minScore: Float, ngramRange: [UInt],
-    language: String?, yakeParams: YakeParams?, rakeParams: RakeParams?
-  ) {
-    self.algorithm = algorithm
-    self.maxKeywords = maxKeywords
-    self.minScore = minScore
-    self.ngramRange = ngramRange
-    self.language = language
-    self.yakeParams = yakeParams
-    self.rakeParams = rakeParams
-  }
-}
+public typealias KeywordConfig = RustBridge.KeywordConfig
 
 /// Extracted keyword with metadata.
-public struct Keyword: Codable {
-  /// The keyword text.
-  public let text: String
-  /// Relevance score (higher is better, algorithm-specific range).
-  public let score: Float
-  /// Algorithm that extracted this keyword.
-  public let algorithm: KeywordAlgorithm
-  /// Optional positions where keyword appears in text (character offsets).
-  public let positions: [UInt]?
+public typealias Keyword = RustBridge.Keyword
 
-  public init(text: String, score: Float, algorithm: KeywordAlgorithm, positions: [UInt]?) {
-    self.text = text
-    self.score = score
-    self.algorithm = algorithm
-    self.positions = positions
-  }
-}
-
-public struct OcrCacheStats {
-  public let totalFiles: UInt
-  public let totalSizeMb: Double
-
-  public init(totalFiles: UInt, totalSizeMb: Double) {
-    self.totalFiles = totalFiles
-    self.totalSizeMb = totalSizeMb
-  }
-}
+public typealias OcrCacheStats = RustBridge.OcrCacheStats
 
 /// Pre-computed table markdown for a table detection region.
-public struct RecognizedTable {
-  /// Detection bbox that this table corresponds to (for matching).
-  public let detectionBbox: BBox
-  /// Table cells as a 2D vector (rows x columns).
-  public let cells: [[String]]
-  /// Rendered markdown table.
-  public let markdown: String
-
-  public init(detectionBbox: BBox, cells: [[String]], markdown: String) {
-    self.detectionBbox = detectionBbox
-    self.cells = cells
-    self.markdown = markdown
-  }
-}
+public typealias RecognizedTable = RustBridge.RecognizedTable
 
 /// Manages tessdata file downloading, caching, and manifest generation.
-public struct TessdataManager {}
+public typealias TessdataManager = RustBridge.TessdataManager
 
 /// Configuration for PaddleOCR backend.
 ///
@@ -5038,317 +1248,56 @@ public struct TessdataManager {}
 /// let config = PaddleOcrConfig::new("en")
 ///     .with_table_detection(true);
 /// ```
-public struct PaddleOcrConfig: Codable {
-  /// Language code (e.g., "en", "ch", "jpn", "kor", "deu", "fra")
-  public let language: String
-  /// Optional custom cache directory for model files
-  public let cacheDir: URL?
-  /// Enable angle classification for rotated text (default: false).
-  /// Can misfire on short text regions, rotating crops incorrectly before recognition.
-  public let useAngleCls: Bool
-  /// Enable table structure detection (default: false)
-  public let enableTableDetection: Bool
-  /// Database threshold for text detection (default: 0.3)
-  /// Range: 0.0-1.0, higher values require more confident detections
-  public let detDbThresh: Float
-  /// Box threshold for text bounding box refinement (default: 0.5)
-  /// Range: 0.0-1.0
-  public let detDbBoxThresh: Float
-  /// Unclip ratio for expanding text bounding boxes (default: 1.6)
-  /// Controls the expansion of detected text regions
-  public let detDbUnclipRatio: Float
-  /// Maximum side length for detection image (default: 960)
-  /// Larger images may be resized to this limit for faster inference
-  public let detLimitSideLen: UInt32
-  /// Batch size for recognition inference (default: 6)
-  /// Number of text regions to process simultaneously
-  public let recBatchNum: UInt32
-  /// Padding in pixels added around the image before detection (default: 10).
-  /// Large values can include surrounding content like table gridlines.
-  public let padding: UInt32
-  /// Minimum recognition confidence score for text lines (default: 0.5).
-  /// Text regions with recognition confidence below this threshold are discarded.
-  /// Matches PaddleOCR Python's `drop_score` parameter.
-  /// Range: 0.0-1.0
-  public let dropScore: Float
-  /// Model tier controlling detection/recognition model size and accuracy trade-off.
-  /// - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference
-  /// - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents
-  public let modelTier: String
-
-  public init(
-    language: String, cacheDir: URL?, useAngleCls: Bool, enableTableDetection: Bool,
-    detDbThresh: Float, detDbBoxThresh: Float, detDbUnclipRatio: Float, detLimitSideLen: UInt32,
-    recBatchNum: UInt32, padding: UInt32, dropScore: Float, modelTier: String
-  ) {
-    self.language = language
-    self.cacheDir = cacheDir
-    self.useAngleCls = useAngleCls
-    self.enableTableDetection = enableTableDetection
-    self.detDbThresh = detDbThresh
-    self.detDbBoxThresh = detDbBoxThresh
-    self.detDbUnclipRatio = detDbUnclipRatio
-    self.detLimitSideLen = detLimitSideLen
-    self.recBatchNum = recBatchNum
-    self.padding = padding
-    self.dropScore = dropScore
-    self.modelTier = modelTier
-  }
-}
+public typealias PaddleOcrConfig = RustBridge.PaddleOcrConfig
 
 /// Combined paths to all models needed for OCR (backward compatibility).
-public struct ModelPaths {
-  /// Path to the detection model directory.
-  public let detModel: URL
-  /// Path to the classification model directory.
-  public let clsModel: URL
-  /// Path to the recognition model directory.
-  public let recModel: URL
-  /// Path to the character dictionary file.
-  public let dictFile: URL
-
-  public init(detModel: URL, clsModel: URL, recModel: URL, dictFile: URL) {
-    self.detModel = detModel
-    self.clsModel = clsModel
-    self.recModel = recModel
-    self.dictFile = dictFile
-  }
-}
+public typealias ModelPaths = RustBridge.ModelPaths
 
 /// Document orientation detection result.
-public struct OrientationResult {
-  /// Detected orientation in degrees (0, 90, 180, or 270).
-  public let degrees: UInt32
-  /// Confidence score (0.0-1.0).
-  public let confidence: Float
-
-  public init(degrees: UInt32, confidence: Float) {
-    self.degrees = degrees
-    self.confidence = confidence
-  }
-}
+public typealias OrientationResult = RustBridge.OrientationResult
 
 /// Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
-public struct BBox: Codable {
-  public let x1: Float
-  public let y1: Float
-  public let x2: Float
-  public let y2: Float
-
-  public init(x1: Float, y1: Float, x2: Float, y2: Float) {
-    self.x1 = x1
-    self.y1 = y1
-    self.x2 = x2
-    self.y2 = y2
-  }
-}
+public typealias BBox = RustBridge.BBox
 
 /// A single layout detection result.
-public struct LayoutDetection: Codable {
-  public let className: LayoutClass
-  public let confidence: Float
-  public let bbox: BBox
-
-  public init(className: LayoutClass, confidence: Float, bbox: BBox) {
-    self.className = className
-    self.confidence = confidence
-    self.bbox = bbox
-  }
-}
+public typealias LayoutDetection = RustBridge.LayoutDetection
 
 /// Page-level detection result containing all detections and page metadata.
-public struct DetectionResult: Codable {
-  public let pageWidth: UInt32
-  public let pageHeight: UInt32
-  public let detections: [LayoutDetection]
-
-  public init(pageWidth: UInt32, pageHeight: UInt32, detections: [LayoutDetection]) {
-    self.pageWidth = pageWidth
-    self.pageHeight = pageHeight
-    self.detections = detections
-  }
-}
+public typealias DetectionResult = RustBridge.DetectionResult
 
 /// Embedded file descriptor extracted from the PDF name tree.
-public struct EmbeddedFile {
-  /// The filename as stored in the PDF name tree.
-  public let name: String
-  /// Raw file bytes from the embedded stream.
-  public let data: Data
-  /// MIME type if specified in the filespec, otherwise `None`.
-  public let mimeType: String?
+public typealias EmbeddedFile = RustBridge.EmbeddedFile
 
-  public init(name: String, data: Data, mimeType: String?) {
-    self.name = name
-    self.data = data
-    self.mimeType = mimeType
-  }
-}
-
-public struct PdfImage: Codable {
-  public let pageNumber: UInt
-  public let imageIndex: UInt
-  public let width: Int64
-  public let height: Int64
-  public let colorSpace: String?
-  public let bitsPerComponent: Int64?
-  /// Original PDF stream filters (e.g. `["FlateDecode"]`, `["DCTDecode"]`).
-  public let filters: [String]
-  /// The decoded image bytes in a standard format (JPEG, PNG, etc.).
-  public let data: Data
-  /// The format of `data` after decoding: `"jpeg"`, `"png"`, `"jpeg2000"`, `"ccitt"`, or `"raw"`.
-  public let decodedFormat: String
-
-  public init(
-    pageNumber: UInt, imageIndex: UInt, width: Int64, height: Int64, colorSpace: String?,
-    bitsPerComponent: Int64?, filters: [String], data: Data, decodedFormat: String
-  ) {
-    self.pageNumber = pageNumber
-    self.imageIndex = imageIndex
-    self.width = width
-    self.height = height
-    self.colorSpace = colorSpace
-    self.bitsPerComponent = bitsPerComponent
-    self.filters = filters
-    self.data = data
-    self.decodedFormat = decodedFormat
-  }
-}
+public typealias PdfImage = RustBridge.PdfImage
 
 /// Layout detection results for a single page.
-public struct PageLayoutResult {
-  public let pageIndex: UInt
-  public let regions: [String]
-  public let pageWidthPts: Float
-  public let pageHeightPts: Float
-  /// Width of the rendered image used for layout detection (pixels).
-  public let renderWidthPx: UInt32
-  /// Height of the rendered image used for layout detection (pixels).
-  public let renderHeightPx: UInt32
-
-  public init(
-    pageIndex: UInt, regions: [String], pageWidthPts: Float, pageHeightPts: Float,
-    renderWidthPx: UInt32, renderHeightPx: UInt32
-  ) {
-    self.pageIndex = pageIndex
-    self.regions = regions
-    self.pageWidthPts = pageWidthPts
-    self.pageHeightPts = pageHeightPts
-    self.renderWidthPx = renderWidthPx
-    self.renderHeightPx = renderHeightPx
-  }
-}
+public typealias PageLayoutResult = RustBridge.PageLayoutResult
 
 /// Timing breakdown for a single page.
-public struct PageTiming {
-  /// Time to render the PDF page to a raster image (amortized from batch render).
-  public let renderMs: Double
-  /// Time spent in image preprocessing (resize, normalize, tensor construction).
-  public let preprocessMs: Double
-  /// Time for the ONNX model session.run() call (actual neural network inference).
-  public let onnxMs: Double
-  /// Total model inference time (preprocess + onnx), as measured by the engine.
-  public let inferenceMs: Double
-  /// Time spent in postprocessing (confidence filtering, overlap resolution).
-  public let postprocessMs: Double
-  /// Time to map pixel-space bounding boxes to PDF coordinate space.
-  public let mappingMs: Double
-
-  public init(
-    renderMs: Double, preprocessMs: Double, onnxMs: Double, inferenceMs: Double,
-    postprocessMs: Double, mappingMs: Double
-  ) {
-    self.renderMs = renderMs
-    self.preprocessMs = preprocessMs
-    self.onnxMs = onnxMs
-    self.inferenceMs = inferenceMs
-    self.postprocessMs = postprocessMs
-    self.mappingMs = mappingMs
-  }
-}
+public typealias PageTiming = RustBridge.PageTiming
 
 /// Common metadata fields extracted from a PDF.
-public struct CommonPdfMetadata {
-  public let title: String?
-  public let subject: String?
-  public let authors: [String]?
-  public let keywords: [String]?
-  public let createdAt: String?
-  public let modifiedAt: String?
-  public let createdBy: String?
-
-  public init(
-    title: String?, subject: String?, authors: [String]?, keywords: [String]?, createdAt: String?,
-    modifiedAt: String?, createdBy: String?
-  ) {
-    self.title = title
-    self.subject = subject
-    self.authors = authors
-    self.keywords = keywords
-    self.createdAt = createdAt
-    self.modifiedAt = modifiedAt
-    self.createdBy = createdBy
-  }
-}
+public typealias CommonPdfMetadata = RustBridge.CommonPdfMetadata
 
 /// Result type for unified PDF text and metadata extraction.
 ///
 /// Contains text, optional page boundaries, optional per-page content, and metadata.
-public struct PdfUnifiedExtractionResult {}
+public typealias PdfUnifiedExtractionResult = RustBridge.PdfUnifiedExtractionResult
 
 /// ONNX Runtime execution provider type.
 ///
 /// Determines which hardware backend is used for model inference.
 /// `Auto` (default) selects the best available provider per platform.
-public enum ExecutionProviderType: Codable {
-  /// Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere.
-  case auto
-  /// CPU execution provider (always available).
-  case cpu
-  /// Apple CoreML (macOS/iOS Neural Engine + GPU).
-  case coreMl
-  /// NVIDIA CUDA GPU acceleration.
-  case cuda
-  /// NVIDIA TensorRT (optimized CUDA inference).
-  case tensorRt
-}
+public typealias ExecutionProviderType = RustBridge.ExecutionProviderType
 
 /// Built-in HTML theme selection.
-public enum HtmlTheme: Codable {
-  /// Sensible defaults: system font stack, neutral colours, readable line
-  /// measure. CSS custom properties (`--kb-*`) are all defined so user CSS
-  /// can override individual values.
-  case default_
-  /// GitHub Markdown-inspired palette and spacing.
-  case gitHub
-  /// Dark background, light text.
-  case dark
-  /// Minimal light theme with generous whitespace.
-  case light
-  /// No built-in stylesheet emitted. CSS custom properties are still defined
-  /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
-  case unstyled
-}
+public typealias HtmlTheme = RustBridge.HtmlTheme
 
 /// Which table structure recognition model to use.
 ///
 /// Controls the model used for table cell detection within layout-detected
 /// table regions.
-public enum TableModel: Codable {
-  /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
-  case tatr
-  /// SLANeXT wired variant -- 365MB, optimized for bordered tables.
-  case slanetWired
-  /// SLANeXT wireless variant -- 365MB, optimized for borderless tables.
-  case slanetWireless
-  /// SLANet-plus -- 7.78MB, lightweight general-purpose.
-  case slanetPlus
-  /// Classifier-routed SLANeXT: auto-select wired/wireless per table.
-  /// Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
-  case slanetAuto
-  /// Disable table structure model inference entirely; use heuristic path only.
-  case disabled
-}
+public typealias TableModel = RustBridge.TableModel
 
 /// PDF extraction backend selection.
 ///
@@ -5356,14 +1305,7 @@ public enum TableModel: Codable {
 /// - `Pdfium`: pdfium-render (default, C++ based, mature)
 /// - `PdfOxide`: pdf_oxide (pure Rust, faster, requires `pdf-oxide` feature)
 /// - `Auto`: automatically select based on available features
-public enum PdfBackend: Codable {
-  /// Use pdfium-render backend (default).
-  case pdfium
-  /// Use pdf_oxide backend (pure Rust). Requires `pdf-oxide` feature.
-  case pdfOxide
-  /// Automatically select the best available backend.
-  case auto
-}
+public typealias PdfBackend = RustBridge.PdfBackend
 
 /// Type of text chunker to use.
 ///
@@ -5379,12 +1321,7 @@ public enum PdfBackend: Codable {
 ///   blank-line paragraphs) and merges groups into chunks capped at
 ///   `max_characters` (default 1000). `topic_threshold` has no effect in the
 ///   fallback path. For best results, pair with an embedding model.
-public enum ChunkerType: Codable {
-  case text
-  case markdown
-  case yaml
-  case semantic
-}
+public typealias ChunkerType = RustBridge.ChunkerType
 
 /// How chunk size is measured.
 ///
@@ -5394,571 +1331,127 @@ public enum ChunkerType: Codable {
 /// Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer
 /// available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 /// (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
-public enum ChunkSizing: Codable {
-  /// Size measured in Unicode characters (default).
-  case characters
-  /// Size measured in tokens from a HuggingFace tokenizer.
-  case tokenizer(model: String, cacheDir: URL)
-}
+public typealias ChunkSizing = RustBridge.ChunkSizing
 
 /// Embedding model types supported by Kreuzberg.
-public enum EmbeddingModelType: Codable {
-  /// Use a preset model configuration (recommended)
-  case preset(name: String)
-  /// Use a custom ONNX model from HuggingFace
-  case custom(modelId: String, dimensions: UInt)
-  /// Provider-hosted embedding model via liter-llm.
-  ///
-  /// Uses the model specified in the nested `LlmConfig` (e.g.,
-  /// `"openai/text-embedding-3-small"`).
-  case llm(llm: LlmConfig)
-  /// In-process embedding backend registered via the plugin system.
-  ///
-  /// The caller registers an [`EmbeddingBackend`](crate::plugins::EmbeddingBackend) once
-  /// (e.g. a wrapper around an already-loaded `llama-cpp-python`, `sentence-transformers`,
-  /// or tuned ONNX model), then references it by name in config. Kreuzberg calls back
-  /// into the registered backend during chunking and standalone embed requests —
-  /// no HuggingFace download, no ONNX Runtime requirement, no HTTP sidecar.
-  ///
-  /// When this variant is selected, only the following [`EmbeddingConfig`] fields
-  /// apply: `normalize` (post-call L2 normalization) and `max_embed_duration_secs`
-  /// (dispatcher timeout). Model-loading fields (`batch_size`, `cache_dir`,
-  /// `show_download_progress`, `acceleration`) are ignored — the host owns the
-  /// model lifecycle.
-  ///
-  /// Semantic chunking falls back to [`ChunkingConfig::max_characters`] when this variant
-  /// is used, since there is no preset to look a chunk-size ceiling up against — size your
-  /// context window via `max_characters` directly.
-  ///
-  /// See [`crate::plugins::register_embedding_backend`].
-  case plugin(name: String)
-}
+public typealias EmbeddingModelType = RustBridge.EmbeddingModelType
 
 /// Content rendering mode for code extraction.
 ///
 /// Controls how extracted code content is represented in the `content` field
 /// of `ExtractionResult`.
-public enum CodeContentMode: Codable {
-  /// Use TSLP semantic chunks as content (default).
-  case chunks
-  /// Use raw source code as content.
-  case raw
-  /// Emit function/class headings + docstrings (no code bodies).
-  case structure
-}
+public typealias CodeContentMode = RustBridge.CodeContentMode
 
-public enum FracType {
-  case bar
-  case noBar
-  case linear
-  case skewed
-}
+public typealias FracType = RustBridge.FracType
 
 /// OCR backend types.
-public enum OcrBackendType {
-  /// Tesseract OCR (native Rust binding)
-  case tesseract
-  /// EasyOCR (Python-based, via FFI)
-  case easyOcr
-  /// PaddleOCR (Python-based, via FFI)
-  case paddleOcr
-  /// Custom/third-party OCR backend
-  case custom
-}
+public typealias OcrBackendType = RustBridge.OcrBackendType
 
 /// Processing stages for post-processors.
 ///
 /// Post-processors are executed in stage order (Early → Middle → Late).
 /// Use stages to control the order of post-processing operations.
-public enum ProcessingStage {
-  /// Early stage - foundational processing.
-  ///
-  /// Use for:
-  /// - Language detection
-  /// - Character encoding normalization
-  /// - Entity extraction (NER)
-  /// - Text quality scoring
-  case early
-  /// Middle stage - content transformation.
-  ///
-  /// Use for:
-  /// - Keyword extraction
-  /// - Token reduction
-  /// - Text summarization
-  /// - Semantic analysis
-  case middle
-  /// Late stage - final enrichment.
-  ///
-  /// Use for:
-  /// - Custom user hooks
-  /// - Analytics/logging
-  /// - Final validation
-  /// - Output formatting
-  case late
-}
+public typealias ProcessingStage = RustBridge.ProcessingStage
 
-public enum ReductionLevel: Codable {
-  case off
-  case light
-  case moderate
-  case aggressive
-  case maximum
-}
+public typealias ReductionLevel = RustBridge.ReductionLevel
 
 /// Type of PDF annotation.
-public enum PdfAnnotationType: Codable {
-  /// Sticky note / text annotation
-  case text
-  /// Highlighted text region
-  case highlight
-  /// Hyperlink annotation
-  case link
-  /// Rubber stamp annotation
-  case stamp
-  /// Underline text markup
-  case underline
-  /// Strikeout text markup
-  case strikeOut
-  /// Any other annotation type
-  case other
-}
+public typealias PdfAnnotationType = RustBridge.PdfAnnotationType
 
 /// Types of block-level elements in Djot.
-public enum BlockType: Codable {
-  case paragraph
-  case heading
-  case blockquote
-  case codeBlock
-  case listItem
-  case orderedList
-  case bulletList
-  case taskList
-  case definitionList
-  case definitionTerm
-  case definitionDescription
-  case div
-  case section
-  case thematicBreak
-  case rawBlock
-  case mathDisplay
-}
+public typealias BlockType = RustBridge.BlockType
 
 /// Types of inline elements in Djot.
-public enum InlineType: Codable {
-  case text
-  case strong
-  case emphasis
-  case highlight
-  case subscript_
-  case superscript
-  case insert
-  case delete
-  case code
-  case link
-  case image
-  case span
-  case math
-  case rawInline
-  case footnoteRef
-  case symbol
-}
+public typealias InlineType = RustBridge.InlineType
 
 /// Semantic kind of a relationship between document elements.
-public enum RelationshipKind: Codable {
-  /// Footnote marker -> footnote definition.
-  case footnoteReference
-  /// Citation marker -> bibliography entry.
-  case citationReference
-  /// Internal anchor link (`#id`) -> target heading/element.
-  case internalLink
-  /// Caption paragraph -> figure/table it describes.
-  case caption
-  /// Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`).
-  case label
-  /// TOC entry -> target section.
-  case tocEntry
-  /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
-  case crossReference
-}
+public typealias RelationshipKind = RustBridge.RelationshipKind
 
 /// Content layer classification for document nodes.
 ///
 /// Replaces separate body/furniture arrays with per-node granularity.
-public enum ContentLayer: Codable {
-  /// Main document body content.
-  case body
-  /// Page/section header (running header).
-  case header
-  /// Page/section footer (running footer).
-  case footer
-  /// Footnote content.
-  case footnote
-}
+public typealias ContentLayer = RustBridge.ContentLayer
 
 /// Tagged enum for node content. Each variant carries only type-specific data.
 ///
 /// Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
 /// Go/Java/TypeScript bindings.
-public enum NodeContent: Codable {
-  /// Document title.
-  case title(text: String)
-  /// Section heading with level (1-6).
-  case heading(level: UInt8, text: String)
-  /// Body text paragraph.
-  case paragraph(text: String)
-  /// List container — children are `ListItem` nodes.
-  case list(ordered: Bool)
-  /// Individual list item.
-  case listItem(text: String)
-  /// Table with structured cell grid.
-  case table(grid: String)
-  /// Image reference.
-  case image(description: String, imageIndex: UInt32, src: String)
-  /// Code block.
-  case code(text: String, language: String)
-  /// Block quote — container, children carry the quoted content.
-  case quote
-  /// Mathematical formula / equation.
-  case formula(text: String)
-  /// Footnote reference content.
-  case footnote(text: String)
-  /// Logical grouping container (section, key-value area).
-  ///
-  /// `heading_level` + `heading_text` capture the section heading directly
-  /// rather than relying on a first-child positional convention.
-  case group(label: String, headingLevel: UInt8, headingText: String)
-  /// Page break marker.
-  case pageBreak
-  /// Presentation slide container — children are the slide's content nodes.
-  case slide(number: UInt32, title: String)
-  /// Definition list container — children are `DefinitionItem` nodes.
-  case definitionList
-  /// Individual definition list entry with term and definition.
-  case definitionItem(term: String, definition: String)
-  /// Citation or bibliographic reference.
-  case citation(key: String, text: String)
-  /// Admonition / callout container (note, warning, tip, etc.).
-  ///
-  /// Children carry the admonition body content.
-  case admonition(kind: String, title: String)
-  /// Raw block preserved verbatim from the source format.
-  ///
-  /// Used for content that cannot be mapped to a semantic node type
-  /// (e.g. JSX in MDX, raw LaTeX in markdown, embedded HTML).
-  case rawBlock(format: String, content: String)
-  /// Structured metadata block (email headers, YAML frontmatter, etc.).
-  case metadataBlock(entries: [String])
-}
+public typealias NodeContent = RustBridge.NodeContent
 
 /// Types of inline text annotations.
-public enum AnnotationKind: Codable {
-  case bold
-  case italic
-  case underline
-  case strikethrough
-  case code
-  case subscript_
-  case superscript
-  case link(url: String, title: String)
-  /// Highlighted text (PDF highlights, HTML `<mark>`).
-  case highlight
-  /// Text color (CSS-compatible value, e.g. "#ff0000", "red").
-  case color(value: String)
-  /// Font size with units (e.g. "12pt", "1.2em", "16px").
-  case fontSize(value: String)
-  /// Extensible annotation for format-specific styling.
-  case custom(name: String, value: String)
-}
+public typealias AnnotationKind = RustBridge.AnnotationKind
 
 /// Semantic structural classification of a text chunk.
 ///
 /// Assigned by the heuristic classifier in `chunking::classifier`.
 /// Defaults to `Unknown` when no rule matches.
 /// Designed to be extended in future versions without breaking changes.
-public enum ChunkType: Codable {
-  /// Section heading or document title.
-  case heading
-  /// Party list: names, addresses, and signatories.
-  case partyList
-  /// Definition clause ("X means…", "X shall mean…").
-  case definitions
-  /// Operative clause containing legal/contractual action verbs.
-  case operativeClause
-  /// Signature block with signatures, names, and dates.
-  case signatureBlock
-  /// Schedule, annex, appendix, or exhibit section.
-  case schedule
-  /// Table-like content with aligned columns or repeated patterns.
-  case tableLike
-  /// Mathematical formula or equation.
-  case formula
-  /// Code block or preformatted content.
-  case codeBlock
-  /// Embedded or referenced image content.
-  case image
-  /// Organizational chart or hierarchy diagram.
-  case orgChart
-  /// Diagram, figure, or visual illustration.
-  case diagram
-  /// Unclassified or mixed content.
-  case unknown
-}
+public typealias ChunkType = RustBridge.ChunkType
 
 /// Semantic element type classification.
 ///
 /// Categorizes text content into semantic units for downstream processing.
 /// Supports the element types commonly found in Unstructured documents.
-public enum ElementType: Codable {
-  /// Document title
-  case title
-  /// Main narrative text body
-  case narrativeText
-  /// Section heading
-  case heading
-  /// List item (bullet, numbered, etc.)
-  case listItem
-  /// Table element
-  case table
-  /// Image element
-  case image
-  /// Page break marker
-  case pageBreak
-  /// Code block
-  case codeBlock
-  /// Block quote
-  case blockQuote
-  /// Footer text
-  case footer
-  /// Header text
-  case header
-}
+public typealias ElementType = RustBridge.ElementType
 
 /// Format-specific metadata (discriminated union).
 ///
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
-public enum FormatMetadata: Codable {
-  case pdf(field0: String)
-  case docx(field0: DocxMetadata)
-  case excel(field0: ExcelMetadata)
-  case email(field0: EmailMetadata)
-  case pptx(field0: PptxMetadata)
-  case archive(field0: ArchiveMetadata)
-  case image(field0: String)
-  case xml(field0: XmlMetadata)
-  case text(field0: TextMetadata)
-  case html(field0: HtmlMetadata)
-  case ocr(field0: OcrMetadata)
-  case csv(field0: CsvMetadata)
-  case bibtex(field0: BibtexMetadata)
-  case citation(field0: CitationMetadata)
-  case fictionBook(field0: FictionBookMetadata)
-  case dbf(field0: DbfMetadata)
-  case jats(field0: JatsMetadata)
-  case epub(field0: EpubMetadata)
-  case pst(field0: PstMetadata)
-  case code(field0: String)
-}
+public typealias FormatMetadata = RustBridge.FormatMetadata
 
 /// Text direction enumeration for HTML documents.
-public enum TextDirection: Codable {
-  /// Left-to-right text direction
-  case leftToRight
-  /// Right-to-left text direction
-  case rightToLeft
-  /// Automatic text direction detection
-  case auto
-}
+public typealias TextDirection = RustBridge.TextDirection
 
 /// Link type classification.
-public enum LinkType: Codable {
-  /// Anchor link (#section)
-  case anchor
-  /// Internal link (same domain)
-  case internal_
-  /// External link (different domain)
-  case external
-  /// Email link (mailto:)
-  case email
-  /// Phone link (tel:)
-  case phone
-  /// Other link type
-  case other
-}
+public typealias LinkType = RustBridge.LinkType
 
 /// Image type classification.
-public enum ImageType: Codable {
-  /// Data URI image
-  case dataUri
-  /// Inline SVG
-  case inlineSvg
-  /// External image URL
-  case external
-  /// Relative path image
-  case relative
-}
+public typealias ImageType = RustBridge.ImageType
 
 /// Structured data type classification.
-public enum StructuredDataType: Codable {
-  /// JSON-LD structured data
-  case jsonLd
-  /// Microdata
-  case microdata
-  /// RDFa
-  case rdFa
-}
+public typealias StructuredDataType = RustBridge.StructuredDataType
 
 /// Bounding geometry for an OCR element.
 ///
 /// Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
 /// (from PaddleOCR and rotated text detection).
-public enum OcrBoundingGeometry: Codable {
-  /// Axis-aligned bounding box (typical for Tesseract output).
-  case rectangle(left: UInt32, top: UInt32, width: UInt32, height: UInt32)
-  /// 4-point quadrilateral for rotated/skewed text (PaddleOCR).
-  ///
-  /// Points are in clockwise order starting from top-left:
-  /// `[top_left, top_right, bottom_right, bottom_left]`
-  case quadrilateral(points: String)
-}
+public typealias OcrBoundingGeometry = RustBridge.OcrBoundingGeometry
 
 /// Hierarchical level of an OCR element.
 ///
 /// Maps to Tesseract's page segmentation hierarchy and provides
 /// equivalent semantics for PaddleOCR.
-public enum OcrElementLevel: Codable {
-  /// Individual word
-  case word
-  /// Line of text (default for PaddleOCR)
-  case line
-  /// Paragraph or text block
-  case block
-  /// Page-level element
-  case page
-}
+public typealias OcrElementLevel = RustBridge.OcrElementLevel
 
 /// Type of paginated unit in a document.
 ///
 /// Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet sheets).
-public enum PageUnitType: Codable {
-  /// Standard document pages (PDF, DOCX, images)
-  case page
-  /// Presentation slides (PPTX, ODP)
-  case slide
-  /// Spreadsheet sheets (XLSX, ODS)
-  case sheet
-}
+public typealias PageUnitType = RustBridge.PageUnitType
 
 /// Semantic classification of an extracted URI.
-public enum UriKind: Codable {
-  /// A clickable hyperlink (web URL, file link).
-  case hyperlink
-  /// An image or media resource reference.
-  case image
-  /// An internal anchor or cross-reference target.
-  case anchor
-  /// A citation or bibliographic reference (DOI, academic ref).
-  case citation
-  /// A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST).
-  case reference
-  /// An email address (`mailto:` link or bare email).
-  case email
-}
+public typealias UriKind = RustBridge.UriKind
 
 /// Error type for pool operations.
-public enum PoolError {
-  /// The pool's internal mutex was poisoned.
-  ///
-  /// This indicates a panic occurred while holding the lock.
-  /// The pool is in a locked state and cannot be recovered.
-  case lockPoisoned
-}
+public typealias PoolError = RustBridge.PoolError
 
 /// Keyword algorithm selection.
-public enum KeywordAlgorithm: Codable {
-  /// YAKE (Yet Another Keyword Extractor) - statistical approach
-  case yake
-  /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
-  case rake
-}
+public typealias KeywordAlgorithm = RustBridge.KeywordAlgorithm
 
 /// Page Segmentation Mode for Tesseract OCR
-public enum PSMMode: Codable {
-  case osdOnly
-  case autoOsd
-  case autoOnly
-  case auto
-  case singleColumn
-  case singleBlockVertical
-  case singleBlock
-  case singleLine
-  case singleWord
-  case circleWord
-  case singleChar
-}
+public typealias PSMMode = RustBridge.PSMMode
 
 /// Supported languages in PaddleOCR.
 ///
 /// Maps user-friendly language codes to paddle-ocr-rs language identifiers.
-public enum PaddleLanguage {
-  /// English
-  case english
-  /// Simplified Chinese
-  case chinese
-  /// Japanese
-  case japanese
-  /// Korean
-  case korean
-  /// German
-  case german
-  /// French
-  case french
-  /// Latin script (covers most European languages)
-  case latin
-  /// Cyrillic (Russian and related)
-  case cyrillic
-  /// Traditional Chinese
-  case traditionalChinese
-  /// Thai
-  case thai
-  /// Greek
-  case greek
-  /// East Slavic (Russian, Ukrainian, Belarusian)
-  case eastSlavic
-  /// Arabic (Arabic, Persian, Urdu)
-  case arabic
-  /// Devanagari (Hindi, Marathi, Sanskrit, Nepali)
-  case devanagari
-  /// Tamil
-  case tamil
-  /// Telugu
-  case telugu
-}
+public typealias PaddleLanguage = RustBridge.PaddleLanguage
 
 /// The 17 canonical document layout classes.
 ///
 /// All model backends (RT-DETR, YOLO, etc.) map their native class IDs
 /// to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
 /// map to the closest equivalent.
-public enum LayoutClass: Codable {
-  case caption
-  case footnote
-  case formula
-  case listItem
-  case pageFooter
-  case pageHeader
-  case picture
-  case sectionHeader
-  case table
-  case text
-  case title
-  case documentIndex
-  case code
-  case checkboxSelected
-  case checkboxUnselected
-  case form
-  case keyValueRegion
-}
+public typealias LayoutClass = RustBridge.LayoutClass
 
 /// Main error type for all Kreuzberg operations.
 ///
@@ -5996,1718 +1489,4 @@ public enum KreuzbergError: Error {
   case cancelled(message: String)
   case security(message: String, source: String)
   case other(message: String, field0: String)
-}
-
-public enum Kreuzberg {
-  /// Hash arbitrary bytes with blake3, returning a 32-char hex string.
-  public static func blake3HashBytes(data: Data) -> String {
-    return RustBridge.blake3HashBytes(data)
-  }
-
-  /// Hash a file's content with blake3 using streaming 64 KiB reads.
-  ///
-  /// Returns a 32-char hex string (128 bits of blake3 output).
-  public static func blake3HashFile(path: URL) throws -> String {
-    return try RustBridge.blake3HashFile(path)
-  }
-
-  public static func fastHash(data: Data) -> UInt64 {
-    return RustBridge.fastHash(data)
-  }
-
-  public static func validateCacheKey(key: String) -> Bool {
-    return RustBridge.validateCacheKey(key)
-  }
-
-  /// Validate a port number for server configuration.
-  ///
-  /// Port must be in the range 1-65535. While ports 1-1023 are privileged and may require
-  /// special permissions on some systems, they are still valid port numbers.
-  ///
-  /// # Arguments
-  ///
-  /// * `port` - The port number to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_port;
-  ///
-  /// assert!(validate_port(8000).is_ok());
-  /// assert!(validate_port(80).is_ok());
-  /// assert!(validate_port(1).is_ok());
-  /// assert!(validate_port(65535).is_ok());
-  /// assert!(validate_port(0).is_err());
-  /// ```
-  public static func validatePort(port: UInt16) throws {
-    try RustBridge.validatePort(port)
-  }
-
-  /// Validate a host/IP address string for server configuration.
-  ///
-  /// Accepts valid IPv4 addresses (e.g., "127.0.0.1", "0.0.0.0"), valid IPv6 addresses
-  /// (e.g., "::1", "::"), and hostnames (e.g., "localhost", "example.com").
-  ///
-  /// # Arguments
-  ///
-  /// * `host` - The host/IP address string to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_host;
-  ///
-  /// assert!(validate_host("127.0.0.1").is_ok());
-  /// assert!(validate_host("0.0.0.0").is_ok());
-  /// assert!(validate_host("::1").is_ok());
-  /// assert!(validate_host("::").is_ok());
-  /// assert!(validate_host("localhost").is_ok());
-  /// assert!(validate_host("example.com").is_ok());
-  /// assert!(validate_host("").is_err());
-  /// ```
-  public static func validateHost(host: String) throws {
-    try RustBridge.validateHost(host)
-  }
-
-  /// Validate a CORS (Cross-Origin Resource Sharing) origin URL.
-  ///
-  /// Accepts valid HTTP/HTTPS URLs (e.g., "https://example.com") or the wildcard "*"
-  /// to allow all origins. URLs must start with "http://" or "https://", or be exactly "*".
-  ///
-  /// # Arguments
-  ///
-  /// * `origin` - The CORS origin URL to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_cors_origin;
-  ///
-  /// assert!(validate_cors_origin("https://example.com").is_ok());
-  /// assert!(validate_cors_origin("http://localhost:3000").is_ok());
-  /// assert!(validate_cors_origin("*").is_ok());
-  /// assert!(validate_cors_origin("not-a-url").is_err());
-  /// assert!(validate_cors_origin("ftp://example.com").is_err());
-  /// ```
-  public static func validateCorsOrigin(origin: String) throws {
-    try RustBridge.validateCorsOrigin(origin)
-  }
-
-  /// Validate an upload size limit for server configuration.
-  ///
-  /// Upload size must be greater than 0 (measured in bytes).
-  ///
-  /// # Arguments
-  ///
-  /// * `size` - The maximum upload size in bytes to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_upload_size;
-  ///
-  /// assert!(validate_upload_size(1024).is_ok());
-  /// assert!(validate_upload_size(1_000_000).is_ok());
-  /// assert!(validate_upload_size(0).is_err());
-  /// ```
-  public static func validateUploadSize(size: UInt) throws {
-    try RustBridge.validateUploadSize(size)
-  }
-
-  /// Validate a binarization method string.
-  ///
-  /// # Arguments
-  ///
-  /// * `method` - The binarization method to validate (e.g., "otsu", "adaptive", "sauvola")
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_binarization_method;
-  ///
-  /// assert!(validate_binarization_method("otsu").is_ok());
-  /// assert!(validate_binarization_method("adaptive").is_ok());
-  /// assert!(validate_binarization_method("invalid").is_err());
-  /// ```
-  public static func validateBinarizationMethod(method: String) throws {
-    try RustBridge.validateBinarizationMethod(method)
-  }
-
-  /// Validate a token reduction level string.
-  ///
-  /// # Arguments
-  ///
-  /// * `level` - The token reduction level to validate (e.g., "off", "light", "moderate")
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_token_reduction_level;
-  ///
-  /// assert!(validate_token_reduction_level("off").is_ok());
-  /// assert!(validate_token_reduction_level("moderate").is_ok());
-  /// assert!(validate_token_reduction_level("extreme").is_err());
-  /// ```
-  public static func validateTokenReductionLevel(level: String) throws {
-    try RustBridge.validateTokenReductionLevel(level)
-  }
-
-  /// Validate an OCR backend string.
-  ///
-  /// # Arguments
-  ///
-  /// * `backend` - The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr")
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_ocr_backend;
-  ///
-  /// assert!(validate_ocr_backend("tesseract").is_ok());
-  /// assert!(validate_ocr_backend("easyocr").is_ok());
-  /// assert!(validate_ocr_backend("invalid").is_err());
-  /// ```
-  public static func validateOcrBackend(backend: String) throws {
-    try RustBridge.validateOcrBackend(backend)
-  }
-
-  /// Validate a language code (ISO 639-1 or 639-3 format).
-  ///
-  /// Accepts both 2-letter ISO 639-1 codes (e.g., "en", "de") and
-  /// 3-letter ISO 639-3 codes (e.g., "eng", "deu") for broader compatibility.
-  ///
-  /// # Arguments
-  ///
-  /// * `code` - The language code to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_language_code;
-  ///
-  /// assert!(validate_language_code("en").is_ok());
-  /// assert!(validate_language_code("eng").is_ok());
-  /// assert!(validate_language_code("de").is_ok());
-  /// assert!(validate_language_code("deu").is_ok());
-  /// assert!(validate_language_code("invalid").is_err());
-  /// ```
-  public static func validateLanguageCode(code: String) throws {
-    try RustBridge.validateLanguageCode(code)
-  }
-
-  /// Validate a tesseract Page Segmentation Mode (PSM).
-  ///
-  /// # Arguments
-  ///
-  /// * `psm` - The PSM value to validate (0-13)
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_tesseract_psm;
-  ///
-  /// assert!(validate_tesseract_psm(3).is_ok());  // Fully automatic
-  /// assert!(validate_tesseract_psm(6).is_ok());  // Single block of text
-  /// assert!(validate_tesseract_psm(14).is_err()); // Out of range
-  /// ```
-  public static func validateTesseractPsm(psm: Int32) throws {
-    try RustBridge.validateTesseractPsm(psm)
-  }
-
-  /// Validate a tesseract OCR Engine Mode (OEM).
-  ///
-  /// # Arguments
-  ///
-  /// * `oem` - The OEM value to validate (0-3)
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_tesseract_oem;
-  ///
-  /// assert!(validate_tesseract_oem(1).is_ok());  // Neural nets (LSTM)
-  /// assert!(validate_tesseract_oem(2).is_ok());  // Legacy + LSTM
-  /// assert!(validate_tesseract_oem(4).is_err()); // Out of range
-  /// ```
-  public static func validateTesseractOem(oem: Int32) throws {
-    try RustBridge.validateTesseractOem(oem)
-  }
-
-  /// Validate a document extraction output format.
-  ///
-  /// Accepts the following formats and aliases:
-  /// - "plain" or "text" for plain text output
-  /// - "markdown" or "md" for Markdown output
-  /// - "djot" for Djot markup format
-  /// - "html" for HTML output
-  ///
-  /// # Arguments
-  ///
-  /// * `format` - The output format to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_output_format;
-  ///
-  /// assert!(validate_output_format("text").is_ok());
-  /// assert!(validate_output_format("plain").is_ok());
-  /// assert!(validate_output_format("markdown").is_ok());
-  /// assert!(validate_output_format("md").is_ok());
-  /// assert!(validate_output_format("djot").is_ok());
-  /// assert!(validate_output_format("html").is_ok());
-  /// assert!(validate_output_format("json").is_ok());
-  /// ```
-  public static func validateOutputFormat(format: String) throws {
-    try RustBridge.validateOutputFormat(format)
-  }
-
-  /// Validate a confidence threshold value.
-  ///
-  /// Confidence thresholds should be between 0.0 and 1.0 inclusive.
-  ///
-  /// # Arguments
-  ///
-  /// * `confidence` - The confidence threshold to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_confidence;
-  ///
-  /// assert!(validate_confidence(0.5).is_ok());
-  /// assert!(validate_confidence(0.0).is_ok());
-  /// assert!(validate_confidence(1.0).is_ok());
-  /// assert!(validate_confidence(1.5).is_err());
-  /// assert!(validate_confidence(-0.1).is_err());
-  /// ```
-  public static func validateConfidence(confidence: Double) throws {
-    try RustBridge.validateConfidence(confidence)
-  }
-
-  /// Validate a DPI (dots per inch) value.
-  ///
-  /// DPI should be a positive integer, typically 72-600.
-  ///
-  /// # Arguments
-  ///
-  /// * `dpi` - The DPI value to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_dpi;
-  ///
-  /// assert!(validate_dpi(96).is_ok());
-  /// assert!(validate_dpi(300).is_ok());
-  /// assert!(validate_dpi(0).is_err());
-  /// assert!(validate_dpi(-1).is_err());
-  /// ```
-  public static func validateDpi(dpi: Int32) throws {
-    try RustBridge.validateDpi(dpi)
-  }
-
-  /// Validate chunk size parameters.
-  ///
-  /// Checks that max_chars > 0 and max_overlap < max_chars.
-  ///
-  /// # Arguments
-  ///
-  /// * `max_chars` - The maximum characters per chunk
-  /// * `max_overlap` - The maximum overlap between chunks
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_chunking_params;
-  ///
-  /// assert!(validate_chunking_params(1000, 200).is_ok());
-  /// assert!(validate_chunking_params(500, 50).is_ok());
-  /// assert!(validate_chunking_params(0, 100).is_err()); // max_chars must be > 0
-  /// assert!(validate_chunking_params(100, 150).is_err()); // overlap >= max_chars
-  /// ```
-  public static func validateChunkingParams(maxChars: UInt, maxOverlap: UInt) throws {
-    try RustBridge.validateChunkingParams(maxChars, maxOverlap)
-  }
-
-  /// Validate that an [`LlmConfig`](crate::core::config::LlmConfig) has a non-empty model string.
-  ///
-  /// # Arguments
-  ///
-  /// * `model` - The model string to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_llm_config_model;
-  ///
-  /// assert!(validate_llm_config_model("openai/gpt-4o").is_ok());
-  /// assert!(validate_llm_config_model("").is_err());
-  /// ```
-  public static func validateLlmConfigModel(model: String) throws {
-    try RustBridge.validateLlmConfigModel(model)
-  }
-
-  /// Extract content from a byte array.
-  ///
-  /// This is the main entry point for in-memory extraction. It performs the following steps:
-  /// 1. Validate MIME type
-  /// 2. Handle legacy format conversion if needed
-  /// 3. Select appropriate extractor from registry
-  /// 4. Extract content
-  /// 5. Run post-processing pipeline
-  ///
-  /// # Arguments
-  ///
-  /// * `content` - The byte array to extract
-  /// * `mime_type` - MIME type of the content
-  /// * `config` - Extraction configuration
-  ///
-  /// # Returns
-  ///
-  /// An `ExtractionResult` containing the extracted content and metadata.
-  ///
-  /// # Errors
-  ///
-  /// Returns `KreuzbergError::Validation` if MIME type is invalid.
-  /// Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::extract_bytes;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  ///
-  /// # async fn example() -> kreuzberg::Result<()> {
-  /// let config = ExtractionConfig::default();
-  /// let bytes = b"Hello, world!";
-  /// let result = extract_bytes(bytes, "text/plain", &config).await?;
-  /// println!("Content: {}", result.content);
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func extractBytes(content: Data, mimeType: String, config: ExtractionConfig)
-    async throws -> ExtractionResult
-  {
-    return try await RustBridge.extractBytes(content, mimeType, config)
-  }
-
-  /// Extract content from a file.
-  ///
-  /// This is the main entry point for file-based extraction. It performs the following steps:
-  /// 1. Check cache for existing result (if caching enabled)
-  /// 2. Detect or validate MIME type
-  /// 3. Select appropriate extractor from registry
-  /// 4. Extract content
-  /// 5. Run post-processing pipeline
-  /// 6. Store result in cache (if caching enabled)
-  ///
-  /// # Arguments
-  ///
-  /// * `path` - Path to the file to extract
-  /// * `mime_type` - Optional MIME type override. If None, will be auto-detected
-  /// * `config` - Extraction configuration
-  ///
-  /// # Returns
-  ///
-  /// An `ExtractionResult` containing the extracted content and metadata.
-  ///
-  /// # Errors
-  ///
-  /// Returns `KreuzbergError::Io` if the file doesn't exist (NotFound) or for other file I/O errors.
-  /// Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::extract_file;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  ///
-  /// # async fn example() -> kreuzberg::Result<()> {
-  /// let config = ExtractionConfig::default();
-  /// let result = extract_file("document.pdf", None, &config).await?;
-  /// println!("Content: {}", result.content);
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func extractFile(path: String, mimeType: String, config: ExtractionConfig)
-    async throws -> ExtractionResult
-  {
-    return try await RustBridge.extractFile(path, mimeType, config)
-  }
-
-  /// Synchronous wrapper for `extract_file`.
-  ///
-  /// This is a convenience function that blocks the current thread until extraction completes.
-  /// For async code, use `extract_file` directly.
-  ///
-  /// Uses the global Tokio runtime for 100x+ performance improvement over creating
-  /// a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
-  ///
-  /// This function is only available with the `tokio-runtime` feature. For WASM targets,
-  /// use a truly synchronous extraction approach instead.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::extract_file_sync;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  ///
-  /// let config = ExtractionConfig::default();
-  /// let result = extract_file_sync("document.pdf", None, &config)?;
-  /// println!("Content: {}", result.content);
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// ```
-  public static func extractFileSync(path: String, mimeType: String, config: ExtractionConfig)
-    throws -> ExtractionResult
-  {
-    return try RustBridge.extractFileSync(path, mimeType, config)
-  }
-
-  /// Synchronous wrapper for `extract_bytes`.
-  ///
-  /// Uses the global Tokio runtime for 100x+ performance improvement over creating
-  /// a new runtime per call.
-  ///
-  /// With the `tokio-runtime` feature, this blocks the current thread using the global
-  /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::extract_bytes_sync;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  ///
-  /// let config = ExtractionConfig::default();
-  /// let bytes = b"Hello, world!";
-  /// let result = extract_bytes_sync(bytes, "text/plain", &config)?;
-  /// println!("Content: {}", result.content);
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// ```
-  public static func extractBytesSync(content: Data, mimeType: String, config: ExtractionConfig)
-    throws -> ExtractionResult
-  {
-    return try RustBridge.extractBytesSync(content, mimeType, config)
-  }
-
-  /// Synchronous wrapper for `batch_extract_file`.
-  ///
-  /// Uses the global Tokio runtime for optimal performance.
-  /// Only available with `tokio-runtime` (WASM has no filesystem).
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_file_sync;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
-  /// use std::path::PathBuf;
-  ///
-  /// let config = ExtractionConfig::default();
-  /// let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
-  ///     ("doc1.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-  ///     ("doc2.pdf".into(), None),
-  /// ];
-  /// let results = batch_extract_file_sync(items, &config)?;
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// ```
-  public static func batchExtractFileSync(items: [String], config: ExtractionConfig) throws
-    -> [ExtractionResult]
-  {
-    return try RustBridge.batchExtractFileSync(items, config)
-  }
-
-  /// Synchronous wrapper for `batch_extract_bytes`.
-  ///
-  /// Uses the global Tokio runtime for optimal performance.
-  /// With the `tokio-runtime` feature, this blocks the current thread using the global
-  /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
-  /// that iterates through items and calls `extract_bytes_sync()`.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_bytes_sync;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
-  ///
-  /// let config = ExtractionConfig::default();
-  /// let items = vec![
-  ///     (b"content".to_vec(), "text/plain".to_string(), None),
-  ///     (b"other".to_vec(), "text/plain".to_string(),
-  ///      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-  /// ];
-  /// let results = batch_extract_bytes_sync(items, &config)?;
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// ```
-  public static func batchExtractBytesSync(items: [String], config: ExtractionConfig) throws
-    -> [ExtractionResult]
-  {
-    return try RustBridge.batchExtractBytesSync(items, config)
-  }
-
-  /// Extract content from multiple files concurrently.
-  ///
-  /// This function processes multiple files in parallel, automatically managing
-  /// concurrency to prevent resource exhaustion. The concurrency limit can be
-  /// configured via `ExtractionConfig::max_concurrent_extractions` or defaults
-  /// to `(num_cpus * 1.5).ceil()`.
-  ///
-  /// Each file can optionally specify a [`FileExtractionConfig`] that overrides specific
-  /// fields from the batch-level `config`. Pass `None` for a file to use the batch defaults.
-  /// Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
-  /// taken from the batch-level `config`.
-  ///
-  /// # Arguments
-  ///
-  /// * `items` - Vector of `(path, optional_file_config)` tuples. Pass `None` as the
-  ///   config to use the batch-level defaults for that file.
-  /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
-  ///
-  /// # Returns
-  ///
-  /// A vector of `ExtractionResult` in the same order as the input items.
-  ///
-  /// # Errors
-  ///
-  /// Individual file errors are captured in the result metadata. System errors
-  /// (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
-  ///
-  /// # Examples
-  ///
-  /// Simple usage with no per-file overrides:
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_file;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use std::path::PathBuf;
-  ///
-  /// # async fn example() -> kreuzberg::Result<()> {
-  /// let config = ExtractionConfig::default();
-  /// let items: Vec<(PathBuf, Option<kreuzberg::FileExtractionConfig>)> = vec![
-  ///     ("doc1.pdf".into(), None),
-  ///     ("doc2.pdf".into(), None),
-  /// ];
-  /// let results = batch_extract_file(items, &config).await?;
-  /// println!("Processed {} files", results.len());
-  /// # Ok(())
-  /// # }
-  /// ```
-  ///
-  /// Per-file configuration overrides:
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_file;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
-  /// use std::path::PathBuf;
-  ///
-  /// # async fn example() -> kreuzberg::Result<()> {
-  /// let config = ExtractionConfig::default();
-  /// let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
-  ///     ("scan.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-  ///     ("notes.txt".into(), None),
-  /// ];
-  /// let results = batch_extract_file(items, &config).await?;
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func batchExtractFile(items: [String], config: ExtractionConfig) async throws
-    -> [ExtractionResult]
-  {
-    return try await RustBridge.batchExtractFile(items, config)
-  }
-
-  /// Extract content from multiple byte arrays concurrently.
-  ///
-  /// This function processes multiple byte arrays in parallel, automatically managing
-  /// concurrency to prevent resource exhaustion. The concurrency limit can be
-  /// configured via `ExtractionConfig::max_concurrent_extractions` or defaults
-  /// to `(num_cpus * 1.5).ceil()`.
-  ///
-  /// Each item can optionally specify a [`FileExtractionConfig`] that overrides specific
-  /// fields from the batch-level `config`. Pass `None` as the config to use
-  /// the batch-level defaults for that item.
-  ///
-  /// # Arguments
-  ///
-  /// * `items` - Vector of `(bytes, mime_type, optional_file_config)` tuples
-  /// * `config` - Batch-level extraction configuration
-  ///
-  /// # Returns
-  ///
-  /// A vector of `ExtractionResult` in the same order as the input items.
-  ///
-  /// # Examples
-  ///
-  /// Simple usage with no per-item overrides:
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_bytes;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  ///
-  /// # async fn example() -> kreuzberg::Result<()> {
-  /// let config = ExtractionConfig::default();
-  /// let items = vec![
-  ///     (b"content 1".to_vec(), "text/plain".to_string(), None),
-  ///     (b"content 2".to_vec(), "text/plain".to_string(), None),
-  /// ];
-  /// let results = batch_extract_bytes(items, &config).await?;
-  /// println!("Processed {} items", results.len());
-  /// # Ok(())
-  /// # }
-  /// ```
-  ///
-  /// Per-item configuration overrides:
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_bytes;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
-  ///
-  /// # async fn example() -> kreuzberg::Result<()> {
-  /// let config = ExtractionConfig::default();
-  /// let items = vec![
-  ///     (b"content".to_vec(), "text/plain".to_string(), None),
-  ///     (b"<html>test</html>".to_vec(), "text/html".to_string(),
-  ///      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-  /// ];
-  /// let results = batch_extract_bytes(items, &config).await?;
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func batchExtractBytes(items: [String], config: ExtractionConfig) async throws
-    -> [ExtractionResult]
-  {
-    return try await RustBridge.batchExtractBytes(items, config)
-  }
-
-  /// Validates whether a field name is in the known formats registry.
-  ///
-  /// This uses a pre-built hash set for O(1) lookups instead of linear search,
-  /// providing significant performance improvements for repeated validations.
-  ///
-  /// # Arguments
-  ///
-  /// * `field` - The field name to validate
-  ///
-  /// # Returns
-  ///
-  /// `true` if the field is in KNOWN_FORMATS, `false` otherwise.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::core::formats::is_valid_format_field;
-  ///
-  /// assert!(is_valid_format_field("title"));
-  /// assert!(is_valid_format_field("creation_date"));
-  /// assert!(!is_valid_format_field("invalid_field"));
-  /// ```
-  public static func isValidFormatField(field: String) -> Bool {
-    return RustBridge.isValidFormatField(field)
-  }
-
-  /// Validate that a MIME type is supported.
-  ///
-  /// # Arguments
-  ///
-  /// * `mime_type` - The MIME type to validate
-  ///
-  /// # Returns
-  ///
-  /// The validated MIME type (may be normalized).
-  ///
-  /// # Errors
-  ///
-  /// Returns `KreuzbergError::UnsupportedFormat` if not supported.
-  public static func validateMimeType(mimeType: String) throws -> String {
-    return try RustBridge.validateMimeType(mimeType)
-  }
-
-  /// Detect or validate MIME type.
-  ///
-  /// If `mime_type` is provided, validates it. Otherwise, detects from `path`.
-  ///
-  /// # Arguments
-  ///
-  /// * `path` - Optional path to detect MIME type from
-  /// * `mime_type` - Optional explicit MIME type to validate
-  ///
-  /// # Returns
-  ///
-  /// The validated MIME type string.
-  public static func detectOrValidate(path: String, mimeType: String) throws -> String {
-    return try RustBridge.detectOrValidate(path, mimeType)
-  }
-
-  /// Detect MIME type from raw file bytes.
-  ///
-  /// Uses magic byte signatures to detect file type from content.
-  /// Falls back to `infer` crate for comprehensive detection.
-  ///
-  /// For ZIP-based files, inspects contents to distinguish Office Open XML
-  /// formats (DOCX, XLSX, PPTX) from plain ZIP archives.
-  ///
-  /// # Arguments
-  ///
-  /// * `content` - Raw file bytes
-  ///
-  /// # Returns
-  ///
-  /// The detected MIME type string.
-  ///
-  /// # Errors
-  ///
-  /// Returns `KreuzbergError::UnsupportedFormat` if MIME type cannot be determined.
-  public static func detectMimeTypeFromBytes(content: Data) throws -> String {
-    return try RustBridge.detectMimeTypeFromBytes(content)
-  }
-
-  /// Get file extensions for a given MIME type.
-  ///
-  /// Returns all known file extensions that map to the specified MIME type.
-  ///
-  /// # Arguments
-  ///
-  /// * `mime_type` - The MIME type to look up
-  ///
-  /// # Returns
-  ///
-  /// A vector of file extensions (without leading dot) for the MIME type.
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use kreuzberg::core::mime::get_extensions_for_mime;
-  ///
-  /// let extensions = get_extensions_for_mime("application/pdf").unwrap();
-  /// assert_eq!(extensions, vec!["pdf"]);
-  ///
-  /// let doc_extensions = get_extensions_for_mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document").unwrap();
-  /// assert!(doc_extensions.contains(&"docx".to_string()));
-  /// ```
-  public static func getExtensionsForMime(mimeType: String) throws -> [String] {
-    return try RustBridge.getExtensionsForMime(mimeType)
-  }
-
-  /// List all supported document formats.
-  ///
-  /// Returns a list of all file extensions and their corresponding MIME types
-  /// that Kreuzberg can process. Derived from the centralized [`FORMATS`] registry.
-  ///
-  /// The list is sorted alphabetically by file extension.
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use kreuzberg::core::mime::list_supported_formats;
-  ///
-  /// let formats = list_supported_formats();
-  /// assert!(!formats.is_empty());
-  /// assert!(formats.iter().any(|f| f.extension == "pdf"));
-  /// ```
-  public static func listSupportedFormats() -> [SupportedFormat] {
-    return RustBridge.listSupportedFormats()
-  }
-
-  /// Clear the processor cache (primarily for testing when registry changes).
-  public static func clearProcessorCache() throws {
-    try RustBridge.clearProcessorCache()
-  }
-
-  /// Transform an extraction result into semantic elements.
-  ///
-  /// This function takes a reference to an ExtractionResult and generates
-  /// a vector of Element structs representing semantic blocks in the document.
-  /// It detects content sections, list items, page breaks, and other structural
-  /// elements to create an Unstructured-compatible element-based output.
-  ///
-  /// Handles:
-  /// - PDF hierarchy → Title/Heading elements
-  /// - Multi-page documents with correct page numbers
-  /// - Table and Image extraction
-  /// - PageBreak interleaving
-  /// - Bounding box coordinates
-  /// - Paragraph detection for NarrativeText
-  ///
-  /// # Arguments
-  ///
-  /// * `result` - Reference to the ExtractionResult to transform
-  ///
-  /// # Returns
-  ///
-  /// A vector of Elements with proper semantic types and metadata.
-  public static func transformExtractionResultToElements(result: ExtractionResult) -> [Element] {
-    return RustBridge.transformExtractionResultToElements(result)
-  }
-
-  /// Extract email content from either .eml or .msg format
-  public static func extractEmailContent(data: Data, mimeType: String, fallbackCodepage: UInt32)
-    throws -> EmailExtractionResult
-  {
-    return try RustBridge.extractEmailContent(data, mimeType, fallbackCodepage)
-  }
-
-  /// Converts a 2D vector of cell strings into a GitHub-Flavored Markdown table.
-  ///
-  /// # Behavior
-  ///
-  /// - The first row is treated as the header row
-  /// - A separator row is inserted after the header
-  /// - Pipe characters (`|`) in cell content are automatically escaped with backslash
-  /// - Irregular tables (rows with varying column counts) are padded with empty cells to match the header
-  /// - Returns an empty string for empty input
-  ///
-  /// # Arguments
-  ///
-  /// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-  ///
-  /// # Returns
-  ///
-  /// A `String` containing the GFM markdown table representation
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use kreuzberg::extraction::cells_to_markdown;
-  /// let cells = vec![
-  ///     vec!["Name".to_string(), "Age".to_string()],
-  ///     vec!["Alice".to_string(), "30".to_string()],
-  ///     vec!["Bob".to_string(), "25".to_string()],
-  /// ];
-  ///
-  /// let markdown = cells_to_markdown(&cells);
-  /// assert!(markdown.contains("| Name | Age |"));
-  /// assert!(markdown.contains("|------|------|"));
-  /// ```
-  ///
-  /// Converts a 2D vector of cell strings into plain text with tab-separated columns.
-  ///
-  /// # Behavior
-  ///
-  /// - Rows are separated by newlines
-  /// - Cells within a row are separated by tab characters
-  /// - No pipe delimiters or separator rows (unlike markdown tables)
-  /// - Returns an empty string for empty input
-  ///
-  /// # Arguments
-  ///
-  /// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-  ///
-  /// # Returns
-  ///
-  /// A `String` containing the plain text table representation
-  public static func cellsToText(cells: [[String]]) -> String {
-    return RustBridge.cellsToText(cells)
-  }
-
-  public static func cellsToMarkdown(cells: [[String]]) -> String {
-    return RustBridge.cellsToMarkdown(cells)
-  }
-
-  /// Render djot content to HTML.
-  ///
-  /// This function takes djot source text and renders it to HTML using jotdown's
-  /// built-in HTML renderer.
-  ///
-  /// # Arguments
-  ///
-  /// * `djot_source` - The djot markup text to render
-  ///
-  /// # Returns
-  ///
-  /// A `Result` containing the rendered HTML string
-  ///
-  /// # Example
-  ///
-  /// ```ignore
-  /// let djot = "# Hello\n\nThis is *bold* and _italic_.";
-  /// let html = djot_to_html(djot)?;
-  /// assert!(html.contains("<h1>"));
-  /// assert!(html.contains("<strong>"));
-  /// assert!(html.contains("<em>"));
-  /// ```
-  public static func djotToHtml(djotSource: String) throws -> String {
-    return try RustBridge.djotToHtml(djotSource)
-  }
-
-  /// Deduplicate a list of text strings while preserving order.
-  /// Adjacent duplicates and near-duplicates are removed.
-  public static func dedupText(texts: [String]) -> [String] {
-    return RustBridge.dedupText(texts)
-  }
-
-  /// Normalize whitespace in a string.
-  ///
-  /// - Collapses multiple consecutive spaces/tabs into a single space
-  /// - Preserves single newlines (paragraph breaks from \par)
-  /// - Collapses multiple consecutive newlines into a double newline
-  /// - Trims leading/trailing whitespace from each line
-  /// - Trims leading/trailing blank lines
-  public static func normalizeWhitespace(s: String) -> String {
-    return RustBridge.normalizeWhitespace(s)
-  }
-
-  /// Register all built-in extractors with the global registry.
-  ///
-  /// This function should be called once at application startup to register
-  /// the default extractors (PlainText, Markdown, XML, etc.).
-  ///
-  /// **Note:** This is called automatically on first extraction operation.
-  /// Explicit calling is optional.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::extractors::register_default_extractors;
-  ///
-  /// # fn main() -> kreuzberg::Result<()> {
-  /// register_default_extractors()?;
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func registerDefaultExtractors() throws {
-    try RustBridge.registerDefaultExtractors()
-  }
-
-  /// Unregister a document extractor by name.
-  public static func unregisterExtractor(name: String) throws {
-    try RustBridge.unregisterExtractor(name)
-  }
-
-  /// List names of all registered document extractors.
-  public static func listExtractors() throws -> [String] {
-    return try RustBridge.listExtractors()
-  }
-
-  /// Remove all registered document extractors.
-  public static func clearExtractors() throws {
-    try RustBridge.clearExtractors()
-  }
-
-  /// Unregister an OCR backend by name.
-  ///
-  /// Removes the OCR backend from the global registry and calls its `shutdown()` method.
-  ///
-  /// # Arguments
-  ///
-  /// * `name` - Name of the OCR backend to unregister
-  ///
-  /// # Returns
-  ///
-  /// - `Ok(())` if the backend was unregistered or didn't exist
-  /// - `Err(...)` if the shutdown method failed
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::plugins::unregister_ocr_backend;
-  ///
-  /// # tokio_test::block_on(async {
-  /// unregister_ocr_backend("custom-ocr")?;
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// # });
-  /// ```
-  public static func unregisterOcrBackend(name: String) throws {
-    try RustBridge.unregisterOcrBackend(name)
-  }
-
-  /// List all registered OCR backends.
-  ///
-  /// Returns the names of all OCR backends currently registered in the global registry.
-  ///
-  /// # Returns
-  ///
-  /// A vector of OCR backend names.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::plugins::list_ocr_backends;
-  ///
-  /// # tokio_test::block_on(async {
-  /// let backends = list_ocr_backends()?;
-  /// for name in backends {
-  ///     println!("Registered OCR backend: {}", name);
-  /// }
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// # });
-  /// ```
-  public static func listOcrBackends() throws -> [String] {
-    return try RustBridge.listOcrBackends()
-  }
-
-  /// Clear all OCR backends from the global registry.
-  ///
-  /// Removes all OCR backends and calls their `shutdown()` methods.
-  ///
-  /// # Returns
-  ///
-  /// - `Ok(())` if all backends were cleared successfully
-  /// - `Err(...)` if any shutdown method failed
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::plugins::clear_ocr_backends;
-  ///
-  /// # tokio_test::block_on(async {
-  /// clear_ocr_backends()?;
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// # });
-  /// ```
-  public static func clearOcrBackends() throws {
-    try RustBridge.clearOcrBackends()
-  }
-
-  /// List all registered post-processor names.
-  ///
-  /// Returns a vector of all post-processor names currently registered in the
-  /// global registry.
-  ///
-  /// # Returns
-  ///
-  /// - `Ok(Vec<String>)` - Vector of post-processor names
-  /// - `Err(...)` if the registry lock is poisoned
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::plugins::list_post_processors;
-  ///
-  /// # tokio_test::block_on(async {
-  /// let processors = list_post_processors()?;
-  /// for name in processors {
-  ///     println!("Registered post-processor: {}", name);
-  /// }
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// # });
-  /// ```
-  public static func listPostProcessors() throws -> [String] {
-    return try RustBridge.listPostProcessors()
-  }
-
-  /// Unregister a renderer by name.
-  public static func unregisterRenderer(name: String) throws {
-    try RustBridge.unregisterRenderer(name)
-  }
-
-  /// List names of all registered renderers.
-  public static func listRenderers() throws -> [String] {
-    return try RustBridge.listRenderers()
-  }
-
-  /// Remove all registered renderers.
-  public static func clearRenderers() throws {
-    try RustBridge.clearRenderers()
-  }
-
-  /// List names of all registered validators.
-  public static func listValidators() throws -> [String] {
-    return try RustBridge.listValidators()
-  }
-
-  /// Remove all registered validators.
-  public static func clearValidators() throws {
-    try RustBridge.clearValidators()
-  }
-
-  /// Sanitize a file path to return only the filename (no directory).
-  ///
-  /// Prevents PII from appearing in traces.
-  public static func sanitizeFilename(path: URL) -> String {
-    return RustBridge.sanitizeFilename(path)
-  }
-
-  /// Sanitize a file path to return only the filename.
-  ///
-  /// Prevents PII (personally identifiable information) from appearing in
-  /// traces by only recording filenames instead of full paths.
-  public static func sanitizePath(path: URL) -> String {
-    return RustBridge.sanitizePath(path)
-  }
-
-  /// Validates bytes as UTF-8 without conversion to string slice.
-  ///
-  /// Returns `true` if the bytes represent valid UTF-8, `false` otherwise.
-  /// This is useful when you only need to check validity without constructing a string.
-  ///
-  /// # Arguments
-  ///
-  /// * `bytes` - The byte slice to validate
-  ///
-  /// # Returns
-  ///
-  /// `true` if valid UTF-8, `false` otherwise.
-  ///
-  /// # Performance
-  ///
-  /// This function is optimized for early exit on invalid sequences.
-  public static func isValidUtf8(bytes: Data) -> Bool {
-    return RustBridge.isValidUtf8(bytes)
-  }
-
-  public static func cleanExtractedText(text: String) -> String {
-    return RustBridge.cleanExtractedText(text)
-  }
-
-  /// Reduces token count in text while preserving meaning and structure.
-  ///
-  /// This function removes stopwords, redundancy, and applies compression techniques
-  /// based on the specified reduction level. Supports 64 languages with automatic
-  /// stopword removal and optional semantic clustering.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The input text to reduce
-  /// * `config` - Configuration specifying reduction level and options
-  /// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-  ///
-  /// # Returns
-  ///
-  /// Returns the reduced text with preserved structure (markdown, code blocks).
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::text::token_reduction::{reduce_tokens, TokenReductionConfig, ReductionLevel};
-  ///
-  /// let text = "This is a simple example text with some stopwords.";
-  /// let config = TokenReductionConfig::default();
-  /// let reduced = reduce_tokens(text, &config, Some("eng"))?;
-  /// println!("Reduced: {}", reduced);
-  /// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-  /// ```
-  public static func reduceTokens(text: String, config: TokenReductionConfig, languageHint: String)
-    throws -> String
-  {
-    return try RustBridge.reduceTokens(text, config, languageHint)
-  }
-
-  /// Reduces token count for multiple texts efficiently using parallel processing.
-  ///
-  /// This function processes multiple texts in parallel using Rayon, providing
-  /// significant performance improvements for batch operations. All texts use the
-  /// same configuration and language hint for consistency.
-  ///
-  /// # Arguments
-  ///
-  /// * `texts` - Slice of text references to reduce
-  /// * `config` - Configuration specifying reduction level and options
-  /// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-  ///
-  /// # Returns
-  ///
-  /// Returns a vector of reduced texts in the same order as the input.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::text::token_reduction::{batch_reduce_tokens, TokenReductionConfig, ReductionLevel};
-  ///
-  /// let texts: Vec<String> = vec![
-  ///     "This is the first document with some text.".to_string(),
-  ///     "Here is another document with different content.".to_string(),
-  ///     "And finally, a third document to process.".to_string(),
-  /// ];
-  /// let config = TokenReductionConfig::default();
-  /// let reduced = batch_reduce_tokens(&texts, &config, Some("eng"))?;
-  /// assert_eq!(reduced.len(), 3);
-  /// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-  /// ```
-  public static func batchReduceTokens(
-    texts: [String], config: TokenReductionConfig, languageHint: String
-  ) throws -> [String] {
-    return try RustBridge.batchReduceTokens(texts, config, languageHint)
-  }
-
-  /// Create a bold annotation for the given byte range.
-  public static func bold(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.bold(start, end)
-  }
-
-  /// Create an italic annotation for the given byte range.
-  public static func italic(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.italic(start, end)
-  }
-
-  /// Create an underline annotation for the given byte range.
-  public static func underline(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.underline(start, end)
-  }
-
-  /// Create a link annotation for the given byte range.
-  public static func link(start: UInt32, end: UInt32, url: String, title: String) -> TextAnnotation
-  {
-    return RustBridge.link(start, end, url, title)
-  }
-
-  /// Create a code (inline) annotation for the given byte range.
-  public static func code(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.code(start, end)
-  }
-
-  /// Create a strikethrough annotation for the given byte range.
-  public static func strikethrough(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.strikethrough(start, end)
-  }
-
-  /// Create a subscript annotation for the given byte range.
-  public static func subscript_(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.subscript_(start, end)
-  }
-
-  /// Create a superscript annotation for the given byte range.
-  public static func superscript(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.superscript(start, end)
-  }
-
-  /// Create a font size annotation for the given byte range.
-  public static func fontSize(start: UInt32, end: UInt32, value: String) -> TextAnnotation {
-    return RustBridge.fontSize(start, end, value)
-  }
-
-  /// Create a color annotation for the given byte range.
-  public static func color(start: UInt32, end: UInt32, value: String) -> TextAnnotation {
-    return RustBridge.color(start, end, value)
-  }
-
-  /// Create a highlight annotation for the given byte range.
-  public static func highlight(start: UInt32, end: UInt32) -> TextAnnotation {
-    return RustBridge.highlight(start, end)
-  }
-
-  /// Classify a URL string into the appropriate `UriKind`.
-  ///
-  /// - `mailto:` → `Email`
-  /// - `#` prefix → `Anchor`
-  /// - everything else → `Hyperlink`
-  public static func classifyUri(url: String) -> UriKind {
-    return RustBridge.classifyUri(url)
-  }
-
-  /// Decode raw bytes into UTF-8, using heuristics and fallback encodings when necessary.
-  ///
-  /// The function prefers an explicit `encoding`, falls back to the cached guess, probes
-  /// an encoding detector, and finally tries a small curated list before returning a
-  /// mojibake-cleaned string.
-  public static func safeDecode(byteData: Data, encoding: String) -> String {
-    return RustBridge.safeDecode(byteData, encoding)
-  }
-
-  /// Estimate how trustworthy a decoded string is on a 0.0–1.0 scale.
-  ///
-  /// Scores close to 1.0 indicate mostly printable characters, whereas lower scores
-  /// point to mojibake, control characters, or suspicious character mixes.
-  public static func calculateTextConfidence(text: String) -> Double {
-    return RustBridge.calculateTextConfidence(text)
-  }
-
-  /// Create a pre-configured string buffer pool for batch processing.
-  ///
-  /// # Arguments
-  ///
-  /// * `pool_size` - Maximum number of buffers to keep in the pool
-  /// * `buffer_capacity` - Initial capacity for each buffer in bytes
-  ///
-  /// # Returns
-  ///
-  /// A pool configured for text accumulation with reasonable defaults.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::utils::pool::create_string_buffer_pool;
-  ///
-  /// let pool = create_string_buffer_pool(10, 8192);
-  /// let mut buffer = pool.acquire().unwrap();
-  /// buffer.push_str("content");
-  /// ```
-  public static func createStringBufferPool(poolSize: UInt, bufferCapacity: UInt)
-    -> StringBufferPool
-  {
-    return RustBridge.createStringBufferPool(poolSize, bufferCapacity)
-  }
-
-  /// Create a pre-configured byte buffer pool for batch processing.
-  ///
-  /// # Arguments
-  ///
-  /// * `pool_size` - Maximum number of buffers to keep in the pool
-  /// * `buffer_capacity` - Initial capacity for each buffer in bytes
-  ///
-  /// # Returns
-  ///
-  /// A pool configured for binary data handling with reasonable defaults.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::utils::pool::create_byte_buffer_pool;
-  ///
-  /// let pool = create_byte_buffer_pool(10, 65536);
-  /// let mut buffer = pool.acquire().unwrap();
-  /// buffer.extend_from_slice(b"binary data");
-  /// ```
-  public static func createByteBufferPool(poolSize: UInt, bufferCapacity: UInt) -> ByteBufferPool {
-    return RustBridge.createByteBufferPool(poolSize, bufferCapacity)
-  }
-
-  /// Generate OpenAPI JSON schema.
-  ///
-  /// Returns the complete OpenAPI 3.1 specification as a JSON string.
-  ///
-  /// # Examples
-  ///
-  /// ```no_run
-  /// use kreuzberg::api::openapi::openapi_json;
-  ///
-  /// let schema = openapi_json();
-  /// println!("{}", schema);
-  /// ```
-  public static func openapiJson() -> String {
-    return RustBridge.openapiJson()
-  }
-
-  /// Start the API server with default host and port.
-  ///
-  /// Defaults: host = "127.0.0.1", port = 8000
-  ///
-  /// Uses config file discovery (searches current/parent directories for kreuzberg.toml/yaml/json).
-  /// Validates plugins at startup to help diagnose configuration issues.
-  public static func serveDefault() async throws {
-    try await RustBridge.serveDefault()
-  }
-
-  /// Split text into chunks with optional page boundary tracking.
-  ///
-  /// This is the primary API function for chunking text. It supports both plain text
-  /// and Markdown with configurable chunk size, overlap, and page boundary mapping.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The text to split into chunks
-  /// * `config` - Chunking configuration (max size, overlap, type)
-  /// * `page_boundaries` - Optional page boundary markers for mapping chunks to pages
-  ///
-  /// # Returns
-  ///
-  /// A ChunkingResult containing all chunks and their metadata.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::chunking::{chunk_text, ChunkingConfig, ChunkerType};
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let config = ChunkingConfig {
-  ///     max_characters: 500,
-  ///     overlap: 50,
-  ///     trim: true,
-  ///     chunker_type: ChunkerType::Text,
-  ///     ..Default::default()
-  /// };
-  /// let result = chunk_text("Long text...", &config, None)?;
-  /// assert!(!result.chunks.is_empty());
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func chunkText(text: String, config: ChunkingConfig, pageBoundaries: [PageBoundary])
-    throws -> ChunkingResult
-  {
-    return try RustBridge.chunkText(text, config, pageBoundaries)
-  }
-
-  /// Chunk text with an optional separate markdown source for heading context resolution.
-  ///
-  /// When `heading_source` is provided, it is used instead of `text` for building the
-  /// heading map. This is needed when `text` is plain text (no markdown headings) but
-  /// the original document had headings that were stripped during rendering.
-  public static func chunkTextWithHeadingSource(
-    text: String, config: ChunkingConfig, pageBoundaries: [PageBoundary], headingSource: String
-  ) throws -> ChunkingResult {
-    return try RustBridge.chunkTextWithHeadingSource(text, config, pageBoundaries, headingSource)
-  }
-
-  /// Batch process multiple texts with the same configuration.
-  ///
-  /// This convenience function applies the same chunking configuration to multiple
-  /// texts in sequence.
-  ///
-  /// # Arguments
-  ///
-  /// * `texts` - Slice of text strings to chunk
-  /// * `config` - Chunking configuration to apply to all texts
-  ///
-  /// # Returns
-  ///
-  /// A vector of ChunkingResult objects, one per input text.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if chunking any individual text fails.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::chunking::{chunk_texts_batch, ChunkingConfig};
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let config = ChunkingConfig::default();
-  /// let texts: Vec<String> = vec!["First text".to_string(), "Second text".to_string()];
-  /// let results = chunk_texts_batch(&texts, &config)?;
-  /// assert_eq!(results.len(), 2);
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func chunkTextsBatch(texts: [String], config: ChunkingConfig) throws
-    -> [ChunkingResult]
-  {
-    return try RustBridge.chunkTextsBatch(texts, config)
-  }
-
-  /// Split text into semantically coherent chunks.
-  ///
-  /// Splits text into fine-grained segments, detects structural (and optionally
-  /// embedding-based) topic boundaries, then merges segments into chunks that
-  /// respect those boundaries and the configured size budget.
-  public static func chunkSemantic(
-    text: String, config: ChunkingConfig, pageBoundaries: [PageBoundary]
-  ) throws -> ChunkingResult {
-    return try RustBridge.chunkSemantic(text, config, pageBoundaries)
-  }
-
-  /// L2-normalize a vector.
-  public static func normalize(v: [Float]) -> [Float] {
-    return RustBridge.normalize(v)
-  }
-
-  /// List all available preset names.
-  public static func listPresets() -> [String] {
-    return RustBridge.listPresets()
-  }
-
-  /// Eagerly download and cache an embedding model without returning the handle.
-  ///
-  /// This triggers the same download and initialization as `get_or_init_engine`
-  /// but discards the result, making it suitable for cache-warming scenarios
-  /// where the caller doesn't need to use the model immediately.
-  ///
-  /// **Note**: This function downloads AND initializes the ONNX model, which
-  /// requires ONNX Runtime and uses significant memory. For download-only
-  /// scenarios (e.g., init containers), use [`download_model`] instead.
-  public static func warmModel(modelType: EmbeddingModelType, cacheDir: URL) throws {
-    try RustBridge.warmModel(modelType, cacheDir)
-  }
-
-  /// Download an embedding model's files without initializing ONNX Runtime.
-  ///
-  /// Downloads the model files (ONNX model, tokenizer, config) from HuggingFace
-  /// to the cache directory. Subsequent calls to `warm_model` or
-  /// `get_or_init_engine` will find the files cached and skip the download step.
-  ///
-  /// This is ideal for init containers or CI environments where you want to
-  /// pre-populate the cache without loading models into memory.
-  public static func downloadModel(modelType: EmbeddingModelType, cacheDir: URL) throws {
-    try RustBridge.downloadModel(modelType, cacheDir)
-  }
-
-  /// Calculate optimal DPI with min/max constraints
-  public static func calculateOptimalDpi(
-    pageWidth: Double, pageHeight: Double, targetDpi: Int32, maxDimension: Int32, minDpi: Int32,
-    maxDpi: Int32
-  ) -> Int32 {
-    return RustBridge.calculateOptimalDpi(
-      pageWidth, pageHeight, targetDpi, maxDimension, minDpi, maxDpi)
-  }
-
-  /// Detect languages in text using whatlang.
-  ///
-  /// Returns a list of detected language codes (ISO 639-3 format).
-  /// Returns `None` if no languages could be detected with sufficient confidence.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The text to analyze for language detection
-  /// * `config` - Optional configuration for language detection
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::language_detection::detect_languages;
-  /// use kreuzberg::core::config::LanguageDetectionConfig;
-  ///
-  /// let text = "Hello world! This is English text.";
-  /// let config = LanguageDetectionConfig {
-  ///     enabled: true,
-  ///     min_confidence: 0.8,
-  ///     detect_multiple: false,
-  /// };
-  /// let languages = detect_languages(text, &config).expect("language detection succeeded");
-  /// println!("Detected languages: {:?}", languages);
-  /// ```
-  public static func detectLanguages(text: String, config: LanguageDetectionConfig) throws
-    -> [String]?
-  {
-    return try RustBridge.detectLanguages(text, config)
-  }
-
-  /// Extract keywords from text using the specified algorithm.
-  ///
-  /// This is the unified entry point for keyword extraction. The algorithm
-  /// used is determined by `config.algorithm`.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The text to extract keywords from
-  /// * `config` - Keyword extraction configuration
-  ///
-  /// # Returns
-  ///
-  /// A vector of keywords sorted by relevance (highest score first).
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if:
-  /// - The specified algorithm feature is not enabled
-  /// - Keyword extraction fails
-  ///
-  /// # Examples
-  ///
-  /// ```rust,no_run
-  /// # use kreuzberg::keywords::{extract_keywords, KeywordConfig};
-  /// let text = "Document intelligence with Rust provides memory safety.";
-  /// let config = KeywordConfig::default()
-  ///     .with_max_keywords(10)
-  ///     .with_language("en");
-  ///
-  /// let keywords = extract_keywords(text, &config)?;
-  ///
-  /// for keyword in keywords {
-  ///     println!("{}: {:.3}", keyword.text, keyword.score);
-  /// }
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// ```
-  public static func extractKeywords(text: String, config: KeywordConfig) throws -> [Keyword] {
-    return try RustBridge.extractKeywords(text, config)
-  }
-
-  /// Compute a blake3 hash string from input data.
-  ///
-  /// Returns a 32-character hex string (128 bits of blake3 output).
-  public static func computeHash(data: String) -> String {
-    return RustBridge.computeHash(data)
-  }
-
-  /// Render a single PDF page to a PNG-encoded byte buffer.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the PDF is invalid, the page index is out of bounds,
-  /// or if the page fails to render.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::pdf::render_pdf_page_to_png;
-  ///
-  /// # fn example() -> kreuzberg::pdf::error::Result<()> {
-  /// let pdf_bytes = std::fs::read("document.pdf")?;
-  /// let png = render_pdf_page_to_png(&pdf_bytes, 0, Some(150), None)?;
-  /// std::fs::write("page_0.png", png)?;
-  /// # Ok(())
-  /// # }
-  /// ```
-  public static func renderPdfPageToPng(
-    pdfBytes: Data, pageIndex: UInt, dpi: Int32, password: String
-  ) throws -> Data {
-    return try RustBridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password)
-  }
-
-  public static func extractTextFromPdf(pdfBytes: Data) throws -> String {
-    return try RustBridge.extractTextFromPdf(pdfBytes)
-  }
-
-  /// Serialize an [`ExtractionResult`] to TOON (Token-Oriented Object Notation).
-  ///
-  /// TOON is a token-efficient alternative to JSON for LLM prompts.
-  /// Losslessly convertible to/from JSON but uses fewer tokens.
-  public static func serializeToToon(result: ExtractionResult) throws -> String {
-    return try RustBridge.serializeToToon(result)
-  }
-
-  /// Serialize an [`ExtractionResult`] to pretty-printed JSON.
-  public static func serializeToJson(result: ExtractionResult) throws -> String {
-    return try RustBridge.serializeToJson(result)
-  }
-
 }

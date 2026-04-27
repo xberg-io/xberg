@@ -3643,11 +3643,15 @@ impl Default for LayoutClass {
     }
 }
 
+/// Hash arbitrary bytes with blake3, returning a 32-char hex string.
 #[rustler::nif]
 pub fn blake3_hash_bytes(data: Vec<u8>) -> String {
     kreuzberg::cache::blake3_hash_bytes(&data)
 }
 
+/// Hash a file's content with blake3 using streaming 64 KiB reads.
+///
+/// Returns a 32-char hex string (128 bits of blake3 output).
 #[rustler::nif]
 pub fn blake3_hash_file(path: String) -> Result<String, String> {
     let result = kreuzberg::cache::blake3_hash_file(&std::path::PathBuf::from(path)).map_err(|e| e.to_string())?;
@@ -3664,96 +3668,463 @@ pub fn validate_cache_key(key: String) -> bool {
     kreuzberg::cache::validate_cache_key(&key)
 }
 
+/// Validate a port number for server configuration.
+///
+/// Port must be in the range 1-65535. While ports 1-1023 are privileged and may require
+/// special permissions on some systems, they are still valid port numbers.
+///
+/// # Arguments
+///
+/// * `port` - The port number to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_port;
+///
+/// assert!(validate_port(8000).is_ok());
+/// assert!(validate_port(80).is_ok());
+/// assert!(validate_port(1).is_ok());
+/// assert!(validate_port(65535).is_ok());
+/// assert!(validate_port(0).is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_port(port: u16) -> Result<(), String> {
     let result = kreuzberg::core::config_validation::validate_port(port).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a host/IP address string for server configuration.
+///
+/// Accepts valid IPv4 addresses (e.g., "127.0.0.1", "0.0.0.0"), valid IPv6 addresses
+/// (e.g., "::1", "::"), and hostnames (e.g., "localhost", "example.com").
+///
+/// # Arguments
+///
+/// * `host` - The host/IP address string to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_host;
+///
+/// assert!(validate_host("127.0.0.1").is_ok());
+/// assert!(validate_host("0.0.0.0").is_ok());
+/// assert!(validate_host("::1").is_ok());
+/// assert!(validate_host("::").is_ok());
+/// assert!(validate_host("localhost").is_ok());
+/// assert!(validate_host("example.com").is_ok());
+/// assert!(validate_host("").is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_host(host: String) -> Result<(), String> {
     let result = kreuzberg::core::config_validation::validate_host(&host).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a CORS (Cross-Origin Resource Sharing) origin URL.
+///
+/// Accepts valid HTTP/HTTPS URLs (e.g., "https://example.com") or the wildcard "*"
+/// to allow all origins. URLs must start with "http://" or "https://", or be exactly "*".
+///
+/// # Arguments
+///
+/// * `origin` - The CORS origin URL to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_cors_origin;
+///
+/// assert!(validate_cors_origin("https://example.com").is_ok());
+/// assert!(validate_cors_origin("http://localhost:3000").is_ok());
+/// assert!(validate_cors_origin("*").is_ok());
+/// assert!(validate_cors_origin("not-a-url").is_err());
+/// assert!(validate_cors_origin("ftp://example.com").is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_cors_origin(origin: String) -> Result<(), String> {
     let result = kreuzberg::core::config_validation::validate_cors_origin(&origin).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate an upload size limit for server configuration.
+///
+/// Upload size must be greater than 0 (measured in bytes).
+///
+/// # Arguments
+///
+/// * `size` - The maximum upload size in bytes to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_upload_size;
+///
+/// assert!(validate_upload_size(1024).is_ok());
+/// assert!(validate_upload_size(1_000_000).is_ok());
+/// assert!(validate_upload_size(0).is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_upload_size(size: usize) -> Result<(), String> {
     let result = kreuzberg::core::config_validation::validate_upload_size(size).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a binarization method string.
+///
+/// # Arguments
+///
+/// * `method` - The binarization method to validate (e.g., "otsu", "adaptive", "sauvola")
+///
+/// # Returns
+///
+/// `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_binarization_method;
+///
+/// assert!(validate_binarization_method("otsu").is_ok());
+/// assert!(validate_binarization_method("adaptive").is_ok());
+/// assert!(validate_binarization_method("invalid").is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_binarization_method(method: String) -> Result<(), String> {
     let result = kreuzberg::core::validate_binarization_method(&method).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a token reduction level string.
+///
+/// # Arguments
+///
+/// * `level` - The token reduction level to validate (e.g., "off", "light", "moderate")
+///
+/// # Returns
+///
+/// `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_token_reduction_level;
+///
+/// assert!(validate_token_reduction_level("off").is_ok());
+/// assert!(validate_token_reduction_level("moderate").is_ok());
+/// assert!(validate_token_reduction_level("extreme").is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_token_reduction_level(level: String) -> Result<(), String> {
     let result = kreuzberg::core::validate_token_reduction_level(&level).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate an OCR backend string.
+///
+/// # Arguments
+///
+/// * `backend` - The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr")
+///
+/// # Returns
+///
+/// `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_ocr_backend;
+///
+/// assert!(validate_ocr_backend("tesseract").is_ok());
+/// assert!(validate_ocr_backend("easyocr").is_ok());
+/// assert!(validate_ocr_backend("invalid").is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_ocr_backend(backend: String) -> Result<(), String> {
     let result = kreuzberg::core::validate_ocr_backend(&backend).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a language code (ISO 639-1 or 639-3 format).
+///
+/// Accepts both 2-letter ISO 639-1 codes (e.g., "en", "de") and
+/// 3-letter ISO 639-3 codes (e.g., "eng", "deu") for broader compatibility.
+///
+/// # Arguments
+///
+/// * `code` - The language code to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_language_code;
+///
+/// assert!(validate_language_code("en").is_ok());
+/// assert!(validate_language_code("eng").is_ok());
+/// assert!(validate_language_code("de").is_ok());
+/// assert!(validate_language_code("deu").is_ok());
+/// assert!(validate_language_code("invalid").is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_language_code(code: String) -> Result<(), String> {
     let result = kreuzberg::core::validate_language_code(&code).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a tesseract Page Segmentation Mode (PSM).
+///
+/// # Arguments
+///
+/// * `psm` - The PSM value to validate (0-13)
+///
+/// # Returns
+///
+/// `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_tesseract_psm;
+///
+/// assert!(validate_tesseract_psm(3).is_ok());  // Fully automatic
+/// assert!(validate_tesseract_psm(6).is_ok());  // Single block of text
+/// assert!(validate_tesseract_psm(14).is_err()); // Out of range
+/// ```
 #[rustler::nif]
 pub fn validate_tesseract_psm(psm: i32) -> Result<(), String> {
     let result = kreuzberg::core::validate_tesseract_psm(psm).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a tesseract OCR Engine Mode (OEM).
+///
+/// # Arguments
+///
+/// * `oem` - The OEM value to validate (0-3)
+///
+/// # Returns
+///
+/// `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_tesseract_oem;
+///
+/// assert!(validate_tesseract_oem(1).is_ok());  // Neural nets (LSTM)
+/// assert!(validate_tesseract_oem(2).is_ok());  // Legacy + LSTM
+/// assert!(validate_tesseract_oem(4).is_err()); // Out of range
+/// ```
 #[rustler::nif]
 pub fn validate_tesseract_oem(oem: i32) -> Result<(), String> {
     let result = kreuzberg::core::validate_tesseract_oem(oem).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a document extraction output format.
+///
+/// Accepts the following formats and aliases:
+/// - "plain" or "text" for plain text output
+/// - "markdown" or "md" for Markdown output
+/// - "djot" for Djot markup format
+/// - "html" for HTML output
+///
+/// # Arguments
+///
+/// * `format` - The output format to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_output_format;
+///
+/// assert!(validate_output_format("text").is_ok());
+/// assert!(validate_output_format("plain").is_ok());
+/// assert!(validate_output_format("markdown").is_ok());
+/// assert!(validate_output_format("md").is_ok());
+/// assert!(validate_output_format("djot").is_ok());
+/// assert!(validate_output_format("html").is_ok());
+/// assert!(validate_output_format("json").is_ok());
+/// ```
 #[rustler::nif]
 pub fn validate_output_format(format: String) -> Result<(), String> {
     let result = kreuzberg::core::validate_output_format(&format).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a confidence threshold value.
+///
+/// Confidence thresholds should be between 0.0 and 1.0 inclusive.
+///
+/// # Arguments
+///
+/// * `confidence` - The confidence threshold to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_confidence;
+///
+/// assert!(validate_confidence(0.5).is_ok());
+/// assert!(validate_confidence(0.0).is_ok());
+/// assert!(validate_confidence(1.0).is_ok());
+/// assert!(validate_confidence(1.5).is_err());
+/// assert!(validate_confidence(-0.1).is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_confidence(confidence: f64) -> Result<(), String> {
     let result = kreuzberg::core::validate_confidence(confidence).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate a DPI (dots per inch) value.
+///
+/// DPI should be a positive integer, typically 72-600.
+///
+/// # Arguments
+///
+/// * `dpi` - The DPI value to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_dpi;
+///
+/// assert!(validate_dpi(96).is_ok());
+/// assert!(validate_dpi(300).is_ok());
+/// assert!(validate_dpi(0).is_err());
+/// assert!(validate_dpi(-1).is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_dpi(dpi: i32) -> Result<(), String> {
     let result = kreuzberg::core::validate_dpi(dpi).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate chunk size parameters.
+///
+/// Checks that max_chars > 0 and max_overlap < max_chars.
+///
+/// # Arguments
+///
+/// * `max_chars` - The maximum characters per chunk
+/// * `max_overlap` - The maximum overlap between chunks
+///
+/// # Returns
+///
+/// `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_chunking_params;
+///
+/// assert!(validate_chunking_params(1000, 200).is_ok());
+/// assert!(validate_chunking_params(500, 50).is_ok());
+/// assert!(validate_chunking_params(0, 100).is_err()); // max_chars must be > 0
+/// assert!(validate_chunking_params(100, 150).is_err()); // overlap >= max_chars
+/// ```
 #[rustler::nif]
 pub fn validate_chunking_params(max_chars: usize, max_overlap: usize) -> Result<(), String> {
     let result = kreuzberg::core::validate_chunking_params(max_chars, max_overlap).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Validate that an [`LlmConfig`](crate::core::config::LlmConfig) has a non-empty model string.
+///
+/// # Arguments
+///
+/// * `model` - The model string to validate
+///
+/// # Returns
+///
+/// `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::core::config_validation::validate_llm_config_model;
+///
+/// assert!(validate_llm_config_model("openai/gpt-4o").is_ok());
+/// assert!(validate_llm_config_model("").is_err());
+/// ```
 #[rustler::nif]
 pub fn validate_llm_config_model(model: String) -> Result<(), String> {
     let result = kreuzberg::core::config_validation::validate_llm_config_model(&model).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Extract content from a byte array.
+///
+/// This is the main entry point for in-memory extraction. It performs the following steps:
+/// 1. Validate MIME type
+/// 2. Handle legacy format conversion if needed
+/// 3. Select appropriate extractor from registry
+/// 4. Extract content
+/// 5. Run post-processing pipeline
+///
+/// # Arguments
+///
+/// * `content` - The byte array to extract
+/// * `mime_type` - MIME type of the content
+/// * `config` - Extraction configuration
+///
+/// # Returns
+///
+/// An `ExtractionResult` containing the extracted content and metadata.
+///
+/// # Errors
+///
+/// Returns `KreuzbergError::Validation` if MIME type is invalid.
+/// Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::extract_bytes;
+/// use kreuzberg::core::config::ExtractionConfig;
+///
+/// # async fn example() -> kreuzberg::Result<()> {
+/// let config = ExtractionConfig::default();
+/// let bytes = b"Hello, world!";
+/// let result = extract_bytes(bytes, "text/plain", &config).await?;
+/// println!("Content: {}", result.content);
+/// # Ok(())
+/// # }
+/// ```
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn extract_bytes_async(
     content: Vec<u8>,
@@ -3778,6 +4149,44 @@ pub fn extract_bytes_async(
     Ok(result.into())
 }
 
+/// Extract content from a file.
+///
+/// This is the main entry point for file-based extraction. It performs the following steps:
+/// 1. Check cache for existing result (if caching enabled)
+/// 2. Detect or validate MIME type
+/// 3. Select appropriate extractor from registry
+/// 4. Extract content
+/// 5. Run post-processing pipeline
+/// 6. Store result in cache (if caching enabled)
+///
+/// # Arguments
+///
+/// * `path` - Path to the file to extract
+/// * `mime_type` - Optional MIME type override. If None, will be auto-detected
+/// * `config` - Extraction configuration
+///
+/// # Returns
+///
+/// An `ExtractionResult` containing the extracted content and metadata.
+///
+/// # Errors
+///
+/// Returns `KreuzbergError::Io` if the file doesn't exist (NotFound) or for other file I/O errors.
+/// Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::extract_file;
+/// use kreuzberg::core::config::ExtractionConfig;
+///
+/// # async fn example() -> kreuzberg::Result<()> {
+/// let config = ExtractionConfig::default();
+/// let result = extract_file("document.pdf", None, &config).await?;
+/// println!("Content: {}", result.content);
+/// # Ok(())
+/// # }
+/// ```
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn extract_file_async(
     path: String,
@@ -3802,6 +4211,28 @@ pub fn extract_file_async(
     Ok(result.into())
 }
 
+/// Synchronous wrapper for `extract_file`.
+///
+/// This is a convenience function that blocks the current thread until extraction completes.
+/// For async code, use `extract_file` directly.
+///
+/// Uses the global Tokio runtime for 100x+ performance improvement over creating
+/// a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
+///
+/// This function is only available with the `tokio-runtime` feature. For WASM targets,
+/// use a truly synchronous extraction approach instead.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::extract_file_sync;
+/// use kreuzberg::core::config::ExtractionConfig;
+///
+/// let config = ExtractionConfig::default();
+/// let result = extract_file_sync("document.pdf", None, &config)?;
+/// println!("Content: {}", result.content);
+/// # Ok::<(), kreuzberg::KreuzbergError>(())
+/// ```
 #[rustler::nif]
 pub fn extract_file_sync(
     path: String,
@@ -3821,6 +4252,26 @@ pub fn extract_file_sync(
     Ok(result.into())
 }
 
+/// Synchronous wrapper for `extract_bytes`.
+///
+/// Uses the global Tokio runtime for 100x+ performance improvement over creating
+/// a new runtime per call.
+///
+/// With the `tokio-runtime` feature, this blocks the current thread using the global
+/// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::extract_bytes_sync;
+/// use kreuzberg::core::config::ExtractionConfig;
+///
+/// let config = ExtractionConfig::default();
+/// let bytes = b"Hello, world!";
+/// let result = extract_bytes_sync(bytes, "text/plain", &config)?;
+/// println!("Content: {}", result.content);
+/// # Ok::<(), kreuzberg::KreuzbergError>(())
+/// ```
 #[rustler::nif]
 pub fn extract_bytes_sync(
     content: Vec<u8>,
@@ -3840,35 +4291,140 @@ pub fn extract_bytes_sync(
     Ok(result.into())
 }
 
+/// Validates whether a field name is in the known formats registry.
+///
+/// This uses a pre-built hash set for O(1) lookups instead of linear search,
+/// providing significant performance improvements for repeated validations.
+///
+/// # Arguments
+///
+/// * `field` - The field name to validate
+///
+/// # Returns
+///
+/// `true` if the field is in KNOWN_FORMATS, `false` otherwise.
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::core::formats::is_valid_format_field;
+///
+/// assert!(is_valid_format_field("title"));
+/// assert!(is_valid_format_field("creation_date"));
+/// assert!(!is_valid_format_field("invalid_field"));
+/// ```
 #[rustler::nif]
 pub fn is_valid_format_field(field: String) -> bool {
     kreuzberg::is_valid_format_field(&field)
 }
 
+/// Validate that a MIME type is supported.
+///
+/// # Arguments
+///
+/// * `mime_type` - The MIME type to validate
+///
+/// # Returns
+///
+/// The validated MIME type (may be normalized).
+///
+/// # Errors
+///
+/// Returns `KreuzbergError::UnsupportedFormat` if not supported.
 #[rustler::nif]
 pub fn validate_mime_type(mime_type: String) -> Result<String, String> {
     let result = kreuzberg::validate_mime_type(&mime_type).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Detect or validate MIME type.
+///
+/// If `mime_type` is provided, validates it. Otherwise, detects from `path`.
+///
+/// # Arguments
+///
+/// * `path` - Optional path to detect MIME type from
+/// * `mime_type` - Optional explicit MIME type to validate
+///
+/// # Returns
+///
+/// The validated MIME type string.
 #[rustler::nif]
 pub fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> Result<String, String> {
     let result = kreuzberg::detect_or_validate(path.as_deref(), mime_type.as_deref()).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Detect MIME type from raw file bytes.
+///
+/// Uses magic byte signatures to detect file type from content.
+/// Falls back to `infer` crate for comprehensive detection.
+///
+/// For ZIP-based files, inspects contents to distinguish Office Open XML
+/// formats (DOCX, XLSX, PPTX) from plain ZIP archives.
+///
+/// # Arguments
+///
+/// * `content` - Raw file bytes
+///
+/// # Returns
+///
+/// The detected MIME type string.
+///
+/// # Errors
+///
+/// Returns `KreuzbergError::UnsupportedFormat` if MIME type cannot be determined.
 #[rustler::nif]
 pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String> {
     let result = kreuzberg::detect_mime_type_from_bytes(&content).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Get file extensions for a given MIME type.
+///
+/// Returns all known file extensions that map to the specified MIME type.
+///
+/// # Arguments
+///
+/// * `mime_type` - The MIME type to look up
+///
+/// # Returns
+///
+/// A vector of file extensions (without leading dot) for the MIME type.
+///
+/// # Example
+///
+/// ```
+/// use kreuzberg::core::mime::get_extensions_for_mime;
+///
+/// let extensions = get_extensions_for_mime("application/pdf").unwrap();
+/// assert_eq!(extensions, vec!["pdf"]);
+///
+/// let doc_extensions = get_extensions_for_mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document").unwrap();
+/// assert!(doc_extensions.contains(&"docx".to_string()));
+/// ```
 #[rustler::nif]
 pub fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String> {
     let result = kreuzberg::get_extensions_for_mime(&mime_type).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// List all supported document formats.
+///
+/// Returns a list of all file extensions and their corresponding MIME types
+/// that Kreuzberg can process. Derived from the centralized [`FORMATS`] registry.
+///
+/// The list is sorted alphabetically by file extension.
+///
+/// # Example
+///
+/// ```
+/// use kreuzberg::core::mime::list_supported_formats;
+///
+/// let formats = list_supported_formats();
+/// assert!(!formats.is_empty());
+/// assert!(formats.iter().any(|f| f.extension == "pdf"));
+/// ```
 #[rustler::nif]
 pub fn list_supported_formats() -> Vec<SupportedFormat> {
     kreuzberg::list_supported_formats()
@@ -3877,12 +4433,14 @@ pub fn list_supported_formats() -> Vec<SupportedFormat> {
         .collect()
 }
 
+/// Clear the processor cache (primarily for testing when registry changes).
 #[rustler::nif]
 pub fn clear_processor_cache() -> Result<(), String> {
     let result = kreuzberg::core::pipeline::clear_processor_cache().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Extract email content from either .eml or .msg format
 #[rustler::nif]
 pub fn extract_email_content(
     data: Vec<u8>,
@@ -3894,6 +4452,55 @@ pub fn extract_email_content(
     Ok(result.into())
 }
 
+/// Converts a 2D vector of cell strings into a GitHub-Flavored Markdown table.
+///
+/// # Behavior
+///
+/// - The first row is treated as the header row
+/// - A separator row is inserted after the header
+/// - Pipe characters (`|`) in cell content are automatically escaped with backslash
+/// - Irregular tables (rows with varying column counts) are padded with empty cells to match the header
+/// - Returns an empty string for empty input
+///
+/// # Arguments
+///
+/// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
+///
+/// # Returns
+///
+/// A `String` containing the GFM markdown table representation
+///
+/// # Examples
+///
+/// ```
+/// # use kreuzberg::extraction::cells_to_markdown;
+/// let cells = vec![
+///     vec!["Name".to_string(), "Age".to_string()],
+///     vec!["Alice".to_string(), "30".to_string()],
+///     vec!["Bob".to_string(), "25".to_string()],
+/// ];
+///
+/// let markdown = cells_to_markdown(&cells);
+/// assert!(markdown.contains("| Name | Age |"));
+/// assert!(markdown.contains("|------|------|"));
+/// ```
+///
+/// Converts a 2D vector of cell strings into plain text with tab-separated columns.
+///
+/// # Behavior
+///
+/// - Rows are separated by newlines
+/// - Cells within a row are separated by tab characters
+/// - No pipe delimiters or separator rows (unlike markdown tables)
+/// - Returns an empty string for empty input
+///
+/// # Arguments
+///
+/// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
+///
+/// # Returns
+///
+/// A `String` containing the plain text table representation
 #[rustler::nif]
 pub fn cells_to_text(cells: Vec<Vec<String>>) -> String {
     kreuzberg::extraction::cells_to_text(&cells)
@@ -3904,104 +4511,247 @@ pub fn cells_to_markdown(cells: Vec<Vec<String>>) -> String {
     kreuzberg::extraction::cells_to_markdown(&cells)
 }
 
+/// Render djot content to HTML.
+///
+/// This function takes djot source text and renders it to HTML using jotdown's
+/// built-in HTML renderer.
+///
+/// # Arguments
+///
+/// * `djot_source` - The djot markup text to render
+///
+/// # Returns
+///
+/// A `Result` containing the rendered HTML string
+///
+/// # Example
+///
+/// ```ignore
+/// let djot = "# Hello\n\nThis is *bold* and _italic_.";
+/// let html = djot_to_html(djot)?;
+/// assert!(html.contains("<h1>"));
+/// assert!(html.contains("<strong>"));
+/// assert!(html.contains("<em>"));
+/// ```
 #[rustler::nif]
 pub fn djot_to_html(djot_source: String) -> Result<String, String> {
     let result = kreuzberg::extractors::djot_format::djot_to_html(&djot_source).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Deduplicate a list of text strings while preserving order.
+/// Adjacent duplicates and near-duplicates are removed.
 #[rustler::nif]
 pub fn dedup_text(texts: Vec<String>) -> Vec<String> {
     kreuzberg::extractors::iwork::dedup_text(texts)
 }
 
+/// Normalize whitespace in a string.
+///
+/// - Collapses multiple consecutive spaces/tabs into a single space
+/// - Preserves single newlines (paragraph breaks from \par)
+/// - Collapses multiple consecutive newlines into a double newline
+/// - Trims leading/trailing whitespace from each line
+/// - Trims leading/trailing blank lines
 #[rustler::nif]
 pub fn normalize_whitespace(s: String) -> String {
     kreuzberg::extractors::rtf::normalize_whitespace(&s)
 }
 
+/// Register all built-in extractors with the global registry.
+///
+/// This function should be called once at application startup to register
+/// the default extractors (PlainText, Markdown, XML, etc.).
+///
+/// **Note:** This is called automatically on first extraction operation.
+/// Explicit calling is optional.
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::extractors::register_default_extractors;
+///
+/// # fn main() -> kreuzberg::Result<()> {
+/// register_default_extractors()?;
+/// # Ok(())
+/// # }
+/// ```
 #[rustler::nif]
 pub fn register_default_extractors() -> Result<(), String> {
     let result = kreuzberg::extractors::register_default_extractors().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Unregister a document extractor by name.
 #[rustler::nif]
 pub fn unregister_extractor(name: String) -> Result<(), String> {
     let result = kreuzberg::plugins::unregister_extractor(&name).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// List names of all registered document extractors.
 #[rustler::nif]
 pub fn list_extractors() -> Result<Vec<String>, String> {
     let result = kreuzberg::plugins::list_extractors().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Remove all registered document extractors.
 #[rustler::nif]
 pub fn clear_extractors() -> Result<(), String> {
     let result = kreuzberg::plugins::clear_extractors().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// List all registered OCR backends.
+///
+/// Returns the names of all OCR backends currently registered in the global registry.
+///
+/// # Returns
+///
+/// A vector of OCR backend names.
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::plugins::list_ocr_backends;
+///
+/// # tokio_test::block_on(async {
+/// let backends = list_ocr_backends()?;
+/// for name in backends {
+///     println!("Registered OCR backend: {}", name);
+/// }
+/// # Ok::<(), kreuzberg::KreuzbergError>(())
+/// # });
+/// ```
 #[rustler::nif]
 pub fn list_ocr_backends() -> Result<Vec<String>, String> {
     let result = kreuzberg::plugins::list_ocr_backends().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Clear all OCR backends from the global registry.
+///
+/// Removes all OCR backends and calls their `shutdown()` methods.
+///
+/// # Returns
+///
+/// - `Ok(())` if all backends were cleared successfully
+/// - `Err(...)` if any shutdown method failed
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::plugins::clear_ocr_backends;
+///
+/// # tokio_test::block_on(async {
+/// clear_ocr_backends()?;
+/// # Ok::<(), kreuzberg::KreuzbergError>(())
+/// # });
+/// ```
 #[rustler::nif]
 pub fn clear_ocr_backends() -> Result<(), String> {
     let result = kreuzberg::plugins::clear_ocr_backends().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// List all registered post-processor names.
+///
+/// Returns a vector of all post-processor names currently registered in the
+/// global registry.
+///
+/// # Returns
+///
+/// - `Ok(Vec<String>)` - Vector of post-processor names
+/// - `Err(...)` if the registry lock is poisoned
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::plugins::list_post_processors;
+///
+/// # tokio_test::block_on(async {
+/// let processors = list_post_processors()?;
+/// for name in processors {
+///     println!("Registered post-processor: {}", name);
+/// }
+/// # Ok::<(), kreuzberg::KreuzbergError>(())
+/// # });
+/// ```
 #[rustler::nif]
 pub fn list_post_processors() -> Result<Vec<String>, String> {
     let result = kreuzberg::plugins::list_post_processors().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Unregister a renderer by name.
 #[rustler::nif]
 pub fn unregister_renderer(name: String) -> Result<(), String> {
     let result = kreuzberg::plugins::unregister_renderer(&name).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// List names of all registered renderers.
 #[rustler::nif]
 pub fn list_renderers() -> Result<Vec<String>, String> {
     let result = kreuzberg::plugins::list_renderers().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Remove all registered renderers.
 #[rustler::nif]
 pub fn clear_renderers() -> Result<(), String> {
     let result = kreuzberg::plugins::clear_renderers().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// List names of all registered validators.
 #[rustler::nif]
 pub fn list_validators() -> Result<Vec<String>, String> {
     let result = kreuzberg::plugins::list_validators().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Remove all registered validators.
 #[rustler::nif]
 pub fn clear_validators() -> Result<(), String> {
     let result = kreuzberg::plugins::clear_validators().map_err(|e| e.to_string())?;
     Ok(result)
 }
 
+/// Sanitize a file path to return only the filename (no directory).
+///
+/// Prevents PII from appearing in traces.
 #[rustler::nif]
 pub fn sanitize_filename(path: String) -> String {
     kreuzberg::telemetry::conventions::sanitize_filename(&std::path::PathBuf::from(path)).into()
 }
 
+/// Sanitize a file path to return only the filename.
+///
+/// Prevents PII (personally identifiable information) from appearing in
+/// traces by only recording filenames instead of full paths.
 #[rustler::nif]
 pub fn sanitize_path(path: String) -> String {
     kreuzberg::telemetry::spans::sanitize_path(&std::path::PathBuf::from(path))
 }
 
+/// Validates bytes as UTF-8 without conversion to string slice.
+///
+/// Returns `true` if the bytes represent valid UTF-8, `false` otherwise.
+/// This is useful when you only need to check validity without constructing a string.
+///
+/// # Arguments
+///
+/// * `bytes` - The byte slice to validate
+///
+/// # Returns
+///
+/// `true` if valid UTF-8, `false` otherwise.
+///
+/// # Performance
+///
+/// This function is optimized for early exit on invalid sequences.
 #[rustler::nif]
 pub fn is_valid_utf8(bytes: Vec<u8>) -> bool {
     kreuzberg::text::utf8_validation::is_valid_utf8(&bytes)
@@ -4012,6 +4762,37 @@ pub fn clean_extracted_text(text: String) -> String {
     kreuzberg::text::quality::clean_extracted_text(&text)
 }
 
+/// Reduces token count in text while preserving meaning and structure.
+///
+/// This function removes stopwords, redundancy, and applies compression techniques
+/// based on the specified reduction level. Supports 64 languages with automatic
+/// stopword removal and optional semantic clustering.
+///
+/// # Arguments
+///
+/// * `text` - The input text to reduce
+/// * `config` - Configuration specifying reduction level and options
+/// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
+///
+/// # Returns
+///
+/// Returns the reduced text with preserved structure (markdown, code blocks).
+///
+/// # Errors
+///
+/// Returns an error if the language hint is invalid or stopwords cannot be loaded.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::text::token_reduction::{reduce_tokens, TokenReductionConfig, ReductionLevel};
+///
+/// let text = "This is a simple example text with some stopwords.";
+/// let config = TokenReductionConfig::default();
+/// let reduced = reduce_tokens(text, &config, Some("eng"))?;
+/// println!("Reduced: {}", reduced);
+/// # Ok::<(), kreuzberg::error::KreuzbergError>(())
+/// ```
 #[rustler::nif]
 pub fn reduce_tokens(text: String, config: Option<String>, language_hint: Option<String>) -> Result<String, String> {
     let config_core: Option<kreuzberg::TokenReductionConfig> = config
@@ -4027,6 +4808,41 @@ pub fn reduce_tokens(text: String, config: Option<String>, language_hint: Option
     Ok(result)
 }
 
+/// Reduces token count for multiple texts efficiently using parallel processing.
+///
+/// This function processes multiple texts in parallel using Rayon, providing
+/// significant performance improvements for batch operations. All texts use the
+/// same configuration and language hint for consistency.
+///
+/// # Arguments
+///
+/// * `texts` - Slice of text references to reduce
+/// * `config` - Configuration specifying reduction level and options
+/// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
+///
+/// # Returns
+///
+/// Returns a vector of reduced texts in the same order as the input.
+///
+/// # Errors
+///
+/// Returns an error if the language hint is invalid or stopwords cannot be loaded.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::text::token_reduction::{batch_reduce_tokens, TokenReductionConfig, ReductionLevel};
+///
+/// let texts: Vec<String> = vec![
+///     "This is the first document with some text.".to_string(),
+///     "Here is another document with different content.".to_string(),
+///     "And finally, a third document to process.".to_string(),
+/// ];
+/// let config = TokenReductionConfig::default();
+/// let reduced = batch_reduce_tokens(&texts, &config, Some("eng"))?;
+/// assert_eq!(reduced.len(), 3);
+/// # Ok::<(), kreuzberg::error::KreuzbergError>(())
+/// ```
 #[rustler::nif]
 pub fn batch_reduce_tokens(
     texts: Vec<String>,
@@ -4046,76 +4862,121 @@ pub fn batch_reduce_tokens(
     Ok(result)
 }
 
+/// Create a bold annotation for the given byte range.
 #[rustler::nif]
 pub fn bold(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::bold(start, end).into()
 }
 
+/// Create an italic annotation for the given byte range.
 #[rustler::nif]
 pub fn italic(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::italic(start, end).into()
 }
 
+/// Create an underline annotation for the given byte range.
 #[rustler::nif]
 pub fn underline(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::underline(start, end).into()
 }
 
+/// Create a link annotation for the given byte range.
 #[rustler::nif]
 pub fn link(start: u32, end: u32, url: String, title: Option<String>) -> TextAnnotation {
     kreuzberg::builder::link(start, end, &url, title.as_deref()).into()
 }
 
+/// Create a code (inline) annotation for the given byte range.
 #[rustler::nif]
 pub fn code(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::code(start, end).into()
 }
 
+/// Create a strikethrough annotation for the given byte range.
 #[rustler::nif]
 pub fn strikethrough(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::strikethrough(start, end).into()
 }
 
+/// Create a subscript annotation for the given byte range.
 #[rustler::nif]
 pub fn subscript(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::subscript(start, end).into()
 }
 
+/// Create a superscript annotation for the given byte range.
 #[rustler::nif]
 pub fn superscript(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::superscript(start, end).into()
 }
 
+/// Create a font size annotation for the given byte range.
 #[rustler::nif]
 pub fn font_size(start: u32, end: u32, value: String) -> TextAnnotation {
     kreuzberg::builder::font_size(start, end, &value).into()
 }
 
+/// Create a color annotation for the given byte range.
 #[rustler::nif]
 pub fn color(start: u32, end: u32, value: String) -> TextAnnotation {
     kreuzberg::builder::color(start, end, &value).into()
 }
 
+/// Create a highlight annotation for the given byte range.
 #[rustler::nif]
 pub fn highlight(start: u32, end: u32) -> TextAnnotation {
     kreuzberg::builder::highlight(start, end).into()
 }
 
+/// Classify a URL string into the appropriate `UriKind`.
+///
+/// - `mailto:` → `Email`
+/// - `#` prefix → `Anchor`
+/// - everything else → `Hyperlink`
 #[rustler::nif]
 pub fn classify_uri(url: String) -> UriKind {
     kreuzberg::classify_uri(&url).into()
 }
 
+/// Decode raw bytes into UTF-8, using heuristics and fallback encodings when necessary.
+///
+/// The function prefers an explicit `encoding`, falls back to the cached guess, probes
+/// an encoding detector, and finally tries a small curated list before returning a
+/// mojibake-cleaned string.
 #[rustler::nif]
 pub fn safe_decode(byte_data: Vec<u8>, encoding: Option<String>) -> String {
     kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref())
 }
 
+/// Estimate how trustworthy a decoded string is on a 0.0–1.0 scale.
+///
+/// Scores close to 1.0 indicate mostly printable characters, whereas lower scores
+/// point to mojibake, control characters, or suspicious character mixes.
 #[rustler::nif]
 pub fn calculate_text_confidence(text: String) -> f64 {
     kreuzberg::utils::calculate_text_confidence(&text)
 }
 
+/// Create a pre-configured string buffer pool for batch processing.
+///
+/// # Arguments
+///
+/// * `pool_size` - Maximum number of buffers to keep in the pool
+/// * `buffer_capacity` - Initial capacity for each buffer in bytes
+///
+/// # Returns
+///
+/// A pool configured for text accumulation with reasonable defaults.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::utils::pool::create_string_buffer_pool;
+///
+/// let pool = create_string_buffer_pool(10, 8192);
+/// let mut buffer = pool.acquire().unwrap();
+/// buffer.push_str("content");
+/// ```
 #[rustler::nif]
 pub fn create_string_buffer_pool(pool_size: usize, buffer_capacity: usize) -> ResourceArc<StringBufferPool> {
     ResourceArc::new(StringBufferPool {
@@ -4126,6 +4987,26 @@ pub fn create_string_buffer_pool(pool_size: usize, buffer_capacity: usize) -> Re
     })
 }
 
+/// Create a pre-configured byte buffer pool for batch processing.
+///
+/// # Arguments
+///
+/// * `pool_size` - Maximum number of buffers to keep in the pool
+/// * `buffer_capacity` - Initial capacity for each buffer in bytes
+///
+/// # Returns
+///
+/// A pool configured for binary data handling with reasonable defaults.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::utils::pool::create_byte_buffer_pool;
+///
+/// let pool = create_byte_buffer_pool(10, 65536);
+/// let mut buffer = pool.acquire().unwrap();
+/// buffer.extend_from_slice(b"binary data");
+/// ```
 #[rustler::nif]
 pub fn create_byte_buffer_pool(pool_size: usize, buffer_capacity: usize) -> ResourceArc<ByteBufferPool> {
     ResourceArc::new(ByteBufferPool {
@@ -4136,11 +5017,29 @@ pub fn create_byte_buffer_pool(pool_size: usize, buffer_capacity: usize) -> Reso
     })
 }
 
+/// Generate OpenAPI JSON schema.
+///
+/// Returns the complete OpenAPI 3.1 specification as a JSON string.
+///
+/// # Examples
+///
+/// ```no_run
+/// use kreuzberg::api::openapi::openapi_json;
+///
+/// let schema = openapi_json();
+/// println!("{}", schema);
+/// ```
 #[rustler::nif]
 pub fn openapi_json() -> String {
     kreuzberg::api::openapi::openapi_json()
 }
 
+/// Start the API server with default host and port.
+///
+/// Defaults: host = "127.0.0.1", port = 8000
+///
+/// Uses config file discovery (searches current/parent directories for kreuzberg.toml/yaml/json).
+/// Validates plugins at startup to help diagnose configuration issues.
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn serve_default_async() -> Result<(), String> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
@@ -4150,6 +5049,37 @@ pub fn serve_default_async() -> Result<(), String> {
     Ok(result)
 }
 
+/// Batch process multiple texts with the same configuration.
+///
+/// This convenience function applies the same chunking configuration to multiple
+/// texts in sequence.
+///
+/// # Arguments
+///
+/// * `texts` - Slice of text strings to chunk
+/// * `config` - Chunking configuration to apply to all texts
+///
+/// # Returns
+///
+/// A vector of ChunkingResult objects, one per input text.
+///
+/// # Errors
+///
+/// Returns an error if chunking any individual text fails.
+///
+/// # Examples
+///
+/// ```rust
+/// use kreuzberg::chunking::{chunk_texts_batch, ChunkingConfig};
+///
+/// # fn example() -> kreuzberg::Result<()> {
+/// let config = ChunkingConfig::default();
+/// let texts: Vec<String> = vec!["First text".to_string(), "Second text".to_string()];
+/// let results = chunk_texts_batch(&texts, &config)?;
+/// assert_eq!(results.len(), 2);
+/// # Ok(())
+/// # }
+/// ```
 #[rustler::nif]
 pub fn chunk_texts_batch(texts: Vec<String>, config: Option<String>) -> Result<Vec<ChunkingResult>, String> {
     let config_core: Option<kreuzberg::ChunkingConfig> = config
@@ -4164,16 +5094,19 @@ pub fn chunk_texts_batch(texts: Vec<String>, config: Option<String>) -> Result<V
     Ok(result.into_iter().map(Into::into).collect())
 }
 
+/// L2-normalize a vector.
 #[rustler::nif]
 pub fn normalize(v: Vec<f32>) -> Vec<f32> {
     kreuzberg::embeddings::engine::normalize(&v)
 }
 
+/// Get a preset by name.
 #[rustler::nif]
 pub fn get_preset(name: String) -> Option<String> {
     None
 }
 
+/// Calculate optimal DPI with min/max constraints
 #[rustler::nif]
 pub fn calculate_optimal_dpi(
     page_width: f64,
@@ -4186,6 +5119,31 @@ pub fn calculate_optimal_dpi(
     kreuzberg::image::calculate_optimal_dpi(page_width, page_height, target_dpi, max_dimension, min_dpi, max_dpi)
 }
 
+/// Detect languages in text using whatlang.
+///
+/// Returns a list of detected language codes (ISO 639-3 format).
+/// Returns `None` if no languages could be detected with sufficient confidence.
+///
+/// # Arguments
+///
+/// * `text` - The text to analyze for language detection
+/// * `config` - Optional configuration for language detection
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::language_detection::detect_languages;
+/// use kreuzberg::core::config::LanguageDetectionConfig;
+///
+/// let text = "Hello world! This is English text.";
+/// let config = LanguageDetectionConfig {
+///     enabled: true,
+///     min_confidence: 0.8,
+///     detect_multiple: false,
+/// };
+/// let languages = detect_languages(text, &config).expect("language detection succeeded");
+/// println!("Detected languages: {:?}", languages);
+/// ```
 #[rustler::nif]
 pub fn detect_languages(text: String, config: LanguageDetectionConfig) -> Result<Option<Vec<String>>, String> {
     let config_json = serde_json::to_string(&config).map_err(|e| e.to_string())?;
@@ -4195,6 +5153,42 @@ pub fn detect_languages(text: String, config: LanguageDetectionConfig) -> Result
     Ok(result)
 }
 
+/// Extract keywords from text using the specified algorithm.
+///
+/// This is the unified entry point for keyword extraction. The algorithm
+/// used is determined by `config.algorithm`.
+///
+/// # Arguments
+///
+/// * `text` - The text to extract keywords from
+/// * `config` - Keyword extraction configuration
+///
+/// # Returns
+///
+/// A vector of keywords sorted by relevance (highest score first).
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The specified algorithm feature is not enabled
+/// - Keyword extraction fails
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use kreuzberg::keywords::{extract_keywords, KeywordConfig};
+/// let text = "Document intelligence with Rust provides memory safety.";
+/// let config = KeywordConfig::default()
+///     .with_max_keywords(10)
+///     .with_language("en");
+///
+/// let keywords = extract_keywords(text, &config)?;
+///
+/// for keyword in keywords {
+///     println!("{}: {:.3}", keyword.text, keyword.score);
+/// }
+/// # Ok::<(), kreuzberg::KreuzbergError>(())
+/// ```
 #[rustler::nif]
 pub fn extract_keywords(text: String, config: Option<String>) -> Result<Vec<Keyword>, String> {
     let config_core: Option<kreuzberg::KeywordConfig> = config
@@ -4206,11 +5200,33 @@ pub fn extract_keywords(text: String, config: Option<String>) -> Result<Vec<Keyw
     Ok(result.into_iter().map(Into::into).collect())
 }
 
+/// Compute a blake3 hash string from input data.
+///
+/// Returns a 32-character hex string (128 bits of blake3 output).
 #[rustler::nif]
 pub fn compute_hash(data: String) -> String {
     kreuzberg::ocr::compute_hash(&data)
 }
 
+/// Render a single PDF page to a PNG-encoded byte buffer.
+///
+/// # Errors
+///
+/// Returns an error if the PDF is invalid, the page index is out of bounds,
+/// or if the page fails to render.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::pdf::render_pdf_page_to_png;
+///
+/// # fn example() -> kreuzberg::pdf::error::Result<()> {
+/// let pdf_bytes = std::fs::read("document.pdf")?;
+/// let png = render_pdf_page_to_png(&pdf_bytes, 0, Some(150), None)?;
+/// std::fs::write("page_0.png", png)?;
+/// # Ok(())
+/// # }
+/// ```
 #[rustler::nif]
 pub fn render_pdf_page_to_png(
     pdf_bytes: Vec<u8>,
@@ -4229,6 +5245,10 @@ pub fn extract_text_from_pdf(pdf_bytes: Vec<u8>) -> Result<String, String> {
     Ok(result)
 }
 
+/// Serialize an [`ExtractionResult`] to TOON (Token-Oriented Object Notation).
+///
+/// TOON is a token-efficient alternative to JSON for LLM prompts.
+/// Losslessly convertible to/from JSON but uses fewer tokens.
 #[rustler::nif]
 pub fn serialize_to_toon(result: Option<String>) -> Result<String, String> {
     let result_core: Option<kreuzberg::ExtractionResult> = result
@@ -4240,6 +5260,7 @@ pub fn serialize_to_toon(result: Option<String>) -> Result<String, String> {
     Ok(result)
 }
 
+/// Serialize an [`ExtractionResult`] to pretty-printed JSON.
 #[rustler::nif]
 pub fn serialize_to_json(result: Option<String>) -> Result<String, String> {
     let result_core: Option<kreuzberg::ExtractionResult> = result
@@ -4261,6 +5282,17 @@ pub fn extractionconfig_default() -> ExtractionConfig {
     kreuzberg::ExtractionConfig::default().into()
 }
 
+/// Check if image processing is needed by examining OCR and image extraction settings.
+///
+/// Returns `true` if either OCR is enabled or image extraction is configured,
+/// indicating that image decompression and processing should occur.
+/// Returns `false` if both are disabled, allowing optimization to skip unnecessary
+/// image decompression for text-only extraction workflows.
+///
+/// # Optimization Impact
+/// For text-only extractions (no OCR, no image extraction), skipping image
+/// decompression can improve CPU utilization by 5-10% by avoiding wasteful
+/// image I/O and processing when results won't be used.
 #[rustler::nif]
 pub fn extractionconfig_needs_image_processing(obj: ExtractionConfig) -> bool {
     kreuzberg::ExtractionConfig::from(obj).needs_image_processing()
@@ -4331,26 +5363,94 @@ pub fn serverconfig_default() -> ServerConfig {
     kreuzberg::ServerConfig::default().into()
 }
 
+/// Get the server listen address (host:port).
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::core::ServerConfig;
+///
+/// let config = ServerConfig::default();
+/// assert_eq!(config.listen_addr(), "127.0.0.1:8000");
+/// ```
 #[rustler::nif]
 pub fn serverconfig_listen_addr(obj: ServerConfig) -> String {
     kreuzberg::ServerConfig::from(obj).listen_addr()
 }
 
+/// Check if CORS allows all origins.
+///
+/// Returns `true` if the `cors_origins` vector is empty, meaning all origins
+/// are allowed. Returns `false` if specific origins are configured.
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::core::ServerConfig;
+///
+/// let mut config = ServerConfig::default();
+/// assert!(config.cors_allows_all());
+///
+/// config.cors_origins.push("https://example.com".to_string());
+/// assert!(!config.cors_allows_all());
+/// ```
 #[rustler::nif]
 pub fn serverconfig_cors_allows_all(obj: ServerConfig) -> bool {
     kreuzberg::ServerConfig::from(obj).cors_allows_all()
 }
 
+/// Check if a given origin is allowed by CORS configuration.
+///
+/// Returns `true` if:
+/// - CORS allows all origins (empty origins list), or
+/// - The given origin is in the allowed origins list
+///
+/// # Arguments
+///
+/// * `origin` - The origin to check (e.g., "https://example.com")
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::core::ServerConfig;
+///
+/// let mut config = ServerConfig::default();
+/// assert!(config.is_origin_allowed("https://example.com"));
+///
+/// config.cors_origins.push("https://allowed.com".to_string());
+/// assert!(config.is_origin_allowed("https://allowed.com"));
+/// assert!(!config.is_origin_allowed("https://denied.com"));
+/// ```
 #[rustler::nif]
 pub fn serverconfig_is_origin_allowed(obj: ServerConfig, origin: String) -> bool {
     kreuzberg::ServerConfig::from(obj).is_origin_allowed(&origin)
 }
 
+/// Get maximum request body size in megabytes (rounded up).
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::core::ServerConfig;
+///
+/// let mut config = ServerConfig::default();
+/// assert_eq!(config.max_request_body_mb(), 100);
+/// ```
 #[rustler::nif]
 pub fn serverconfig_max_request_body_mb(obj: ServerConfig) -> usize {
     kreuzberg::ServerConfig::from(obj).max_request_body_mb()
 }
 
+/// Get maximum multipart field size in megabytes (rounded up).
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::core::ServerConfig;
+///
+/// let mut config = ServerConfig::default();
+/// assert_eq!(config.max_multipart_field_mb(), 100);
+/// ```
 #[rustler::nif]
 pub fn serverconfig_max_multipart_field_mb(obj: ServerConfig) -> usize {
     kreuzberg::ServerConfig::from(obj).max_multipart_field_mb()
@@ -4391,6 +5491,7 @@ pub fn keywordconfig_default() -> KeywordConfig {
     kreuzberg::KeywordConfig::default().into()
 }
 
+/// Get the cache directory path.
 #[rustler::nif]
 pub fn tessdatamanager_cache_dir(resource: rustler::ResourceArc<TessdataManager>) -> String {
     resource
@@ -4402,11 +5503,17 @@ pub fn tessdatamanager_cache_dir(resource: rustler::ResourceArc<TessdataManager>
         .to_string()
 }
 
+/// Check if a specific language traineddata file is cached.
 #[rustler::nif]
 pub fn tessdatamanager_is_language_cached(resource: rustler::ResourceArc<TessdataManager>, lang: String) -> bool {
     resource.inner.as_ref().clone().is_language_cached(&lang)
 }
 
+/// Downloads all tessdata_fast traineddata files to the cache directory.
+///
+/// Skips files that already exist. Returns the count of newly downloaded files.
+///
+/// Requires the `paddle-ocr` feature for HTTP download support (ureq).
 #[rustler::nif]
 pub fn tessdatamanager_ensure_all_languages(resource: rustler::ResourceArc<TessdataManager>) -> Result<usize, String> {
     let result = resource
@@ -4418,6 +5525,21 @@ pub fn tessdatamanager_ensure_all_languages(resource: rustler::ResourceArc<Tessd
     Ok(result)
 }
 
+/// Sets a custom cache directory for model files.
+///
+/// # Arguments
+///
+/// * `path` - Path to cache directory
+///
+/// # Examples
+///
+/// ```no_run
+/// use kreuzberg::PaddleOcrConfig;
+/// use std::path::PathBuf;
+///
+/// let config = PaddleOcrConfig::new("en")
+///     .with_cache_dir(PathBuf::from("/tmp/paddle-cache"));
+/// ```
 #[rustler::nif]
 pub fn paddleocrconfig_with_cache_dir(obj: PaddleOcrConfig, path: String) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj)
@@ -4425,6 +5547,20 @@ pub fn paddleocrconfig_with_cache_dir(obj: PaddleOcrConfig, path: String) -> Pad
         .into()
 }
 
+/// Enables or disables table structure detection.
+///
+/// # Arguments
+///
+/// * `enable` - Whether to enable table detection
+///
+/// # Examples
+///
+/// ```no_run
+/// use kreuzberg::PaddleOcrConfig;
+///
+/// let config = PaddleOcrConfig::new("en")
+///     .with_table_detection(true);
+/// ```
 #[rustler::nif]
 pub fn paddleocrconfig_with_table_detection(obj: PaddleOcrConfig, enable: bool) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj)
@@ -4432,11 +5568,21 @@ pub fn paddleocrconfig_with_table_detection(obj: PaddleOcrConfig, enable: bool) 
         .into()
 }
 
+/// Enables or disables angle classification for rotated text.
+///
+/// # Arguments
+///
+/// * `enable` - Whether to enable angle classification
 #[rustler::nif]
 pub fn paddleocrconfig_with_angle_cls(obj: PaddleOcrConfig, enable: bool) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj).with_angle_cls(enable).into()
 }
 
+/// Sets the database threshold for text detection.
+///
+/// # Arguments
+///
+/// * `threshold` - Detection threshold (0.0-1.0)
 #[rustler::nif]
 pub fn paddleocrconfig_with_det_db_thresh(obj: PaddleOcrConfig, threshold: f32) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj)
@@ -4444,6 +5590,11 @@ pub fn paddleocrconfig_with_det_db_thresh(obj: PaddleOcrConfig, threshold: f32) 
         .into()
 }
 
+/// Sets the box threshold for text bounding box refinement.
+///
+/// # Arguments
+///
+/// * `threshold` - Box threshold (0.0-1.0)
 #[rustler::nif]
 pub fn paddleocrconfig_with_det_db_box_thresh(obj: PaddleOcrConfig, threshold: f32) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj)
@@ -4451,6 +5602,11 @@ pub fn paddleocrconfig_with_det_db_box_thresh(obj: PaddleOcrConfig, threshold: f
         .into()
 }
 
+/// Sets the unclip ratio for expanding text bounding boxes.
+///
+/// # Arguments
+///
+/// * `ratio` - Unclip ratio (typically 1.5-2.0)
 #[rustler::nif]
 pub fn paddleocrconfig_with_det_db_unclip_ratio(obj: PaddleOcrConfig, ratio: f32) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj)
@@ -4458,6 +5614,11 @@ pub fn paddleocrconfig_with_det_db_unclip_ratio(obj: PaddleOcrConfig, ratio: f32
         .into()
 }
 
+/// Sets the maximum side length for detection images.
+///
+/// # Arguments
+///
+/// * `length` - Maximum side length in pixels
 #[rustler::nif]
 pub fn paddleocrconfig_with_det_limit_side_len(obj: PaddleOcrConfig, length: u32) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj)
@@ -4465,6 +5626,11 @@ pub fn paddleocrconfig_with_det_limit_side_len(obj: PaddleOcrConfig, length: u32
         .into()
 }
 
+/// Sets the batch size for recognition inference.
+///
+/// # Arguments
+///
+/// * `batch_size` - Number of text regions to process simultaneously
 #[rustler::nif]
 pub fn paddleocrconfig_with_rec_batch_num(obj: PaddleOcrConfig, batch_size: u32) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj)
@@ -4472,21 +5638,37 @@ pub fn paddleocrconfig_with_rec_batch_num(obj: PaddleOcrConfig, batch_size: u32)
         .into()
 }
 
+/// Sets the minimum recognition confidence threshold.
+///
+/// # Arguments
+///
+/// * `score` - Minimum confidence (0.0-1.0), text below this is dropped
 #[rustler::nif]
 pub fn paddleocrconfig_with_drop_score(obj: PaddleOcrConfig, score: f32) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj).with_drop_score(score).into()
 }
 
+/// Sets padding in pixels added around images before detection.
+///
+/// # Arguments
+///
+/// * `padding` - Padding in pixels (0-100)
 #[rustler::nif]
 pub fn paddleocrconfig_with_padding(obj: PaddleOcrConfig, padding: u32) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj).with_padding(padding).into()
 }
 
+/// Sets the model tier controlling detection/recognition model size.
+///
+/// # Arguments
+///
+/// * `tier` - `"mobile"` (default, lightweight, faster) or `"server"` (high accuracy, GPU/complex documents)
 #[rustler::nif]
 pub fn paddleocrconfig_with_model_tier(obj: PaddleOcrConfig, tier: String) -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::from(obj).with_model_tier(tier).into()
 }
 
+/// Creates a default configuration with English language support.
 #[rustler::nif]
 pub fn paddleocrconfig_default() -> PaddleOcrConfig {
     kreuzberg::PaddleOcrConfig::default().into()

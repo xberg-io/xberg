@@ -8,21 +8,6 @@ import gleam/option.{type Option}
 ///
 /// Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
 /// for inference in layout detection and embedding generation.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::AccelerationConfig;
-///
-/// // Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere
-/// let config = AccelerationConfig::default();
-///
-/// // Force CPU only
-/// let config = AccelerationConfig {
-///     provider: kreuzberg::ExecutionProviderType::Cpu,
-///     ..Default::default()
-/// };
-/// ```
 pub type AccelerationConfig {
   AccelerationConfig(provider: ExecutionProviderType, device_id: Int)
 }
@@ -34,7 +19,7 @@ pub type AccelerationConfig {
 /// results. Applies across all extractors (PDF, DOCX, RTF, ODT, HTML, etc.)
 /// with format-specific implementation.
 ///
-/// When `None` on `ExtractionConfig`, each extractor uses its current
+/// When `null` on `ExtractionConfig`, each extractor uses its current
 /// default behavior unchanged.
 pub type ContentFilterConfig {
   ContentFilterConfig(
@@ -54,18 +39,6 @@ pub type EmailConfig {
 ///
 /// This struct contains all configuration options for the extraction process.
 /// It can be loaded from TOML, YAML, or JSON files, or created programmatically.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// // Create with defaults
-/// let config = ExtractionConfig::default();
-///
-/// // Load from TOML file
-/// // let config = ExtractionConfig::from_toml_file("kreuzberg.toml")?;
-/// ```
 pub type ExtractionConfig {
   ExtractionConfig(
     use_cache: Bool,
@@ -105,31 +78,19 @@ pub type ExtractionConfig {
 
 /// Per-file extraction configuration overrides for batch processing.
 ///
-/// All fields are `Option<T>` — `None` means "use the batch-level default."
-/// This type is used with [`crate::batch_extract_file`] and
-/// [`crate::batch_extract_bytes`] to allow heterogeneous
+/// All fields are `Option<T>` — `null` means "use the batch-level default."
+/// This type is used with `crate.batch_extract_file` and
+/// `crate.batch_extract_bytes` to allow heterogeneous
 /// extraction settings within a single batch.
 ///
 /// # Excluded Fields
 ///
-/// The following [`super::ExtractionConfig`] fields are batch-level only and
+/// The following `super.ExtractionConfig` fields are batch-level only and
 /// cannot be overridden per file:
 /// - `max_concurrent_extractions` — controls batch parallelism
 /// - `use_cache` — global caching policy
 /// - `acceleration` — shared ONNX execution provider
 /// - `security_limits` — global archive security policy
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::FileExtractionConfig;
-///
-/// // Override just OCR forcing for a specific file
-/// let config = FileExtractionConfig {
-///     force_ocr: Some(true),
-///     ..Default::default()
-/// };
-/// ```
 pub type FileExtractionConfig {
   FileExtractionConfig(
     enable_quality_processing: Option(Bool),
@@ -186,22 +147,10 @@ pub type LanguageDetectionConfig {
 
 /// Configuration for styled HTML output.
 ///
-/// When set on [`ExtractionConfig::html_output`] alongside
-/// `output_format = OutputFormat::Html`, the pipeline builds a
-/// [`StyledHtmlRenderer`](crate::rendering::StyledHtmlRenderer) instead of
+/// When set on `ExtractionConfig.html_output` alongside
+/// `output_format = OutputFormat.Html`, the pipeline builds a
+/// `StyledHtmlRenderer` instead of
 /// the plain comrak-based renderer.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::core::config::{HtmlOutputConfig, HtmlTheme};
-///
-/// let config = HtmlOutputConfig {
-///     theme: HtmlTheme::GitHub,
-///     css: Some(".kb-p { font-size: 1.1rem; }".to_string()),
-///     ..Default::default()
-/// };
-/// ```
 pub type HtmlOutputConfig {
   HtmlOutputConfig(
     css: Option(String),
@@ -215,7 +164,7 @@ pub type HtmlOutputConfig {
 /// Layout detection configuration.
 ///
 /// Controls layout detection behavior in the extraction pipeline.
-/// When set on [`ExtractionConfig`](super::ExtractionConfig), layout detection
+/// When set on `ExtractionConfig`, layout detection
 /// is enabled for PDF extraction.
 pub type LayoutDetectionConfig {
   LayoutDetectionConfig(
@@ -230,14 +179,6 @@ pub type LayoutDetectionConfig {
 ///
 /// Each feature (VLM OCR, VLM embeddings, structured extraction) carries
 /// its own `LlmConfig`, allowing different providers per feature.
-///
-/// # Example
-///
-/// ```toml
-/// [structured_extraction.llm]
-/// model = "openai/gpt-4o"
-/// api_key = "sk-..."  # or use KREUZBERG_LLM_API_KEY env var
-/// ```
 pub type LlmConfig {
   LlmConfig(
     model: String,
@@ -254,23 +195,6 @@ pub type LlmConfig {
 ///
 /// Sends extracted document content to a VLM with a JSON schema,
 /// returning structured data that conforms to the schema.
-///
-/// # Example
-///
-/// ```toml
-/// [structured_extraction]
-/// schema_name = "invoice_data"
-/// strict = true
-///
-/// [structured_extraction.schema]
-/// type = "object"
-/// properties.vendor = { type = "string" }
-/// properties.total = { type = "number" }
-/// required = ["vendor", "total"]
-///
-/// [structured_extraction.llm]
-/// model = "openai/gpt-4o"
-/// ```
 pub type StructuredExtractionConfig {
   StructuredExtractionConfig(
     schema: String,
@@ -285,7 +209,7 @@ pub type StructuredExtractionConfig {
 /// Quality thresholds for OCR fallback decisions and pipeline quality gating.
 ///
 /// All fields default to the values that match the previous hardcoded behavior,
-/// so `OcrQualityThresholds::default()` preserves existing semantics exactly.
+/// so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 pub type OcrQualityThresholds {
   OcrQualityThresholds(
     min_total_non_whitespace: Int,
@@ -353,7 +277,7 @@ pub type OcrConfig {
 /// Page extraction and tracking configuration.
 ///
 /// Controls how pages are extracted, tracked, and represented in the extraction results.
-/// When `None`, page tracking is disabled.
+/// When `null`, page tracking is disabled.
 ///
 /// Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
 /// when page boundaries are available and chunking is configured.
@@ -410,14 +334,7 @@ pub type PostProcessorConfig {
 /// Configures text chunking for document content, including chunk size,
 /// overlap, trimming behavior, and optional embeddings.
 ///
-/// Use `..Default::default()` when constructing to allow for future field additions:
-/// ```rust
-/// # use kreuzberg::ChunkingConfig;
-/// let config = ChunkingConfig {
-///     max_characters: 500,
-///     ..Default::default()
-/// };
-/// ```
+/// Use `..the default constructor` when constructing to allow for future field additions:
 pub type ChunkingConfig {
   ChunkingConfig(
     max_characters: Int,
@@ -733,25 +650,6 @@ pub type OdtProperties {
 /// # MIME Type Validation
 ///
 /// The `mime_type` parameter is guaranteed to be already validated.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// impl SyncExtractor for PlainTextExtractor {
-///     fn extract_sync(&self, content: &[u8], config: &ExtractionConfig) -> Result<ExtractionResult> {
-///         let text = String::from_utf8_lossy(content).to_string();
-///         Ok(ExtractionResult {
-///             content: text,
-///             mime_type: "text/plain".to_string(),
-///             metadata: Metadata::default(),
-///             tables: vec![],
-///             detected_languages: None,
-///             chunks: None,
-///             images: None,
-///         })
-///     }
-/// }
-/// ```
 pub type SyncExtractor {
   SyncExtractor
 }
@@ -763,8 +661,8 @@ pub type ZipBombValidator {
 
 /// Trait for in-process embedding backend plugins.
 ///
-/// Async to match the convention used by [`crate::plugins::OcrBackend`],
-/// [`crate::plugins::DocumentExtractor`], and [`crate::plugins::PostProcessor`].
+/// Async to match the convention used by `crate.plugins.OcrBackend`,
+/// `crate.plugins.DocumentExtractor`, and `crate.plugins.PostProcessor`.
 /// Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 /// C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 /// equivalent to satisfy the async signature.
@@ -779,9 +677,9 @@ pub type ZipBombValidator {
 /// # Contract
 ///
 /// - `embed(texts)` MUST return exactly `texts.len()` vectors, each of length
-///   `self.dimensions()`. The dispatcher in [`crate::embeddings::embed_texts`]
+///   `self.dimensions()`. The dispatcher in `crate.embeddings.embed_texts`
 ///   validates this before returning to downstream consumers; a non-conforming
-///   backend surfaces as a `KreuzbergError::Validation`, not a panic.
+///   backend surfaces as a `KreuzbergError.Validation`, not a panic.
 /// - `embed` may be called from any thread. Its future must be `Send`
 ///   (enforced by `async_trait` when `#[async_trait]` is used on non-WASM targets).
 /// - `dimensions()` is called exactly once at registration, immediately after
@@ -791,7 +689,7 @@ pub type ZipBombValidator {
 ///   afterwards. Later mutations of the backend's reported dimension are not
 ///   observed by kreuzberg — implementations that need to change dimension
 ///   must unregister and re-register.
-/// - `shutdown()` (inherited from [`crate::plugins::Plugin`]) may be invoked
+/// - `shutdown()` (inherited from `crate.plugins.Plugin`) may be invoked
 ///   concurrently with an in-flight `embed()` call. Implementations must
 ///   tolerate this — e.g. by letting in-flight calls finish using resources
 ///   held via the `Arc<dyn EmbeddingBackend>` reference, and only releasing
@@ -799,12 +697,12 @@ pub type ZipBombValidator {
 ///
 /// # Runtime
 ///
-/// The synchronous [`crate::embed_texts`] entry uses
-/// [`tokio::task::block_in_place`] to await the trait's async `embed`, which
+/// The synchronous `crate.embed_texts` entry uses
+/// `tokio.task.block_in_place` to await the trait's async `embed`, which
 /// requires a multi-thread tokio runtime. Callers running inside a
-/// `current_thread` runtime (e.g. `#[tokio::test]` without `flavor = "multi_thread"`,
-/// or `tokio::runtime::Builder::new_current_thread()`) must use
-/// [`crate::embed_texts_async`] instead, which awaits directly without
+/// `current_thread` runtime (e.g. `#[tokio.test]` without `flavor = "multi_thread"`,
+/// or `tokio.runtime.Builder.new_current_thread()`) must use
+/// `crate.embed_texts_async` instead, which awaits directly without
 /// `block_in_place`.
 pub type EmbeddingBackend {
   EmbeddingBackend
@@ -834,45 +732,6 @@ pub type EmbeddingBackend {
 /// # Thread Safety
 ///
 /// Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, DocumentExtractor};
-/// use kreuzberg::{Result, ExtractionConfig};
-/// use kreuzberg::types::internal::InternalDocument;
-/// use async_trait::async_trait;
-/// use std::path::Path;
-///
-/// /// Custom PDF extractor with premium features
-/// struct PremiumPdfExtractor;
-///
-/// impl Plugin for PremiumPdfExtractor {
-///     fn name(&self) -> &str { "premium-pdf" }
-///     fn version(&self) -> String { "2.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl DocumentExtractor for PremiumPdfExtractor {
-///     async fn extract_bytes(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig)
-///         -> Result<InternalDocument> {
-///         // Premium extraction logic with better accuracy
-///         let mut doc = InternalDocument::new("pdf");
-///         // ... populate doc.elements, doc.metadata, etc.
-///         Ok(doc)
-///     }
-///
-///     fn supported_mime_types(&self) -> &[&str] {
-///         &["application/pdf"]
-///     }
-///
-///     fn priority(&self) -> i32 {
-///         100  // Higher than default (50) - will be preferred
-///     }
-/// }
-/// ```
 pub type DocumentExtractor {
   DocumentExtractor
 }
@@ -887,51 +746,6 @@ pub type DocumentExtractor {
 /// # Thread Safety
 ///
 /// OCR backends must be thread-safe (`Send + Sync`) to support concurrent processing.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, OcrBackend, OcrBackendType};
-/// use kreuzberg::{Result, OcrConfig};
-/// use async_trait::async_trait;
-/// use std::borrow::Cow;
-/// use std::path::Path;
-/// use kreuzberg::types::{ExtractionResult, Metadata};
-///
-/// struct CustomOcrBackend;
-///
-/// impl Plugin for CustomOcrBackend {
-///     fn name(&self) -> &str { "custom-ocr" }
-///     fn version(&self) -> String { "1.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl OcrBackend for CustomOcrBackend {
-///     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
-///         // Implement OCR logic here
-///         Ok(ExtractionResult {
-///             content: "Extracted text".to_string(),
-///             mime_type: Cow::Borrowed("text/plain"),
-///             ..Default::default()
-///         })
-///     }
-///
-///     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
-///         let bytes = std::fs::read(path)?;
-///         self.process_image(&bytes, config).await
-///     }
-///
-///     fn supports_language(&self, lang: &str) -> bool {
-///         matches!(lang, "eng" | "deu" | "fra")
-///     }
-///
-///     fn backend_type(&self) -> OcrBackendType {
-///         OcrBackendType::Custom
-///     }
-/// }
-/// ```
 pub type OcrBackend {
   OcrBackend
 }
@@ -963,42 +777,6 @@ pub type OcrBackend {
 /// # Thread Safety
 ///
 /// Post-processors must be thread-safe (`Send + Sync`).
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, PostProcessor, ProcessingStage};
-/// use kreuzberg::{Result, ExtractionResult, ExtractionConfig};
-/// use async_trait::async_trait;
-///
-/// /// Add word count metadata to extraction results
-/// struct WordCountProcessor;
-///
-/// impl Plugin for WordCountProcessor {
-///     fn name(&self) -> &str { "word-count" }
-///     fn version(&self) -> String { "1.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl PostProcessor for WordCountProcessor {
-///     async fn process(&self, result: &mut ExtractionResult, config: &ExtractionConfig)
-///         -> Result<()> {
-///         // Count words
-///         let word_count = result.content.split_whitespace().count();
-///
-///         // Add to metadata
-///         result.metadata.additional.insert("word_count".to_string().into(), serde_json::json!(word_count));
-///
-///         Ok(())
-///     }
-///
-///     fn processing_stage(&self) -> ProcessingStage {
-///         ProcessingStage::Early
-///     }
-/// }
-/// ```
 pub type PostProcessor {
   PostProcessor
 }
@@ -1011,40 +789,6 @@ pub type PostProcessor {
 /// # Thread Safety
 ///
 /// All plugins must be `Send + Sync` to support concurrent usage across threads.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::Plugin;
-/// use kreuzberg::Result;
-/// use std::sync::atomic::{AtomicBool, Ordering};
-///
-/// struct MyPlugin {
-///     initialized: AtomicBool,
-/// }
-///
-/// impl Plugin for MyPlugin {
-///     fn name(&self) -> &str {
-///         "my-plugin"
-///     }
-///
-///     fn version(&self) -> String {
-///         "1.0.0".to_string()
-///     }
-///
-///     fn initialize(&self) -> Result<()> {
-///         self.initialized.store(true, Ordering::Release);
-///         println!("Plugin initialized!");
-///         Ok(())
-///     }
-///
-///     fn shutdown(&self) -> Result<()> {
-///         self.initialized.store(false, Ordering::Release);
-///         println!("Plugin shutdown!");
-///         Ok(())
-///     }
-/// }
-/// ```
 pub type Plugin {
   Plugin
 }
@@ -1073,41 +817,6 @@ pub type Plugin {
 /// # Thread Safety
 ///
 /// Validators must be thread-safe (`Send + Sync`).
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, Validator};
-/// use kreuzberg::{Result, ExtractionResult, ExtractionConfig, KreuzbergError};
-/// use async_trait::async_trait;
-///
-/// /// Validate that extracted content has minimum length
-/// struct MinimumLengthValidator {
-///     min_length: usize,
-/// }
-///
-/// impl Plugin for MinimumLengthValidator {
-///     fn name(&self) -> &str { "min-length-validator" }
-///     fn version(&self) -> String { "1.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl Validator for MinimumLengthValidator {
-///     async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
-///         -> Result<()> {
-///         if result.content.len() < self.min_length {
-///             return Err(KreuzbergError::validation(format!(
-///                 "Content too short: {} < {} characters",
-///                 result.content.len(),
-///                 self.min_length
-///             )));
-///         }
-///         Ok(())
-///     }
-/// }
-/// ```
 pub type Validator {
   Validator
 }
@@ -2090,7 +1799,7 @@ pub type ByteBufferPool {
   ByteBufferPool
 }
 
-/// A [`tower::Layer`] that wraps each extraction in a semantic tracing span.
+/// A `tower.Layer` that wraps each extraction in a semantic tracing span.
 pub type TracingLayer {
   TracingLayer
 }
@@ -2332,7 +2041,7 @@ pub type ChunkingResult {
   ChunkingResult(chunks: List(Chunk), chunk_count: Int)
 }
 
-/// A merged chunk produced by [`merge_segments`].
+/// A merged chunk produced by `merge_segments`.
 pub type MergedChunk {
   MergedChunk(text: String, byte_start: Int, byte_end: Int)
 }
@@ -2392,23 +2101,6 @@ pub type TessdataManager {
 ///
 /// Configures PaddleOCR text detection and recognition with multi-language support.
 /// Uses a builder pattern for convenient configuration.
-///
-/// # Examples
-///
-/// ```no_run
-/// use kreuzberg::PaddleOcrConfig;
-///
-/// // Create with default English configuration
-/// let config = PaddleOcrConfig::new("en");
-///
-/// // Create with custom cache directory
-/// let config = PaddleOcrConfig::new("ch")
-///     .with_cache_dir("/path/to/cache".into());
-///
-/// // Enable table detection
-/// let config = PaddleOcrConfig::new("en")
-///     .with_table_detection(true);
-/// ```
 pub type PaddleOcrConfig {
   PaddleOcrConfig(
     language: String,
@@ -2779,7 +2471,7 @@ pub type AnnotationKind {
 
 /// Semantic structural classification of a text chunk.
 ///
-/// Assigned by the heuristic classifier in `chunking::classifier`.
+/// Assigned by the heuristic classifier in `chunking.classifier`.
 /// Defaults to `Unknown` when no rule matches.
 /// Designed to be extended in future versions without breaking changes.
 pub type ChunkType {
@@ -3046,54 +2738,20 @@ pub fn validate_cache_key(key: String) -> Bool
 /// Port must be in the range 1-65535. While ports 1-1023 are privileged and may require
 /// special permissions on some systems, they are still valid port numbers.
 ///
-/// # Arguments
-///
-/// * `port` - The port number to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_port;
-///
-/// assert!(validate_port(8000).is_ok());
-/// assert!(validate_port(80).is_ok());
-/// assert!(validate_port(1).is_ok());
-/// assert!(validate_port(65535).is_ok());
-/// assert!(validate_port(0).is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_port")
 pub fn validate_port(port: Int) -> Result(Nil, KreuzbergError)
 
 /// Validate a host/IP address string for server configuration.
 ///
 /// Accepts valid IPv4 addresses (e.g., "127.0.0.1", "0.0.0.0"), valid IPv6 addresses
-/// (e.g., "::1", "::"), and hostnames (e.g., "localhost", "example.com").
+/// (e.g., ".1", "."), and hostnames (e.g., "localhost", "example.com").
 ///
-/// # Arguments
-///
-/// * `host` - The host/IP address string to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_host;
-///
-/// assert!(validate_host("127.0.0.1").is_ok());
-/// assert!(validate_host("0.0.0.0").is_ok());
-/// assert!(validate_host("::1").is_ok());
-/// assert!(validate_host("::").is_ok());
-/// assert!(validate_host("localhost").is_ok());
-/// assert!(validate_host("example.com").is_ok());
-/// assert!(validate_host("").is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_host")
 pub fn validate_host(host: String) -> Result(Nil, KreuzbergError)
 
@@ -3102,25 +2760,9 @@ pub fn validate_host(host: String) -> Result(Nil, KreuzbergError)
 /// Accepts valid HTTP/HTTPS URLs (e.g., "https://example.com") or the wildcard "*"
 /// to allow all origins. URLs must start with "http://" or "https://", or be exactly "*".
 ///
-/// # Arguments
-///
-/// * `origin` - The CORS origin URL to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_cors_origin;
-///
-/// assert!(validate_cors_origin("https://example.com").is_ok());
-/// assert!(validate_cors_origin("http://localhost:3000").is_ok());
-/// assert!(validate_cors_origin("*").is_ok());
-/// assert!(validate_cors_origin("not-a-url").is_err());
-/// assert!(validate_cors_origin("ftp://example.com").is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_cors_origin")
 pub fn validate_cors_origin(origin: String) -> Result(Nil, KreuzbergError)
 
@@ -3128,45 +2770,17 @@ pub fn validate_cors_origin(origin: String) -> Result(Nil, KreuzbergError)
 ///
 /// Upload size must be greater than 0 (measured in bytes).
 ///
-/// # Arguments
-///
-/// * `size` - The maximum upload size in bytes to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_upload_size;
-///
-/// assert!(validate_upload_size(1024).is_ok());
-/// assert!(validate_upload_size(1_000_000).is_ok());
-/// assert!(validate_upload_size(0).is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_upload_size")
 pub fn validate_upload_size(size: Int) -> Result(Nil, KreuzbergError)
 
 /// Validate a binarization method string.
 ///
-/// # Arguments
-///
-/// * `method` - The binarization method to validate (e.g., "otsu", "adaptive", "sauvola")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_binarization_method;
-///
-/// assert!(validate_binarization_method("otsu").is_ok());
-/// assert!(validate_binarization_method("adaptive").is_ok());
-/// assert!(validate_binarization_method("invalid").is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_binarization_method")
 pub fn validate_binarization_method(
   method: String,
@@ -3174,23 +2788,9 @@ pub fn validate_binarization_method(
 
 /// Validate a token reduction level string.
 ///
-/// # Arguments
-///
-/// * `level` - The token reduction level to validate (e.g., "off", "light", "moderate")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_token_reduction_level;
-///
-/// assert!(validate_token_reduction_level("off").is_ok());
-/// assert!(validate_token_reduction_level("moderate").is_ok());
-/// assert!(validate_token_reduction_level("extreme").is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_token_reduction_level")
 pub fn validate_token_reduction_level(
   level: String,
@@ -3198,23 +2798,9 @@ pub fn validate_token_reduction_level(
 
 /// Validate an OCR backend string.
 ///
-/// # Arguments
-///
-/// * `backend` - The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_ocr_backend;
-///
-/// assert!(validate_ocr_backend("tesseract").is_ok());
-/// assert!(validate_ocr_backend("easyocr").is_ok());
-/// assert!(validate_ocr_backend("invalid").is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_ocr_backend")
 pub fn validate_ocr_backend(backend: String) -> Result(Nil, KreuzbergError)
 
@@ -3223,69 +2809,25 @@ pub fn validate_ocr_backend(backend: String) -> Result(Nil, KreuzbergError)
 /// Accepts both 2-letter ISO 639-1 codes (e.g., "en", "de") and
 /// 3-letter ISO 639-3 codes (e.g., "eng", "deu") for broader compatibility.
 ///
-/// # Arguments
-///
-/// * `code` - The language code to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_language_code;
-///
-/// assert!(validate_language_code("en").is_ok());
-/// assert!(validate_language_code("eng").is_ok());
-/// assert!(validate_language_code("de").is_ok());
-/// assert!(validate_language_code("deu").is_ok());
-/// assert!(validate_language_code("invalid").is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_language_code")
 pub fn validate_language_code(code: String) -> Result(Nil, KreuzbergError)
 
 /// Validate a tesseract Page Segmentation Mode (PSM).
 ///
-/// # Arguments
-///
-/// * `psm` - The PSM value to validate (0-13)
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_tesseract_psm;
-///
-/// assert!(validate_tesseract_psm(3).is_ok());  // Fully automatic
-/// assert!(validate_tesseract_psm(6).is_ok());  // Single block of text
-/// assert!(validate_tesseract_psm(14).is_err()); // Out of range
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_tesseract_psm")
 pub fn validate_tesseract_psm(psm: Int) -> Result(Nil, KreuzbergError)
 
 /// Validate a tesseract OCR Engine Mode (OEM).
 ///
-/// # Arguments
-///
-/// * `oem` - The OEM value to validate (0-3)
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_tesseract_oem;
-///
-/// assert!(validate_tesseract_oem(1).is_ok());  // Neural nets (LSTM)
-/// assert!(validate_tesseract_oem(2).is_ok());  // Legacy + LSTM
-/// assert!(validate_tesseract_oem(4).is_err()); // Out of range
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_tesseract_oem")
 pub fn validate_tesseract_oem(oem: Int) -> Result(Nil, KreuzbergError)
 
@@ -3297,27 +2839,9 @@ pub fn validate_tesseract_oem(oem: Int) -> Result(Nil, KreuzbergError)
 /// - "djot" for Djot markup format
 /// - "html" for HTML output
 ///
-/// # Arguments
-///
-/// * `format` - The output format to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_output_format;
-///
-/// assert!(validate_output_format("text").is_ok());
-/// assert!(validate_output_format("plain").is_ok());
-/// assert!(validate_output_format("markdown").is_ok());
-/// assert!(validate_output_format("md").is_ok());
-/// assert!(validate_output_format("djot").is_ok());
-/// assert!(validate_output_format("html").is_ok());
-/// assert!(validate_output_format("json").is_ok());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_output_format")
 pub fn validate_output_format(format: String) -> Result(Nil, KreuzbergError)
 
@@ -3325,25 +2849,9 @@ pub fn validate_output_format(format: String) -> Result(Nil, KreuzbergError)
 ///
 /// Confidence thresholds should be between 0.0 and 1.0 inclusive.
 ///
-/// # Arguments
-///
-/// * `confidence` - The confidence threshold to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_confidence;
-///
-/// assert!(validate_confidence(0.5).is_ok());
-/// assert!(validate_confidence(0.0).is_ok());
-/// assert!(validate_confidence(1.0).is_ok());
-/// assert!(validate_confidence(1.5).is_err());
-/// assert!(validate_confidence(-0.1).is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_confidence")
 pub fn validate_confidence(confidence: Float) -> Result(Nil, KreuzbergError)
 
@@ -3351,24 +2859,9 @@ pub fn validate_confidence(confidence: Float) -> Result(Nil, KreuzbergError)
 ///
 /// DPI should be a positive integer, typically 72-600.
 ///
-/// # Arguments
-///
-/// * `dpi` - The DPI value to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_dpi;
-///
-/// assert!(validate_dpi(96).is_ok());
-/// assert!(validate_dpi(300).is_ok());
-/// assert!(validate_dpi(0).is_err());
-/// assert!(validate_dpi(-1).is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_dpi")
 pub fn validate_dpi(dpi: Int) -> Result(Nil, KreuzbergError)
 
@@ -3376,49 +2869,20 @@ pub fn validate_dpi(dpi: Int) -> Result(Nil, KreuzbergError)
 ///
 /// Checks that max_chars > 0 and max_overlap < max_chars.
 ///
-/// # Arguments
-///
-/// * `max_chars` - The maximum characters per chunk
-/// * `max_overlap` - The maximum overlap between chunks
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_chunking_params;
-///
-/// assert!(validate_chunking_params(1000, 200).is_ok());
-/// assert!(validate_chunking_params(500, 50).is_ok());
-/// assert!(validate_chunking_params(0, 100).is_err()); // max_chars must be > 0
-/// assert!(validate_chunking_params(100, 150).is_err()); // overlap >= max_chars
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_chunking_params")
 pub fn validate_chunking_params(
   max_chars: Int,
   max_overlap: Int,
 ) -> Result(Nil, KreuzbergError)
 
-/// Validate that an [`LlmConfig`](crate::core::config::LlmConfig) has a non-empty model string.
+/// Validate that an `LlmConfig` has a non-empty model string.
 ///
-/// # Arguments
-///
-/// * `model` - The model string to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_llm_config_model;
-///
-/// assert!(validate_llm_config_model("openai/gpt-4o").is_ok());
-/// assert!(validate_llm_config_model("").is_err());
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_llm_config_model")
 pub fn validate_llm_config_model(model: String) -> Result(Nil, KreuzbergError)
 
@@ -3431,35 +2895,14 @@ pub fn validate_llm_config_model(model: String) -> Result(Nil, KreuzbergError)
 /// 4. Extract content
 /// 5. Run post-processing pipeline
 ///
-/// # Arguments
-///
-/// * `content` - The byte array to extract
-/// * `mime_type` - MIME type of the content
-/// * `config` - Extraction configuration
-///
-/// # Returns
+/// **Returns:**
 ///
 /// An `ExtractionResult` containing the extracted content and metadata.
 ///
-/// # Errors
+/// **Errors:**
 ///
-/// Returns `KreuzbergError::Validation` if MIME type is invalid.
-/// Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::extract_bytes;
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// # async fn example() -> kreuzberg::Result<()> {
-/// let config = ExtractionConfig::default();
-/// let bytes = b"Hello, world!";
-/// let result = extract_bytes(bytes, "text/plain", &config).await?;
-/// println!("Content: {}", result.content);
-/// # Ok(())
-/// # }
-/// ```
+/// Returns `KreuzbergError.Validation` if MIME type is invalid.
+/// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 @external(erlang, "Elixir.Kreuzberg.Native", "extract_bytes")
 pub fn extract_bytes(
   content: BitArray,
@@ -3477,34 +2920,14 @@ pub fn extract_bytes(
 /// 5. Run post-processing pipeline
 /// 6. Store result in cache (if caching enabled)
 ///
-/// # Arguments
-///
-/// * `path` - Path to the file to extract
-/// * `mime_type` - Optional MIME type override. If None, will be auto-detected
-/// * `config` - Extraction configuration
-///
-/// # Returns
+/// **Returns:**
 ///
 /// An `ExtractionResult` containing the extracted content and metadata.
 ///
-/// # Errors
+/// **Errors:**
 ///
-/// Returns `KreuzbergError::Io` if the file doesn't exist (NotFound) or for other file I/O errors.
-/// Returns `KreuzbergError::UnsupportedFormat` if MIME type is not supported.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::extract_file;
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// # async fn example() -> kreuzberg::Result<()> {
-/// let config = ExtractionConfig::default();
-/// let result = extract_file("document.pdf", None, &config).await?;
-/// println!("Content: {}", result.content);
-/// # Ok(())
-/// # }
-/// ```
+/// Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
+/// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 @external(erlang, "Elixir.Kreuzberg.Native", "extract_file")
 pub fn extract_file(
   path: String,
@@ -3522,18 +2945,6 @@ pub fn extract_file(
 ///
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::extract_file_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// let config = ExtractionConfig::default();
-/// let result = extract_file_sync("document.pdf", None, &config)?;
-/// println!("Content: {}", result.content);
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "extract_file_sync")
 pub fn extract_file_sync(
   path: String,
@@ -3548,19 +2959,6 @@ pub fn extract_file_sync(
 ///
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::extract_bytes_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// let config = ExtractionConfig::default();
-/// let bytes = b"Hello, world!";
-/// let result = extract_bytes_sync(bytes, "text/plain", &config)?;
-/// println!("Content: {}", result.content);
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "extract_bytes_sync")
 pub fn extract_bytes_sync(
   content: BitArray,
@@ -3572,23 +2970,6 @@ pub fn extract_bytes_sync(
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_file_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-/// use kreuzberg::FileExtractionConfig;
-/// use std::path::PathBuf;
-///
-/// let config = ExtractionConfig::default();
-/// let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
-///     ("doc1.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-///     ("doc2.pdf".into(), None),
-/// ];
-/// let results = batch_extract_file_sync(items, &config)?;
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_file_sync")
 pub fn batch_extract_file_sync(
   items: List(String),
@@ -3601,23 +2982,6 @@ pub fn batch_extract_file_sync(
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
 /// that iterates through items and calls `extract_bytes_sync()`.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_bytes_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-/// use kreuzberg::FileExtractionConfig;
-///
-/// let config = ExtractionConfig::default();
-/// let items = vec![
-///     (b"content".to_vec(), "text/plain".to_string(), None),
-///     (b"other".to_vec(), "text/plain".to_string(),
-///      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-/// ];
-/// let results = batch_extract_bytes_sync(items, &config)?;
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_bytes_sync")
 pub fn batch_extract_bytes_sync(
   items: List(String),
@@ -3628,68 +2992,30 @@ pub fn batch_extract_bytes_sync(
 ///
 /// This function processes multiple files in parallel, automatically managing
 /// concurrency to prevent resource exhaustion. The concurrency limit can be
-/// configured via `ExtractionConfig::max_concurrent_extractions` or defaults
+/// configured via `ExtractionConfig.max_concurrent_extractions` or defaults
 /// to `(num_cpus * 1.5).ceil()`.
 ///
-/// Each file can optionally specify a [`FileExtractionConfig`] that overrides specific
-/// fields from the batch-level `config`. Pass `None` for a file to use the batch defaults.
+/// Each file can optionally specify a `FileExtractionConfig` that overrides specific
+/// fields from the batch-level `config`. Pass `null` for a file to use the batch defaults.
 /// Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
 /// taken from the batch-level `config`.
 ///
-/// # Arguments
-///
-/// * `items` - Vector of `(path, optional_file_config)` tuples. Pass `None` as the
 ///   config to use the batch-level defaults for that file.
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of `ExtractionResult` in the same order as the input items.
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Individual file errors are captured in the result metadata. System errors
 /// (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
 ///
-/// # Examples
-///
 /// Simple usage with no per-file overrides:
 ///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_file;
-/// use kreuzberg::core::config::ExtractionConfig;
-/// use std::path::PathBuf;
-///
-/// # async fn example() -> kreuzberg::Result<()> {
-/// let config = ExtractionConfig::default();
-/// let items: Vec<(PathBuf, Option<kreuzberg::FileExtractionConfig>)> = vec![
-///     ("doc1.pdf".into(), None),
-///     ("doc2.pdf".into(), None),
-/// ];
-/// let results = batch_extract_file(items, &config).await?;
-/// println!("Processed {} files", results.len());
-/// # Ok(())
-/// # }
-/// ```
 ///
 /// Per-file configuration overrides:
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_file;
-/// use kreuzberg::core::config::ExtractionConfig;
-/// use kreuzberg::FileExtractionConfig;
-/// use std::path::PathBuf;
-///
-/// # async fn example() -> kreuzberg::Result<()> {
-/// let config = ExtractionConfig::default();
-/// let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
-///     ("scan.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-///     ("notes.txt".into(), None),
-/// ];
-/// let results = batch_extract_file(items, &config).await?;
-/// # Ok(())
-/// # }
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_file")
 pub fn batch_extract_file(
   items: List(String),
@@ -3700,60 +3026,21 @@ pub fn batch_extract_file(
 ///
 /// This function processes multiple byte arrays in parallel, automatically managing
 /// concurrency to prevent resource exhaustion. The concurrency limit can be
-/// configured via `ExtractionConfig::max_concurrent_extractions` or defaults
+/// configured via `ExtractionConfig.max_concurrent_extractions` or defaults
 /// to `(num_cpus * 1.5).ceil()`.
 ///
-/// Each item can optionally specify a [`FileExtractionConfig`] that overrides specific
-/// fields from the batch-level `config`. Pass `None` as the config to use
+/// Each item can optionally specify a `FileExtractionConfig` that overrides specific
+/// fields from the batch-level `config`. Pass `null` as the config to use
 /// the batch-level defaults for that item.
 ///
-/// # Arguments
-///
-/// * `items` - Vector of `(bytes, mime_type, optional_file_config)` tuples
-/// * `config` - Batch-level extraction configuration
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of `ExtractionResult` in the same order as the input items.
 ///
-/// # Examples
-///
 /// Simple usage with no per-item overrides:
 ///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_bytes;
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// # async fn example() -> kreuzberg::Result<()> {
-/// let config = ExtractionConfig::default();
-/// let items = vec![
-///     (b"content 1".to_vec(), "text/plain".to_string(), None),
-///     (b"content 2".to_vec(), "text/plain".to_string(), None),
-/// ];
-/// let results = batch_extract_bytes(items, &config).await?;
-/// println!("Processed {} items", results.len());
-/// # Ok(())
-/// # }
-/// ```
 ///
 /// Per-item configuration overrides:
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_bytes;
-/// use kreuzberg::core::config::ExtractionConfig;
-/// use kreuzberg::FileExtractionConfig;
-///
-/// # async fn example() -> kreuzberg::Result<()> {
-/// let config = ExtractionConfig::default();
-/// let items = vec![
-///     (b"content".to_vec(), "text/plain".to_string(), None),
-///     (b"<html>test</html>".to_vec(), "text/html".to_string(),
-///      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-/// ];
-/// let results = batch_extract_bytes(items, &config).await?;
-/// # Ok(())
-/// # }
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_bytes")
 pub fn batch_extract_bytes(
   items: List(String),
@@ -3765,39 +3052,21 @@ pub fn batch_extract_bytes(
 /// This uses a pre-built hash set for O(1) lookups instead of linear search,
 /// providing significant performance improvements for repeated validations.
 ///
-/// # Arguments
-///
-/// * `field` - The field name to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `true` if the field is in KNOWN_FORMATS, `false` otherwise.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::core::formats::is_valid_format_field;
-///
-/// assert!(is_valid_format_field("title"));
-/// assert!(is_valid_format_field("creation_date"));
-/// assert!(!is_valid_format_field("invalid_field"));
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "is_valid_format_field")
 pub fn is_valid_format_field(field: String) -> Bool
 
 /// Validate that a MIME type is supported.
 ///
-/// # Arguments
-///
-/// * `mime_type` - The MIME type to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// The validated MIME type (may be normalized).
 ///
-/// # Errors
+/// **Errors:**
 ///
-/// Returns `KreuzbergError::UnsupportedFormat` if not supported.
+/// Returns `KreuzbergError.UnsupportedFormat` if not supported.
 @external(erlang, "Elixir.Kreuzberg.Native", "validate_mime_type")
 pub fn validate_mime_type(mime_type: String) -> Result(String, KreuzbergError)
 
@@ -3805,12 +3074,7 @@ pub fn validate_mime_type(mime_type: String) -> Result(String, KreuzbergError)
 ///
 /// If `mime_type` is provided, validates it. Otherwise, detects from `path`.
 ///
-/// # Arguments
-///
-/// * `path` - Optional path to detect MIME type from
-/// * `mime_type` - Optional explicit MIME type to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// The validated MIME type string.
 @external(erlang, "Elixir.Kreuzberg.Native", "detect_or_validate")
@@ -3827,17 +3091,13 @@ pub fn detect_or_validate(
 /// For ZIP-based files, inspects contents to distinguish Office Open XML
 /// formats (DOCX, XLSX, PPTX) from plain ZIP archives.
 ///
-/// # Arguments
-///
-/// * `content` - Raw file bytes
-///
-/// # Returns
+/// **Returns:**
 ///
 /// The detected MIME type string.
 ///
-/// # Errors
+/// **Errors:**
 ///
-/// Returns `KreuzbergError::UnsupportedFormat` if MIME type cannot be determined.
+/// Returns `KreuzbergError.UnsupportedFormat` if MIME type cannot be determined.
 @external(erlang, "Elixir.Kreuzberg.Native", "detect_mime_type_from_bytes")
 pub fn detect_mime_type_from_bytes(
   content: BitArray,
@@ -3847,25 +3107,9 @@ pub fn detect_mime_type_from_bytes(
 ///
 /// Returns all known file extensions that map to the specified MIME type.
 ///
-/// # Arguments
-///
-/// * `mime_type` - The MIME type to look up
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of file extensions (without leading dot) for the MIME type.
-///
-/// # Example
-///
-/// ```
-/// use kreuzberg::core::mime::get_extensions_for_mime;
-///
-/// let extensions = get_extensions_for_mime("application/pdf").unwrap();
-/// assert_eq!(extensions, vec!["pdf"]);
-///
-/// let doc_extensions = get_extensions_for_mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document").unwrap();
-/// assert!(doc_extensions.contains(&"docx".to_string()));
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "get_extensions_for_mime")
 pub fn get_extensions_for_mime(
   mime_type: String,
@@ -3874,19 +3118,9 @@ pub fn get_extensions_for_mime(
 /// List all supported document formats.
 ///
 /// Returns a list of all file extensions and their corresponding MIME types
-/// that Kreuzberg can process. Derived from the centralized [`FORMATS`] registry.
+/// that Kreuzberg can process. Derived from the centralized `FORMATS` registry.
 ///
 /// The list is sorted alphabetically by file extension.
-///
-/// # Example
-///
-/// ```
-/// use kreuzberg::core::mime::list_supported_formats;
-///
-/// let formats = list_supported_formats();
-/// assert!(!formats.is_empty());
-/// assert!(formats.iter().any(|f| f.extension == "pdf"));
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "list_supported_formats")
 pub fn list_supported_formats() -> List(SupportedFormat)
 
@@ -3909,11 +3143,7 @@ pub fn clear_processor_cache() -> Result(Nil, KreuzbergError)
 /// - Bounding box coordinates
 /// - Paragraph detection for NarrativeText
 ///
-/// # Arguments
-///
-/// * `result` - Reference to the ExtractionResult to transform
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of Elements with proper semantic types and metadata.
 @external(erlang, "Elixir.Kreuzberg.Native", "transform_extraction_result_to_elements")
@@ -3939,28 +3169,9 @@ pub fn extract_email_content(
 /// - Irregular tables (rows with varying column counts) are padded with empty cells to match the header
 /// - Returns an empty string for empty input
 ///
-/// # Arguments
-///
-/// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A `String` containing the GFM markdown table representation
-///
-/// # Examples
-///
-/// ```
-/// # use kreuzberg::extraction::cells_to_markdown;
-/// let cells = vec![
-///     vec!["Name".to_string(), "Age".to_string()],
-///     vec!["Alice".to_string(), "30".to_string()],
-///     vec!["Bob".to_string(), "25".to_string()],
-/// ];
-///
-/// let markdown = cells_to_markdown(&cells);
-/// assert!(markdown.contains("| Name | Age |"));
-/// assert!(markdown.contains("|------|------|"));
-/// ```
 ///
 /// Converts a 2D vector of cell strings into plain text with tab-separated columns.
 ///
@@ -3971,11 +3182,7 @@ pub fn extract_email_content(
 /// - No pipe delimiters or separator rows (unlike markdown tables)
 /// - Returns an empty string for empty input
 ///
-/// # Arguments
-///
-/// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A `String` containing the plain text table representation
 @external(erlang, "Elixir.Kreuzberg.Native", "cells_to_text")
@@ -3989,23 +3196,9 @@ pub fn cells_to_markdown(cells: List(List(String))) -> String
 /// This function takes djot source text and renders it to HTML using jotdown's
 /// built-in HTML renderer.
 ///
-/// # Arguments
-///
-/// * `djot_source` - The djot markup text to render
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A `Result` containing the rendered HTML string
-///
-/// # Example
-///
-/// ```ignore
-/// let djot = "# Hello\n\nThis is *bold* and _italic_.";
-/// let html = djot_to_html(djot)?;
-/// assert!(html.contains("<h1>"));
-/// assert!(html.contains("<strong>"));
-/// assert!(html.contains("<em>"));
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "djot_to_html")
 pub fn djot_to_html(djot_source: String) -> Result(String, KreuzbergError)
 
@@ -4031,17 +3224,6 @@ pub fn normalize_whitespace(s: String) -> String
 ///
 /// **Note:** This is called automatically on first extraction operation.
 /// Explicit calling is optional.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::extractors::register_default_extractors;
-///
-/// # fn main() -> kreuzberg::Result<()> {
-/// register_default_extractors()?;
-/// # Ok(())
-/// # }
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "register_default_extractors")
 pub fn register_default_extractors() -> Result(Nil, KreuzbergError)
 
@@ -4061,25 +3243,10 @@ pub fn clear_extractors() -> Result(Nil, KreuzbergError)
 ///
 /// Removes the OCR backend from the global registry and calls its `shutdown()` method.
 ///
-/// # Arguments
-///
-/// * `name` - Name of the OCR backend to unregister
-///
-/// # Returns
+/// **Returns:**
 ///
 /// - `Ok(())` if the backend was unregistered or didn't exist
 /// - `Err(...)` if the shutdown method failed
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::unregister_ocr_backend;
-///
-/// # tokio_test::block_on(async {
-/// unregister_ocr_backend("custom-ocr")?;
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// # });
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "unregister_ocr_backend")
 pub fn unregister_ocr_backend(name: String) -> Result(Nil, KreuzbergError)
 
@@ -4087,23 +3254,9 @@ pub fn unregister_ocr_backend(name: String) -> Result(Nil, KreuzbergError)
 ///
 /// Returns the names of all OCR backends currently registered in the global registry.
 ///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of OCR backend names.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::list_ocr_backends;
-///
-/// # tokio_test::block_on(async {
-/// let backends = list_ocr_backends()?;
-/// for name in backends {
-///     println!("Registered OCR backend: {}", name);
-/// }
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// # });
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "list_ocr_backends")
 pub fn list_ocr_backends() -> Result(List(String), KreuzbergError)
 
@@ -4111,21 +3264,10 @@ pub fn list_ocr_backends() -> Result(List(String), KreuzbergError)
 ///
 /// Removes all OCR backends and calls their `shutdown()` methods.
 ///
-/// # Returns
+/// **Returns:**
 ///
 /// - `Ok(())` if all backends were cleared successfully
 /// - `Err(...)` if any shutdown method failed
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::clear_ocr_backends;
-///
-/// # tokio_test::block_on(async {
-/// clear_ocr_backends()?;
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// # });
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "clear_ocr_backends")
 pub fn clear_ocr_backends() -> Result(Nil, KreuzbergError)
 
@@ -4134,24 +3276,10 @@ pub fn clear_ocr_backends() -> Result(Nil, KreuzbergError)
 /// Returns a vector of all post-processor names currently registered in the
 /// global registry.
 ///
-/// # Returns
+/// **Returns:**
 ///
 /// - `Ok(Vec<String>)` - Vector of post-processor names
 /// - `Err(...)` if the registry lock is poisoned
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::list_post_processors;
-///
-/// # tokio_test::block_on(async {
-/// let processors = list_post_processors()?;
-/// for name in processors {
-///     println!("Registered post-processor: {}", name);
-/// }
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// # });
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "list_post_processors")
 pub fn list_post_processors() -> Result(List(String), KreuzbergError)
 
@@ -4193,11 +3321,7 @@ pub fn sanitize_path(path: String) -> String
 /// Returns `true` if the bytes represent valid UTF-8, `false` otherwise.
 /// This is useful when you only need to check validity without constructing a string.
 ///
-/// # Arguments
-///
-/// * `bytes` - The byte slice to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `true` if valid UTF-8, `false` otherwise.
 ///
@@ -4216,31 +3340,13 @@ pub fn clean_extracted_text(text: String) -> String
 /// based on the specified reduction level. Supports 64 languages with automatic
 /// stopword removal and optional semantic clustering.
 ///
-/// # Arguments
-///
-/// * `text` - The input text to reduce
-/// * `config` - Configuration specifying reduction level and options
-/// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// Returns the reduced text with preserved structure (markdown, code blocks).
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::text::token_reduction::{reduce_tokens, TokenReductionConfig, ReductionLevel};
-///
-/// let text = "This is a simple example text with some stopwords.";
-/// let config = TokenReductionConfig::default();
-/// let reduced = reduce_tokens(text, &config, Some("eng"))?;
-/// println!("Reduced: {}", reduced);
-/// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "reduce_tokens")
 pub fn reduce_tokens(
   text: String,
@@ -4254,35 +3360,13 @@ pub fn reduce_tokens(
 /// significant performance improvements for batch operations. All texts use the
 /// same configuration and language hint for consistency.
 ///
-/// # Arguments
-///
-/// * `texts` - Slice of text references to reduce
-/// * `config` - Configuration specifying reduction level and options
-/// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// Returns a vector of reduced texts in the same order as the input.
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::text::token_reduction::{batch_reduce_tokens, TokenReductionConfig, ReductionLevel};
-///
-/// let texts: Vec<String> = vec![
-///     "This is the first document with some text.".to_string(),
-///     "Here is another document with different content.".to_string(),
-///     "And finally, a third document to process.".to_string(),
-/// ];
-/// let config = TokenReductionConfig::default();
-/// let reduced = batch_reduce_tokens(&texts, &config, Some("eng"))?;
-/// assert_eq!(reduced.len(), 3);
-/// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "batch_reduce_tokens")
 pub fn batch_reduce_tokens(
   texts: List(String),
@@ -4364,24 +3448,9 @@ pub fn calculate_text_confidence(text: String) -> Float
 
 /// Create a pre-configured string buffer pool for batch processing.
 ///
-/// # Arguments
-///
-/// * `pool_size` - Maximum number of buffers to keep in the pool
-/// * `buffer_capacity` - Initial capacity for each buffer in bytes
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A pool configured for text accumulation with reasonable defaults.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::utils::pool::create_string_buffer_pool;
-///
-/// let pool = create_string_buffer_pool(10, 8192);
-/// let mut buffer = pool.acquire().unwrap();
-/// buffer.push_str("content");
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "create_string_buffer_pool")
 pub fn create_string_buffer_pool(
   pool_size: Int,
@@ -4390,24 +3459,9 @@ pub fn create_string_buffer_pool(
 
 /// Create a pre-configured byte buffer pool for batch processing.
 ///
-/// # Arguments
-///
-/// * `pool_size` - Maximum number of buffers to keep in the pool
-/// * `buffer_capacity` - Initial capacity for each buffer in bytes
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A pool configured for binary data handling with reasonable defaults.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::utils::pool::create_byte_buffer_pool;
-///
-/// let pool = create_byte_buffer_pool(10, 65536);
-/// let mut buffer = pool.acquire().unwrap();
-/// buffer.extend_from_slice(b"binary data");
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "create_byte_buffer_pool")
 pub fn create_byte_buffer_pool(
   pool_size: Int,
@@ -4417,15 +3471,6 @@ pub fn create_byte_buffer_pool(
 /// Generate OpenAPI JSON schema.
 ///
 /// Returns the complete OpenAPI 3.1 specification as a JSON string.
-///
-/// # Examples
-///
-/// ```no_run
-/// use kreuzberg::api::openapi::openapi_json;
-///
-/// let schema = openapi_json();
-/// println!("{}", schema);
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "openapi_json")
 pub fn openapi_json() -> String
 
@@ -4443,34 +3488,9 @@ pub fn serve_default() -> Result(Nil, KreuzbergError)
 /// This is the primary API function for chunking text. It supports both plain text
 /// and Markdown with configurable chunk size, overlap, and page boundary mapping.
 ///
-/// # Arguments
-///
-/// * `text` - The text to split into chunks
-/// * `config` - Chunking configuration (max size, overlap, type)
-/// * `page_boundaries` - Optional page boundary markers for mapping chunks to pages
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A ChunkingResult containing all chunks and their metadata.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::chunking::{chunk_text, ChunkingConfig, ChunkerType};
-///
-/// # fn example() -> kreuzberg::Result<()> {
-/// let config = ChunkingConfig {
-///     max_characters: 500,
-///     overlap: 50,
-///     trim: true,
-///     chunker_type: ChunkerType::Text,
-///     ..Default::default()
-/// };
-/// let result = chunk_text("Long text...", &config, None)?;
-/// assert!(!result.chunks.is_empty());
-/// # Ok(())
-/// # }
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "chunk_text")
 pub fn chunk_text(
   text: String,
@@ -4496,32 +3516,13 @@ pub fn chunk_text_with_heading_source(
 /// This convenience function applies the same chunking configuration to multiple
 /// texts in sequence.
 ///
-/// # Arguments
-///
-/// * `texts` - Slice of text strings to chunk
-/// * `config` - Chunking configuration to apply to all texts
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of ChunkingResult objects, one per input text.
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if chunking any individual text fails.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::chunking::{chunk_texts_batch, ChunkingConfig};
-///
-/// # fn example() -> kreuzberg::Result<()> {
-/// let config = ChunkingConfig::default();
-/// let texts: Vec<String> = vec!["First text".to_string(), "Second text".to_string()];
-/// let results = chunk_texts_batch(&texts, &config)?;
-/// assert_eq!(results.len(), 2);
-/// # Ok(())
-/// # }
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "chunk_texts_batch")
 pub fn chunk_texts_batch(
   texts: List(String),
@@ -4560,7 +3561,7 @@ pub fn list_presets() -> List(String)
 ///
 /// **Note**: This function downloads AND initializes the ONNX model, which
 /// requires ONNX Runtime and uses significant memory. For download-only
-/// scenarios (e.g., init containers), use [`download_model`] instead.
+/// scenarios (e.g., init containers), use `download_model` instead.
 @external(erlang, "Elixir.Kreuzberg.Native", "warm_model")
 pub fn warm_model(
   model_type: EmbeddingModelType,
@@ -4595,28 +3596,7 @@ pub fn calculate_optimal_dpi(
 /// Detect languages in text using whatlang.
 ///
 /// Returns a list of detected language codes (ISO 639-3 format).
-/// Returns `None` if no languages could be detected with sufficient confidence.
-///
-/// # Arguments
-///
-/// * `text` - The text to analyze for language detection
-/// * `config` - Optional configuration for language detection
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::language_detection::detect_languages;
-/// use kreuzberg::core::config::LanguageDetectionConfig;
-///
-/// let text = "Hello world! This is English text.";
-/// let config = LanguageDetectionConfig {
-///     enabled: true,
-///     min_confidence: 0.8,
-///     detect_multiple: false,
-/// };
-/// let languages = detect_languages(text, &config).expect("language detection succeeded");
-/// println!("Detected languages: {:?}", languages);
-/// ```
+/// Returns `null` if no languages could be detected with sufficient confidence.
 @external(erlang, "Elixir.Kreuzberg.Native", "detect_languages")
 pub fn detect_languages(
   text: String,
@@ -4628,37 +3608,15 @@ pub fn detect_languages(
 /// This is the unified entry point for keyword extraction. The algorithm
 /// used is determined by `config.algorithm`.
 ///
-/// # Arguments
-///
-/// * `text` - The text to extract keywords from
-/// * `config` - Keyword extraction configuration
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of keywords sorted by relevance (highest score first).
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if:
 /// - The specified algorithm feature is not enabled
 /// - Keyword extraction fails
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use kreuzberg::keywords::{extract_keywords, KeywordConfig};
-/// let text = "Document intelligence with Rust provides memory safety.";
-/// let config = KeywordConfig::default()
-///     .with_max_keywords(10)
-///     .with_language("en");
-///
-/// let keywords = extract_keywords(text, &config)?;
-///
-/// for keyword in keywords {
-///     println!("{}: {:.3}", keyword.text, keyword.score);
-/// }
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "extract_keywords")
 pub fn extract_keywords(
   text: String,
@@ -4673,23 +3631,10 @@ pub fn compute_hash(data: String) -> String
 
 /// Render a single PDF page to a PNG-encoded byte buffer.
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if the PDF is invalid, the page index is out of bounds,
 /// or if the page fails to render.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::pdf::render_pdf_page_to_png;
-///
-/// # fn example() -> kreuzberg::pdf::error::Result<()> {
-/// let pdf_bytes = std::fs::read("document.pdf")?;
-/// let png = render_pdf_page_to_png(&pdf_bytes, 0, Some(150), None)?;
-/// std::fs::write("page_0.png", png)?;
-/// # Ok(())
-/// # }
-/// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "render_pdf_page_to_png")
 pub fn render_pdf_page_to_png(
   pdf_bytes: BitArray,
@@ -4703,7 +3648,7 @@ pub fn extract_text_from_pdf(
   pdf_bytes: BitArray,
 ) -> Result(String, KreuzbergError)
 
-/// Serialize an [`ExtractionResult`] to TOON (Token-Oriented Object Notation).
+/// Serialize an `ExtractionResult` to TOON (Token-Oriented Object Notation).
 ///
 /// TOON is a token-efficient alternative to JSON for LLM prompts.
 /// Losslessly convertible to/from JSON but uses fewer tokens.
@@ -4712,7 +3657,7 @@ pub fn serialize_to_toon(
   result: ExtractionResult,
 ) -> Result(String, KreuzbergError)
 
-/// Serialize an [`ExtractionResult`] to pretty-printed JSON.
+/// Serialize an `ExtractionResult` to pretty-printed JSON.
 @external(erlang, "Elixir.Kreuzberg.Native", "serialize_to_json")
 pub fn serialize_to_json(
   result: ExtractionResult,

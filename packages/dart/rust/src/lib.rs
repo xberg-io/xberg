@@ -1865,26 +1865,26 @@ pub enum ElementType {
 
 #[frb(mirror(FormatMetadata))]
 pub enum FormatMetadata {
-    Pdf { _0: String },
-    Docx { _0: DocxMetadata },
-    Excel { _0: ExcelMetadata },
-    Email { _0: EmailMetadata },
-    Pptx { _0: PptxMetadata },
-    Archive { _0: ArchiveMetadata },
-    Image { _0: String },
-    Xml { _0: XmlMetadata },
-    Text { _0: TextMetadata },
-    Html { _0: HtmlMetadata },
-    Ocr { _0: OcrMetadata },
-    Csv { _0: CsvMetadata },
-    Bibtex { _0: BibtexMetadata },
-    Citation { _0: CitationMetadata },
-    FictionBook { _0: FictionBookMetadata },
-    Dbf { _0: DbfMetadata },
-    Jats { _0: JatsMetadata },
-    Epub { _0: EpubMetadata },
-    Pst { _0: PstMetadata },
-    Code { _0: String },
+    Pdf { field0: String },
+    Docx { field0: DocxMetadata },
+    Excel { field0: ExcelMetadata },
+    Email { field0: EmailMetadata },
+    Pptx { field0: PptxMetadata },
+    Archive { field0: ArchiveMetadata },
+    Image { field0: String },
+    Xml { field0: XmlMetadata },
+    Text { field0: TextMetadata },
+    Html { field0: HtmlMetadata },
+    Ocr { field0: OcrMetadata },
+    Csv { field0: CsvMetadata },
+    Bibtex { field0: BibtexMetadata },
+    Citation { field0: CitationMetadata },
+    FictionBook { field0: FictionBookMetadata },
+    Dbf { field0: DbfMetadata },
+    Jats { field0: JatsMetadata },
+    Epub { field0: EpubMetadata },
+    Pst { field0: PstMetadata },
+    Code { field0: String },
 }
 
 #[frb(mirror(TextDirection))]
@@ -2024,10 +2024,14 @@ pub enum LayoutClass {
     KeyValueRegion,
 }
 
+/// Hash arbitrary bytes with blake3, returning a 32-char hex string.
 pub fn blake3_hash_bytes(data: Vec<u8>) -> String {
     kreuzberg::cache::blake3_hash_bytes(&data).to_string()
 }
 
+/// Hash a file's content with blake3 using streaming 64 KiB reads.
+///
+/// Returns a 32-char hex string (128 bits of blake3 output).
 pub fn blake3_hash_file(path: String) -> Result<String, String> {
     kreuzberg::cache::blake3_hash_file(std::path::Path::new(&path))
         .map(|v| v.to_string())
@@ -2042,96 +2046,214 @@ pub fn validate_cache_key(key: String) -> bool {
     kreuzberg::cache::validate_cache_key(&key) as bool
 }
 
+/// Validate a port number for server configuration.
+///
+/// Port must be in the range 1-65535. While ports 1-1023 are privileged and may require
+/// special permissions on some systems, they are still valid port numbers.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
 pub fn validate_port(port: i64) -> Result<(), String> {
     kreuzberg::core::config_validation::validate_port(port as u16)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a host/IP address string for server configuration.
+///
+/// Accepts valid IPv4 addresses (e.g., "127.0.0.1", "0.0.0.0"), valid IPv6 addresses
+/// (e.g., ".1", "."), and hostnames (e.g., "localhost", "example.com").
+///
+/// **Returns:**
+///
+/// `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
 pub fn validate_host(host: String) -> Result<(), String> {
     kreuzberg::core::config_validation::validate_host(&host)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a CORS (Cross-Origin Resource Sharing) origin URL.
+///
+/// Accepts valid HTTP/HTTPS URLs (e.g., "https://example.com") or the wildcard "*"
+/// to allow all origins. URLs must start with "http://" or "https://", or be exactly "*".
+///
+/// **Returns:**
+///
+/// `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
 pub fn validate_cors_origin(origin: String) -> Result<(), String> {
     kreuzberg::core::config_validation::validate_cors_origin(&origin)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate an upload size limit for server configuration.
+///
+/// Upload size must be greater than 0 (measured in bytes).
+///
+/// **Returns:**
+///
+/// `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
 pub fn validate_upload_size(size: i64) -> Result<(), String> {
     kreuzberg::core::config_validation::validate_upload_size(size as usize)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a binarization method string.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
 pub fn validate_binarization_method(method: String) -> Result<(), String> {
     kreuzberg::core::validate_binarization_method(&method)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a token reduction level string.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
 pub fn validate_token_reduction_level(level: String) -> Result<(), String> {
     kreuzberg::core::validate_token_reduction_level(&level)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate an OCR backend string.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
 pub fn validate_ocr_backend(backend: String) -> Result<(), String> {
     kreuzberg::core::validate_ocr_backend(&backend)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a language code (ISO 639-1 or 639-3 format).
+///
+/// Accepts both 2-letter ISO 639-1 codes (e.g., "en", "de") and
+/// 3-letter ISO 639-3 codes (e.g., "eng", "deu") for broader compatibility.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
 pub fn validate_language_code(code: String) -> Result<(), String> {
     kreuzberg::core::validate_language_code(&code)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a tesseract Page Segmentation Mode (PSM).
+///
+/// **Returns:**
+///
+/// `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
 pub fn validate_tesseract_psm(psm: i64) -> Result<(), String> {
     kreuzberg::core::validate_tesseract_psm(psm as i32)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a tesseract OCR Engine Mode (OEM).
+///
+/// **Returns:**
+///
+/// `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
 pub fn validate_tesseract_oem(oem: i64) -> Result<(), String> {
     kreuzberg::core::validate_tesseract_oem(oem as i32)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a document extraction output format.
+///
+/// Accepts the following formats and aliases:
+/// - "plain" or "text" for plain text output
+/// - "markdown" or "md" for Markdown output
+/// - "djot" for Djot markup format
+/// - "html" for HTML output
+///
+/// **Returns:**
+///
+/// `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
 pub fn validate_output_format(format: String) -> Result<(), String> {
     kreuzberg::core::validate_output_format(&format)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a confidence threshold value.
+///
+/// Confidence thresholds should be between 0.0 and 1.0 inclusive.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
 pub fn validate_confidence(confidence: f64) -> Result<(), String> {
     kreuzberg::core::validate_confidence(confidence)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate a DPI (dots per inch) value.
+///
+/// DPI should be a positive integer, typically 72-600.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
 pub fn validate_dpi(dpi: i64) -> Result<(), String> {
     kreuzberg::core::validate_dpi(dpi as i32)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate chunk size parameters.
+///
+/// Checks that max_chars > 0 and max_overlap < max_chars.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
 pub fn validate_chunking_params(max_chars: i64, max_overlap: i64) -> Result<(), String> {
     kreuzberg::core::validate_chunking_params(max_chars as usize, max_overlap as usize)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Validate that an `LlmConfig` has a non-empty model string.
+///
+/// **Returns:**
+///
+/// `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
 pub fn validate_llm_config_model(model: String) -> Result<(), String> {
     kreuzberg::core::config_validation::validate_llm_config_model(&model)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Extract content from a byte array.
+///
+/// This is the main entry point for in-memory extraction. It performs the following steps:
+/// 1. Validate MIME type
+/// 2. Handle legacy format conversion if needed
+/// 3. Select appropriate extractor from registry
+/// 4. Extract content
+/// 5. Run post-processing pipeline
+///
+/// **Returns:**
+///
+/// An `ExtractionResult` containing the extracted content and metadata.
+///
+/// **Errors:**
+///
+/// Returns `KreuzbergError.Validation` if MIME type is invalid.
+/// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 pub async fn extract_bytes(
     content: Vec<u8>,
     mime_type: String,
@@ -2143,6 +2265,24 @@ pub async fn extract_bytes(
         .map_err(|e| e.to_string())
 }
 
+/// Extract content from a file.
+///
+/// This is the main entry point for file-based extraction. It performs the following steps:
+/// 1. Check cache for existing result (if caching enabled)
+/// 2. Detect or validate MIME type
+/// 3. Select appropriate extractor from registry
+/// 4. Extract content
+/// 5. Run post-processing pipeline
+/// 6. Store result in cache (if caching enabled)
+///
+/// **Returns:**
+///
+/// An `ExtractionResult` containing the extracted content and metadata.
+///
+/// **Errors:**
+///
+/// Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
+/// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 pub async fn extract_file(
     path: String,
     mime_type: Option<String>,
@@ -2154,6 +2294,16 @@ pub async fn extract_file(
         .map_err(|e| e.to_string())
 }
 
+/// Synchronous wrapper for `extract_file`.
+///
+/// This is a convenience function that blocks the current thread until extraction completes.
+/// For async code, use `extract_file` directly.
+///
+/// Uses the global Tokio runtime for 100x+ performance improvement over creating
+/// a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
+///
+/// This function is only available with the `tokio-runtime` feature. For WASM targets,
+/// use a truly synchronous extraction approach instead.
 pub fn extract_file_sync(
     path: String,
     mime_type: Option<String>,
@@ -2164,6 +2314,13 @@ pub fn extract_file_sync(
         .map_err(|e| e.to_string())
 }
 
+/// Synchronous wrapper for `extract_bytes`.
+///
+/// Uses the global Tokio runtime for 100x+ performance improvement over creating
+/// a new runtime per call.
+///
+/// With the `tokio-runtime` feature, this blocks the current thread using the global
+/// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
 pub fn extract_bytes_sync(
     content: Vec<u8>,
     mime_type: String,
@@ -2174,6 +2331,10 @@ pub fn extract_bytes_sync(
         .map_err(|e| e.to_string())
 }
 
+/// Synchronous wrapper for `batch_extract_file`.
+///
+/// Uses the global Tokio runtime for optimal performance.
+/// Only available with `tokio-runtime` (WASM has no filesystem).
 pub fn batch_extract_file_sync(
     items: Vec<String>,
     config: kreuzberg::ExtractionConfig,
@@ -2189,6 +2350,34 @@ pub fn batch_extract_file_sync(
     .map_err(|e| e.to_string())
 }
 
+/// Extract content from multiple files concurrently.
+///
+/// This function processes multiple files in parallel, automatically managing
+/// concurrency to prevent resource exhaustion. The concurrency limit can be
+/// configured via `ExtractionConfig.max_concurrent_extractions` or defaults
+/// to `(num_cpus * 1.5).ceil()`.
+///
+/// Each file can optionally specify a `FileExtractionConfig` that overrides specific
+/// fields from the batch-level `config`. Pass `null` for a file to use the batch defaults.
+/// Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
+/// taken from the batch-level `config`.
+///
+///   config to use the batch-level defaults for that file.
+/// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
+///
+/// **Returns:**
+///
+/// A vector of `ExtractionResult` in the same order as the input items.
+///
+/// **Errors:**
+///
+/// Individual file errors are captured in the result metadata. System errors
+/// (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
+///
+/// Simple usage with no per-file overrides:
+///
+///
+/// Per-file configuration overrides:
 pub async fn batch_extract_file(
     items: Vec<String>,
     config: kreuzberg::ExtractionConfig,
@@ -2205,48 +2394,120 @@ pub async fn batch_extract_file(
     .map_err(|e| e.to_string())
 }
 
+/// Validates whether a field name is in the known formats registry.
+///
+/// This uses a pre-built hash set for O(1) lookups instead of linear search,
+/// providing significant performance improvements for repeated validations.
+///
+/// **Returns:**
+///
+/// `true` if the field is in KNOWN_FORMATS, `false` otherwise.
 pub fn is_valid_format_field(field: String) -> bool {
     kreuzberg::is_valid_format_field(&field) as bool
 }
 
+/// Validate that a MIME type is supported.
+///
+/// **Returns:**
+///
+/// The validated MIME type (may be normalized).
+///
+/// **Errors:**
+///
+/// Returns `KreuzbergError.UnsupportedFormat` if not supported.
 pub fn validate_mime_type(mime_type: String) -> Result<String, String> {
     kreuzberg::validate_mime_type(&mime_type)
         .map(|v| v.to_string())
         .map_err(|e| e.to_string())
 }
 
+/// Detect or validate MIME type.
+///
+/// If `mime_type` is provided, validates it. Otherwise, detects from `path`.
+///
+/// **Returns:**
+///
+/// The validated MIME type string.
 pub fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> Result<String, String> {
     kreuzberg::detect_or_validate(path.as_deref(), mime_type.as_deref())
         .map(|v| v.to_string())
         .map_err(|e| e.to_string())
 }
 
+/// Detect MIME type from raw file bytes.
+///
+/// Uses magic byte signatures to detect file type from content.
+/// Falls back to `infer` crate for comprehensive detection.
+///
+/// For ZIP-based files, inspects contents to distinguish Office Open XML
+/// formats (DOCX, XLSX, PPTX) from plain ZIP archives.
+///
+/// **Returns:**
+///
+/// The detected MIME type string.
+///
+/// **Errors:**
+///
+/// Returns `KreuzbergError.UnsupportedFormat` if MIME type cannot be determined.
 pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String> {
     kreuzberg::detect_mime_type_from_bytes(&content)
         .map(|v| v.to_string())
         .map_err(|e| e.to_string())
 }
 
+/// Get file extensions for a given MIME type.
+///
+/// Returns all known file extensions that map to the specified MIME type.
+///
+/// **Returns:**
+///
+/// A vector of file extensions (without leading dot) for the MIME type.
 pub fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String> {
     kreuzberg::get_extensions_for_mime(&mime_type)
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
 }
 
+/// List all supported document formats.
+///
+/// Returns a list of all file extensions and their corresponding MIME types
+/// that Kreuzberg can process. Derived from the centralized `FORMATS` registry.
+///
+/// The list is sorted alphabetically by file extension.
 pub fn list_supported_formats() -> Vec<kreuzberg::SupportedFormat> {
     kreuzberg::list_supported_formats()
 }
 
+/// Clear the processor cache (primarily for testing when registry changes).
 pub fn clear_processor_cache() -> Result<(), String> {
     kreuzberg::core::pipeline::clear_processor_cache()
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Transform an extraction result into semantic elements.
+///
+/// This function takes a reference to an ExtractionResult and generates
+/// a vector of Element structs representing semantic blocks in the document.
+/// It detects content sections, list items, page breaks, and other structural
+/// elements to create an Unstructured-compatible element-based output.
+///
+/// Handles:
+/// - PDF hierarchy → Title/Heading elements
+/// - Multi-page documents with correct page numbers
+/// - Table and Image extraction
+/// - PageBreak interleaving
+/// - Bounding box coordinates
+/// - Paragraph detection for NarrativeText
+///
+/// **Returns:**
+///
+/// A vector of Elements with proper semantic types and metadata.
 pub fn transform_extraction_result_to_elements(result: kreuzberg::ExtractionResult) -> Vec<kreuzberg::Element> {
     kreuzberg::extraction::transform::transform_extraction_result_to_elements(&result)
 }
 
+/// Extract email content from either .eml or .msg format
 pub fn extract_email_content(
     data: Vec<u8>,
     mime_type: String,
@@ -2257,6 +2518,32 @@ pub fn extract_email_content(
         .map_err(|e| e.to_string())
 }
 
+/// Converts a 2D vector of cell strings into a GitHub-Flavored Markdown table.
+///
+/// # Behavior
+///
+/// - The first row is treated as the header row
+/// - A separator row is inserted after the header
+/// - Pipe characters (`|`) in cell content are automatically escaped with backslash
+/// - Irregular tables (rows with varying column counts) are padded with empty cells to match the header
+/// - Returns an empty string for empty input
+///
+/// **Returns:**
+///
+/// A `String` containing the GFM markdown table representation
+///
+/// Converts a 2D vector of cell strings into plain text with tab-separated columns.
+///
+/// # Behavior
+///
+/// - Rows are separated by newlines
+/// - Cells within a row are separated by tab characters
+/// - No pipe delimiters or separator rows (unlike markdown tables)
+/// - Returns an empty string for empty input
+///
+/// **Returns:**
+///
+/// A `String` containing the plain text table representation
 pub fn cells_to_text(cells: Vec<Vec<String>>) -> String {
     kreuzberg::extraction::cells_to_text(&cells).to_string()
 }
@@ -2265,12 +2552,22 @@ pub fn cells_to_markdown(cells: Vec<Vec<String>>) -> String {
     kreuzberg::extraction::cells_to_markdown(&cells).to_string()
 }
 
+/// Render djot content to HTML.
+///
+/// This function takes djot source text and renders it to HTML using jotdown's
+/// built-in HTML renderer.
+///
+/// **Returns:**
+///
+/// A `Result` containing the rendered HTML string
 pub fn djot_to_html(djot_source: String) -> Result<String, String> {
     kreuzberg::extractors::djot_format::djot_to_html(&djot_source)
         .map(|v| v.to_string())
         .map_err(|e| e.to_string())
 }
 
+/// Deduplicate a list of text strings while preserving order.
+/// Adjacent duplicates and near-duplicates are removed.
 pub fn dedup_text(texts: Vec<String>) -> Vec<String> {
     kreuzberg::extractors::iwork::dedup_text(texts)
         .into_iter()
@@ -2278,96 +2575,169 @@ pub fn dedup_text(texts: Vec<String>) -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
+/// Normalize whitespace in a string.
+///
+/// - Collapses multiple consecutive spaces/tabs into a single space
+/// - Preserves single newlines (paragraph breaks from \par)
+/// - Collapses multiple consecutive newlines into a double newline
+/// - Trims leading/trailing whitespace from each line
+/// - Trims leading/trailing blank lines
 pub fn normalize_whitespace(s: String) -> String {
     kreuzberg::extractors::rtf::normalize_whitespace(&s).to_string()
 }
 
+/// Register all built-in extractors with the global registry.
+///
+/// This function should be called once at application startup to register
+/// the default extractors (PlainText, Markdown, XML, etc.).
+///
+/// **Note:** This is called automatically on first extraction operation.
+/// Explicit calling is optional.
 pub fn register_default_extractors() -> Result<(), String> {
     kreuzberg::extractors::register_default_extractors()
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Unregister a document extractor by name.
 pub fn unregister_extractor(name: String) -> Result<(), String> {
     kreuzberg::plugins::unregister_extractor(&name)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// List names of all registered document extractors.
 pub fn list_extractors() -> Result<Vec<String>, String> {
     kreuzberg::plugins::list_extractors()
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
 }
 
+/// Remove all registered document extractors.
 pub fn clear_extractors() -> Result<(), String> {
     kreuzberg::plugins::clear_extractors()
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Unregister an OCR backend by name.
+///
+/// Removes the OCR backend from the global registry and calls its `shutdown()` method.
+///
+/// **Returns:**
+///
+/// - `Ok(())` if the backend was unregistered or didn't exist
+/// - `Err(...)` if the shutdown method failed
 pub fn unregister_ocr_backend(name: String) -> Result<(), String> {
     kreuzberg::plugins::unregister_ocr_backend(&name)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// List all registered OCR backends.
+///
+/// Returns the names of all OCR backends currently registered in the global registry.
+///
+/// **Returns:**
+///
+/// A vector of OCR backend names.
 pub fn list_ocr_backends() -> Result<Vec<String>, String> {
     kreuzberg::plugins::list_ocr_backends()
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
 }
 
+/// Clear all OCR backends from the global registry.
+///
+/// Removes all OCR backends and calls their `shutdown()` methods.
+///
+/// **Returns:**
+///
+/// - `Ok(())` if all backends were cleared successfully
+/// - `Err(...)` if any shutdown method failed
 pub fn clear_ocr_backends() -> Result<(), String> {
     kreuzberg::plugins::clear_ocr_backends()
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// List all registered post-processor names.
+///
+/// Returns a vector of all post-processor names currently registered in the
+/// global registry.
+///
+/// **Returns:**
+///
+/// - `Ok(Vec<String>)` - Vector of post-processor names
+/// - `Err(...)` if the registry lock is poisoned
 pub fn list_post_processors() -> Result<Vec<String>, String> {
     kreuzberg::plugins::list_post_processors()
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
 }
 
+/// Unregister a renderer by name.
 pub fn unregister_renderer(name: String) -> Result<(), String> {
     kreuzberg::plugins::unregister_renderer(&name)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// List names of all registered renderers.
 pub fn list_renderers() -> Result<Vec<String>, String> {
     kreuzberg::plugins::list_renderers()
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
 }
 
+/// Remove all registered renderers.
 pub fn clear_renderers() -> Result<(), String> {
     kreuzberg::plugins::clear_renderers()
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// List names of all registered validators.
 pub fn list_validators() -> Result<Vec<String>, String> {
     kreuzberg::plugins::list_validators()
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
 }
 
+/// Remove all registered validators.
 pub fn clear_validators() -> Result<(), String> {
     kreuzberg::plugins::clear_validators()
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Sanitize a file path to return only the filename (no directory).
+///
+/// Prevents PII from appearing in traces.
 pub fn sanitize_filename(path: String) -> String {
     kreuzberg::telemetry::conventions::sanitize_filename(std::path::Path::new(&path)).to_string()
 }
 
+/// Sanitize a file path to return only the filename.
+///
+/// Prevents PII (personally identifiable information) from appearing in
+/// traces by only recording filenames instead of full paths.
 pub fn sanitize_path(path: String) -> String {
     kreuzberg::telemetry::spans::sanitize_path(std::path::Path::new(&path)).to_string()
 }
 
+/// Validates bytes as UTF-8 without conversion to string slice.
+///
+/// Returns `true` if the bytes represent valid UTF-8, `false` otherwise.
+/// This is useful when you only need to check validity without constructing a string.
+///
+/// **Returns:**
+///
+/// `true` if valid UTF-8, `false` otherwise.
+///
+/// # Performance
+///
+/// This function is optimized for early exit on invalid sequences.
 pub fn is_valid_utf8(bytes: Vec<u8>) -> bool {
     kreuzberg::text::utf8_validation::is_valid_utf8(&bytes) as bool
 }
@@ -2376,6 +2746,19 @@ pub fn clean_extracted_text(text: String) -> String {
     kreuzberg::text::quality::clean_extracted_text(&text).to_string()
 }
 
+/// Reduces token count in text while preserving meaning and structure.
+///
+/// This function removes stopwords, redundancy, and applies compression techniques
+/// based on the specified reduction level. Supports 64 languages with automatic
+/// stopword removal and optional semantic clustering.
+///
+/// **Returns:**
+///
+/// Returns the reduced text with preserved structure (markdown, code blocks).
+///
+/// **Errors:**
+///
+/// Returns an error if the language hint is invalid or stopwords cannot be loaded.
 pub fn reduce_tokens(
     text: String,
     config: kreuzberg::TokenReductionConfig,
@@ -2386,6 +2769,19 @@ pub fn reduce_tokens(
         .map_err(|e| e.to_string())
 }
 
+/// Reduces token count for multiple texts efficiently using parallel processing.
+///
+/// This function processes multiple texts in parallel using Rayon, providing
+/// significant performance improvements for batch operations. All texts use the
+/// same configuration and language hint for consistency.
+///
+/// **Returns:**
+///
+/// Returns a vector of reduced texts in the same order as the input.
+///
+/// **Errors:**
+///
+/// Returns an error if the language hint is invalid or stopwords cannot be loaded.
 pub fn batch_reduce_tokens(
     texts: Vec<String>,
     config: kreuzberg::TokenReductionConfig,
@@ -2396,74 +2792,118 @@ pub fn batch_reduce_tokens(
         .map_err(|e| e.to_string())
 }
 
+/// Create a bold annotation for the given byte range.
 pub fn bold(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::bold(start as u32, end as u32)
 }
 
+/// Create an italic annotation for the given byte range.
 pub fn italic(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::italic(start as u32, end as u32)
 }
 
+/// Create an underline annotation for the given byte range.
 pub fn underline(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::underline(start as u32, end as u32)
 }
 
+/// Create a link annotation for the given byte range.
 pub fn link(start: i64, end: i64, url: String, title: Option<String>) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::link(start as u32, end as u32, &url, title.as_deref())
 }
 
+/// Create a code (inline) annotation for the given byte range.
 pub fn code(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::code(start as u32, end as u32)
 }
 
+/// Create a strikethrough annotation for the given byte range.
 pub fn strikethrough(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::strikethrough(start as u32, end as u32)
 }
 
+/// Create a subscript annotation for the given byte range.
 pub fn subscript(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::subscript(start as u32, end as u32)
 }
 
+/// Create a superscript annotation for the given byte range.
 pub fn superscript(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::superscript(start as u32, end as u32)
 }
 
+/// Create a font size annotation for the given byte range.
 pub fn font_size(start: i64, end: i64, value: String) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::font_size(start as u32, end as u32, &value)
 }
 
+/// Create a color annotation for the given byte range.
 pub fn color(start: i64, end: i64, value: String) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::color(start as u32, end as u32, &value)
 }
 
+/// Create a highlight annotation for the given byte range.
 pub fn highlight(start: i64, end: i64) -> kreuzberg::TextAnnotation {
     kreuzberg::builder::highlight(start as u32, end as u32)
 }
 
+/// Classify a URL string into the appropriate `UriKind`.
+///
+/// - `mailto:` → `Email`
+/// - `#` prefix → `Anchor`
+/// - everything else → `Hyperlink`
 pub fn classify_uri(url: String) -> kreuzberg::UriKind {
     kreuzberg::classify_uri(&url)
 }
 
+/// Decode raw bytes into UTF-8, using heuristics and fallback encodings when necessary.
+///
+/// The function prefers an explicit `encoding`, falls back to the cached guess, probes
+/// an encoding detector, and finally tries a small curated list before returning a
+/// mojibake-cleaned string.
 pub fn safe_decode(byte_data: Vec<u8>, encoding: Option<String>) -> String {
     kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref()).to_string()
 }
 
+/// Estimate how trustworthy a decoded string is on a 0.0–1.0 scale.
+///
+/// Scores close to 1.0 indicate mostly printable characters, whereas lower scores
+/// point to mojibake, control characters, or suspicious character mixes.
 pub fn calculate_text_confidence(text: String) -> f64 {
     kreuzberg::utils::calculate_text_confidence(&text) as f64
 }
 
+/// Create a pre-configured string buffer pool for batch processing.
+///
+/// **Returns:**
+///
+/// A pool configured for text accumulation with reasonable defaults.
 pub fn create_string_buffer_pool(pool_size: i64, buffer_capacity: i64) -> kreuzberg::utils::pool::StringBufferPool {
     kreuzberg::utils::pool::create_string_buffer_pool(pool_size as usize, buffer_capacity as usize)
 }
 
+/// Create a pre-configured byte buffer pool for batch processing.
+///
+/// **Returns:**
+///
+/// A pool configured for binary data handling with reasonable defaults.
 pub fn create_byte_buffer_pool(pool_size: i64, buffer_capacity: i64) -> kreuzberg::utils::pool::ByteBufferPool {
     kreuzberg::utils::pool::create_byte_buffer_pool(pool_size as usize, buffer_capacity as usize)
 }
 
+/// Generate OpenAPI JSON schema.
+///
+/// Returns the complete OpenAPI 3.1 specification as a JSON string.
 pub fn openapi_json() -> String {
     kreuzberg::api::openapi::openapi_json().to_string()
 }
 
+/// Start the API server with default host and port.
+///
+/// Defaults: host = "127.0.0.1", port = 8000
+///
+/// Uses config file discovery (searches current/parent directories for kreuzberg.toml/yaml/json).
+/// Validates plugins at startup to help diagnose configuration issues.
 pub async fn serve_default() -> Result<(), String> {
     kreuzberg::api::serve_default()
         .await
@@ -2471,6 +2911,14 @@ pub async fn serve_default() -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Split text into chunks with optional page boundary tracking.
+///
+/// This is the primary API function for chunking text. It supports both plain text
+/// and Markdown with configurable chunk size, overlap, and page boundary mapping.
+///
+/// **Returns:**
+///
+/// A ChunkingResult containing all chunks and their metadata.
 pub fn chunk_text(
     text: String,
     config: kreuzberg::ChunkingConfig,
@@ -2481,6 +2929,11 @@ pub fn chunk_text(
         .map_err(|e| e.to_string())
 }
 
+/// Chunk text with an optional separate markdown source for heading context resolution.
+///
+/// When `heading_source` is provided, it is used instead of `text` for building the
+/// heading map. This is needed when `text` is plain text (no markdown headings) but
+/// the original document had headings that were stripped during rendering.
 pub fn chunk_text_with_heading_source(
     text: String,
     config: kreuzberg::ChunkingConfig,
@@ -2497,6 +2950,18 @@ pub fn chunk_text_with_heading_source(
     .map_err(|e| e.to_string())
 }
 
+/// Batch process multiple texts with the same configuration.
+///
+/// This convenience function applies the same chunking configuration to multiple
+/// texts in sequence.
+///
+/// **Returns:**
+///
+/// A vector of ChunkingResult objects, one per input text.
+///
+/// **Errors:**
+///
+/// Returns an error if chunking any individual text fails.
 pub fn chunk_texts_batch(
     texts: Vec<String>,
     config: kreuzberg::ChunkingConfig,
@@ -2506,6 +2971,11 @@ pub fn chunk_texts_batch(
         .map_err(|e| e.to_string())
 }
 
+/// Split text into semantically coherent chunks.
+///
+/// Splits text into fine-grained segments, detects structural (and optionally
+/// embedding-based) topic boundaries, then merges segments into chunks that
+/// respect those boundaries and the configured size budget.
 pub fn chunk_semantic(
     text: String,
     config: kreuzberg::ChunkingConfig,
@@ -2516,6 +2986,7 @@ pub fn chunk_semantic(
         .map_err(|e| e.to_string())
 }
 
+/// L2-normalize a vector.
 pub fn normalize(v: Vec<f64>) -> Vec<f64> {
     kreuzberg::embeddings::engine::normalize(v.iter().map(|x| *x as f32).collect::<Vec<_>>().as_slice())
         .into_iter()
@@ -2523,10 +2994,12 @@ pub fn normalize(v: Vec<f64>) -> Vec<f64> {
         .collect::<Vec<_>>()
 }
 
+/// Get a preset by name.
 pub fn get_preset(name: String) -> Option<String> {
     kreuzberg::get_preset(&name).map(|v| format!("{:?}", v))
 }
 
+/// List all available preset names.
 pub fn list_presets() -> Vec<String> {
     kreuzberg::list_presets()
         .into_iter()
@@ -2534,18 +3007,36 @@ pub fn list_presets() -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
+/// Eagerly download and cache an embedding model without returning the handle.
+///
+/// This triggers the same download and initialization as `get_or_init_engine`
+/// but discards the result, making it suitable for cache-warming scenarios
+/// where the caller doesn't need to use the model immediately.
+///
+/// **Note**: This function downloads AND initializes the ONNX model, which
+/// requires ONNX Runtime and uses significant memory. For download-only
+/// scenarios (e.g., init containers), use `download_model` instead.
 pub fn warm_model(model_type: kreuzberg::EmbeddingModelType, cache_dir: Option<String>) -> Result<(), String> {
     kreuzberg::warm_model(&model_type, cache_dir.map(std::path::PathBuf::from))
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Download an embedding model's files without initializing ONNX Runtime.
+///
+/// Downloads the model files (ONNX model, tokenizer, config) from HuggingFace
+/// to the cache directory. Subsequent calls to `warm_model` or
+/// `get_or_init_engine` will find the files cached and skip the download step.
+///
+/// This is ideal for init containers or CI environments where you want to
+/// pre-populate the cache without loading models into memory.
 pub fn download_model(model_type: kreuzberg::EmbeddingModelType, cache_dir: Option<String>) -> Result<(), String> {
     kreuzberg::download_model(&model_type, cache_dir.map(std::path::PathBuf::from))
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Calculate optimal DPI with min/max constraints
 pub fn calculate_optimal_dpi(
     page_width: f64,
     page_height: f64,
@@ -2564,6 +3055,10 @@ pub fn calculate_optimal_dpi(
     ) as i64
 }
 
+/// Detect languages in text using whatlang.
+///
+/// Returns a list of detected language codes (ISO 639-3 format).
+/// Returns `null` if no languages could be detected with sufficient confidence.
 pub fn detect_languages(
     text: String,
     config: kreuzberg::LanguageDetectionConfig,
@@ -2573,16 +3068,39 @@ pub fn detect_languages(
         .map_err(|e| e.to_string())
 }
 
+/// Extract keywords from text using the specified algorithm.
+///
+/// This is the unified entry point for keyword extraction. The algorithm
+/// used is determined by `config.algorithm`.
+///
+/// **Returns:**
+///
+/// A vector of keywords sorted by relevance (highest score first).
+///
+/// **Errors:**
+///
+/// Returns an error if:
+/// - The specified algorithm feature is not enabled
+/// - Keyword extraction fails
 pub fn extract_keywords(text: String, config: kreuzberg::KeywordConfig) -> Result<Vec<kreuzberg::Keyword>, String> {
     kreuzberg::extract_keywords(&text, &config)
         .map(|v| v)
         .map_err(|e| e.to_string())
 }
 
+/// Compute a blake3 hash string from input data.
+///
+/// Returns a 32-character hex string (128 bits of blake3 output).
 pub fn compute_hash(data: String) -> String {
     kreuzberg::ocr::compute_hash(&data).to_string()
 }
 
+/// Render a single PDF page to a PNG-encoded byte buffer.
+///
+/// **Errors:**
+///
+/// Returns an error if the PDF is invalid, the page index is out of bounds,
+/// or if the page fails to render.
 pub fn render_pdf_page_to_png(
     pdf_bytes: Vec<u8>,
     page_index: i64,
@@ -2605,12 +3123,17 @@ pub fn extract_text_from_pdf(pdf_bytes: Vec<u8>) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Serialize an `ExtractionResult` to TOON (Token-Oriented Object Notation).
+///
+/// TOON is a token-efficient alternative to JSON for LLM prompts.
+/// Losslessly convertible to/from JSON but uses fewer tokens.
 pub fn serialize_to_toon(result: kreuzberg::ExtractionResult) -> Result<String, String> {
     kreuzberg::serialize_to_toon(&result)
         .map(|v| v.to_string())
         .map_err(|e| e.to_string())
 }
 
+/// Serialize an `ExtractionResult` to pretty-printed JSON.
 pub fn serialize_to_json(result: kreuzberg::ExtractionResult) -> Result<String, String> {
     kreuzberg::serialize_to_json(&result)
         .map(|v| v.to_string())

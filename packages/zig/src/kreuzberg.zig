@@ -72,21 +72,6 @@ pub const KreuzbergError = error{
 ///
 /// Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
 /// for inference in layout detection and embedding generation.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::AccelerationConfig;
-///
-/// // Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere
-/// let config = AccelerationConfig::default();
-///
-/// // Force CPU only
-/// let config = AccelerationConfig {
-///     provider: kreuzberg::ExecutionProviderType::Cpu,
-///     ..Default::default()
-/// };
-/// ```
 pub const AccelerationConfig = struct {
     provider: ExecutionProviderType,
     device_id: u32,
@@ -99,7 +84,7 @@ pub const AccelerationConfig = struct {
 /// results. Applies across all extractors (PDF, DOCX, RTF, ODT, HTML, etc.)
 /// with format-specific implementation.
 ///
-/// When `None` on `ExtractionConfig`, each extractor uses its current
+/// When `null` on `ExtractionConfig`, each extractor uses its current
 /// default behavior unchanged.
 pub const ContentFilterConfig = struct {
     include_headers: bool,
@@ -117,18 +102,6 @@ pub const EmailConfig = struct {
 ///
 /// This struct contains all configuration options for the extraction process.
 /// It can be loaded from TOML, YAML, or JSON files, or created programmatically.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// // Create with defaults
-/// let config = ExtractionConfig::default();
-///
-/// // Load from TOML file
-/// // let config = ExtractionConfig::from_toml_file("kreuzberg.toml")?;
-/// ```
 pub const ExtractionConfig = struct {
     use_cache: bool,
     enable_quality_processing: bool,
@@ -166,31 +139,19 @@ pub const ExtractionConfig = struct {
 
 /// Per-file extraction configuration overrides for batch processing.
 ///
-/// All fields are `Option<T>` — `None` means "use the batch-level default."
-/// This type is used with [`crate::batch_extract_file`] and
-/// [`crate::batch_extract_bytes`] to allow heterogeneous
+/// All fields are `Option<T>` — `null` means "use the batch-level default."
+/// This type is used with `crate.batch_extract_file` and
+/// `crate.batch_extract_bytes` to allow heterogeneous
 /// extraction settings within a single batch.
 ///
 /// # Excluded Fields
 ///
-/// The following [`super::ExtractionConfig`] fields are batch-level only and
+/// The following `super.ExtractionConfig` fields are batch-level only and
 /// cannot be overridden per file:
 /// - `max_concurrent_extractions` — controls batch parallelism
 /// - `use_cache` — global caching policy
 /// - `acceleration` — shared ONNX execution provider
 /// - `security_limits` — global archive security policy
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::FileExtractionConfig;
-///
-/// // Override just OCR forcing for a specific file
-/// let config = FileExtractionConfig {
-///     force_ocr: Some(true),
-///     ..Default::default()
-/// };
-/// ```
 pub const FileExtractionConfig = struct {
     enable_quality_processing: ?bool,
     ocr: ?OcrConfig,
@@ -242,22 +203,10 @@ pub const LanguageDetectionConfig = struct {
 
 /// Configuration for styled HTML output.
 ///
-/// When set on [`ExtractionConfig::html_output`] alongside
-/// `output_format = OutputFormat::Html`, the pipeline builds a
-/// [`StyledHtmlRenderer`](crate::rendering::StyledHtmlRenderer) instead of
+/// When set on `ExtractionConfig.html_output` alongside
+/// `output_format = OutputFormat.Html`, the pipeline builds a
+/// `StyledHtmlRenderer` instead of
 /// the plain comrak-based renderer.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::core::config::{HtmlOutputConfig, HtmlTheme};
-///
-/// let config = HtmlOutputConfig {
-///     theme: HtmlTheme::GitHub,
-///     css: Some(".kb-p { font-size: 1.1rem; }".to_string()),
-///     ..Default::default()
-/// };
-/// ```
 pub const HtmlOutputConfig = struct {
     css: ?[:0]const u8,
     css_file: ?[:0]const u8,
@@ -269,7 +218,7 @@ pub const HtmlOutputConfig = struct {
 /// Layout detection configuration.
 ///
 /// Controls layout detection behavior in the extraction pipeline.
-/// When set on [`ExtractionConfig`](super::ExtractionConfig), layout detection
+/// When set on `ExtractionConfig`, layout detection
 /// is enabled for PDF extraction.
 pub const LayoutDetectionConfig = struct {
     confidence_threshold: ?f32,
@@ -282,14 +231,6 @@ pub const LayoutDetectionConfig = struct {
 ///
 /// Each feature (VLM OCR, VLM embeddings, structured extraction) carries
 /// its own `LlmConfig`, allowing different providers per feature.
-///
-/// # Example
-///
-/// ```toml
-/// [structured_extraction.llm]
-/// model = "openai/gpt-4o"
-/// api_key = "sk-..."  # or use KREUZBERG_LLM_API_KEY env var
-/// ```
 pub const LlmConfig = struct {
     model: [:0]const u8,
     api_key: ?[:0]const u8,
@@ -304,23 +245,6 @@ pub const LlmConfig = struct {
 ///
 /// Sends extracted document content to a VLM with a JSON schema,
 /// returning structured data that conforms to the schema.
-///
-/// # Example
-///
-/// ```toml
-/// [structured_extraction]
-/// schema_name = "invoice_data"
-/// strict = true
-///
-/// [structured_extraction.schema]
-/// type = "object"
-/// properties.vendor = { type = "string" }
-/// properties.total = { type = "number" }
-/// required = ["vendor", "total"]
-///
-/// [structured_extraction.llm]
-/// model = "openai/gpt-4o"
-/// ```
 pub const StructuredExtractionConfig = struct {
     schema: [:0]const u8,
     schema_name: [:0]const u8,
@@ -333,7 +257,7 @@ pub const StructuredExtractionConfig = struct {
 /// Quality thresholds for OCR fallback decisions and pipeline quality gating.
 ///
 /// All fields default to the values that match the previous hardcoded behavior,
-/// so `OcrQualityThresholds::default()` preserves existing semantics exactly.
+/// so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 pub const OcrQualityThresholds = struct {
     min_total_non_whitespace: u64,
     min_non_whitespace_per_page: f64,
@@ -393,7 +317,7 @@ pub const OcrConfig = struct {
 /// Page extraction and tracking configuration.
 ///
 /// Controls how pages are extracted, tracked, and represented in the extraction results.
-/// When `None`, page tracking is disabled.
+/// When `null`, page tracking is disabled.
 ///
 /// Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
 /// when page boundaries are available and chunking is configured.
@@ -442,14 +366,7 @@ pub const PostProcessorConfig = struct {
 /// Configures text chunking for document content, including chunk size,
 /// overlap, trimming behavior, and optional embeddings.
 ///
-/// Use `..Default::default()` when constructing to allow for future field additions:
-/// ```rust
-/// # use kreuzberg::ChunkingConfig;
-/// let config = ChunkingConfig {
-///     max_characters: 500,
-///     ..Default::default()
-/// };
-/// ```
+/// Use `..the default constructor` when constructing to allow for future field additions:
 pub const ChunkingConfig = struct {
     max_characters: u64,
     overlap: u64,
@@ -729,25 +646,6 @@ pub const OdtProperties = struct {
 /// # MIME Type Validation
 ///
 /// The `mime_type` parameter is guaranteed to be already validated.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// impl SyncExtractor for PlainTextExtractor {
-///     fn extract_sync(&self, content: &[u8], config: &ExtractionConfig) -> Result<ExtractionResult> {
-///         let text = String::from_utf8_lossy(content).to_string();
-///         Ok(ExtractionResult {
-///             content: text,
-///             mime_type: "text/plain".to_string(),
-///             metadata: Metadata::default(),
-///             tables: vec![],
-///             detected_languages: None,
-///             chunks: None,
-///             images: None,
-///         })
-///     }
-/// }
-/// ```
 pub const SyncExtractor = struct {};
 
 /// Helper struct for validating ZIP archives for security issues.
@@ -755,8 +653,8 @@ pub const ZipBombValidator = struct {};
 
 /// Trait for in-process embedding backend plugins.
 ///
-/// Async to match the convention used by [`crate::plugins::OcrBackend`],
-/// [`crate::plugins::DocumentExtractor`], and [`crate::plugins::PostProcessor`].
+/// Async to match the convention used by `crate.plugins.OcrBackend`,
+/// `crate.plugins.DocumentExtractor`, and `crate.plugins.PostProcessor`.
 /// Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 /// C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 /// equivalent to satisfy the async signature.
@@ -771,9 +669,9 @@ pub const ZipBombValidator = struct {};
 /// # Contract
 ///
 /// - `embed(texts)` MUST return exactly `texts.len()` vectors, each of length
-///   `self.dimensions()`. The dispatcher in [`crate::embeddings::embed_texts`]
+///   `self.dimensions()`. The dispatcher in `crate.embeddings.embed_texts`
 ///   validates this before returning to downstream consumers; a non-conforming
-///   backend surfaces as a `KreuzbergError::Validation`, not a panic.
+///   backend surfaces as a `KreuzbergError.Validation`, not a panic.
 /// - `embed` may be called from any thread. Its future must be `Send`
 ///   (enforced by `async_trait` when `#[async_trait]` is used on non-WASM targets).
 /// - `dimensions()` is called exactly once at registration, immediately after
@@ -783,7 +681,7 @@ pub const ZipBombValidator = struct {};
 ///   afterwards. Later mutations of the backend's reported dimension are not
 ///   observed by kreuzberg — implementations that need to change dimension
 ///   must unregister and re-register.
-/// - `shutdown()` (inherited from [`crate::plugins::Plugin`]) may be invoked
+/// - `shutdown()` (inherited from `crate.plugins.Plugin`) may be invoked
 ///   concurrently with an in-flight `embed()` call. Implementations must
 ///   tolerate this — e.g. by letting in-flight calls finish using resources
 ///   held via the `Arc<dyn EmbeddingBackend>` reference, and only releasing
@@ -791,12 +689,12 @@ pub const ZipBombValidator = struct {};
 ///
 /// # Runtime
 ///
-/// The synchronous [`crate::embed_texts`] entry uses
-/// [`tokio::task::block_in_place`] to await the trait's async `embed`, which
+/// The synchronous `crate.embed_texts` entry uses
+/// `tokio.task.block_in_place` to await the trait's async `embed`, which
 /// requires a multi-thread tokio runtime. Callers running inside a
-/// `current_thread` runtime (e.g. `#[tokio::test]` without `flavor = "multi_thread"`,
-/// or `tokio::runtime::Builder::new_current_thread()`) must use
-/// [`crate::embed_texts_async`] instead, which awaits directly without
+/// `current_thread` runtime (e.g. `#[tokio.test]` without `flavor = "multi_thread"`,
+/// or `tokio.runtime.Builder.new_current_thread()`) must use
+/// `crate.embed_texts_async` instead, which awaits directly without
 /// `block_in_place`.
 pub const EmbeddingBackend = struct {};
 
@@ -824,45 +722,6 @@ pub const EmbeddingBackend = struct {};
 /// # Thread Safety
 ///
 /// Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, DocumentExtractor};
-/// use kreuzberg::{Result, ExtractionConfig};
-/// use kreuzberg::types::internal::InternalDocument;
-/// use async_trait::async_trait;
-/// use std::path::Path;
-///
-/// /// Custom PDF extractor with premium features
-/// struct PremiumPdfExtractor;
-///
-/// impl Plugin for PremiumPdfExtractor {
-///     fn name(&self) -> &str { "premium-pdf" }
-///     fn version(&self) -> String { "2.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl DocumentExtractor for PremiumPdfExtractor {
-///     async fn extract_bytes(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig)
-///         -> Result<InternalDocument> {
-///         // Premium extraction logic with better accuracy
-///         let mut doc = InternalDocument::new("pdf");
-///         // ... populate doc.elements, doc.metadata, etc.
-///         Ok(doc)
-///     }
-///
-///     fn supported_mime_types(&self) -> &[&str] {
-///         &["application/pdf"]
-///     }
-///
-///     fn priority(&self) -> i32 {
-///         100  // Higher than default (50) - will be preferred
-///     }
-/// }
-/// ```
 pub const DocumentExtractor = struct {};
 
 /// Trait for OCR backend plugins.
@@ -875,51 +734,6 @@ pub const DocumentExtractor = struct {};
 /// # Thread Safety
 ///
 /// OCR backends must be thread-safe (`Send + Sync`) to support concurrent processing.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, OcrBackend, OcrBackendType};
-/// use kreuzberg::{Result, OcrConfig};
-/// use async_trait::async_trait;
-/// use std::borrow::Cow;
-/// use std::path::Path;
-/// use kreuzberg::types::{ExtractionResult, Metadata};
-///
-/// struct CustomOcrBackend;
-///
-/// impl Plugin for CustomOcrBackend {
-///     fn name(&self) -> &str { "custom-ocr" }
-///     fn version(&self) -> String { "1.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl OcrBackend for CustomOcrBackend {
-///     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
-///         // Implement OCR logic here
-///         Ok(ExtractionResult {
-///             content: "Extracted text".to_string(),
-///             mime_type: Cow::Borrowed("text/plain"),
-///             ..Default::default()
-///         })
-///     }
-///
-///     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
-///         let bytes = std::fs::read(path)?;
-///         self.process_image(&bytes, config).await
-///     }
-///
-///     fn supports_language(&self, lang: &str) -> bool {
-///         matches!(lang, "eng" | "deu" | "fra")
-///     }
-///
-///     fn backend_type(&self) -> OcrBackendType {
-///         OcrBackendType::Custom
-///     }
-/// }
-/// ```
 pub const OcrBackend = struct {};
 
 /// Trait for post-processor plugins.
@@ -949,42 +763,6 @@ pub const OcrBackend = struct {};
 /// # Thread Safety
 ///
 /// Post-processors must be thread-safe (`Send + Sync`).
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, PostProcessor, ProcessingStage};
-/// use kreuzberg::{Result, ExtractionResult, ExtractionConfig};
-/// use async_trait::async_trait;
-///
-/// /// Add word count metadata to extraction results
-/// struct WordCountProcessor;
-///
-/// impl Plugin for WordCountProcessor {
-///     fn name(&self) -> &str { "word-count" }
-///     fn version(&self) -> String { "1.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl PostProcessor for WordCountProcessor {
-///     async fn process(&self, result: &mut ExtractionResult, config: &ExtractionConfig)
-///         -> Result<()> {
-///         // Count words
-///         let word_count = result.content.split_whitespace().count();
-///
-///         // Add to metadata
-///         result.metadata.additional.insert("word_count".to_string().into(), serde_json::json!(word_count));
-///
-///         Ok(())
-///     }
-///
-///     fn processing_stage(&self) -> ProcessingStage {
-///         ProcessingStage::Early
-///     }
-/// }
-/// ```
 pub const PostProcessor = struct {};
 
 /// Base trait that all plugins must implement.
@@ -995,40 +773,6 @@ pub const PostProcessor = struct {};
 /// # Thread Safety
 ///
 /// All plugins must be `Send + Sync` to support concurrent usage across threads.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::Plugin;
-/// use kreuzberg::Result;
-/// use std::sync::atomic::{AtomicBool, Ordering};
-///
-/// struct MyPlugin {
-///     initialized: AtomicBool,
-/// }
-///
-/// impl Plugin for MyPlugin {
-///     fn name(&self) -> &str {
-///         "my-plugin"
-///     }
-///
-///     fn version(&self) -> String {
-///         "1.0.0".to_string()
-///     }
-///
-///     fn initialize(&self) -> Result<()> {
-///         self.initialized.store(true, Ordering::Release);
-///         println!("Plugin initialized!");
-///         Ok(())
-///     }
-///
-///     fn shutdown(&self) -> Result<()> {
-///         self.initialized.store(false, Ordering::Release);
-///         println!("Plugin shutdown!");
-///         Ok(())
-///     }
-/// }
-/// ```
 pub const Plugin = struct {};
 
 /// Trait for validator plugins.
@@ -1055,41 +799,6 @@ pub const Plugin = struct {};
 /// # Thread Safety
 ///
 /// Validators must be thread-safe (`Send + Sync`).
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::{Plugin, Validator};
-/// use kreuzberg::{Result, ExtractionResult, ExtractionConfig, KreuzbergError};
-/// use async_trait::async_trait;
-///
-/// /// Validate that extracted content has minimum length
-/// struct MinimumLengthValidator {
-///     min_length: usize,
-/// }
-///
-/// impl Plugin for MinimumLengthValidator {
-///     fn name(&self) -> &str { "min-length-validator" }
-///     fn version(&self) -> String { "1.0.0".to_string() }
-///     fn initialize(&self) -> Result<()> { Ok(()) }
-///     fn shutdown(&self) -> Result<()> { Ok(()) }
-/// }
-///
-/// #[async_trait]
-/// impl Validator for MinimumLengthValidator {
-///     async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
-///         -> Result<()> {
-///         if result.content.len() < self.min_length {
-///             return Err(KreuzbergError::validation(format!(
-///                 "Content too short: {} < {} characters",
-///                 result.content.len(),
-///                 self.min_length
-///             )));
-///         }
-///         Ok(())
-///     }
-/// }
-/// ```
 pub const Validator = struct {};
 
 pub const TokenReductionConfig = struct {
@@ -1988,7 +1697,7 @@ pub const StringBufferPool = struct {};
 /// Convenience type alias for a pooled Vec<u8>.
 pub const ByteBufferPool = struct {};
 
-/// A [`tower::Layer`] that wraps each extraction in a semantic tracing span.
+/// A `tower.Layer` that wraps each extraction in a semantic tracing span.
 pub const TracingLayer = struct {};
 
 /// OpenAPI documentation structure.
@@ -2215,7 +1924,7 @@ pub const ChunkingResult = struct {
     chunk_count: u64,
 };
 
-/// A merged chunk produced by [`merge_segments`].
+/// A merged chunk produced by `merge_segments`.
 pub const MergedChunk = struct {
     text: [:0]const u8,
     byte_start: u64,
@@ -2271,23 +1980,6 @@ pub const TessdataManager = struct {};
 ///
 /// Configures PaddleOCR text detection and recognition with multi-language support.
 /// Uses a builder pattern for convenient configuration.
-///
-/// # Examples
-///
-/// ```no_run
-/// use kreuzberg::PaddleOcrConfig;
-///
-/// // Create with default English configuration
-/// let config = PaddleOcrConfig::new("en");
-///
-/// // Create with custom cache directory
-/// let config = PaddleOcrConfig::new("ch")
-///     .with_cache_dir("/path/to/cache".into());
-///
-/// // Enable table detection
-/// let config = PaddleOcrConfig::new("en")
-///     .with_table_detection(true);
-/// ```
 pub const PaddleOcrConfig = struct {
     language: [:0]const u8,
     cache_dir: ?[:0]const u8,
@@ -2683,7 +2375,7 @@ pub const AnnotationKind = union(enum) {
 
 /// Semantic structural classification of a text chunk.
 ///
-/// Assigned by the heuristic classifier in `chunking::classifier`.
+/// Assigned by the heuristic classifier in `chunking.classifier`.
 /// Defaults to `Unknown` when no rule matches.
 /// Designed to be extended in future versions without breaking changes.
 pub const ChunkType = enum {
@@ -2950,25 +2642,9 @@ pub fn validate_cache_key(key: []const u8) bool {
 /// Port must be in the range 1-65535. While ports 1-1023 are privileged and may require
 /// special permissions on some systems, they are still valid port numbers.
 ///
-/// # Arguments
-///
-/// * `port` - The port number to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_port;
-///
-/// assert!(validate_port(8000).is_ok());
-/// assert!(validate_port(80).is_ok());
-/// assert!(validate_port(1).is_ok());
-/// assert!(validate_port(65535).is_ok());
-/// assert!(validate_port(0).is_err());
-/// ```
 pub fn validate_port(port: u16) (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_validate_port(port);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -2980,29 +2656,11 @@ pub fn validate_port(port: u16) (KreuzbergError || error{OutOfMemory})!void {
 /// Validate a host/IP address string for server configuration.
 ///
 /// Accepts valid IPv4 addresses (e.g., "127.0.0.1", "0.0.0.0"), valid IPv6 addresses
-/// (e.g., "::1", "::"), and hostnames (e.g., "localhost", "example.com").
+/// (e.g., ".1", "."), and hostnames (e.g., "localhost", "example.com").
 ///
-/// # Arguments
-///
-/// * `host` - The host/IP address string to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_host;
-///
-/// assert!(validate_host("127.0.0.1").is_ok());
-/// assert!(validate_host("0.0.0.0").is_ok());
-/// assert!(validate_host("::1").is_ok());
-/// assert!(validate_host("::").is_ok());
-/// assert!(validate_host("localhost").is_ok());
-/// assert!(validate_host("example.com").is_ok());
-/// assert!(validate_host("").is_err());
-/// ```
 pub fn validate_host(host: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const host_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3022,25 +2680,9 @@ pub fn validate_host(host: []const u8) (KreuzbergError || error{OutOfMemory})!vo
 /// Accepts valid HTTP/HTTPS URLs (e.g., "https://example.com") or the wildcard "*"
 /// to allow all origins. URLs must start with "http://" or "https://", or be exactly "*".
 ///
-/// # Arguments
-///
-/// * `origin` - The CORS origin URL to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_cors_origin;
-///
-/// assert!(validate_cors_origin("https://example.com").is_ok());
-/// assert!(validate_cors_origin("http://localhost:3000").is_ok());
-/// assert!(validate_cors_origin("*").is_ok());
-/// assert!(validate_cors_origin("not-a-url").is_err());
-/// assert!(validate_cors_origin("ftp://example.com").is_err());
-/// ```
 pub fn validate_cors_origin(origin: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const origin_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3059,23 +2701,9 @@ pub fn validate_cors_origin(origin: []const u8) (KreuzbergError || error{OutOfMe
 ///
 /// Upload size must be greater than 0 (measured in bytes).
 ///
-/// # Arguments
-///
-/// * `size` - The maximum upload size in bytes to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_upload_size;
-///
-/// assert!(validate_upload_size(1024).is_ok());
-/// assert!(validate_upload_size(1_000_000).is_ok());
-/// assert!(validate_upload_size(0).is_err());
-/// ```
 pub fn validate_upload_size(size: u64) (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_validate_upload_size(size);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -3086,23 +2714,9 @@ pub fn validate_upload_size(size: u64) (KreuzbergError || error{OutOfMemory})!vo
 
 /// Validate a binarization method string.
 ///
-/// # Arguments
-///
-/// * `method` - The binarization method to validate (e.g., "otsu", "adaptive", "sauvola")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_binarization_method;
-///
-/// assert!(validate_binarization_method("otsu").is_ok());
-/// assert!(validate_binarization_method("adaptive").is_ok());
-/// assert!(validate_binarization_method("invalid").is_err());
-/// ```
 pub fn validate_binarization_method(method: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const method_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3119,23 +2733,9 @@ pub fn validate_binarization_method(method: []const u8) (KreuzbergError || error
 
 /// Validate a token reduction level string.
 ///
-/// # Arguments
-///
-/// * `level` - The token reduction level to validate (e.g., "off", "light", "moderate")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_token_reduction_level;
-///
-/// assert!(validate_token_reduction_level("off").is_ok());
-/// assert!(validate_token_reduction_level("moderate").is_ok());
-/// assert!(validate_token_reduction_level("extreme").is_err());
-/// ```
 pub fn validate_token_reduction_level(level: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const level_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3152,23 +2752,9 @@ pub fn validate_token_reduction_level(level: []const u8) (KreuzbergError || erro
 
 /// Validate an OCR backend string.
 ///
-/// # Arguments
-///
-/// * `backend` - The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_ocr_backend;
-///
-/// assert!(validate_ocr_backend("tesseract").is_ok());
-/// assert!(validate_ocr_backend("easyocr").is_ok());
-/// assert!(validate_ocr_backend("invalid").is_err());
-/// ```
 pub fn validate_ocr_backend(backend: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const backend_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3188,25 +2774,9 @@ pub fn validate_ocr_backend(backend: []const u8) (KreuzbergError || error{OutOfM
 /// Accepts both 2-letter ISO 639-1 codes (e.g., "en", "de") and
 /// 3-letter ISO 639-3 codes (e.g., "eng", "deu") for broader compatibility.
 ///
-/// # Arguments
-///
-/// * `code` - The language code to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_language_code;
-///
-/// assert!(validate_language_code("en").is_ok());
-/// assert!(validate_language_code("eng").is_ok());
-/// assert!(validate_language_code("de").is_ok());
-/// assert!(validate_language_code("deu").is_ok());
-/// assert!(validate_language_code("invalid").is_err());
-/// ```
 pub fn validate_language_code(code_arg: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const code_arg_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3223,23 +2793,9 @@ pub fn validate_language_code(code_arg: []const u8) (KreuzbergError || error{Out
 
 /// Validate a tesseract Page Segmentation Mode (PSM).
 ///
-/// # Arguments
-///
-/// * `psm` - The PSM value to validate (0-13)
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_tesseract_psm;
-///
-/// assert!(validate_tesseract_psm(3).is_ok());  // Fully automatic
-/// assert!(validate_tesseract_psm(6).is_ok());  // Single block of text
-/// assert!(validate_tesseract_psm(14).is_err()); // Out of range
-/// ```
 pub fn validate_tesseract_psm(psm: i32) (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_validate_tesseract_psm(psm);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -3250,23 +2806,9 @@ pub fn validate_tesseract_psm(psm: i32) (KreuzbergError || error{OutOfMemory})!v
 
 /// Validate a tesseract OCR Engine Mode (OEM).
 ///
-/// # Arguments
-///
-/// * `oem` - The OEM value to validate (0-3)
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_tesseract_oem;
-///
-/// assert!(validate_tesseract_oem(1).is_ok());  // Neural nets (LSTM)
-/// assert!(validate_tesseract_oem(2).is_ok());  // Legacy + LSTM
-/// assert!(validate_tesseract_oem(4).is_err()); // Out of range
-/// ```
 pub fn validate_tesseract_oem(oem: i32) (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_validate_tesseract_oem(oem);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -3283,27 +2825,9 @@ pub fn validate_tesseract_oem(oem: i32) (KreuzbergError || error{OutOfMemory})!v
 /// - "djot" for Djot markup format
 /// - "html" for HTML output
 ///
-/// # Arguments
-///
-/// * `format` - The output format to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_output_format;
-///
-/// assert!(validate_output_format("text").is_ok());
-/// assert!(validate_output_format("plain").is_ok());
-/// assert!(validate_output_format("markdown").is_ok());
-/// assert!(validate_output_format("md").is_ok());
-/// assert!(validate_output_format("djot").is_ok());
-/// assert!(validate_output_format("html").is_ok());
-/// assert!(validate_output_format("json").is_ok());
-/// ```
 pub fn validate_output_format(format: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const format_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3322,25 +2846,9 @@ pub fn validate_output_format(format: []const u8) (KreuzbergError || error{OutOf
 ///
 /// Confidence thresholds should be between 0.0 and 1.0 inclusive.
 ///
-/// # Arguments
-///
-/// * `confidence` - The confidence threshold to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_confidence;
-///
-/// assert!(validate_confidence(0.5).is_ok());
-/// assert!(validate_confidence(0.0).is_ok());
-/// assert!(validate_confidence(1.0).is_ok());
-/// assert!(validate_confidence(1.5).is_err());
-/// assert!(validate_confidence(-0.1).is_err());
-/// ```
 pub fn validate_confidence(confidence: f64) (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_validate_confidence(confidence);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -3353,24 +2861,9 @@ pub fn validate_confidence(confidence: f64) (KreuzbergError || error{OutOfMemory
 ///
 /// DPI should be a positive integer, typically 72-600.
 ///
-/// # Arguments
-///
-/// * `dpi` - The DPI value to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_dpi;
-///
-/// assert!(validate_dpi(96).is_ok());
-/// assert!(validate_dpi(300).is_ok());
-/// assert!(validate_dpi(0).is_err());
-/// assert!(validate_dpi(-1).is_err());
-/// ```
 pub fn validate_dpi(dpi: i32) (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_validate_dpi(dpi);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -3383,25 +2876,9 @@ pub fn validate_dpi(dpi: i32) (KreuzbergError || error{OutOfMemory})!void {
 ///
 /// Checks that max_chars > 0 and max_overlap < max_chars.
 ///
-/// # Arguments
-///
-/// * `max_chars` - The maximum characters per chunk
-/// * `max_overlap` - The maximum overlap between chunks
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_chunking_params;
-///
-/// assert!(validate_chunking_params(1000, 200).is_ok());
-/// assert!(validate_chunking_params(500, 50).is_ok());
-/// assert!(validate_chunking_params(0, 100).is_err()); // max_chars must be > 0
-/// assert!(validate_chunking_params(100, 150).is_err()); // overlap >= max_chars
-/// ```
 pub fn validate_chunking_params(max_chars: u64, max_overlap: u64) (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_validate_chunking_params(max_chars, max_overlap);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -3410,24 +2887,11 @@ pub fn validate_chunking_params(max_chars: u64, max_overlap: u64) (KreuzbergErro
     return;
 }
 
-/// Validate that an [`LlmConfig`](crate::core::config::LlmConfig) has a non-empty model string.
+/// Validate that an `LlmConfig` has a non-empty model string.
 ///
-/// # Arguments
-///
-/// * `model` - The model string to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::core::config_validation::validate_llm_config_model;
-///
-/// assert!(validate_llm_config_model("openai/gpt-4o").is_ok());
-/// assert!(validate_llm_config_model("").is_err());
-/// ```
 pub fn validate_llm_config_model(model: []const u8) (KreuzbergError || error{OutOfMemory})!void {
     const model_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3452,18 +2916,6 @@ pub fn validate_llm_config_model(model: []const u8) (KreuzbergError || error{Out
 ///
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::extract_file_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// let config = ExtractionConfig::default();
-/// let result = extract_file_sync("document.pdf", None, &config)?;
-/// println!("Content: {}", result.content);
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: ExtractionConfig) (KreuzbergError || error{OutOfMemory})!ExtractionResult {
     const path_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3491,19 +2943,6 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: Extra
 ///
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::extract_bytes_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-///
-/// let config = ExtractionConfig::default();
-/// let bytes = b"Hello, world!";
-/// let result = extract_bytes_sync(bytes, "text/plain", &config)?;
-/// println!("Content: {}", result.content);
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: ExtractionConfig) (KreuzbergError || error{OutOfMemory})!ExtractionResult {
     const mime_type_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3522,23 +2961,6 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: Ex
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_file_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-/// use kreuzberg::FileExtractionConfig;
-/// use std::path::PathBuf;
-///
-/// let config = ExtractionConfig::default();
-/// let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
-///     ("doc1.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-///     ("doc2.pdf".into(), None),
-/// ];
-/// let results = batch_extract_file_sync(items, &config)?;
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 pub fn batch_extract_file_sync(items: []const u8, config: ExtractionConfig) (KreuzbergError || error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
     const items_z: [*:0]u8 = try std.fmt.allocPrintZ(
@@ -3565,23 +2987,6 @@ pub fn batch_extract_file_sync(items: []const u8, config: ExtractionConfig) (Kre
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
 /// that iterates through items and calls `extract_bytes_sync()`.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_bytes_sync;
-/// use kreuzberg::core::config::ExtractionConfig;
-/// use kreuzberg::FileExtractionConfig;
-///
-/// let config = ExtractionConfig::default();
-/// let items = vec![
-///     (b"content".to_vec(), "text/plain".to_string(), None),
-///     (b"other".to_vec(), "text/plain".to_string(),
-///      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-/// ];
-/// let results = batch_extract_bytes_sync(items, &config)?;
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 pub fn batch_extract_bytes_sync(items: []const u8, config: ExtractionConfig) (KreuzbergError || error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
     const items_z: [*:0]u8 = try std.fmt.allocPrintZ(
@@ -3607,23 +3012,9 @@ pub fn batch_extract_bytes_sync(items: []const u8, config: ExtractionConfig) (Kr
 /// This uses a pre-built hash set for O(1) lookups instead of linear search,
 /// providing significant performance improvements for repeated validations.
 ///
-/// # Arguments
-///
-/// * `field` - The field name to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `true` if the field is in KNOWN_FORMATS, `false` otherwise.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::core::formats::is_valid_format_field;
-///
-/// assert!(is_valid_format_field("title"));
-/// assert!(is_valid_format_field("creation_date"));
-/// assert!(!is_valid_format_field("invalid_field"));
-/// ```
 pub fn is_valid_format_field(field: []const u8) bool {
     const field_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3637,17 +3028,13 @@ pub fn is_valid_format_field(field: []const u8) bool {
 
 /// Validate that a MIME type is supported.
 ///
-/// # Arguments
-///
-/// * `mime_type` - The MIME type to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// The validated MIME type (may be normalized).
 ///
-/// # Errors
+/// **Errors:**
 ///
-/// Returns `KreuzbergError::UnsupportedFormat` if not supported.
+/// Returns `KreuzbergError.UnsupportedFormat` if not supported.
 pub fn validate_mime_type(mime_type: []const u8) (KreuzbergError || error{OutOfMemory})![]u8 {
     const mime_type_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3671,12 +3058,7 @@ pub fn validate_mime_type(mime_type: []const u8) (KreuzbergError || error{OutOfM
 ///
 /// If `mime_type` is provided, validates it. Otherwise, detects from `path`.
 ///
-/// # Arguments
-///
-/// * `path` - Optional path to detect MIME type from
-/// * `mime_type` - Optional explicit MIME type to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// The validated MIME type string.
 pub fn detect_or_validate(path: ?[]const u8, mime_type: ?[]const u8) (KreuzbergError || error{OutOfMemory})![]u8 {
@@ -3712,17 +3094,13 @@ pub fn detect_or_validate(path: ?[]const u8, mime_type: ?[]const u8) (KreuzbergE
 /// For ZIP-based files, inspects contents to distinguish Office Open XML
 /// formats (DOCX, XLSX, PPTX) from plain ZIP archives.
 ///
-/// # Arguments
-///
-/// * `content` - Raw file bytes
-///
-/// # Returns
+/// **Returns:**
 ///
 /// The detected MIME type string.
 ///
-/// # Errors
+/// **Errors:**
 ///
-/// Returns `KreuzbergError::UnsupportedFormat` if MIME type cannot be determined.
+/// Returns `KreuzbergError.UnsupportedFormat` if MIME type cannot be determined.
 pub fn detect_mime_type_from_bytes(content: []const u8) (KreuzbergError || error{OutOfMemory})![]u8 {
     const _result = c.kreuzberg_detect_mime_type_from_bytes(content.ptr, content.len);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -3740,25 +3118,9 @@ pub fn detect_mime_type_from_bytes(content: []const u8) (KreuzbergError || error
 ///
 /// Returns all known file extensions that map to the specified MIME type.
 ///
-/// # Arguments
-///
-/// * `mime_type` - The MIME type to look up
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of file extensions (without leading dot) for the MIME type.
-///
-/// # Example
-///
-/// ```
-/// use kreuzberg::core::mime::get_extensions_for_mime;
-///
-/// let extensions = get_extensions_for_mime("application/pdf").unwrap();
-/// assert_eq!(extensions, vec!["pdf"]);
-///
-/// let doc_extensions = get_extensions_for_mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document").unwrap();
-/// assert!(doc_extensions.contains(&"docx".to_string()));
-/// ```
 pub fn get_extensions_for_mime(mime_type: []const u8) (KreuzbergError || error{OutOfMemory})![]u8 {
     const mime_type_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -3781,19 +3143,9 @@ pub fn get_extensions_for_mime(mime_type: []const u8) (KreuzbergError || error{O
 /// List all supported document formats.
 ///
 /// Returns a list of all file extensions and their corresponding MIME types
-/// that Kreuzberg can process. Derived from the centralized [`FORMATS`] registry.
+/// that Kreuzberg can process. Derived from the centralized `FORMATS` registry.
 ///
 /// The list is sorted alphabetically by file extension.
-///
-/// # Example
-///
-/// ```
-/// use kreuzberg::core::mime::list_supported_formats;
-///
-/// let formats = list_supported_formats();
-/// assert!(!formats.is_empty());
-/// assert!(formats.iter().any(|f| f.extension == "pdf"));
-/// ```
 pub fn list_supported_formats() []u8 {
     const _result = c.kreuzberg_list_supported_formats();
     return blk: {
@@ -3828,11 +3180,7 @@ pub fn clear_processor_cache() (KreuzbergError || error{OutOfMemory})!void {
 /// - Bounding box coordinates
 /// - Paragraph detection for NarrativeText
 ///
-/// # Arguments
-///
-/// * `result` - Reference to the ExtractionResult to transform
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of Elements with proper semantic types and metadata.
 pub fn transform_extraction_result_to_elements(result: ExtractionResult) []u8 {
@@ -3870,28 +3218,9 @@ pub fn extract_email_content(data: []const u8, mime_type: []const u8, fallback_c
 /// - Irregular tables (rows with varying column counts) are padded with empty cells to match the header
 /// - Returns an empty string for empty input
 ///
-/// # Arguments
-///
-/// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A `String` containing the GFM markdown table representation
-///
-/// # Examples
-///
-/// ```
-/// # use kreuzberg::extraction::cells_to_markdown;
-/// let cells = vec![
-///     vec!["Name".to_string(), "Age".to_string()],
-///     vec!["Alice".to_string(), "30".to_string()],
-///     vec!["Bob".to_string(), "25".to_string()],
-/// ];
-///
-/// let markdown = cells_to_markdown(&cells);
-/// assert!(markdown.contains("| Name | Age |"));
-/// assert!(markdown.contains("|------|------|"));
-/// ```
 ///
 /// Converts a 2D vector of cell strings into plain text with tab-separated columns.
 ///
@@ -3902,11 +3231,7 @@ pub fn extract_email_content(data: []const u8, mime_type: []const u8, fallback_c
 /// - No pipe delimiters or separator rows (unlike markdown tables)
 /// - Returns an empty string for empty input
 ///
-/// # Arguments
-///
-/// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A `String` containing the plain text table representation
 pub fn cells_to_text(cells: []const u8) []u8 {
@@ -3948,23 +3273,9 @@ pub fn cells_to_markdown(cells: []const u8) []u8 {
 /// This function takes djot source text and renders it to HTML using jotdown's
 /// built-in HTML renderer.
 ///
-/// # Arguments
-///
-/// * `djot_source` - The djot markup text to render
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A `Result` containing the rendered HTML string
-///
-/// # Example
-///
-/// ```ignore
-/// let djot = "# Hello\n\nThis is *bold* and _italic_.";
-/// let html = djot_to_html(djot)?;
-/// assert!(html.contains("<h1>"));
-/// assert!(html.contains("<strong>"));
-/// assert!(html.contains("<em>"));
-/// ```
 pub fn djot_to_html(djot_source: []const u8) (KreuzbergError || error{OutOfMemory})![]u8 {
     const djot_source_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -4033,17 +3344,6 @@ pub fn normalize_whitespace(s: []const u8) []u8 {
 ///
 /// **Note:** This is called automatically on first extraction operation.
 /// Explicit calling is optional.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::extractors::register_default_extractors;
-///
-/// # fn main() -> kreuzberg::Result<()> {
-/// register_default_extractors()?;
-/// # Ok(())
-/// # }
-/// ```
 pub fn register_default_extractors() (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_register_default_extractors();
     if (c.kreuzberg_last_error_code() != 0) {
@@ -4094,23 +3394,9 @@ pub fn clear_extractors() (KreuzbergError || error{OutOfMemory})!void {
 ///
 /// Returns the names of all OCR backends currently registered in the global registry.
 ///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of OCR backend names.
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::list_ocr_backends;
-///
-/// # tokio_test::block_on(async {
-/// let backends = list_ocr_backends()?;
-/// for name in backends {
-///     println!("Registered OCR backend: {}", name);
-/// }
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// # });
-/// ```
 pub fn list_ocr_backends() (KreuzbergError || error{OutOfMemory})![]u8 {
     const _result = c.kreuzberg_list_ocr_backends();
     if (c.kreuzberg_last_error_code() != 0) {
@@ -4128,21 +3414,10 @@ pub fn list_ocr_backends() (KreuzbergError || error{OutOfMemory})![]u8 {
 ///
 /// Removes all OCR backends and calls their `shutdown()` methods.
 ///
-/// # Returns
+/// **Returns:**
 ///
 /// - `Ok(())` if all backends were cleared successfully
 /// - `Err(...)` if any shutdown method failed
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::clear_ocr_backends;
-///
-/// # tokio_test::block_on(async {
-/// clear_ocr_backends()?;
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// # });
-/// ```
 pub fn clear_ocr_backends() (KreuzbergError || error{OutOfMemory})!void {
     _ = c.kreuzberg_clear_ocr_backends();
     if (c.kreuzberg_last_error_code() != 0) {
@@ -4156,24 +3431,10 @@ pub fn clear_ocr_backends() (KreuzbergError || error{OutOfMemory})!void {
 /// Returns a vector of all post-processor names currently registered in the
 /// global registry.
 ///
-/// # Returns
+/// **Returns:**
 ///
 /// - `Ok(Vec<String>)` - Vector of post-processor names
 /// - `Err(...)` if the registry lock is poisoned
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::plugins::list_post_processors;
-///
-/// # tokio_test::block_on(async {
-/// let processors = list_post_processors()?;
-/// for name in processors {
-///     println!("Registered post-processor: {}", name);
-/// }
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// # });
-/// ```
 pub fn list_post_processors() (KreuzbergError || error{OutOfMemory})![]u8 {
     const _result = c.kreuzberg_list_post_processors();
     if (c.kreuzberg_last_error_code() != 0) {
@@ -4292,11 +3553,7 @@ pub fn sanitize_path(path: []const u8) []u8 {
 /// Returns `true` if the bytes represent valid UTF-8, `false` otherwise.
 /// This is useful when you only need to check validity without constructing a string.
 ///
-/// # Arguments
-///
-/// * `bytes` - The byte slice to validate
-///
-/// # Returns
+/// **Returns:**
 ///
 /// `true` if valid UTF-8, `false` otherwise.
 ///
@@ -4330,31 +3587,13 @@ pub fn clean_extracted_text(text: []const u8) []u8 {
 /// based on the specified reduction level. Supports 64 languages with automatic
 /// stopword removal and optional semantic clustering.
 ///
-/// # Arguments
-///
-/// * `text` - The input text to reduce
-/// * `config` - Configuration specifying reduction level and options
-/// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// Returns the reduced text with preserved structure (markdown, code blocks).
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::text::token_reduction::{reduce_tokens, TokenReductionConfig, ReductionLevel};
-///
-/// let text = "This is a simple example text with some stopwords.";
-/// let config = TokenReductionConfig::default();
-/// let reduced = reduce_tokens(text, &config, Some("eng"))?;
-/// println!("Reduced: {}", reduced);
-/// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-/// ```
 pub fn reduce_tokens(text: []const u8, config: TokenReductionConfig, language_hint: ?[]const u8) (KreuzbergError || error{OutOfMemory})![]u8 {
     const text_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -4386,35 +3625,13 @@ pub fn reduce_tokens(text: []const u8, config: TokenReductionConfig, language_hi
 /// significant performance improvements for batch operations. All texts use the
 /// same configuration and language hint for consistency.
 ///
-/// # Arguments
-///
-/// * `texts` - Slice of text references to reduce
-/// * `config` - Configuration specifying reduction level and options
-/// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-///
-/// # Returns
+/// **Returns:**
 ///
 /// Returns a vector of reduced texts in the same order as the input.
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::text::token_reduction::{batch_reduce_tokens, TokenReductionConfig, ReductionLevel};
-///
-/// let texts: Vec<String> = vec![
-///     "This is the first document with some text.".to_string(),
-///     "Here is another document with different content.".to_string(),
-///     "And finally, a third document to process.".to_string(),
-/// ];
-/// let config = TokenReductionConfig::default();
-/// let reduced = batch_reduce_tokens(&texts, &config, Some("eng"))?;
-/// assert_eq!(reduced.len(), 3);
-/// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-/// ```
 pub fn batch_reduce_tokens(texts: []const u8, config: TokenReductionConfig, language_hint: ?[]const u8) (KreuzbergError || error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
     const texts_z: [*:0]u8 = try std.fmt.allocPrintZ(
@@ -4585,24 +3802,9 @@ pub fn calculate_text_confidence(text: []const u8) f64 {
 
 /// Create a pre-configured string buffer pool for batch processing.
 ///
-/// # Arguments
-///
-/// * `pool_size` - Maximum number of buffers to keep in the pool
-/// * `buffer_capacity` - Initial capacity for each buffer in bytes
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A pool configured for text accumulation with reasonable defaults.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::utils::pool::create_string_buffer_pool;
-///
-/// let pool = create_string_buffer_pool(10, 8192);
-/// let mut buffer = pool.acquire().unwrap();
-/// buffer.push_str("content");
-/// ```
 pub fn create_string_buffer_pool(pool_size: u64, buffer_capacity: u64) StringBufferPool {
     const _result = c.kreuzberg_create_string_buffer_pool(pool_size, buffer_capacity);
     return _result;
@@ -4610,24 +3812,9 @@ pub fn create_string_buffer_pool(pool_size: u64, buffer_capacity: u64) StringBuf
 
 /// Create a pre-configured byte buffer pool for batch processing.
 ///
-/// # Arguments
-///
-/// * `pool_size` - Maximum number of buffers to keep in the pool
-/// * `buffer_capacity` - Initial capacity for each buffer in bytes
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A pool configured for binary data handling with reasonable defaults.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::utils::pool::create_byte_buffer_pool;
-///
-/// let pool = create_byte_buffer_pool(10, 65536);
-/// let mut buffer = pool.acquire().unwrap();
-/// buffer.extend_from_slice(b"binary data");
-/// ```
 pub fn create_byte_buffer_pool(pool_size: u64, buffer_capacity: u64) ByteBufferPool {
     const _result = c.kreuzberg_create_byte_buffer_pool(pool_size, buffer_capacity);
     return _result;
@@ -4636,15 +3823,6 @@ pub fn create_byte_buffer_pool(pool_size: u64, buffer_capacity: u64) ByteBufferP
 /// Generate OpenAPI JSON schema.
 ///
 /// Returns the complete OpenAPI 3.1 specification as a JSON string.
-///
-/// # Examples
-///
-/// ```no_run
-/// use kreuzberg::api::openapi::openapi_json;
-///
-/// let schema = openapi_json();
-/// println!("{}", schema);
-/// ```
 pub fn openapi_json() []u8 {
     const _result = c.kreuzberg_openapi_json();
     return blk: {
@@ -4660,34 +3838,9 @@ pub fn openapi_json() []u8 {
 /// This is the primary API function for chunking text. It supports both plain text
 /// and Markdown with configurable chunk size, overlap, and page boundary mapping.
 ///
-/// # Arguments
-///
-/// * `text` - The text to split into chunks
-/// * `config` - Chunking configuration (max size, overlap, type)
-/// * `page_boundaries` - Optional page boundary markers for mapping chunks to pages
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A ChunkingResult containing all chunks and their metadata.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::chunking::{chunk_text, ChunkingConfig, ChunkerType};
-///
-/// # fn example() -> kreuzberg::Result<()> {
-/// let config = ChunkingConfig {
-///     max_characters: 500,
-///     overlap: 50,
-///     trim: true,
-///     chunker_type: ChunkerType::Text,
-///     ..Default::default()
-/// };
-/// let result = chunk_text("Long text...", &config, None)?;
-/// assert!(!result.chunks.is_empty());
-/// # Ok(())
-/// # }
-/// ```
 pub fn chunk_text(text: []const u8, config: ChunkingConfig, page_boundaries: ?[]const u8) (KreuzbergError || error{OutOfMemory})!ChunkingResult {
     const text_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -4746,32 +3899,13 @@ pub fn chunk_text_with_heading_source(text: []const u8, config: ChunkingConfig, 
 /// This convenience function applies the same chunking configuration to multiple
 /// texts in sequence.
 ///
-/// # Arguments
-///
-/// * `texts` - Slice of text strings to chunk
-/// * `config` - Chunking configuration to apply to all texts
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of ChunkingResult objects, one per input text.
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if chunking any individual text fails.
-///
-/// # Examples
-///
-/// ```rust
-/// use kreuzberg::chunking::{chunk_texts_batch, ChunkingConfig};
-///
-/// # fn example() -> kreuzberg::Result<()> {
-/// let config = ChunkingConfig::default();
-/// let texts: Vec<String> = vec!["First text".to_string(), "Second text".to_string()];
-/// let results = chunk_texts_batch(&texts, &config)?;
-/// assert_eq!(results.len(), 2);
-/// # Ok(())
-/// # }
-/// ```
 pub fn chunk_texts_batch(texts: []const u8, config: ChunkingConfig) (KreuzbergError || error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
     const texts_z: [*:0]u8 = try std.fmt.allocPrintZ(
@@ -4867,7 +4001,7 @@ pub fn list_presets() []u8 {
 ///
 /// **Note**: This function downloads AND initializes the ONNX model, which
 /// requires ONNX Runtime and uses significant memory. For download-only
-/// scenarios (e.g., init containers), use [`download_model`] instead.
+/// scenarios (e.g., init containers), use `download_model` instead.
 pub fn warm_model(model_type: EmbeddingModelType, cache_dir: ?[]const u8) (KreuzbergError || error{OutOfMemory})!void {
     const cache_dir_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -4913,28 +4047,7 @@ pub fn calculate_optimal_dpi(page_width: f64, page_height: f64, target_dpi: i32,
 /// Detect languages in text using whatlang.
 ///
 /// Returns a list of detected language codes (ISO 639-3 format).
-/// Returns `None` if no languages could be detected with sufficient confidence.
-///
-/// # Arguments
-///
-/// * `text` - The text to analyze for language detection
-/// * `config` - Optional configuration for language detection
-///
-/// # Example
-///
-/// ```rust
-/// use kreuzberg::language_detection::detect_languages;
-/// use kreuzberg::core::config::LanguageDetectionConfig;
-///
-/// let text = "Hello world! This is English text.";
-/// let config = LanguageDetectionConfig {
-///     enabled: true,
-///     min_confidence: 0.8,
-///     detect_multiple: false,
-/// };
-/// let languages = detect_languages(text, &config).expect("language detection succeeded");
-/// println!("Detected languages: {:?}", languages);
-/// ```
+/// Returns `null` if no languages could be detected with sufficient confidence.
 pub fn detect_languages(text: []const u8, config: LanguageDetectionConfig) (KreuzbergError || error{OutOfMemory})!?[]const [:0]const u8 {
     const text_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -4954,37 +4067,15 @@ pub fn detect_languages(text: []const u8, config: LanguageDetectionConfig) (Kreu
 /// This is the unified entry point for keyword extraction. The algorithm
 /// used is determined by `config.algorithm`.
 ///
-/// # Arguments
-///
-/// * `text` - The text to extract keywords from
-/// * `config` - Keyword extraction configuration
-///
-/// # Returns
+/// **Returns:**
 ///
 /// A vector of keywords sorted by relevance (highest score first).
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if:
 /// - The specified algorithm feature is not enabled
 /// - Keyword extraction fails
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use kreuzberg::keywords::{extract_keywords, KeywordConfig};
-/// let text = "Document intelligence with Rust provides memory safety.";
-/// let config = KeywordConfig::default()
-///     .with_max_keywords(10)
-///     .with_language("en");
-///
-/// let keywords = extract_keywords(text, &config)?;
-///
-/// for keyword in keywords {
-///     println!("{}: {:.3}", keyword.text, keyword.score);
-/// }
-/// # Ok::<(), kreuzberg::KreuzbergError>(())
-/// ```
 pub fn extract_keywords(text: []const u8, config: KeywordConfig) (KreuzbergError || error{OutOfMemory})![]u8 {
     const text_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -5025,23 +4116,10 @@ pub fn compute_hash(data: []const u8) []u8 {
 
 /// Render a single PDF page to a PNG-encoded byte buffer.
 ///
-/// # Errors
+/// **Errors:**
 ///
 /// Returns an error if the PDF is invalid, the page index is out of bounds,
 /// or if the page fails to render.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use kreuzberg::pdf::render_pdf_page_to_png;
-///
-/// # fn example() -> kreuzberg::pdf::error::Result<()> {
-/// let pdf_bytes = std::fs::read("document.pdf")?;
-/// let png = render_pdf_page_to_png(&pdf_bytes, 0, Some(150), None)?;
-/// std::fs::write("page_0.png", png)?;
-/// # Ok(())
-/// # }
-/// ```
 pub fn render_pdf_page_to_png(pdf_bytes: []const u8, page_index: u64, dpi: ?i32, password: ?[]const u8) (KreuzbergError || error{OutOfMemory})![]const u8 {
     const password_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
@@ -5069,7 +4147,7 @@ pub fn extract_text_from_pdf(pdf_bytes: []const u8) (KreuzbergError || error{Out
     };
 }
 
-/// Serialize an [`ExtractionResult`] to TOON (Token-Oriented Object Notation).
+/// Serialize an `ExtractionResult` to TOON (Token-Oriented Object Notation).
 ///
 /// TOON is a token-efficient alternative to JSON for LLM prompts.
 /// Losslessly convertible to/from JSON but uses fewer tokens.
@@ -5086,7 +4164,7 @@ pub fn serialize_to_toon(result: ExtractionResult) (KreuzbergError || error{OutO
     };
 }
 
-/// Serialize an [`ExtractionResult`] to pretty-printed JSON.
+/// Serialize an `ExtractionResult` to pretty-printed JSON.
 pub fn serialize_to_json(result: ExtractionResult) (KreuzbergError || error{OutOfMemory})![]u8 {
     const _result = c.kreuzberg_serialize_to_json(result);
     if (c.kreuzberg_last_error_code() != 0) {
@@ -5361,11 +4439,10 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
             fn thunk(ud: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const image_bytes_slice = image_bytes_ptr[0..image_bytes_len];
-                if (self.process_image(image_bytes_slice, config)) |result| {
-                    _ = result;
+                if (self.process_image(image_bytes_slice, config)) |value| {
+                    _ = value;
                     _ = out_result;
                     unreachable; // complex return: implement manually
-                    return 0;
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5377,11 +4454,10 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         .process_image_file = struct {
             fn thunk(ud: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
-                if (self.process_image_file(path, config)) |result| {
-                    _ = result;
+                if (self.process_image_file(path, config)) |value| {
+                    _ = value;
                     _ = out_result;
                     unreachable; // complex return: implement manually
-                    return 0;
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5393,6 +4469,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         .supports_language = struct {
             fn thunk(ud: ?*anyopaque, lang: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.supports_language(lang);
             }
         }.thunk,
@@ -5400,6 +4477,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         .backend_type = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.backend_type();
             }
         }.thunk,
@@ -5407,6 +4485,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         .supported_languages = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.supported_languages();
             }
         }.thunk,
@@ -5414,6 +4493,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         .supports_table_detection = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.supports_table_detection();
             }
         }.thunk,
@@ -5421,6 +4501,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         .supports_document_processing = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.supports_document_processing();
             }
         }.thunk,
@@ -5428,11 +4509,10 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         .process_document = struct {
             fn thunk(ud: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
-                if (self.process_document(_path, _config)) |result| {
-                    _ = result;
+                if (self.process_document(_path, _config)) |value| {
+                    _ = value;
                     _ = out_result;
                     unreachable; // complex return: implement manually
-                    return 0;
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5707,7 +4787,8 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         .process = struct {
             fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
-                if (self.process(result, config)) |result| {
+                if (self.process(result, config)) |value| {
+                    _ = value;
                     return 0;
                 } else |err| {
                     _ = err;
@@ -5720,6 +4801,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         .processing_stage = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.processing_stage();
             }
         }.thunk,
@@ -5727,6 +4809,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         .should_process = struct {
             fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.should_process(_result, _config);
             }
         }.thunk,
@@ -5734,6 +4817,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         .estimated_duration_ms = struct {
             fn thunk(ud: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) u64 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.estimated_duration_ms(_result);
             }
         }.thunk,
@@ -6034,7 +5118,8 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
         .validate = struct {
             fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
-                if (self.validate(result, config)) |result| {
+                if (self.validate(result, config)) |value| {
+                    _ = value;
                     return 0;
                 } else |err| {
                     _ = err;
@@ -6047,6 +5132,7 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
         .should_validate = struct {
             fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.should_validate(_result, _config);
             }
         }.thunk,
@@ -6054,6 +5140,7 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
         .priority = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.priority();
             }
         }.thunk,
@@ -6167,6 +5254,7 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
         .dimensions = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) usize {
                 const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
                 return self.dimensions();
             }
         }.thunk,
@@ -6174,11 +5262,10 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
         .embed = struct {
             fn thunk(ud: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
-                if (self.embed(texts)) |result| {
-                    _ = result;
+                if (self.embed(texts)) |value| {
+                    _ = value;
                     _ = out_result;
                     unreachable; // complex return: implement manually
-                    return 0;
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
