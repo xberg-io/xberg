@@ -2981,7 +2981,7 @@ mod ffi {
 
     extern "Rust" {
         type OcrBackendBox;
-        fn _alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox>;
+        fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox>;
         fn ocr_backend_call_process_image(
             this: &OcrBackendBox,
             image_bytes: Vec<u8>,
@@ -3006,7 +3006,7 @@ mod ffi {
 
     extern "Rust" {
         type PostProcessorBox;
-        fn _alef_phantom_vec_post_processor() -> Vec<PostProcessorBox>;
+        fn alef_phantom_vec_post_processor() -> Vec<PostProcessorBox>;
         fn post_processor_call_process(
             this: &PostProcessorBox,
             result: ExtractionResult,
@@ -3023,7 +3023,7 @@ mod ffi {
 
     extern "Rust" {
         type ValidatorBox;
-        fn _alef_phantom_vec_validator() -> Vec<ValidatorBox>;
+        fn alef_phantom_vec_validator() -> Vec<ValidatorBox>;
         fn validator_call_validate(
             this: &ValidatorBox,
             result: ExtractionResult,
@@ -3039,7 +3039,7 @@ mod ffi {
 
     extern "Rust" {
         type EmbeddingBackendBox;
-        fn _alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox>;
+        fn alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox>;
         fn embedding_backend_call_dimensions(this: &EmbeddingBackendBox) -> usize;
         fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> Result<String, String>;
     }
@@ -11909,7 +11909,7 @@ pub fn serialize_to_json(result: ExtractionResult) -> Result<String, String> {
 pub struct OcrBackendBox(pub Box<dyn kreuzberg::plugins::OcrBackend + Send + Sync>);
 
 #[doc(hidden)]
-pub fn _alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox> {
+pub fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox> {
     Vec::new()
 }
 
@@ -11990,7 +11990,7 @@ pub fn ocr_backend_call_process_document(
 pub struct PostProcessorBox(pub Box<dyn kreuzberg::plugins::PostProcessor + Send + Sync>);
 
 #[doc(hidden)]
-pub fn _alef_phantom_vec_post_processor() -> Vec<PostProcessorBox> {
+pub fn alef_phantom_vec_post_processor() -> Vec<PostProcessorBox> {
     Vec::new()
 }
 
@@ -12030,7 +12030,7 @@ pub fn post_processor_call_estimated_duration_ms(this: &PostProcessorBox, result
 pub struct ValidatorBox(pub Box<dyn kreuzberg::plugins::Validator + Send + Sync>);
 
 #[doc(hidden)]
-pub fn _alef_phantom_vec_validator() -> Vec<ValidatorBox> {
+pub fn alef_phantom_vec_validator() -> Vec<ValidatorBox> {
     Vec::new()
 }
 
@@ -12057,7 +12057,7 @@ pub fn validator_call_priority(this: &ValidatorBox) -> i32 {
 pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::plugins::EmbeddingBackend + Send + Sync>);
 
 #[doc(hidden)]
-pub fn _alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox> {
+pub fn alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox> {
     Vec::new()
 }
 

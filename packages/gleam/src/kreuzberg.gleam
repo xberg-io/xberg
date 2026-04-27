@@ -4787,6 +4787,182 @@ pub fn serialize_to_json(
 @external(erlang, "Elixir.Kreuzberg.Native", "register_ocr_backend")
 pub fn register_ocr_backend(pid: Dynamic, plugin_name: String) -> Nil
 
+/// Send the `process_image` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "process_image", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("process_image"), args_json, call_id) ->
+/// //       let result = do_process_image(args_json)
+/// //       ocr_backend_process_image_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_process_image_response")
+pub fn ocr_backend_process_image_response(
+  call_id: Dynamic,
+  result: Result(ExtractionResult, KreuzbergError),
+) -> Nil
+
+/// Send the `process_image_file` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "process_image_file", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("process_image_file"), args_json, call_id) ->
+/// //       let result = do_process_image_file(args_json)
+/// //       ocr_backend_process_image_file_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_process_image_file_response")
+pub fn ocr_backend_process_image_file_response(
+  call_id: Dynamic,
+  result: Result(ExtractionResult, KreuzbergError),
+) -> Nil
+
+/// Send the `supports_language` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "supports_language", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("supports_language"), args_json, call_id) ->
+/// //       let result = do_supports_language(args_json)
+/// //       ocr_backend_supports_language_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supports_language_response")
+pub fn ocr_backend_supports_language_response(
+  call_id: Dynamic,
+  result: Result(Bool, String),
+) -> Nil
+
+/// Send the `backend_type` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "backend_type", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("backend_type"), args_json, call_id) ->
+/// //       let result = do_backend_type(args_json)
+/// //       ocr_backend_backend_type_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_backend_type_response")
+pub fn ocr_backend_backend_type_response(
+  call_id: Dynamic,
+  result: Result(OcrBackendType, String),
+) -> Nil
+
+/// Send the `supported_languages` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "supported_languages", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("supported_languages"), args_json, call_id) ->
+/// //       let result = do_supported_languages(args_json)
+/// //       ocr_backend_supported_languages_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supported_languages_response")
+pub fn ocr_backend_supported_languages_response(
+  call_id: Dynamic,
+  result: Result(List(String), String),
+) -> Nil
+
+/// Send the `supports_table_detection` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "supports_table_detection", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("supports_table_detection"), args_json, call_id) ->
+/// //       let result = do_supports_table_detection(args_json)
+/// //       ocr_backend_supports_table_detection_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supports_table_detection_response")
+pub fn ocr_backend_supports_table_detection_response(
+  call_id: Dynamic,
+  result: Result(Bool, String),
+) -> Nil
+
+/// Send the `supports_document_processing` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "supports_document_processing", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("supports_document_processing"), args_json, call_id) ->
+/// //       let result = do_supports_document_processing(args_json)
+/// //       ocr_backend_supports_document_processing_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supports_document_processing_response")
+pub fn ocr_backend_supports_document_processing_response(
+  call_id: Dynamic,
+  result: Result(Bool, String),
+) -> Nil
+
+/// Send the `process_document` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "process_document", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("process_document"), args_json, call_id) ->
+/// //       let result = do_process_document(args_json)
+/// //       ocr_backend_process_document_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_process_document_response")
+pub fn ocr_backend_process_document_response(
+  call_id: Dynamic,
+  result: Result(ExtractionResult, KreuzbergError),
+) -> Nil
+
 /// Complete a pending trait call with a successful JSON result.
 /// Call this from your GenServer after processing a trait_call message.
 @external(erlang, "Elixir.Kreuzberg.Native", "complete_trait_call")
@@ -4874,6 +5050,94 @@ pub fn fail_trait_call(reply_id: Int, error_message: String) -> Nil
 @external(erlang, "Elixir.Kreuzberg.Native", "register_post_processor")
 pub fn register_post_processor(pid: Dynamic, plugin_name: String) -> Nil
 
+/// Send the `process` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "process", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("process"), args_json, call_id) ->
+/// //       let result = do_process(args_json)
+/// //       post_processor_process_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_process_response")
+pub fn post_processor_process_response(
+  call_id: Dynamic,
+  result: Result(Nil, KreuzbergError),
+) -> Nil
+
+/// Send the `processing_stage` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "processing_stage", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("processing_stage"), args_json, call_id) ->
+/// //       let result = do_processing_stage(args_json)
+/// //       post_processor_processing_stage_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_processing_stage_response")
+pub fn post_processor_processing_stage_response(
+  call_id: Dynamic,
+  result: Result(ProcessingStage, String),
+) -> Nil
+
+/// Send the `should_process` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "should_process", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("should_process"), args_json, call_id) ->
+/// //       let result = do_should_process(args_json)
+/// //       post_processor_should_process_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_should_process_response")
+pub fn post_processor_should_process_response(
+  call_id: Dynamic,
+  result: Result(Bool, String),
+) -> Nil
+
+/// Send the `estimated_duration_ms` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "estimated_duration_ms", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("estimated_duration_ms"), args_json, call_id) ->
+/// //       let result = do_estimated_duration_ms(args_json)
+/// //       post_processor_estimated_duration_ms_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_estimated_duration_ms_response")
+pub fn post_processor_estimated_duration_ms_response(
+  call_id: Dynamic,
+  result: Result(Int, String),
+) -> Nil
+
 /// Trait bridge shims for `Validator`.
 ///
 /// Trait for validator plugins.
@@ -4947,6 +5211,72 @@ pub fn register_post_processor(pid: Dynamic, plugin_name: String) -> Nil
 @external(erlang, "Elixir.Kreuzberg.Native", "register_validator")
 pub fn register_validator(pid: Dynamic, plugin_name: String) -> Nil
 
+/// Send the `validate` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "validate", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("validate"), args_json, call_id) ->
+/// //       let result = do_validate(args_json)
+/// //       validator_validate_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "validator_validate_response")
+pub fn validator_validate_response(
+  call_id: Dynamic,
+  result: Result(Nil, KreuzbergError),
+) -> Nil
+
+/// Send the `should_validate` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "should_validate", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("should_validate"), args_json, call_id) ->
+/// //       let result = do_should_validate(args_json)
+/// //       validator_should_validate_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "validator_should_validate_response")
+pub fn validator_should_validate_response(
+  call_id: Dynamic,
+  result: Result(Bool, String),
+) -> Nil
+
+/// Send the `priority` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "priority", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("priority"), args_json, call_id) ->
+/// //       let result = do_priority(args_json)
+/// //       validator_priority_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "validator_priority_response")
+pub fn validator_priority_response(
+  call_id: Dynamic,
+  result: Result(Int, String),
+) -> Nil
+
 /// Trait bridge shims for `EmbeddingBackend`.
 ///
 /// Trait for in-process embedding backend plugins.
@@ -5005,3 +5335,47 @@ pub fn register_validator(pid: Dynamic, plugin_name: String) -> Nil
 /// module is done via the Elixir/Rustler side (existing GenServer pattern).
 @external(erlang, "Elixir.Kreuzberg.Native", "register_embedding_backend")
 pub fn register_embedding_backend(pid: Dynamic, plugin_name: String) -> Nil
+
+/// Send the `dimensions` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "dimensions", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("dimensions"), args_json, call_id) ->
+/// //       let result = do_dimensions(args_json)
+/// //       embedding_backend_dimensions_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "embedding_backend_dimensions_response")
+pub fn embedding_backend_dimensions_response(
+  call_id: Dynamic,
+  result: Result(Int, String),
+) -> Nil
+
+/// Send the `embed` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "embed", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("embed"), args_json, call_id) ->
+/// //       let result = do_embed(args_json)
+/// //       embedding_backend_embed_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "embedding_backend_embed_response")
+pub fn embedding_backend_embed_response(
+  call_id: Dynamic,
+  result: Result(List(List(Float)), KreuzbergError),
+) -> Nil

@@ -5311,6 +5311,144 @@ pub fn unregister_ocr_backend(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
     return c.kreuzberg_unregister_ocr_backend(name, out_error);
 }
 
+/// Build an `IOcrBackend` vtable for a concrete Zig type `T`.
+///
+/// `T` must implement every method of `OcrBackend` as a plain Zig function.
+/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// back to `*T` and forwards the call.
+///
+/// # Usage
+/// ```zig
+/// const vtable = make_{snake}_vtable(MyType, &my_instance);
+/// _ = register_ocr_backend("my-impl", vtable, &my_instance, &out_error);
+/// ```
+pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
+    _ = instance; // instance is passed as user_data by the caller
+    return IOcrBackend{
+        .name_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_name;
+                unreachable; // override .name_fn in the returned vtable
+            }
+        }.thunk,
+
+        .version_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_version;
+                unreachable; // override .version_fn in the returned vtable
+            }
+        }.thunk,
+
+        .initialize_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .shutdown_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .process_image = struct {
+            fn thunk(ud: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                const image_bytes_slice = image_bytes_ptr[0..image_bytes_len];
+                if (self.process_image(image_bytes_slice, config)) |result| {
+                    _ = result;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
+                    return 0;
+                } else |err| {
+                    _ = err;
+                    if (out_error) |ptr| ptr.* = null; // caller checks error code
+                    return 1;
+                }
+            }
+        }.thunk,
+
+        .process_image_file = struct {
+            fn thunk(ud: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                if (self.process_image_file(path, config)) |result| {
+                    _ = result;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
+                    return 0;
+                } else |err| {
+                    _ = err;
+                    if (out_error) |ptr| ptr.* = null; // caller checks error code
+                    return 1;
+                }
+            }
+        }.thunk,
+
+        .supports_language = struct {
+            fn thunk(ud: ?*anyopaque, lang: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.supports_language(lang);
+            }
+        }.thunk,
+
+        .backend_type = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.backend_type();
+            }
+        }.thunk,
+
+        .supported_languages = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.supported_languages();
+            }
+        }.thunk,
+
+        .supports_table_detection = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.supports_table_detection();
+            }
+        }.thunk,
+
+        .supports_document_processing = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.supports_document_processing();
+            }
+        }.thunk,
+
+        .process_document = struct {
+            fn thunk(ud: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                if (self.process_document(_path, _config)) |result| {
+                    _ = result;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
+                    return 0;
+                } else |err| {
+                    _ = err;
+                    if (out_error) |ptr| ptr.* = null; // caller checks error code
+                    return 1;
+                }
+            }
+        }.thunk,
+
+        .free_user_data = struct {
+            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+                _ = user_data;
+            }
+        }.thunk,
+    };
+}
+
 /// Vtable for a Zig implementation of the `PostProcessor` trait.
 /// Fill each function pointer, then pass this struct to the corresponding
 /// `register_post_processor` function to register your implementation.
@@ -5518,6 +5656,94 @@ pub fn register_post_processor(name: [*c]const u8, vtable: IPostProcessor, user_
 /// Returns 0 on success; non-zero on failure.
 pub fn unregister_post_processor(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
     return c.kreuzberg_unregister_post_processor(name, out_error);
+}
+
+/// Build an `IPostProcessor` vtable for a concrete Zig type `T`.
+///
+/// `T` must implement every method of `PostProcessor` as a plain Zig function.
+/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// back to `*T` and forwards the call.
+///
+/// # Usage
+/// ```zig
+/// const vtable = make_{snake}_vtable(MyType, &my_instance);
+/// _ = register_post_processor("my-impl", vtable, &my_instance, &out_error);
+/// ```
+pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor {
+    _ = instance; // instance is passed as user_data by the caller
+    return IPostProcessor{
+        .name_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_name;
+                unreachable; // override .name_fn in the returned vtable
+            }
+        }.thunk,
+
+        .version_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_version;
+                unreachable; // override .version_fn in the returned vtable
+            }
+        }.thunk,
+
+        .initialize_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .shutdown_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .process = struct {
+            fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                if (self.process(result, config)) |result| {
+                    return 0;
+                } else |err| {
+                    _ = err;
+                    if (out_error) |ptr| ptr.* = null; // caller checks error code
+                    return 1;
+                }
+            }
+        }.thunk,
+
+        .processing_stage = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.processing_stage();
+            }
+        }.thunk,
+
+        .should_process = struct {
+            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.should_process(_result, _config);
+            }
+        }.thunk,
+
+        .estimated_duration_ms = struct {
+            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) u64 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.estimated_duration_ms(_result);
+            }
+        }.thunk,
+
+        .free_user_data = struct {
+            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+                _ = user_data;
+            }
+        }.thunk,
+    };
 }
 
 /// Vtable for a Zig implementation of the `Validator` trait.
@@ -5759,6 +5985,87 @@ pub fn unregister_validator(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
     return c.kreuzberg_unregister_validator(name, out_error);
 }
 
+/// Build an `IValidator` vtable for a concrete Zig type `T`.
+///
+/// `T` must implement every method of `Validator` as a plain Zig function.
+/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// back to `*T` and forwards the call.
+///
+/// # Usage
+/// ```zig
+/// const vtable = make_{snake}_vtable(MyType, &my_instance);
+/// _ = register_validator("my-impl", vtable, &my_instance, &out_error);
+/// ```
+pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
+    _ = instance; // instance is passed as user_data by the caller
+    return IValidator{
+        .name_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_name;
+                unreachable; // override .name_fn in the returned vtable
+            }
+        }.thunk,
+
+        .version_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_version;
+                unreachable; // override .version_fn in the returned vtable
+            }
+        }.thunk,
+
+        .initialize_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .shutdown_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .validate = struct {
+            fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                if (self.validate(result, config)) |result| {
+                    return 0;
+                } else |err| {
+                    _ = err;
+                    if (out_error) |ptr| ptr.* = null; // caller checks error code
+                    return 1;
+                }
+            }
+        }.thunk,
+
+        .should_validate = struct {
+            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.should_validate(_result, _config);
+            }
+        }.thunk,
+
+        .priority = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.priority();
+            }
+        }.thunk,
+
+        .free_user_data = struct {
+            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+                _ = user_data;
+            }
+        }.thunk,
+    };
+}
+
 /// Vtable for a Zig implementation of the `EmbeddingBackend` trait.
 /// Fill each function pointer, then pass this struct to the corresponding
 /// `register_embedding_backend` function to register your implementation.
@@ -5809,4 +6116,81 @@ pub fn register_embedding_backend(name: [*c]const u8, vtable: IEmbeddingBackend,
 /// Returns 0 on success; non-zero on failure.
 pub fn unregister_embedding_backend(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
     return c.kreuzberg_unregister_embedding_backend(name, out_error);
+}
+
+/// Build an `IEmbeddingBackend` vtable for a concrete Zig type `T`.
+///
+/// `T` must implement every method of `EmbeddingBackend` as a plain Zig function.
+/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// back to `*T` and forwards the call.
+///
+/// # Usage
+/// ```zig
+/// const vtable = make_{snake}_vtable(MyType, &my_instance);
+/// _ = register_embedding_backend("my-impl", vtable, &my_instance, &out_error);
+/// ```
+pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingBackend {
+    _ = instance; // instance is passed as user_data by the caller
+    return IEmbeddingBackend{
+        .name_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_name;
+                unreachable; // override .name_fn in the returned vtable
+            }
+        }.thunk,
+
+        .version_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+                _ = user_data;
+                _ = out_version;
+                unreachable; // override .version_fn in the returned vtable
+            }
+        }.thunk,
+
+        .initialize_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .shutdown_fn = struct {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                _ = user_data;
+                _ = out_error;
+                return 0;
+            }
+        }.thunk,
+
+        .dimensions = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) usize {
+                const self: *T = @ptrCast(@alignCast(ud));
+                return self.dimensions();
+            }
+        }.thunk,
+
+        .embed = struct {
+            fn thunk(ud: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                if (self.embed(texts)) |result| {
+                    _ = result;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
+                    return 0;
+                } else |err| {
+                    _ = err;
+                    if (out_error) |ptr| ptr.* = null; // caller checks error code
+                    return 1;
+                }
+            }
+        }.thunk,
+
+        .free_user_data = struct {
+            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+                _ = user_data;
+            }
+        }.thunk,
+    };
 }
