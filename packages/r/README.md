@@ -73,6 +73,10 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 ### Package Installation
 
 
+
+
+
+
 ### System Requirements
 
 - See [Installation Guide](https://kreuzberg.dev/getting-started/installation/) for requirements
@@ -118,10 +122,12 @@ cat(substr(result$content, 1, 200))
 ```
 
 
+
 #### Table Extraction
 
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
+
 
 
 #### Processing Multiple Files
@@ -144,6 +150,8 @@ cat(sprintf("\n\nDetected language: %s\n", detected_language(result)))
 ```
 
 
+
+
 #### Async Processing
 
 For non-blocking document processing:
@@ -164,12 +172,16 @@ cat(sprintf("Detected language: %s\n", detected_language(result)))
 ```
 
 
+
+
+
 ### Next Steps
 
 - **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+
 
 
 ## Features
@@ -269,9 +281,11 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
 
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
+
 
 
 - **Tesseract**
@@ -299,6 +313,9 @@ cat(substr(result$content, 1, 200))
 ```
 
 
+
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
@@ -306,11 +323,16 @@ Kreuzberg supports extensible post-processing plugins for custom text transforma
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
 
 
+
+
+
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+
+
 
 
 ## Batch Processing
@@ -332,6 +354,7 @@ cat(sprintf("Extracted text from image:\n"))
 cat(content(result))
 cat(sprintf("\n\nDetected language: %s\n", detected_language(result)))
 ```
+
 
 
 ## Configuration

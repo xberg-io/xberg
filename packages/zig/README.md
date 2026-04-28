@@ -73,6 +73,10 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 ### Package Installation
 
 
+
+
+
+
 ### System Requirements
 
 - See [Installation Guide](https://kreuzberg.dev/getting-started/installation/) for requirements
@@ -98,16 +102,20 @@ Most use cases benefit from configuration to control extraction behavior:
 <!-- snippet not found: ocr/ocr_extraction.md -->
 
 
+
 #### Table Extraction
 
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
 
+
 #### Processing Multiple Files
 
 
 <!-- snippet not found: api/batch_extract_files_sync.md -->
+
+
 
 
 #### Async Processing
@@ -117,12 +125,16 @@ For non-blocking document processing:
 <!-- snippet not found: api/extract_file_async.md -->
 
 
+
+
+
 ### Next Steps
 
 - **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+
 
 
 ## Features
@@ -222,9 +234,11 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
 
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
+
 
 
 - **Tesseract**
@@ -238,11 +252,17 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 <!-- snippet not found: ocr/ocr_extraction.md -->
 
 
+
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
 
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
+
+
+
 
 
 ## Embeddings Support
@@ -252,11 +272,14 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
 
 
+
+
 ## Batch Processing
 
 Process multiple documents efficiently:
 
 <!-- snippet not found: api/batch_extract_files_sync.md -->
+
 
 
 ## Configuration

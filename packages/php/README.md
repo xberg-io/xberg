@@ -73,11 +73,15 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 ### Package Installation
 
 
+
+
 Install via Composer:
 
 ```bash
 composer require kreuzberg/kreuzberg
 ```
+
+
 
 
 ### System Requirements
@@ -179,7 +183,7 @@ echo $result->content . "\n\n";
 $multilingualConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
-        language: 'eng+fra+deu'
+        language: 'eng+fra+deu'  
     )
 );
 
@@ -275,10 +279,12 @@ if ($avgCharsPerPage < 100) {
 ```
 
 
+
 #### Table Extraction
 
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
+
 
 
 #### Processing Multiple Files
@@ -334,7 +340,7 @@ if (!empty($files)) {
 
 $config = new ExtractionConfig(
     extractTables: true,
-    extractImages: false
+    extractImages: false  
 );
 
 $kreuzberg = new Kreuzberg($config);
@@ -442,12 +448,18 @@ echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
 
 
+
+
+
+
+
 ### Next Steps
 
 - **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+
 
 
 ## Features
@@ -547,9 +559,11 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
 
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
+
 
 
 - **Tesseract**
@@ -595,7 +609,7 @@ echo $result->content . "\n\n";
 $multilingualConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
-        language: 'eng+fra+deu'
+        language: 'eng+fra+deu'  
     )
 );
 
@@ -691,6 +705,9 @@ if ($avgCharsPerPage < 100) {
 ```
 
 
+
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
@@ -698,11 +715,16 @@ Kreuzberg supports extensible post-processing plugins for custom text transforma
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
 
 
+
+
+
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+
+
 
 
 ## Batch Processing
@@ -759,7 +781,7 @@ if (!empty($files)) {
 
 $config = new ExtractionConfig(
     extractTables: true,
-    extractImages: false
+    extractImages: false  
 );
 
 $kreuzberg = new Kreuzberg($config);
@@ -865,6 +887,7 @@ foreach ($batches as $index => $batch) {
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
 ```
+
 
 
 ## Configuration

@@ -73,6 +73,10 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 ### Package Installation
 
 
+
+
+
+
 ### System Requirements
 
 - See [Installation Guide](https://kreuzberg.dev/getting-started/installation/) for requirements
@@ -93,13 +97,20 @@ Extract text, metadata, and structure from any supported document format:
 Most use cases benefit from configuration to control extraction behavior:
 
 
+
 #### Table Extraction
 
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
 
+
 #### Processing Multiple Files
+
+
+
+
+
 
 
 ### Next Steps
@@ -108,6 +119,7 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+
 
 
 ## Features
@@ -209,14 +221,18 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
 
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
 
 
+
 ### OCR Configuration Example
 
 <!-- snippet not found:  -->
+
+
 
 
 ## Async Support
@@ -226,6 +242,8 @@ This binding provides full async/await support for non-blocking document process
 <!-- snippet not found:  -->
 
 
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
@@ -233,11 +251,16 @@ Kreuzberg supports extensible post-processing plugins for custom text transforma
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
 
 
+
+
+
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+
+
 
 
 ## Configuration

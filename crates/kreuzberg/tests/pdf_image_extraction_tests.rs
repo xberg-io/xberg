@@ -153,3 +153,132 @@ fn test_ghostscript_inline_images_completes_in_reasonable_time() {
     // The file has no text — content may be empty or minimal; that is expected.
     let _ = result;
 }
+
+// ─── Regression tests for issue #796 ────────────────────────────────────────
+//
+// Before the fix, setting `images.extract_images = false` (or
+// `pdf_options.extract_images = false`) still caused full base64 image data to
+// appear in `ExtractionResult.images` when `output_format` was `Markdown` or
+// `Djot`. The root cause was that `inject_placeholders` in `extraction.rs`
+// defaulted to `true` without checking `extract_images`, allowing the structure
+// pipeline to call `populate_images_from_pdfium` unconditionally.
+
+/// Helper: extract with a specific output format and images explicitly disabled
+/// via `ImageExtractionConfig.extract_images = false`.
+fn extract_no_images(relative_path: &str, fmt: OutputFormat) -> kreuzberg::types::ExtractionResult {
+    use kreuzberg::core::config::ImageExtractionConfig;
+    let path = test_documents_dir().join(relative_path);
+    let config = ExtractionConfig {
+        output_format: fmt,
+        images: Some(ImageExtractionConfig {
+            extract_images: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(kreuzberg::core::extractor::extract_file(&path, None, &config))
+        .unwrap()
+}
+
+/// Helper: extract with a specific output format and images disabled via
+/// `PdfConfig.extract_images = false`.
+fn extract_no_images_via_pdf_options(relative_path: &str, fmt: OutputFormat) -> kreuzberg::types::ExtractionResult {
+    use kreuzberg::core::config::pdf::PdfConfig;
+    let path = test_documents_dir().join(relative_path);
+    let config = ExtractionConfig {
+        output_format: fmt,
+        pdf_options: Some(PdfConfig {
+            extract_images: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(kreuzberg::core::extractor::extract_file(&path, None, &config))
+        .unwrap()
+}
+
+/// Regression #796: images must be absent when extract_images=false, output_format=Markdown.
+///
+/// Uses `embedded_images_tables.pdf` — a known-image PDF. Before the fix, this
+/// returned `ExtractionResult.images` with full base64 data despite the flag.
+#[test]
+fn test_regression_796_markdown_no_images_when_disabled_via_images_config() {
+    let result = extract_no_images("pdf/embedded_images_tables.pdf", OutputFormat::Markdown);
+    assert!(
+        result.images.as_ref().map(|v| v.is_empty()).unwrap_or(true),
+        "images.extract_images=false must produce an empty images list even for \
+         output_format=Markdown. Got {} image(s).",
+        result.images.as_ref().map(|v| v.len()).unwrap_or(0)
+    );
+    // Confirm the text content was still extracted (no regression on content).
+    assert!(
+        !result.content.is_empty(),
+        "Content must still be extracted when images are disabled"
+    );
+}
+
+/// Regression #796: same assertion for Djot output format.
+#[test]
+fn test_regression_796_djot_no_images_when_disabled_via_images_config() {
+    let result = extract_no_images("pdf/embedded_images_tables.pdf", OutputFormat::Djot);
+    assert!(
+        result.images.as_ref().map(|v| v.is_empty()).unwrap_or(true),
+        "images.extract_images=false must produce an empty images list even for \
+         output_format=Djot. Got {} image(s).",
+        result.images.as_ref().map(|v| v.len()).unwrap_or(0)
+    );
+}
+
+/// Regression #796: the pdf_options.extract_images path must also be respected
+/// when output_format=Markdown.
+#[test]
+fn test_regression_796_markdown_no_images_when_disabled_via_pdf_options() {
+    let result = extract_no_images_via_pdf_options("pdf/embedded_images_tables.pdf", OutputFormat::Markdown);
+    assert!(
+        result.images.as_ref().map(|v| v.is_empty()).unwrap_or(true),
+        "pdf_options.extract_images=false must produce an empty images list even for \
+         output_format=Markdown. Got {} image(s).",
+        result.images.as_ref().map(|v| v.len()).unwrap_or(0)
+    );
+}
+
+/// Sanity check: images must still appear when extract_images=true (no regression).
+#[test]
+fn test_regression_796_markdown_images_present_when_enabled() {
+    use kreuzberg::core::config::ImageExtractionConfig;
+    let path = test_documents_dir().join("pdf/embedded_images_tables.pdf");
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        images: Some(ImageExtractionConfig {
+            extract_images: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt
+        .block_on(kreuzberg::core::extractor::extract_file(&path, None, &config))
+        .unwrap();
+    let images = result
+        .images
+        .as_ref()
+        .expect("images must be Some when extract_images=true");
+    assert!(
+        !images.is_empty(),
+        "images list must be non-empty when extract_images=true and the PDF contains images"
+    );
+}
+
+/// Plain-text baseline: images must never appear for plain output (already passing
+/// before the fix; kept as a safety net).
+#[test]
+fn test_regression_796_plain_no_images_when_disabled() {
+    let result = extract_no_images("pdf/embedded_images_tables.pdf", OutputFormat::Plain);
+    assert!(
+        result.images.as_ref().map(|v| v.is_empty()).unwrap_or(true),
+        "Plain output with extract_images=false must have no images. Got {} image(s).",
+        result.images.as_ref().map(|v| v.len()).unwrap_or(0)
+    );
+}

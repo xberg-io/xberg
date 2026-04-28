@@ -76,10 +76,13 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 Install via one of the supported package managers:
 
 
+
 **npm:**
 ```bash
 npm install @kreuzberg/node
 ```
+
+
 
 
 **pnpm:**
@@ -88,10 +91,15 @@ pnpm add @kreuzberg/node
 ```
 
 
+
+
 **yarn:**
 ```bash
 yarn add @kreuzberg/node
 ```
+
+
+
 
 
 ### System Requirements
@@ -106,6 +114,7 @@ Pre-built binaries available for:
 - macOS (arm64, x64)
 - Linux (x64)
 - Windows (x64)
+
 
 
 ## Quick Start
@@ -155,6 +164,7 @@ console.log(result.content);
 ```
 
 
+
 #### Table Extraction
 
 
@@ -169,6 +179,7 @@ for (const table of result.tables) {
 	console.log(table.markdown);
 }
 ```
+
 
 
 #### Processing Multiple Files
@@ -186,6 +197,8 @@ results.forEach((result, i) => {
 ```
 
 
+
+
 #### Async Processing
 
 For non-blocking document processing:
@@ -196,6 +209,8 @@ import { extractFile } from '@kreuzberg/node';
 const result = await extractFile('document.pdf');
 console.log(result.content);
 ```
+
+
 
 
 #### Configuration Discovery
@@ -214,6 +229,8 @@ if (config) {
   console.log(result.content);
 }
 ```
+
+
 
 
 #### Worker Thread Pool
@@ -259,6 +276,7 @@ try {
 - Reuse pools across multiple batch operations for efficiency
 
 
+
 ### Next Steps
 
 - **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
@@ -291,6 +309,7 @@ This binding uses NAPI-RS to provide native Node.js bindings with:
 - Temporary files are created in system temp directory for extraction
 - Memory is automatically released after extraction completion
 - ONNX models are cached in memory for repeated embeddings operations
+
 
 
 ## Features
@@ -392,9 +411,11 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
 
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
+
 
 
 - **Tesseract**
@@ -423,6 +444,8 @@ console.log(result.content);
 ```
 
 
+
+
 ## Async Support
 
 This binding provides full async/await support for non-blocking document processing:
@@ -435,6 +458,8 @@ console.log(result.content);
 ```
 
 
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
@@ -442,11 +467,16 @@ Kreuzberg supports extensible post-processing plugins for custom text transforma
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
 
 
+
+
+
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+
+
 
 
 ## Batch Processing
@@ -463,6 +493,7 @@ results.forEach((result, i) => {
 	console.log(`File ${i + 1}: ${result.content.length} characters`);
 });
 ```
+
 
 
 ## Configuration
