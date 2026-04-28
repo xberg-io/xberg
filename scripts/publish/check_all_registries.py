@@ -55,7 +55,7 @@ GH_ASSET_CHECKS: list[tuple[str, str, dict[str, str]]] = [
     ("CLI binaries", "", {"asset_prefix": "kreuzberg-cli-"}),
     ("Go FFI", "", {"asset_prefix": "go-ffi-"}),
     ("C FFI", "", {"asset_prefix": "c-ffi-"}),
-    ("Elixir NIF", "", {"asset_prefix": "libkreuzberg_rustler-"}),
+    ("Elixir NIF", "", {"asset_prefix": "libkreuzberg_nif-"}),
     ("Homebrew bottles", "", {"asset_prefix": "kreuzberg-"}),
 ]
 

@@ -45,7 +45,7 @@ for TARGET in "${TARGETS[@]}"; do
       EXT="so"
     fi
 
-    FILENAME="libkreuzberg_rustler-v${VERSION}-nif-${NIF_VERSION}-${TARGET}.${EXT}.tar.gz"
+    FILENAME="libkreuzberg_nif-v${VERSION}-nif-${NIF_VERSION}-${TARGET}.${EXT}.tar.gz"
     URL="https://github.com/${REPO}/releases/download/v${VERSION}/${FILENAME}"
 
     echo "Downloading: $FILENAME"

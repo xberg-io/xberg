@@ -5,7 +5,7 @@
 #   docker build -f docker/Dockerfile.musl-rustler \
 #     --output type=local,dest=./dist .
 #
-# Produces libkreuzberg_rustler.so at dist/libkreuzberg_rustler.so
+# Produces libkreuzberg_nif.so at dist/libkreuzberg_nif.so
 # =============================================================================
 FROM alpine:3.21 AS builder
 
@@ -56,23 +56,23 @@ COPY crates/kreuzberg/ crates/kreuzberg/
 COPY crates/kreuzberg-tesseract/ crates/kreuzberg-tesseract/
 COPY crates/kreuzberg-paddle-ocr/ crates/kreuzberg-paddle-ocr/
 COPY crates/kreuzberg-pdfium-render/ crates/kreuzberg-pdfium-render/
-COPY packages/elixir/native/kreuzberg_rustler/ packages/elixir/native/kreuzberg_rustler/
+COPY packages/elixir/native/kreuzberg_nif/ packages/elixir/native/kreuzberg_nif/
 
 # Remove workspace members that aren't included
-RUN sed -i '/kreuzberg-py/d; /kreuzberg_rb/d; /kreuzberg-node/d; /kreuzberg-cli/d; /kreuzberg-ffi/d; /kreuzberg-php/d; /kreuzberg_nif/d; /packages\/dart\/rust/d; /packages\/swift\/rust/d; /"crates\/kreuzberg-wasm"/d; /^\[profile\.release\.package\.kreuzberg-wasm\]$/,$d; /benchmark-harness/d; /e2e-generator/d; /snippet-runner/d; /e2e\/rust/d' Cargo.toml
+RUN sed -i '/kreuzberg-py/d; /kreuzberg_rb/d; /kreuzberg-node/d; /kreuzberg-cli/d; /kreuzberg-ffi/d; /kreuzberg-php/d; /packages\/dart\/rust/d; /packages\/swift\/rust/d; /"crates\/kreuzberg-wasm"/d; /^\[profile\.release\.package\.kreuzberg-wasm\]$/,$d; /benchmark-harness/d; /e2e-generator/d; /snippet-runner/d; /e2e\/rust/d' Cargo.toml
 
 # Build the Rustler NIF shared library
-RUN cargo build --release --package kreuzberg_rustler && \
-    cp target/release/libkreuzberg_rustler.so /build/libkreuzberg_rustler.so && \
-    strip /build/libkreuzberg_rustler.so
+RUN cargo build --release --package kreuzberg_nif && \
+    cp target/release/libkreuzberg_nif.so /build/libkreuzberg_nif.so && \
+    strip /build/libkreuzberg_nif.so
 
 # Verify the library
-RUN file /build/libkreuzberg_rustler.so && \
+RUN file /build/libkreuzberg_nif.so && \
     echo "=== Dynamic dependencies ===" && \
-    readelf -d /build/libkreuzberg_rustler.so 2>/dev/null | grep NEEDED || echo "No dynamic dependencies (fully static)"
+    readelf -d /build/libkreuzberg_nif.so 2>/dev/null | grep NEEDED || echo "No dynamic dependencies (fully static)"
 
 # =============================================================================
 # Output stage — just the shared library
 # =============================================================================
 FROM scratch
-COPY --from=builder /build/libkreuzberg_rustler.so /libkreuzberg_rustler.so
+COPY --from=builder /build/libkreuzberg_nif.so /libkreuzberg_nif.so
