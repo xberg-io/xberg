@@ -73,6 +73,8 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 ### Package Installation
 
 
+
+
 Install via NuGet:
 
 ```bash
@@ -84,6 +86,8 @@ Or via NuGet Package Manager:
 ```
 Install-Package Kreuzberg
 ```
+
+
 
 
 ### System Requirements
@@ -144,10 +148,12 @@ Console.WriteLine(result.Content);
 ```
 
 
+
 #### Table Extraction
 
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
+
 
 
 #### Processing Multiple Files
@@ -203,6 +209,8 @@ class Program
 ```
 
 
+
+
 #### Async Processing
 
 For non-blocking document processing:
@@ -244,12 +252,16 @@ class Program
 ```
 
 
+
+
+
 ### Next Steps
 
 - **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+
 
 
 ## Features
@@ -351,9 +363,11 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
 
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
+
 
 
 - **Tesseract**
@@ -383,6 +397,8 @@ var config = new ExtractionConfig
 var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
 Console.WriteLine(result.Content);
 ```
+
+
 
 
 ## Async Support
@@ -426,6 +442,8 @@ class Program
 ```
 
 
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
@@ -433,11 +451,16 @@ Kreuzberg supports extensible post-processing plugins for custom text transforma
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
 
 
+
+
+
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+
+
 
 
 ## Batch Processing
@@ -492,6 +515,7 @@ class Program
     }
 }
 ```
+
 
 
 ## Configuration

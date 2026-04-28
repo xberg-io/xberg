@@ -617,7 +617,7 @@ impl PdfExtractor {
         let mut ocr_tables: Vec<crate::types::Table> = Vec::new();
         #[cfg(feature = "ocr")]
         #[allow(unused_assignments)]
-        let mut _ocr_elements_from_ocr: Vec<crate::types::OcrElement> = Vec::new();
+        let mut ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
         #[cfg(feature = "ocr")]
         let mut ocr_internal_doc: Option<crate::types::internal::InternalDocument> = None;
         #[cfg(feature = "ocr")]
@@ -629,7 +629,7 @@ impl PdfExtractor {
             let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
                 run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
-            _ocr_elements_from_ocr = ocr_elems;
+            ocr_elements = ocr_elems;
             ocr_internal_doc = ocr_doc;
             ocr_llm_usage = llm_usage;
             (ocr_text, true)
@@ -734,7 +734,7 @@ impl PdfExtractor {
                 match run_ocr_with_layout(content, config, path).await {
                     Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
                         ocr_tables = ocr_tbls;
-                        _ocr_elements_from_ocr = ocr_elems;
+                        ocr_elements = ocr_elems;
                         ocr_internal_doc = ocr_doc;
                         ocr_llm_usage = llm_usage;
                         (ocr_text, true)
@@ -1074,6 +1074,9 @@ impl PdfExtractor {
                 doc.processing_warnings.push(warning);
             }
             doc.annotations = pdf_annotations;
+            if !ocr_elements.is_empty() {
+                doc.prebuilt_ocr_elements = Some(ocr_elements);
+            }
             doc
         };
 
@@ -1238,7 +1241,7 @@ impl PdfExtractor {
         let mut ocr_tables: Vec<crate::types::Table> = Vec::new();
         #[cfg(feature = "ocr")]
         #[allow(unused_assignments)]
-        let mut _ocr_elements_from_ocr: Vec<crate::types::OcrElement> = Vec::new();
+        let mut ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
         #[cfg(feature = "ocr")]
         let mut ocr_internal_doc: Option<InternalDocument> = None;
         #[cfg(feature = "ocr")]
@@ -1251,7 +1254,7 @@ impl PdfExtractor {
             let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
                 run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
-            _ocr_elements_from_ocr = ocr_elems;
+            ocr_elements = ocr_elems;
             ocr_internal_doc = ocr_doc;
             ocr_llm_usage = llm_usage;
             (ocr_text, true)
@@ -1268,7 +1271,7 @@ impl PdfExtractor {
                 match run_ocr_with_layout(content, config, path).await {
                     Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
                         ocr_tables = ocr_tbls;
-                        _ocr_elements_from_ocr = ocr_elems;
+                        ocr_elements = ocr_elems;
                         ocr_internal_doc = ocr_doc;
                         ocr_llm_usage = llm_usage;
                         (ocr_text, true)

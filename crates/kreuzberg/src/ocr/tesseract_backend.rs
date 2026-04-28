@@ -376,6 +376,7 @@ impl OcrBackend for TesseractBackend {
                     }
                 })
                 .collect(),
+            ocr_elements: ocr_result.ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
             ..Default::default()
         })
