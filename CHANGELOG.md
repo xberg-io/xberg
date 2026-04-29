@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **#761**: `ExtractionResult.extraction_method` — new field exposing how text was extracted (`native`, `ocr`, `mixed`). Populated by PDF (native vs OCR vs `force_ocr_pages` mixed) and image (always `ocr`) extractors. Surfaced across every binding (Python, Node, PHP, Ruby, Java, C#, Go, R, Dart, Swift, Elixir, Gleam, Zig, WASM, C FFI).
+- **#788 follow-up**: Image classification + tile clustering on `ExtractedImage`. New optional fields `image_kind` (a public `ImageKind` enum: `Photograph`, `Diagram`, `Chart`, `Drawing`, `TextBlock`, `Decoration`, `Logo`, `Icon`, `TileFragment`, `Mask`, `Unknown`), `kind_confidence` (`f32` ∈ [0.0, 1.0]), and `cluster_id` (`u32`). The classifier is offline, deterministic, and uses already-captured signals: dimensions, aspect ratio, colorspace, bits-per-component, format, plus Shannon entropy of a 64×64 thumbnail. The clusterer groups same-page images with similar dimensions whose bounding boxes sit within half a tile-side of each other and reclassifies the members to `TileFragment`, so a technical drawing composed of N raster fragments surfaces as one `cluster_id`. Wired through every extractor that produces `ExtractedImage`: PDF (lopdf and pdfium fallback), DOCX, PPTX, HTML, ODT, EPUB, FictionBook, Jupyter, RTF, and the standalone image extractor. Toggle via `ImageExtractionConfig.classify` (default `true`).
 
 ### Fixed
 
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **#787 (log hygiene)**: Default tracing subscriber now layers `ureq=warn`, `ureq_proto=warn`, `rustls=warn`, `hyper_util=warn`, `hf_hub=info`, `tower_http=info` on top of any user-supplied `RUST_LOG`, and the API router's `TraceLayer` demotes per-request/response events to DEBUG (failures stay at WARN). Default `info` log level no longer produces a wall of HTTP/TLS/transport DEBUG lines around HuggingFace model downloads. Per-target `RUST_LOG` rules continue to win, so `RUST_LOG=ureq=debug` still surfaces full transport detail when needed. The HuggingFace fetch chatter itself was never a re-fetch bug — models are cached on disk under `HF_HOME` and in-process via `LazyLock` engine caches; the noise was purely third-party transport DEBUG bleeding through.
 - **Dependabot bumps**: `swift-actions/setup-swift` 2 → 3 (#841), `gradle/actions` 4 → 6 (#840), `docker/setup-qemu-action` 3 → 4 (#833), `mlugg/setup-zig` 1 → 2 (#832).
 
 ## [4.10.0-rc.4] - 2026-04-28
