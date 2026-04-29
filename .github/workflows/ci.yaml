@@ -26,7 +26,7 @@ jobs:
         run: uv sync
 
       - name: Run pre-commit hooks
-        uses: j178/prek-action@v2.0.2
+        uses: j178/prek-action@v2.0.3
         with:
           extra-args: --all-files
 
