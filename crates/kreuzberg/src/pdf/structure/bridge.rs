@@ -535,34 +535,32 @@ pub(super) fn objects_to_page_data(
     let objects: Vec<PdfPageObject> = page.objects().iter().collect();
 
     // Image scan BEFORE text extraction.
+    // Recurse into XObjectForm objects so that images nested inside Form XObjects
+    // (e.g. 86 raster tiles composing a single technical drawing) are counted and
+    // their positions recorded.  Previously only top-level Image objects were
+    // found, causing nested images to be silently omitted from the output.
     let mut images = Vec::new();
     let mut page_image_count = 0u32;
+    let mut capped = false;
     for obj in &objects {
-        if obj.as_image_object().is_some() {
-            if max_images_per_page.is_some_and(|cap| page_image_count >= cap) {
-                // Still advance the global offset so indices stay consistent
-                // with what populate_images_from_pdfium will see.
-                *image_offset += 1;
-                page_image_count += 1;
-                continue;
-            }
-            images.push(ImagePosition {
-                page_number,
-                image_index: *image_offset,
-            });
-            *image_offset += 1;
-            page_image_count += 1;
-        }
+        count_image_objects(
+            obj,
+            page_number,
+            image_offset,
+            &mut page_image_count,
+            &mut capped,
+            max_images_per_page,
+            &mut images,
+            0,
+        );
     }
-    if let Some(cap) = max_images_per_page
-        && page_image_count > cap
-    {
+    if capped {
         tracing::warn!(
             page_number,
-            cap,
+            cap = max_images_per_page.unwrap_or(0),
             total_images = page_image_count,
             "PDF page has more image objects than max_images_per_page; \
-                 excess images skipped to prevent hang"
+             excess images skipped to prevent hang"
         );
     }
 
@@ -611,6 +609,61 @@ struct CharFontInfo {
     baseline_y: f32,
     x: f32,
     top: f32,
+}
+
+/// Recursively count image objects inside a pdfium page object tree, recording
+/// each image's position and respecting the `max_images_per_page` cap.
+///
+/// Descends into `XObjectForm` children so that images nested inside Form
+/// XObjects are not silently skipped.
+#[allow(clippy::too_many_arguments)]
+fn count_image_objects(
+    obj: &PdfPageObject,
+    page_number: usize,
+    image_offset: &mut usize,
+    page_image_count: &mut u32,
+    capped: &mut bool,
+    max_images_per_page: Option<u32>,
+    images: &mut Vec<ImagePosition>,
+    depth: usize,
+) {
+    const MAX_XOBJECT_DEPTH: usize = 10;
+    match obj {
+        PdfPageObject::Image(_) => {
+            if max_images_per_page.is_some_and(|cap| *page_image_count >= cap) {
+                *capped = true;
+                // Advance global offset so indices stay consistent.
+                *image_offset += 1;
+                *page_image_count += 1;
+            } else {
+                images.push(ImagePosition {
+                    page_number,
+                    image_index: *image_offset,
+                });
+                *image_offset += 1;
+                *page_image_count += 1;
+            }
+        }
+        PdfPageObject::XObjectForm(form_obj) => {
+            if depth >= MAX_XOBJECT_DEPTH {
+                tracing::debug!(depth, "objects_to_page_data: max XObject nesting depth reached");
+                return;
+            }
+            for child in form_obj.iter() {
+                count_image_objects(
+                    &child,
+                    page_number,
+                    image_offset,
+                    page_image_count,
+                    capped,
+                    max_images_per_page,
+                    images,
+                    depth + 1,
+                );
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Returns one `SegmentData` per paragraph block, where `.text` is the exact

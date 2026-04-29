@@ -159,7 +159,19 @@ pub(crate) fn extract_text_and_metadata_from_pdf_document(
     document: &PdfDocument<'_>,
     extraction_config: Option<&crate::core::config::ExtractionConfig>,
 ) -> Result<PdfUnifiedExtractionResult> {
-    let page_config = extraction_config.and_then(|c| c.pages.as_ref());
+    // force_ocr_pages requires per-page byte boundaries to splice OCR text into the right
+    // ranges. Synthesize a default PageConfig when the caller has not provided one.
+    let needs_boundaries_for_force_ocr = extraction_config
+        .map(|c| c.force_ocr_pages.as_ref().is_some_and(|p| !p.is_empty()))
+        .unwrap_or(false);
+    let synthesized_page_config = if needs_boundaries_for_force_ocr {
+        Some(crate::core::config::PageConfig::default())
+    } else {
+        None
+    };
+    let page_config = extraction_config
+        .and_then(|c| c.pages.as_ref())
+        .or(synthesized_page_config.as_ref());
     let (text, boundaries, page_contents) = extract_text_from_pdf_document(document, page_config, extraction_config)?;
 
     let metadata = crate::pdf::metadata::extract_metadata_from_document_impl(document, boundaries.as_deref(), &text)?;

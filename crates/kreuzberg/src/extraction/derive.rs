@@ -16,7 +16,7 @@ use ahash::AHashMap;
 use crate::types::document_structure::{
     DocumentNode, DocumentRelationship, DocumentStructure, GridCell, NodeContent, NodeId, NodeIndex, TableGrid,
 };
-use crate::types::extraction::ExtractionResult;
+use crate::types::extraction::{ExtractionMethod, ExtractionResult};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement, RelationshipTarget};
 use crate::types::ocr_elements::{OcrConfidence, OcrElement};
 use crate::types::page::PageContent;
@@ -635,6 +635,13 @@ pub fn derive_extraction_result(
         _ => None,
     };
 
+    let extraction_method = doc
+        .metadata
+        .additional
+        .get("extraction_method")
+        .and_then(serde_json::Value::as_str)
+        .and_then(ExtractionMethod::from_metadata_value);
+
     tracing::debug!(
         content_length = content.len(),
         has_document_structure = document.is_some(),
@@ -644,6 +651,7 @@ pub fn derive_extraction_result(
         content,
         mime_type,
         metadata: doc.metadata,
+        extraction_method,
         tables: doc.tables,
         images,
         pages,
@@ -1044,5 +1052,31 @@ mod tests {
         let result = derive_extraction_result(doc, true, crate::core::config::OutputFormat::Plain);
         let ds = result.document.unwrap();
         assert_eq!(ds.source_format.as_deref(), Some("epub"));
+    }
+
+    #[test]
+    fn test_derive_extraction_result_promotes_extraction_method() {
+        let mut doc = make_doc("pdf");
+        doc.metadata.additional.insert(
+            Cow::Borrowed("extraction_method"),
+            serde_json::Value::String("mixed".to_string()),
+        );
+        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Hello world.", 0));
+
+        let result = derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
+        assert_eq!(result.extraction_method, Some(ExtractionMethod::Mixed));
+    }
+
+    #[test]
+    fn test_derive_extraction_result_ignores_unknown_extraction_method() {
+        let mut doc = make_doc("pdf");
+        doc.metadata.additional.insert(
+            Cow::Borrowed("extraction_method"),
+            serde_json::Value::String("native_ole".to_string()),
+        );
+        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Hello world.", 0));
+
+        let result = derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
+        assert_eq!(result.extraction_method, None);
     }
 }

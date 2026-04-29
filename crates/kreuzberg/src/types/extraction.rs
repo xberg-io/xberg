@@ -12,6 +12,39 @@ use super::ocr_elements::OcrElement;
 use super::page::PageContent;
 use super::tables::Table;
 
+/// How the extracted text was produced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ExtractionMethod {
+    Native,
+    Ocr,
+    Mixed,
+}
+
+impl ExtractionMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Ocr => "ocr",
+            Self::Mixed => "mixed",
+        }
+    }
+
+    pub fn used_ocr(self) -> bool {
+        !matches!(self, Self::Native)
+    }
+
+    pub(crate) fn from_metadata_value(value: &str) -> Option<Self> {
+        match value {
+            "native" => Some(Self::Native),
+            "ocr" => Some(Self::Ocr),
+            "mixed" => Some(Self::Mixed),
+            _ => None,
+        }
+    }
+}
+
 /// General extraction result used by the core extraction API.
 ///
 /// This is the main result type returned by all extraction functions.
@@ -23,6 +56,13 @@ pub struct ExtractionResult {
     #[cfg_attr(feature = "api", schema(value_type = String))]
     pub mime_type: Cow<'static, str>,
     pub metadata: Metadata,
+    /// Extraction strategy used to produce the returned text.
+    ///
+    /// Populated when the extractor can reliably distinguish native text extraction,
+    /// OCR-only extraction, or mixed native/OCR output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub extraction_method: Option<ExtractionMethod>,
     pub tables: Vec<Table>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detected_languages: Option<Vec<String>>,

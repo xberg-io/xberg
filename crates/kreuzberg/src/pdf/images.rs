@@ -21,7 +21,8 @@ pub struct PdfImage {
 
 #[derive(Debug)]
 pub struct PdfImageExtractor {
-    document: Document,
+    pub(crate) document: Document,
+    pub(crate) max_images_per_page: Option<u32>,
 }
 
 /// Decode raw PDF image stream bytes according to PDF filter(s).
@@ -397,75 +398,253 @@ impl PdfImageExtractor {
             }
         }
 
-        Ok(Self { document: doc })
+        Ok(Self {
+            document: doc,
+            max_images_per_page: None,
+        })
     }
 
-    pub(crate) fn extract_images(&self, max_images_per_page: Option<u32>) -> Result<Vec<PdfImage>> {
+    pub(crate) fn extract_images(&self) -> Result<Vec<PdfImage>> {
         let mut all_images = Vec::new();
         let pages = self.document.get_pages();
 
         for (page_num, page_id) in pages.iter() {
-            let images = self
-                .document
-                .get_page_images(*page_id)
-                .map_err(|e| PdfError::MetadataExtractionFailed(format!("Failed to get page images: {}", e)))?;
+            let page_dict = match self.document.get_dictionary(*page_id) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let resources = match self.document.get_dict_in_dict(page_dict, b"Resources") {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            let mut img_index = 0usize;
+            let mut visited = std::collections::HashSet::new();
+            let mut page_image_count = 0u32;
+            self.collect_images_from_resources(
+                resources,
+                *page_num as usize,
+                &mut img_index,
+                &mut all_images,
+                0,
+                &mut visited,
+                &mut page_image_count,
+            );
+        }
 
-            if let Some(cap) = max_images_per_page
-                && images.len() > cap as usize
-            {
+        Ok(all_images)
+    }
+
+    /// Recursively collect images from a PDF resource dictionary.
+    ///
+    /// Walks the `XObject` sub-dictionary and:
+    /// - Collects every entry with `Subtype = Image` as a `PdfImage`.
+    /// - Recurses into every entry with `Subtype = Form` (up to `MAX_FORM_DEPTH`
+    ///   levels) so that images nested inside Form XObjects — a common structure
+    ///   for tiled technical drawings — are not silently dropped.
+    ///
+    /// Previously, kreuzberg delegated this scan to `lopdf::get_page_images`,
+    /// which only looks at the page-level resource dict and never descends into
+    /// Form XObjects.  That caused all images inside a Form XObject (e.g. 86
+    /// raster tiles composing a single figure) to be invisible to the extractor.
+    fn collect_images_from_resources(
+        &self,
+        resources: &lopdf::Dictionary,
+        page_number: usize,
+        img_index: &mut usize,
+        out: &mut Vec<PdfImage>,
+        depth: usize,
+        visited: &mut std::collections::HashSet<lopdf::ObjectId>,
+        page_image_count: &mut u32,
+    ) {
+        // Guard against pathological or cyclic Form XObject chains.
+        const MAX_FORM_DEPTH: usize = 8;
+        if depth > MAX_FORM_DEPTH {
+            tracing::debug!(
+                page_number,
+                depth,
+                "PDF image extraction: max Form XObject recursion depth reached, stopping"
+            );
+            return;
+        }
+
+        let xobject_dict = match self.document.get_dict_in_dict(resources, b"XObject") {
+            Ok(d) => d,
+            Err(_) => return, // XObject is optional
+        };
+
+        for (_, xvalue) in xobject_dict.iter() {
+            if self.max_images_per_page.is_some_and(|cap| *page_image_count >= cap) {
                 tracing::warn!(
-                    page_number = *page_num,
-                    image_count = images.len(),
-                    cap,
-                    "PDF page exceeds max_images_per_page; skipping image extraction for this page"
+                    page_number,
+                    cap = self.max_images_per_page.unwrap(),
+                    "PDF image extraction: max images per page reached, skipping remaining objects on this page"
                 );
+                return;
+            }
+            use lopdf::Object;
+
+            let id = match xvalue.as_reference() {
+                Ok(id) => id,
+                Err(_) => continue,
+            };
+            // Skip XObjects already processed on this page — the same object can be
+            // referenced from multiple Form parents (DAG), and processing it more than
+            // once would corrupt the sequential image_index.
+            if !visited.insert(id) {
                 continue;
             }
+            let stream = match self
+                .document
+                .get_object(id)
+                .and_then(|o| o.as_stream().cloned())
+            {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let dict = &stream.dict;
 
-            for (img_index, img) in images.iter().enumerate() {
-                let filters = img.filters.clone().unwrap_or_default();
+            let subtype = match dict.get(b"Subtype").and_then(|o| o.as_name()) {
+                Ok(n) => n,
+                Err(_) => continue,
+            };
+
+            if subtype == b"Image" {
+                // Collect this image.
+                let width = match dict.get(b"Width").and_then(|o| o.as_i64()) {
+                    Ok(w) => w,
+                    Err(_) => continue,
+                };
+                let height = match dict.get(b"Height").and_then(|o| o.as_i64()) {
+                    Ok(h) => h,
+                    Err(_) => continue,
+                };
+                let color_space = match dict.get(b"ColorSpace") {
+                    Ok(cs) => match cs {
+                        Object::Array(array) => array[0].as_name().ok().map(|n| String::from_utf8_lossy(n).to_string()),
+                        Object::Name(name) => Some(String::from_utf8_lossy(name).to_string()),
+                        _ => None,
+                    },
+                    Err(_) => None,
+                };
+                let bits_per_component = dict.get(b"BitsPerComponent").and_then(|o| o.as_i64()).ok();
+                let mut filters = vec![];
+                if let Ok(filter) = dict.get(b"Filter") {
+                    match filter {
+                        Object::Array(array) => {
+                            for obj in array.iter() {
+                                if let Ok(name) = obj.as_name() {
+                                    filters.push(String::from_utf8_lossy(name).to_string());
+                                }
+                            }
+                        }
+                        Object::Name(name) => {
+                            filters.push(String::from_utf8_lossy(name).to_string());
+                        }
+                        _ => {}
+                    }
+                }
 
                 #[cfg(feature = "pdf")]
-                let (palette, palette_base_channels) = extract_indexed_palette(img.origin_dict, &self.document)
+                let (palette, palette_base_channels) = extract_indexed_palette(dict, &self.document)
                     .map(|(p, ch)| (Some(p), ch))
                     .unwrap_or((None, 0));
 
                 #[cfg(feature = "pdf")]
                 let (data, decoded_format) = decode_image_data(
-                    img.content,
+                    &stream.content,
                     &filters,
-                    img.color_space.as_deref(),
-                    img.width,
-                    img.height,
-                    img.bits_per_component,
+                    color_space.as_deref(),
+                    width,
+                    height,
+                    bits_per_component,
                     palette.as_deref(),
                     palette_base_channels,
                 );
 
                 #[cfg(not(feature = "pdf"))]
-                let (data, decoded_format) = (Bytes::from(img.content.to_vec()), "raw".to_string());
+                let (data, decoded_format) = (Bytes::from(stream.content.clone()), "raw".to_string());
 
-                all_images.push(PdfImage {
-                    page_number: *page_num as usize,
-                    image_index: img_index + 1,
-                    width: img.width,
-                    height: img.height,
-                    color_space: img.color_space.clone(),
-                    bits_per_component: img.bits_per_component,
+                *page_image_count += 1;
+                *img_index += 1;
+                out.push(PdfImage {
+                    page_number,
+                    image_index: *img_index,
+                    width,
+                    height,
+                    color_space,
+                    bits_per_component,
                     filters,
                     data,
                     decoded_format,
                 });
+            } else if subtype == b"Form" {
+                // Recurse into the Form XObject's own resource dictionary.
+                if let Ok(form_resources) = dict.get(b"Resources").and_then(|r| r.as_dict()) {
+                    self.collect_images_from_resources(
+                        form_resources,
+                        page_number,
+                        img_index,
+                        out,
+                        depth + 1,
+                        visited,
+                        page_image_count,
+                    );
+                }
             }
         }
+    }
 
-        Ok(all_images)
+    pub(crate) fn extract_images_from_page(&self, page_number: u32) -> Result<Vec<PdfImage>> {
+        let pages = self.document.get_pages();
+        let page_id = pages
+            .get(&page_number)
+            .ok_or(PdfError::PageNotFound(page_number as usize))?;
+
+        let page_dict = match self.document.get_dictionary(*page_id) {
+            Ok(d) => d,
+            Err(_) => return Ok(vec![]),
+        };
+        let resources = match self.document.get_dict_in_dict(page_dict, b"Resources") {
+            Ok(r) => r,
+            Err(_) => return Ok(vec![]),
+        };
+
+        let mut page_images = Vec::new();
+        let mut img_index = 0usize;
+        let mut visited = std::collections::HashSet::new();
+        let mut page_image_count = 0u32;
+        self.collect_images_from_resources(
+            resources,
+            page_number as usize,
+            &mut img_index,
+            &mut page_images,
+            0,
+            &mut visited,
+            &mut page_image_count,
+        );
+        Ok(page_images)
+    }
+
+    pub(crate) fn get_image_count(&self) -> Result<usize> {
+        let images = self.extract_images()?;
+        Ok(images.len())
     }
 }
 
 pub(crate) fn extract_images_from_pdf(pdf_bytes: &[u8], max_images_per_page: Option<u32>) -> Result<Vec<PdfImage>> {
-    let extractor = PdfImageExtractor::new(pdf_bytes)?;
-    extractor.extract_images(max_images_per_page)
+    let mut extractor = PdfImageExtractor::new(pdf_bytes)?;
+    extractor.max_images_per_page = max_images_per_page;
+    extractor.extract_images()
+}
+
+pub(crate) fn extract_images_from_pdf_with_password(
+    pdf_bytes: &[u8],
+    password: &str,
+    max_images_per_page: Option<u32>,
+) -> Result<Vec<PdfImage>> {
+    let mut extractor = PdfImageExtractor::new_with_password(pdf_bytes, Some(password))?;
+    extractor.max_images_per_page = max_images_per_page;
+    extractor.extract_images()
 }
 
 /// Re-extract images that have unusable formats (`"raw"`, `"ccitt"`, `"jbig2"`) by
@@ -475,7 +654,6 @@ pub(crate) fn extract_images_from_pdf(pdf_bytes: &[u8], max_images_per_page: Opt
 /// Returns the number of images successfully re-extracted.
 #[cfg(feature = "pdf")]
 pub(crate) fn reextract_raw_images_via_pdfium(pdf_bytes: &[u8], images: &mut [PdfImage]) -> Result<u32> {
-    use image::ImageEncoder;
     use pdfium_render::prelude::*;
 
     let needs_fallback = images
@@ -504,37 +682,104 @@ pub(crate) fn reextract_raw_images_via_pdfium(pdf_bytes: &[u8], images: &mut [Pd
             continue;
         };
 
-        // Find the nth image object on this page (image_index is 1-indexed)
+        // Find the nth image object on this page (image_index is 1-indexed).
+        // Recurse into XObjectForm objects so that images nested inside Form
+        // XObjects (e.g. tiled technical drawings) are reachable.
         let target_index = img.image_index;
         let mut current_image = 0usize;
+        let mut found = false;
 
-        for obj in page.objects().iter() {
-            if let Some(image_obj) = obj.as_image_object() {
-                current_image += 1;
-                if current_image == target_index {
-                    if let Ok(dynamic_image) = image_obj.get_processed_image(&document) {
-                        let w = dynamic_image.width();
-                        let h = dynamic_image.height();
-                        let rgba = dynamic_image.to_rgba8();
-                        let mut png_buf: Vec<u8> = Vec::new();
-                        if image::codecs::png::PngEncoder::new(&mut png_buf)
-                            .write_image(rgba.as_raw(), w, h, image::ExtendedColorType::Rgba8)
-                            .is_ok()
-                        {
-                            img.data = Bytes::from(png_buf);
-                            img.decoded_format = "png".to_string();
-                            img.width = w as i64;
-                            img.height = h as i64;
-                            reextracted += 1;
-                        }
-                    }
-                    break;
-                }
+        'outer: for obj in page.objects().iter() {
+            if collect_image_from_pdfium_obj(
+                &obj,
+                &document,
+                target_index,
+                &mut current_image,
+                img,
+                &mut reextracted,
+                0,
+            ) {
+                found = true;
+                break 'outer;
             }
+        }
+
+        if !found {
+            tracing::debug!(
+                page = img.page_number,
+                target_index,
+                "pdfium fallback: image index {} not found among {} objects",
+                target_index,
+                current_image,
+            );
         }
     }
 
     Ok(reextracted)
+}
+
+/// Walk a single pdfium page object and its nested children, looking for the
+/// image at `target_index` (1-based global counter across the page).
+///
+/// Returns `true` if the target image was found and processed.
+#[cfg(feature = "pdf")]
+fn collect_image_from_pdfium_obj(
+    obj: &pdfium_render::prelude::PdfPageObject<'_>,
+    document: &pdfium_render::prelude::PdfDocument<'_>,
+    target_index: usize,
+    current_image: &mut usize,
+    img: &mut PdfImage,
+    reextracted: &mut u32,
+    depth: usize,
+) -> bool {
+    const MAX_XOBJECT_DEPTH: usize = 10;
+    use image::ImageEncoder;
+    use pdfium_render::prelude::PdfPageObject;
+
+    match obj {
+        PdfPageObject::Image(image_obj) => {
+            *current_image += 1;
+            if *current_image == target_index {
+                if let Ok(dynamic_image) = image_obj.get_processed_image(document) {
+                    let w = dynamic_image.width();
+                    let h = dynamic_image.height();
+                    let rgba = dynamic_image.to_rgba8();
+                    let mut png_buf: Vec<u8> = Vec::new();
+                    if image::codecs::png::PngEncoder::new(&mut png_buf)
+                        .write_image(rgba.as_raw(), w, h, image::ExtendedColorType::Rgba8)
+                        .is_ok()
+                    {
+                        img.data = Bytes::from(png_buf);
+                        img.decoded_format = "png".to_string();
+                        img.width = w as i64;
+                        img.height = h as i64;
+                        *reextracted += 1;
+                    }
+                }
+                return true;
+            }
+        }
+        PdfPageObject::XObjectForm(form_obj) => {
+            if depth >= MAX_XOBJECT_DEPTH {
+                return false;
+            }
+            for child in form_obj.iter() {
+                if collect_image_from_pdfium_obj(
+                    &child,
+                    document,
+                    target_index,
+                    current_image,
+                    img,
+                    reextracted,
+                    depth + 1,
+                ) {
+                    return true;
+                }
+            }
+        }
+        _ => {}
+    }
+    false
 }
 
 #[cfg(test)]
@@ -687,87 +932,74 @@ mod tests {
         );
     }
 
-    /// Regression test for issue #789: `max_images_per_page` must be enforced
-    /// in the lopdf extraction path so pages with thousands of image objects
-    /// do not cause an indefinite hang.
+    /// Regression test for issue #788: images nested inside Form XObjects must
+    /// be extracted. Previously, `lopdf::get_page_images` only scanned the
+    /// page-level Resources dict and silently skipped Form-nested images.
     #[cfg(feature = "pdf")]
     #[test]
-    fn test_max_images_per_page_cap_skips_dense_page() {
+    fn test_extract_images_nested_in_form_xobject() {
         use flate2::Compression;
         use flate2::write::ZlibEncoder;
         use lopdf::{Document, Object, Stream, dictionary};
         use std::io::Write;
 
-        // Build a PDF with two pages:
-        //   page 1 → 3 images (below cap of 2 → wait, cap is 2 so 3 > 2 → skipped)
-        //   page 2 → 1 image  (below cap → extracted)
-        // After applying max_images_per_page = 2, only page 2's image is returned.
-
-        let make_compressed_pixel = || {
-            let raw = vec![255u8, 0u8, 0u8]; // 1×1 DeviceRGB
-            let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
-            enc.write_all(&raw).unwrap();
-            enc.finish().unwrap()
-        };
+        // 1×1 DeviceRGB pixel compressed with FlateDecode
+        let raw_pixel = vec![255u8, 0u8, 0u8];
+        let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
+        enc.write_all(&raw_pixel).unwrap();
+        let compressed = enc.finish().unwrap();
 
         let mut doc = Document::with_version("1.4");
 
-        // Helper: add an Image XObject and return its id.
-        let add_image = |doc: &mut Document| {
-            let stream = Stream::new(
-                dictionary! {
-                    "Type" => Object::Name(b"XObject".to_vec()),
-                    "Subtype" => Object::Name(b"Image".to_vec()),
-                    "Width" => 1i64,
-                    "Height" => 1i64,
-                    "ColorSpace" => Object::Name(b"DeviceRGB".to_vec()),
-                    "BitsPerComponent" => 8i64,
-                    "Filter" => Object::Name(b"FlateDecode".to_vec())
-                },
-                make_compressed_pixel(),
-            );
-            doc.add_object(stream)
-        };
+        // Image XObject (nested — NOT directly on the page)
+        let image_stream = Stream::new(
+            dictionary! {
+                "Type" => Object::Name(b"XObject".to_vec()),
+                "Subtype" => Object::Name(b"Image".to_vec()),
+                "Width" => 1i64,
+                "Height" => 1i64,
+                "ColorSpace" => Object::Name(b"DeviceRGB".to_vec()),
+                "BitsPerComponent" => 8i64,
+                "Filter" => Object::Name(b"FlateDecode".to_vec())
+            },
+            compressed,
+        );
+        let image_id = doc.add_object(image_stream);
 
-        // Page 1: 3 images (will be skipped when cap = 2)
-        let img1a = add_image(&mut doc);
-        let img1b = add_image(&mut doc);
-        let img1c = add_image(&mut doc);
+        // Form XObject whose Resources contain the image
+        let form_stream = Stream::new(
+            dictionary! {
+                "Type" => Object::Name(b"XObject".to_vec()),
+                "Subtype" => Object::Name(b"Form".to_vec()),
+                "BBox" => Object::Array(vec![0i64.into(), 0i64.into(), 10i64.into(), 10i64.into()]),
+                "Resources" => dictionary! {
+                    "XObject" => dictionary! {
+                        "Im0" => Object::Reference(image_id)
+                    }
+                }
+            },
+            b"/Im0 Do".to_vec(),
+        );
+        let form_id = doc.add_object(form_stream);
 
-        // Page 2: 1 image (below cap → extracted)
-        let img2a = add_image(&mut doc);
-
+        // Page whose Resources reference only the Form (not the Image)
         let pages_id = doc.new_object_id();
-
-        let page1_id = doc.add_object(dictionary! {
+        let page_id = doc.add_object(dictionary! {
             "Type" => Object::Name(b"Page".to_vec()),
             "Parent" => Object::Reference(pages_id),
             "MediaBox" => Object::Array(vec![0i64.into(), 0i64.into(), 100i64.into(), 100i64.into()]),
             "Resources" => dictionary! {
                 "XObject" => dictionary! {
-                    "Im0" => Object::Reference(img1a),
-                    "Im1" => Object::Reference(img1b),
-                    "Im2" => Object::Reference(img1c)
+                    "Form1" => Object::Reference(form_id)
                 }
             }
         });
-        let page2_id = doc.add_object(dictionary! {
-            "Type" => Object::Name(b"Page".to_vec()),
-            "Parent" => Object::Reference(pages_id),
-            "MediaBox" => Object::Array(vec![0i64.into(), 0i64.into(), 100i64.into(), 100i64.into()]),
-            "Resources" => dictionary! {
-                "XObject" => dictionary! {
-                    "Im0" => Object::Reference(img2a)
-                }
-            }
-        });
-
         doc.set_object(
             pages_id,
             dictionary! {
                 "Type" => Object::Name(b"Pages".to_vec()),
-                "Kids" => Object::Array(vec![Object::Reference(page1_id), Object::Reference(page2_id)]),
-                "Count" => 2i64
+                "Kids" => Object::Array(vec![Object::Reference(page_id)]),
+                "Count" => 1i64
             },
         );
         let catalog_id = doc.add_object(dictionary! {
@@ -779,22 +1011,185 @@ mod tests {
         let mut pdf_bytes = Vec::new();
         doc.save_to(&mut pdf_bytes).unwrap();
 
-        // No cap: all 4 images extracted.
-        let all = extract_images_from_pdf(&pdf_bytes, None).expect("should parse");
-        assert_eq!(all.len(), 4, "without cap: all images extracted");
+        let images = extract_images_from_pdf(&pdf_bytes, None).expect("should parse PDF");
+        assert_eq!(images.len(), 1, "image nested inside Form XObject must be found");
+        assert_eq!(images[0].width, 1);
+        assert_eq!(images[0].height, 1);
+    }
 
-        // Cap of 2: page 1 has 3 images → skipped; page 2 has 1 image → extracted.
-        let capped = extract_images_from_pdf(&pdf_bytes, Some(2)).expect("should parse");
-        assert_eq!(capped.len(), 1, "with cap=2: only page-2 image extracted");
-        assert_eq!(capped[0].width, 1);
+    /// Regression: a Form XObject referenced twice from the same page must not
+    /// double-count its images (would corrupt the sequential image_index).
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn test_extract_images_form_xobject_referenced_twice() {
+        use lopdf::{Document, Object, Stream, dictionary};
 
-        // Edge case: cap=0 means every page with any images is skipped.
-        let zero_capped = extract_images_from_pdf(&pdf_bytes, Some(0)).expect("should parse");
-        assert_eq!(zero_capped.len(), 0, "cap=0: all pages skipped");
+        // Minimal JPEG magic — use DCTDecode passthrough so no FlateDecode is needed.
+        let jpeg_bytes: Vec<u8> = vec![0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, b'J', b'F', b'I', b'F'];
 
-        // Edge case: cap exactly equal to page-1 image count (3) — page is NOT skipped.
-        let exact_capped = extract_images_from_pdf(&pdf_bytes, Some(3)).expect("should parse");
-        assert_eq!(exact_capped.len(), 4, "cap=exactly-page-count: all images extracted");
+        let mut doc = Document::with_version("1.4");
+
+        let image_stream = Stream::new(
+            dictionary! {
+                "Type" => Object::Name(b"XObject".to_vec()),
+                "Subtype" => Object::Name(b"Image".to_vec()),
+                "Width" => 10i64,
+                "Height" => 10i64,
+                "ColorSpace" => Object::Name(b"DeviceRGB".to_vec()),
+                "BitsPerComponent" => 8i64,
+                "Filter" => Object::Name(b"DCTDecode".to_vec())
+            },
+            jpeg_bytes,
+        );
+        let image_id = doc.add_object(image_stream);
+
+        let form_stream = Stream::new(
+            dictionary! {
+                "Type" => Object::Name(b"XObject".to_vec()),
+                "Subtype" => Object::Name(b"Form".to_vec()),
+                "BBox" => Object::Array(vec![0i64.into(), 0i64.into(), 10i64.into(), 10i64.into()]),
+                "Resources" => dictionary! {
+                    "XObject" => dictionary! {
+                        "Im0" => Object::Reference(image_id)
+                    }
+                }
+            },
+            b"/Im0 Do".to_vec(),
+        );
+        let form_id = doc.add_object(form_stream);
+
+        let pages_id = doc.new_object_id();
+        let page_id = doc.add_object(dictionary! {
+            "Type" => Object::Name(b"Page".to_vec()),
+            "Parent" => Object::Reference(pages_id),
+            "MediaBox" => Object::Array(vec![0i64.into(), 0i64.into(), 100i64.into(), 100i64.into()]),
+            "Resources" => dictionary! {
+                "XObject" => dictionary! {
+                    // Same form referenced under two different names — must not double-count
+                    "Form1" => Object::Reference(form_id),
+                    "Form2" => Object::Reference(form_id)
+                }
+            }
+        });
+        doc.set_object(
+            pages_id,
+            dictionary! {
+                "Type" => Object::Name(b"Pages".to_vec()),
+                "Kids" => Object::Array(vec![Object::Reference(page_id)]),
+                "Count" => 1i64
+            },
+        );
+        let catalog_id = doc.add_object(dictionary! {
+            "Type" => Object::Name(b"Catalog".to_vec()),
+            "Pages" => Object::Reference(pages_id)
+        });
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+
+        let mut pdf_bytes = Vec::new();
+        doc.save_to(&mut pdf_bytes).unwrap();
+
+        let images = extract_images_from_pdf(&pdf_bytes, None).expect("should parse PDF");
+        assert_eq!(
+            images.len(),
+            1,
+            "Form XObject referenced twice must yield exactly one image, not two"
+        );
+    }
+
+    /// Regression: images nested at depth 2 (Form inside Form) must be extracted.
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn test_extract_images_depth2_nested_form_xobject() {
+        use flate2::Compression;
+        use flate2::write::ZlibEncoder;
+        use lopdf::{Document, Object, Stream, dictionary};
+        use std::io::Write;
+
+        let raw_pixel = vec![0u8, 128u8, 255u8]; // 1×1 DeviceRGB
+        let mut enc = ZlibEncoder::new(Vec::new(), Compression::default());
+        enc.write_all(&raw_pixel).unwrap();
+        let compressed = enc.finish().unwrap();
+
+        let mut doc = Document::with_version("1.4");
+
+        let image_stream = Stream::new(
+            dictionary! {
+                "Type" => Object::Name(b"XObject".to_vec()),
+                "Subtype" => Object::Name(b"Image".to_vec()),
+                "Width" => 1i64,
+                "Height" => 1i64,
+                "ColorSpace" => Object::Name(b"DeviceRGB".to_vec()),
+                "BitsPerComponent" => 8i64,
+                "Filter" => Object::Name(b"FlateDecode".to_vec())
+            },
+            compressed,
+        );
+        let image_id = doc.add_object(image_stream);
+
+        // inner form → contains image
+        let inner_form = Stream::new(
+            dictionary! {
+                "Type" => Object::Name(b"XObject".to_vec()),
+                "Subtype" => Object::Name(b"Form".to_vec()),
+                "BBox" => Object::Array(vec![0i64.into(), 0i64.into(), 5i64.into(), 5i64.into()]),
+                "Resources" => dictionary! {
+                    "XObject" => dictionary! {
+                        "Im0" => Object::Reference(image_id)
+                    }
+                }
+            },
+            b"/Im0 Do".to_vec(),
+        );
+        let inner_form_id = doc.add_object(inner_form);
+
+        // outer form → contains inner form
+        let outer_form = Stream::new(
+            dictionary! {
+                "Type" => Object::Name(b"XObject".to_vec()),
+                "Subtype" => Object::Name(b"Form".to_vec()),
+                "BBox" => Object::Array(vec![0i64.into(), 0i64.into(), 10i64.into(), 10i64.into()]),
+                "Resources" => dictionary! {
+                    "XObject" => dictionary! {
+                        "Inner" => Object::Reference(inner_form_id)
+                    }
+                }
+            },
+            b"/Inner Do".to_vec(),
+        );
+        let outer_form_id = doc.add_object(outer_form);
+
+        let pages_id = doc.new_object_id();
+        let page_id = doc.add_object(dictionary! {
+            "Type" => Object::Name(b"Page".to_vec()),
+            "Parent" => Object::Reference(pages_id),
+            "MediaBox" => Object::Array(vec![0i64.into(), 0i64.into(), 100i64.into(), 100i64.into()]),
+            "Resources" => dictionary! {
+                "XObject" => dictionary! {
+                    "Outer" => Object::Reference(outer_form_id)
+                }
+            }
+        });
+        doc.set_object(
+            pages_id,
+            dictionary! {
+                "Type" => Object::Name(b"Pages".to_vec()),
+                "Kids" => Object::Array(vec![Object::Reference(page_id)]),
+                "Count" => 1i64
+            },
+        );
+        let catalog_id = doc.add_object(dictionary! {
+            "Type" => Object::Name(b"Catalog".to_vec()),
+            "Pages" => Object::Reference(pages_id)
+        });
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+
+        let mut pdf_bytes = Vec::new();
+        doc.save_to(&mut pdf_bytes).unwrap();
+
+        let images = extract_images_from_pdf(&pdf_bytes, None).expect("should parse PDF");
+        assert_eq!(images.len(), 1, "image at depth-2 Form nesting must be extracted");
+        assert_eq!(images[0].width, 1);
+        assert_eq!(images[0].height, 1);
     }
 
     #[cfg(feature = "pdf")]

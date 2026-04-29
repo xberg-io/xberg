@@ -198,9 +198,17 @@ impl Document {
     }
 
     /// Render the document and return both the text and accurate page boundaries.
-    pub fn extract_text_with_boundaries(&self, is_markdown: bool) -> (String, Vec<crate::types::PageBoundary>) {
+    ///
+    /// `inject_placeholders` controls whether image reference markers (`![](image_N)`) are
+    /// emitted in the markdown text. Passing `false` suppresses them, which is honoured when
+    /// `ImageExtractionConfig::inject_placeholders` is set to `false` by the caller.
+    pub fn extract_text_with_boundaries(
+        &self,
+        is_markdown: bool,
+        inject_placeholders: bool,
+    ) -> (String, Vec<crate::types::PageBoundary>) {
         let text = if is_markdown {
-            self.to_markdown(true)
+            self.to_markdown(inject_placeholders)
         } else {
             self.to_plain_text()
         };

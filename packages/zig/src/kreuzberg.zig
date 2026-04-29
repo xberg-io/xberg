@@ -958,6 +958,7 @@ pub const ExtractionResult = struct {
     content: [:0]const u8,
     mime_type: [:0]const u8,
     metadata: Metadata,
+    extraction_method: ?ExtractionMethod,
     tables: []const [:0]const u8,
     detected_languages: ?[]const [:0]const u8,
     chunks: ?[]const Chunk,
@@ -2371,6 +2372,13 @@ pub const AnnotationKind = union(enum) {
         name: [:0]const u8,
         value: ?[:0]const u8,
     },
+};
+
+/// How the extracted text was produced.
+pub const ExtractionMethod = enum {
+    native,
+    ocr,
+    mixed,
 };
 
 /// Semantic structural classification of a text chunk.

@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **#761**: `ExtractionResult.extraction_method` — new field exposing how text was extracted (`native`, `ocr`, `mixed`). Populated by PDF (native vs OCR vs `force_ocr_pages` mixed) and image (always `ocr`) extractors. Surfaced across every binding (Python, Node, PHP, Ruby, Java, C#, Go, R, Dart, Swift, Elixir, Gleam, Zig, WASM, C FFI).
+
+### Fixed
+
+- **#799**: Extract images nested inside PDF Form XObjects across XObject references — recursive Form XObject descent (depth-limited to 8) now follows indirect references through the resource chain, with cycle detection via a visited-set so self-referential XObject DAGs no longer hang. Both the lopdf and pdfium image-decoding paths benefit.
+- **#824**: Robust PDF image extraction across XObject references — fixes silent image drops when documents reference XObjects through indirect chains. Combined with the depth limit and cycle guard from #799 to harden the recursive walker against malformed structures.
+- **#826**: WASM loading on Next.js / Turbopack — `@kreuzberg/wasm` now bundles cleanly under webpack 5, Turbopack, and Next.js's app router. Dynamic imports of Node built-ins and the pdfium-js subsystem carry `/* webpackIgnore: true */` markers so bundlers stop trying to inline platform-specific binaries.
+- **#834**: DOCX `inject_placeholders` flag honored end-to-end — image placeholders now appear in markdown/plain/djot output when `ImageExtractionConfig.inject_placeholders = true`, and the DOCX OCR pipeline runs before rendering so OCR text reaches the final document. Adds extractor-level security regression tests for LaTeX, EPUB, ODT, Jupyter, RST, and RTF inputs (deeply nested envs, unclosed math, oversized control words, entity bombs, depth bombs, large item lists).
+- **#836**: Prevent base64 image data leaking into structured PDF output when image extraction is disabled. The structure pipeline now suppresses `populate_images_from_pdfium` and `inject_placeholders` whenever neither `ImageExtractionConfig.extract_images` nor `pdf_options.extract_images` is enabled, so disabled-by-default users no longer see embedded raster blobs in their results.
+- **#838**: OCR `elements` are now propagated through the extraction pipeline — image and PDF OCR backends populate `ExtractionResult.ocr_elements` consistently, fixing downstream consumers that relied on per-token bounding boxes.
+- **#839**: `extraction_timeout_secs` now applies to the single-file `extract_file` / `extract_bytes` paths. Previously the timeout only fired in batch and async wrappers, so a hostile single document could hang past the configured limit. The timeout is gated on `tokio-runtime`; non-tokio builds remain timeout-less by design.
+- **`force_ocr_pages` now reliably yields `ExtractionMethod::Mixed`** even when `pages` config is not explicitly set. The PDF text path now synthesizes a default `PageConfig` when force-ocr-pages is non-empty so byte boundaries are always available for splicing OCR text into the right ranges.
+- **PDF page extraction strategy enum renamed `ExtractionMethod` → `PageExtractionMethod`** in `kreuzberg-pdfium-render` to disambiguate from `kreuzberg::ExtractionMethod` (the new native/ocr/mixed strategy enum from #761). The pdfium variant remains exported via `pdfium_render::prelude` under the new name.
+
+### Changed
+
+- **Dependabot bumps**: `swift-actions/setup-swift` 2 → 3 (#841), `gradle/actions` 4 → 6 (#840), `docker/setup-qemu-action` 3 → 4 (#833), `mlugg/setup-zig` 1 → 2 (#832).
+
 ## [4.10.0-rc.4] - 2026-04-28
 
 Cycle 4 of the alef-backed publish-pipeline iteration. Cycle 3 surfaced fourteen build-stage publish failures across Elixir, Ruby, Python, PHP, Node, and C#; this RC bundles the targeted fixes for each.
@@ -41,18 +61,34 @@ First release candidate of v4.10.0. The release pipeline itself is the headline 
 ### Fixed
 
 - **C FFI, PHP, Ruby, R bindings shipped 40+ stub functions that returned `Not implemented` at runtime**. Every batch API (`batch_extract_file_sync`, `batch_extract_bytes_sync`, plus async variants), `extract_file`, `extract_file_sync`, and most of the Ruby gem's surface (21 functions) silently failed with error code 99. Root cause was in the alef binding generator: bare `Path` was misresolved to `Named("Path")` and sanitized to `String`; sanitized batch-tuple params (`Vec<(PathBuf, Option<FileExtractionConfig>)>`) were never handled by the PHP/Magnus/FFI codegen even though the IR carried the original type for JSON-roundtrip; Magnus rejected every extraction function via an over-strict `is_named_ref_param` check; and the R backend panicked on every async function. Fixed in alef and regenerated all bindings — Python, Node, FFI all build clean. Only `kreuzberg_get_preset` remains stubbed (return-type sanitization edge case; tracked separately).
-
-### Added
-
-- **#768**: In-process embedding backend plugin. Callers that already own an embedder (sentence-transformers, llama-cpp-python, a tuned ONNX session, etc.) can register it once via `kreuzberg::plugins::register_embedding_backend(Arc::new(MyEmbedder))` and route kreuzberg's chunking and standalone embed paths into it through the new `EmbeddingModelType::Plugin { name }` config variant. Reachable from REST, MCP (`embedding_plugin`), CLI (`--provider plugin --plugin NAME`), and the `KREUZBERG_EMBEDDING_PLUGIN_NAME` environment variable; registry pre-flight returns the available backends list when the name isn't found. A new `EmbeddingConfig.max_embed_duration_secs` field bounds the wait on a hung backend (default 60s; `None` disables, `Some(0)` is treated as disabled). Host-side `registerEmbeddingBackend` is wired through Python (PyO3), Node (NAPI-RS), PHP (ext-php-rs), WASM (wasm-bindgen), Ruby (Magnus), Elixir (Rustler), R (extendr), Go (cgo), C# (P/Invoke), and the C FFI (`kreuzberg_register_embedding_backend`); Java's Panama backend can round-trip the `Plugin` config but does not yet emit plugin bridges. Adds fork-safety guidance for Python users running native-backed embedders under prefork servers (`os.register_at_fork`).
-
-### Fixed
-
+- **#788**: Extract images nested inside PDF Form XObjects — `lopdf::get_page_images` only scanned the page-level `Resources` dictionary and silently skipped images stored inside `Subtype=Form` XObjects, which is the structure used by technical drawings composed of tiled raster tiles. PDF image extraction now recursively descends into Form XObjects (up to 8 levels deep) in both the lopdf and pdfium code paths, so all constituent images are collected.
 - **Security limits actually enforce now**. `SecurityLimits` config fields (`max_nesting_depth`, `max_entity_length`, `max_content_size`, `max_iterations`, `max_xml_depth`, `max_table_cells`) and the matching `SecurityError` variants previously advertised protection that no extractor invoked — the validator helpers were `#[cfg(test)]`-gated and removed in commit `c58069201` as dead code, leaving only the config knobs. Five internal validators (`StringGrowthValidator`, `IterationValidator`, `DepthValidator`, `EntityValidator`, `TableValidator`) are restored and now run on every extraction path that ingests user-controlled bytes — XML-class formats (DOCX/PPTX/XLSX/ODT/EPUB/SVG/JATS/DocBook/FictionBook/OPML), HTML, JSON/YAML/TOML, tabular extraction (CSV/Excel/HTML tables/DOCX cells), and final text accumulation for plain-text formats (Markdown/Org/RST/LaTeX/Jupyter/RTF). Hostile inputs (billion-laughs entity expansion, depth bombs, cell bombs, quadratic string growth, iteration bombs) now fail with a structured `KreuzbergError::Security` instead of OOMing or hanging. The validators are internal core-only types; bindings observe the protection through the new unified `Security` error variant returned from every `extract_*` entry point. Defaults relaxed where the previous values false-positived on legitimate documents: `max_nesting_depth` 100 → 1024, `max_xml_depth` 100 → 1024, `max_entity_length` 32 → 1 048 576 (per-token cap; cumulative size remains bounded by `max_content_size`).
 - **#789**: PDF image extraction would hang indefinitely on documents with thousands of image objects on a single page (observed: 2487 images). The `max_images_per_page` cap was added to `ImageExtractionConfig` in #766 but only wired to the structure pipeline's position counting, never to the byte-decoding path; pages exceeding the cap are now skipped with a `WARN` log before the FlateDecode loop runs. Both `extract_images_from_pdf` and the pdfium fallback now run inside `tokio::task::spawn_blocking`, so `extraction_timeout_secs` can interrupt them. (#800)
 - **#794**: Fix Helm chart default install broken by two conflicts: (1) the cache init container ran as `root` while `podSecurityContext.runAsNonRoot: true` is the default, causing kubelet to reject the pod; (2) Kubernetes service discovery injects `KREUZBERG_PORT=tcp://...` when the release is named `kreuzberg`, which the binary parses as a `u16` and panics. Fixed by adding `runAsNonRoot: false` to the init container's `securityContext`, a new `cache.initChown` toggle (default `true`, set to `false` on fsGroup-aware storage to skip the init container entirely), and defaulting `enableServiceLinks: false` in the pod spec. (#822)
 - **#825**: `kreuzberg cache manifest` no longer fails with `E0282` when `kreuzberg-cli` is built without `paddle-ocr` or `layout-detection` (e.g. `--no-default-features --features bundled-pdfium`). The command now bails with a clear actionable error if invoked at runtime in such a build.
 - **`@kreuzberg/node` prebuilt bindings fail to load on RHEL 8 / AlmaLinux 8 / Rocky 8 / RHEL 9**: the Linux x64/arm64 GNU prebuilds are now built via `cargo-zigbuild`, which caps the glibc floor at link time. Fixes the `GLIBC_2.38 not found` / `GLIBCXX_3.4.31 not found` / `undefined symbol: __isoc23_strtoll` load errors on RHEL 8, AlmaLinux 8, Rocky 8 (glibc 2.28) and RHEL 9 (glibc 2.34). Verified locally: the prebuilt `.node` drops from `GLIBC_2.38` / `GLIBCXX_3.4.31` down to `GLIBC_2.28` / no `GLIBCXX` dependency. `kreuzberg-tesseract/build.rs` auto-detects the zigbuild toolchain and (1) disables tesseract's AVX512 codepath (zig/clang requires an explicit `evex512` feature that tesseract's CMake doesn't pass) and (2) skips linking `stdc++fs` (zig's libstdc++ has `std::filesystem` inline). The publish pipeline now (a) runs `objdump -T` against each linux-gnu prebuild and rejects any artifact requiring `GLIBC_*` > 2.28, any `GLIBCXX_*` symbol, or any `__isoc23_*` symbol, and (b) loads the prebuilt `.node` inside `redhat/ubi8` (glibc 2.28) and exercises the napi surface before publishing to npm. Refs #352.
+- **#781**: Fix DOCX OCR pipeline integration — reordered the extraction pipeline to ensure OCR processing runs before document rendering. Markdown, Plain, and Djot renderers now correctly receive and inject OCR text output instead of dropping it or omitting images.
+- **#823**: Fix WASM loading in Next.js / Turbopack by adding `/* webpackIgnore: true */` to dynamic imports of Node.js built-ins and resolving bundling issues in the pdfium-js subsystem.
+
+### Added
+
+- **#788**: Extract images nested inside PDF Form XObjects — PDF image extraction now recursively descends into Form XObjects (up to 8 levels deep) in both the lopdf and pdfium code paths.
+
+### Changed
+
+- Fix `use use` duplicate-import syntax error in alef-generated elixir NIF binding (`kreuzberg_nif/src/lib.rs`).
+- Apply `cargo fmt` uniformly across all workspace crates (formatting only, no logic changes).
+- Fix typo `entrys` → `entries` in auto-generated API reference docs.
+
+### Added
+
+- **#788**: Extract images nested inside PDF Form XObjects — PDF image extraction now recursively descends into Form XObjects (up to 8 levels deep) in both the lopdf and pdfium code paths.
+
+### Changed
+
+- Fix `use use` duplicate-import syntax error in alef-generated elixir NIF binding (`kreuzberg_nif/src/lib.rs`).
+- Apply `cargo fmt` uniformly across all workspace crates (formatting only, no logic changes).
+- Fix typo `entrys` → `entries` in auto-generated API reference docs.
 
 ---
 

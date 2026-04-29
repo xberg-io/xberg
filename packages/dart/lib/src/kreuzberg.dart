@@ -2495,6 +2495,12 @@ class ExtractionResult {
   final String content;
   final String mimeType;
   final Metadata metadata;
+
+  /// Extraction strategy used to produce the returned text.
+  ///
+  /// Populated when the extractor can reliably distinguish native text extraction,
+  /// OCR-only extraction, or mixed native/OCR output.
+  final ExtractionMethod? extractionMethod;
   final List<String> tables;
   final List<String>? detectedLanguages;
 
@@ -2643,6 +2649,7 @@ class ExtractionResult {
     required this.content,
     required this.mimeType,
     required this.metadata,
+    required this.extractionMethod,
     required this.tables,
     required this.detectedLanguages,
     required this.chunks,
@@ -5893,6 +5900,9 @@ final class Custom extends AnnotationKind {
   final String value;
   Custom({required this.name, required this.value});
 }
+
+/// How the extracted text was produced.
+enum ExtractionMethod { native, ocr, mixed }
 
 /// Semantic structural classification of a text chunk.
 ///

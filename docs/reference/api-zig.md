@@ -3869,6 +3869,7 @@ This is the main result type returned by all extraction functions.
 | `content` | `[:0]const u8` | — | The extracted text content |
 | `mimeType` | `[:0]const u8` | — | The detected MIME type |
 | `metadata` | `Metadata` | — | Document metadata |
+| `extractionMethod` | `ExtractionMethod?` | `null` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
 | `tables` | `[]const [:0]const u8` | `[]` | Tables extracted from the document |
 | `detectedLanguages` | `[]const [:0]const u8?` | `[]` | Detected languages |
 | `chunks` | `[]const Chunk?` | `[]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
@@ -4194,14 +4195,24 @@ Image extraction configuration.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extractImages` | `bool` | — | Extract images from documents |
-| `targetDpi` | `i32` | — | Target DPI for image normalization |
-| `maxImageDimension` | `i32` | — | Maximum dimension for images (width or height) |
-| `injectPlaceholders` | `bool` | — | Whether to inject image reference placeholders into markdown output. When `true` (default), image references like `![Image 1](embedded:p1_i0)` are appended to the markdown. Set to `false` to extract images as data without polluting the markdown output. |
-| `autoAdjustDpi` | `bool` | — | Automatically adjust DPI based on image content |
-| `minDpi` | `i32` | — | Minimum DPI threshold |
-| `maxDpi` | `i32` | — | Maximum DPI threshold |
+| `extractImages` | `bool` | `true` | Extract images from documents |
+| `targetDpi` | `i32` | `300` | Target DPI for image normalization |
+| `maxImageDimension` | `i32` | `4096` | Maximum dimension for images (width or height) |
+| `injectPlaceholders` | `bool` | `true` | Whether to inject image reference placeholders into markdown output. When `true` (default), image references like `![Image 1](embedded:p1_i0)` are appended to the markdown. Set to `false` to extract images as data without polluting the markdown output. |
+| `autoAdjustDpi` | `bool` | `true` | Automatically adjust DPI based on image content |
+| `minDpi` | `i32` | `72` | Minimum DPI threshold |
+| `maxDpi` | `i32` | `600` | Maximum DPI threshold |
 | `maxImagesPerPage` | `u32?` | `null` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdfium FFI. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `null` (default) means no limit — all images are extracted. |
+
+##### Methods
+
+###### default()
+
+**Signature:**
+
+```zig
+// Phase 1: zig backend method signature generation
+```
 
 
 ---
@@ -6975,6 +6986,19 @@ Types of inline text annotations.
 | `Color` | Text color (CSS-compatible value, e.g. "#ff0000", "red"). — Fields: `value`: `[:0]const u8` |
 | `FontSize` | Font size with units (e.g. "12pt", "1.2em", "16px"). — Fields: `value`: `[:0]const u8` |
 | `Custom` | Extensible annotation for format-specific styling. — Fields: `name`: `[:0]const u8`, `value`: `[:0]const u8` |
+
+
+---
+
+#### ExtractionMethod
+
+How the extracted text was produced.
+
+| Value | Description |
+|-------|-------------|
+| `Native` | Native |
+| `Ocr` | Ocr |
+| `Mixed` | Mixed |
 
 
 ---

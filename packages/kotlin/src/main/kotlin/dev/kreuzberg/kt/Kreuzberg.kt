@@ -203,6 +203,7 @@ typealias RelationshipKind = dev.kreuzberg.RelationshipKind
 typealias ContentLayer = dev.kreuzberg.ContentLayer
 typealias NodeContent = dev.kreuzberg.NodeContent
 typealias AnnotationKind = dev.kreuzberg.AnnotationKind
+typealias ExtractionMethod = dev.kreuzberg.ExtractionMethod
 typealias ChunkType = dev.kreuzberg.ChunkType
 typealias ElementType = dev.kreuzberg.ElementType
 typealias FormatMetadata = dev.kreuzberg.FormatMetadata

@@ -20,7 +20,7 @@ jobs:
           java-version: "21"
           distribution: temurin
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - name: Run Gradle build
         run: gradle build
       - name: Run Gradle tests

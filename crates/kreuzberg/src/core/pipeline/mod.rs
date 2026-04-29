@@ -55,6 +55,29 @@ use initialization::{get_processors_from_cache, initialize_features, initialize_
     )
 ))]
 pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractionResult> {
+    // 1. Process extracted images with OCR if configured
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    if config.ocr.is_some() && !doc.images.is_empty() {
+        let images_to_process = std::mem::take(&mut doc.images);
+        match crate::extraction::image_ocr::process_images_with_ocr(
+            images_to_process,
+            config,
+            &mut doc.processing_warnings,
+        )
+        .await
+        {
+            Ok(processed) => {
+                doc.images = processed;
+            }
+            Err(e) => {
+                doc.processing_warnings.push(crate::types::ProcessingWarning {
+                    source: std::borrow::Cow::Borrowed("image_ocr"),
+                    message: std::borrow::Cow::Owned(format!("Image OCR failed: {e}")),
+                });
+            }
+        }
+    }
+
     // Pre-render markdown for the chunker's heading context resolution when:
     // - Markdown chunking is configured
     // - Output format is not already Markdown (which would produce formatted_content anyway)
@@ -99,29 +122,6 @@ pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) 
             None
         }
     };
-
-    // 1. Process extracted images with OCR if configured
-    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-    if config.ocr.is_some() && !doc.images.is_empty() {
-        let images_to_process = std::mem::take(&mut doc.images);
-        match crate::extraction::image_ocr::process_images_with_ocr(
-            images_to_process,
-            config,
-            &mut doc.processing_warnings,
-        )
-        .await
-        {
-            Ok(processed) => {
-                doc.images = processed;
-            }
-            Err(e) => {
-                doc.processing_warnings.push(crate::types::ProcessingWarning {
-                    source: std::borrow::Cow::Borrowed("image_ocr"),
-                    message: std::borrow::Cow::Owned(format!("Image OCR failed: {e}")),
-                });
-            }
-        }
-    }
 
     // 2. Derive ExtractionResult from InternalDocument
     let include_structure = config.include_document_structure;

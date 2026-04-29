@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Image extraction configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageExtractionConfig {
     /// Extract images from documents
     #[serde(default = "default_true")]
@@ -82,6 +82,21 @@ pub struct LanguageDetectionConfig {
     pub detect_multiple: bool,
 }
 
+impl Default for ImageExtractionConfig {
+    fn default() -> Self {
+        Self {
+            extract_images: true,
+            target_dpi: 300,
+            max_image_dimension: 4096,
+            inject_placeholders: true,
+            auto_adjust_dpi: true,
+            min_dpi: 72,
+            max_dpi: 600,
+            max_images_per_page: None,
+        }
+    }
+}
+
 // Default value functions
 fn default_true() -> bool {
     true
@@ -114,6 +129,40 @@ fn default_confidence() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_image_extraction_config_default_booleans_are_true() {
+        let cfg = ImageExtractionConfig::default();
+        assert!(cfg.extract_images, "extract_images must default to true");
+        assert!(cfg.inject_placeholders, "inject_placeholders must default to true");
+        assert!(cfg.auto_adjust_dpi, "auto_adjust_dpi must default to true");
+        assert_eq!(cfg.target_dpi, 300);
+        assert_eq!(cfg.max_image_dimension, 4096);
+        assert_eq!(cfg.min_dpi, 72);
+        assert_eq!(cfg.max_dpi, 600);
+    }
+
+    #[test]
+    fn test_image_extraction_config_explicit_false_disables_placeholders() {
+        let cfg = ImageExtractionConfig {
+            inject_placeholders: false,
+            ..ImageExtractionConfig::default()
+        };
+        assert!(!cfg.inject_placeholders);
+        assert!(cfg.extract_images);
+    }
+
+    #[test]
+    fn test_image_extraction_config_absent_json_fields_get_canonical_defaults() {
+        let json = r#"{"extract_images": true}"#;
+        let cfg: ImageExtractionConfig = serde_json::from_str(json).unwrap();
+        assert!(
+            cfg.inject_placeholders,
+            "absent inject_placeholders must deserialize to true"
+        );
+        assert!(cfg.auto_adjust_dpi, "absent auto_adjust_dpi must deserialize to true");
+        assert_eq!(cfg.target_dpi, 300);
+    }
 
     #[test]
     fn test_max_images_per_page_defaults_none() {

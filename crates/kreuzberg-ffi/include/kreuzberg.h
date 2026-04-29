@@ -86,6 +86,7 @@ typedef struct KREUZBERGExtractStructuredParams KREUZBERGExtractStructuredParams
 typedef struct KREUZBERGExtractedImage KREUZBERGExtractedImage;
 typedef struct KREUZBERGExtractedInlineImage KREUZBERGExtractedInlineImage;
 typedef struct KREUZBERGExtractionConfig KREUZBERGExtractionConfig;
+typedef struct KREUZBERGExtractionMethod KREUZBERGExtractionMethod;
 typedef struct KREUZBERGExtractionResult KREUZBERGExtractionResult;
 typedef struct KREUZBERGFictionBookMetadata KREUZBERGFictionBookMetadata;
 typedef struct KREUZBERGFileExtractionConfig KREUZBERGFileExtractionConfig;
@@ -1586,6 +1587,13 @@ int32_t kreuzberg_image_extraction_config_max_dpi(const KREUZBERGImageExtraction
  * Pointer must be a valid handle returned by this library.
  */
 uint32_t kreuzberg_image_extraction_config_max_images_per_page(const KREUZBERGImageExtractionConfig *ptr);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+KREUZBERGImageExtractionConfig *kreuzberg_image_extraction_config_default(void);
 
 /**
  * Create a `TokenReductionOptions` from a JSON string. Returns null on failure.
@@ -4599,6 +4607,13 @@ char *kreuzberg_extraction_result_content(const KREUZBERGExtractionResult *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 KREUZBERGMetadata *kreuzberg_extraction_result_metadata(const KREUZBERGExtractionResult *ptr);
+
+/**
+ * Get the `extraction_method` field from a `ExtractionResult`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGExtractionMethod *kreuzberg_extraction_result_extraction_method(const KREUZBERGExtractionResult *ptr);
 
 /**
  * Get the `detected_languages` field from a `ExtractionResult`.
@@ -10780,6 +10795,21 @@ int32_t kreuzberg_annotation_kind_from_i32(int32_t value);
  * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t kreuzberg_annotation_kind_from_str(const char *name);
+
+/**
+ * Convert an integer to a `ExtractionMethod` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t kreuzberg_extraction_method_from_i32(int32_t value);
+
+/**
+ * Convert a `ExtractionMethod` variant name (C string) to its integer value. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t kreuzberg_extraction_method_from_str(const char *name);
 
 /**
  * Convert an integer to a `ChunkType` variant. Returns -1 on invalid input.

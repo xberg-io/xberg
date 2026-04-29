@@ -994,6 +994,7 @@ pub type ExtractionResult {
     content: String,
     mime_type: String,
     metadata: Metadata,
+    extraction_method: Option(ExtractionMethod),
     tables: List(String),
     detected_languages: Option(List(String)),
     chunks: Option(List(Chunk)),
@@ -2467,6 +2468,13 @@ pub type AnnotationKind {
   Color(value: String)
   FontSize(value: String)
   AnnotationKindCustom(name: String, value: Option(String))
+}
+
+/// How the extracted text was produced.
+pub type ExtractionMethod {
+  Native
+  ExtractionMethodOcr
+  Mixed
 }
 
 /// Semantic structural classification of a text chunk.

@@ -154,7 +154,7 @@ pub use core::config::{LayoutDetectionConfig, TableModel};
 #[cfg(feature = "layout-detection")]
 pub use layout::types::{BBox, DetectionResult, LayoutClass, LayoutDetection};
 
-#[cfg(feature = "ocr")]
+#[cfg(all(feature = "ocr", feature = "layout-detection"))]
 pub use ocr::layout_assembly::RecognizedTable;
 #[cfg(feature = "ocr")]
 pub use ocr::types::PSMMode;

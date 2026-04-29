@@ -601,6 +601,7 @@ pub struct ExtractionResult {
     pub content: String,
     pub mime_type: String,
     pub metadata: Metadata,
+    pub extraction_method: Option<ExtractionMethod>,
     pub tables: Vec<String>,
     pub detected_languages: Option<Vec<String>>,
     pub chunks: Option<Vec<Chunk>>,
@@ -1829,6 +1830,13 @@ pub enum AnnotationKind {
     Color { value: String },
     FontSize { value: String },
     Custom { name: String, value: String },
+}
+
+#[frb(mirror(ExtractionMethod))]
+pub enum ExtractionMethod {
+    Native,
+    Ocr,
+    Mixed,
 }
 
 #[frb(mirror(ChunkType))]

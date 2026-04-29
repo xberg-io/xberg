@@ -24,6 +24,13 @@ impl ImageExtractor {
         Self
     }
 
+    fn mark_ocr_extraction(doc: &mut InternalDocument) {
+        doc.metadata.additional.insert(
+            std::borrow::Cow::Borrowed("extraction_method"),
+            serde_json::Value::String(crate::types::ExtractionMethod::Ocr.as_str().to_string()),
+        );
+    }
+
     /// Extract text from image using OCR with optional page tracking for multi-frame TIFFs.
     #[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
     async fn extract_with_ocr(
@@ -88,6 +95,7 @@ impl ImageExtractor {
             // Build InternalDocument from OCR text
             let mut doc = build_image_internal_document(Some(&ocr_extraction_result.content), None);
             doc.metadata = ocr_metadata;
+            Self::mark_ocr_extraction(&mut doc);
 
             // Store OCR elements directly to avoid injecting raw word tokens into the
             // rendering pipeline, which would double the top-level content (#706).
@@ -121,6 +129,7 @@ impl ImageExtractor {
             let _ = mime_type;
             let mut doc = build_image_internal_document(Some(&ocr_content), None);
             doc.metadata = ocr_metadata;
+            Self::mark_ocr_extraction(&mut doc);
             doc.prebuilt_ocr_elements = ocr_elements;
             let text = ocr_content.trim().to_string();
             if !text.is_empty() {
@@ -308,6 +317,7 @@ impl ImageExtractor {
             output_format: Some("markdown".to_string()),
             ..Default::default()
         };
+        Self::mark_ocr_extraction(&mut doc);
 
         Ok(doc)
     }

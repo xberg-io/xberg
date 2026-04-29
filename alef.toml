@@ -343,6 +343,10 @@ types = [
     "QualityProcessor",
     "ChunkingProcessor",
 
+    # Removed security validator types — deleted from Rust, kept here to prevent alef from regenerating stubs
+    "DepthValidator",
+    "StringGrowthValidator",
+
     # Internal error/data types missing required derives (Serialize/Deserialize/Clone)
     "HwpError",
     "MathNode",

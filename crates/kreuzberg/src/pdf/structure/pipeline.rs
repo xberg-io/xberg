@@ -47,7 +47,9 @@ fn extract_structure_tree_pages(
 
         let page_t = crate::utils::timing::Instant::now();
         match extract_page_content(&page) {
-            Ok(extraction) if extraction.method == ExtractionMethod::StructureTree && !extraction.blocks.is_empty() => {
+            Ok(extraction)
+                if extraction.method == PageExtractionMethod::StructureTree && !extraction.blocks.is_empty() =>
+            {
                 tracing::trace!(
                     page = i,
                     method = ?extraction.method,
@@ -2684,6 +2686,85 @@ fn is_dedup_candidate(p: &PdfParagraph) -> bool {
         && p.caption_for.is_none()
 }
 
+/// Recursively walk a pdfium page object, extracting image data for the target index.
+///
+/// Mirrors the traversal order of `count_image_objects` in bridge.rs exactly so that
+/// `image_offset` indices assigned there align with the images extracted here.
+#[allow(clippy::too_many_arguments)]
+fn extract_image_from_pdfium_obj(
+    obj: &PdfPageObject,
+    document: &PdfDocument,
+    page_num: usize,
+    first_idx_on_page: usize,
+    current_image: &mut usize,
+    indices_set: &ahash::AHashSet<usize>,
+    extracted_on_page: &mut ahash::AHashMap<usize, crate::types::ExtractedImage>,
+    extracted_count: &mut u32,
+    depth: usize,
+) {
+    const MAX_XOBJECT_DEPTH: usize = 10;
+    use image::ImageEncoder;
+    match obj {
+        PdfPageObject::Image(image_obj) => {
+            let global_idx = first_idx_on_page + *current_image;
+            if indices_set.contains(&global_idx)
+                && let Ok(dynamic_image) = image_obj.get_processed_image(document) {
+                    let w = dynamic_image.width();
+                    let h = dynamic_image.height();
+                    if w >= 32 || h >= 32 {
+                        let rgba = dynamic_image.to_rgba8();
+                        let mut png_buf: Vec<u8> = Vec::new();
+                        if image::codecs::png::PngEncoder::new(&mut png_buf)
+                            .write_image(rgba.as_raw(), w, h, image::ExtendedColorType::Rgba8)
+                            .is_ok()
+                        {
+                            *extracted_count += 1;
+                            extracted_on_page.insert(
+                                global_idx,
+                                crate::types::ExtractedImage {
+                                    data: bytes::Bytes::from(png_buf),
+                                    format: std::borrow::Cow::Borrowed("png"),
+                                    image_index: global_idx,
+                                    page_number: Some(page_num),
+                                    width: Some(w),
+                                    height: Some(h),
+                                    colorspace: Some("RGBA".to_string()),
+                                    bits_per_component: Some(8),
+                                    is_mask: false,
+                                    description: None,
+                                    ocr_result: None,
+                                    bounding_box: None,
+                                    source_path: None,
+                                },
+                            );
+                        }
+                    }
+                }
+            *current_image += 1;
+        }
+        PdfPageObject::XObjectForm(form_obj) => {
+            if depth >= MAX_XOBJECT_DEPTH {
+                tracing::debug!(depth, "populate_images_from_pdfium: max XObject nesting depth reached");
+                return;
+            }
+            for child in form_obj.iter() {
+                extract_image_from_pdfium_obj(
+                    &child,
+                    document,
+                    page_num,
+                    first_idx_on_page,
+                    current_image,
+                    indices_set,
+                    extracted_on_page,
+                    extracted_count,
+                    depth + 1,
+                );
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Extract actual image data from pdfium and populate `doc.images`.
 ///
 /// Each `ImagePosition` records (page_number, image_index) for image objects
@@ -2697,9 +2778,6 @@ fn populate_images_from_pdfium(
     doc: &mut crate::types::internal::InternalDocument,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) {
-    use bytes::Bytes;
-    use image::ImageEncoder;
-
     if image_positions.is_empty() {
         return;
     }
@@ -2765,49 +2843,17 @@ fn populate_images_from_pdfium(
         let mut extracted_on_page: ahash::AHashMap<usize, crate::types::ExtractedImage> = ahash::AHashMap::new();
 
         for obj in page.objects().iter() {
-            if let Some(image_obj) = obj.as_image_object() {
-                let global_idx = first_idx_on_page + current_image;
-                if indices_set.contains(&global_idx)
-                    && let Ok(dynamic_image) = image_obj.get_processed_image(document)
-                {
-                    let w = dynamic_image.width();
-                    let h = dynamic_image.height();
-                    // Skip images where BOTH dimensions are tiny (< 32px). This targets
-                    // Ghostscript vector decomposition artifacts (16×16 CCITT masks) while
-                    // preserving thin rules and decorative elements that may be intentional.
-                    if w < 32 && h < 32 {
-                        current_image += 1;
-                        continue;
-                    }
-                    let rgba = dynamic_image.to_rgba8();
-                    let mut png_buf: Vec<u8> = Vec::new();
-                    if image::codecs::png::PngEncoder::new(&mut png_buf)
-                        .write_image(rgba.as_raw(), w, h, image::ExtendedColorType::Rgba8)
-                        .is_ok()
-                    {
-                        extracted_count += 1;
-                        extracted_on_page.insert(
-                            global_idx,
-                            crate::types::ExtractedImage {
-                                data: Bytes::from(png_buf),
-                                format: std::borrow::Cow::Borrowed("png"),
-                                image_index: global_idx,
-                                page_number: Some(page_num),
-                                width: Some(w),
-                                height: Some(h),
-                                colorspace: Some("RGBA".to_string()),
-                                bits_per_component: Some(8),
-                                is_mask: false,
-                                description: None,
-                                ocr_result: None,
-                                bounding_box: None,
-                                source_path: None,
-                            },
-                        );
-                    }
-                }
-                current_image += 1;
-            }
+            extract_image_from_pdfium_obj(
+                &obj,
+                document,
+                page_num,
+                first_idx_on_page,
+                &mut current_image,
+                &indices_set,
+                &mut extracted_on_page,
+                &mut extracted_count,
+                0,
+            );
         }
 
         for &idx in indices {

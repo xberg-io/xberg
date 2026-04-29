@@ -175,6 +175,7 @@ pub struct PageContent {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct LayoutRegion {
     /// Layout class name (e.g. "picture", "table", "text", "section_header").
+    #[serde(alias = "class")]
     pub class_name: String,
     /// Confidence score from the layout detection model (0.0 to 1.0).
     pub confidence: f64,

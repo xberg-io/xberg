@@ -1381,6 +1381,9 @@ public typealias NodeContent = RustBridge.NodeContent
 /// Types of inline text annotations.
 public typealias AnnotationKind = RustBridge.AnnotationKind
 
+/// How the extracted text was produced.
+public typealias ExtractionMethod = RustBridge.ExtractionMethod
+
 /// Semantic structural classification of a text chunk.
 ///
 /// Assigned by the heuristic classifier in `chunking::classifier`.

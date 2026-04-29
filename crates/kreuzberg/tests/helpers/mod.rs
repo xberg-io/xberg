@@ -128,17 +128,6 @@ pub mod pdf_helpers {
     use kreuzberg::pdf::hierarchy::BoundingBox;
 
     /// Create a bounding box with simple coordinates.
-    ///
-    /// # Arguments
-    ///
-    /// * `left` - Left x-coordinate
-    /// * `top` - Top y-coordinate
-    /// * `right` - Right x-coordinate
-    /// * `bottom` - Bottom y-coordinate
-    ///
-    /// # Returns
-    ///
-    /// A new BoundingBox with the specified coordinates
     pub fn create_bounding_box(left: f32, top: f32, right: f32, bottom: f32) -> BoundingBox {
         BoundingBox {
             left,

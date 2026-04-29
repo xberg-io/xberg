@@ -10,8 +10,8 @@ mod pages;
 use crate::Result;
 use crate::core::config::{ExtractionConfig, OutputFormat};
 use crate::plugins::{DocumentExtractor, Plugin};
-use crate::types::Metadata;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+use crate::types::{ExtractionMethod, Metadata};
 use async_trait::async_trait;
 #[cfg(feature = "tokio-runtime")]
 use std::path::Path;
@@ -617,22 +617,22 @@ impl PdfExtractor {
         let mut ocr_tables: Vec<crate::types::Table> = Vec::new();
         #[cfg(feature = "ocr")]
         #[allow(unused_assignments)]
-        let mut _ocr_elements_from_ocr: Vec<crate::types::OcrElement> = Vec::new();
+        let mut ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
         #[cfg(feature = "ocr")]
         let mut ocr_internal_doc: Option<crate::types::internal::InternalDocument> = None;
         #[cfg(feature = "ocr")]
         let mut ocr_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
         #[cfg(feature = "ocr")]
-        let (text, used_ocr) = if config.effective_disable_ocr() {
-            (native_text, false)
+        let (text, extraction_method) = if config.effective_disable_ocr() {
+            (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
             let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
                 run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
-            _ocr_elements_from_ocr = ocr_elems;
+            ocr_elements = ocr_elems;
             ocr_internal_doc = ocr_doc;
             ocr_llm_usage = llm_usage;
-            (ocr_text, true)
+            (ocr_text, ExtractionMethod::Ocr)
         } else if let Some(ref ocr_pages) = config.force_ocr_pages {
             if !ocr_pages.is_empty() {
                 if let Some(ref bounds) = boundaries {
@@ -641,17 +641,17 @@ impl PdfExtractor {
                             ocr::extract_mixed_ocr_native(&native_text, bounds, ocr_pages, content, config, path)
                                 .await?;
                         ocr_llm_usage = mixed_llm_usage;
-                        (mixed, true)
+                        (mixed, ExtractionMethod::Mixed)
                     } else {
                         tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
-                        (native_text, false)
+                        (native_text, ExtractionMethod::Native)
                     }
                 } else {
                     tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
-                    (native_text, false)
+                    (native_text, ExtractionMethod::Native)
                 }
             } else {
-                (native_text, false)
+                (native_text, ExtractionMethod::Native)
             }
         } else if let Some(ocr_config) = config.ocr.as_ref() {
             let thresholds = ocr_config.effective_thresholds();
@@ -720,7 +720,7 @@ impl PdfExtractor {
                     alnum_ws_chars,
                     "Skipping OCR: font encoding issues but content is non-textual and pre-rendered structured doc available"
                 );
-                (native_text, false)
+                (native_text, ExtractionMethod::Native)
             } else if has_substantive_doc {
                 tracing::debug!(
                     total_chars,
@@ -729,33 +729,33 @@ impl PdfExtractor {
                     has_font_encoding_issues,
                     "Skipping OCR: pre-rendered structured doc available with substantive native text"
                 );
-                (native_text, false)
+                (native_text, ExtractionMethod::Native)
             } else if decision.fallback || has_font_encoding_issues {
                 match run_ocr_with_layout(content, config, path).await {
                     Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
                         ocr_tables = ocr_tbls;
-                        _ocr_elements_from_ocr = ocr_elems;
+                        ocr_elements = ocr_elems;
                         ocr_internal_doc = ocr_doc;
                         ocr_llm_usage = llm_usage;
-                        (ocr_text, true)
+                        (ocr_text, ExtractionMethod::Ocr)
                     }
                     Err(e) => {
                         tracing::warn!(
                             error = %e,
                             "OCR fallback failed; using native text extraction result"
                         );
-                        (native_text, false)
+                        (native_text, ExtractionMethod::Native)
                     }
                 }
             } else {
-                (native_text, false)
+                (native_text, ExtractionMethod::Native)
             }
         } else {
-            (native_text, false)
+            (native_text, ExtractionMethod::Native)
         };
 
         #[cfg(not(feature = "ocr"))]
-        let (text, used_ocr) = (native_text, false);
+        let (text, extraction_method) = (native_text, ExtractionMethod::Native);
 
         // Merge OCR-detected tables with native-extracted tables.
         // When OCR was used, its TATR-detected tables may be more accurate for scanned pages.
@@ -769,6 +769,7 @@ impl PdfExtractor {
         // The document was rendered during the first document load to avoid redundant PDF parsing.
         // OCR results already produce structured output via the hOCR path, so this only applies
         // when native text extraction was used and structured output was requested.
+        let used_ocr = extraction_method.used_ocr();
         #[cfg(feature = "pdf")]
         let use_structured_doc = !used_ocr && pre_rendered_doc.is_some();
         tracing::debug!(
@@ -849,7 +850,10 @@ impl PdfExtractor {
                         .collect();
                     (Some(extracted), warning)
                 }
-                Err(_) => (Some(vec![]), None),
+                Err(e) => {
+                    tracing::warn!(error = %e, "PDF image extraction failed");
+                    (Some(vec![]), None)
+                }
             }
         } else {
             (None, None)
@@ -1041,6 +1045,10 @@ impl PdfExtractor {
                 format: Some(crate::types::FormatMetadata::Pdf(pdf_metadata.pdf_specific)),
                 ..Default::default()
             };
+            doc.metadata.additional.insert(
+                std::borrow::Cow::Borrowed("extraction_method"),
+                serde_json::Value::String(extraction_method.as_str().to_string()),
+            );
             // When the OCR path produced a structured InternalDocument, its tables are
             // already embedded with matching ElementKind::Table indices. Overwriting
             // doc.tables would break those references. Instead, merge any additional
@@ -1074,6 +1082,9 @@ impl PdfExtractor {
                 doc.processing_warnings.push(warning);
             }
             doc.annotations = pdf_annotations;
+            if !ocr_elements.is_empty() {
+                doc.prebuilt_ocr_elements = Some(ocr_elements);
+            }
             doc
         };
 
@@ -1238,23 +1249,23 @@ impl PdfExtractor {
         let mut ocr_tables: Vec<crate::types::Table> = Vec::new();
         #[cfg(feature = "ocr")]
         #[allow(unused_assignments)]
-        let mut _ocr_elements_from_ocr: Vec<crate::types::OcrElement> = Vec::new();
+        let mut ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
         #[cfg(feature = "ocr")]
         let mut ocr_internal_doc: Option<InternalDocument> = None;
         #[cfg(feature = "ocr")]
         let mut ocr_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
 
         #[cfg(feature = "ocr")]
-        let (text, _used_ocr) = if config.effective_disable_ocr() {
-            (native_text, false)
+        let (text, extraction_method) = if config.effective_disable_ocr() {
+            (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
             let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
                 run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
-            _ocr_elements_from_ocr = ocr_elems;
+            ocr_elements = ocr_elems;
             ocr_internal_doc = ocr_doc;
             ocr_llm_usage = llm_usage;
-            (ocr_text, true)
+            (ocr_text, ExtractionMethod::Ocr)
         } else if let Some(ocr_config) = config.ocr.as_ref() {
             let thresholds = ocr_config.effective_thresholds();
             let decision = ocr::evaluate_per_page_ocr(
@@ -1268,28 +1279,28 @@ impl PdfExtractor {
                 match run_ocr_with_layout(content, config, path).await {
                     Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
                         ocr_tables = ocr_tbls;
-                        _ocr_elements_from_ocr = ocr_elems;
+                        ocr_elements = ocr_elems;
                         ocr_internal_doc = ocr_doc;
                         ocr_llm_usage = llm_usage;
-                        (ocr_text, true)
+                        (ocr_text, ExtractionMethod::Ocr)
                     }
                     Err(e) => {
                         tracing::warn!(
                             error = %e,
                             "OCR fallback failed on oxide path; using native text"
                         );
-                        (native_text, false)
+                        (native_text, ExtractionMethod::Native)
                     }
                 }
             } else {
-                (native_text, false)
+                (native_text, ExtractionMethod::Native)
             }
         } else {
-            (native_text, false)
+            (native_text, ExtractionMethod::Native)
         };
 
         #[cfg(not(feature = "ocr"))]
-        let (text, _used_ocr) = (native_text, false);
+        let (text, extraction_method) = (native_text, ExtractionMethod::Native);
 
         #[cfg(feature = "ocr")]
         if !ocr_tables.is_empty() {
@@ -1355,15 +1366,7 @@ impl PdfExtractor {
 
         // When a pre-rendered structured document is available (headings, paragraphs from
         // font-size clustering), use it directly. Otherwise fall back to flat paragraph splitting.
-        let used_ocr;
-        #[cfg(feature = "ocr")]
-        {
-            used_ocr = ocr_internal_doc.is_some();
-        }
-        #[cfg(not(feature = "ocr"))]
-        {
-            used_ocr = false;
-        }
+        let used_ocr = extraction_method.used_ocr();
 
         let use_structured_doc = !used_ocr && pre_rendered_doc.is_some();
 
@@ -1414,6 +1417,10 @@ impl PdfExtractor {
             format: Some(crate::types::FormatMetadata::Pdf(pdf_metadata.pdf_specific)),
             ..Default::default()
         };
+        doc.metadata.additional.insert(
+            std::borrow::Cow::Borrowed("extraction_method"),
+            serde_json::Value::String(extraction_method.as_str().to_string()),
+        );
 
         // When using the structured doc, tables are already interleaved by the assembly pipeline.
         // Only add tables separately for the flat-text fallback path.
@@ -1553,6 +1560,85 @@ mod tests {
     use super::*;
     #[cfg(feature = "ocr")]
     use crate::core::config::OcrQualityThresholds;
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    use serial_test::serial;
+
+    #[cfg(feature = "pdf")]
+    fn pdf_test_document(name: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../test_documents/pdf/{name}"))
+    }
+
+    #[cfg(feature = "pdf")]
+    fn extraction_method(result: &crate::types::ExtractionResult) -> Option<ExtractionMethod> {
+        result.extraction_method
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    struct MockPdfOcrBackend {
+        name: &'static str,
+        content: &'static str,
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    impl crate::plugins::Plugin for MockPdfOcrBackend {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for MockPdfOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+
+        async fn process_image(
+            &self,
+            _image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractionResult> {
+            Ok(crate::types::ExtractionResult {
+                content: self.content.to_string(),
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    struct RegisteredOcrBackendGuard {
+        name: &'static str,
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    impl Drop for RegisteredOcrBackendGuard {
+        fn drop(&mut self) {
+            let _ = crate::plugins::unregister_ocr_backend(self.name);
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    fn register_mock_ocr_backend(name: &'static str, content: &'static str) -> RegisteredOcrBackendGuard {
+        crate::plugins::register_ocr_backend(std::sync::Arc::new(MockPdfOcrBackend { name, content })).unwrap();
+        RegisteredOcrBackendGuard { name }
+    }
 
     #[test]
     fn test_pdf_extractor_plugin_interface() {
@@ -1853,6 +1939,96 @@ mod tests {
                     "Page markers should be inserted when configured and document has multiple pages"
                 );
             }
+        }
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "pdf")]
+    async fn test_pdf_exposes_native_extraction_method() {
+        let extractor = PdfExtractor::new();
+        let config = ExtractionConfig::default();
+        let pdf_path = pdf_test_document("google_doc_document.pdf");
+
+        if let Ok(content) = std::fs::read(pdf_path) {
+            let result = extractor
+                .extract_bytes(&content, "application/pdf", &config)
+                .await
+                .expect("native PDF extraction should succeed");
+            let result = crate::extraction::derive::derive_extraction_result(
+                result,
+                true,
+                crate::core::config::OutputFormat::Plain,
+            );
+
+            assert_eq!(extraction_method(&result), Some(ExtractionMethod::Native));
+        }
+    }
+
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_pdf_exposes_ocr_extraction_method() {
+        use crate::core::config::OcrConfig;
+
+        let _backend = register_mock_ocr_backend("pdf-extraction-method-ocr", "mock OCR text");
+        let extractor = PdfExtractor::new();
+        let config = ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "pdf-extraction-method-ocr".to_string(),
+                language: "eng".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let pdf_path = pdf_test_document("multi_page.pdf");
+
+        if let Ok(content) = std::fs::read(pdf_path) {
+            let result = extractor
+                .extract_bytes(&content, "application/pdf", &config)
+                .await
+                .expect("forced OCR extraction should succeed");
+            let result = crate::extraction::derive::derive_extraction_result(
+                result,
+                true,
+                crate::core::config::OutputFormat::Plain,
+            );
+
+            assert_eq!(extraction_method(&result), Some(ExtractionMethod::Ocr));
+        }
+    }
+
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_pdf_exposes_mixed_extraction_method() {
+        use crate::core::config::OcrConfig;
+
+        let _backend = register_mock_ocr_backend("pdf-extraction-method-mixed", "mixed OCR page");
+        let extractor = PdfExtractor::new();
+        let config = ExtractionConfig {
+            force_ocr_pages: Some(vec![1]),
+            ocr: Some(OcrConfig {
+                backend: "pdf-extraction-method-mixed".to_string(),
+                language: "eng".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let pdf_path = pdf_test_document("multi_page.pdf");
+
+        if let Ok(content) = std::fs::read(pdf_path) {
+            let result = extractor
+                .extract_bytes(&content, "application/pdf", &config)
+                .await
+                .expect("mixed OCR/native extraction should succeed");
+            let result = crate::extraction::derive::derive_extraction_result(
+                result,
+                true,
+                crate::core::config::OutputFormat::Plain,
+            );
+
+            assert_eq!(extraction_method(&result), Some(ExtractionMethod::Mixed));
         }
     }
 

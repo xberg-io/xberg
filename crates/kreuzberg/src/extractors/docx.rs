@@ -294,7 +294,14 @@ fn build_document_structure(doc: &crate::extraction::docx::parser::Document) -> 
 /// Creates a flat element list with headings, paragraphs, lists, tables, images,
 /// footnotes/endnotes (with relationships), and hyperlinks (as InternalLink relationships).
 /// Mirrors `build_document_structure` but outputs the flat `InternalDocument` representation.
-fn build_internal_document(doc: &crate::extraction::docx::parser::Document) -> InternalDocument {
+///
+/// When `inject_placeholders` is `false`, `Drawing` elements are **not** pushed into the
+/// returned `InternalDocument`, so they will not appear in `ExtractionResult::elements`.
+/// Image data is still extracted separately by the caller.
+fn build_internal_document(
+    doc: &crate::extraction::docx::parser::Document,
+    inject_placeholders: bool,
+) -> InternalDocument {
     use crate::types::document_structure::ContentLayer;
     use crate::types::extraction::BoundingBox;
     use crate::types::internal::{ElementKind, InternalElement, RelationshipKind, RelationshipTarget};
@@ -508,6 +515,12 @@ fn build_internal_document(doc: &crate::extraction::docx::parser::Document) -> I
 
                 // Skip drawings without an image reference (e.g. textbox shapes)
                 if drawing.image_ref.is_none() {
+                    continue;
+                }
+
+                // Honour inject_placeholders=false: suppress the Image element so it does
+                // not appear in result.elements. Image data is still extracted by the caller.
+                if !inject_placeholders {
                     continue;
                 }
 
@@ -795,15 +808,22 @@ type DocxParseResult = (
 );
 
 /// Parse DOCX document content and extract text, tables, page boundaries, drawings, image relationships, optional document structure, and InternalDocument.
+///
+/// `inject_placeholders` is threaded into both `extract_text_with_boundaries` (controls
+/// whether `![…](image)` links appear in the markdown text) and `build_internal_document`
+/// (controls whether `Image` elements are added to the returned `InternalDocument`).
 fn parse_docx_core(
     content: &[u8],
     include_doc_structure: bool,
     output_format: crate::core::config::OutputFormat,
+    inject_placeholders: bool,
     mut budget: SecurityBudget,
 ) -> crate::error::Result<DocxParseResult> {
     let doc = crate::extraction::docx::parser::parse_document(content, &mut budget)?;
-    let (text, page_boundaries) =
-        doc.extract_text_with_boundaries(matches!(output_format, crate::core::config::OutputFormat::Markdown));
+    let (text, page_boundaries) = doc.extract_text_with_boundaries(
+        matches!(output_format, crate::core::config::OutputFormat::Markdown),
+        inject_placeholders,
+    );
 
     // Determine the correct 1-based page number for each top-level table.
     let table_page_nums = doc.table_page_numbers();
@@ -830,7 +850,7 @@ fn parse_docx_core(
     } else {
         None
     };
-    let internal_doc = build_internal_document(&doc);
+    let internal_doc = build_internal_document(&doc, inject_placeholders);
     Ok((
         text,
         tables,
@@ -947,6 +967,7 @@ impl DocumentExtractor for DocxExtractor {
         };
 
         let include_doc_structure = config.include_document_structure;
+        let inject_placeholders = config.images.as_ref().map(|i| i.inject_placeholders).unwrap_or(true);
         let budget = SecurityBudget::from_config(config);
         let (text, tables, page_boundaries, drawings, image_rels, _doc_structure, mut internal_doc) = {
             #[cfg(feature = "tokio-runtime")]
@@ -958,16 +979,34 @@ impl DocumentExtractor for DocxExtractor {
                 let span = tracing::Span::current();
                 tokio::task::spawn_blocking(move || {
                     let _guard = span.entered();
-                    parse_docx_core(&content_owned, include_doc_structure, output_format, budget)
+                    parse_docx_core(
+                        &content_owned,
+                        include_doc_structure,
+                        output_format,
+                        inject_placeholders,
+                        budget,
+                    )
                 })
                 .await
                 .map_err(|e| crate::error::KreuzbergError::parsing(format!("DOCX extraction task failed: {}", e)))??
             } else {
-                parse_docx_core(content, include_doc_structure, output_format, budget)?
+                parse_docx_core(
+                    content,
+                    include_doc_structure,
+                    output_format,
+                    inject_placeholders,
+                    budget,
+                )?
             }
 
             #[cfg(not(feature = "tokio-runtime"))]
-            parse_docx_core(content, include_doc_structure, output_format, budget)?
+            parse_docx_core(
+                content,
+                include_doc_structure,
+                output_format,
+                inject_placeholders,
+                budget,
+            )?
         };
 
         let mut archive = {
@@ -1415,6 +1454,8 @@ impl DocumentExtractor for DocxExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::extraction::ImageExtractionConfig;
+    use crate::types::document_structure::NodeContent;
 
     #[tokio::test]
     async fn test_docx_extractor_plugin_interface() {
@@ -1496,7 +1537,7 @@ mod tests {
 
     /// Helper: build a minimal DOCX ZIP in memory with given document.xml content.
     fn build_test_docx(document_xml: &str) -> Vec<u8> {
-        build_test_docx_with_parts(document_xml, None, None, None, None, None)
+        build_test_docx_with_parts(document_xml, None, None, None, None, None, None)
     }
 
     /// Helper: build a DOCX ZIP with optional parts.
@@ -1507,6 +1548,7 @@ mod tests {
         endnotes_xml: Option<&str>,
         header_xml: Option<&str>,
         footer_xml: Option<&str>,
+        rels_xml: Option<&str>,
     ) -> Vec<u8> {
         use std::io::Write;
         let buf = Vec::new();
@@ -1556,6 +1598,12 @@ mod tests {
         if let Some(f_xml) = footer_xml {
             zip.start_file("word/footer1.xml", options).unwrap();
             zip.write_all(f_xml.as_bytes()).unwrap();
+        }
+
+        // Relationships
+        if let Some(rels) = rels_xml {
+            zip.start_file("word/_rels/document.xml.rels", options).unwrap();
+            zip.write_all(rels.as_bytes()).unwrap();
         }
 
         zip.finish().unwrap().into_inner()
@@ -1683,6 +1731,186 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_docx_inject_placeholders_true() {
+        let drawing_xml = r#"<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                             xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+                             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                             xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+                             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <w:r>
+            <w:drawing>
+              <wp:inline>
+                <wp:extent cx="914400" cy="457200"/>
+                <wp:docPr id="1" name="Picture 1" descr="A test image"/>
+                <a:graphic>
+                  <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                    <pic:pic>
+                      <pic:blipFill>
+                        <a:blip r:embed="rId5"/>
+                      </pic:blipFill>
+                    </pic:pic>
+                  </a:graphicData>
+                </a:graphic>
+              </wp:inline>
+            </w:drawing>
+          </w:r>
+        </w:p>"#;
+
+        let rels_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>"#;
+
+        let document_xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    {}
+  </w:body>
+</w:document>"#,
+            drawing_xml
+        );
+
+        let data = build_test_docx_with_parts(&document_xml, None, None, None, None, None, Some(rels_xml));
+        let extractor = DocxExtractor::new();
+        let config = ExtractionConfig {
+            images: Some(crate::core::config::extraction::ImageExtractionConfig {
+                extract_images: false,
+                inject_placeholders: true,
+                ..Default::default()
+            }),
+            include_document_structure: true,
+            ..Default::default()
+        };
+
+        let internal_doc = extractor
+            .extract_bytes(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await
+            .expect("Extraction failed");
+
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal_doc,
+            true,
+            crate::core::config::OutputFormat::Markdown,
+        );
+
+        // Verify that the image element is present in the document structure
+        let doc = result.document.as_ref().expect("DocumentStructure should be present");
+        let has_image = doc.nodes.iter().any(|n| matches!(n.content, NodeContent::Image { .. }));
+        assert!(
+            has_image,
+            "Image node should be present when inject_placeholders is true"
+        );
+
+        // Verify that the placeholder is present in the markdown content
+        let formatted = result
+            .formatted_content
+            .as_ref()
+            .expect("Formatted content should be present");
+        assert!(
+            formatted.contains("![A test image](media/image1.png)"),
+            "Markdown should contain image placeholder. Content: {}",
+            formatted
+        );
+    }
+
+    #[tokio::test]
+    async fn test_docx_inject_placeholders_false() {
+        let drawing_xml = r#"<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                             xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+                             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                             xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+                             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <w:r>
+            <w:drawing>
+              <wp:inline>
+                <wp:extent cx="914400" cy="457200"/>
+                <wp:docPr id="1" name="Picture 1" descr="A test image"/>
+                <a:graphic>
+                  <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                    <pic:pic>
+                      <pic:blipFill>
+                        <a:blip r:embed="rId5"/>
+                      </pic:blipFill>
+                    </pic:pic>
+                  </a:graphicData>
+                </a:graphic>
+              </wp:inline>
+            </w:drawing>
+          </w:r>
+        </w:p>"#;
+
+        let rels_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>"#;
+
+        let document_xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Before image</w:t></w:r></w:p>
+    {}
+    <w:p><w:r><w:t>After image</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#,
+            drawing_xml
+        );
+
+        let data = build_test_docx_with_parts(&document_xml, None, None, None, None, None, Some(rels_xml));
+        let extractor = DocxExtractor::new();
+        let config = ExtractionConfig {
+            images: Some(ImageExtractionConfig {
+                extract_images: false,
+                inject_placeholders: false,
+                ..Default::default()
+            }),
+            include_document_structure: true,
+            ..Default::default()
+        };
+
+        let internal_doc = extractor
+            .extract_bytes(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await
+            .expect("Extraction failed");
+
+        let result = crate::extraction::derive::derive_extraction_result(
+            internal_doc,
+            true,
+            crate::core::config::OutputFormat::Markdown,
+        );
+
+        // Verify that the image element is NOT present in the document structure
+        let doc = result.document.as_ref().expect("DocumentStructure should be present");
+        let has_image = doc.nodes.iter().any(|n| matches!(n.content, NodeContent::Image { .. }));
+        assert!(
+            !has_image,
+            "Image node should NOT be present when inject_placeholders is false"
+        );
+
+        // Verify that the placeholder is NOT present in the markdown content
+        let formatted = result
+            .formatted_content
+            .as_ref()
+            .expect("Formatted content should be present");
+        assert!(
+            !formatted.contains("![A test image](media/image1.png)"),
+            "Markdown should NOT contain image placeholder. Content: {}",
+            formatted
+        );
+        assert!(result.content.contains("Before image"));
+        assert!(result.content.contains("After image"));
+    }
+
+    #[tokio::test]
     async fn test_full_extraction_with_headers_footers() {
         let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -1701,7 +1929,7 @@ mod tests {
   <w:p><w:r><w:t>Page Footer</w:t></w:r></w:p>
 </w:ftr>"#;
 
-        let data = build_test_docx_with_parts(document_xml, None, None, None, Some(header_xml), Some(footer_xml));
+        let data = build_test_docx_with_parts(document_xml, None, None, None, Some(header_xml), Some(footer_xml), None);
         let extractor = DocxExtractor::new();
         let config = ExtractionConfig {
             output_format: crate::core::config::OutputFormat::Markdown,
@@ -1762,7 +1990,7 @@ mod tests {
   <w:footnote w:id="2"><w:p><w:r><w:t>This is the footnote content.</w:t></w:r></w:p></w:footnote>
 </w:footnotes>"#;
 
-        let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), None, None, None);
+        let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), None, None, None, None);
         let extractor = DocxExtractor::new();
         let config = ExtractionConfig {
             output_format: crate::core::config::OutputFormat::Markdown,
@@ -1824,7 +2052,7 @@ mod tests {
   </w:style>
 </w:styles>"#;
 
-        let data = build_test_docx_with_parts(document_xml, Some(styles_xml), None, None, None, None);
+        let data = build_test_docx_with_parts(document_xml, Some(styles_xml), None, None, None, None, None);
         let extractor = DocxExtractor::new();
         let config = ExtractionConfig {
             output_format: crate::core::config::OutputFormat::Markdown,
@@ -1879,7 +2107,7 @@ mod tests {
   <w:p><w:r><w:t>Header</w:t></w:r></w:p>
 </w:hdr>"#;
 
-        let data = build_test_docx_with_parts(document_xml, None, None, None, Some(header_xml), None);
+        let data = build_test_docx_with_parts(document_xml, None, None, None, Some(header_xml), None, None);
         let extractor = DocxExtractor::new();
         let config = ExtractionConfig {
             include_document_structure: true,
@@ -2081,7 +2309,7 @@ mod tests {
   <w:endnote w:id="2"><w:p><w:r><w:t>This is the endnote.</w:t></w:r></w:p></w:endnote>
 </w:endnotes>"#;
 
-        let data = build_test_docx_with_parts(document_xml, None, None, Some(endnotes_xml), None, None);
+        let data = build_test_docx_with_parts(document_xml, None, None, Some(endnotes_xml), None, None, None);
         let extractor = DocxExtractor::new();
         let config = ExtractionConfig {
             output_format: crate::core::config::OutputFormat::Markdown,

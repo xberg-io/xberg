@@ -3869,6 +3869,7 @@ This is the main result type returned by all extraction functions.
 | `content` | `String` | — | The extracted text content |
 | `mime_type` | `String` | — | The detected MIME type |
 | `metadata` | `Metadata` | — | Document metadata |
+| `extraction_method` | `Option<ExtractionMethod>` | `Default::default()` | Extraction strategy used to produce the returned text. Populated when the extractor can reliably distinguish native text extraction, OCR-only extraction, or mixed native/OCR output. |
 | `tables` | `Vec<String>` | `vec![]` | Tables extracted from the document |
 | `detected_languages` | `Option<Vec<String>>` | `vec![]` | Detected languages |
 | `chunks` | `Option<Vec<Chunk>>` | `vec![]` | Text chunks when chunking is enabled. When chunking configuration is provided, the content is split into overlapping chunks for efficient processing. Each chunk contains the text, optional embeddings (if enabled), and metadata about its position. |
@@ -4194,14 +4195,24 @@ Image extraction configuration.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extract_images` | `bool` | — | Extract images from documents |
-| `target_dpi` | `i32` | — | Target DPI for image normalization |
-| `max_image_dimension` | `i32` | — | Maximum dimension for images (width or height) |
-| `inject_placeholders` | `bool` | — | Whether to inject image reference placeholders into markdown output. When `true` (default), image references like `![Image 1](embedded:p1_i0)` are appended to the markdown. Set to `false` to extract images as data without polluting the markdown output. |
-| `auto_adjust_dpi` | `bool` | — | Automatically adjust DPI based on image content |
-| `min_dpi` | `i32` | — | Minimum DPI threshold |
-| `max_dpi` | `i32` | — | Maximum DPI threshold |
-| `max_images_per_page` | `Option<u32>` | `Default::default()` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdfium FFI. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `None` (default) means no limit — all images are extracted. |
+| `extract_images` | `bool` | `true` | Extract images from documents |
+| `target_dpi` | `i32` | `300` | Target DPI for image normalization |
+| `max_image_dimension` | `i32` | `4096` | Maximum dimension for images (width or height) |
+| `inject_placeholders` | `bool` | `true` | Whether to inject image reference placeholders into markdown output. When `true` (default), image references like `![Image 1](embedded:p1_i0)` are appended to the markdown. Set to `false` to extract images as data without polluting the markdown output. |
+| `auto_adjust_dpi` | `bool` | `true` | Automatically adjust DPI based on image content |
+| `min_dpi` | `i32` | `72` | Minimum DPI threshold |
+| `max_dpi` | `i32` | `600` | Maximum DPI threshold |
+| `max_images_per_page` | `Option<u32>` | `None` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdfium FFI. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `None` (default) means no limit — all images are extracted. |
+
+##### Methods
+
+###### default()
+
+**Signature:**
+
+```rust
+pub fn default() -> ImageExtractionConfig
+```
 
 
 ---
@@ -6975,6 +6986,19 @@ Types of inline text annotations.
 | `Color` | Text color (CSS-compatible value, e.g. "#ff0000", "red"). — Fields: `value`: `String` |
 | `FontSize` | Font size with units (e.g. "12pt", "1.2em", "16px"). — Fields: `value`: `String` |
 | `Custom` | Extensible annotation for format-specific styling. — Fields: `name`: `String`, `value`: `String` |
+
+
+---
+
+#### ExtractionMethod
+
+How the extracted text was produced.
+
+| Value | Description |
+|-------|-------------|
+| `Native` | Native |
+| `Ocr` | Ocr |
+| `Mixed` | Mixed |
 
 
 ---

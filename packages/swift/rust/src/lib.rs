@@ -937,6 +937,7 @@ mod ffi {
             content: String,
             mime_type: String,
             metadata: Metadata,
+            extraction_method: Option<ExtractionMethod>,
             tables: Vec<String>,
             detected_languages: Option<Vec<String>>,
             chunks: Option<Vec<Chunk>>,
@@ -959,6 +960,7 @@ mod ffi {
         fn content(&self) -> String;
         fn mime_type(&self) -> String;
         fn metadata(&self) -> Metadata;
+        fn extraction_method(&self) -> Option<ExtractionMethod>;
         fn tables(&self) -> Vec<String>;
         fn detected_languages(&self) -> Option<Vec<String>>;
         fn chunks(&self) -> Option<Vec<Chunk>>;
@@ -2262,6 +2264,10 @@ mod ffi {
 
     extern "Rust" {
         type AnnotationKind;
+    }
+
+    extern "Rust" {
+        type ExtractionMethod;
     }
 
     extern "Rust" {
@@ -5486,6 +5492,7 @@ impl ExtractionResult {
         content: String,
         mime_type: String,
         metadata: Metadata,
+        extraction_method: Option<ExtractionMethod>,
         tables: Vec<String>,
         detected_languages: Option<Vec<String>>,
         chunks: Option<Vec<Chunk>>,
@@ -5517,6 +5524,7 @@ impl ExtractionResult {
             }
         }
         __target.metadata = metadata.0;
+        // alef: extraction_method (ExtractionMethod) is an enum; reverse From not generated — left at default
         if let Ok(__v) = ::serde_json::to_value(tables) {
             if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.tables = t;
@@ -5594,6 +5602,9 @@ impl ExtractionResult {
     }
     pub fn metadata(&self) -> Metadata {
         Metadata(self.0.metadata.clone())
+    }
+    pub fn extraction_method(&self) -> Option<ExtractionMethod> {
+        self.0.extraction_method.clone().map(ExtractionMethod::from)
     }
     pub fn tables(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.tables)
@@ -9879,6 +9890,22 @@ impl From<kreuzberg::AnnotationKind> for AnnotationKind {
             kreuzberg::AnnotationKind::Superscript => Self::Superscript,
             kreuzberg::AnnotationKind::Highlight => Self::Highlight,
             _ => Self::Unknown,
+        }
+    }
+}
+
+pub enum ExtractionMethod {
+    Native,
+    Ocr,
+    Mixed,
+}
+
+impl From<kreuzberg::ExtractionMethod> for ExtractionMethod {
+    fn from(val: kreuzberg::ExtractionMethod) -> Self {
+        match val {
+            kreuzberg::ExtractionMethod::Native => Self::Native,
+            kreuzberg::ExtractionMethod::Ocr => Self::Ocr,
+            kreuzberg::ExtractionMethod::Mixed => Self::Mixed,
         }
     }
 }

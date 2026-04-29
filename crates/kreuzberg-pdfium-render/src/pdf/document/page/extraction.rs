@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 /// The method used for extracting content from a page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExtractionMethod {
+pub enum PageExtractionMethod {
     /// Content was extracted using the PDF structure tree (tagged PDF).
     StructureTree,
     /// Content was extracted using heuristic analysis of text objects.
@@ -73,7 +73,7 @@ pub struct ExtractedBlock {
 #[derive(Debug)]
 pub struct PageExtraction {
     /// Which extraction method was used.
-    pub method: ExtractionMethod,
+    pub method: PageExtractionMethod,
     /// The extracted content blocks in reading order.
     pub blocks: Vec<ExtractedBlock>,
 }
@@ -135,7 +135,7 @@ fn extract_via_structure_tree(page: &PdfPage<'_>) -> Result<Option<PageExtractio
     let blocks = flatten_structural_wrappers(blocks);
 
     Ok(Some(PageExtraction {
-        method: ExtractionMethod::StructureTree,
+        method: PageExtractionMethod::StructureTree,
         blocks,
     }))
 }
@@ -415,7 +415,7 @@ fn extract_via_heuristics(page: &PdfPage<'_>) -> Result<PageExtraction, PdfiumEr
 
     if text_entries.is_empty() {
         return Ok(PageExtraction {
-            method: ExtractionMethod::Heuristic,
+            method: PageExtractionMethod::Heuristic,
             blocks: Vec::new(),
         });
     }
@@ -427,7 +427,7 @@ fn extract_via_heuristics(page: &PdfPage<'_>) -> Result<PageExtraction, PdfiumEr
     let blocks = group_text_into_blocks(text_entries, body_font_size, page.height());
 
     Ok(PageExtraction {
-        method: ExtractionMethod::Heuristic,
+        method: PageExtractionMethod::Heuristic,
         blocks,
     })
 }

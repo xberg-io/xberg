@@ -82,7 +82,7 @@ pub async fn extract_file(
         );
     }
 
-    let result = async {
+    let extraction_future = async {
         io::validate_file_exists(path)?;
 
         if config.force_ocr && config.effective_disable_ocr() {
@@ -119,8 +119,32 @@ pub async fn extract_file(
         }
 
         extract_file_with_extractor(path, &detected_mime, config).await
-    }
-    .await;
+    };
+
+    #[cfg(feature = "tokio-runtime")]
+    let result = if let Some(secs) = config.extraction_timeout_secs {
+        let start = std::time::Instant::now();
+        match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
+            Ok(inner) => inner,
+            Err(_elapsed) => {
+                if let Some(ref token) = config.cancel_token {
+                    token.cancel();
+                }
+                Err(crate::KreuzbergError::Timeout {
+                    elapsed_ms: start.elapsed().as_millis() as u64,
+                    limit_ms: secs * 1000,
+                })
+            }
+        }
+    } else {
+        extraction_future.await
+    };
+
+    #[cfg(not(feature = "tokio-runtime"))]
+    let result = {
+        let _ = config.extraction_timeout_secs;
+        extraction_future.await
+    };
 
     #[cfg(feature = "otel")]
     if let Err(ref e) = result {
