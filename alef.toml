@@ -1802,7 +1802,7 @@ function = "extractFile"
 options_type = "ExtractionConfig"
 
 [e2e.call.overrides.csharp]
-class = "Kreuzberg"
+class = "KreuzbergLib"
 function = "ExtractFile"
 options_type = "ExtractionConfig"
 
@@ -2470,7 +2470,7 @@ path = "../../crates/kreuzberg-node"
 
 [e2e.packages.go]
 module = "github.com/kreuzberg-dev/kreuzberg/v4"
-path = "../../packages/go"
+path = "../../packages/go/v4"
 [e2e.packages.csharp]
 name = "Kreuzberg"
 path = "../../packages/csharp/Kreuzberg.csproj"
