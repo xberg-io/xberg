@@ -3266,6 +3266,9 @@ See the [API Reference](https://docs.kreuzberg.dev/reference/api-python/) for de
 - [Format Support](https://docs.kreuzberg.dev/reference/formats/) - Supported file formats
 - [Extraction Guide](https://docs.kreuzberg.dev/guides/extraction/) - Extraction examples
 
+[4.10.0-rc.4]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.10.0-rc.4
+[4.10.0-rc.2]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.10.0-rc.2
+[4.10.0-rc.1]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.10.0-rc.1
 [4.9.5]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.9.5
 [4.9.4]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.9.4
 [4.9.3]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.9.3
