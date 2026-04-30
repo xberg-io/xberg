@@ -264,7 +264,7 @@ where
 /// groups non-table words into lines and paragraphs, then interleaves
 /// paragraphs and table markdown sorted by Y-position.
 fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_confidence: f64) -> String {
-    let words = match extract_words_from_tsv(tsv_data, min_confidence) {
+    let mut words = match extract_words_from_tsv(tsv_data, min_confidence) {
         Ok(w) => w,
         Err(_) => return String::new(),
     };
@@ -273,11 +273,21 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
         return String::new();
     }
 
+    // Safety limit: cap word count to prevent browser freezes/OOM on noisy images.
+    // 5000 words is ~8-10 full pages of text; more than this on one page is likely noise.
+    if words.len() > 5000 {
+        tracing::warn!(
+            "OCR produced {} words, capping to 5000 to prevent freeze",
+            words.len()
+        );
+        words.truncate(5000);
+    }
+
     // Collect table bounding boxes
     let table_bboxes: Vec<_> = tables.iter().filter_map(|t| t.bounding_box.as_ref()).collect();
 
     // Classify words as inside a table bbox or not
-    let mut non_table_words = Vec::new();
+    let mut non_table_words = Vec::with_capacity(words.len());
     for word in &words {
         let in_table = table_bboxes.iter().any(|bbox| {
             let word_cx = word.left + word.width / 2;
