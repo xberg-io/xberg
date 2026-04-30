@@ -338,8 +338,10 @@
       try {
         // Fetch the actual latest version to ensure JS and WASM versions match exactly
         // and avoid CDN split-cache FFI mismatches (fixes hang on small images).
-        const pkg = await fetch('https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/package.json').then(r => r.json());
+        const pkg = await fetch('https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/package.json')
+          .then(r => { if (!r.ok) throw new Error(`CDN version fetch failed: ${r.status}`); return r.json(); });
         const version = pkg.version;
+        if (!version || typeof version !== 'string') throw new Error('Invalid version in @kreuzberg/wasm package.json');
 
         const module = await import(`https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@${version}/dist/index.js`);
         enableOcr = module.enableOcr;
@@ -354,6 +356,8 @@
         wasmReady = true;
       } catch (e) {
         console.error('WASM initialization failed:', e);
+        const errorBox = document.getElementById("error-message");
+        if (errorBox) errorBox.style.display = 'flex';
       }
 
       // ── Drag & Drop ────────────────────────────────────────────────────────
@@ -437,7 +441,8 @@
       // ── Process File ───────────────────────────────────────────────────────
       async function processFile(file) {
         if (!wasmReady) {
-          console.error("WASM not ready yet.");
+          const errorBox = document.getElementById("error-message");
+          if (errorBox) errorBox.style.display = 'flex';
           return;
         }
 
