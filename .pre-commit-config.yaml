@@ -51,7 +51,8 @@ repos:
     rev: v0.1.0
     hooks:
       - id: mypy
-        exclude: "examples/"
+        args: ["--strict", "src"]
+        exclude: "^(examples|tests|benchmarks|e2e)/"
 
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
