@@ -152,8 +152,15 @@ async function createNodeWorker(wasmGluePath: string, wasmBinary: Uint8Array | u
 }
 
 async function createBrowserWorker(wasmGluePath: string, wasmBinary: Uint8Array | undefined): Promise<void> {
-	const workerUrl = new URL("./ocr-worker.js", import.meta.url);
-	const worker = new Worker(workerUrl, { type: "module" });
+	const workerScriptUrl = new URL("./ocr-worker.js", import.meta.url);
+	// Browsers reject Worker construction for cross-origin script URLs even when
+	// the server sends CORS headers. A Blob URL is always same-origin to the
+	// current page; the single-line module import inside fetches the real script
+	// via CORS (jsdelivr and most CDNs serve Access-Control-Allow-Origin: *).
+	const blob = new Blob([`import "${workerScriptUrl.href}";`], { type: "application/javascript" });
+	const blobUrl = URL.createObjectURL(blob);
+	const worker = new Worker(blobUrl, { type: "module" });
+	URL.revokeObjectURL(blobUrl);
 
 	worker.onmessage = (e: MessageEvent) => handleWorkerMessage(e.data as Record<string, unknown>);
 	worker.onerror = (e: ErrorEvent) => {
