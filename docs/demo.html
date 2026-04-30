@@ -331,32 +331,17 @@
       const outputScreen = document.getElementById("output-screen");
       const btnBack = document.getElementById("btn-back");
 
-      let enableOcr, extractFromFile, initWasm, clearOcrBackends;
-
-      // ── Init WASM on page load ─────────────────────────────────────────────
+      // ── Resolve CDN version ────────────────────────────────────────────────
       let wasmReady = false;
+      let resolvedVersion = null;
       try {
-        // Fetch the actual latest version to ensure JS and WASM versions match exactly
-        // and avoid CDN split-cache FFI mismatches (fixes hang on small images).
         const pkg = await fetch('https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/package.json')
           .then(r => { if (!r.ok) throw new Error(`CDN version fetch failed: ${r.status}`); return r.json(); });
-        const version = pkg.version;
-        if (!version || typeof version !== 'string') throw new Error('Invalid version in @kreuzberg/wasm package.json');
-
-        const module = await import(`https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@${version}/dist/index.js`);
-        enableOcr = module.enableOcr;
-        extractFromFile = module.extractFromFile;
-        initWasm = module.initWasm;
-        clearOcrBackends = module.clearOcrBackends;
-
-        await initWasm(`https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@${version}/dist/pkg/kreuzberg_wasm_bg.wasm`);
-        // Enable OCR so image files (WebP, PNG, JPEG, etc.) can be extracted.
-        // Without this the Rust-side OCR plugin registry stays empty and any
-        // image upload fails with "OCR backend 'tesseract' not registered".
-        await enableOcr();
+        resolvedVersion = pkg.version;
+        if (!resolvedVersion || typeof resolvedVersion !== 'string') throw new Error('Invalid version');
         wasmReady = true;
       } catch (e) {
-        console.error('WASM initialization failed:', e);
+        console.error('Version resolution failed:', e);
         const errorBox = document.getElementById("error-message");
         if (errorBox) errorBox.style.display = 'flex';
       }
@@ -439,9 +424,66 @@
         );
       }
 
+      // ── Extraction via Web Worker ──────────────────────────────────────────
+      // The entire WASM extraction pipeline (image decoding, OCR, format
+      // parsing) is CPU-bound and blocks whichever thread runs it. By spawning
+      // a dedicated Web Worker per extraction we keep the UI thread free.
+      // worker.terminate() provides a real kill switch if it hangs.
+      function extractInWorker(fileBytes, mimeType, version) {
+        return new Promise((resolve, reject) => {
+          const workerCode = `
+            let extractBytes, initWasm, enableOcr;
+            self.onmessage = async (e) => {
+              const { fileBytes, mimeType, version } = e.data;
+              try {
+                const cdnBase = 'https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@' + version;
+                const mod = await import(cdnBase + '/dist/index.js');
+                initWasm = mod.initWasm;
+                extractBytes = mod.extractBytes;
+                enableOcr = mod.enableOcr;
+                await initWasm(cdnBase + '/dist/pkg/kreuzberg_wasm_bg.wasm');
+                await enableOcr();
+                const result = await extractBytes(fileBytes, mimeType, null);
+                // Structured-clone safe: extract plain data
+                self.postMessage({ ok: true, result: JSON.parse(JSON.stringify(result)) });
+              } catch (err) {
+                self.postMessage({ ok: false, error: err?.message || String(err) });
+              }
+            };
+          `;
+          const blob = new Blob([workerCode], { type: 'application/javascript' });
+          const url = URL.createObjectURL(blob);
+          const worker = new Worker(url, { type: 'module' });
+
+          const TIMEOUT_MS = 30_000;
+          const timer = setTimeout(() => {
+            worker.terminate();
+            URL.revokeObjectURL(url);
+            reject(new Error('Extraction timed out after 30s. The file may be too complex for in-browser processing. Try a simpler file or use the API.'));
+          }, TIMEOUT_MS);
+
+          worker.onmessage = (e) => {
+            clearTimeout(timer);
+            worker.terminate();
+            URL.revokeObjectURL(url);
+            if (e.data.ok) resolve(e.data.result);
+            else reject(new Error(e.data.error));
+          };
+
+          worker.onerror = (e) => {
+            clearTimeout(timer);
+            worker.terminate();
+            URL.revokeObjectURL(url);
+            reject(new Error(e.message || 'Worker error'));
+          };
+
+          worker.postMessage({ fileBytes, mimeType, version });
+        });
+      }
+
       // ── Process File ───────────────────────────────────────────────────────
       async function processFile(file) {
-        if (!wasmReady) {
+        if (!wasmReady || !resolvedVersion) {
           const errorBox = document.getElementById("error-message");
           if (errorBox) errorBox.style.display = 'flex';
           return;
@@ -464,34 +506,24 @@
         }
 
         outputScreen.style.display = "flex";
+        const mdEl   = document.getElementById("content-markdown");
+        const jsonEl = document.getElementById("content-json");
+        if (mdEl) mdEl.innerHTML = '<p style="color:#aaa">Extracting…</p>';
+
         try {
-          // Race extraction against a 20s watchdog. When the watchdog fires,
-          // call clearOcrBackends() before rejecting — this triggers backend.shutdown()
-          // → terminateOcrWorker() → worker.terminate(), which forcibly stops the
-          // Tesseract Web Worker. Without termination the worker spins at 100% CPU
-          // (Tesseract PSM AUTO loops on near-uniform images) even after the promise
-          // rejects, causing "Page Unresponsive" dialogs in Chrome and Firefox.
-          const result = await new Promise((resolve, reject) => {
-            const timer = setTimeout(async () => {
-              try { if (clearOcrBackends) await clearOcrBackends(); } catch (_) {}
-              reject(new Error("OCR timed out after 20s — Tesseract may have hung on this image. Try a PDF, Word document, or text file instead."));
-            }, 20_000);
-            extractFromFile(file, file.type || null).then(
-              r => { clearTimeout(timer); resolve(r); },
-              e => { clearTimeout(timer); reject(e); }
-            );
-          });
-          const mdEl   = document.getElementById("content-markdown");
-          const jsonEl = document.getElementById("content-json");
+          const buf = await file.arrayBuffer();
+          const fileBytes = new Uint8Array(buf);
+          const mimeType = file.type || 'application/octet-stream';
+          const result = await extractInWorker(fileBytes, mimeType, resolvedVersion);
           if (mdEl)   mdEl.innerHTML  = result.content ? renderMarkdown(result.content) : '<p style="color:#888">No content extracted.</p>';
           if (jsonEl) jsonEl.innerHTML = highlightJson(result);
         } catch (e) {
-          console.error("WASM Extraction failed:", e);
+          console.error("Extraction failed:", e);
           outputScreen.style.display = "none";
           const errorBox = document.getElementById("error-message");
           const errTitle = document.getElementById("error-title");
           const errDetail = document.getElementById("error-detail");
-          if (errTitle) errTitle.textContent = e?.message?.includes("timed out") ? "OCR timed out" : "Extraction failed";
+          if (errTitle) errTitle.textContent = e?.message?.includes("timed out") ? "Extraction timed out" : "Extraction failed";
           if (errDetail) errDetail.textContent = e instanceof Error ? e.message : "An unexpected error occurred. Please try a different file.";
           if (errorBox) errorBox.style.display = 'flex';
         }
