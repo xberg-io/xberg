@@ -69,19 +69,21 @@ def _map_result_to_doc(result: ExtractionResult, source: str, table: str) -> Doc
 
     """
     content_hash = _content_hash(result.content)
+    authors = result.metadata.get("authors")
+    keywords = result.extracted_keywords
     return {
         "id": RecordID(table, content_hash),
         "source": source,
         "content": result.content,
         "mime_type": result.mime_type,
         "title": result.metadata.get("title"),
-        "authors": result.metadata.get("authors"),
+        "authors": ", ".join(authors) if authors else None,
         "created_at": _parse_datetime(result.metadata.get("created_at")),
-        "metadata": result.metadata,
+        "metadata": dict(result.metadata),
         "quality_score": result.quality_score,
         "content_hash": content_hash,
-        "detected_languages": result.detected_languages,
-        "keywords": result.extracted_keywords,
+        "detected_languages": result.detected_languages or [],
+        "keywords": [kw.text for kw in keywords] if keywords else [],
     }
 
 

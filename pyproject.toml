@@ -117,6 +117,11 @@ lint.per-file-ignores."tests/**" = [
   "TC003",
 ]
 
+[tool.mypy]
+python_version = "3.10"
+strict = true
+exclude = [ "examples/" ]
+
 [tool.pytest]
 ini_options.testpaths = [ "tests" ]
 ini_options.asyncio_mode = "auto"
@@ -125,8 +130,3 @@ ini_options.markers = [ "integration: tests requiring a live SurrealDB instance 
 [tool.coverage]
 run.source = [ "kreuzberg_surrealdb" ]
 report.fail_under = 80
-
-[tool.mypy]
-python_version = "3.10"
-strict = true
-exclude = [ "examples/" ]

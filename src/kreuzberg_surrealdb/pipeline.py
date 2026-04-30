@@ -1,6 +1,6 @@
 """Chunked extraction with optional embedding for RAG pipelines."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from kreuzberg import (
     ChunkingConfig,
@@ -179,13 +179,15 @@ class DocumentPipeline(BaseIngester):
 
         res = await self._client.query(
             f"INSERT IGNORE INTO {table} $records",
-            {"records": [doc]},
+            {"records": cast("Any", [doc])},
         )
         _check_insert_result(res, context="document insertion")
 
         chunk_records: list[ChunkRecord] = []
-        for i, chunk in enumerate(result.chunks):
-            meta = chunk.metadata or {}
+        for i, chunk in enumerate(result.chunks or []):
+            meta = chunk.metadata
+            first_page = meta.get("first_page")
+            last_page = meta.get("last_page")
             chunk_rec: ChunkRecord = {
                 "id": RecordID(self._chunk_table, f"{content_hash}_{i}"),
                 "document": doc_id,
@@ -193,11 +195,11 @@ class DocumentPipeline(BaseIngester):
                 "chunk_index": i,
                 "embedding": chunk.embedding if self._embed else None,
                 "word_count": len(chunk.content.split()),
-                "page_number": meta.get("page_number"),
-                "char_start": meta.get("char_start"),
-                "char_end": meta.get("char_end"),
-                "first_page": meta.get("first_page"),
-                "last_page": meta.get("last_page"),
+                "page_number": first_page,
+                "char_start": None,
+                "char_end": None,
+                "first_page": first_page,
+                "last_page": last_page,
             }
             chunk_records.append(chunk_rec)
 
@@ -207,7 +209,7 @@ class DocumentPipeline(BaseIngester):
                 batch = chunk_records[i : i + self._insert_batch_size]
                 res = await self._client.query(
                     f"INSERT IGNORE INTO {ct} $records",
-                    {"records": batch},
+                    {"records": cast("Any", batch)},
                 )
                 _check_insert_result(res, context="chunk insertion")
 

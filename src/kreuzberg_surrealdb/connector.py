@@ -1,5 +1,7 @@
 """Full-document extraction and BM25 search connector."""
 
+from typing import Any, cast
+
 from kreuzberg import ExtractionResult
 
 from kreuzberg_surrealdb._base import BaseIngester, _check_insert_result, _map_result_to_doc
@@ -52,6 +54,6 @@ class DocumentConnector(BaseIngester):
         doc = _map_result_to_doc(result, source, self._table)
         res = await self._client.query(
             f"INSERT IGNORE INTO {self._table} $records",
-            {"records": [doc]},
+            {"records": cast("Any", [doc])},
         )
         _check_insert_result(res, context="document insertion")

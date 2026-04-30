@@ -13,29 +13,22 @@ build/
 .kreuzberg/
 uv.lock
 
-# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
-.agents/
-.claude/
-.codex/
-.cursor/
-.github/agents/code-reviewer.agent.md
-.github/agents/docs-writer.agent.md
-.github/agents/ffi-engineer.agent.md
-.github/agents/performance-engineer.agent.md
-.github/agents/polyglot-architect.agent.md
-.github/agents/rust-core-engineer.agent.md
-.github/agents/security-auditor.agent.md
-.github/copilot-instructions.md
-.github/skills/common-task-commands/SKILL.md
-.github/skills/quick-start/SKILL.md
-.mcp.json
-AGENTS.md
-CLAUDE.md
-GEMINI.md
-# END ai-rulez
 
 # Additional generated artifacts
 .remote-cache/
 .alef/
 .gemini/
 GEMINI.md
+
+# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
+.agents/
+.claude/
+.codex/
+.cursor/
+.github/agents/
+.github/commands/
+.github/copilot-instructions.md
+.github/skills/
+AGENTS.md
+CLAUDE.md
+# END ai-rulez
