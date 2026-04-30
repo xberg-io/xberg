@@ -324,8 +324,6 @@
     </footer>
 
     <script type="module">
-      import { enableOcr, extractFromFile, initWasm } from 'https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/dist/index.js';
-
       const dropZone = document.getElementById("dropZone");
       const fileInput = document.getElementById("fileInput");
       const uploadScreen = document.getElementById("upload-screen");
@@ -333,10 +331,22 @@
       const outputScreen = document.getElementById("output-screen");
       const btnBack = document.getElementById("btn-back");
 
+      let enableOcr, extractFromFile, initWasm;
+
       // ── Init WASM on page load ─────────────────────────────────────────────
       let wasmReady = false;
       try {
-        await initWasm('https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/dist/pkg/kreuzberg_wasm_bg.wasm');
+        // Fetch the actual latest version to ensure JS and WASM versions match exactly
+        // and avoid CDN split-cache FFI mismatches (fixes hang on small images).
+        const pkg = await fetch('https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/package.json').then(r => r.json());
+        const version = pkg.version;
+
+        const module = await import(`https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@${version}/dist/index.js`);
+        enableOcr = module.enableOcr;
+        extractFromFile = module.extractFromFile;
+        initWasm = module.initWasm;
+
+        await initWasm(`https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@${version}/dist/pkg/kreuzberg_wasm_bg.wasm`);
         // Enable OCR so image files (WebP, PNG, JPEG, etc.) can be extracted.
         // Without this the Rust-side OCR plugin registry stays empty and any
         // image upload fails with "OCR backend 'tesseract' not registered".
