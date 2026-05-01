@@ -309,7 +309,7 @@ quick-xml = { version = "0.39.2", features = ["serialize"], optional = true }
 rake = { version = "0.3.6", optional = true }
 rayon = { workspace = true }
 regex = "1.12.3"
-rmcp = { version = "1.5.0", features = [
+rmcp = { version = "1.6.0", features = [
     "server",
     "macros",
     "base64",
