@@ -29,7 +29,7 @@ docs = [
 bench-docling = [ "docling>=2.64.1" ]
 bench-markitdown = [ "markitdown[all]>=0.1.5" ]
 bench-mineru = [ "mineru[pipeline]>=2.6.7", "onnxruntime" ]
-bench-pdfminer = [ "pdfminer-six>=20231228" ]
+bench-pdfminer = [ "pdfminer-six>=20260107" ]
 bench-pdfplumber = [ "pdfplumber>=0.11.4" ]
 bench-pdftotext = [ "pdftotext>=3.0.0" ]
 bench-playa-pdf = [ "playa-pdf>=1.1.0" ]
