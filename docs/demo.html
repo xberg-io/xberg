@@ -441,10 +441,10 @@
               const { type } = e.data;
               if (type === 'init') {
                 try {
-                  const cdnBase = 'https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@' + e.data.version;
+                  const cdnBase = \`https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@\${e.data.version}\`;
                   const mod = await import(cdnBase + '/dist/index.js');
                   await mod.initWasm(cdnBase + '/dist/pkg/kreuzberg_wasm_bg.wasm');
-                  await mod.enableOcr();
+                  try { await mod.enableOcr(); } catch (_) { /* OCR unavailable — extraction still works for non-image formats */ }
                   _extractBytes = mod.extractBytes;
                   self.postMessage({ type: 'ready' });
                 } catch (err) {

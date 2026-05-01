@@ -87,10 +87,10 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build:wasm:web": "wasm-pack build --target web --out-dir pkg --release -- --features ocr-wasm",
-		"build:wasm:bundler": "wasm-pack build --target bundler --out-dir pkg --release -- --features ocr-wasm",
-		"build:wasm:nodejs": "wasm-pack build --target nodejs --out-dir pkg-nodejs --release -- --features ocr-wasm",
-		"build:wasm:deno": "wasm-pack build --target deno --out-dir pkg --release -- --features ocr-wasm",
+		"build:wasm:web": "wasm-pack build --target web --out-dir pkg --release",
+		"build:wasm:bundler": "wasm-pack build --target bundler --out-dir pkg --release",
+		"build:wasm:nodejs": "wasm-pack build --target nodejs --out-dir pkg-nodejs --release",
+		"build:wasm:deno": "wasm-pack build --target deno --out-dir pkg --release",
 		"build:ts": "tsup && tsc --emitDeclarationOnly && node scripts/fix-type-exports.js",
 		"build:ts:minify": "tsup --minify && tsc --emitDeclarationOnly && node scripts/fix-type-exports.js",
 		"fix:wasi": "node scripts/fix-wasi-imports.js",
