@@ -1,0 +1,47 @@
+version: "3"
+
+# ============================================================================
+# Demo development environment
+#
+# Starts two servers so demo.html can load WASM assets from a different port,
+# reproducing the cross-origin scenario that exists when assets are on a CDN.
+#
+#   Docs server  → http://localhost:8001  (serves docs/demo.html)
+#   Asset server → http://localhost:9000  (serves crates/kreuzberg-wasm/)
+#
+# Usage:
+#   task demo:dev                  # full build + both servers
+#   SKIP_WASM_BUILD=1 task demo:dev  # skip Rust build, rebuild TS only
+# ============================================================================
+
+tasks:
+  dev:
+    desc: "Build WASM + TS and serve demo + asset servers for local testing"
+    cmds:
+      - task: dev:build
+      - task: dev:serve
+
+  dev:build:
+    desc: "Build WASM binary (unless SKIP_WASM_BUILD=1) and TypeScript dist"
+    dir: crates/kreuzberg-wasm
+    cmds:
+      - '[ "${SKIP_WASM_BUILD:-0}" = "1" ] || pnpm run build:wasm:web'
+      - pnpm run build:ts
+      - node scripts/copy-pkg.js
+
+  dev:serve:
+    desc: "Start docs server (port 8001) and WASM asset server (port 9000) in parallel"
+    deps:
+      - task: dev:serve:docs
+      - task: dev:serve:assets
+
+  dev:serve:docs:
+    desc: "Serve docs on http://localhost:8001"
+    cmds:
+      - uv run --group doc zensical serve -a localhost:8001
+
+  dev:serve:assets:
+    desc: "Serve WASM assets on http://localhost:9000 (simulates CDN origin)"
+    dir: crates/kreuzberg-wasm
+    cmds:
+      - npx --yes serve . -p 9000 --cors -l tcp://0.0.0.0:9000

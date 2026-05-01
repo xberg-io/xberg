@@ -35,6 +35,8 @@ includes:
     taskfile: ./.task/tools/pdfium.yml
   docs:
     taskfile: ./.task/tools/docs.yml
+  demo:
+    taskfile: ./.task/tools/demo.yml
   _tools:
     taskfile: ./.task/tools/general.yml
     flatten: true
