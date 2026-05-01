@@ -22,7 +22,7 @@ dev = [
   "validate-pyproject>=0.24.1",
 ]
 docs = [
-  "mkdocstrings>=1.0.3",
+  "mkdocstrings>=1.0.4",
   "mkdocstrings-python>=2.0.3",
   "zensical",
 ]
