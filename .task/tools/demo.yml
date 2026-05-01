@@ -26,12 +26,10 @@ tasks:
       - task: dev:serve
 
   dev:build:
-    desc: "Build WASM binary (unless SKIP_WASM_BUILD=1) and TypeScript dist"
+    desc: "Build WASM binary for web target (unless SKIP_WASM_BUILD=1)"
     dir: crates/kreuzberg-wasm
     cmds:
       - '[ "${SKIP_WASM_BUILD:-0}" = "1" ] || pnpm run build:wasm:web'
-      - pnpm run build:ts
-      - node scripts/copy-pkg.js
 
   dev:patch:
     desc: "Generate docs/demo-dev.html with CDN URLs replaced by localhost:9000"
