@@ -1,9 +1,5 @@
 ```typescript title="TypeScript"
-import {
-	extractFile,
-	type ExtractionConfig,
-	type ExtractionResult,
-} from '@kreuzberg/node';
+import { extractFile, type ExtractionConfig, type ExtractionResult } from "@kreuzberg/node";
 
 /**
  * Note: Custom cache backends are not supported in TypeScript v4.0.
@@ -15,7 +11,7 @@ import {
 
 // Usage with built-in cache
 const config: ExtractionConfig = {
-  useCache: true,  // Enable internal Rust cache
+  useCache: true, // Enable internal Rust cache
 };
 
 const result = await extractFile("document.pdf", null, config);

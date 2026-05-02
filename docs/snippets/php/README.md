@@ -23,121 +23,153 @@ php/
 ## Installation (3 snippets)
 
 ### Composer_install.php
+
 Installing Kreuzberg via Composer and verifying the extension is loaded.
 
 ### Extension_setup.php
+
 Setting up the native PHP extension (kreuzberg.so/.dll) and checking for optional dependencies (Tesseract, ONNX Runtime).
 
 ### Requirements_check.php
+
 Comprehensive system requirements verification script.
 
 ## Quickstart (4 snippets)
 
 ### Basic_extraction_oop.php
+
 Simple document extraction using the object-oriented API.
 
 ### Basic_extraction_procedural.php
+
 Simple extraction using the procedural API for more concise code.
 
 ### Extract_from_bytes.php
+
 Extract content from file data in memory (useful for uploaded files).
 
 ### Mime_type_detection.php
+
 Automatic MIME type detection from file paths or content.
 
 ## Configuration (5 snippets)
 
 ### Extraction_config.php
+
 Main ExtractionConfig class - controlling all aspects of extraction.
 
 ### Pdf_config.php
+
 PDF-specific settings including image quality and extraction methods.
 
 ### Page_config.php
+
 Per-page extraction and page markers for maintaining document structure.
 
 ### Language_detection_config.php
+
 Automatic language detection for multilingual documents.
 
 ### Keyword_config.php
+
 Automatic keyword extraction for document categorization.
 
 ## Extraction (7 snippets)
 
 ### Pdf_extraction.php
+
 Extract text, tables, and images from PDF files with various configurations.
 
 ### Docx_extraction.php
+
 Extract content from Microsoft Word documents including metadata and tables.
 
 ### Image_extraction.php
+
 Extract embedded images from documents with optional OCR.
 
 ### Batch_processing.php
+
 Process multiple documents in parallel for maximum performance.
 
 ### Table_extraction.php
+
 Extract and process tables, export to CSV, JSON, and HTML formats.
 
 ### Metadata_extraction.php
+
 Extract document metadata (title, author, dates, keywords).
 
 ### Multi_format.php
+
 Handle various document formats with format-specific processing.
 
 ## OCR (3 snippets)
 
 ### Basic_ocr.php
+
 Basic OCR with Tesseract for scanned documents and images.
 
 ### Advanced_ocr.php
+
 Advanced OCR configuration with Tesseract PSM modes and table detection.
 
 ### Image_preprocessing.php
+
 Image preprocessing for better OCR accuracy (denoising, deskewing, sharpening).
 
 ## Chunking (1 snippet)
 
 ### Basic_chunking.php
+
 Split documents into chunks for RAG applications with various strategies.
 
 ## Embeddings (2 snippets)
 
 ### Basic_embeddings.php
+
 Generate vector embeddings for semantic search and similarity matching.
 
 ### Semantic_search.php
+
 Build a semantic search system using document embeddings.
 
 ## Advanced (2 snippets)
 
 ### Error_handling.php
+
 Robust error handling, retry strategies, and validation.
 
 ### Performance_tuning.php
+
 Performance optimization tips and techniques.
 
 ## Cache (1 snippet)
 
 ### Disk_cache.php
+
 File-based caching to avoid re-processing documents.
 
 ## CLI (2 snippets)
 
 ### Basic_cli.php
+
 Simple command-line interface for document extraction.
 
 ### Cli_with_config.php
+
 Advanced CLI with support for various extraction options.
 
 ## Benchmarking (1 snippet)
 
 ### Simple_benchmark.php
+
 Benchmark extraction performance across different configurations.
 
 ## Usage Patterns
 
 ### Basic Extraction
+
 ```php title="Basic Extraction"
 use Kreuzberg\Kreuzberg;
 
@@ -147,6 +179,7 @@ echo $result->content;
 ```
 
 ### With Configuration
+
 ```php title="With Configuration"
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
@@ -161,6 +194,7 @@ $result = $kreuzberg->extractFile('scanned.pdf');
 ```
 
 ### Procedural API
+
 ```php title="Procedural API"
 use function Kreuzberg\extract_file;
 
@@ -169,6 +203,7 @@ echo $result->content;
 ```
 
 ### Batch Processing
+
 ```php title="Batch Processing"
 use function Kreuzberg\batch_extract_files;
 
@@ -179,15 +214,19 @@ $results = batch_extract_files($files);
 ## Async Extraction (4 snippets)
 
 ### Async_extract_file.php
+
 Async file extraction with DeferredResult polling and blocking patterns.
 
 ### Async_batch.php
+
 Async batch extraction with timeout-based waiting.
 
 ### Async_amp_bridge.php
+
 Integration with Amp v3+ framework using AmpBridge::toFuture().
 
 ### Async_react_bridge.php
+
 Integration with ReactPHP framework using ReactBridge::toPromise().
 
 ## Key Features Demonstrated
@@ -217,11 +256,13 @@ Integration with ReactPHP framework using ReactBridge::toPromise().
 Each snippet is designed to be self-contained and runnable. To test:
 
 1. Install dependencies:
+
    ```bash
    composer require kreuzberg/kreuzberg
    ```
 
 2. Ensure the extension is loaded:
+
    ```bash
    php -m | grep kreuzberg
    ```
@@ -243,6 +284,7 @@ Each snippet is designed to be self-contained and runnable. To test:
 ## Contributing
 
 These snippets follow these conventions:
+
 - All files use `declare(strict_types=1)`
 - Code is wrapped in ````php` markdown code blocks
 - Clear comments explain what each snippet demonstrates

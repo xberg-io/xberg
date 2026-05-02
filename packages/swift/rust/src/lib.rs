@@ -558,20 +558,6 @@ mod ffi {
     }
 
     extern "Rust" {
-        type ArchiveArchiveMetadata;
-        fn format(&self) -> String;
-        fn file_count(&self) -> usize;
-        fn total_size(&self) -> u64;
-    }
-
-    extern "Rust" {
-        type ArchiveArchiveEntry;
-        fn path(&self) -> String;
-        fn size(&self) -> u64;
-        fn is_dir(&self) -> bool;
-    }
-
-    extern "Rust" {
         type HtmlExtractionResult;
         fn markdown(&self) -> String;
         fn images(&self) -> Vec<ExtractedInlineImage>;
@@ -586,33 +572,6 @@ mod ffi {
         fn description(&self) -> Option<String>;
         fn dimensions(&self) -> Option<Vec<u32>>;
         fn attributes(&self) -> Vec<String>;
-    }
-
-    extern "Rust" {
-        type DocExtractionResult;
-        fn content(&self) -> String;
-        fn metadata(&self) -> DocMetadata;
-    }
-
-    extern "Rust" {
-        type DocMetadata;
-        #[swift_bridge(init)]
-        fn new(
-            title: Option<String>,
-            subject: Option<String>,
-            author: Option<String>,
-            last_author: Option<String>,
-            created: Option<String>,
-            modified: Option<String>,
-            revision_number: Option<String>,
-        ) -> DocMetadata;
-        fn title(&self) -> Option<String>;
-        fn subject(&self) -> Option<String>;
-        fn author(&self) -> Option<String>;
-        fn last_author(&self) -> Option<String>;
-        fn created(&self) -> Option<String>;
-        fn modified(&self) -> Option<String>;
-        fn revision_number(&self) -> Option<String>;
     }
 
     extern "Rust" {
@@ -2126,57 +2085,6 @@ mod ffi {
     }
 
     extern "Rust" {
-        type OcrTesseractConfig;
-        #[swift_bridge(init)]
-        fn new(
-            language: String,
-            psm: u8,
-            output_format: String,
-            oem: u8,
-            min_confidence: f64,
-            preprocessing: Option<ImagePreprocessingConfig>,
-            enable_table_detection: bool,
-            table_min_confidence: f64,
-            table_column_threshold: u32,
-            table_row_threshold_ratio: f64,
-            use_cache: bool,
-            classify_use_pre_adapted_templates: bool,
-            language_model_ngram_on: bool,
-            tessedit_dont_blkrej_good_wds: bool,
-            tessedit_dont_rowrej_good_wds: bool,
-            tessedit_enable_dict_correction: bool,
-            tessedit_char_whitelist: String,
-            tessedit_char_blacklist: String,
-            tessedit_use_primary_params_model: bool,
-            textord_space_size_is_variable: bool,
-            thresholding_method: bool,
-            auto_rotate: bool,
-        ) -> OcrTesseractConfig;
-        fn language(&self) -> String;
-        fn psm(&self) -> u8;
-        fn output_format(&self) -> String;
-        fn oem(&self) -> u8;
-        fn min_confidence(&self) -> f64;
-        fn preprocessing(&self) -> Option<ImagePreprocessingConfig>;
-        fn enable_table_detection(&self) -> bool;
-        fn table_min_confidence(&self) -> f64;
-        fn table_column_threshold(&self) -> u32;
-        fn table_row_threshold_ratio(&self) -> f64;
-        fn use_cache(&self) -> bool;
-        fn classify_use_pre_adapted_templates(&self) -> bool;
-        fn language_model_ngram_on(&self) -> bool;
-        fn tessedit_dont_blkrej_good_wds(&self) -> bool;
-        fn tessedit_dont_rowrej_good_wds(&self) -> bool;
-        fn tessedit_enable_dict_correction(&self) -> bool;
-        fn tessedit_char_whitelist(&self) -> String;
-        fn tessedit_char_blacklist(&self) -> String;
-        fn tessedit_use_primary_params_model(&self) -> bool;
-        fn textord_space_size_is_variable(&self) -> bool;
-        fn thresholding_method(&self) -> bool;
-        fn auto_rotate(&self) -> bool;
-    }
-
-    extern "Rust" {
         type PaddleOcrConfig;
         #[swift_bridge(init)]
         fn new(
@@ -2456,44 +2364,6 @@ mod ffi {
     }
 
     extern "Rust" {
-        #[swift_bridge(swift_name = "blake3HashBytes")]
-        fn blake3_hash_bytes(data: Vec<u8>) -> String;
-        #[swift_bridge(swift_name = "blake3HashFile")]
-        fn blake3_hash_file(path: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "fastHash")]
-        fn fast_hash(data: Vec<u8>) -> u64;
-        #[swift_bridge(swift_name = "validateCacheKey")]
-        fn validate_cache_key(key: String) -> bool;
-        #[swift_bridge(swift_name = "validatePort")]
-        fn validate_port(port: u32) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateHost")]
-        fn validate_host(host: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateCorsOrigin")]
-        fn validate_cors_origin(origin: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateUploadSize")]
-        fn validate_upload_size(size: usize) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateBinarizationMethod")]
-        fn validate_binarization_method(method: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateTokenReductionLevel")]
-        fn validate_token_reduction_level(level: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateOcrBackend")]
-        fn validate_ocr_backend(backend: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateLanguageCode")]
-        fn validate_language_code(code: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateTesseractPsm")]
-        fn validate_tesseract_psm(psm: i32) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateTesseractOem")]
-        fn validate_tesseract_oem(oem: i32) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateOutputFormat")]
-        fn validate_output_format(format: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateConfidence")]
-        fn validate_confidence(confidence: f64) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateDpi")]
-        fn validate_dpi(dpi: i32) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateChunkingParams")]
-        fn validate_chunking_params(max_chars: usize, max_overlap: usize) -> Result<(), String>;
-        #[swift_bridge(swift_name = "validateLlmConfigModel")]
-        fn validate_llm_config_model(model: String) -> Result<(), String>;
         #[swift_bridge(swift_name = "extractBytes")]
         fn extract_bytes(
             content: Vec<u8>,
@@ -2525,159 +2395,24 @@ mod ffi {
         ) -> Result<Vec<ExtractionResult>, String>;
         #[swift_bridge(swift_name = "batchExtractFile")]
         fn batch_extract_file(items: Vec<String>, config: ExtractionConfig) -> Result<Vec<ExtractionResult>, String>;
-        #[swift_bridge(swift_name = "isValidFormatField")]
-        fn is_valid_format_field(field: String) -> bool;
-        #[swift_bridge(swift_name = "validateMimeType")]
-        fn validate_mime_type(mime_type: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "detectOrValidate")]
-        fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> Result<String, String>;
         #[swift_bridge(swift_name = "detectMimeTypeFromBytes")]
         fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String>;
         #[swift_bridge(swift_name = "getExtensionsForMime")]
         fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String>;
-        #[swift_bridge(swift_name = "listSupportedFormats")]
-        fn list_supported_formats() -> Vec<SupportedFormat>;
-        #[swift_bridge(swift_name = "clearProcessorCache")]
-        fn clear_processor_cache() -> Result<(), String>;
-        #[swift_bridge(swift_name = "transformExtractionResultToElements")]
-        fn transform_extraction_result_to_elements(result: ExtractionResult) -> Vec<Element>;
-        #[swift_bridge(swift_name = "extractEmailContent")]
-        fn extract_email_content(
-            data: Vec<u8>,
-            mime_type: String,
-            fallback_codepage: Option<u32>,
-        ) -> Result<EmailExtractionResult, String>;
-        #[swift_bridge(swift_name = "cellsToText")]
-        fn cells_to_text(cells: String) -> String;
-        #[swift_bridge(swift_name = "cellsToMarkdown")]
-        fn cells_to_markdown(cells: String) -> String;
-        #[swift_bridge(swift_name = "djotToHtml")]
-        fn djot_to_html(djot_source: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "dedupText")]
-        fn dedup_text(texts: Vec<String>) -> Vec<String>;
-        #[swift_bridge(swift_name = "registerDefaultExtractors")]
-        fn register_default_extractors() -> Result<(), String>;
-        #[swift_bridge(swift_name = "unregisterExtractor")]
-        fn unregister_extractor(name: String) -> Result<(), String>;
         #[swift_bridge(swift_name = "listExtractors")]
         fn list_extractors() -> Result<Vec<String>, String>;
-        #[swift_bridge(swift_name = "clearExtractors")]
-        fn clear_extractors() -> Result<(), String>;
-        #[swift_bridge(swift_name = "unregisterOcrBackend")]
-        fn unregister_ocr_backend(name: String) -> Result<(), String>;
         #[swift_bridge(swift_name = "listOcrBackends")]
         fn list_ocr_backends() -> Result<Vec<String>, String>;
         #[swift_bridge(swift_name = "clearOcrBackends")]
         fn clear_ocr_backends() -> Result<(), String>;
         #[swift_bridge(swift_name = "listPostProcessors")]
         fn list_post_processors() -> Result<Vec<String>, String>;
-        #[swift_bridge(swift_name = "unregisterRenderer")]
-        fn unregister_renderer(name: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "listRenderers")]
-        fn list_renderers() -> Result<Vec<String>, String>;
-        #[swift_bridge(swift_name = "clearRenderers")]
-        fn clear_renderers() -> Result<(), String>;
+        #[swift_bridge(swift_name = "clearPostProcessors")]
+        fn clear_post_processors() -> Result<(), String>;
         #[swift_bridge(swift_name = "listValidators")]
         fn list_validators() -> Result<Vec<String>, String>;
         #[swift_bridge(swift_name = "clearValidators")]
         fn clear_validators() -> Result<(), String>;
-        #[swift_bridge(swift_name = "renderHtmlStr")]
-        fn render_html_str(html: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "renderMarkdownStr")]
-        fn render_markdown_str(html: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "renderDjotStr")]
-        fn render_djot_str(html: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "renderJsonStr")]
-        fn render_json_str(html: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "renderPlainStr")]
-        fn render_plain_str(html: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "sanitizeFilename")]
-        fn sanitize_filename(path: String) -> String;
-        #[swift_bridge(swift_name = "sanitizePath")]
-        fn sanitize_path(path: String) -> String;
-        #[swift_bridge(swift_name = "isValidUtf8")]
-        fn is_valid_utf8(bytes: Vec<u8>) -> bool;
-        #[swift_bridge(swift_name = "cleanExtractedText")]
-        fn clean_extracted_text(text: String) -> String;
-        #[swift_bridge(swift_name = "reduceTokens")]
-        fn reduce_tokens(
-            text: String,
-            config: TokenReductionConfig,
-            language_hint: Option<String>,
-        ) -> Result<String, String>;
-        #[swift_bridge(swift_name = "batchReduceTokens")]
-        fn batch_reduce_tokens(
-            texts: Vec<String>,
-            config: TokenReductionConfig,
-            language_hint: Option<String>,
-        ) -> Result<Vec<String>, String>;
-        fn bold(start: u32, end: u32) -> TextAnnotation;
-        fn italic(start: u32, end: u32) -> TextAnnotation;
-        fn underline(start: u32, end: u32) -> TextAnnotation;
-        fn link(start: u32, end: u32, url: String, title: Option<String>) -> TextAnnotation;
-        fn code(start: u32, end: u32) -> TextAnnotation;
-        fn strikethrough(start: u32, end: u32) -> TextAnnotation;
-        fn subscript_(start: u32, end: u32) -> TextAnnotation;
-        fn superscript(start: u32, end: u32) -> TextAnnotation;
-        #[swift_bridge(swift_name = "fontSize")]
-        fn font_size(start: u32, end: u32, value: String) -> TextAnnotation;
-        fn color(start: u32, end: u32, value: String) -> TextAnnotation;
-        fn highlight(start: u32, end: u32) -> TextAnnotation;
-        #[swift_bridge(swift_name = "classifyUri")]
-        fn classify_uri(url: String) -> UriKind;
-        #[swift_bridge(swift_name = "safeDecode")]
-        fn safe_decode(byte_data: Vec<u8>, encoding: Option<String>) -> String;
-        #[swift_bridge(swift_name = "calculateTextConfidence")]
-        fn calculate_text_confidence(text: String) -> f64;
-        #[swift_bridge(swift_name = "createStringBufferPool")]
-        fn create_string_buffer_pool(pool_size: usize, buffer_capacity: usize) -> StringBufferPool;
-        #[swift_bridge(swift_name = "createByteBufferPool")]
-        fn create_byte_buffer_pool(pool_size: usize, buffer_capacity: usize) -> ByteBufferPool;
-        #[swift_bridge(swift_name = "normalizeWhitespace")]
-        fn normalize_whitespace(s: String) -> String;
-        #[swift_bridge(swift_name = "openapiJson")]
-        fn openapi_json() -> String;
-        #[swift_bridge(swift_name = "serveDefault")]
-        fn serve_default() -> Result<(), String>;
-        #[swift_bridge(swift_name = "chunkText")]
-        fn chunk_text(
-            text: String,
-            config: ChunkingConfig,
-            page_boundaries: Option<Vec<PageBoundary>>,
-        ) -> Result<ChunkingResult, String>;
-        #[swift_bridge(swift_name = "chunkTextWithHeadingSource")]
-        fn chunk_text_with_heading_source(
-            text: String,
-            config: ChunkingConfig,
-            page_boundaries: Option<Vec<PageBoundary>>,
-            heading_source: Option<String>,
-        ) -> Result<ChunkingResult, String>;
-        #[swift_bridge(swift_name = "chunkTextsBatch")]
-        fn chunk_texts_batch(texts: Vec<String>, config: ChunkingConfig) -> Result<Vec<ChunkingResult>, String>;
-        #[swift_bridge(swift_name = "chunkSemantic")]
-        fn chunk_semantic(
-            text: String,
-            config: ChunkingConfig,
-            page_boundaries: Option<Vec<PageBoundary>>,
-        ) -> Result<ChunkingResult, String>;
-        fn normalize(v: Vec<f32>) -> Vec<f32>;
-        #[swift_bridge(swift_name = "listPresets")]
-        fn list_presets() -> Vec<String>;
-        #[swift_bridge(swift_name = "calculateOptimalDpi")]
-        fn calculate_optimal_dpi(
-            page_width: f64,
-            page_height: f64,
-            target_dpi: i32,
-            max_dimension: i32,
-            min_dpi: i32,
-            max_dpi: i32,
-        ) -> i32;
-        #[swift_bridge(swift_name = "detectLanguages")]
-        fn detect_languages(text: String, config: LanguageDetectionConfig) -> Result<String, String>;
-        #[swift_bridge(swift_name = "extractKeywords")]
-        fn extract_keywords(text: String, config: KeywordConfig) -> Result<Vec<Keyword>, String>;
-        #[swift_bridge(swift_name = "computeHash")]
-        fn compute_hash(data: String) -> String;
         #[swift_bridge(swift_name = "renderPdfPageToPng")]
         fn render_pdf_page_to_png(
             pdf_bytes: Vec<u8>,
@@ -2685,34 +2420,14 @@ mod ffi {
             dpi: Option<i32>,
             password: Option<String>,
         ) -> Result<Vec<u8>, String>;
-        #[swift_bridge(swift_name = "extractTextFromPdf")]
-        fn extract_text_from_pdf(pdf_bytes: Vec<u8>) -> Result<String, String>;
         #[swift_bridge(swift_name = "detectMimeType")]
         fn detect_mime_type(path: String, check_exists: bool) -> Result<String, String>;
-        #[swift_bridge(swift_name = "detectImageFormat")]
-        fn detect_image_format(data: Vec<u8>) -> String;
         #[swift_bridge(swift_name = "embedTexts")]
         fn embed_texts(texts: Vec<String>, config: Option<EmbeddingConfig>) -> Result<String, String>;
-        #[swift_bridge(swift_name = "generateCacheKey")]
-        fn generate_cache_key(parts: String) -> String;
-        #[swift_bridge(swift_name = "escapeHtmlEntities")]
-        fn escape_html_entities(text: String) -> String;
-        #[swift_bridge(swift_name = "fixMojibake")]
-        fn fix_mojibake(text: String) -> String;
-        #[swift_bridge(swift_name = "convertHtmlToMarkdown")]
-        fn convert_html_to_markdown(html: String) -> Result<String, String>;
-        #[swift_bridge(swift_name = "extractDocText")]
-        fn extract_doc_text(content: Vec<u8>) -> Result<DocExtractionResult, String>;
-        #[swift_bridge(swift_name = "extractPptxFromBytes")]
-        fn extract_pptx_from_bytes(data: Vec<u8>) -> Result<PptxExtractionResult, String>;
-        #[swift_bridge(swift_name = "serializeToToon")]
-        fn serialize_to_toon(result: ExtractionResult) -> Result<String, String>;
-        #[swift_bridge(swift_name = "serializeToJson")]
-        fn serialize_to_json(result: ExtractionResult) -> Result<String, String>;
-        #[swift_bridge(swift_name = "extractFileToToon")]
-        fn extract_file_to_toon(path: String, config: ExtractionConfig) -> Result<String, String>;
-        #[swift_bridge(swift_name = "extractFileToJson")]
-        fn extract_file_to_json(path: String, config: ExtractionConfig) -> Result<String, String>;
+        #[swift_bridge(swift_name = "getEmbeddingPreset")]
+        fn get_embedding_preset(name: String) -> String;
+        #[swift_bridge(swift_name = "listEmbeddingPresets")]
+        fn list_embedding_presets() -> Vec<String>;
     }
 
     extern "Rust" {
@@ -4598,35 +4313,6 @@ impl ImageOcrResult {
     // alef: skipped getter `page_contents` — type cannot be bridged through swift-bridge
 }
 
-pub struct ArchiveArchiveMetadata(pub kreuzberg::extraction::archive::ArchiveMetadata);
-
-impl ArchiveArchiveMetadata {
-    pub fn format(&self) -> String {
-        format!("{:?}", &self.0.format)
-    }
-    // alef: skipped getter `file_list` — type cannot be bridged through swift-bridge
-    pub fn file_count(&self) -> usize {
-        self.0.file_count.clone()
-    }
-    pub fn total_size(&self) -> u64 {
-        self.0.total_size.clone()
-    }
-}
-
-pub struct ArchiveArchiveEntry(pub kreuzberg::extraction::archive::ArchiveEntry);
-
-impl ArchiveArchiveEntry {
-    pub fn path(&self) -> String {
-        format!("{:?}", &self.0.path)
-    }
-    pub fn size(&self) -> u64 {
-        self.0.size.clone()
-    }
-    pub fn is_dir(&self) -> bool {
-        self.0.is_dir.clone()
-    }
-}
-
 pub struct HtmlExtractionResult(pub kreuzberg::extraction::html::HtmlExtractionResult);
 
 impl HtmlExtractionResult {
@@ -4675,107 +4361,6 @@ impl ExtractedInlineImage {
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
-    }
-}
-
-pub struct DocExtractionResult(pub kreuzberg::DocExtractionResult);
-
-impl DocExtractionResult {
-    pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
-    }
-    pub fn metadata(&self) -> DocMetadata {
-        DocMetadata(self.0.metadata.clone())
-    }
-}
-
-pub struct DocMetadata(pub kreuzberg::DocMetadata);
-
-impl DocMetadata {
-    pub fn new(
-        title: Option<String>,
-        subject: Option<String>,
-        author: Option<String>,
-        last_author: Option<String>,
-        created: Option<String>,
-        modified: Option<String>,
-        revision_number: Option<String>,
-    ) -> DocMetadata {
-        let mut __target: kreuzberg::DocMetadata = ::std::default::Default::default();
-        if let Some(s) = title {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.title = Some(t);
-                }
-            }
-        }
-        if let Some(s) = subject {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.subject = Some(t);
-                }
-            }
-        }
-        if let Some(s) = author {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.author = Some(t);
-                }
-            }
-        }
-        if let Some(s) = last_author {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.last_author = Some(t);
-                }
-            }
-        }
-        if let Some(s) = created {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.created = Some(t);
-                }
-            }
-        }
-        if let Some(s) = modified {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.modified = Some(t);
-                }
-            }
-        }
-        if let Some(s) = revision_number {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.revision_number = Some(t);
-                }
-            }
-        }
-        DocMetadata(__target)
-    }
-    pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
-    }
-    pub fn subject(&self) -> Option<String> {
-        self.0.subject.as_ref().and_then(|v| serde_json::to_string(v).ok())
-    }
-    pub fn author(&self) -> Option<String> {
-        self.0.author.as_ref().and_then(|v| serde_json::to_string(v).ok())
-    }
-    pub fn last_author(&self) -> Option<String> {
-        self.0.last_author.as_ref().and_then(|v| serde_json::to_string(v).ok())
-    }
-    pub fn created(&self) -> Option<String> {
-        self.0.created.as_ref().and_then(|v| serde_json::to_string(v).ok())
-    }
-    pub fn modified(&self) -> Option<String> {
-        self.0.modified.as_ref().and_then(|v| serde_json::to_string(v).ok())
-    }
-    pub fn revision_number(&self) -> Option<String> {
-        self.0
-            .revision_number
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
     }
 }
 
@@ -9662,195 +9247,6 @@ impl RecognizedTable {
 
 pub struct TessdataManager(pub kreuzberg::ocr::TessdataManager);
 
-pub struct OcrTesseractConfig(pub kreuzberg::ocr::TesseractConfig);
-
-impl OcrTesseractConfig {
-    pub fn new(
-        language: String,
-        psm: u8,
-        output_format: String,
-        oem: u8,
-        min_confidence: f64,
-        preprocessing: Option<ImagePreprocessingConfig>,
-        enable_table_detection: bool,
-        table_min_confidence: f64,
-        table_column_threshold: u32,
-        table_row_threshold_ratio: f64,
-        use_cache: bool,
-        classify_use_pre_adapted_templates: bool,
-        language_model_ngram_on: bool,
-        tessedit_dont_blkrej_good_wds: bool,
-        tessedit_dont_rowrej_good_wds: bool,
-        tessedit_enable_dict_correction: bool,
-        tessedit_char_whitelist: String,
-        tessedit_char_blacklist: String,
-        tessedit_use_primary_params_model: bool,
-        textord_space_size_is_variable: bool,
-        thresholding_method: bool,
-        auto_rotate: bool,
-    ) -> OcrTesseractConfig {
-        let mut __target: kreuzberg::ocr::TesseractConfig = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&language) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.language = t;
-            }
-        }
-        __target.psm = psm;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&output_format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.output_format = t;
-            }
-        }
-        __target.oem = oem;
-        __target.min_confidence = min_confidence;
-        if let Some(w) = preprocessing {
-            __target.preprocessing = Some(w.0);
-        }
-        __target.enable_table_detection = enable_table_detection;
-        __target.table_min_confidence = table_min_confidence;
-        __target.table_column_threshold = table_column_threshold;
-        __target.table_row_threshold_ratio = table_row_threshold_ratio;
-        __target.use_cache = use_cache;
-        __target.classify_use_pre_adapted_templates = classify_use_pre_adapted_templates;
-        __target.language_model_ngram_on = language_model_ngram_on;
-        __target.tessedit_dont_blkrej_good_wds = tessedit_dont_blkrej_good_wds;
-        __target.tessedit_dont_rowrej_good_wds = tessedit_dont_rowrej_good_wds;
-        __target.tessedit_enable_dict_correction = tessedit_enable_dict_correction;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&tessedit_char_whitelist) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.tessedit_char_whitelist = t;
-            }
-        }
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&tessedit_char_blacklist) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.tessedit_char_blacklist = t;
-            }
-        }
-        __target.tessedit_use_primary_params_model = tessedit_use_primary_params_model;
-        __target.textord_space_size_is_variable = textord_space_size_is_variable;
-        __target.thresholding_method = thresholding_method;
-        __target.auto_rotate = auto_rotate;
-        OcrTesseractConfig(__target)
-    }
-    pub fn language(&self) -> String {
-        serde_json::to_string(&self.0.language).unwrap_or_default()
-    }
-    pub fn psm(&self) -> u8 {
-        ::serde_json::to_value(&self.0.psm)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn output_format(&self) -> String {
-        serde_json::to_string(&self.0.output_format).unwrap_or_default()
-    }
-    pub fn oem(&self) -> u8 {
-        ::serde_json::to_value(&self.0.oem)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn min_confidence(&self) -> f64 {
-        ::serde_json::to_value(&self.0.min_confidence)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn preprocessing(&self) -> Option<ImagePreprocessingConfig> {
-        self.0.preprocessing.clone().map(ImagePreprocessingConfig)
-    }
-    pub fn enable_table_detection(&self) -> bool {
-        ::serde_json::to_value(&self.0.enable_table_detection)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn table_min_confidence(&self) -> f64 {
-        ::serde_json::to_value(&self.0.table_min_confidence)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn table_column_threshold(&self) -> u32 {
-        ::serde_json::to_value(&self.0.table_column_threshold)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn table_row_threshold_ratio(&self) -> f64 {
-        ::serde_json::to_value(&self.0.table_row_threshold_ratio)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn use_cache(&self) -> bool {
-        ::serde_json::to_value(&self.0.use_cache)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn classify_use_pre_adapted_templates(&self) -> bool {
-        ::serde_json::to_value(&self.0.classify_use_pre_adapted_templates)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn language_model_ngram_on(&self) -> bool {
-        ::serde_json::to_value(&self.0.language_model_ngram_on)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn tessedit_dont_blkrej_good_wds(&self) -> bool {
-        ::serde_json::to_value(&self.0.tessedit_dont_blkrej_good_wds)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn tessedit_dont_rowrej_good_wds(&self) -> bool {
-        ::serde_json::to_value(&self.0.tessedit_dont_rowrej_good_wds)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn tessedit_enable_dict_correction(&self) -> bool {
-        ::serde_json::to_value(&self.0.tessedit_enable_dict_correction)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn tessedit_char_whitelist(&self) -> String {
-        serde_json::to_string(&self.0.tessedit_char_whitelist).unwrap_or_default()
-    }
-    pub fn tessedit_char_blacklist(&self) -> String {
-        serde_json::to_string(&self.0.tessedit_char_blacklist).unwrap_or_default()
-    }
-    pub fn tessedit_use_primary_params_model(&self) -> bool {
-        ::serde_json::to_value(&self.0.tessedit_use_primary_params_model)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn textord_space_size_is_variable(&self) -> bool {
-        ::serde_json::to_value(&self.0.textord_space_size_is_variable)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn thresholding_method(&self) -> bool {
-        ::serde_json::to_value(&self.0.thresholding_method)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-    pub fn auto_rotate(&self) -> bool {
-        ::serde_json::to_value(&self.0.auto_rotate)
-            .ok()
-            .and_then(|j| ::serde_json::from_value(j).ok())
-            .unwrap_or_default()
-    }
-}
-
 pub struct PaddleOcrConfig(pub kreuzberg::PaddleOcrConfig);
 
 impl PaddleOcrConfig {
@@ -11057,84 +10453,6 @@ impl From<kreuzberg::LayoutClass> for LayoutClass {
     }
 }
 
-pub fn blake3_hash_bytes(data: Vec<u8>) -> String {
-    kreuzberg::blake3_hash_bytes(&data).to_string()
-}
-
-pub fn blake3_hash_file(path: String) -> Result<String, String> {
-    kreuzberg::blake3_hash_file(std::path::Path::new(&path))
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn fast_hash(data: Vec<u8>) -> u64 {
-    kreuzberg::fast_hash(&data)
-}
-
-pub fn validate_cache_key(key: String) -> bool {
-    kreuzberg::validate_cache_key(&key)
-}
-
-pub fn validate_port(port: u32) -> Result<(), String> {
-    kreuzberg::validate_port(port).map_err(|e| e.to_string())
-}
-
-pub fn validate_host(host: String) -> Result<(), String> {
-    kreuzberg::validate_host(&host).map_err(|e| e.to_string())
-}
-
-pub fn validate_cors_origin(origin: String) -> Result<(), String> {
-    kreuzberg::core::config_validation::validate_cors_origin(&origin).map_err(|e| e.to_string())
-}
-
-pub fn validate_upload_size(size: usize) -> Result<(), String> {
-    kreuzberg::core::config_validation::validate_upload_size(size).map_err(|e| e.to_string())
-}
-
-pub fn validate_binarization_method(method: String) -> Result<(), String> {
-    kreuzberg::validate_binarization_method(&method).map_err(|e| e.to_string())
-}
-
-pub fn validate_token_reduction_level(level: String) -> Result<(), String> {
-    kreuzberg::validate_token_reduction_level(&level).map_err(|e| e.to_string())
-}
-
-pub fn validate_ocr_backend(backend: String) -> Result<(), String> {
-    kreuzberg::validate_ocr_backend(&backend).map_err(|e| e.to_string())
-}
-
-pub fn validate_language_code(code: String) -> Result<(), String> {
-    kreuzberg::validate_language_code(&code).map_err(|e| e.to_string())
-}
-
-pub fn validate_tesseract_psm(psm: i32) -> Result<(), String> {
-    kreuzberg::validate_tesseract_psm(psm).map_err(|e| e.to_string())
-}
-
-pub fn validate_tesseract_oem(oem: i32) -> Result<(), String> {
-    kreuzberg::validate_tesseract_oem(oem).map_err(|e| e.to_string())
-}
-
-pub fn validate_output_format(format: String) -> Result<(), String> {
-    kreuzberg::validate_output_format(&format).map_err(|e| e.to_string())
-}
-
-pub fn validate_confidence(confidence: f64) -> Result<(), String> {
-    kreuzberg::validate_confidence(confidence).map_err(|e| e.to_string())
-}
-
-pub fn validate_dpi(dpi: i32) -> Result<(), String> {
-    kreuzberg::core::validate_dpi(dpi).map_err(|e| e.to_string())
-}
-
-pub fn validate_chunking_params(max_chars: usize, max_overlap: usize) -> Result<(), String> {
-    kreuzberg::validate_chunking_params(max_chars, max_overlap).map_err(|e| e.to_string())
-}
-
-pub fn validate_llm_config_model(model: String) -> Result<(), String> {
-    kreuzberg::core::config_validation::validate_llm_config_model(&model).map_err(|e| e.to_string())
-}
-
 pub fn extract_bytes(
     content: Vec<u8>,
     mime_type: String,
@@ -11220,22 +10538,6 @@ pub fn batch_extract_file(items: Vec<String>, config: ExtractionConfig) -> Resul
         })
 }
 
-pub fn is_valid_format_field(field: String) -> bool {
-    kreuzberg::is_valid_format_field(&field)
-}
-
-pub fn validate_mime_type(mime_type: String) -> Result<String, String> {
-    kreuzberg::validate_mime_type(&mime_type)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn detect_or_validate(path: Option<String>, mime_type: Option<String>) -> Result<String, String> {
-    kreuzberg::detect_or_validate(path.as_deref(), mime_type.as_deref())
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
 pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String> {
     kreuzberg::detect_mime_type_from_bytes(&content)
         .map_err(|e| e.to_string())
@@ -11248,77 +10550,10 @@ pub fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String>
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
 }
 
-pub fn list_supported_formats() -> Vec<SupportedFormat> {
-    (kreuzberg::list_supported_formats())
-        .into_iter()
-        .map(SupportedFormat)
-        .collect::<Vec<_>>()
-}
-
-pub fn clear_processor_cache() -> Result<(), String> {
-    kreuzberg::core::pipeline::clear_processor_cache().map_err(|e| e.to_string())
-}
-
-pub fn transform_extraction_result_to_elements(result: ExtractionResult) -> Vec<Element> {
-    (kreuzberg::extraction::transform::transform_extraction_result_to_elements(&result.0))
-        .into_iter()
-        .map(Element)
-        .collect::<Vec<_>>()
-}
-
-pub fn extract_email_content(
-    data: Vec<u8>,
-    mime_type: String,
-    fallback_codepage: Option<u32>,
-) -> Result<EmailExtractionResult, String> {
-    kreuzberg::extract_email_content(&data, &mime_type, fallback_codepage)
-        .map_err(|e| e.to_string())
-        .map(EmailExtractionResult)
-}
-
-pub fn cells_to_text(cells: String) -> String {
-    kreuzberg::cells_to_text(&serde_json::from_str::<Vec<Vec<String>>>(&cells).expect("valid JSON for cells"))
-        .to_string()
-}
-
-pub fn cells_to_markdown(cells: String) -> String {
-    kreuzberg::cells_to_markdown(&serde_json::from_str::<Vec<Vec<String>>>(&cells).expect("valid JSON for cells"))
-        .to_string()
-}
-
-pub fn djot_to_html(djot_source: String) -> Result<String, String> {
-    kreuzberg::djot_to_html(&djot_source)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn dedup_text(texts: Vec<String>) -> Vec<String> {
-    kreuzberg::dedup_text(texts)
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
-}
-
-pub fn register_default_extractors() -> Result<(), String> {
-    kreuzberg::extractors::register_default_extractors().map_err(|e| e.to_string())
-}
-
-pub fn unregister_extractor(name: String) -> Result<(), String> {
-    kreuzberg::plugins::unregister_extractor(&name).map_err(|e| e.to_string())
-}
-
 pub fn list_extractors() -> Result<Vec<String>, String> {
     kreuzberg::plugins::list_extractors()
         .map_err(|e| e.to_string())
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
-}
-
-pub fn clear_extractors() -> Result<(), String> {
-    kreuzberg::plugins::clear_extractors().map_err(|e| e.to_string())
-}
-
-pub fn unregister_ocr_backend(name: String) -> Result<(), String> {
-    kreuzberg::plugins::unregister_ocr_backend(&name).map_err(|e| e.to_string())
 }
 
 pub fn list_ocr_backends() -> Result<Vec<String>, String> {
@@ -11328,7 +10563,7 @@ pub fn list_ocr_backends() -> Result<Vec<String>, String> {
 }
 
 pub fn clear_ocr_backends() -> Result<(), String> {
-    kreuzberg::plugins::clear_ocr_backends().map_err(|e| e.to_string())
+    kreuzberg::clear_ocr_backends().map_err(|e| e.to_string())
 }
 
 pub fn list_post_processors() -> Result<Vec<String>, String> {
@@ -11337,18 +10572,8 @@ pub fn list_post_processors() -> Result<Vec<String>, String> {
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
 }
 
-pub fn unregister_renderer(name: String) -> Result<(), String> {
-    kreuzberg::plugins::unregister_renderer(&name).map_err(|e| e.to_string())
-}
-
-pub fn list_renderers() -> Result<Vec<String>, String> {
-    kreuzberg::plugins::list_renderers()
-        .map_err(|e| e.to_string())
-        .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
-}
-
-pub fn clear_renderers() -> Result<(), String> {
-    kreuzberg::plugins::clear_renderers().map_err(|e| e.to_string())
+pub fn clear_post_processors() -> Result<(), String> {
+    kreuzberg::clear_post_processors().map_err(|e| e.to_string())
 }
 
 pub fn list_validators() -> Result<Vec<String>, String> {
@@ -11358,256 +10583,7 @@ pub fn list_validators() -> Result<Vec<String>, String> {
 }
 
 pub fn clear_validators() -> Result<(), String> {
-    kreuzberg::plugins::clear_validators().map_err(|e| e.to_string())
-}
-
-pub fn render_html_str(html: String) -> Result<String, String> {
-    kreuzberg::render_html_str(&html)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn render_markdown_str(html: String) -> Result<String, String> {
-    kreuzberg::render_markdown_str(&html)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn render_djot_str(html: String) -> Result<String, String> {
-    kreuzberg::render_djot_str(&html)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn render_json_str(html: String) -> Result<String, String> {
-    kreuzberg::render_json_str(&html)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn render_plain_str(html: String) -> Result<String, String> {
-    kreuzberg::render_plain_str(&html)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn sanitize_filename(path: String) -> String {
-    kreuzberg::sanitize_filename(std::path::Path::new(&path)).to_string()
-}
-
-pub fn sanitize_path(path: String) -> String {
-    kreuzberg::sanitize_path(std::path::Path::new(&path)).to_string()
-}
-
-pub fn is_valid_utf8(bytes: Vec<u8>) -> bool {
-    kreuzberg::is_valid_utf8(&bytes)
-}
-
-pub fn clean_extracted_text(text: String) -> String {
-    kreuzberg::clean_extracted_text(&text).to_string()
-}
-
-pub fn reduce_tokens(
-    text: String,
-    config: TokenReductionConfig,
-    language_hint: Option<String>,
-) -> Result<String, String> {
-    kreuzberg::reduce_tokens(&text, &config.0, language_hint.as_deref())
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn batch_reduce_tokens(
-    texts: Vec<String>,
-    config: TokenReductionConfig,
-    language_hint: Option<String>,
-) -> Result<Vec<String>, String> {
-    kreuzberg::text::batch_reduce_tokens(&texts, &config.0, language_hint.as_deref())
-        .map_err(|e| e.to_string())
-        .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
-}
-
-pub fn bold(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::bold(start, end))
-}
-
-pub fn italic(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::italic(start, end))
-}
-
-pub fn underline(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::underline(start, end))
-}
-
-pub fn link(start: u32, end: u32, url: String, title: Option<String>) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::link(start, end, &url, title.as_deref()))
-}
-
-pub fn code(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::code(start, end))
-}
-
-pub fn strikethrough(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::strikethrough(start, end))
-}
-
-pub fn subscript_(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::subscript(start, end))
-}
-
-pub fn superscript(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::superscript(start, end))
-}
-
-pub fn font_size(start: u32, end: u32, value: String) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::font_size(start, end, &value))
-}
-
-pub fn color(start: u32, end: u32, value: String) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::color(start, end, &value))
-}
-
-pub fn highlight(start: u32, end: u32) -> TextAnnotation {
-    TextAnnotation(kreuzberg::builder::highlight(start, end))
-}
-
-pub fn classify_uri(url: String) -> UriKind {
-    UriKind::from(kreuzberg::classify_uri(&url))
-}
-
-pub fn safe_decode(byte_data: Vec<u8>, encoding: Option<String>) -> String {
-    kreuzberg::utils::safe_decode(&byte_data, encoding.as_deref()).to_string()
-}
-
-pub fn calculate_text_confidence(text: String) -> f64 {
-    kreuzberg::utils::calculate_text_confidence(&text)
-}
-
-pub fn create_string_buffer_pool(pool_size: usize, buffer_capacity: usize) -> StringBufferPool {
-    StringBufferPool(kreuzberg::utils::pool::create_string_buffer_pool(
-        pool_size,
-        buffer_capacity,
-    ))
-}
-
-pub fn create_byte_buffer_pool(pool_size: usize, buffer_capacity: usize) -> ByteBufferPool {
-    ByteBufferPool(kreuzberg::utils::pool::create_byte_buffer_pool(
-        pool_size,
-        buffer_capacity,
-    ))
-}
-
-pub fn normalize_whitespace(s: String) -> String {
-    kreuzberg::normalize_whitespace(&s).to_string()
-}
-
-pub fn openapi_json() -> String {
-    kreuzberg::api::openapi::openapi_json().to_string()
-}
-
-pub fn serve_default() -> Result<(), String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async { kreuzberg::api::serve_default().await.map_err(|e| e.to_string()) })
-}
-
-pub fn chunk_text(
-    text: String,
-    config: ChunkingConfig,
-    page_boundaries: Option<Vec<PageBoundary>>,
-) -> Result<ChunkingResult, String> {
-    kreuzberg::chunk_text(
-        &text,
-        &config.0,
-        page_boundaries
-            .as_ref()
-            .map(|v| v.iter().map(|w| w.0.clone()).collect::<Vec<_>>())
-            .as_deref(),
-    )
-    .map_err(|e| e.to_string())
-    .map(ChunkingResult)
-}
-
-pub fn chunk_text_with_heading_source(
-    text: String,
-    config: ChunkingConfig,
-    page_boundaries: Option<Vec<PageBoundary>>,
-    heading_source: Option<String>,
-) -> Result<ChunkingResult, String> {
-    kreuzberg::chunking::core::chunk_text_with_heading_source(
-        &text,
-        &config.0,
-        page_boundaries
-            .as_ref()
-            .map(|v| v.iter().map(|w| w.0.clone()).collect::<Vec<_>>())
-            .as_deref(),
-        heading_source.as_deref(),
-    )
-    .map_err(|e| e.to_string())
-    .map(ChunkingResult)
-}
-
-pub fn chunk_texts_batch(texts: Vec<String>, config: ChunkingConfig) -> Result<Vec<ChunkingResult>, String> {
-    kreuzberg::chunk_texts_batch(&texts, &config.0)
-        .map_err(|e| e.to_string())
-        .map(|v| v.into_iter().map(ChunkingResult).collect::<Vec<_>>())
-}
-
-pub fn chunk_semantic(
-    text: String,
-    config: ChunkingConfig,
-    page_boundaries: Option<Vec<PageBoundary>>,
-) -> Result<ChunkingResult, String> {
-    kreuzberg::chunk_semantic(
-        &text,
-        &config.0,
-        page_boundaries
-            .as_ref()
-            .map(|v| v.iter().map(|w| w.0.clone()).collect::<Vec<_>>())
-            .as_deref(),
-    )
-    .map_err(|e| e.to_string())
-    .map(ChunkingResult)
-}
-
-pub fn normalize(v: Vec<f32>) -> Vec<f32> {
-    kreuzberg::normalize(&v)
-}
-
-pub fn list_presets() -> Vec<String> {
-    kreuzberg::list_presets()
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
-}
-
-pub fn calculate_optimal_dpi(
-    page_width: f64,
-    page_height: f64,
-    target_dpi: i32,
-    max_dimension: i32,
-    min_dpi: i32,
-    max_dpi: i32,
-) -> i32 {
-    kreuzberg::image::calculate_optimal_dpi(page_width, page_height, target_dpi, max_dimension, min_dpi, max_dpi)
-}
-
-pub fn detect_languages(text: String, config: LanguageDetectionConfig) -> Result<String, String> {
-    kreuzberg::detect_languages(&text, &config.0)
-        .map_err(|e| e.to_string())
-        .map(|v| serde_json::to_string(&v).expect("serializable return"))
-}
-
-pub fn extract_keywords(text: String, config: KeywordConfig) -> Result<Vec<Keyword>, String> {
-    kreuzberg::extract_keywords(&text, &config.0)
-        .map_err(|e| e.to_string())
-        .map(|v| v.into_iter().map(Keyword).collect::<Vec<_>>())
-}
-
-pub fn compute_hash(data: String) -> String {
-    kreuzberg::compute_hash(&data).to_string()
+    kreuzberg::clear_validators().map_err(|e| e.to_string())
 }
 
 pub fn render_pdf_page_to_png(
@@ -11619,20 +10595,10 @@ pub fn render_pdf_page_to_png(
     kreuzberg::render_pdf_page_to_png(&pdf_bytes, page_index, dpi, password.as_deref()).map_err(|e| e.to_string())
 }
 
-pub fn extract_text_from_pdf(pdf_bytes: Vec<u8>) -> Result<String, String> {
-    kreuzberg::extract_text_from_pdf(&pdf_bytes)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
 pub fn detect_mime_type(path: String, check_exists: bool) -> Result<String, String> {
     kreuzberg::detect_mime_type(path, check_exists)
         .map_err(|e| e.to_string())
         .map(|s| s.to_string())
-}
-
-pub fn detect_image_format(data: Vec<u8>) -> String {
-    kreuzberg::detect_image_format(data).to_string()
 }
 
 pub fn embed_texts(texts: Vec<String>, config: Option<EmbeddingConfig>) -> Result<String, String> {
@@ -11641,59 +10607,15 @@ pub fn embed_texts(texts: Vec<String>, config: Option<EmbeddingConfig>) -> Resul
         .map(|v| serde_json::to_string(&v).expect("serializable return"))
 }
 
-pub fn generate_cache_key(parts: String) -> String {
-    kreuzberg::generate_cache_key(serde_json::from_str::<Vec<Vec<String>>>(&parts).expect("valid JSON for parts"))
-        .to_string()
+pub fn get_embedding_preset(name: String) -> String {
+    serde_json::to_string(&(kreuzberg::get_embedding_preset(&name))).expect("serializable return")
 }
 
-pub fn escape_html_entities(text: String) -> String {
-    kreuzberg::escape_html_entities(&text).to_string()
-}
-
-pub fn fix_mojibake(text: String) -> String {
-    kreuzberg::fix_mojibake(&text).to_string()
-}
-
-pub fn convert_html_to_markdown(html: String) -> Result<String, String> {
-    kreuzberg::convert_html_to_markdown(&html)
-        .map_err(|e| e.to_string())
+pub fn list_embedding_presets() -> Vec<String> {
+    kreuzberg::list_embedding_presets()
+        .into_iter()
         .map(|s| s.to_string())
-}
-
-pub fn extract_doc_text(content: Vec<u8>) -> Result<DocExtractionResult, String> {
-    kreuzberg::extract_doc_text(&content)
-        .map_err(|e| e.to_string())
-        .map(DocExtractionResult)
-}
-
-pub fn extract_pptx_from_bytes(data: Vec<u8>) -> Result<PptxExtractionResult, String> {
-    kreuzberg::extract_pptx_from_bytes(&data)
-        .map_err(|e| e.to_string())
-        .map(PptxExtractionResult)
-}
-
-pub fn serialize_to_toon(result: ExtractionResult) -> Result<String, String> {
-    kreuzberg::serialize_to_toon(&result.0)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn serialize_to_json(result: ExtractionResult) -> Result<String, String> {
-    kreuzberg::serialize_to_json(&result.0)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn extract_file_to_toon(path: String, config: ExtractionConfig) -> Result<String, String> {
-    kreuzberg::extract_file_to_toon(std::path::PathBuf::from(path), &config.0)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
-}
-
-pub fn extract_file_to_json(path: String, config: ExtractionConfig) -> Result<String, String> {
-    kreuzberg::extract_file_to_json(std::path::PathBuf::from(path), &config.0)
-        .map_err(|e| e.to_string())
-        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
 }
 
 pub struct OcrBackendBox(pub Box<dyn kreuzberg::plugins::OcrBackend + Send + Sync>);

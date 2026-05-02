@@ -23,29 +23,34 @@ The plugin system requires complex callback handling between Rust and PHP throug
 The following functions exist in Python, Ruby, Node.js, and other bindings but are not yet available in PHP:
 
 ### OCR Backend Registration
+
 - `kreuzberg_register_ocr_backend()`
 - `kreuzberg_unregister_ocr_backend()`
 - `kreuzberg_list_ocr_backends()`
 
 ### Post-Processor Plugins
+
 - `kreuzberg_register_post_processor()`
 - `kreuzberg_unregister_post_processor()`
 - `kreuzberg_list_post_processors()`
 - `kreuzberg_clear_post_processors()`
 
 ### Validator Plugins
+
 - `kreuzberg_register_validator()`
 - `kreuzberg_unregister_validator()`
 - `kreuzberg_list_validators()`
 - `kreuzberg_clear_validators()`
 
 ### Custom Extractor Plugins
+
 - `kreuzberg_register_extractor()`
 - `kreuzberg_unregister_extractor()`
 - `kreuzberg_list_extractors()`
 - `kreuzberg_clear_extractors()`
 
 ### Plugin Testing
+
 - `kreuzberg_test_plugin()`
 
 ## Workarounds

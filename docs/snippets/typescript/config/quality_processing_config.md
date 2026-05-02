@@ -1,10 +1,10 @@
 ```typescript title="TypeScript"
-import { extractFile } from '@kreuzberg/node';
+import { extractFile } from "@kreuzberg/node";
 
 const config = {
-	enableQualityProcessing: true,
+  enableQualityProcessing: true,
 };
 
-const result = await extractFile('document.pdf', null, config);
+const result = await extractFile("document.pdf", null, config);
 console.log(result.content);
 ```

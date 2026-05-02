@@ -1,8 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 $finder = (new PhpCsFixer\Finder())
-    ->in(__DIR__ . '/src')
-    ->in(__DIR__ . '/tests');
+    ->in(array_filter([
+        __DIR__ . '/src',
+        is_dir(__DIR__ . '/tests') ? __DIR__ . '/tests' : null,
+    ]));
 
 return (new PhpCsFixer\Config())
     ->setRules([

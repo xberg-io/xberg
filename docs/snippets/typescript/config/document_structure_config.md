@@ -1,5 +1,5 @@
 ```typescript title="Document Structure Config (TypeScript)"
-import { extractFileSync, ExtractionConfig } from '@kreuzberg/node';
+import { extractFileSync, ExtractionConfig } from "@kreuzberg/node";
 
 const config: ExtractionConfig = {
   includeDocumentStructure: true,

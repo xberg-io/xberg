@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require 'bundler/gem_tasks'
+require 'bundler'
+Bundler::GemHelper.install_tasks name: 'kreuzberg'
 require 'rake/extensiontask'
 require 'rspec/core/rake_task'
 

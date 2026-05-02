@@ -47,4 +47,4 @@ async function benchmarkExtractions(): Promise<void> {
 }
 
 benchmarkExtractions().catch(console.error);
-```
+```;

@@ -1,1 +1,27 @@
 include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    - avoid_empty_else
+    - avoid_print
+    - avoid_relative_lib_imports
+    - avoid_returning_null
+    - avoid_returning_null_for_future
+    - avoid_returning_this
+    - avoid_slow_async_io
+    - cancel_subscriptions
+    - close_sinks
+    - comment_references
+    - control_flow_in_finally
+    - empty_statements
+    - hash_and_equals
+    - invariant_booleans
+    - iterable_contains_unrelated_type
+    - list_remove_unrelated_type
+    - literal_only_boolean_expressions
+    - no_adjacent_strings_in_list
+    - no_duplicate_case_values
+    - prefer_void_to_null
+    - throw_in_finally
+    - unnecessary_statements
+    - unrelated_type_equality_checks

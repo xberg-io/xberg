@@ -3,22 +3,44 @@ name = "kreuzberg_nif"
 version = "4.10.0-rc.15"
 edition = "2024"
 license = "Elastic-2.0"
+description = "High-performance document intelligence library"
+readme = false
+keywords = ["document", "extraction", "pdf", "ocr", "text"]
+categories = ["text-processing"]
 
 [lib]
+name = "kreuzberg_nif"
 crate-type = ["cdylib"]
 
 [dependencies]
-kreuzberg = { path = "../../../../crates/kreuzberg", features = ["full"] }
+kreuzberg = { path = "../../../../crates/kreuzberg", features = [
+  "full",
+  "pdf",
+  "ocr",
+  "paddle-ocr",
+  "layout-detection",
+  "embeddings",
+  "chunking",
+  "keywords-yake",
+  "keywords-rake",
+  "language-detection",
+  "html",
+  "tree-sitter",
+  "office",
+  "email",
+  "archives",
+  "stopwords",
+  "auto-rotate",
+  "tokio-runtime",
+  "api",
+  "mcp",
+  "liter-llm",
+  "quality",
+] }
 rustler = "0.37"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+futures-util = "0.3"
 
-# Archive crates crash with SIGBUS under opt-level=3 on macOS ARM64.
-# Mirror the workspace Cargo.toml override so standalone (non-workspace) NIF builds
-# also get the correct opt-level.
-[profile.release.package.sevenz-rust2]
-opt-level = 2
-
-[profile.release.package.zip]
-opt-level = 2
+[workspace]

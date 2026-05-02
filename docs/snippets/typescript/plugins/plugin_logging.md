@@ -1,9 +1,5 @@
 ```typescript title="TypeScript"
-import {
-	registerPostProcessor,
-	registerValidator,
-	type ExtractionResult,
-} from '@kreuzberg/node';
+import { registerPostProcessor, registerValidator, type ExtractionResult } from "@kreuzberg/node";
 
 class LoggingPostProcessor {
   name = "logging-processor";
@@ -26,9 +22,7 @@ class LoggingValidator {
   priority = 100;
 
   validate(result: ExtractionResult): void {
-    console.info(
-      `[Validator] Validating extraction result (${result.content.length} bytes)`
-    );
+    console.info(`[Validator] Validating extraction result (${result.content.length} bytes)`);
 
     if (result.content.length < 50) {
       console.error("[Validator] Error: Content below minimum threshold");

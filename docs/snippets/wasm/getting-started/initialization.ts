@@ -1,25 +1,25 @@
 import { getVersion, getWasmCapabilities, initWasm, isInitialized } from "@kreuzberg/wasm";
 
 async function initializeKreuzberg() {
-	const caps = getWasmCapabilities();
+  const caps = getWasmCapabilities();
 
-	if (!caps.hasWasm) {
-		console.error("WebAssembly not supported");
-		return;
-	}
+  if (!caps.hasWasm) {
+    console.error("WebAssembly not supported");
+    return;
+  }
 
-	try {
-		if (!isInitialized()) {
-			await initWasm();
-		}
+  try {
+    if (!isInitialized()) {
+      await initWasm();
+    }
 
-		const version = getVersion();
-		console.log(`Kreuzberg ${version} initialized successfully`);
-		console.log("Workers available:", caps.hasWorkers);
-		console.log("SharedArrayBuffer available:", caps.hasSharedArrayBuffer);
-	} catch (error) {
-		console.error("Initialization failed:", error);
-	}
+    const version = getVersion();
+    console.log(`Kreuzberg ${version} initialized successfully`);
+    console.log("Workers available:", caps.hasWorkers);
+    console.log("SharedArrayBuffer available:", caps.hasSharedArrayBuffer);
+  } catch (error) {
+    console.error("Initialization failed:", error);
+  }
 }
 
 initializeKreuzberg();

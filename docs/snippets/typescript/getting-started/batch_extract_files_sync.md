@@ -1,10 +1,10 @@
 ```typescript title="TypeScript"
-import { batchExtractFilesSync } from '@kreuzberg/node';
+import { batchExtractFilesSync } from "@kreuzberg/node";
 
-const files = ['doc1.pdf', 'doc2.docx', 'doc3.pptx'];
+const files = ["doc1.pdf", "doc2.docx", "doc3.pptx"];
 const results = batchExtractFilesSync(files);
 
 results.forEach((result, i) => {
-	console.log(`File ${i + 1}: ${result.content.length} characters`);
+  console.log(`File ${i + 1}: ${result.content.length} characters`);
 });
 ```

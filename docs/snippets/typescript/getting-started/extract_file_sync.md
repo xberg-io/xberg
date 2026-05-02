@@ -1,7 +1,7 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from '@kreuzberg/node';
+import { extractFileSync } from "@kreuzberg/node";
 
-const result = extractFileSync('document.pdf');
+const result = extractFileSync("document.pdf");
 
 console.log(result.content);
 console.log(`Tables: ${result.tables.length}`);

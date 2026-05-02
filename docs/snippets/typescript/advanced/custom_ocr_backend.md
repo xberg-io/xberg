@@ -1,8 +1,5 @@
 ```typescript title="TypeScript"
-import {
-	registerOcrBackend,
-	type OcrBackendProtocol,
-} from '@kreuzberg/node';
+import { registerOcrBackend, type OcrBackendProtocol } from "@kreuzberg/node";
 
 /**
  * Custom OCR backend implementation
@@ -40,16 +37,15 @@ class CustomOcrBackend implements OcrBackendProtocol {
    */
   async processImage(
     imageData: Uint8Array | string,
-    language: string
+    language: string,
   ): Promise<{
     content: string;
     mime_type: string;
     metadata: Record<string, unknown>;
     tables: unknown[];
   }> {
-    const buffer = typeof imageData === "string"
-      ? Buffer.from(imageData, "base64")
-      : Buffer.from(imageData);
+    const buffer =
+      typeof imageData === "string" ? Buffer.from(imageData, "base64") : Buffer.from(imageData);
 
     const formData = new FormData();
     const blob = new Blob([buffer], { type: "image/png" });
@@ -70,7 +66,7 @@ class CustomOcrBackend implements OcrBackendProtocol {
       content: result.text,
       mime_type: "text/plain",
       metadata: { confidence: result.confidence, language },
-      tables: result.tables || []
+      tables: result.tables || [],
     };
   }
 }

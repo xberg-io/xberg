@@ -555,13 +555,13 @@ export KREUZBERG_VLM_EMBEDDING_MODEL=cohere/embed-english-v3.0
 
 **Note**: When `api_key` is not set in config, liter-llm falls back to provider-standard environment variables (for example, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `KREUZBERG_LLM_MODEL` | Default LLM model for structured extraction | `openai/gpt-4o-mini` |
-| `KREUZBERG_LLM_API_KEY` | API key for structured extraction LLM provider | `sk-...` |
-| `KREUZBERG_LLM_BASE_URL` | Custom base URL for structured extraction provider | `https://api.example.com` |
-| `KREUZBERG_VLM_OCR_MODEL` | VLM model for vision-based OCR | `openai/gpt-4o` |
-| `KREUZBERG_VLM_EMBEDDING_MODEL` | LLM model for provider-hosted embeddings | `openai/text-embedding-3-small` |
+| Variable                        | Description                                        | Example                         |
+| ------------------------------- | -------------------------------------------------- | ------------------------------- |
+| `KREUZBERG_LLM_MODEL`           | Default LLM model for structured extraction        | `openai/gpt-4o-mini`            |
+| `KREUZBERG_LLM_API_KEY`         | API key for structured extraction LLM provider     | `sk-...`                        |
+| `KREUZBERG_LLM_BASE_URL`        | Custom base URL for structured extraction provider | `https://api.example.com`       |
+| `KREUZBERG_VLM_OCR_MODEL`       | VLM model for vision-based OCR                     | `openai/gpt-4o`                 |
+| `KREUZBERG_VLM_EMBEDDING_MODEL` | LLM model for provider-hosted embeddings           | `openai/text-embedding-3-small` |
 
 ---
 

@@ -2,27 +2,27 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
   `java-library`
-  kotlin("jvm") version "2.1.10"
+  kotlin("jvm") version "2.3.21"
   `maven-publish`
   id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
 }
 
 group = "dev.kreuzberg"
-version = "4.9.5"
+version = "4.10.0-rc.15"
 
 repositories {
   mavenCentral()
 }
 
 dependencies {
-  api("net.java.dev.jna:jna:5.14.0")
+  api("net.java.dev.jna:jna:5.18.1")
   // Jackson is on the public surface because the alef-emitted Java records
   // include `@JsonProperty` annotations for serialization round-tripping.
   api("com.fasterxml.jackson.core:jackson-annotations:2.18.2")
   api("com.fasterxml.jackson.core:jackson-databind:2.18.2")
   api("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.18.2")
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-  testImplementation("org.jetbrains.kotlin:kotlin-test:2.1.10")
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+  testImplementation("org.jetbrains.kotlin:kotlin-test:2.3.21")
   testImplementation("junit:junit:4.13.2")
 }
 

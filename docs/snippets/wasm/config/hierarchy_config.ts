@@ -1,21 +1,26 @@
-import { type ExtractionConfig, type HierarchyConfig, Kreuzberg, type PdfConfig } from "kreuzberg-wasm";
+import {
+  type ExtractionConfig,
+  type HierarchyConfig,
+  Kreuzberg,
+  type PdfConfig,
+} from "kreuzberg-wasm";
 
 // Example 1: Basic hierarchy extraction
 // Enabled with default kClusters=6 for standard H1-H6 heading hierarchy.
 // Extract bounding box information for spatial layout awareness.
 const hierarchyConfigBasic: HierarchyConfig = {
-	enabled: true,
-	kClusters: 6, // Default: creates 6 font size clusters (H1-H6 structure)
-	includeBbox: true, // Include bounding box coordinates
-	ocrCoverageThreshold: undefined, // No OCR coverage threshold
+  enabled: true,
+  kClusters: 6, // Default: creates 6 font size clusters (H1-H6 structure)
+  includeBbox: true, // Include bounding box coordinates
+  ocrCoverageThreshold: undefined, // No OCR coverage threshold
 };
 
 const pdfConfigBasic: PdfConfig = {
-	hierarchy: hierarchyConfigBasic,
+  hierarchy: hierarchyConfigBasic,
 };
 
 const extractionConfigBasic: ExtractionConfig = {
-	pdfOptions: pdfConfigBasic,
+  pdfOptions: pdfConfigBasic,
 };
 
 // const kreuzberg = new Kreuzberg(extractionConfigBasic);
@@ -25,18 +30,18 @@ const extractionConfigBasic: ExtractionConfig = {
 // Use 3 clusters for simpler hierarchy with minimal structure.
 // Useful when you only need major section divisions (Main, Subsection, Detail).
 const hierarchyConfigMinimal: HierarchyConfig = {
-	enabled: true,
-	kClusters: 3, // Minimal clustering: just 3 levels
-	includeBbox: true,
-	ocrCoverageThreshold: undefined,
+  enabled: true,
+  kClusters: 3, // Minimal clustering: just 3 levels
+  includeBbox: true,
+  ocrCoverageThreshold: undefined,
 };
 
 const pdfConfigMinimal: PdfConfig = {
-	hierarchy: hierarchyConfigMinimal,
+  hierarchy: hierarchyConfigMinimal,
 };
 
 const _extractionConfigMinimal: ExtractionConfig = {
-	pdfOptions: pdfConfigMinimal,
+  pdfOptions: pdfConfigMinimal,
 };
 
 // const result = await kreuzberg.extractFile("document.pdf");
@@ -45,34 +50,34 @@ const _extractionConfigMinimal: ExtractionConfig = {
 // Trigger OCR if less than 50% of text has font data.
 // Useful for documents with mixed digital and scanned content.
 const hierarchyConfigOcr: HierarchyConfig = {
-	enabled: true,
-	kClusters: 6,
-	includeBbox: true,
-	ocrCoverageThreshold: 0.5, // Trigger OCR if text coverage < 50%
+  enabled: true,
+  kClusters: 6,
+  includeBbox: true,
+  ocrCoverageThreshold: 0.5, // Trigger OCR if text coverage < 50%
 };
 
 const pdfConfigOcr: PdfConfig = {
-	hierarchy: hierarchyConfigOcr,
+  hierarchy: hierarchyConfigOcr,
 };
 
 const _extractionConfigOcr: ExtractionConfig = {
-	pdfOptions: pdfConfigOcr,
+  pdfOptions: pdfConfigOcr,
 };
 
 // const result = await kreuzberg.extractFile("document.pdf");
 
 // Integration with Kreuzberg WASM instance
 async function _extractWithHierarchy(): Promise<void> {
-	const config = extractionConfigBasic;
-	const kreuzberg = new Kreuzberg(config);
+  const config = extractionConfigBasic;
+  const kreuzberg = new Kreuzberg(config);
 
-	try {
-		// Extract from file (requires file input or fetch)
-		const result = await kreuzberg.extractFile("document.pdf");
-		console.log("Extraction complete:", result);
-	} catch (error) {
-		console.error("Extraction failed:", error);
-	}
+  try {
+    // Extract from file (requires file input or fetch)
+    const result = await kreuzberg.extractFile("document.pdf");
+    console.log("Extraction complete:", result);
+  } catch (error) {
+    console.error("Extraction failed:", error);
+  }
 }
 
 // Field descriptions:

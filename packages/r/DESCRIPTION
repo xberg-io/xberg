@@ -12,7 +12,9 @@ Imports: jsonlite
 Suggests:
     testthat (>= 3.0.0),
     withr,
-    roxygen2
+    roxygen2,
+    lintr,
+    styler
 SystemRequirements: Cargo (Rust's package manager), rustc (>= 1.91)
 Config/rextendr/version: 0.4.2
 Encoding: UTF-8

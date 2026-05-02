@@ -3,22 +3,27 @@
 Use worker pools for CPU-bound batch processing to maximize parallelism and throughput:
 
 ```typescript title="worker_pool.ts"
-import { createWorkerPool, extractFileInWorker, batchExtractFilesInWorker, closeWorkerPool } from '@kreuzberg/node';
+import {
+  createWorkerPool,
+  extractFileInWorker,
+  batchExtractFilesInWorker,
+  closeWorkerPool,
+} from "@kreuzberg/node";
 
 // Create a pool with 4 worker threads
 const pool = createWorkerPool(4);
 
 try {
   // Extract single file in worker
-  const result = await extractFileInWorker(pool, 'document.pdf', null, {
-    useCache: true
+  const result = await extractFileInWorker(pool, "document.pdf", null, {
+    useCache: true,
   });
   console.log(result.content);
 
   // Extract multiple files concurrently
-  const files = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
+  const files = ["doc1.pdf", "doc2.docx", "doc3.xlsx"];
   const results = await batchExtractFilesInWorker(pool, files, {
-    useCache: true
+    useCache: true,
   });
 
   results.forEach((result, i) => {
@@ -31,12 +36,14 @@ try {
 ```
 
 **Performance Benefits:**
+
 - **Parallel Processing**: Multiple documents extracted simultaneously
 - **CPU Usage**: Maximizes multi-core CPU usage for large batches
 - **Queue Management**: Automatically distributes work across available workers
 - **Resource Control**: Prevents thread exhaustion with configurable pool size
 
 **Best Practices:**
+
 - Use worker pools for batches of 10+ documents
 - Set pool size to number of CPU cores (default behavior)
 - Always close pools with `closeWorkerPool()` to prevent resource leaks

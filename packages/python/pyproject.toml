@@ -16,15 +16,9 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
-authors = [
-    { name = "Na'aman Hirschfeld <naaman@kreuzberg.dev>" }
-]
+authors = [{ name = "Na'aman Hirschfeld <naaman@kreuzberg.dev>" }]
 keywords = ["document", "extraction", "pdf", "ocr", "text"]
 homepage = "https://kreuzberg.dev"
-
-[project.optional-dependencies]
-easyocr = ["easyocr>=1.7.2", "torch>=2.9.1"]
-
 [project.urls]
 repository = "https://github.com/kreuzberg-dev/kreuzberg"
 
@@ -34,7 +28,62 @@ manifest-path = "../../crates/kreuzberg-py/Cargo.toml"
 features = ["pyo3/extension-module"]
 python-packages = ["kreuzberg"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
+[dependency-groups]
+dev = ["ruff>=0.14.8", "mypy>=1.19.0"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "ANN401",
+  "ASYNC109",
+  "ASYNC110",
+  "BLE001",
+  "COM812",
+  "D100",
+  "D104",
+  "D107",
+  "D205",
+  "E501",
+  "EM",
+  "FBT",
+  "FIX",
+  "ISC001",
+  "PD011",
+  "PGH003",
+  "PLR2004",
+  "PLW0603",
+  "S104",
+  "S110",
+  "S603",
+  "TD",
+  "TRY",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.pylint]
+max-args = 10
+max-branches = 15
+max-returns = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "D103", "ANN", "PLR2004"]
+
+[tool.ruff.format]
+docstring-code-line-length = 120
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+show_error_codes = true
+implicit_reexport = false
+namespace_packages = true

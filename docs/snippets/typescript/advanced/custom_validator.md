@@ -1,12 +1,12 @@
 ```typescript title="TypeScript"
 import {
-	registerValidator,
-	unregisterValidator,
-	extractFile,
-	type ValidatorProtocol,
-	type ExtractionResult,
-	ValidationError,
-} from '@kreuzberg/node';
+  registerValidator,
+  unregisterValidator,
+  extractFile,
+  type ValidatorProtocol,
+  type ExtractionResult,
+  ValidationError,
+} from "@kreuzberg/node";
 
 /**
  * Custom validator for quality checking
@@ -40,7 +40,7 @@ class QualityValidator implements ValidatorProtocol {
     const minLength = 50;
     if (result.content.length < minLength) {
       throw new ValidationError(
-        `Content too short: ${result.content.length} bytes (minimum ${minLength})`
+        `Content too short: ${result.content.length} bytes (minimum ${minLength})`,
       );
     }
   }
@@ -72,9 +72,7 @@ registerValidator(validator);
 // Usage with error handling (must use async extraction for custom validators)
 try {
   const result = await extractFile("document.pdf");
-  console.log(
-    `Validated content length: ${result.content.length} characters`
-  );
+  console.log(`Validated content length: ${result.content.length} characters`);
 } catch (error) {
   if (error instanceof ValidationError) {
     console.error(`Validation failed: ${error.message}`);

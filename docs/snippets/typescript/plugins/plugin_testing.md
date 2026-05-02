@@ -1,12 +1,12 @@
 ```typescript title="TypeScript"
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 import {
-	registerPostProcessor,
-	registerValidator,
-	unregisterPostProcessor,
-	unregisterValidator,
-	type ExtractionResult,
-} from '@kreuzberg/node';
+  registerPostProcessor,
+  registerValidator,
+  unregisterPostProcessor,
+  unregisterValidator,
+  type ExtractionResult,
+} from "@kreuzberg/node";
 
 describe("Plugin Testing", () => {
   describe("PostProcessor", () => {
@@ -71,9 +71,7 @@ describe("Plugin Testing", () => {
         images: undefined,
       };
 
-      expect(() => validator.validate(mockResult)).toThrow(
-        "Content too short"
-      );
+      expect(() => validator.validate(mockResult)).toThrow("Content too short");
 
       unregisterValidator("length-validator");
     });

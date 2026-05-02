@@ -1,20 +1,20 @@
 Package main
 
 Import (
-    "fmt"
-    "Kreuzberg"
+"fmt"
+"Kreuzberg"
 )
 
 Func main() {
-    config := &kreuzberg.ExtractionConfig{
-        Chunking: &kreuzberg.ChunkingConfig{
-            ChunkSize: 500,
-            Overlap:   50,
-        },
-        Pages: &kreuzberg.PageConfig{
-            ExtractPages: true,
-        },
-    }
+config := &kreuzberg.ExtractionConfig{
+Chunking: &kreuzberg.ChunkingConfig{
+ChunkSize: 500,
+Overlap: 50,
+},
+Pages: &kreuzberg.PageConfig{
+ExtractPages: true,
+},
+}
 
     result, _ := kreuzberg.ExtractFileSync("document.pdf", config)
 
@@ -32,4 +32,5 @@ Func main() {
             }
         }
     }
+
 }

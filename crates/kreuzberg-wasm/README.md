@@ -72,33 +72,30 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 ### Package Installation
 
-
 Install via one of the supported package managers:
 
-
 **npm:**
+
 ```bash
 npm install @kreuzberg/wasm
 ```
 
-
 **pnpm:**
+
 ```bash
 pnpm add @kreuzberg/wasm
 ```
 
-
 **yarn:**
+
 ```bash
 yarn add @kreuzberg/wasm
 ```
-
 
 ### System Requirements
 
 - Modern browser with WebAssembly support, or Deno 1.0+, or Cloudflare Workers
 - Optional: [Tesseract WASM](https://github.com/naptha/tesseract.js) for OCR functionality
-
 
 ## Quick Start
 
@@ -110,17 +107,17 @@ Extract text, metadata, and structure from any supported document format:
 import { extractBytes, initWasm } from "@kreuzberg/wasm";
 
 async function main() {
-	await initWasm();
+  await initWasm();
 
-	const buffer = await fetch("document.pdf").then((r) => r.arrayBuffer());
-	const bytes = new Uint8Array(buffer);
+  const buffer = await fetch("document.pdf").then((r) => r.arrayBuffer());
+  const bytes = new Uint8Array(buffer);
 
-	const result = await extractBytes(bytes, "application/pdf");
+  const result = await extractBytes(bytes, "application/pdf");
 
-	console.log("Extracted content:");
-	console.log(result.content);
-	console.log("MIME type:", result.mimeType);
-	console.log("Metadata:", result.metadata);
+  console.log("Extracted content:");
+  console.log(result.content);
+  console.log("MIME type:", result.mimeType);
+  console.log("Metadata:", result.metadata);
 }
 
 main().catch(console.error);
@@ -132,85 +129,79 @@ main().catch(console.error);
 
 Most use cases benefit from configuration to control extraction behavior:
 
-
 **With OCR (for scanned documents):**
 
 ```ts
 import { enableOcr, extractBytes, initWasm } from "@kreuzberg/wasm";
 
 async function extractWithOcr() {
-	await initWasm();
+  await initWasm();
 
-	try {
-		await enableOcr();
-		console.log("OCR enabled successfully");
-	} catch (error) {
-		console.error("Failed to enable OCR:", error);
-		return;
-	}
+  try {
+    await enableOcr();
+    console.log("OCR enabled successfully");
+  } catch (error) {
+    console.error("Failed to enable OCR:", error);
+    return;
+  }
 
-	const bytes = new Uint8Array(await fetch("scanned-page.png").then((r) => r.arrayBuffer()));
+  const bytes = new Uint8Array(await fetch("scanned-page.png").then((r) => r.arrayBuffer()));
 
-	const result = await extractBytes(bytes, "image/png", {
-		ocr: {
-			backend: "tesseract-wasm",
-			language: "eng",
-		},
-	});
+  const result = await extractBytes(bytes, "image/png", {
+    ocr: {
+      backend: "tesseract-wasm",
+      language: "eng",
+    },
+  });
 
-	console.log("Extracted text:");
-	console.log(result.content);
+  console.log("Extracted text:");
+  console.log(result.content);
 }
 
 extractWithOcr().catch(console.error);
 ```
 
-
 #### Table Extraction
-
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
-
 #### Processing Multiple Files
-
 
 ```ts
 import { extractBytes, initWasm } from "@kreuzberg/wasm";
 
 interface DocumentJob {
-	name: string;
-	bytes: Uint8Array;
-	mimeType: string;
+  name: string;
+  bytes: Uint8Array;
+  mimeType: string;
 }
 
 async function _processBatch(documents: DocumentJob[], concurrency: number = 3) {
-	await initWasm();
+  await initWasm();
 
-	const results: Record<string, string> = {};
-	const queue = [...documents];
+  const results: Record<string, string> = {};
+  const queue = [...documents];
 
-	const workers = Array(concurrency)
-		.fill(null)
-		.map(async () => {
-			while (queue.length > 0) {
-				const doc = queue.shift();
-				if (!doc) break;
+  const workers = Array(concurrency)
+    .fill(null)
+    .map(async () => {
+      while (queue.length > 0) {
+        const doc = queue.shift();
+        if (!doc) break;
 
-				try {
-					const result = await extractBytes(doc.bytes, doc.mimeType);
-					results[doc.name] = result.content;
-				} catch (error) {
-					console.error(`Failed to process ${doc.name}:`, error);
-				}
-			}
-		});
+        try {
+          const result = await extractBytes(doc.bytes, doc.mimeType);
+          results[doc.name] = result.content;
+        } catch (error) {
+          console.error(`Failed to process ${doc.name}:`, error);
+        }
+      }
+    });
 
-	await Promise.all(workers);
-	return results;
+  await Promise.all(workers);
+  return results;
 }
 ```
-
 
 #### Async Processing
 
@@ -220,29 +211,30 @@ For non-blocking document processing:
 import { extractBytes, getWasmCapabilities, initWasm } from "@kreuzberg/wasm";
 
 async function extractDocuments(files: Uint8Array[], mimeTypes: string[]) {
-	const caps = getWasmCapabilities();
-	if (!caps.hasWasm) {
-		throw new Error("WebAssembly not supported");
-	}
+  const caps = getWasmCapabilities();
+  if (!caps.hasWasm) {
+    throw new Error("WebAssembly not supported");
+  }
 
-	await initWasm();
+  await initWasm();
 
-	const results = await Promise.all(files.map((bytes, index) => extractBytes(bytes, mimeTypes[index])));
+  const results = await Promise.all(
+    files.map((bytes, index) => extractBytes(bytes, mimeTypes[index])),
+  );
 
-	return results.map((r) => ({
-		content: r.content,
-		pageCount: r.metadata?.pageCount,
-	}));
+  return results.map((r) => ({
+    content: r.content,
+    pageCount: r.metadata?.pageCount,
+  }));
 }
 
 const fileBytes = [new Uint8Array([1, 2, 3])];
 const mimes = ["application/pdf"];
 
 extractDocuments(fileBytes, mimes)
-	.then((results) => console.log(results))
-	.catch(console.error);
+  .then((results) => console.log(results))
+  .catch(console.error);
 ```
-
 
 ### Next Steps
 
@@ -250,7 +242,6 @@ extractDocuments(fileBytes, mimes)
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
-
 
 ## Features
 
@@ -260,57 +251,57 @@ extractDocuments(fileBytes, mimes)
 
 #### Office Documents
 
-| Category | Formats | Capabilities |
-|----------|---------|--------------|
-| **Word Processing** | `.docx`, `.docm`, `.dotx`, `.dotm`, `.dot`, `.odt` | Full text, tables, images, metadata, styles |
-| **Spreadsheets** | `.xlsx`, `.xlsm`, `.xlsb`, `.xls`, `.xla`, `.xlam`, `.xltm`, `.xltx`, `.xlt`, `.ods` | Sheet data, formulas, cell metadata, charts |
-| **Presentations** | `.pptx`, `.pptm`, `.ppsx`, `.potx`, `.potm`, `.pot`, `.ppt` | Slides, speaker notes, images, metadata |
-| **PDF** | `.pdf` | Text, tables, images, metadata, OCR support |
-| **eBooks** | `.epub`, `.fb2` | Chapters, metadata, embedded resources |
-| **Database** | `.dbf` | Table data extraction, field type support |
-| **Hangul** | `.hwp`, `.hwpx` | Korean document format, text extraction |
+| Category            | Formats                                                                              | Capabilities                                |
+| ------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------- |
+| **Word Processing** | `.docx`, `.docm`, `.dotx`, `.dotm`, `.dot`, `.odt`                                   | Full text, tables, images, metadata, styles |
+| **Spreadsheets**    | `.xlsx`, `.xlsm`, `.xlsb`, `.xls`, `.xla`, `.xlam`, `.xltm`, `.xltx`, `.xlt`, `.ods` | Sheet data, formulas, cell metadata, charts |
+| **Presentations**   | `.pptx`, `.pptm`, `.ppsx`, `.potx`, `.potm`, `.pot`, `.ppt`                          | Slides, speaker notes, images, metadata     |
+| **PDF**             | `.pdf`                                                                               | Text, tables, images, metadata, OCR support |
+| **eBooks**          | `.epub`, `.fb2`                                                                      | Chapters, metadata, embedded resources      |
+| **Database**        | `.dbf`                                                                               | Table data extraction, field type support   |
+| **Hangul**          | `.hwp`, `.hwpx`                                                                      | Korean document format, text extraction     |
 
 #### Images (OCR-Enabled)
 
-| Category | Formats | Features |
-|----------|---------|----------|
-| **Raster** | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif` | OCR, table detection, EXIF metadata, dimensions, color space |
+| Category     | Formats                                                                          | Features                                                                                             |
+| ------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Raster**   | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif`                | OCR, table detection, EXIF metadata, dimensions, color space                                         |
 | **Advanced** | `.jp2`, `.jpx`, `.jpm`, `.mj2`, `.jbig2`, `.jb2`, `.pnm`, `.pbm`, `.pgm`, `.ppm` | OCR via hayro-jpeg2000 (pure Rust decoder), JBIG2 support, table detection, format-specific metadata |
-| **Vector** | `.svg` | DOM parsing, embedded text, graphics metadata |
+| **Vector**   | `.svg`                                                                           | DOM parsing, embedded text, graphics metadata                                                        |
 
 #### Web & Data
 
-| Category | Formats | Features |
-|----------|---------|----------|
-| **Markup** | `.html`, `.htm`, `.xhtml`, `.xml`, `.svg` | DOM parsing, metadata (Open Graph, Twitter Card), link extraction |
-| **Structured Data** | `.json`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv` | Schema detection, nested structures, validation |
-| **Text & Markdown** | `.txt`, `.md`, `.markdown`, `.djot`, `.rst`, `.org`, `.rtf` | CommonMark, GFM, Djot, reStructuredText, Org Mode |
+| Category            | Formats                                                     | Features                                                          |
+| ------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Markup**          | `.html`, `.htm`, `.xhtml`, `.xml`, `.svg`                   | DOM parsing, metadata (Open Graph, Twitter Card), link extraction |
+| **Structured Data** | `.json`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`           | Schema detection, nested structures, validation                   |
+| **Text & Markdown** | `.txt`, `.md`, `.markdown`, `.djot`, `.rst`, `.org`, `.rtf` | CommonMark, GFM, Djot, reStructuredText, Org Mode                 |
 
 #### Email & Archives
 
-| Category | Formats | Features |
-|----------|---------|----------|
-| **Email** | `.eml`, `.msg` | Headers, body (HTML/plain), attachments, threading |
-| **Archives** | `.zip`, `.tar`, `.tgz`, `.gz`, `.7z` | File listing, nested archives, metadata |
+| Category     | Formats                              | Features                                           |
+| ------------ | ------------------------------------ | -------------------------------------------------- |
+| **Email**    | `.eml`, `.msg`                       | Headers, body (HTML/plain), attachments, threading |
+| **Archives** | `.zip`, `.tar`, `.tgz`, `.gz`, `.7z` | File listing, nested archives, metadata            |
 
 #### Academic & Scientific
 
-| Category | Formats | Features |
-|----------|---------|----------|
-| **Citations** | `.bib`, `.biblatex`, `.ris`, `.nbib`, `.enw`, `.csl` | Structured parsing: RIS (structured), PubMed/MEDLINE, EndNote XML (structured), BibTeX, CSL JSON |
-| **Scientific** | `.tex`, `.latex`, `.typst`, `.jats`, `.ipynb`, `.docbook` | LaTeX, Jupyter notebooks, PubMed JATS |
-| **Documentation** | `.opml`, `.pod`, `.mdoc`, `.troff` | Technical documentation formats |
+| Category          | Formats                                                   | Features                                                                                         |
+| ----------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Citations**     | `.bib`, `.biblatex`, `.ris`, `.nbib`, `.enw`, `.csl`      | Structured parsing: RIS (structured), PubMed/MEDLINE, EndNote XML (structured), BibTeX, CSL JSON |
+| **Scientific**    | `.tex`, `.latex`, `.typst`, `.jats`, `.ipynb`, `.docbook` | LaTeX, Jupyter notebooks, PubMed JATS                                                            |
+| **Documentation** | `.opml`, `.pod`, `.mdoc`, `.troff`                        | Technical documentation formats                                                                  |
 
 #### Code Intelligence (248 Languages)
 
-| Feature | Description |
-|---------|-------------|
-| **Structure Extraction** | Functions, classes, methods, structs, interfaces, enums |
-| **Import/Export Analysis** | Module dependencies, re-exports, wildcard imports |
-| **Symbol Extraction** | Variables, constants, type aliases, properties |
-| **Docstring Parsing** | Google, NumPy, Sphinx, JSDoc, RustDoc, and 10+ formats |
-| **Diagnostics** | Parse errors with line/column positions |
-| **Syntax-Aware Chunking** | Split code by semantic boundaries, not arbitrary byte offsets |
+| Feature                    | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| **Structure Extraction**   | Functions, classes, methods, structs, interfaces, enums       |
+| **Import/Export Analysis** | Module dependencies, re-exports, wildcard imports             |
+| **Symbol Extraction**      | Variables, constants, type aliases, properties                |
+| **Docstring Parsing**      | Google, NumPy, Sphinx, JSDoc, RustDoc, and 10+ formats        |
+| **Diagnostics**            | Parse errors with line/column positions                       |
+| **Syntax-Aware Chunking**  | Split code by semantic boundaries, not arbitrary byte offsets |
 
 Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack) — [documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev).
 
@@ -326,9 +317,7 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 
 - **Async/Await** - Non-blocking document processing with concurrent operations
 
-
 - **Plugin System** - Extensible post-processing for custom text transformation
-
 
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
@@ -340,22 +329,19 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 
 ### Performance Characteristics
 
-| Format | Speed | Memory | Notes |
-|--------|-------|--------|-------|
-| **PDF (text)** | 10-100 MB/s | ~50MB per doc | Fastest extraction |
-| **Office docs** | 20-200 MB/s | ~100MB per doc | DOCX, XLSX, PPTX |
-| **Images (OCR)** | 1-5 MB/s | Variable | Depends on OCR backend |
-| **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
-| **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
-
+| Format           | Speed       | Memory         | Notes                  |
+| ---------------- | ----------- | -------------- | ---------------------- |
+| **PDF (text)**   | 10-100 MB/s | ~50MB per doc  | Fastest extraction     |
+| **Office docs**  | 20-200 MB/s | ~100MB per doc | DOCX, XLSX, PPTX       |
+| **Images (OCR)** | 1-5 MB/s    | Variable       | Depends on OCR backend |
+| **Archives**     | 5-50 MB/s   | ~200MB per doc | ZIP, TAR, etc.         |
+| **Web formats**  | 50-200 MB/s | Streaming      | HTML, XML, JSON        |
 
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
 
-
 - **Tesseract-Wasm**
-
 
 ### OCR Configuration Example
 
@@ -363,32 +349,31 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 import { enableOcr, extractBytes, initWasm } from "@kreuzberg/wasm";
 
 async function extractWithOcr() {
-	await initWasm();
+  await initWasm();
 
-	try {
-		await enableOcr();
-		console.log("OCR enabled successfully");
-	} catch (error) {
-		console.error("Failed to enable OCR:", error);
-		return;
-	}
+  try {
+    await enableOcr();
+    console.log("OCR enabled successfully");
+  } catch (error) {
+    console.error("Failed to enable OCR:", error);
+    return;
+  }
 
-	const bytes = new Uint8Array(await fetch("scanned-page.png").then((r) => r.arrayBuffer()));
+  const bytes = new Uint8Array(await fetch("scanned-page.png").then((r) => r.arrayBuffer()));
 
-	const result = await extractBytes(bytes, "image/png", {
-		ocr: {
-			backend: "tesseract-wasm",
-			language: "eng",
-		},
-	});
+  const result = await extractBytes(bytes, "image/png", {
+    ocr: {
+      backend: "tesseract-wasm",
+      language: "eng",
+    },
+  });
 
-	console.log("Extracted text:");
-	console.log(result.content);
+  console.log("Extracted text:");
+  console.log(result.content);
 }
 
 extractWithOcr().catch(console.error);
 ```
-
 
 ## Async Support
 
@@ -398,36 +383,36 @@ This binding provides full async/await support for non-blocking document process
 import { extractBytes, getWasmCapabilities, initWasm } from "@kreuzberg/wasm";
 
 async function extractDocuments(files: Uint8Array[], mimeTypes: string[]) {
-	const caps = getWasmCapabilities();
-	if (!caps.hasWasm) {
-		throw new Error("WebAssembly not supported");
-	}
+  const caps = getWasmCapabilities();
+  if (!caps.hasWasm) {
+    throw new Error("WebAssembly not supported");
+  }
 
-	await initWasm();
+  await initWasm();
 
-	const results = await Promise.all(files.map((bytes, index) => extractBytes(bytes, mimeTypes[index])));
+  const results = await Promise.all(
+    files.map((bytes, index) => extractBytes(bytes, mimeTypes[index])),
+  );
 
-	return results.map((r) => ({
-		content: r.content,
-		pageCount: r.metadata?.pageCount,
-	}));
+  return results.map((r) => ({
+    content: r.content,
+    pageCount: r.metadata?.pageCount,
+  }));
 }
 
 const fileBytes = [new Uint8Array([1, 2, 3])];
 const mimes = ["application/pdf"];
 
 extractDocuments(fileBytes, mimes)
-	.then((results) => console.log(results))
-	.catch(console.error);
+  .then((results) => console.log(results))
+  .catch(console.error);
 ```
-
 
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
 
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
-
 
 ## Batch Processing
 
@@ -437,38 +422,37 @@ Process multiple documents efficiently:
 import { extractBytes, initWasm } from "@kreuzberg/wasm";
 
 interface DocumentJob {
-	name: string;
-	bytes: Uint8Array;
-	mimeType: string;
+  name: string;
+  bytes: Uint8Array;
+  mimeType: string;
 }
 
 async function _processBatch(documents: DocumentJob[], concurrency: number = 3) {
-	await initWasm();
+  await initWasm();
 
-	const results: Record<string, string> = {};
-	const queue = [...documents];
+  const results: Record<string, string> = {};
+  const queue = [...documents];
 
-	const workers = Array(concurrency)
-		.fill(null)
-		.map(async () => {
-			while (queue.length > 0) {
-				const doc = queue.shift();
-				if (!doc) break;
+  const workers = Array(concurrency)
+    .fill(null)
+    .map(async () => {
+      while (queue.length > 0) {
+        const doc = queue.shift();
+        if (!doc) break;
 
-				try {
-					const result = await extractBytes(doc.bytes, doc.mimeType);
-					results[doc.name] = result.content;
-				} catch (error) {
-					console.error(`Failed to process ${doc.name}:`, error);
-				}
-			}
-		});
+        try {
+          const result = await extractBytes(doc.bytes, doc.mimeType);
+          results[doc.name] = result.content;
+        } catch (error) {
+          console.error(`Failed to process ${doc.name}:`, error);
+        }
+      }
+    });
 
-	await Promise.all(workers);
-	return results;
+  await Promise.all(workers);
+  return results;
 }
 ```
-
 
 ## Configuration
 

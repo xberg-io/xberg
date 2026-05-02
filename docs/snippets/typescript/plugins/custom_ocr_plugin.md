@@ -1,8 +1,5 @@
 ```typescript title="TypeScript"
-import {
-	registerOcrBackend,
-	type OcrBackendProtocol,
-} from '@kreuzberg/node';
+import { registerOcrBackend, type OcrBackendProtocol } from "@kreuzberg/node";
 
 /**
  * Mock OCR backend for testing
@@ -36,7 +33,7 @@ class MockOcrBackend implements OcrBackendProtocol {
    */
   async processImage(
     imageData: Uint8Array | string,
-    language: string
+    language: string,
   ): Promise<{
     content: string;
     mime_type: string;
@@ -45,21 +42,19 @@ class MockOcrBackend implements OcrBackendProtocol {
   }> {
     this.callCount++;
 
-    const buffer = typeof imageData === "string"
-      ? Buffer.from(imageData, "base64")
-      : Buffer.from(imageData);
+    const buffer =
+      typeof imageData === "string" ? Buffer.from(imageData, "base64") : Buffer.from(imageData);
 
     // Simulate OCR processing time
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const mockText =
-      `This is mock OCR result for ${language} detected in ${buffer.length} bytes of image data.`;
+    const mockText = `This is mock OCR result for ${language} detected in ${buffer.length} bytes of image data.`;
 
     return {
       content: mockText,
       mime_type: "text/plain",
       metadata: { confidence: 0.95, language },
-      tables: []
+      tables: [],
     };
   }
 

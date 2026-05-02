@@ -1,23 +1,23 @@
 ```typescript title="TypeScript"
-import { extractFile } from '@kreuzberg/node';
+import { extractFile } from "@kreuzberg/node";
 
 const config = {
-	pdfOptions: {
-		extractMetadata: true,
-		hierarchy: {
-			enabled: true,
-			kClusters: 6,
-			includeBbox: true,
-			ocrCoverageThreshold: 0.8,
-		},
-	},
+  pdfOptions: {
+    extractMetadata: true,
+    hierarchy: {
+      enabled: true,
+      kClusters: 6,
+      includeBbox: true,
+      ocrCoverageThreshold: 0.8,
+    },
+  },
 };
 
-const result = await extractFile('document.pdf', null, config);
+const result = await extractFile("document.pdf", null, config);
 if (result.pages) {
-	result.pages.forEach((page) => {
-		console.log(`Page ${page.pageNumber}:`);
-		console.log(`  Content: ${page.content.substring(0, 100)}...`);
-	});
+  result.pages.forEach((page) => {
+    console.log(`Page ${page.pageNumber}:`);
+    console.log(`  Content: ${page.content.substring(0, 100)}...`);
+  });
 }
 ```

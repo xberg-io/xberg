@@ -18,4 +18,4 @@ const config: ExtractionConfig = { useCache: true };
   const isIdentical = result1.content === result2.content;
   console.log("\nResults are identical: " + isIdentical);
 })();
-```
+```;

@@ -3,14 +3,14 @@ import type { ChunkingConfig, EmbeddingConfig, ExtractionConfig } from "kreuzber
 // Example 1: Preset model (recommended)
 // Fast, balanced, or quality preset configurations optimized for common use cases.
 const _embeddingConfig: EmbeddingConfig = {
-	model: {
-		type: "preset",
-		name: "balanced",
-	},
-	batchSize: 32,
-	normalize: true,
-	showDownloadProgress: true,
-	cacheDir: "~/.cache/kreuzberg/embeddings",
+  model: {
+    type: "preset",
+    name: "balanced",
+  },
+  batchSize: 32,
+  normalize: true,
+  showDownloadProgress: true,
+  cacheDir: "~/.cache/kreuzberg/embeddings",
 };
 
 // Available presets:
@@ -22,15 +22,15 @@ const _embeddingConfig: EmbeddingConfig = {
 // Example 2: Custom ONNX model (requires embeddings feature)
 // Direct access to specific ONNX embedding models from HuggingFace with custom dimensions.
 const _embeddingConfigCustomOnnx: EmbeddingConfig = {
-	model: {
-		type: "custom",
-		modelId: "BAAI/bge-small-en-v1.5",
-		dimensions: 384,
-	},
-	batchSize: 32,
-	normalize: true,
-	showDownloadProgress: true,
-	cacheDir: undefined, // Uses default: .kreuzberg/embeddings/
+  model: {
+    type: "custom",
+    modelId: "BAAI/bge-small-en-v1.5",
+    dimensions: 384,
+  },
+  batchSize: 32,
+  normalize: true,
+  showDownloadProgress: true,
+  cacheDir: undefined, // Uses default: .kreuzberg/embeddings/
 };
 
 // Popular ONNX-compatible models:
@@ -42,35 +42,35 @@ const _embeddingConfigCustomOnnx: EmbeddingConfig = {
 // Example 3: Alternative Custom ONNX Model
 // For advanced users wanting different ONNX embedding models.
 const _embeddingConfigCustom: EmbeddingConfig = {
-	model: {
-		type: "custom",
-		modelId: "sentence-transformers/all-mpnet-base-v2",
-		dimensions: 768,
-	},
-	batchSize: 16, // Larger model requires smaller batch size
-	normalize: true,
-	showDownloadProgress: true,
-	cacheDir: "/var/cache/embeddings",
+  model: {
+    type: "custom",
+    modelId: "sentence-transformers/all-mpnet-base-v2",
+    dimensions: 768,
+  },
+  batchSize: 16, // Larger model requires smaller batch size
+  normalize: true,
+  showDownloadProgress: true,
+  cacheDir: "/var/cache/embeddings",
 };
 
 // Integration with ChunkingConfig
 // Add embeddings to your chunking configuration:
 const chunkingConfig: ChunkingConfig = {
-	maxChars: 1024,
-	maxOverlap: 100,
-	preset: "balanced",
-	embedding: {
-		model: {
-			type: "preset",
-			name: "balanced",
-		},
-		batchSize: 32,
-		normalize: true,
-	},
+  maxChars: 1024,
+  maxOverlap: 100,
+  preset: "balanced",
+  embedding: {
+    model: {
+      type: "preset",
+      name: "balanced",
+    },
+    batchSize: 32,
+    normalize: true,
+  },
 };
 
 const _extractionConfig: ExtractionConfig = {
-	chunking: chunkingConfig,
+  chunking: chunkingConfig,
 };
 
 // Create Kreuzberg instance with embedding config

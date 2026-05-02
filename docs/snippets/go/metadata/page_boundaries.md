@@ -1,12 +1,12 @@
 Package main
 
 Import (
-    "fmt"
-    "Kreuzberg"
+"fmt"
+"Kreuzberg"
 )
 
 Func main() {
-    result, _ := kreuzberg.ExtractFileSync("document.pdf", nil)
+result, \_ := kreuzberg.ExtractFileSync("document.pdf", nil)
 
     if result.Metadata.Pages != nil && result.Metadata.Pages.Boundaries != nil {
         contentBytes := []byte(result.Content)
@@ -24,4 +24,5 @@ Func main() {
             fmt.Printf("  Preview: %s...\n", pageText[:100])
         }
     }
+
 }

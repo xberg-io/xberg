@@ -6,10 +6,10 @@ Kreuzberg enforces size limits on file uploads and API requests to manage server
 
 File size limits protect your server from resource exhaustion and unexpected memory spikes. The Kreuzberg API implements two complementary limit types:
 
-| Limit Type | Purpose | Default |
-|------------|---------|---------|
-| **Request Body Limit** | Total size of all files in a single request | 100 MB |
-| **Multipart Field Limit** | Maximum size of an individual file | 100 MB |
+| Limit Type                | Purpose                                     | Default |
+| ------------------------- | ------------------------------------------- | ------- |
+| **Request Body Limit**    | Total size of all files in a single request | 100 MB  |
+| **Multipart Field Limit** | Maximum size of an individual file          | 100 MB  |
 
 Both limits are configurable via environment variables (`KREUZBERG_MAX_REQUEST_BODY_BYTES`, `KREUZBERG_MAX_MULTIPART_FIELD_BYTES`) or programmatically via the `ApiSizeLimits` type.
 
@@ -68,7 +68,7 @@ kreuzberg serve -H 0.0.0.0 -p 8000
 Configure limits in your Docker Compose setup:
 
 ```yaml title="docker-compose.yaml"
-version: '3.8'
+version: "3.8"
 services:
   kreuzberg-api:
     image: ghcr.io/kreuzberg-dev/kreuzberg:latest
@@ -103,17 +103,17 @@ spec:
   template:
     spec:
       containers:
-      - name: kreuzberg
-        image: ghcr.io/kreuzberg-dev/kreuzberg:latest
-        env:
-        - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
-          value: "524288000"
-        - name: KREUZBERG_CORS_ORIGINS
-          value: "https://myapp.com"
-        resources:
-          limits:
-            memory: "2Gi"
-            cpu: "2000m"
+        - name: kreuzberg
+          image: ghcr.io/kreuzberg-dev/kreuzberg:latest
+          env:
+            - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
+              value: "524288000"
+            - name: KREUZBERG_CORS_ORIGINS
+              value: "https://myapp.com"
+          resources:
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
 ```
 
 ### 4. Programmatic Configuration
@@ -290,12 +290,12 @@ File size limits directly impact memory consumption:
 
 #### Memory Impact Examples
 
-| Upload Limit | Memory Impact | Recommended RAM |
-|--------------|--------------|-----------------|
-| 50 MB | ~50-100 MB per request | 512 MB |
-| 100 MB (default) | ~100-200 MB per request | 1 GB |
-| 500 MB | ~500 MB-1 GB per request | 2-4 GB |
-| 1000 MB | ~1-2 GB per request | 4-8 GB |
+| Upload Limit     | Memory Impact            | Recommended RAM |
+| ---------------- | ------------------------ | --------------- |
+| 50 MB            | ~50-100 MB per request   | 512 MB          |
+| 100 MB (default) | ~100-200 MB per request  | 1 GB            |
+| 500 MB           | ~500 MB-1 GB per request | 2-4 GB          |
+| 1000 MB          | ~1-2 GB per request      | 4-8 GB          |
 
 ### Handling Large Files
 
@@ -319,11 +319,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G      # Limit container to 4 GB
-          cpus: '2'       # Limit to 2 CPU cores
+          memory: 4G # Limit container to 4 GB
+          cpus: "2" # Limit to 2 CPU cores
         reservations:
-          memory: 2G      # Reserve 2 GB minimum
-          cpus: '1'       # Reserve 1 CPU core
+          memory: 2G # Reserve 2 GB minimum
+          cpus: "1" # Reserve 1 CPU core
 ```
 
 ### Reverse Proxy Configuration

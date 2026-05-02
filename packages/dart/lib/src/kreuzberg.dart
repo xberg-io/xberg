@@ -29,10 +29,7 @@ class AccelerationConfig {
 
   /// GPU device ID (for CUDA/TensorRT). Ignored for CPU/CoreML/Auto.
   final int deviceId;
-  AccelerationConfig({
-    required this.provider,
-    required this.deviceId,
-  });
+  AccelerationConfig({required this.provider, required this.deviceId});
 }
 
 /// Cross-extractor content filtering configuration.
@@ -886,10 +883,7 @@ class OcrPipelineConfig {
 
   /// Quality thresholds for deciding whether to accept a result or try the next backend.
   final OcrQualityThresholds qualityThresholds;
-  OcrPipelineConfig({
-    required this.stages,
-    required this.qualityThresholds,
-  });
+  OcrPipelineConfig({required this.stages, required this.qualityThresholds});
 }
 
 /// OCR configuration.
@@ -1331,10 +1325,7 @@ class SupportedFormat {
 
   /// MIME type string, e.g., "application/pdf"
   final String mimeType;
-  SupportedFormat({
-    required this.extension_,
-    required this.mimeType,
-  });
+  SupportedFormat({required this.extension_, required this.mimeType});
 }
 
 /// API server configuration.
@@ -1409,44 +1400,6 @@ class ImageOcrResult {
   });
 }
 
-/// Archive metadata extracted from an archive file.
-class ArchiveArchiveMetadata {
-  /// Archive format (e.g., "ZIP", "TAR")
-  final String format;
-
-  /// List of files in the archive
-  final List<ArchiveEntry> fileList;
-
-  /// Total number of files
-  final int fileCount;
-
-  /// Total uncompressed size in bytes
-  final int totalSize;
-  ArchiveArchiveMetadata({
-    required this.format,
-    required this.fileList,
-    required this.fileCount,
-    required this.totalSize,
-  });
-}
-
-/// Information about a single file in an archive.
-class ArchiveArchiveEntry {
-  /// File path within the archive
-  final String path;
-
-  /// File size in bytes
-  final int size;
-
-  /// Whether this is a directory
-  final bool isDir;
-  ArchiveArchiveEntry({
-    required this.path,
-    required this.size,
-    required this.isDir,
-  });
-}
-
 /// Result of HTML extraction with optional images and warnings.
 class HtmlExtractionResult {
   final String markdown;
@@ -1475,39 +1428,6 @@ class ExtractedInlineImage {
     required this.description,
     required this.dimensions,
     required this.attributes,
-  });
-}
-
-/// Result of DOC text extraction.
-class DocExtractionResult {
-  /// Extracted text content. Aliased as `text` for back-compat.
-  final String content;
-
-  /// Document metadata.
-  final DocMetadata metadata;
-  DocExtractionResult({
-    required this.content,
-    required this.metadata,
-  });
-}
-
-/// Metadata extracted from DOC files.
-class DocMetadata {
-  final String? title;
-  final String? subject;
-  final String? author;
-  final String? lastAuthor;
-  final String? created;
-  final String? modified;
-  final String? revisionNumber;
-  DocMetadata({
-    required this.title,
-    required this.subject,
-    required this.author,
-    required this.lastAuthor,
-    required this.created,
-    required this.modified,
-    required this.revisionNumber,
   });
 }
 
@@ -1558,11 +1478,7 @@ class Note {
   final String id;
   final String noteType;
   final List<String> paragraphs;
-  Note({
-    required this.id,
-    required this.noteType,
-    required this.paragraphs,
-  });
+  Note({required this.id, required this.noteType, required this.paragraphs});
 }
 
 /// Page margins converted to points (1/72 inch).
@@ -2431,10 +2347,7 @@ class Footnote {
 
   /// Footnote content blocks
   final List<FormattedBlock> content;
-  Footnote({
-    required this.label,
-    required this.content,
-  });
+  Footnote({required this.label, required this.content});
 }
 
 /// Top-level structured document representation.
@@ -2596,11 +2509,7 @@ class TextAnnotation {
 
   /// Annotation type.
   final AnnotationKind kind;
-  TextAnnotation({
-    required this.start,
-    required this.end,
-    required this.kind,
-  });
+  TextAnnotation({required this.start, required this.end, required this.kind});
 }
 
 /// General extraction result used by the core extraction API.
@@ -2826,10 +2735,7 @@ class ProcessingWarning {
 
   /// Human-readable description of what went wrong.
   final String message;
-  ProcessingWarning({
-    required this.source,
-    required this.message,
-  });
+  ProcessingWarning({required this.source, required this.message});
 }
 
 /// Token usage and cost data for a single LLM call made during extraction.
@@ -2918,10 +2824,7 @@ class HeadingLevel {
 
   /// The text content of the heading.
   final String text;
-  HeadingLevel({
-    required this.level,
-    required this.text,
-  });
+  HeadingLevel({required this.level, required this.text});
 }
 
 /// Metadata about a chunk's position in the original document.
@@ -3111,10 +3014,7 @@ class ExcelWorkbook {
 
   /// Workbook-level metadata (author, creation date, etc.)
   final Map<String, String> metadata;
-  ExcelWorkbook({
-    required this.sheets,
-    required this.metadata,
-  });
+  ExcelWorkbook({required this.sheets, required this.metadata});
 }
 
 /// Single Excel worksheet.
@@ -3832,10 +3732,7 @@ class XmlMetadata {
 
   /// List of unique element tag names (sorted)
   final List<String> uniqueElements;
-  XmlMetadata({
-    required this.elementCount,
-    required this.uniqueElements,
-  });
+  XmlMetadata({required this.elementCount, required this.uniqueElements});
 }
 
 /// Text/Markdown metadata.
@@ -4072,10 +3969,7 @@ class OcrMetadata {
 class ErrorMetadata {
   final String errorType;
   final String message;
-  ErrorMetadata({
-    required this.errorType,
-    required this.message,
-  });
+  ErrorMetadata({required this.errorType, required this.message});
 }
 
 /// PowerPoint presentation metadata.
@@ -4186,11 +4080,7 @@ class YearRange {
   final int? min;
   final int? max;
   final List<int> years;
-  YearRange({
-    required this.min,
-    required this.max,
-    required this.years,
-  });
+  YearRange({required this.min, required this.max, required this.years});
 }
 
 /// FictionBook (FB2) metadata.
@@ -4221,10 +4111,7 @@ class DbfMetadata {
 class DbfFieldInfo {
   final String name;
   final String fieldType;
-  DbfFieldInfo({
-    required this.name,
-    required this.fieldType,
-  });
+  DbfFieldInfo({required this.name, required this.fieldType});
 }
 
 /// JATS (Journal Article Tag Suite) metadata.
@@ -4245,10 +4132,7 @@ class JatsMetadata {
 class ContributorRole {
   final String name;
   final String? role;
-  ContributorRole({
-    required this.name,
-    required this.role,
-  });
+  ContributorRole({required this.name, required this.role});
 }
 
 /// EPUB metadata (Dublin Core extensions).
@@ -4290,10 +4174,7 @@ class OcrConfidence {
   ///
   /// Range: 0.0 to 1.0.
   final double recognition;
-  OcrConfidence({
-    required this.detection,
-    required this.recognition,
-  });
+  OcrConfidence({required this.detection, required this.recognition});
 }
 
 /// Rotation information for an OCR element.
@@ -4303,10 +4184,7 @@ class OcrRotation {
 
   /// Confidence score for the rotation detection.
   final double? confidence;
-  OcrRotation({
-    required this.angleDegrees,
-    required this.confidence,
-  });
+  OcrRotation({required this.angleDegrees, required this.confidence});
 }
 
 /// A unified OCR element representing detected text with full metadata.
@@ -4580,10 +4458,7 @@ class PageHierarchy {
 
   /// Hierarchical blocks with heading levels
   final List<HierarchicalBlock> blocks;
-  PageHierarchy({
-    required this.blockCount,
-    required this.blocks,
-  });
+  PageHierarchy({required this.blockCount, required this.blocks});
 }
 
 /// A text block with hierarchy level assignment.
@@ -4691,10 +4566,7 @@ class InfoResponse {
 
   /// Whether using Rust backend
   final bool rustBackend;
-  InfoResponse({
-    required this.version,
-    required this.rustBackend,
-  });
+  InfoResponse({required this.version, required this.rustBackend});
 }
 
 /// Extraction response (list of results).
@@ -4714,10 +4586,7 @@ class ApiState {
   /// while `ApiState` must be `Clone + Sync` for Axum's state requirement.
   /// The lock is held only long enough to clone the service.
   final String extractionService;
-  ApiState({
-    required this.defaultConfig,
-    required this.extractionService,
-  });
+  ApiState({required this.defaultConfig, required this.extractionService});
 }
 
 /// Cache statistics response.
@@ -4773,10 +4642,7 @@ class EmbedRequest {
 
   /// Optional embedding configuration (model, batch size, etc.)
   final EmbeddingConfig? config;
-  EmbedRequest({
-    required this.texts,
-    required this.config,
-  });
+  EmbedRequest({required this.texts, required this.config});
 }
 
 /// Embedding response containing generated embeddings.
@@ -4856,10 +4722,7 @@ class DetectResponse {
 
   /// Original filename (if provided)
   final String? filename;
-  DetectResponse({
-    required this.mimeType,
-    required this.filename,
-  });
+  DetectResponse({required this.mimeType, required this.filename});
 }
 
 /// Model manifest entry for cache management.
@@ -4911,10 +4774,7 @@ class WarmRequest {
 
   /// Specific embedding model preset to download
   final String? embeddingModel;
-  WarmRequest({
-    required this.allEmbeddings,
-    required this.embeddingModel,
-  });
+  WarmRequest({required this.allEmbeddings, required this.embeddingModel});
 }
 
 /// Cache warm response.
@@ -4960,10 +4820,7 @@ class OpenWebDocumentResponse {
 
   /// Document metadata
   final String metadata;
-  OpenWebDocumentResponse({
-    required this.pageContent,
-    required this.metadata,
-  });
+  OpenWebDocumentResponse({required this.pageContent, required this.metadata});
 }
 
 /// OpenWebUI "Docling" engine response format.
@@ -4975,10 +4832,7 @@ class DoclingCompatResponse {
 
   /// Processing status
   final String status;
-  DoclingCompatResponse({
-    required this.document,
-    required this.status,
-  });
+  DoclingCompatResponse({required this.document, required this.status});
 }
 
 /// Request parameters for file extraction.
@@ -5064,10 +4918,7 @@ class DetectMimeTypeParams {
 
   /// Use content-based detection (default: true)
   final bool useContent;
-  DetectMimeTypeParams({
-    required this.path,
-    required this.useContent,
-  });
+  DetectMimeTypeParams({required this.path, required this.useContent});
 }
 
 /// Request parameters for cache warm (model download).
@@ -5077,10 +4928,7 @@ class CacheWarmParams {
 
   /// Specific embedding preset name to download (e.g. "balanced", "speed", "quality")
   final String? embeddingModel;
-  CacheWarmParams({
-    required this.allEmbeddings,
-    required this.embeddingModel,
-  });
+  CacheWarmParams({required this.allEmbeddings, required this.embeddingModel});
 }
 
 /// Request parameters for embedding generation.
@@ -5180,10 +5028,7 @@ class DetectedBoundary {
 
   /// Whether this boundary looks like a header/section title.
   final bool isHeader;
-  DetectedBoundary({
-    required this.byteOffset,
-    required this.isHeader,
-  });
+  DetectedBoundary({required this.byteOffset, required this.isHeader});
 }
 
 /// Result of a text chunking operation.
@@ -5195,10 +5040,7 @@ class ChunkingResult {
 
   /// Total number of chunks generated
   final int chunkCount;
-  ChunkingResult({
-    required this.chunks,
-    required this.chunkCount,
-  });
+  ChunkingResult({required this.chunks, required this.chunkCount});
 }
 
 /// A merged chunk produced by [`merge_segments`].
@@ -5229,10 +5071,7 @@ class RakeParams {
 
   /// Maximum words in a keyword phrase (default: 3).
   final int maxWordsPerPhrase;
-  RakeParams({
-    required this.minWordLength,
-    required this.maxWordsPerPhrase,
-  });
+  RakeParams({required this.minWordLength, required this.maxWordsPerPhrase});
 }
 
 /// Keyword extraction configuration.
@@ -5301,10 +5140,7 @@ class Keyword {
 class OcrCacheStats {
   final int totalFiles;
   final double totalSizeMb;
-  OcrCacheStats({
-    required this.totalFiles,
-    required this.totalSizeMb,
-  });
+  OcrCacheStats({required this.totalFiles, required this.totalSizeMb});
 }
 
 /// Pre-computed table markdown for a table detection region.
@@ -5326,65 +5162,6 @@ class RecognizedTable {
 
 /// Manages tessdata file downloading, caching, and manifest generation.
 class TessdataManager {}
-
-/// Configuration for Tesseract OCR (internal, efficient types).
-///
-/// This is the internal representation used by the OCR processor.
-/// Public API uses i32 for PyO3 compatibility, converted to u8 here for efficiency.
-class OcrTesseractConfig {
-  final String language;
-  final int psm;
-  final String outputFormat;
-  final int oem;
-  final double minConfidence;
-  final ImagePreprocessingConfig? preprocessing;
-  final bool enableTableDetection;
-  final double tableMinConfidence;
-  final int tableColumnThreshold;
-  final double tableRowThresholdRatio;
-  final bool useCache;
-  final bool classifyUsePreAdaptedTemplates;
-  final bool languageModelNgramOn;
-  final bool tesseditDontBlkrejGoodWds;
-  final bool tesseditDontRowrejGoodWds;
-  final bool tesseditEnableDictCorrection;
-  final String tesseditCharWhitelist;
-  final String tesseditCharBlacklist;
-  final bool tesseditUsePrimaryParamsModel;
-  final bool textordSpaceSizeIsVariable;
-  final bool thresholdingMethod;
-
-  /// Enable automatic page rotation based on orientation detection.
-  ///
-  /// When enabled, uses Tesseract's `DetectOrientationScript()` to detect
-  /// page orientation (0/90/180/270 degrees) before OCR. If the page is
-  /// rotated with high confidence, the image is corrected before recognition.
-  final bool autoRotate;
-  OcrTesseractConfig({
-    required this.language,
-    required this.psm,
-    required this.outputFormat,
-    required this.oem,
-    required this.minConfidence,
-    required this.preprocessing,
-    required this.enableTableDetection,
-    required this.tableMinConfidence,
-    required this.tableColumnThreshold,
-    required this.tableRowThresholdRatio,
-    required this.useCache,
-    required this.classifyUsePreAdaptedTemplates,
-    required this.languageModelNgramOn,
-    required this.tesseditDontBlkrejGoodWds,
-    required this.tesseditDontRowrejGoodWds,
-    required this.tesseditEnableDictCorrection,
-    required this.tesseditCharWhitelist,
-    required this.tesseditCharBlacklist,
-    required this.tesseditUsePrimaryParamsModel,
-    required this.textordSpaceSizeIsVariable,
-    required this.thresholdingMethod,
-    required this.autoRotate,
-  });
-}
 
 /// Configuration for PaddleOCR backend.
 ///
@@ -5499,10 +5276,7 @@ class OrientationResult {
 
   /// Confidence score (0.0-1.0).
   final double confidence;
-  OrientationResult({
-    required this.degrees,
-    required this.confidence,
-  });
+  OrientationResult({required this.degrees, required this.confidence});
 }
 
 /// Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
@@ -5695,7 +5469,7 @@ enum ExecutionProviderType {
   cuda,
 
   /// NVIDIA TensorRT (optimized CUDA inference).
-  tensorRt;
+  tensorRt,
 }
 
 /// Built-in HTML theme selection.
@@ -5716,7 +5490,7 @@ enum HtmlTheme {
 
   /// No built-in stylesheet emitted. CSS custom properties are still defined
   /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
-  unstyled;
+  unstyled,
 }
 
 /// Which table structure recognition model to use.
@@ -5741,7 +5515,7 @@ enum TableModel {
   slanetAuto,
 
   /// Disable table structure model inference entirely; use heuristic path only.
-  disabled;
+  disabled,
 }
 
 /// PDF extraction backend selection.
@@ -5758,7 +5532,7 @@ enum PdfBackend {
   pdfOxide,
 
   /// Automatically select the best available backend.
-  auto;
+  auto,
 }
 
 /// Type of text chunker to use.
@@ -5775,12 +5549,7 @@ enum PdfBackend {
 ///   blank-line paragraphs) and merges groups into chunks capped at
 ///   `max_characters` (default 1000). `topic_threshold` has no effect in the
 ///   fallback path. For best results, pair with an embedding model.
-enum ChunkerType {
-  text,
-  markdown,
-  yaml,
-  semantic;
-}
+enum ChunkerType { text, markdown, yaml, semantic }
 
 /// How chunk size is measured.
 ///
@@ -5799,10 +5568,7 @@ final class Characters extends ChunkSizing {}
 final class Tokenizer extends ChunkSizing {
   final String model;
   final String cacheDir;
-  Tokenizer({
-    required this.model,
-    required this.cacheDir,
-  });
+  Tokenizer({required this.model, required this.cacheDir});
 }
 
 /// Embedding model types supported by Kreuzberg.
@@ -5818,10 +5584,7 @@ final class Preset extends EmbeddingModelType {
 final class Custom extends EmbeddingModelType {
   final String modelId;
   final int dimensions;
-  Custom({
-    required this.modelId,
-    required this.dimensions,
-  });
+  Custom({required this.modelId, required this.dimensions});
 }
 
 /// Provider-hosted embedding model via liter-llm.
@@ -5869,15 +5632,10 @@ enum CodeContentMode {
   raw,
 
   /// Emit function/class headings + docstrings (no code bodies).
-  structure;
+  structure,
 }
 
-enum FracType {
-  bar,
-  noBar,
-  linear,
-  skewed;
-}
+enum FracType { bar, noBar, linear, skewed }
 
 /// OCR backend types.
 enum OcrBackendType {
@@ -5891,7 +5649,7 @@ enum OcrBackendType {
   paddleOcr,
 
   /// Custom/third-party OCR backend
-  custom;
+  custom,
 }
 
 /// Processing stages for post-processors.
@@ -5924,16 +5682,10 @@ enum ProcessingStage {
   /// - Analytics/logging
   /// - Final validation
   /// - Output formatting
-  late_;
+  late_,
 }
 
-enum ReductionLevel {
-  off,
-  light,
-  moderate,
-  aggressive,
-  maximum;
-}
+enum ReductionLevel { off, light, moderate, aggressive, maximum }
 
 /// Type of PDF annotation.
 enum PdfAnnotationType {
@@ -5956,7 +5708,7 @@ enum PdfAnnotationType {
   strikeOut,
 
   /// Any other annotation type
-  other;
+  other,
 }
 
 /// Types of block-level elements in Djot.
@@ -5976,7 +5728,7 @@ enum BlockType {
   section,
   thematicBreak,
   rawBlock,
-  mathDisplay;
+  mathDisplay,
 }
 
 /// Types of inline elements in Djot.
@@ -5996,7 +5748,7 @@ enum InlineType {
   math,
   rawInline,
   footnoteRef,
-  symbol;
+  symbol,
 }
 
 /// Semantic kind of a relationship between document elements.
@@ -6020,7 +5772,7 @@ enum RelationshipKind {
   tocEntry,
 
   /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
-  crossReference;
+  crossReference,
 }
 
 /// Content layer classification for document nodes.
@@ -6037,7 +5789,7 @@ enum ContentLayer {
   footer,
 
   /// Footnote content.
-  footnote;
+  footnote,
 }
 
 /// Tagged enum for node content. Each variant carries only type-specific data.
@@ -6056,10 +5808,7 @@ final class Title extends NodeContent {
 final class Heading extends NodeContent {
   final int level;
   final String text;
-  Heading({
-    required this.level,
-    required this.text,
-  });
+  Heading({required this.level, required this.text});
 }
 
 /// Body text paragraph.
@@ -6102,10 +5851,7 @@ final class Image extends NodeContent {
 final class Code extends NodeContent {
   final String text;
   final String language;
-  Code({
-    required this.text,
-    required this.language,
-  });
+  Code({required this.text, required this.language});
 }
 
 /// Block quote — container, children carry the quoted content.
@@ -6145,10 +5891,7 @@ final class PageBreak extends NodeContent {}
 final class Slide extends NodeContent {
   final int number;
   final String title;
-  Slide({
-    required this.number,
-    required this.title,
-  });
+  Slide({required this.number, required this.title});
 }
 
 /// Definition list container — children are `DefinitionItem` nodes.
@@ -6158,20 +5901,14 @@ final class DefinitionList extends NodeContent {}
 final class DefinitionItem extends NodeContent {
   final String term;
   final String definition;
-  DefinitionItem({
-    required this.term,
-    required this.definition,
-  });
+  DefinitionItem({required this.term, required this.definition});
 }
 
 /// Citation or bibliographic reference.
 final class Citation extends NodeContent {
   final String key;
   final String text;
-  Citation({
-    required this.key,
-    required this.text,
-  });
+  Citation({required this.key, required this.text});
 }
 
 /// Admonition / callout container (note, warning, tip, etc.).
@@ -6180,10 +5917,7 @@ final class Citation extends NodeContent {
 final class Admonition extends NodeContent {
   final String kind;
   final String title;
-  Admonition({
-    required this.kind,
-    required this.title,
-  });
+  Admonition({required this.kind, required this.title});
 }
 
 /// Raw block preserved verbatim from the source format.
@@ -6193,10 +5927,7 @@ final class Admonition extends NodeContent {
 final class RawBlock extends NodeContent {
   final String format;
   final String content;
-  RawBlock({
-    required this.format,
-    required this.content,
-  });
+  RawBlock({required this.format, required this.content});
 }
 
 /// Structured metadata block (email headers, YAML frontmatter, etc.).
@@ -6225,10 +5956,7 @@ final class Superscript extends AnnotationKind {}
 final class Link extends AnnotationKind {
   final String url;
   final String title;
-  Link({
-    required this.url,
-    required this.title,
-  });
+  Link({required this.url, required this.title});
 }
 
 /// Highlighted text (PDF highlights, HTML `<mark>`).
@@ -6250,18 +5978,11 @@ final class FontSize extends AnnotationKind {
 final class Custom extends AnnotationKind {
   final String name;
   final String value;
-  Custom({
-    required this.name,
-    required this.value,
-  });
+  Custom({required this.name, required this.value});
 }
 
 /// How the extracted text was produced.
-enum ExtractionMethod {
-  native,
-  ocr,
-  mixed;
-}
+enum ExtractionMethod { native, ocr, mixed }
 
 /// Semantic structural classification of a text chunk.
 ///
@@ -6306,7 +6027,7 @@ enum ChunkType {
   diagram,
 
   /// Unclassified or mixed content.
-  unknown;
+  unknown,
 }
 
 /// Heuristic classification of what an image likely depicts.
@@ -6342,7 +6063,7 @@ enum ImageKind {
   mask,
 
   /// Could not classify with reasonable confidence
-  unknown;
+  unknown,
 }
 
 /// Semantic element type classification.
@@ -6381,7 +6102,7 @@ enum ElementType {
   footer,
 
   /// Header text
-  header;
+  header,
 }
 
 /// Format-specific metadata (discriminated union).
@@ -6499,7 +6220,7 @@ enum TextDirection {
   rightToLeft,
 
   /// Automatic text direction detection
-  auto;
+  auto,
 }
 
 /// Link type classification.
@@ -6520,7 +6241,7 @@ enum LinkType {
   phone,
 
   /// Other link type
-  other;
+  other,
 }
 
 /// Image type classification.
@@ -6535,7 +6256,7 @@ enum ImageType {
   external_,
 
   /// Relative path image
-  relative;
+  relative,
 }
 
 /// Structured data type classification.
@@ -6547,7 +6268,7 @@ enum StructuredDataType {
   microdata,
 
   /// RDFa
-  rdFa;
+  rdFa,
 }
 
 /// Bounding geometry for an OCR element.
@@ -6594,7 +6315,7 @@ enum OcrElementLevel {
   block,
 
   /// Page-level element
-  page;
+  page,
 }
 
 /// Type of paginated unit in a document.
@@ -6608,7 +6329,7 @@ enum PageUnitType {
   slide,
 
   /// Spreadsheet sheets (XLSX, ODS)
-  sheet;
+  sheet,
 }
 
 /// Semantic classification of an extracted URI.
@@ -6629,7 +6350,7 @@ enum UriKind {
   reference,
 
   /// An email address (`mailto:` link or bare email).
-  email;
+  email,
 }
 
 /// Error type for pool operations.
@@ -6638,7 +6359,7 @@ enum PoolError {
   ///
   /// This indicates a panic occurred while holding the lock.
   /// The pool is in a locked state and cannot be recovered.
-  lockPoisoned;
+  lockPoisoned,
 }
 
 /// Keyword algorithm selection.
@@ -6647,7 +6368,7 @@ enum KeywordAlgorithm {
   yake,
 
   /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
-  rake;
+  rake,
 }
 
 /// Page Segmentation Mode for Tesseract OCR
@@ -6662,7 +6383,7 @@ enum PSMMode {
   singleLine,
   singleWord,
   circleWord,
-  singleChar;
+  singleChar,
 }
 
 /// Supported languages in PaddleOCR.
@@ -6715,7 +6436,7 @@ enum PaddleLanguage {
   tamil,
 
   /// Telugu
-  telugu;
+  telugu,
 }
 
 /// The 17 canonical document layout classes.
@@ -6740,7 +6461,7 @@ enum LayoutClass {
   checkboxSelected,
   checkboxUnselected,
   form,
-  keyValueRegion;
+  keyValueRegion,
 }
 
 /// Main error type for all Kreuzberg operations.
@@ -6778,10 +6499,7 @@ final class Parsing implements KreuzbergError {
   final String source;
   @override
   String get message => 'Parsing error: {message}';
-  Parsing({
-    required this.message,
-    required this.source,
-  });
+  Parsing({required this.message, required this.source});
 }
 
 final class Ocr implements KreuzbergError {
@@ -6789,10 +6507,7 @@ final class Ocr implements KreuzbergError {
   final String source;
   @override
   String get message => 'OCR error: {message}';
-  Ocr({
-    required this.message,
-    required this.source,
-  });
+  Ocr({required this.message, required this.source});
 }
 
 final class Validation implements KreuzbergError {
@@ -6800,10 +6515,7 @@ final class Validation implements KreuzbergError {
   final String source;
   @override
   String get message => 'Validation error: {message}';
-  Validation({
-    required this.message,
-    required this.source,
-  });
+  Validation({required this.message, required this.source});
 }
 
 final class Cache implements KreuzbergError {
@@ -6811,10 +6523,7 @@ final class Cache implements KreuzbergError {
   final String source;
   @override
   String get message => 'Cache error: {message}';
-  Cache({
-    required this.message,
-    required this.source,
-  });
+  Cache({required this.message, required this.source});
 }
 
 final class ImageProcessing implements KreuzbergError {
@@ -6822,10 +6531,7 @@ final class ImageProcessing implements KreuzbergError {
   final String source;
   @override
   String get message => 'Image processing error: {message}';
-  ImageProcessing({
-    required this.message,
-    required this.source,
-  });
+  ImageProcessing({required this.message, required this.source});
 }
 
 final class Serialization implements KreuzbergError {
@@ -6833,10 +6539,7 @@ final class Serialization implements KreuzbergError {
   final String source;
   @override
   String get message => 'Serialization error: {message}';
-  Serialization({
-    required this.message,
-    required this.source,
-  });
+  Serialization({required this.message, required this.source});
 }
 
 final class MissingDependency implements KreuzbergError {
@@ -6851,10 +6554,7 @@ final class Plugin implements KreuzbergError {
   final String pluginName;
   @override
   String get message => 'Plugin error in \'{plugin_name}\': {message}';
-  Plugin({
-    required this.message,
-    required this.pluginName,
-  });
+  Plugin({required this.message, required this.pluginName});
 }
 
 final class LockPoisoned implements KreuzbergError {
@@ -6876,10 +6576,7 @@ final class Embedding implements KreuzbergError {
   final String source;
   @override
   String get message => 'Embedding error: {message}';
-  Embedding({
-    required this.message,
-    required this.source,
-  });
+  Embedding({required this.message, required this.source});
 }
 
 final class Timeout implements KreuzbergError {
@@ -6888,10 +6585,7 @@ final class Timeout implements KreuzbergError {
   @override
   String get message =>
       'Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)';
-  Timeout({
-    required this.elapsedMs,
-    required this.limitMs,
-  });
+  Timeout({required this.elapsedMs, required this.limitMs});
 }
 
 final class Cancelled implements KreuzbergError {
@@ -6905,10 +6599,7 @@ final class Security implements KreuzbergError {
   final String source;
   @override
   String get message => 'Security violation: {message}';
-  Security({
-    required this.message,
-    required this.source,
-  });
+  Security({required this.message, required this.source});
 }
 
 final class Other implements KreuzbergError {
@@ -6919,432 +6610,6 @@ final class Other implements KreuzbergError {
 }
 
 class KreuzbergBridge {
-  /// Hash arbitrary bytes with blake3, returning a 32-char hex string.
-  static String blake3HashBytes(Uint8List data) {
-    return rust_bridge.blake3HashBytes(data);
-  }
-
-  /// Hash a file's content with blake3 using streaming 64 KiB reads.
-  ///
-  /// Returns a 32-char hex string (128 bits of blake3 output).
-  /// throws anyhow::Error on failure
-  static String blake3HashFile(String path) {
-    return rust_bridge.blake3HashFile(path);
-  }
-
-  static int fastHash(Uint8List data) {
-    return rust_bridge.fastHash(data);
-  }
-
-  static bool validateCacheKey(String key) {
-    return rust_bridge.validateCacheKey(key);
-  }
-
-  /// Validate a port number for server configuration.
-  ///
-  /// Port must be in the range 1-65535. While ports 1-1023 are privileged and may require
-  /// special permissions on some systems, they are still valid port numbers.
-  ///
-  /// # Arguments
-  ///
-  /// * `port` - The port number to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the port is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_port;
-  ///
-  /// assert!(validate_port(8000).is_ok());
-  /// assert!(validate_port(80).is_ok());
-  /// assert!(validate_port(1).is_ok());
-  /// assert!(validate_port(65535).is_ok());
-  /// assert!(validate_port(0).is_err());
-  /// assert!(validate_port(70000).is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validatePort(int port) {
-    return rust_bridge.validatePort(port);
-  }
-
-  /// Validate a host/IP address string for server configuration.
-  ///
-  /// Accepts valid IPv4 addresses (e.g., "127.0.0.1", "0.0.0.0"), valid IPv6 addresses
-  /// (e.g., "::1", "::"), and hostnames (e.g., "localhost", "example.com").
-  ///
-  /// # Arguments
-  ///
-  /// * `host` - The host/IP address string to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the host is valid, or a `ValidationError` with details about valid formats.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_host;
-  ///
-  /// assert!(validate_host("127.0.0.1").is_ok());
-  /// assert!(validate_host("0.0.0.0").is_ok());
-  /// assert!(validate_host("::1").is_ok());
-  /// assert!(validate_host("::").is_ok());
-  /// assert!(validate_host("localhost").is_ok());
-  /// assert!(validate_host("example.com").is_ok());
-  /// assert!(validate_host("").is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateHost(String host) {
-    return rust_bridge.validateHost(host);
-  }
-
-  /// Validate a CORS (Cross-Origin Resource Sharing) origin URL.
-  ///
-  /// Accepts valid HTTP/HTTPS URLs (e.g., "https://example.com") or the wildcard "*"
-  /// to allow all origins. URLs must start with "http://" or "https://", or be exactly "*".
-  ///
-  /// # Arguments
-  ///
-  /// * `origin` - The CORS origin URL to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the origin is valid, or a `ValidationError` with details about valid formats.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_cors_origin;
-  ///
-  /// assert!(validate_cors_origin("https://example.com").is_ok());
-  /// assert!(validate_cors_origin("http://localhost:3000").is_ok());
-  /// assert!(validate_cors_origin("*").is_ok());
-  /// assert!(validate_cors_origin("not-a-url").is_err());
-  /// assert!(validate_cors_origin("ftp://example.com").is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateCorsOrigin(String origin) {
-    return rust_bridge.validateCorsOrigin(origin);
-  }
-
-  /// Validate an upload size limit for server configuration.
-  ///
-  /// Upload size must be greater than 0 (measured in bytes).
-  ///
-  /// # Arguments
-  ///
-  /// * `size` - The maximum upload size in bytes to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the size is valid, or a `ValidationError` with details about constraints.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_upload_size;
-  ///
-  /// assert!(validate_upload_size(1024).is_ok());
-  /// assert!(validate_upload_size(1_000_000).is_ok());
-  /// assert!(validate_upload_size(0).is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateUploadSize(int size) {
-    return rust_bridge.validateUploadSize(size);
-  }
-
-  /// Validate a binarization method string.
-  ///
-  /// # Arguments
-  ///
-  /// * `method` - The binarization method to validate (e.g., "otsu", "adaptive", "sauvola")
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the method is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_binarization_method;
-  ///
-  /// assert!(validate_binarization_method("otsu").is_ok());
-  /// assert!(validate_binarization_method("adaptive").is_ok());
-  /// assert!(validate_binarization_method("invalid").is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateBinarizationMethod(String method) {
-    return rust_bridge.validateBinarizationMethod(method);
-  }
-
-  /// Validate a token reduction level string.
-  ///
-  /// # Arguments
-  ///
-  /// * `level` - The token reduction level to validate (e.g., "off", "light", "moderate")
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the level is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_token_reduction_level;
-  ///
-  /// assert!(validate_token_reduction_level("off").is_ok());
-  /// assert!(validate_token_reduction_level("moderate").is_ok());
-  /// assert!(validate_token_reduction_level("extreme").is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateTokenReductionLevel(String level) {
-    return rust_bridge.validateTokenReductionLevel(level);
-  }
-
-  /// Validate an OCR backend string.
-  ///
-  /// # Arguments
-  ///
-  /// * `backend` - The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr")
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the backend is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_ocr_backend;
-  ///
-  /// assert!(validate_ocr_backend("tesseract").is_ok());
-  /// assert!(validate_ocr_backend("easyocr").is_ok());
-  /// assert!(validate_ocr_backend("invalid").is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateOcrBackend(String backend) {
-    return rust_bridge.validateOcrBackend(backend);
-  }
-
-  /// Validate a language code (ISO 639-1 or 639-3 format).
-  ///
-  /// Accepts both 2-letter ISO 639-1 codes (e.g., "en", "de") and
-  /// 3-letter ISO 639-3 codes (e.g., "eng", "deu") for broader compatibility.
-  ///
-  /// # Arguments
-  ///
-  /// * `code` - The language code to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the code is valid, or a `ValidationError` indicating an invalid language code.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_language_code;
-  ///
-  /// assert!(validate_language_code("en").is_ok());
-  /// assert!(validate_language_code("eng").is_ok());
-  /// assert!(validate_language_code("de").is_ok());
-  /// assert!(validate_language_code("deu").is_ok());
-  /// assert!(validate_language_code("invalid").is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateLanguageCode(String code) {
-    return rust_bridge.validateLanguageCode(code);
-  }
-
-  /// Validate a tesseract Page Segmentation Mode (PSM).
-  ///
-  /// # Arguments
-  ///
-  /// * `psm` - The PSM value to validate (0-13)
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the PSM is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_tesseract_psm;
-  ///
-  /// assert!(validate_tesseract_psm(3).is_ok());  // Fully automatic
-  /// assert!(validate_tesseract_psm(6).is_ok());  // Single block of text
-  /// assert!(validate_tesseract_psm(14).is_err()); // Out of range
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateTesseractPsm(int psm) {
-    return rust_bridge.validateTesseractPsm(psm);
-  }
-
-  /// Validate a tesseract OCR Engine Mode (OEM).
-  ///
-  /// # Arguments
-  ///
-  /// * `oem` - The OEM value to validate (0-3)
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the OEM is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_tesseract_oem;
-  ///
-  /// assert!(validate_tesseract_oem(1).is_ok());  // Neural nets (LSTM)
-  /// assert!(validate_tesseract_oem(2).is_ok());  // Legacy + LSTM
-  /// assert!(validate_tesseract_oem(4).is_err()); // Out of range
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateTesseractOem(int oem) {
-    return rust_bridge.validateTesseractOem(oem);
-  }
-
-  /// Validate a document extraction output format.
-  ///
-  /// Accepts the following formats and aliases:
-  /// - "plain" or "text" for plain text output
-  /// - "markdown" or "md" for Markdown output
-  /// - "djot" for Djot markup format
-  /// - "html" for HTML output
-  ///
-  /// # Arguments
-  ///
-  /// * `format` - The output format to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the format is valid, or a `ValidationError` with details about valid options.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_output_format;
-  ///
-  /// assert!(validate_output_format("text").is_ok());
-  /// assert!(validate_output_format("plain").is_ok());
-  /// assert!(validate_output_format("markdown").is_ok());
-  /// assert!(validate_output_format("md").is_ok());
-  /// assert!(validate_output_format("djot").is_ok());
-  /// assert!(validate_output_format("html").is_ok());
-  /// assert!(validate_output_format("json").is_ok());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateOutputFormat(String format) {
-    return rust_bridge.validateOutputFormat(format);
-  }
-
-  /// Validate a confidence threshold value.
-  ///
-  /// Confidence thresholds should be between 0.0 and 1.0 inclusive.
-  ///
-  /// # Arguments
-  ///
-  /// * `confidence` - The confidence threshold to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the confidence is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_confidence;
-  ///
-  /// assert!(validate_confidence(0.5).is_ok());
-  /// assert!(validate_confidence(0.0).is_ok());
-  /// assert!(validate_confidence(1.0).is_ok());
-  /// assert!(validate_confidence(1.5).is_err());
-  /// assert!(validate_confidence(-0.1).is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateConfidence(double confidence) {
-    return rust_bridge.validateConfidence(confidence);
-  }
-
-  /// Validate a DPI (dots per inch) value.
-  ///
-  /// DPI should be a positive integer, typically 72-600.
-  ///
-  /// # Arguments
-  ///
-  /// * `dpi` - The DPI value to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the DPI is valid, or a `ValidationError` with details about valid ranges.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_dpi;
-  ///
-  /// assert!(validate_dpi(96).is_ok());
-  /// assert!(validate_dpi(300).is_ok());
-  /// assert!(validate_dpi(0).is_err());
-  /// assert!(validate_dpi(-1).is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateDpi(int dpi) {
-    return rust_bridge.validateDpi(dpi);
-  }
-
-  /// Validate chunk size parameters.
-  ///
-  /// Checks that max_chars > 0 and max_overlap < max_chars.
-  ///
-  /// # Arguments
-  ///
-  /// * `max_chars` - The maximum characters per chunk
-  /// * `max_overlap` - The maximum overlap between chunks
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the parameters are valid, or a `ValidationError` with details about constraints.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_chunking_params;
-  ///
-  /// assert!(validate_chunking_params(1000, 200).is_ok());
-  /// assert!(validate_chunking_params(500, 50).is_ok());
-  /// assert!(validate_chunking_params(0, 100).is_err()); // max_chars must be > 0
-  /// assert!(validate_chunking_params(100, 150).is_err()); // overlap >= max_chars
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateChunkingParams(int maxChars, int maxOverlap) {
-    return rust_bridge.validateChunkingParams(maxChars, maxOverlap);
-  }
-
-  /// Validate that an [`LlmConfig`](crate::core::config::LlmConfig) has a non-empty model string.
-  ///
-  /// # Arguments
-  ///
-  /// * `model` - The model string to validate
-  ///
-  /// # Returns
-  ///
-  /// `Ok(())` if the model is non-empty, or a `ValidationError` otherwise.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::core::config_validation::validate_llm_config_model;
-  ///
-  /// assert!(validate_llm_config_model("openai/gpt-4o").is_ok());
-  /// assert!(validate_llm_config_model("").is_err());
-  /// ```
-  /// throws anyhow::Error on failure
-  static void validateLlmConfigModel(String model) {
-    return rust_bridge.validateLlmConfigModel(model);
-  }
-
   /// Extract content from a byte array.
   ///
   /// This is the main entry point for in-memory extraction. It performs the following steps:
@@ -7385,7 +6650,10 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractBytes(
-      Uint8List content, String mimeType, ExtractionConfig config) async {
+    Uint8List content,
+    String mimeType,
+    ExtractionConfig config,
+  ) async {
     return await rust_bridge.extractBytes(content, mimeType, config);
   }
 
@@ -7429,7 +6697,10 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractFile(
-      String path, String? mimeType, ExtractionConfig config) async {
+    String path,
+    String? mimeType,
+    ExtractionConfig config,
+  ) async {
     return await rust_bridge.extractFile(path, mimeType, config);
   }
 
@@ -7457,7 +6728,10 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static ExtractionResult extractFileSync(
-      String path, String? mimeType, ExtractionConfig config) {
+    String path,
+    String? mimeType,
+    ExtractionConfig config,
+  ) {
     return rust_bridge.extractFileSync(path, mimeType, config);
   }
 
@@ -7483,7 +6757,10 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static ExtractionResult extractBytesSync(
-      Uint8List content, String mimeType, ExtractionConfig config) {
+    Uint8List content,
+    String mimeType,
+    ExtractionConfig config,
+  ) {
     return rust_bridge.extractBytesSync(content, mimeType, config);
   }
 
@@ -7510,7 +6787,9 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static List<ExtractionResult> batchExtractFileSync(
-      List<String> items, ExtractionConfig config) {
+    List<String> items,
+    ExtractionConfig config,
+  ) {
     return rust_bridge.batchExtractFileSync(items, config);
   }
 
@@ -7539,7 +6818,9 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static List<ExtractionResult> batchExtractBytesSync(
-      List<String> items, ExtractionConfig config) {
+    List<String> items,
+    ExtractionConfig config,
+  ) {
     return rust_bridge.batchExtractBytesSync(items, config);
   }
 
@@ -7611,7 +6892,9 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<List<ExtractionResult>> batchExtractFile(
-      List<String> items, ExtractionConfig config) async {
+    List<String> items,
+    ExtractionConfig config,
+  ) async {
     return await rust_bridge.batchExtractFile(items, config);
   }
 
@@ -7675,69 +6958,10 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<List<ExtractionResult>> batchExtractBytes(
-      List<String> items, ExtractionConfig config) async {
+    List<String> items,
+    ExtractionConfig config,
+  ) async {
     return await rust_bridge.batchExtractBytes(items, config);
-  }
-
-  /// Validates whether a field name is in the known formats registry.
-  ///
-  /// This uses a pre-built hash set for O(1) lookups instead of linear search,
-  /// providing significant performance improvements for repeated validations.
-  ///
-  /// # Arguments
-  ///
-  /// * `field` - The field name to validate
-  ///
-  /// # Returns
-  ///
-  /// `true` if the field is in KNOWN_FORMATS, `false` otherwise.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::core::formats::is_valid_format_field;
-  ///
-  /// assert!(is_valid_format_field("title"));
-  /// assert!(is_valid_format_field("creation_date"));
-  /// assert!(!is_valid_format_field("invalid_field"));
-  /// ```
-  static bool isValidFormatField(String field) {
-    return rust_bridge.isValidFormatField(field);
-  }
-
-  /// Validate that a MIME type is supported.
-  ///
-  /// # Arguments
-  ///
-  /// * `mime_type` - The MIME type to validate
-  ///
-  /// # Returns
-  ///
-  /// The validated MIME type (may be normalized).
-  ///
-  /// # Errors
-  ///
-  /// Returns `KreuzbergError::UnsupportedFormat` if not supported.
-  /// throws anyhow::Error on failure
-  static String validateMimeType(String mimeType) {
-    return rust_bridge.validateMimeType(mimeType);
-  }
-
-  /// Detect or validate MIME type.
-  ///
-  /// If `mime_type` is provided, validates it. Otherwise, detects from `path`.
-  ///
-  /// # Arguments
-  ///
-  /// * `path` - Optional path to detect MIME type from
-  /// * `mime_type` - Optional explicit MIME type to validate
-  ///
-  /// # Returns
-  ///
-  /// The validated MIME type string.
-  /// throws anyhow::Error on failure
-  static String detectOrValidate(String? path, String? mimeType) {
-    return rust_bridge.detectOrValidate(path, mimeType);
   }
 
   /// Detect MIME type from raw file bytes.
@@ -7792,223 +7016,12 @@ class KreuzbergBridge {
     return rust_bridge.getExtensionsForMime(mimeType);
   }
 
-  /// List all supported document formats.
-  ///
-  /// Returns a list of all file extensions and their corresponding MIME types
-  /// that Kreuzberg can process. Derived from the centralized [`FORMATS`] registry.
-  ///
-  /// The list is sorted alphabetically by file extension.
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use kreuzberg::core::mime::list_supported_formats;
-  ///
-  /// let formats = list_supported_formats();
-  /// assert!(!formats.is_empty());
-  /// assert!(formats.iter().any(|f| f.extension == "pdf"));
-  /// ```
-  static List<SupportedFormat> listSupportedFormats() {
-    return rust_bridge.listSupportedFormats();
-  }
-
-  /// Clear the processor cache (primarily for testing when registry changes).
-  /// throws anyhow::Error on failure
-  static void clearProcessorCache() {
-    return rust_bridge.clearProcessorCache();
-  }
-
-  /// Transform an extraction result into semantic elements.
-  ///
-  /// This function takes a reference to an ExtractionResult and generates
-  /// a vector of Element structs representing semantic blocks in the document.
-  /// It detects content sections, list items, page breaks, and other structural
-  /// elements to create an Unstructured-compatible element-based output.
-  ///
-  /// Handles:
-  /// - PDF hierarchy → Title/Heading elements
-  /// - Multi-page documents with correct page numbers
-  /// - Table and Image extraction
-  /// - PageBreak interleaving
-  /// - Bounding box coordinates
-  /// - Paragraph detection for NarrativeText
-  ///
-  /// # Arguments
-  ///
-  /// * `result` - Reference to the ExtractionResult to transform
-  ///
-  /// # Returns
-  ///
-  /// A vector of Elements with proper semantic types and metadata.
-  static List<Element> transformExtractionResultToElements(
-      ExtractionResult result) {
-    return rust_bridge.transformExtractionResultToElements(result);
-  }
-
-  /// Extract email content from either .eml or .msg format
-  /// throws anyhow::Error on failure
-  static EmailExtractionResult extractEmailContent(
-      Uint8List data, String mimeType, int? fallbackCodepage) {
-    return rust_bridge.extractEmailContent(data, mimeType, fallbackCodepage);
-  }
-
-  /// Converts a 2D vector of cell strings into a GitHub-Flavored Markdown table.
-  ///
-  /// # Behavior
-  ///
-  /// - The first row is treated as the header row
-  /// - A separator row is inserted after the header
-  /// - Pipe characters (`|`) in cell content are automatically escaped with backslash
-  /// - Irregular tables (rows with varying column counts) are padded with empty cells to match the header
-  /// - Returns an empty string for empty input
-  ///
-  /// # Arguments
-  ///
-  /// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-  ///
-  /// # Returns
-  ///
-  /// A `String` containing the GFM markdown table representation
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use kreuzberg::extraction::cells_to_markdown;
-  /// let cells = vec![
-  ///     vec!["Name".to_string(), "Age".to_string()],
-  ///     vec!["Alice".to_string(), "30".to_string()],
-  ///     vec!["Bob".to_string(), "25".to_string()],
-  /// ];
-  ///
-  /// let markdown = cells_to_markdown(&cells);
-  /// assert!(markdown.contains("| Name | Age |"));
-  /// assert!(markdown.contains("|------|------|"));
-  /// ```
-  ///
-  /// Converts a 2D vector of cell strings into plain text with tab-separated columns.
-  ///
-  /// # Behavior
-  ///
-  /// - Rows are separated by newlines
-  /// - Cells within a row are separated by tab characters
-  /// - No pipe delimiters or separator rows (unlike markdown tables)
-  /// - Returns an empty string for empty input
-  ///
-  /// # Arguments
-  ///
-  /// * `cells` - A slice of vectors representing table rows, where each inner vector contains cell values
-  ///
-  /// # Returns
-  ///
-  /// A `String` containing the plain text table representation
-  static String cellsToText(List<List<String>> cells) {
-    return rust_bridge.cellsToText(cells);
-  }
-
-  static String cellsToMarkdown(List<List<String>> cells) {
-    return rust_bridge.cellsToMarkdown(cells);
-  }
-
-  /// Render djot content to HTML.
-  ///
-  /// This function takes djot source text and renders it to HTML using jotdown's
-  /// built-in HTML renderer.
-  ///
-  /// # Arguments
-  ///
-  /// * `djot_source` - The djot markup text to render
-  ///
-  /// # Returns
-  ///
-  /// A `Result` containing the rendered HTML string
-  ///
-  /// # Example
-  ///
-  /// ```ignore
-  /// let djot = "# Hello\n\nThis is *bold* and _italic_.";
-  /// let html = djot_to_html(djot)?;
-  /// assert!(html.contains("<h1>"));
-  /// assert!(html.contains("<strong>"));
-  /// assert!(html.contains("<em>"));
-  /// ```
-  /// throws anyhow::Error on failure
-  static String djotToHtml(String djotSource) {
-    return rust_bridge.djotToHtml(djotSource);
-  }
-
-  /// Deduplicate a list of text strings while preserving order.
-  /// Adjacent duplicates and near-duplicates are removed.
-  static List<String> dedupText(List<String> texts) {
-    return rust_bridge.dedupText(texts);
-  }
-
-  /// Register all built-in extractors with the global registry.
-  ///
-  /// This function should be called once at application startup to register
-  /// the default extractors (PlainText, Markdown, XML, etc.).
-  ///
-  /// **Note:** This is called automatically on first extraction operation.
-  /// Explicit calling is optional.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::extractors::register_default_extractors;
-  ///
-  /// # fn main() -> kreuzberg::Result<()> {
-  /// register_default_extractors()?;
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static void registerDefaultExtractors() {
-    return rust_bridge.registerDefaultExtractors();
-  }
-
-  /// Unregister a document extractor by name.
-  /// throws anyhow::Error on failure
-  static void unregisterExtractor(String name) {
-    return rust_bridge.unregisterExtractor(name);
-  }
-
   /// List names of all registered document extractors.
+  ///
+  /// Re-exported at the crate root as `list_document_extractors`.
   /// throws anyhow::Error on failure
   static List<String> listExtractors() {
     return rust_bridge.listExtractors();
-  }
-
-  /// Remove all registered document extractors.
-  /// throws anyhow::Error on failure
-  static void clearExtractors() {
-    return rust_bridge.clearExtractors();
-  }
-
-  /// Unregister an OCR backend by name.
-  ///
-  /// Removes the OCR backend from the global registry and calls its `shutdown()` method.
-  ///
-  /// # Arguments
-  ///
-  /// * `name` - Name of the OCR backend to unregister
-  ///
-  /// # Returns
-  ///
-  /// - `Ok(())` if the backend was unregistered or didn't exist
-  /// - `Err(...)` if the shutdown method failed
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::plugins::unregister_ocr_backend;
-  ///
-  /// # tokio_test::block_on(async {
-  /// unregister_ocr_backend("custom-ocr")?;
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// # });
-  /// ```
-  /// throws anyhow::Error on failure
-  static void unregisterOcrBackend(String name) {
-    return rust_bridge.unregisterOcrBackend(name);
   }
 
   /// List all registered OCR backends.
@@ -8089,22 +7102,10 @@ class KreuzbergBridge {
     return rust_bridge.listPostProcessors();
   }
 
-  /// Unregister a renderer by name.
+  /// Remove all registered post-processors.
   /// throws anyhow::Error on failure
-  static void unregisterRenderer(String name) {
-    return rust_bridge.unregisterRenderer(name);
-  }
-
-  /// List names of all registered renderers.
-  /// throws anyhow::Error on failure
-  static List<String> listRenderers() {
-    return rust_bridge.listRenderers();
-  }
-
-  /// Remove all registered renderers.
-  /// throws anyhow::Error on failure
-  static void clearRenderers() {
-    return rust_bridge.clearRenderers();
+  static void clearPostProcessors() {
+    return rust_bridge.clearPostProcessors();
   }
 
   /// List names of all registered validators.
@@ -8117,626 +7118,6 @@ class KreuzbergBridge {
   /// throws anyhow::Error on failure
   static void clearValidators() {
     return rust_bridge.clearValidators();
-  }
-
-  /// Parse an HTML string and render it to HTML5.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the HTML cannot be parsed.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::render_html_str;
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let out = render_html_str("<h1>Hello</h1><p>World</p>")?;
-  /// assert!(out.contains("Hello"));
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static String renderHtmlStr(String html) {
-    return rust_bridge.renderHtmlStr(html);
-  }
-
-  /// Parse an HTML string and render it to GFM Markdown.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the HTML cannot be parsed.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::render_markdown_str;
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let out = render_markdown_str("<h1>Hello</h1><p>World</p>")?;
-  /// assert!(out.contains("# Hello"));
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static String renderMarkdownStr(String html) {
-    return rust_bridge.renderMarkdownStr(html);
-  }
-
-  /// Parse an HTML string and render it to Djot markup.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the HTML cannot be parsed.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::render_djot_str;
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let out = render_djot_str("<h1>Hello</h1><p>World</p>")?;
-  /// assert!(out.contains("# Hello"));
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static String renderDjotStr(String html) {
-    return rust_bridge.renderDjotStr(html);
-  }
-
-  /// Parse an HTML string and render it to a JSON tree string.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the HTML cannot be parsed.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::render_json_str;
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let out = render_json_str("<p>Hello</p>")?;
-  /// assert!(out.contains("paragraph"));
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static String renderJsonStr(String html) {
-    return rust_bridge.renderJsonStr(html);
-  }
-
-  /// Parse an HTML string and render it to plain text.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the HTML cannot be parsed.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::render_plain_str;
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let out = render_plain_str("<p>Hello world</p>")?;
-  /// assert!(out.contains("Hello world"));
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static String renderPlainStr(String html) {
-    return rust_bridge.renderPlainStr(html);
-  }
-
-  /// Sanitize a file path to return only the filename (no directory).
-  ///
-  /// Prevents PII from appearing in traces.
-  static String sanitizeFilename(String path) {
-    return rust_bridge.sanitizeFilename(path);
-  }
-
-  /// Sanitize a file path to return only the filename.
-  ///
-  /// Prevents PII (personally identifiable information) from appearing in
-  /// traces by only recording filenames instead of full paths.
-  static String sanitizePath(String path) {
-    return rust_bridge.sanitizePath(path);
-  }
-
-  /// Validates bytes as UTF-8 without conversion to string slice.
-  ///
-  /// Returns `true` if the bytes represent valid UTF-8, `false` otherwise.
-  /// This is useful when you only need to check validity without constructing a string.
-  ///
-  /// # Arguments
-  ///
-  /// * `bytes` - The byte slice to validate
-  ///
-  /// # Returns
-  ///
-  /// `true` if valid UTF-8, `false` otherwise.
-  ///
-  /// # Performance
-  ///
-  /// This function is optimized for early exit on invalid sequences.
-  static bool isValidUtf8(Uint8List bytes) {
-    return rust_bridge.isValidUtf8(bytes);
-  }
-
-  static String cleanExtractedText(String text) {
-    return rust_bridge.cleanExtractedText(text);
-  }
-
-  /// Reduces token count in text while preserving meaning and structure.
-  ///
-  /// This function removes stopwords, redundancy, and applies compression techniques
-  /// based on the specified reduction level. Supports 64 languages with automatic
-  /// stopword removal and optional semantic clustering.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The input text to reduce
-  /// * `config` - Configuration specifying reduction level and options
-  /// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-  ///
-  /// # Returns
-  ///
-  /// Returns the reduced text with preserved structure (markdown, code blocks).
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::text::token_reduction::{reduce_tokens, TokenReductionConfig, ReductionLevel};
-  ///
-  /// let text = "This is a simple example text with some stopwords.";
-  /// let config = TokenReductionConfig::default();
-  /// let reduced = reduce_tokens(text, &config, Some("eng"))?;
-  /// println!("Reduced: {}", reduced);
-  /// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-  /// ```
-  /// throws anyhow::Error on failure
-  static String reduceTokens(
-      String text, TokenReductionConfig config, String? languageHint) {
-    return rust_bridge.reduceTokens(text, config, languageHint);
-  }
-
-  /// Reduces token count for multiple texts efficiently using parallel processing.
-  ///
-  /// This function processes multiple texts in parallel using Rayon, providing
-  /// significant performance improvements for batch operations. All texts use the
-  /// same configuration and language hint for consistency.
-  ///
-  /// # Arguments
-  ///
-  /// * `texts` - Slice of text references to reduce
-  /// * `config` - Configuration specifying reduction level and options
-  /// * `language_hint` - Optional ISO 639-3 language code (e.g., "eng", "spa")
-  ///
-  /// # Returns
-  ///
-  /// Returns a vector of reduced texts in the same order as the input.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the language hint is invalid or stopwords cannot be loaded.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::text::token_reduction::{batch_reduce_tokens, TokenReductionConfig, ReductionLevel};
-  ///
-  /// let texts: Vec<String> = vec![
-  ///     "This is the first document with some text.".to_string(),
-  ///     "Here is another document with different content.".to_string(),
-  ///     "And finally, a third document to process.".to_string(),
-  /// ];
-  /// let config = TokenReductionConfig::default();
-  /// let reduced = batch_reduce_tokens(&texts, &config, Some("eng"))?;
-  /// assert_eq!(reduced.len(), 3);
-  /// # Ok::<(), kreuzberg::error::KreuzbergError>(())
-  /// ```
-  /// throws anyhow::Error on failure
-  static List<String> batchReduceTokens(
-      List<String> texts, TokenReductionConfig config, String? languageHint) {
-    return rust_bridge.batchReduceTokens(texts, config, languageHint);
-  }
-
-  /// Create a bold annotation for the given byte range.
-  static TextAnnotation bold(int start, int end) {
-    return rust_bridge.bold(start, end);
-  }
-
-  /// Create an italic annotation for the given byte range.
-  static TextAnnotation italic(int start, int end) {
-    return rust_bridge.italic(start, end);
-  }
-
-  /// Create an underline annotation for the given byte range.
-  static TextAnnotation underline(int start, int end) {
-    return rust_bridge.underline(start, end);
-  }
-
-  /// Create a link annotation for the given byte range.
-  static TextAnnotation link(int start, int end, String url, String? title) {
-    return rust_bridge.link(start, end, url, title);
-  }
-
-  /// Create a code (inline) annotation for the given byte range.
-  static TextAnnotation code(int start, int end) {
-    return rust_bridge.code(start, end);
-  }
-
-  /// Create a strikethrough annotation for the given byte range.
-  static TextAnnotation strikethrough(int start, int end) {
-    return rust_bridge.strikethrough(start, end);
-  }
-
-  /// Create a subscript annotation for the given byte range.
-  static TextAnnotation subscript(int start, int end) {
-    return rust_bridge.subscript(start, end);
-  }
-
-  /// Create a superscript annotation for the given byte range.
-  static TextAnnotation superscript(int start, int end) {
-    return rust_bridge.superscript(start, end);
-  }
-
-  /// Create a font size annotation for the given byte range.
-  static TextAnnotation fontSize(int start, int end, String value) {
-    return rust_bridge.fontSize(start, end, value);
-  }
-
-  /// Create a color annotation for the given byte range.
-  static TextAnnotation color(int start, int end, String value) {
-    return rust_bridge.color(start, end, value);
-  }
-
-  /// Create a highlight annotation for the given byte range.
-  static TextAnnotation highlight(int start, int end) {
-    return rust_bridge.highlight(start, end);
-  }
-
-  /// Classify a URL string into the appropriate `UriKind`.
-  ///
-  /// - `mailto:` → `Email`
-  /// - `#` prefix → `Anchor`
-  /// - everything else → `Hyperlink`
-  static UriKind classifyUri(String url) {
-    return rust_bridge.classifyUri(url);
-  }
-
-  /// Decode raw bytes into UTF-8, using heuristics and fallback encodings when necessary.
-  ///
-  /// The function prefers an explicit `encoding`, falls back to the cached guess, probes
-  /// an encoding detector, and finally tries a small curated list before returning a
-  /// mojibake-cleaned string.
-  static String safeDecode(Uint8List byteData, String? encoding) {
-    return rust_bridge.safeDecode(byteData, encoding);
-  }
-
-  /// Estimate how trustworthy a decoded string is on a 0.0–1.0 scale.
-  ///
-  /// Scores close to 1.0 indicate mostly printable characters, whereas lower scores
-  /// point to mojibake, control characters, or suspicious character mixes.
-  static double calculateTextConfidence(String text) {
-    return rust_bridge.calculateTextConfidence(text);
-  }
-
-  /// Create a pre-configured string buffer pool for batch processing.
-  ///
-  /// # Arguments
-  ///
-  /// * `pool_size` - Maximum number of buffers to keep in the pool
-  /// * `buffer_capacity` - Initial capacity for each buffer in bytes
-  ///
-  /// # Returns
-  ///
-  /// A pool configured for text accumulation with reasonable defaults.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::utils::pool::create_string_buffer_pool;
-  ///
-  /// let pool = create_string_buffer_pool(10, 8192);
-  /// let mut buffer = pool.acquire().unwrap();
-  /// buffer.push_str("content");
-  /// ```
-  static StringBufferPool createStringBufferPool(
-      int poolSize, int bufferCapacity) {
-    return rust_bridge.createStringBufferPool(poolSize, bufferCapacity);
-  }
-
-  /// Create a pre-configured byte buffer pool for batch processing.
-  ///
-  /// # Arguments
-  ///
-  /// * `pool_size` - Maximum number of buffers to keep in the pool
-  /// * `buffer_capacity` - Initial capacity for each buffer in bytes
-  ///
-  /// # Returns
-  ///
-  /// A pool configured for binary data handling with reasonable defaults.
-  ///
-  /// # Example
-  ///
-  /// ```rust,no_run
-  /// use kreuzberg::utils::pool::create_byte_buffer_pool;
-  ///
-  /// let pool = create_byte_buffer_pool(10, 65536);
-  /// let mut buffer = pool.acquire().unwrap();
-  /// buffer.extend_from_slice(b"binary data");
-  /// ```
-  static ByteBufferPool createByteBufferPool(int poolSize, int bufferCapacity) {
-    return rust_bridge.createByteBufferPool(poolSize, bufferCapacity);
-  }
-
-  /// Normalizes whitespace by collapsing multiple whitespace characters into single spaces.
-  /// Returns Cow::Borrowed if no normalization needed.
-  static String normalizeWhitespace(String s) {
-    return rust_bridge.normalizeWhitespace(s);
-  }
-
-  /// Generate OpenAPI JSON schema.
-  ///
-  /// Returns the complete OpenAPI 3.1 specification as a JSON string.
-  ///
-  /// # Examples
-  ///
-  /// ```no_run
-  /// use kreuzberg::api::openapi::openapi_json;
-  ///
-  /// let schema = openapi_json();
-  /// println!("{}", schema);
-  /// ```
-  static String openapiJson() {
-    return rust_bridge.openapiJson();
-  }
-
-  /// Start the API server with default host and port.
-  ///
-  /// Defaults: host = "127.0.0.1", port = 8000
-  ///
-  /// Uses config file discovery (searches current/parent directories for kreuzberg.toml/yaml/json).
-  /// Validates plugins at startup to help diagnose configuration issues.
-  /// throws anyhow::Error on failure
-  static Future<void> serveDefault() async {
-    return await rust_bridge.serveDefault();
-  }
-
-  /// Split text into chunks with optional page boundary tracking.
-  ///
-  /// This is the primary API function for chunking text. It supports both plain text
-  /// and Markdown with configurable chunk size, overlap, and page boundary mapping.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The text to split into chunks
-  /// * `config` - Chunking configuration (max size, overlap, type)
-  /// * `page_boundaries` - Optional page boundary markers for mapping chunks to pages
-  ///
-  /// # Returns
-  ///
-  /// A ChunkingResult containing all chunks and their metadata.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::chunking::{chunk_text, ChunkingConfig, ChunkerType};
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let config = ChunkingConfig {
-  ///     max_characters: 500,
-  ///     overlap: 50,
-  ///     trim: true,
-  ///     chunker_type: ChunkerType::Text,
-  ///     ..Default::default()
-  /// };
-  /// let result = chunk_text("Long text...", &config, None)?;
-  /// assert!(!result.chunks.is_empty());
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static ChunkingResult chunkText(
-      String text, ChunkingConfig config, List<PageBoundary>? pageBoundaries) {
-    return rust_bridge.chunkText(text, config, pageBoundaries);
-  }
-
-  /// Chunk text with an optional separate markdown source for heading context resolution.
-  ///
-  /// When `heading_source` is provided, it is used instead of `text` for building the
-  /// heading map. This is needed when `text` is plain text (no markdown headings) but
-  /// the original document had headings that were stripped during rendering.
-  /// throws anyhow::Error on failure
-  static ChunkingResult chunkTextWithHeadingSource(
-      String text,
-      ChunkingConfig config,
-      List<PageBoundary>? pageBoundaries,
-      String? headingSource) {
-    return rust_bridge.chunkTextWithHeadingSource(
-        text, config, pageBoundaries, headingSource);
-  }
-
-  /// Batch process multiple texts with the same configuration.
-  ///
-  /// This convenience function applies the same chunking configuration to multiple
-  /// texts in sequence.
-  ///
-  /// # Arguments
-  ///
-  /// * `texts` - Slice of text strings to chunk
-  /// * `config` - Chunking configuration to apply to all texts
-  ///
-  /// # Returns
-  ///
-  /// A vector of ChunkingResult objects, one per input text.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if chunking any individual text fails.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// use kreuzberg::chunking::{chunk_texts_batch, ChunkingConfig};
-  ///
-  /// # fn example() -> kreuzberg::Result<()> {
-  /// let config = ChunkingConfig::default();
-  /// let texts: Vec<String> = vec!["First text".to_string(), "Second text".to_string()];
-  /// let results = chunk_texts_batch(&texts, &config)?;
-  /// assert_eq!(results.len(), 2);
-  /// # Ok(())
-  /// # }
-  /// ```
-  /// throws anyhow::Error on failure
-  static List<ChunkingResult> chunkTextsBatch(
-      List<String> texts, ChunkingConfig config) {
-    return rust_bridge.chunkTextsBatch(texts, config);
-  }
-
-  /// Split text into semantically coherent chunks.
-  ///
-  /// Splits text into fine-grained segments, detects structural (and optionally
-  /// embedding-based) topic boundaries, then merges segments into chunks that
-  /// respect those boundaries and the configured size budget.
-  /// throws anyhow::Error on failure
-  static ChunkingResult chunkSemantic(
-      String text, ChunkingConfig config, List<PageBoundary>? pageBoundaries) {
-    return rust_bridge.chunkSemantic(text, config, pageBoundaries);
-  }
-
-  /// L2-normalize a vector.
-  static List<double> normalize(List<double> v) {
-    return rust_bridge.normalize(v);
-  }
-
-  /// Get a preset by name.
-  static String? getPreset(String name) {
-    return rust_bridge.getPreset(name);
-  }
-
-  /// List all available preset names.
-  static List<String> listPresets() {
-    return rust_bridge.listPresets();
-  }
-
-  /// Eagerly download and cache an embedding model without returning the handle.
-  ///
-  /// This triggers the same download and initialization as `get_or_init_engine`
-  /// but discards the result, making it suitable for cache-warming scenarios
-  /// where the caller doesn't need to use the model immediately.
-  ///
-  /// **Note**: This function downloads AND initializes the ONNX model, which
-  /// requires ONNX Runtime and uses significant memory. For download-only
-  /// scenarios (e.g., init containers), use [`download_model`] instead.
-  /// throws anyhow::Error on failure
-  static void warmModel(EmbeddingModelType modelType, String? cacheDir) {
-    return rust_bridge.warmModel(modelType, cacheDir);
-  }
-
-  /// Download an embedding model's files without initializing ONNX Runtime.
-  ///
-  /// Downloads the model files (ONNX model, tokenizer, config) from HuggingFace
-  /// to the cache directory. Subsequent calls to `warm_model` or
-  /// `get_or_init_engine` will find the files cached and skip the download step.
-  ///
-  /// This is ideal for init containers or CI environments where you want to
-  /// pre-populate the cache without loading models into memory.
-  /// throws anyhow::Error on failure
-  static void downloadModel(EmbeddingModelType modelType, String? cacheDir) {
-    return rust_bridge.downloadModel(modelType, cacheDir);
-  }
-
-  /// Calculate optimal DPI with min/max constraints
-  static int calculateOptimalDpi(double pageWidth, double pageHeight,
-      int targetDpi, int maxDimension, int minDpi, int maxDpi) {
-    return rust_bridge.calculateOptimalDpi(
-        pageWidth, pageHeight, targetDpi, maxDimension, minDpi, maxDpi);
-  }
-
-  /// Detect languages in text using whatlang.
-  ///
-  /// Returns a list of detected language codes (ISO 639-3 format).
-  /// Returns `None` if no languages could be detected with sufficient confidence.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The text to analyze for language detection
-  /// * `config` - Optional configuration for language detection
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// use kreuzberg::language_detection::detect_languages;
-  /// use kreuzberg::core::config::LanguageDetectionConfig;
-  ///
-  /// let text = "Hello world! This is English text.";
-  /// let config = LanguageDetectionConfig {
-  ///     enabled: true,
-  ///     min_confidence: 0.8,
-  ///     detect_multiple: false,
-  /// };
-  /// let languages = detect_languages(text, &config).expect("language detection succeeded");
-  /// println!("Detected languages: {:?}", languages);
-  /// ```
-  /// throws anyhow::Error on failure
-  static List<String>? detectLanguages(
-      String text, LanguageDetectionConfig config) {
-    return rust_bridge.detectLanguages(text, config);
-  }
-
-  /// Extract keywords from text using the specified algorithm.
-  ///
-  /// This is the unified entry point for keyword extraction. The algorithm
-  /// used is determined by `config.algorithm`.
-  ///
-  /// # Arguments
-  ///
-  /// * `text` - The text to extract keywords from
-  /// * `config` - Keyword extraction configuration
-  ///
-  /// # Returns
-  ///
-  /// A vector of keywords sorted by relevance (highest score first).
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if:
-  /// - The specified algorithm feature is not enabled
-  /// - Keyword extraction fails
-  ///
-  /// # Examples
-  ///
-  /// ```rust,no_run
-  /// # use kreuzberg::keywords::{extract_keywords, KeywordConfig};
-  /// let text = "Document intelligence with Rust provides memory safety.";
-  /// let config = KeywordConfig::default()
-  ///     .with_max_keywords(10)
-  ///     .with_language("en");
-  ///
-  /// let keywords = extract_keywords(text, &config)?;
-  ///
-  /// for keyword in keywords {
-  ///     println!("{}: {:.3}", keyword.text, keyword.score);
-  /// }
-  /// # Ok::<(), kreuzberg::KreuzbergError>(())
-  /// ```
-  /// throws anyhow::Error on failure
-  static List<Keyword> extractKeywords(String text, KeywordConfig config) {
-    return rust_bridge.extractKeywords(text, config);
-  }
-
-  /// Compute a blake3 hash string from input data.
-  ///
-  /// Returns a 32-character hex string (128 bits of blake3 output).
-  static String computeHash(String data) {
-    return rust_bridge.computeHash(data);
   }
 
   /// Render a single PDF page to a PNG-encoded byte buffer.
@@ -8760,13 +7141,12 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Uint8List renderPdfPageToPng(
-      Uint8List pdfBytes, int pageIndex, int? dpi, String? password) {
+    Uint8List pdfBytes,
+    int pageIndex,
+    int? dpi,
+    String? password,
+  ) {
     return rust_bridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password);
-  }
-
-  /// throws anyhow::Error on failure
-  static String extractTextFromPdf(Uint8List pdfBytes) {
-    return rust_bridge.extractTextFromPdf(pdfBytes);
   }
 
   /// Detect the MIME type of a file at the given path.
@@ -8778,98 +7158,26 @@ class KreuzbergBridge {
     return rust_bridge.detectMimeType(path, checkExists);
   }
 
-  /// Detect the image format from raw bytes.
-  ///
-  /// Returns a string identifying the format (e.g., `"jpeg"`, `"png"`, `"gif"`, `"bmp"`, `"tiff"`, `"webp"`).
-  /// Returns `"unknown"` if the format cannot be determined.
-  static String detectImageFormat(Uint8List data) {
-    return rust_bridge.detectImageFormat(data);
-  }
-
   /// Embed a list of texts using the configured embedding model.
   ///
   /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
   /// throws anyhow::Error on failure
   static List<List<double>> embedTexts(
-      List<String> texts, EmbeddingConfig? config) {
+    List<String> texts,
+    EmbeddingConfig? config,
+  ) {
     return rust_bridge.embedTexts(texts, config);
   }
 
-  /// Generate a deterministic cache key from a list of key-value pairs.
+  /// Get an embedding preset by name.
   ///
-  /// Each element of `parts` should be a two-element list `[key, value]`.
-  /// The pairs are sorted by key before hashing, so order does not affect the result.
-  static String generateCacheKey(List<List<String>> parts) {
-    return rust_bridge.generateCacheKey(parts);
+  /// Returns `None` if no preset with the given name exists.
+  static String? getEmbeddingPreset(String name) {
+    return rust_bridge.getEmbeddingPreset(name);
   }
 
-  /// Escape HTML special characters in a string.
-  ///
-  /// Converts `&`, `<`, `>`, `"`, and `'` to their HTML entity equivalents.
-  static String escapeHtmlEntities(String text) {
-    return rust_bridge.escapeHtmlEntities(text);
-  }
-
-  /// Fix mojibake (garbled text from encoding errors) in a string.
-  ///
-  /// Attempts to detect and correct common encoding errors where text was
-  /// decoded with the wrong character set (e.g., UTF-8 bytes interpreted as Latin-1).
-  static String fixMojibake(String text) {
-    return rust_bridge.fixMojibake(text);
-  }
-
-  /// Convert HTML to Markdown.
-  ///
-  /// Converts an HTML string to Markdown using default conversion options.
-  /// throws anyhow::Error on failure
-  static String convertHtmlToMarkdown(String html) {
-    return rust_bridge.convertHtmlToMarkdown(html);
-  }
-
-  /// Extract text from a DOC (Word 97-2003) file.
-  ///
-  /// Takes the raw bytes of a `.doc` file and returns the extracted text and metadata.
-  /// throws anyhow::Error on failure
-  static DocExtractionResult extractDocText(Uint8List content) {
-    return rust_bridge.extractDocText(content);
-  }
-
-  /// Extract text and metadata from a PPTX (PowerPoint) file.
-  ///
-  /// Takes the raw bytes of a `.pptx` file and returns the extracted content
-  /// using default extraction options.
-  /// throws anyhow::Error on failure
-  static PptxExtractionResult extractPptxFromBytes(Uint8List data) {
-    return rust_bridge.extractPptxFromBytes(data);
-  }
-
-  /// Serialize an [`ExtractionResult`] to TOON (Token-Oriented Object Notation).
-  ///
-  /// TOON is a token-efficient alternative to JSON for LLM prompts.
-  /// Losslessly convertible to/from JSON but uses fewer tokens.
-  /// throws anyhow::Error on failure
-  static String serializeToToon(ExtractionResult result) {
-    return rust_bridge.serializeToToon(result);
-  }
-
-  /// Serialize an [`ExtractionResult`] to pretty-printed JSON.
-  /// throws anyhow::Error on failure
-  static String serializeToJson(ExtractionResult result) {
-    return rust_bridge.serializeToJson(result);
-  }
-
-  /// Convenience: extract a file and serialize the result to TOON.
-  ///
-  /// Equivalent to `extract_file_sync(path, None, config).and_then(|r| serialize_to_toon(&r))`,
-  /// exposed as a single function so all bindings can offer the same one-call shape.
-  /// throws anyhow::Error on failure
-  static String extractFileToToon(String path, ExtractionConfig config) {
-    return rust_bridge.extractFileToToon(path, config);
-  }
-
-  /// Convenience: extract a file and serialize the result to pretty-printed JSON.
-  /// throws anyhow::Error on failure
-  static String extractFileToJson(String path, ExtractionConfig config) {
-    return rust_bridge.extractFileToJson(path, config);
+  /// List the names of all available embedding presets.
+  static List<String> listEmbeddingPresets() {
+    return rust_bridge.listEmbeddingPresets();
   }
 }

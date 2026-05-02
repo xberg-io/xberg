@@ -1,16 +1,16 @@
 ```typescript title="TypeScript"
-import { extractFile } from '@kreuzberg/node';
+import { extractFile } from "@kreuzberg/node";
 
 const config = {
-	languageDetection: {
-		enabled: true,
-		minConfidence: 0.8,
-		detectMultiple: false,
-	},
+  languageDetection: {
+    enabled: true,
+    minConfidence: 0.8,
+    detectMultiple: false,
+  },
 };
 
-const result = await extractFile('document.pdf', null, config);
+const result = await extractFile("document.pdf", null, config);
 if (result.detectedLanguages) {
-	console.log(`Detected languages: ${result.detectedLanguages.join(', ')}`);
+  console.log(`Detected languages: ${result.detectedLanguages.join(", ")}`);
 }
 ```

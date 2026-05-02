@@ -269,23 +269,11 @@ public typealias StreamReader = RustBridge.StreamReader
 /// Result of OCR extraction from an image with optional page tracking.
 public typealias ImageOcrResult = RustBridge.ImageOcrResult
 
-/// Archive metadata extracted from an archive file.
-public typealias ArchiveArchiveMetadata = RustBridge.ArchiveArchiveMetadata
-
-/// Information about a single file in an archive.
-public typealias ArchiveArchiveEntry = RustBridge.ArchiveArchiveEntry
-
 /// Result of HTML extraction with optional images and warnings.
 public typealias HtmlExtractionResult = RustBridge.HtmlExtractionResult
 
 /// Extracted inline image with metadata.
 public typealias ExtractedInlineImage = RustBridge.ExtractedInlineImage
-
-/// Result of DOC text extraction.
-public typealias DocExtractionResult = RustBridge.DocExtractionResult
-
-/// Metadata extracted from DOC files.
-public typealias DocMetadata = RustBridge.DocMetadata
 
 /// A drawing object extracted from `<w:drawing>`.
 public typealias Drawing = RustBridge.Drawing
@@ -1240,12 +1228,6 @@ public typealias RecognizedTable = RustBridge.RecognizedTable
 
 /// Manages tessdata file downloading, caching, and manifest generation.
 public typealias TessdataManager = RustBridge.TessdataManager
-
-/// Configuration for Tesseract OCR (internal, efficient types).
-///
-/// This is the internal representation used by the OCR processor.
-/// Public API uses i32 for PyO3 compatibility, converted to u8 here for efficiency.
-public typealias OcrTesseractConfig = RustBridge.OcrTesseractConfig
 
 /// Configuration for PaddleOCR backend.
 ///

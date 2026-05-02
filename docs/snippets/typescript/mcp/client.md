@@ -78,10 +78,7 @@ class KreuzbergMcpClient {
   /**
    * Call a tool on the server
    */
-  async callTool(
-    toolName: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  async callTool(toolName: string, args: Record<string, unknown>): Promise<unknown> {
     return this.sendRequest("tools/call", {
       name: toolName,
       arguments: args,
@@ -91,10 +88,7 @@ class KreuzbergMcpClient {
   /**
    * Extract file from path
    */
-  async extractFile(
-    path: string,
-    async: boolean = false
-  ): Promise<Record<string, unknown>> {
+  async extractFile(path: string, async: boolean = false): Promise<Record<string, unknown>> {
     return this.callTool("extract_file", {
       path,
       async,
@@ -107,7 +101,7 @@ class KreuzbergMcpClient {
   async extractBytes(
     data: Uint8Array,
     mimeType: string,
-    async: boolean = false
+    async: boolean = false,
   ): Promise<Record<string, unknown>> {
     const base64 = Buffer.from(data).toString("base64");
     return this.callTool("extract_bytes", {
@@ -120,10 +114,7 @@ class KreuzbergMcpClient {
   /**
    * Send request to server
    */
-  private sendRequest(
-    method: string,
-    params: Record<string, unknown>
-  ): Promise<unknown> {
+  private sendRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = ++this.requestId;
       this.pendingRequests.set(id, { resolve, reject });
@@ -159,7 +150,10 @@ async function main(): Promise<void> {
 
     // List available tools
     const tools = await client.listTools();
-    console.log("Available tools:", tools.map((t) => t.name));
+    console.log(
+      "Available tools:",
+      tools.map((t) => t.name),
+    );
 
     // Extract file
     const result = await client.extractFile("document.pdf", true);

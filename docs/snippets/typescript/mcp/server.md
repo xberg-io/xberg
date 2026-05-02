@@ -1,12 +1,12 @@
 ```typescript title="TypeScript"
 import {
-	extractFile,
-	extractFileSync,
-	extractBytes,
-	extractBytesSync,
-	type ExtractionResult,
-	type ExtractionConfig,
-} from '@kreuzberg/node';
+  extractFile,
+  extractFileSync,
+  extractBytes,
+  extractBytesSync,
+  type ExtractionResult,
+  type ExtractionConfig,
+} from "@kreuzberg/node";
 import * as readline from "node:readline";
 
 /**
@@ -46,13 +46,12 @@ class KreuzbergMcpServer {
         const response = await this.handleRequest(request);
         process.stdout.write(JSON.stringify(response) + "\n");
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
         process.stdout.write(
           JSON.stringify({
             id: 0,
             error: { message: errorMessage },
-          }) + "\n"
+          }) + "\n",
         );
       }
     });
@@ -78,7 +77,7 @@ class KreuzbergMcpServer {
     if (method === "tools/call") {
       const result = await this.callTool(
         params.name as string,
-        params.arguments as Record<string, unknown>
+        params.arguments as Record<string, unknown>,
       );
       return {
         id,
@@ -100,8 +99,7 @@ class KreuzbergMcpServer {
     return [
       {
         name: "extract_file",
-        description:
-          "Extract content from a file by path",
+        description: "Extract content from a file by path",
         inputSchema: {
           type: "object",
           properties: {
@@ -117,8 +115,7 @@ class KreuzbergMcpServer {
       },
       {
         name: "extract_bytes",
-        description:
-          "Extract content from raw bytes",
+        description: "Extract content from raw bytes",
         inputSchema: {
           type: "object",
           properties: {
@@ -139,10 +136,7 @@ class KreuzbergMcpServer {
   /**
    * Call tool
    */
-  private async callTool(
-    name: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  private async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     if (name === "extract_file") {
       const path = args.path as string;
       const useAsync = (args.async as boolean) ?? true;

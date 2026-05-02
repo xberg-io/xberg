@@ -3,13 +3,14 @@ Use Kreuzberg::extract_file_sync;
 Let result = extract_file_sync("document.pdf", &Default::default())?;
 
 If let Some(pages) = result.metadata.pages {
-    if let Some(boundaries) = pages.boundaries {
-        for boundary in boundaries.iter().take(3) {
-            let page_text = &result.content[boundary.byte_start..boundary.byte_end];
+if let Some(boundaries) = pages.boundaries {
+for boundary in boundaries.iter().take(3) {
+let page_text = &result.content[boundary.byte_start..boundary.byte_end];
 
             println!("Page {}:", boundary.page_number);
             println!("  Byte range: {}-{}", boundary.byte_start, boundary.byte_end);
             println!("  Preview: {}...", &page_text[..100.min(page_text.len())]);
         }
     }
+
 }

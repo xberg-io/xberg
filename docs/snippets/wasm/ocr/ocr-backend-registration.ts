@@ -1,30 +1,30 @@
 import {
-	initWasm,
-	listOcrBackends,
-	registerOcrBackend,
-	TesseractWasmBackend,
-	unregisterOcrBackend,
+  initWasm,
+  listOcrBackends,
+  registerOcrBackend,
+  TesseractWasmBackend,
+  unregisterOcrBackend,
 } from "@kreuzberg/wasm";
 
 async function manageOcrBackends() {
-	await initWasm();
+  await initWasm();
 
-	const backend = new TesseractWasmBackend();
-	await backend.initialize();
+  const backend = new TesseractWasmBackend();
+  await backend.initialize();
 
-	registerOcrBackend(backend);
+  registerOcrBackend(backend);
 
-	const backends = listOcrBackends();
-	console.log("Available OCR backends:", backends);
+  const backends = listOcrBackends();
+  console.log("Available OCR backends:", backends);
 
-	if (backends.includes("tesseract-wasm")) {
-		console.log("Tesseract WASM backend is registered");
-	}
+  if (backends.includes("tesseract-wasm")) {
+    console.log("Tesseract WASM backend is registered");
+  }
 
-	unregisterOcrBackend("tesseract-wasm");
+  unregisterOcrBackend("tesseract-wasm");
 
-	const afterUnregister = listOcrBackends();
-	console.log("Backends after unregister:", afterUnregister);
+  const afterUnregister = listOcrBackends();
+  console.log("Backends after unregister:", afterUnregister);
 }
 
 manageOcrBackends().catch(console.error);

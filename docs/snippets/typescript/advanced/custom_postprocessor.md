@@ -1,10 +1,10 @@
 ```typescript title="TypeScript"
 import {
-	registerPostProcessor,
-	unregisterPostProcessor,
-	type PostProcessorProtocol,
-	type ExtractionResult,
-} from '@kreuzberg/node';
+  registerPostProcessor,
+  unregisterPostProcessor,
+  type PostProcessorProtocol,
+  type ExtractionResult,
+} from "@kreuzberg/node";
 
 /**
  * Custom post-processor for cleaning extraction results

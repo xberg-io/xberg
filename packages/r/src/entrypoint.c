@@ -4,6 +4,6 @@
 
 void R_init_kreuzberg(void *dll);
 
-void attribute_visible R_init_kreuzberg_impl(void *dll) {
+void attribute_visible R_init_kreuzberg_impl(void *dll) {{
     R_init_kreuzberg(dll);
-}
+}}

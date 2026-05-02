@@ -512,7 +512,7 @@ sudo apt-get install pandoc
 
 ## Troubleshooting
 
-### Import Error: No module named '_kreuzberg'
+### Import Error: No module named '\_kreuzberg'
 
 This usually means the Rust extension wasn't built correctly. Try:
 
@@ -544,12 +544,12 @@ PDF extraction is powered by PDFium, which is automatically bundled with this pa
 
 ### Platform Support
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Linux x86_64 | ✅ | Bundled |
-| macOS ARM64 | ✅ | Bundled |
-| macOS x86_64 | ✅ | Bundled |
-| Windows x86_64 | ✅ | Bundled |
+| Platform       | Status | Notes   |
+| -------------- | ------ | ------- |
+| Linux x86_64   | ✅     | Bundled |
+| macOS ARM64    | ✅     | Bundled |
+| macOS x86_64   | ✅     | Bundled |
+| Windows x86_64 | ✅     | Bundled |
 
 ### Binary Size Impact
 

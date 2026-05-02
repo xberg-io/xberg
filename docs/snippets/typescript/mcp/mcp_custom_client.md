@@ -1,8 +1,8 @@
 ```typescript title="TypeScript"
-import { spawn } from 'child_process';
-import * as readline from 'readline';
+import { spawn } from "child_process";
+import * as readline from "readline";
 
-const mcpProcess = spawn('kreuzberg', ['mcp']);
+const mcpProcess = spawn("kreuzberg", ["mcp"]);
 
 const rl = readline.createInterface({
   input: mcpProcess.stdout,
@@ -11,25 +11,25 @@ const rl = readline.createInterface({
 });
 
 const request = {
-  method: 'tools/call',
+  method: "tools/call",
   params: {
-    name: 'extract_file',
+    name: "extract_file",
     arguments: {
-      path: 'document.pdf',
+      path: "document.pdf",
       async: true,
     },
   },
 };
 
-mcpProcess.stdin.write(JSON.stringify(request) + '\n');
+mcpProcess.stdin.write(JSON.stringify(request) + "\n");
 
-rl.on('line', (line) => {
+rl.on("line", (line) => {
   const response = JSON.parse(line);
   console.log(response);
   mcpProcess.kill();
 });
 
-mcpProcess.on('error', (err) => {
-  console.error('Failed to start MCP process:', err);
+mcpProcess.on("error", (err) => {
+  console.error("Failed to start MCP process:", err);
 });
 ```

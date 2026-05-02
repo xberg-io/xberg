@@ -1,13 +1,13 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from '@kreuzberg/node';
+import { extractFileSync } from "@kreuzberg/node";
 
 const config = {
-	ocr: {
-		backend: 'tesseract',
-		language: 'eng+deu+fra',
-	},
+  ocr: {
+    backend: "tesseract",
+    language: "eng+deu+fra",
+  },
 };
 
-const result = extractFileSync('multilingual.pdf', null, config);
+const result = extractFileSync("multilingual.pdf", null, config);
 console.log(result.content);
 ```

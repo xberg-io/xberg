@@ -1,20 +1,20 @@
 ```typescript title="TypeScript"
 import {
-	registerPostProcessor,
-	registerValidator,
-	registerOcrBackend,
-	listPostProcessors,
-	listValidators,
-	listOcrBackends,
-	unregisterPostProcessor,
-	unregisterValidator,
-	clearPostProcessors,
-	clearValidators,
-	clearOcrBackends,
-	type PostProcessorProtocol,
-	type ValidatorProtocol,
-	type OcrBackendProtocol,
-} from '@kreuzberg/node';
+  registerPostProcessor,
+  registerValidator,
+  registerOcrBackend,
+  listPostProcessors,
+  listValidators,
+  listOcrBackends,
+  unregisterPostProcessor,
+  unregisterValidator,
+  clearPostProcessors,
+  clearValidators,
+  clearOcrBackends,
+  type PostProcessorProtocol,
+  type ValidatorProtocol,
+  type OcrBackendProtocol,
+} from "@kreuzberg/node";
 
 /**
  * Plugin registry and lifecycle management

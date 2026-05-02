@@ -1,9 +1,9 @@
 ```typescript title="Element-Based Output (WASM)"
-import { extractFileSync, ExtractionConfig } from 'kreuzberg-wasm';
+import { extractFileSync, ExtractionConfig } from "kreuzberg-wasm";
 
 // Configure element-based output
 const config: ExtractionConfig = {
-  outputFormat: "element_based"
+  outputFormat: "element_based",
 };
 
 // Extract document
@@ -27,7 +27,7 @@ for (const element of result.elements) {
 }
 
 // Filter by element type
-const titles = result.elements.filter(e => e.elementType === "title");
+const titles = result.elements.filter((e) => e.elementType === "title");
 for (const title of titles) {
   const level = title.metadata.additional?.level || "unknown";
   console.log(`[${level}] ${title.text}`);

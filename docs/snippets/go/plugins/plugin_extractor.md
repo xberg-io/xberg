@@ -1,7 +1,7 @@
 ```markdown title="Markdown"
 !!! note "Not Supported"
-    The Go binding is a thin CGO wrapper and does not currently support
-    custom document extractors. Custom plugins must be implemented in Rust.
+The Go binding is a thin CGO wrapper and does not currently support
+custom document extractors. Custom plugins must be implemented in Rust.
 
     See the [Rust plugin documentation](../rust/plugin_extractor.md) for details on creating custom document extractors.
 

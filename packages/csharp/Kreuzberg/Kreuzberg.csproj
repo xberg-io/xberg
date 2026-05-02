@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="../../../../LICENSE" Pack="true" PackagePath="/" />
-    <None Include="../runtimes/**" Pack="true" PackagePath="runtimes/" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="runtimes/**" Pack="true" PackagePath="runtimes/" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

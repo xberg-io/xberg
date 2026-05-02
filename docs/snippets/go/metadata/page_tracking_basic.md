@@ -1,16 +1,16 @@
 Package main
 
 Import (
-    "fmt"
-    "Kreuzberg"
+"fmt"
+"Kreuzberg"
 )
 
 Func main() {
-    config := &kreuzberg.ExtractionConfig{
-        Pages: &kreuzberg.PageConfig{
-            ExtractPages: true,
-        },
-    }
+config := &kreuzberg.ExtractionConfig{
+Pages: &kreuzberg.PageConfig{
+ExtractPages: true,
+},
+}
 
     result, err := kreuzberg.ExtractFileSync("document.pdf", config)
     if err != nil {
@@ -25,4 +25,5 @@ Func main() {
             fmt.Printf("  Images: %d\n", len(page.Images))
         }
     }
+
 }

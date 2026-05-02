@@ -1,9 +1,9 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 // NOTE: Run `cargo build -p kreuzberg-swift` before `swift build`.
-// That step generates Sources/RustBridge/{kreuzberg-swift,SwiftBridgeCore}.swift and the headers.
-// See BUILDING.md for the full workflow.
+// The build step generates Swift + C bridge sources; copy them into Sources/RustBridge
+// and Sources/RustBridgeC before building. See BUILDING.md for the full workflow.
 let package = Package(
     name: "Kreuzberg",
     platforms: [
@@ -16,21 +16,20 @@ let package = Package(
     targets: [
         // RustBridgeC: pure C/headers target. Swift files in RustBridge import this
         // to access C types (RustStr, etc.) produced by swift-bridge.
+        // publicHeadersPath: "." exposes RustBridgeC.h to dependents.
         .target(
             name: "RustBridgeC",
             path: "Sources/RustBridgeC",
             publicHeadersPath: "."
         ),
         // RustBridge: Swift wrapper around the Rust static library.
-        // Depends on RustBridgeC so Swift files here can use the C types.
+        // Depends on RustBridgeC so the generated Swift files can use the C types.
+        // Note: link the Rust static library by setting LIBRARY_SEARCH_PATHS in your
+        // build system rather than unsafeFlags here (unsafeFlags prevents use as a dep).
         .target(
             name: "RustBridge",
             dependencies: ["RustBridgeC"],
-            path: "Sources/RustBridge",
-            linkerSettings: [
-                .linkedLibrary("kreuzberg_swift"),
-                .unsafeFlags(["-L../../target/debug"]),
-            ]
+            path: "Sources/RustBridge"
         ),
         .target(name: "Kreuzberg", dependencies: ["RustBridge"], path: "Sources/Kreuzberg"),
         .testTarget(name: "KreuzbergTests", dependencies: ["Kreuzberg"], path: "Tests/KreuzbergTests"),

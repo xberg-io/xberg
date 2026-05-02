@@ -1,11 +1,11 @@
 ```typescript title="TypeScript"
 import {
-	registerValidator,
-	unregisterValidator,
-	type ValidatorProtocol,
-	type ExtractionResult,
-	ValidationError,
-} from '@kreuzberg/node';
+  registerValidator,
+  unregisterValidator,
+  type ValidatorProtocol,
+  type ExtractionResult,
+  ValidationError,
+} from "@kreuzberg/node";
 
 /**
  * Stateful validator with call counting
@@ -54,9 +54,7 @@ class StatefulValidator implements ValidatorProtocol {
   private performValidation(result: ExtractionResult): void {
     // Check content length
     if (result.content.length < 10) {
-      throw new ValidationError(
-        "Content too short (minimum 10 characters)"
-      );
+      throw new ValidationError("Content too short (minimum 10 characters)");
     }
 
     // Check for mime type
@@ -89,9 +87,7 @@ class StatefulValidator implements ValidatorProtocol {
     return {
       totalCalls: this.callCount,
       failures: this.failureCount,
-      successRate: this.callCount > 0
-        ? (1 - this.failureCount / this.callCount) * 100
-        : 100,
+      successRate: this.callCount > 0 ? (1 - this.failureCount / this.callCount) * 100 : 100,
       cacheSize: this.cache.size,
     };
   }

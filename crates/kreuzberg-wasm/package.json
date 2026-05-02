@@ -9,13 +9,13 @@
     "url": "https://github.com/kreuzberg-dev/kreuzberg",
     "directory": "crates/kreuzberg-wasm"
   },
-  "type": "module",
   "files": [
     "pkg",
     "*.wasm",
     "*.d.ts",
     "README.md"
   ],
+  "type": "module",
   "main": "pkg/nodejs/kreuzberg_wasm.js",
   "module": "pkg/web/kreuzberg_wasm.js",
   "types": "pkg/nodejs/kreuzberg_wasm.d.ts",

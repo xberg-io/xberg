@@ -1,6 +1,6 @@
 ```typescript title="TypeScript"
-import { extractFile } from '@kreuzberg/node';
+import { extractFile } from "@kreuzberg/node";
 
-const result = await extractFile('document.pdf');
+const result = await extractFile("document.pdf");
 console.log(result.content);
 ```

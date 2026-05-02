@@ -1,21 +1,26 @@
-import { type ExtractionConfig, extractFileSync, type HierarchyConfig, type PdfConfig } from "@kreuzberg/node";
+import {
+  type ExtractionConfig,
+  extractFileSync,
+  type HierarchyConfig,
+  type PdfConfig,
+} from "@kreuzberg/node";
 
 // Example 1: Basic hierarchy extraction
 // Enabled with default kClusters=6 for standard H1-H6 heading hierarchy.
 // Extract bounding box information for spatial layout awareness.
 const hierarchyConfigBasic: HierarchyConfig = {
-	enabled: true,
-	kClusters: 6, // Default: creates 6 font size clusters (H1-H6 structure)
-	includeBbox: true, // Include bounding box coordinates
-	ocrCoverageThreshold: undefined, // No OCR coverage threshold
+  enabled: true,
+  kClusters: 6, // Default: creates 6 font size clusters (H1-H6 structure)
+  includeBbox: true, // Include bounding box coordinates
+  ocrCoverageThreshold: undefined, // No OCR coverage threshold
 };
 
 const pdfConfigBasic: PdfConfig = {
-	hierarchy: hierarchyConfigBasic,
+  hierarchy: hierarchyConfigBasic,
 };
 
 const extractionConfigBasic: ExtractionConfig = {
-	pdfOptions: pdfConfigBasic,
+  pdfOptions: pdfConfigBasic,
 };
 
 const _result = extractFileSync("document.pdf", { config: extractionConfigBasic });
@@ -24,18 +29,18 @@ const _result = extractFileSync("document.pdf", { config: extractionConfigBasic 
 // Use 3 clusters for simpler hierarchy with minimal structure.
 // Useful when you only need major section divisions (Main, Subsection, Detail).
 const hierarchyConfigMinimal: HierarchyConfig = {
-	enabled: true,
-	kClusters: 3, // Minimal clustering: just 3 levels
-	includeBbox: true,
-	ocrCoverageThreshold: undefined,
+  enabled: true,
+  kClusters: 3, // Minimal clustering: just 3 levels
+  includeBbox: true,
+  ocrCoverageThreshold: undefined,
 };
 
 const pdfConfigMinimal: PdfConfig = {
-	hierarchy: hierarchyConfigMinimal,
+  hierarchy: hierarchyConfigMinimal,
 };
 
 const extractionConfigMinimal: ExtractionConfig = {
-	pdfOptions: pdfConfigMinimal,
+  pdfOptions: pdfConfigMinimal,
 };
 
 const _resultMinimal = extractFileSync("document.pdf", { config: extractionConfigMinimal });
@@ -44,18 +49,18 @@ const _resultMinimal = extractFileSync("document.pdf", { config: extractionConfi
 // Trigger OCR if less than 50% of text has font data.
 // Useful for documents with mixed digital and scanned content.
 const hierarchyConfigOcr: HierarchyConfig = {
-	enabled: true,
-	kClusters: 6,
-	includeBbox: true,
-	ocrCoverageThreshold: 0.5, // Trigger OCR if text coverage < 50%
+  enabled: true,
+  kClusters: 6,
+  includeBbox: true,
+  ocrCoverageThreshold: 0.5, // Trigger OCR if text coverage < 50%
 };
 
 const pdfConfigOcr: PdfConfig = {
-	hierarchy: hierarchyConfigOcr,
+  hierarchy: hierarchyConfigOcr,
 };
 
 const extractionConfigOcr: ExtractionConfig = {
-	pdfOptions: pdfConfigOcr,
+  pdfOptions: pdfConfigOcr,
 };
 
 const _resultOcr = extractFileSync("document.pdf", { config: extractionConfigOcr });
