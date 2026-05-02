@@ -286,8 +286,8 @@ pub struct TesseractConfig {
     /// Page Segmentation Mode (0-13).
     ///
     /// Common values:
-    /// - 3: Fully automatic page segmentation (default)
-    /// - 6: Assume a single uniform block of text
+    /// - 3: Fully automatic page segmentation (native default)
+    /// - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang)
     /// - 11: Sparse text with no particular order
     pub psm: i32,
 
@@ -364,6 +364,10 @@ impl Default for TesseractConfig {
     fn default() -> Self {
         Self {
             language: "eng".to_string(),
+            // PSM_AUTO (3) hangs 60-90s on sparse/no-text images in WASM (issue #855)
+            #[cfg(target_arch = "wasm32")]
+            psm: 6,
+            #[cfg(not(target_arch = "wasm32"))]
             psm: 3,
             output_format: "markdown".to_string(),
             oem: 3,
