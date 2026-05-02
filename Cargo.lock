@@ -3653,7 +3653,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-dart"
-version = "0.13.6"
+version = "4.10.0-rc.15"
 dependencies = [
  "async-trait",
  "flutter_rust_bridge",

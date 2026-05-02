@@ -1,25 +1,25 @@
 [workspace]
 members = [
-  "crates/kreuzberg",
-  "crates/kreuzberg-cli",
-  "crates/kreuzberg-ffi",
-  "crates/kreuzberg-node",
-  "crates/kreuzberg-paddle-ocr",
-  "crates/kreuzberg-pdfium-render",
-  "crates/kreuzberg-php",
-  "crates/kreuzberg-py",
-  "crates/kreuzberg-tesseract",
-  "crates/kreuzberg-wasm",
-  "packages/dart/rust",
-  "packages/swift/rust",
-  "tools/benchmark-harness",
-  "tools/snippet-runner",
+    "crates/kreuzberg",
+    "crates/kreuzberg-cli",
+    "crates/kreuzberg-ffi",
+    "crates/kreuzberg-node",
+    "crates/kreuzberg-paddle-ocr",
+    "crates/kreuzberg-pdfium-render",
+    "crates/kreuzberg-php",
+    "crates/kreuzberg-py",
+    "crates/kreuzberg-tesseract",
+    "crates/kreuzberg-wasm",
+    "packages/dart/rust",
+    "packages/swift/rust",
+    "tools/benchmark-harness",
+    "tools/snippet-runner",
 ]
 exclude = [
-  "e2e/rust",
-  "packages/elixir/native/kreuzberg_nif",
-  "packages/r/src/rust",
-  "packages/ruby/ext/kreuzberg_rb",
+    "e2e/rust",
+    "packages/elixir/native/kreuzberg_nif",
+    "packages/r/src/rust",
+    "packages/ruby/ext/kreuzberg_rb",
 ]
 default-members = ["crates/kreuzberg", "crates/kreuzberg-cli"]
 resolver = "2"
@@ -79,14 +79,14 @@ serde_toon_format = "0.1"
 tempfile = "3.27.0"
 thiserror = "2.0.18"
 tokio = { version = "1.52.1", features = [
-  "rt",
-  "rt-multi-thread",
-  "macros",
-  "sync",
-  "process",
-  "fs",
-  "time",
-  "io-util",
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "process",
+    "fs",
+    "time",
+    "io-util",
 ] }
 toml = "1.1.2"
 tracing = "0.1"
@@ -94,14 +94,14 @@ tree-sitter-language-pack = { version = "1.7.0", default-features = false, featu
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
-  "Blob",
-  "File",
-  "FileReader",
-  "console",
-  "TextDecoder",
-  "ImageData",
-  "Window",
-  "Response",
+    "Blob",
+    "File",
+    "FileReader",
+    "console",
+    "TextDecoder",
+    "ImageData",
+    "Window",
+    "Response",
 ] }
 
 [patch.crates-io]

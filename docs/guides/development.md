@@ -112,12 +112,12 @@ The demo at `docs/demo.html` loads `@kreuzberg/wasm` from a CDN. To test local c
 task demo:dev
 ```
 
-This builds the WASM binary and TypeScript dist, patches the demo with local URLs, and starts two servers:
+This builds the Wasm binary and TypeScript dist, patches the demo with local URLs, and starts two servers:
 
 | Server | URL                     | Role                               |
 | ------ | ----------------------- | ---------------------------------- |
 | Docs   | `http://localhost:8001` | Serves the patched `demo-dev.html` |
-| Assets | `http://localhost:9000` | Serves the local WASM package      |
+| Assets | `http://localhost:9000` | Serves the local Wasm package      |
 
 Open **`http://localhost:8001/demo-dev.html`** — no manual edits needed. The patched file (`docs/demo-dev.html`) is gitignored and regenerated on every run. The two different ports reproduce the cross-origin setup the CDN creates in production.
 

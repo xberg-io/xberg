@@ -72,11 +72,13 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 ### Package Installation
 
+
 Install via Composer:
 
 ```bash
 composer require kreuzberg/kreuzberg
 ```
+
 
 ### System Requirements
 
@@ -84,13 +86,14 @@ composer require kreuzberg/kreuzberg
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.22.x for embeddings support
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 
+
 ## Quick Start
 
 ### Basic Extraction
 
 Extract text, metadata, and structure from any supported document format:
 
-````php
+```php
 ```php title="basic_extraction_oop.php"
 <?php
 
@@ -129,9 +132,8 @@ if (count($result->tables) > 0) {
         echo $table->markdown . "\n";
     }
 }
-````
-
-````
+```
+```
 
 ### Common Use Cases
 
@@ -269,9 +271,8 @@ if ($avgCharsPerPage < 100) {
 } else {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
-````
-
-````
+```
+```
 
 
 #### Table Extraction
@@ -437,9 +438,8 @@ foreach ($batches as $index => $batch) {
 }
 
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
-````
-
-````
+```
+```
 
 
 ### Next Steps
@@ -687,9 +687,8 @@ if ($avgCharsPerPage < 100) {
 } else {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
-````
-
-````
+```
+```
 
 
 ## Plugin System
@@ -864,8 +863,7 @@ foreach ($batches as $index => $batch) {
 }
 
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
-````
-
+```
 ```
 
 
@@ -894,4 +892,3 @@ MIT License - see LICENSE file for details.
 - **Discord Community**: [Join our Discord](https://discord.gg/xt9WY3GnKR)
 - **GitHub Issues**: [Report bugs](https://github.com/kreuzberg-dev/kreuzberg/issues)
 - **Discussions**: [Ask questions](https://github.com/kreuzberg-dev/kreuzberg/discussions)
-```

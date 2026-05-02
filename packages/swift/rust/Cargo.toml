@@ -11,8 +11,8 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt", "macros"] }
 swift-bridge = "0.1.59"
+tokio = { version = "1", features = ["rt", "macros"] }
 
 [build-dependencies]
 swift-bridge-build = "0.1.59"
