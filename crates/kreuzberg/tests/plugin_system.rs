@@ -71,6 +71,25 @@ impl DocumentExtractor for FailingExtractor {
 struct MetadataModifyingProcessor {
     name: String,
     stage: ProcessingStage,
+    priority: i32,
+}
+
+impl MetadataModifyingProcessor {
+    fn new(name: impl Into<String>, stage: ProcessingStage) -> Self {
+        Self {
+            name: name.into(),
+            stage,
+            priority: 50,
+        }
+    }
+
+    fn with_priority(name: impl Into<String>, stage: ProcessingStage, priority: i32) -> Self {
+        Self {
+            name: name.into(),
+            stage,
+            priority,
+        }
+    }
 }
 
 impl Plugin for MetadataModifyingProcessor {
@@ -97,6 +116,10 @@ impl PostProcessor for MetadataModifyingProcessor {
 
     fn processing_stage(&self) -> ProcessingStage {
         self.stage
+    }
+
+    fn priority(&self) -> i32 {
+        self.priority
     }
 }
 
@@ -423,24 +446,27 @@ fn test_extractor_list_after_partial_removal() {
 async fn test_processor_execution_order_within_stage() {
     let mut registry = PostProcessorRegistry::new();
 
-    let high = Arc::new(MetadataModifyingProcessor {
-        name: "high".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let high = Arc::new(MetadataModifyingProcessor::with_priority(
+        "high",
+        ProcessingStage::Early,
+        100,
+    ));
 
-    let medium = Arc::new(MetadataModifyingProcessor {
-        name: "medium".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let medium = Arc::new(MetadataModifyingProcessor::with_priority(
+        "medium",
+        ProcessingStage::Early,
+        50,
+    ));
 
-    let low = Arc::new(MetadataModifyingProcessor {
-        name: "low".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let low = Arc::new(MetadataModifyingProcessor::with_priority(
+        "low",
+        ProcessingStage::Early,
+        10,
+    ));
 
-    registry.register(low, 10).expect("Operation failed");
-    registry.register(high, 100).expect("Operation failed");
-    registry.register(medium, 50).expect("Operation failed");
+    registry.register(low).expect("Operation failed");
+    registry.register(high).expect("Operation failed");
+    registry.register(medium).expect("Operation failed");
 
     let processors = registry.get_for_stage(ProcessingStage::Early);
     assert_eq!(processors.len(), 3);
@@ -470,7 +496,7 @@ async fn test_processor_error_propagation() {
         name: "failing".to_string(),
     });
 
-    registry.register(failing, 50).expect("Operation failed");
+    registry.register(failing).expect("Operation failed");
 
     let processors = registry.get_for_stage(ProcessingStage::Early);
     assert_eq!(processors.len(), 1);
@@ -491,24 +517,13 @@ async fn test_processor_error_propagation() {
 fn test_processor_multiple_stages() {
     let mut registry = PostProcessorRegistry::new();
 
-    let early = Arc::new(MetadataModifyingProcessor {
-        name: "early".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let early = Arc::new(MetadataModifyingProcessor::new("early", ProcessingStage::Early));
+    let middle = Arc::new(MetadataModifyingProcessor::new("middle", ProcessingStage::Middle));
+    let late = Arc::new(MetadataModifyingProcessor::new("late", ProcessingStage::Late));
 
-    let middle = Arc::new(MetadataModifyingProcessor {
-        name: "middle".to_string(),
-        stage: ProcessingStage::Middle,
-    });
-
-    let late = Arc::new(MetadataModifyingProcessor {
-        name: "late".to_string(),
-        stage: ProcessingStage::Late,
-    });
-
-    registry.register(early, 50).expect("Operation failed");
-    registry.register(middle, 50).expect("Operation failed");
-    registry.register(late, 50).expect("Operation failed");
+    registry.register(early).expect("Operation failed");
+    registry.register(middle).expect("Operation failed");
+    registry.register(late).expect("Operation failed");
 
     assert_eq!(registry.get_for_stage(ProcessingStage::Early).len(), 1);
     assert_eq!(registry.get_for_stage(ProcessingStage::Middle).len(), 1);
@@ -550,7 +565,7 @@ fn test_processor_registration_failure() {
     let mut registry = PostProcessorRegistry::new();
     let processor = Arc::new(FailingInitProcessor);
 
-    let result = registry.register(processor, 50);
+    let result = registry.register(processor);
     assert!(matches!(result, Err(KreuzbergError::Plugin { .. })));
 }
 
@@ -558,18 +573,11 @@ fn test_processor_registration_failure() {
 fn test_processor_same_priority_same_stage() {
     let mut registry = PostProcessorRegistry::new();
 
-    let proc1 = Arc::new(MetadataModifyingProcessor {
-        name: "processor1".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let proc1 = Arc::new(MetadataModifyingProcessor::new("processor1", ProcessingStage::Early));
+    let proc2 = Arc::new(MetadataModifyingProcessor::new("processor2", ProcessingStage::Early));
 
-    let proc2 = Arc::new(MetadataModifyingProcessor {
-        name: "processor2".to_string(),
-        stage: ProcessingStage::Early,
-    });
-
-    registry.register(proc1, 50).expect("Operation failed");
-    registry.register(proc2, 50).expect("Operation failed");
+    registry.register(proc1).expect("Operation failed");
+    registry.register(proc2).expect("Operation failed");
 
     let processors = registry.get_for_stage(ProcessingStage::Early);
     assert_eq!(processors.len(), 2);
@@ -579,12 +587,9 @@ fn test_processor_same_priority_same_stage() {
 fn test_processor_remove_from_specific_stage() {
     let mut registry = PostProcessorRegistry::new();
 
-    let early = Arc::new(MetadataModifyingProcessor {
-        name: "processor".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let early = Arc::new(MetadataModifyingProcessor::new("processor", ProcessingStage::Early));
 
-    registry.register(early, 50).expect("Operation failed");
+    registry.register(early).expect("Operation failed");
     assert_eq!(registry.get_for_stage(ProcessingStage::Early).len(), 1);
 
     registry.remove("processor").expect("Operation failed");
@@ -596,11 +601,8 @@ fn test_processor_list_across_stages() {
     let mut registry = PostProcessorRegistry::new();
 
     for stage in [ProcessingStage::Early, ProcessingStage::Middle, ProcessingStage::Late] {
-        let processor = Arc::new(MetadataModifyingProcessor {
-            name: format!("{:?}-processor", stage),
-            stage,
-        });
-        registry.register(processor, 50).expect("Operation failed");
+        let processor = Arc::new(MetadataModifyingProcessor::new(format!("{:?}-processor", stage), stage));
+        registry.register(processor).expect("Operation failed");
     }
 
     let names = registry.list();
@@ -612,11 +614,8 @@ fn test_processor_shutdown_clears_all_stages() {
     let mut registry = PostProcessorRegistry::new();
 
     for stage in [ProcessingStage::Early, ProcessingStage::Middle, ProcessingStage::Late] {
-        let processor = Arc::new(MetadataModifyingProcessor {
-            name: format!("{:?}-processor", stage),
-            stage,
-        });
-        registry.register(processor, 50).expect("Operation failed");
+        let processor = Arc::new(MetadataModifyingProcessor::new(format!("{:?}-processor", stage), stage));
+        registry.register(processor).expect("Operation failed");
     }
 
     registry.shutdown_all().expect("Operation failed");
@@ -841,10 +840,10 @@ fn test_multiple_registries_independence() {
         should_fail_extract: false,
     });
 
-    let processor = Arc::new(MetadataModifyingProcessor {
-        name: "test-processor".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let processor = Arc::new(MetadataModifyingProcessor::new(
+        "test-processor",
+        ProcessingStage::Early,
+    ));
 
     let validator = Arc::new(StrictValidator {
         name: "test-validator".to_string(),
@@ -852,7 +851,7 @@ fn test_multiple_registries_independence() {
     });
 
     extractor_registry.register(extractor).expect("Operation failed");
-    processor_registry.register(processor, 50).expect("Operation failed");
+    processor_registry.register(processor).expect("Operation failed");
     validator_registry.register(validator).expect("Operation failed");
 
     assert_eq!(ocr_registry.list().len(), 0);
@@ -874,10 +873,10 @@ fn test_shutdown_all_registries() {
         should_fail_extract: false,
     });
 
-    let processor = Arc::new(MetadataModifyingProcessor {
-        name: "test-processor".to_string(),
-        stage: ProcessingStage::Early,
-    });
+    let processor = Arc::new(MetadataModifyingProcessor::new(
+        "test-processor",
+        ProcessingStage::Early,
+    ));
 
     let validator = Arc::new(StrictValidator {
         name: "test-validator".to_string(),
@@ -885,7 +884,7 @@ fn test_shutdown_all_registries() {
     });
 
     extractor_registry.register(extractor).expect("Operation failed");
-    processor_registry.register(processor, 50).expect("Operation failed");
+    processor_registry.register(processor).expect("Operation failed");
     validator_registry.register(validator).expect("Operation failed");
 
     ocr_registry.shutdown_all().expect("Operation failed");

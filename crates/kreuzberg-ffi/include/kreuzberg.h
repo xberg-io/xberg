@@ -18,7 +18,9 @@ typedef struct KREUZBERGApiState KREUZBERGApiState;
 typedef struct KREUZBERGArchiveEntry KREUZBERGArchiveEntry;
 typedef struct KREUZBERGArchiveMetadata KREUZBERGArchiveMetadata;
 typedef struct KREUZBERGBBox KREUZBERGBBox;
+typedef struct KREUZBERGBatchBytesItem KREUZBERGBatchBytesItem;
 typedef struct KREUZBERGBatchExtractFilesParams KREUZBERGBatchExtractFilesParams;
+typedef struct KREUZBERGBatchFileItem KREUZBERGBatchFileItem;
 typedef struct KREUZBERGBibtexMetadata KREUZBERGBibtexMetadata;
 typedef struct KREUZBERGBlockType KREUZBERGBlockType;
 typedef struct KREUZBERGByteBufferPool KREUZBERGByteBufferPool;
@@ -73,6 +75,7 @@ typedef struct KREUZBERGEmbeddedFile KREUZBERGEmbeddedFile;
 typedef struct KREUZBERGEmbeddingBackend KREUZBERGEmbeddingBackend;
 typedef struct KREUZBERGEmbeddingConfig KREUZBERGEmbeddingConfig;
 typedef struct KREUZBERGEmbeddingModelType KREUZBERGEmbeddingModelType;
+typedef struct KREUZBERGEmbeddingPreset KREUZBERGEmbeddingPreset;
 typedef struct KREUZBERGEpubMetadata KREUZBERGEpubMetadata;
 typedef struct KREUZBERGErrorMetadata KREUZBERGErrorMetadata;
 typedef struct KREUZBERGExcelMetadata KREUZBERGExcelMetadata;
@@ -156,6 +159,7 @@ typedef struct KREUZBERGOcrTableBoundingBox KREUZBERGOcrTableBoundingBox;
 typedef struct KREUZBERGOdtProperties KREUZBERGOdtProperties;
 typedef struct KREUZBERGOpenWebDocumentResponse KREUZBERGOpenWebDocumentResponse;
 typedef struct KREUZBERGOrientationResult KREUZBERGOrientationResult;
+typedef struct KREUZBERGOutputFormat KREUZBERGOutputFormat;
 typedef struct KREUZBERGPSMMode KREUZBERGPSMMode;
 typedef struct KREUZBERGPaddleLanguage KREUZBERGPaddleLanguage;
 typedef struct KREUZBERGPaddleOcrConfig KREUZBERGPaddleOcrConfig;
@@ -191,6 +195,7 @@ typedef struct KREUZBERGRecyclable KREUZBERGRecyclable;
 typedef struct KREUZBERGReductionLevel KREUZBERGReductionLevel;
 typedef struct KREUZBERGRelationshipKind KREUZBERGRelationshipKind;
 typedef struct KREUZBERGResolvedStyle KREUZBERGResolvedStyle;
+typedef struct KREUZBERGResultFormat KREUZBERGResultFormat;
 typedef struct KREUZBERGServerConfig KREUZBERGServerConfig;
 typedef struct KREUZBERGStreamReader KREUZBERGStreamReader;
 typedef struct KREUZBERGStringBufferPool KREUZBERGStringBufferPool;
@@ -202,6 +207,7 @@ typedef struct KREUZBERGStructuredExtractionResponse KREUZBERGStructuredExtracti
 typedef struct KREUZBERGStyleDefinition KREUZBERGStyleDefinition;
 typedef struct KREUZBERGSupportedFormat KREUZBERGSupportedFormat;
 typedef struct KREUZBERGSyncExtractor KREUZBERGSyncExtractor;
+typedef struct KREUZBERGTableGrid KREUZBERGTableGrid;
 typedef struct KREUZBERGTableModel KREUZBERGTableModel;
 typedef struct KREUZBERGTableProperties KREUZBERGTableProperties;
 typedef struct KREUZBERGTessdataManager KREUZBERGTessdataManager;
@@ -671,6 +677,14 @@ typedef struct KREUZBERGKreuzbergPostProcessorVTable {
    */
   uint64_t (*estimated_duration_ms)(const void *user_data,
                                     const char *_result);
+  /**
+   * Execution priority within the processing stage.
+   *
+   * Higher values run first within the same `ProcessingStage`. Defaults to 50.
+   * Use 0-49 for fallback processors, 50 for normal processors, and 51-255
+   * for high-priority processors that should run early in their stage.
+   */
+  int32_t (*priority)(const void *user_data);
   /**
    * Optional destructor: called once with `user_data` when the bridge is dropped.
    */
@@ -1281,6 +1295,20 @@ uint64_t kreuzberg_extraction_config_extraction_timeout_secs(const KREUZBERGExtr
 uintptr_t kreuzberg_extraction_config_max_concurrent_extractions(const KREUZBERGExtractionConfig *ptr);
 
 /**
+ * Get the `result_format` field from a `ExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGResultFormat *kreuzberg_extraction_config_result_format(const KREUZBERGExtractionConfig *ptr);
+
+/**
+ * Get the `output_format` field from a `ExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGOutputFormat *kreuzberg_extraction_config_output_format(const KREUZBERGExtractionConfig *ptr);
+
+/**
  * Get the `layout` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -1490,6 +1518,20 @@ KREUZBERGKeywordConfig *kreuzberg_file_extraction_config_keywords(const KREUZBER
 KREUZBERGPostProcessorConfig *kreuzberg_file_extraction_config_postprocessor(const KREUZBERGFileExtractionConfig *ptr);
 
 /**
+ * Get the `result_format` field from a `FileExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGResultFormat *kreuzberg_file_extraction_config_result_format(const KREUZBERGFileExtractionConfig *ptr);
+
+/**
+ * Get the `output_format` field from a `FileExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGOutputFormat *kreuzberg_file_extraction_config_output_format(const KREUZBERGFileExtractionConfig *ptr);
+
+/**
  * Get the `include_document_structure` field from a `FileExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -1523,6 +1565,88 @@ KREUZBERGTreeSitterConfig *kreuzberg_file_extraction_config_tree_sitter(const KR
  * Pointer must be a valid handle returned by this library.
  */
 KREUZBERGStructuredExtractionConfig *kreuzberg_file_extraction_config_structured_extraction(const KREUZBERGFileExtractionConfig *ptr);
+
+/**
+ * Create a `BatchBytesItem` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_batch_bytes_item_free`.
+ */
+KREUZBERGBatchBytesItem *kreuzberg_batch_bytes_item_from_json(const char *json);
+
+/**
+ * Serialize a `BatchBytesItem` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_batch_bytes_item_to_json(const KREUZBERGBatchBytesItem *ptr);
+
+/**
+ * Free a `BatchBytesItem` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_batch_bytes_item_free(KREUZBERGBatchBytesItem *ptr);
+
+/**
+ * Get the `content` field from a `BatchBytesItem`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint8_t *kreuzberg_batch_bytes_item_content(const KREUZBERGBatchBytesItem *ptr,
+                                            uintptr_t *out_len);
+
+/**
+ * Get the `mime_type` field from a `BatchBytesItem`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_batch_bytes_item_mime_type(const KREUZBERGBatchBytesItem *ptr);
+
+/**
+ * Get the `config` field from a `BatchBytesItem`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGFileExtractionConfig *kreuzberg_batch_bytes_item_config(const KREUZBERGBatchBytesItem *ptr);
+
+/**
+ * Create a `BatchFileItem` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_batch_file_item_free`.
+ */
+KREUZBERGBatchFileItem *kreuzberg_batch_file_item_from_json(const char *json);
+
+/**
+ * Serialize a `BatchFileItem` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_batch_file_item_to_json(const KREUZBERGBatchFileItem *ptr);
+
+/**
+ * Free a `BatchFileItem` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_batch_file_item_free(KREUZBERGBatchFileItem *ptr);
+
+/**
+ * Get the `path` field from a `BatchFileItem`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_batch_file_item_path(const KREUZBERGBatchFileItem *ptr);
+
+/**
+ * Get the `config` field from a `BatchFileItem`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGFileExtractionConfig *kreuzberg_batch_file_item_config(const KREUZBERGBatchFileItem *ptr);
 
 /**
  * Create a `ImageExtractionConfig` from a JSON string. Returns null on failure.
@@ -2266,6 +2390,13 @@ char *kreuzberg_ocr_config_language(const KREUZBERGOcrConfig *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 KREUZBERGTesseractConfig *kreuzberg_ocr_config_tesseract_config(const KREUZBERGOcrConfig *ptr);
+
+/**
+ * Get the `output_format` field from a `OcrConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGOutputFormat *kreuzberg_ocr_config_output_format(const KREUZBERGOcrConfig *ptr);
 
 /**
  * Get the `paddle_ocr_config` field from a `OcrConfig`.
@@ -4573,6 +4704,50 @@ char *kreuzberg_document_node_annotations(const KREUZBERGDocumentNode *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 char *kreuzberg_document_node_attributes(const KREUZBERGDocumentNode *ptr);
+
+/**
+ * Create a `TableGrid` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_table_grid_free`.
+ */
+KREUZBERGTableGrid *kreuzberg_table_grid_from_json(const char *json);
+
+/**
+ * Serialize a `TableGrid` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_table_grid_to_json(const KREUZBERGTableGrid *ptr);
+
+/**
+ * Free a `TableGrid` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_table_grid_free(KREUZBERGTableGrid *ptr);
+
+/**
+ * Get the `rows` field from a `TableGrid`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t kreuzberg_table_grid_rows(const KREUZBERGTableGrid *ptr);
+
+/**
+ * Get the `cols` field from a `TableGrid`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t kreuzberg_table_grid_cols(const KREUZBERGTableGrid *ptr);
+
+/**
+ * Get the `cells` field from a `TableGrid`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_table_grid_cells(const KREUZBERGTableGrid *ptr);
 
 /**
  * Create a `GridCell` from a JSON string. Returns null on failure.
@@ -9772,6 +9947,85 @@ uintptr_t kreuzberg_merged_chunk_byte_start(const KREUZBERGMergedChunk *ptr);
 uintptr_t kreuzberg_merged_chunk_byte_end(const KREUZBERGMergedChunk *ptr);
 
 /**
+ * Create a `EmbeddingPreset` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_embedding_preset_free`.
+ */
+KREUZBERGEmbeddingPreset *kreuzberg_embedding_preset_from_json(const char *json);
+
+/**
+ * Serialize a `EmbeddingPreset` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_embedding_preset_to_json(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Free a `EmbeddingPreset` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_embedding_preset_free(KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `name` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_embedding_preset_name(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `chunk_size` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t kreuzberg_embedding_preset_chunk_size(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `overlap` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t kreuzberg_embedding_preset_overlap(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `model_repo` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_embedding_preset_model_repo(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `pooling` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_embedding_preset_pooling(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `model_file` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_embedding_preset_model_file(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `dimensions` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t kreuzberg_embedding_preset_dimensions(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
+ * Get the `description` field from a `EmbeddingPreset`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_embedding_preset_description(const KREUZBERGEmbeddingPreset *ptr);
+
+/**
  * Create a `YakeParams` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -10354,6 +10608,22 @@ KREUZBERGPaddleOcrConfig *kreuzberg_paddle_ocr_config_with_model_tier(KREUZBERGP
 KREUZBERGPaddleOcrConfig *kreuzberg_paddle_ocr_config_default(void);
 
 /**
+ * Create a `ModelPaths` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_model_paths_free`.
+ */
+KREUZBERGModelPaths *kreuzberg_model_paths_from_json(const char *json);
+
+/**
+ * Serialize a `ModelPaths` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_model_paths_to_json(const KREUZBERGModelPaths *ptr);
+
+/**
  * Free a `ModelPaths` handle.
  * # Safety
  * Pointer must have been returned by this library, or be null.
@@ -10871,6 +11141,21 @@ int32_t kreuzberg_execution_provider_type_from_i32(int32_t value);
 int32_t kreuzberg_execution_provider_type_from_str(const char *name);
 
 /**
+ * Convert an integer to a `OutputFormat` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t kreuzberg_output_format_from_i32(int32_t value);
+
+/**
+ * Convert a `OutputFormat` variant name (C string) to its integer value. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t kreuzberg_output_format_from_str(const char *name);
+
+/**
  * Convert an integer to a `HtmlTheme` variant. Returns -1 on invalid input.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
@@ -11184,6 +11469,21 @@ int32_t kreuzberg_image_kind_from_i32(int32_t value);
  * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t kreuzberg_image_kind_from_str(const char *name);
+
+/**
+ * Convert an integer to a `ResultFormat` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t kreuzberg_result_format_from_i32(int32_t value);
+
+/**
+ * Convert a `ResultFormat` variant name (C string) to its integer value. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
+ */
+int32_t kreuzberg_result_format_from_str(const char *name);
 
 /**
  * Convert an integer to a `ElementType` variant. Returns -1 on invalid input.
@@ -11567,7 +11867,7 @@ KREUZBERGExtractionResult *kreuzberg_extract_bytes_sync(const uint8_t *content,
                                                         const KREUZBERGExtractionConfig *config);
 
 /**
- * Synchronous wrapper for `batch_extract_file`.
+ * Synchronous wrapper for `batch_extract_files`.
  *
  * Uses the global Tokio runtime for optimal performance.
  * Only available with `tokio-runtime` (WASM has no filesystem).
@@ -11575,25 +11875,26 @@ KREUZBERGExtractionResult *kreuzberg_extract_bytes_sync(const uint8_t *content,
  * # Example
  *
  * ```rust,no_run
- * use kreuzberg::core::extractor::batch_extract_file_sync;
- * use kreuzberg::core::config::ExtractionConfig;
- * use kreuzberg::FileExtractionConfig;
- * use std::path::PathBuf;
+ * use kreuzberg::core::extractor::batch_extract_files_sync;
+ * use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
  *
  * let config = ExtractionConfig::default();
- * let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
- *     ("doc1.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
- *     ("doc2.pdf".into(), None),
+ * let items = vec![
+ *     BatchFileItem {
+ *         path: "doc1.pdf".into(),
+ *         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+ *     },
+ *     BatchFileItem { path: "doc2.pdf".into(), config: None },
  * ];
- * let results = batch_extract_file_sync(items, &config)?;
+ * let results = batch_extract_files_sync(items, &config)?;
  * # Ok::<(), kreuzberg::KreuzbergError>(())
  * ```
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_batch_extract_file_sync(const char *items,
-                                        const KREUZBERGExtractionConfig *config);
+char *kreuzberg_batch_extract_files_sync(const char *items,
+                                         const KREUZBERGExtractionConfig *config);
 
 /**
  * Synchronous wrapper for `batch_extract_bytes`.
@@ -11607,14 +11908,16 @@ char *kreuzberg_batch_extract_file_sync(const char *items,
  *
  * ```rust,no_run
  * use kreuzberg::core::extractor::batch_extract_bytes_sync;
- * use kreuzberg::core::config::ExtractionConfig;
- * use kreuzberg::FileExtractionConfig;
+ * use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem, FileExtractionConfig};
  *
  * let config = ExtractionConfig::default();
  * let items = vec![
- *     (b"content".to_vec(), "text/plain".to_string(), None),
- *     (b"other".to_vec(), "text/plain".to_string(),
- *      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+ *     BatchBytesItem { content: b"content".to_vec(), mime_type: "text/plain".to_string(), config: None },
+ *     BatchBytesItem {
+ *         content: b"other".to_vec(),
+ *         mime_type: "text/plain".to_string(),
+ *         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+ *     },
  * ];
  * let results = batch_extract_bytes_sync(items, &config)?;
  * # Ok::<(), kreuzberg::KreuzbergError>(())
@@ -11641,8 +11944,8 @@ char *kreuzberg_batch_extract_bytes_sync(const char *items,
  *
  * # Arguments
  *
- * * `items` - Vector of `(path, optional_file_config)` tuples. Pass `None` as the
- *   config to use the batch-level defaults for that file.
+ * * `items` - Vector of [`BatchFileItem`] structs, each containing a path and optional
+ *   per-file configuration overrides.
  * * `config` - Batch-level extraction configuration (provides defaults and batch settings)
  *
  * # Returns
@@ -11659,17 +11962,17 @@ char *kreuzberg_batch_extract_bytes_sync(const char *items,
  * Simple usage with no per-file overrides:
  *
  * ```rust,no_run
- * use kreuzberg::core::extractor::batch_extract_file;
- * use kreuzberg::core::config::ExtractionConfig;
+ * use kreuzberg::core::extractor::batch_extract_files;
+ * use kreuzberg::core::config::{ExtractionConfig, BatchFileItem};
  * use std::path::PathBuf;
  *
  * # async fn example() -> kreuzberg::Result<()> {
  * let config = ExtractionConfig::default();
- * let items: Vec<(PathBuf, Option<kreuzberg::FileExtractionConfig>)> = vec![
- *     ("doc1.pdf".into(), None),
- *     ("doc2.pdf".into(), None),
+ * let items = vec![
+ *     BatchFileItem { path: "doc1.pdf".into(), config: None },
+ *     BatchFileItem { path: "doc2.pdf".into(), config: None },
  * ];
- * let results = batch_extract_file(items, &config).await?;
+ * let results = batch_extract_files(items, &config).await?;
  * println!("Processed {} files", results.len());
  * # Ok(())
  * # }
@@ -11678,18 +11981,20 @@ char *kreuzberg_batch_extract_bytes_sync(const char *items,
  * Per-file configuration overrides:
  *
  * ```rust,no_run
- * use kreuzberg::core::extractor::batch_extract_file;
- * use kreuzberg::core::config::ExtractionConfig;
- * use kreuzberg::FileExtractionConfig;
+ * use kreuzberg::core::extractor::batch_extract_files;
+ * use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
  * use std::path::PathBuf;
  *
  * # async fn example() -> kreuzberg::Result<()> {
  * let config = ExtractionConfig::default();
- * let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
- *     ("scan.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
- *     ("notes.txt".into(), None),
+ * let items = vec![
+ *     BatchFileItem {
+ *         path: "scan.pdf".into(),
+ *         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+ *     },
+ *     BatchFileItem { path: "notes.txt".into(), config: None },
  * ];
- * let results = batch_extract_file(items, &config).await?;
+ * let results = batch_extract_files(items, &config).await?;
  * # Ok(())
  * # }
  * ```
@@ -11697,8 +12002,8 @@ char *kreuzberg_batch_extract_bytes_sync(const char *items,
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_batch_extract_file(const char *items,
-                                   const KREUZBERGExtractionConfig *config);
+char *kreuzberg_batch_extract_files(const char *items,
+                                    const KREUZBERGExtractionConfig *config);
 
 /**
  * Extract content from multiple byte arrays concurrently.
@@ -11714,7 +12019,8 @@ char *kreuzberg_batch_extract_file(const char *items,
  *
  * # Arguments
  *
- * * `items` - Vector of `(bytes, mime_type, optional_file_config)` tuples
+ * * `items` - Vector of [`BatchBytesItem`] structs, each containing content bytes,
+ *   MIME type, and optional per-item configuration overrides.
  * * `config` - Batch-level extraction configuration
  *
  * # Returns
@@ -11727,13 +12033,13 @@ char *kreuzberg_batch_extract_file(const char *items,
  *
  * ```rust,no_run
  * use kreuzberg::core::extractor::batch_extract_bytes;
- * use kreuzberg::core::config::ExtractionConfig;
+ * use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem};
  *
  * # async fn example() -> kreuzberg::Result<()> {
  * let config = ExtractionConfig::default();
  * let items = vec![
- *     (b"content 1".to_vec(), "text/plain".to_string(), None),
- *     (b"content 2".to_vec(), "text/plain".to_string(), None),
+ *     BatchBytesItem { content: b"content 1".to_vec(), mime_type: "text/plain".to_string(), config: None },
+ *     BatchBytesItem { content: b"content 2".to_vec(), mime_type: "text/plain".to_string(), config: None },
  * ];
  * let results = batch_extract_bytes(items, &config).await?;
  * println!("Processed {} items", results.len());
@@ -11745,15 +12051,17 @@ char *kreuzberg_batch_extract_file(const char *items,
  *
  * ```rust,no_run
  * use kreuzberg::core::extractor::batch_extract_bytes;
- * use kreuzberg::core::config::ExtractionConfig;
- * use kreuzberg::FileExtractionConfig;
+ * use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem, FileExtractionConfig};
  *
  * # async fn example() -> kreuzberg::Result<()> {
  * let config = ExtractionConfig::default();
  * let items = vec![
- *     (b"content".to_vec(), "text/plain".to_string(), None),
- *     (b"<html>test</html>".to_vec(), "text/html".to_string(),
- *      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+ *     BatchBytesItem { content: b"content".to_vec(), mime_type: "text/plain".to_string(), config: None },
+ *     BatchBytesItem {
+ *         content: b"<html>test</html>".to_vec(),
+ *         mime_type: "text/html".to_string(),
+ *         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+ *     },
  * ];
  * let results = batch_extract_bytes(items, &config).await?;
  * # Ok(())
@@ -11825,13 +12133,11 @@ char *kreuzberg_get_extensions_for_mime(const char *mime_type);
 
 /**
  * List names of all registered document extractors.
- *
- * Re-exported at the crate root as `list_document_extractors`.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_list_extractors(void);
+char *kreuzberg_list_document_extractors(void);
 
 /**
  * List all registered OCR backends.
@@ -11967,15 +12273,18 @@ char *kreuzberg_embed_texts(const char *texts,
 /**
  * Get an embedding preset by name.
  *
- * Returns `None` if no preset with the given name exists.
+ * Returns `None` if no preset with the given name exists. Returns an owned
+ * clone so the value is safe to pass across FFI boundaries.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-char *kreuzberg_get_embedding_preset(const char *_name);
+KREUZBERGEmbeddingPreset *kreuzberg_get_embedding_preset(const char *name);
 
 /**
  * List the names of all available embedding presets.
+ *
+ * Returns owned `String`s so the values are safe to pass across FFI boundaries.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.

@@ -104,7 +104,7 @@ pub(crate) fn register_chunking_processor() -> Result<()> {
     let registry = crate::plugins::registry::get_post_processor_registry();
     let mut registry = registry.write();
 
-    registry.register(Arc::new(ChunkingProcessor), 50)?;
+    registry.register(Arc::new(ChunkingProcessor))?;
 
     Ok(())
 }

@@ -45,7 +45,12 @@ repos:
     rev: "v2.1.4"
     hooks:
       - id: cargo-sort
-        args: [-w]
+        # `-w` (workspace) iterates ALL workspace members regardless of which Cargo.toml
+        # was passed by pre-commit, ignoring this hook's `exclude:` filter and rewriting
+        # alef-generated bindings (kreuzberg-{wasm,node,py,php,ffi}, packages/{dart,swift}/rust).
+        # That breaks the downstream alef-verify hash check. Run per-file (no -w) so
+        # `exclude:` actually filters correctly.
+        exclude: ^(crates/kreuzberg-(wasm|node|py|php|ffi)|packages/(dart|swift)/rust)/Cargo\.toml$
 
   # Rust: formatting, linting, and license checking
   - repo: https://github.com/AndrejOrsula/pre-commit-cargo

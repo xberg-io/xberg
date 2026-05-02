@@ -611,7 +611,7 @@ pub fn create_python_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     create_from_spec(&python_spec(), ocr_enabled, false)
 }
 
-/// Create Python batch adapter (batch_extract_file)
+/// Create Python batch adapter (batch_extract_files)
 pub fn create_python_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     create_from_spec(&python_spec(), ocr_enabled, true)
 }
@@ -647,7 +647,7 @@ pub fn create_ruby_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     create_from_spec(&ruby_spec(), ocr_enabled, false)
 }
 
-/// Create Ruby batch adapter (batch_extract_file)
+/// Create Ruby batch adapter (batch_extract_files)
 pub fn create_ruby_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     create_from_spec(&ruby_spec(), ocr_enabled, true)
 }
@@ -937,7 +937,7 @@ pub fn create_rust_paddle_subprocess_adapter(ocr_enabled: bool) -> Result<Subpro
     ))
 }
 
-/// Create Rust batch adapter (batch_extract_file_sync via subprocess)
+/// Create Rust batch adapter (batch_extract_files_sync via subprocess)
 ///
 /// Uses the `kreuzberg-extract` binary with `batch` subcommand for fair
 /// subprocess overhead comparison with other language batch adapters.

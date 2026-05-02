@@ -122,9 +122,9 @@ pub const ExtractionConfig = struct {
     html_output: ?HtmlOutputConfig,
     extraction_timeout_secs: ?u64,
     max_concurrent_extractions: ?u64,
-    result_format: [:0]const u8,
+    result_format: ResultFormat,
     security_limits: ?[:0]const u8,
-    output_format: [:0]const u8,
+    output_format: OutputFormat,
     layout: ?LayoutDetectionConfig,
     include_document_structure: bool,
     acceleration: ?AccelerationConfig,
@@ -141,7 +141,7 @@ pub const ExtractionConfig = struct {
 /// Per-file extraction configuration overrides for batch processing.
 ///
 /// All fields are `Option<T>` — `null` means "use the batch-level default."
-/// This type is used with `crate.batch_extract_file` and
+/// This type is used with `crate.batch_extract_files` and
 /// `crate.batch_extract_bytes` to allow heterogeneous
 /// extraction settings within a single batch.
 ///
@@ -169,13 +169,32 @@ pub const FileExtractionConfig = struct {
     keywords: ?KeywordConfig,
     postprocessor: ?PostProcessorConfig,
     html_options: ?[:0]const u8,
-    result_format: ?[:0]const u8,
-    output_format: ?[:0]const u8,
+    result_format: ?ResultFormat,
+    output_format: ?OutputFormat,
     include_document_structure: ?bool,
     layout: ?LayoutDetectionConfig,
     timeout_secs: ?u64,
     tree_sitter: ?TreeSitterConfig,
     structured_extraction: ?StructuredExtractionConfig,
+};
+
+/// Batch item for byte array extraction.
+///
+/// Used with `crate.batch_extract_bytes` and `crate.batch_extract_bytes_sync`
+/// to represent a single item in a batch extraction job.
+pub const BatchBytesItem = struct {
+    content: []const u8,
+    mime_type: [:0]const u8,
+    config: ?FileExtractionConfig,
+};
+
+/// Batch item for file extraction.
+///
+/// Used with `crate.batch_extract_files` and `crate.batch_extract_files_sync`
+/// to represent a single file in a batch extraction job.
+pub const BatchFileItem = struct {
+    path: [:0]const u8,
+    config: ?FileExtractionConfig,
 };
 
 /// Image extraction configuration.
@@ -306,7 +325,7 @@ pub const OcrConfig = struct {
     backend: [:0]const u8,
     language: [:0]const u8,
     tesseract_config: ?TesseractConfig,
-    output_format: ?[:0]const u8,
+    output_format: ?OutputFormat,
     paddle_ocr_config: ?[:0]const u8,
     element_config: ?OcrElementConfig,
     quality_thresholds: ?OcrQualityThresholds,
@@ -932,6 +951,15 @@ pub const DocumentNode = struct {
     bbox: ?[:0]const u8,
     annotations: []const TextAnnotation,
     attributes: ?std.StringHashMap([:0]const u8),
+};
+
+/// Structured table grid with cell-level metadata.
+///
+/// Stores row/column dimensions and a flat list of cells with position info.
+pub const TableGrid = struct {
+    rows: u32,
+    cols: u32,
+    cells: []const GridCell,
 };
 
 /// Individual grid cell with position and span metadata.
@@ -1942,6 +1970,24 @@ pub const MergedChunk = struct {
     byte_end: u64,
 };
 
+/// Preset configurations for common RAG use cases.
+///
+/// Each preset combines chunk size, overlap, and embedding model
+/// to provide an optimized configuration for specific scenarios.
+///
+/// All string fields are owned `String` for FFI compatibility — instances
+/// are safe to clone and pass across language boundaries.
+pub const EmbeddingPreset = struct {
+    name: [:0]const u8,
+    chunk_size: u64,
+    overlap: u64,
+    model_repo: [:0]const u8,
+    pooling: [:0]const u8,
+    model_file: [:0]const u8,
+    dimensions: u64,
+    description: [:0]const u8,
+};
+
 /// YAKE-specific parameters.
 pub const YakeParams = struct {
     window_size: u64,
@@ -2110,6 +2156,23 @@ pub const ExecutionProviderType = enum {
     core_ml,
     cuda,
     tensor_rt,
+};
+
+/// Output format for extraction results.
+///
+/// Controls the format of the `content` field in `ExtractionResult`.
+/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
+/// accordingly. `Plain` returns the raw extracted text.
+/// `Structured` returns JSON with full OCR element data including bounding
+/// boxes and confidence scores.
+pub const OutputFormat = union(enum) {
+    plain: void,
+    markdown: void,
+    djot: void,
+    html: void,
+    json: void,
+    structured: void,
+    custom: [:0]const u8,
 };
 
 /// Built-in HTML theme selection.
@@ -2322,7 +2385,7 @@ pub const NodeContent = union(enum) {
     paragraph: [:0]const u8,
     list: bool,
     list_item: [:0]const u8,
-    table: [:0]const u8,
+    table: TableGrid,
     image: struct {
         description: ?[:0]const u8,
         image_index: ?u32,
@@ -2428,6 +2491,16 @@ pub const ImageKind = enum {
     tile_fragment,
     mask,
     unknown,
+};
+
+/// Result-shape selection for extraction results.
+///
+/// Distinct from `crate.OutputFormat` (which controls rendering — Plain, Markdown,
+/// HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
+/// blob vs. an element-based decomposition.
+pub const ResultFormat = enum {
+    unified,
+    element_based,
 };
 
 /// Semantic element type classification.
@@ -2675,18 +2748,18 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: Ex
     return _result;
 }
 
-/// Synchronous wrapper for `batch_extract_file`.
+/// Synchronous wrapper for `batch_extract_files`.
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-pub fn batch_extract_file_sync(items: []const u8, config: ExtractionConfig) (KreuzbergError || error{OutOfMemory})![]u8 {
+pub fn batch_extract_files_sync(items: []const u8, config: ExtractionConfig) (KreuzbergError || error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
     const items_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
         "{s}",
         .{items},
     );
-    const _result = c.kreuzberg_batch_extract_file_sync(items_z, config);
+    const _result = c.kreuzberg_batch_extract_files_sync(items_z, config);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
     }
@@ -2780,10 +2853,8 @@ pub fn get_extensions_for_mime(mime_type: []const u8) (KreuzbergError || error{O
 }
 
 /// List names of all registered document extractors.
-///
-/// Re-exported at the crate root as `list_document_extractors`.
-pub fn list_extractors() (KreuzbergError || error{OutOfMemory})![]u8 {
-    const _result = c.kreuzberg_list_extractors();
+pub fn list_document_extractors() (KreuzbergError || error{OutOfMemory})![]u8 {
+    const _result = c.kreuzberg_list_document_extractors();
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
     }
@@ -2953,8 +3024,9 @@ pub fn embed_texts(texts: []const u8, config: ?EmbeddingConfig) (KreuzbergError 
 
 /// Get an embedding preset by name.
 ///
-/// Returns `null` if no preset with the given name exists.
-pub fn get_embedding_preset(name: []const u8) ?[:0]const u8 {
+/// Returns `null` if no preset with the given name exists. Returns an owned
+/// clone so the value is safe to pass across FFI boundaries.
+pub fn get_embedding_preset(name: []const u8) ?EmbeddingPreset {
     const name_z: [*:0]u8 = try std.fmt.allocPrintZ(
         std.heap.c_allocator,
         "{s}",
@@ -2966,6 +3038,8 @@ pub fn get_embedding_preset(name: []const u8) ?[:0]const u8 {
 }
 
 /// List the names of all available embedding presets.
+///
+/// Returns owned `String`s so the values are safe to pass across FFI boundaries.
 pub fn list_embedding_presets() []u8 {
     const _result = c.kreuzberg_list_embedding_presets();
     return blk: {
@@ -3513,6 +3587,13 @@ pub const IPostProcessor = extern struct {
     /// Estimated processing time in milliseconds.
     estimated_duration_ms: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) u64 = null,
 
+    /// Execution priority within the processing stage.
+    ///
+    /// Higher values run first within the same `ProcessingStage`. Defaults to 50.
+    /// Use 0-49 for fallback processors, 50 for normal processors, and 51-255
+    /// for high-priority processors that should run early in their stage.
+    priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
     free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
@@ -3617,6 +3698,14 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.estimated_duration_ms(_result);
+            }
+        }.thunk,
+
+        .priority = struct {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+                const self: *T = @ptrCast(@alignCast(ud));
+                _ = out_result;
+                return self.priority();
             }
         }.thunk,
 

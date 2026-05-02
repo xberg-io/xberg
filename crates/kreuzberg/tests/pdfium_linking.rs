@@ -220,14 +220,20 @@ fn test_pdf_batch_extraction() {
         return;
     }
 
-    let paths: Vec<(std::path::PathBuf, Option<kreuzberg::FileExtractionConfig>)> = vec![
-        (get_test_file_path("pdf/tiny.pdf"), None),
-        (get_test_file_path("pdf/medium.pdf"), None),
+    let paths: Vec<kreuzberg::BatchFileItem> = vec![
+        kreuzberg::BatchFileItem {
+            path: get_test_file_path("pdf/tiny.pdf"),
+            config: None,
+        },
+        kreuzberg::BatchFileItem {
+            path: get_test_file_path("pdf/medium.pdf"),
+            config: None,
+        },
     ];
 
     let config = ExtractionConfig::default();
 
-    let results = kreuzberg::batch_extract_file_sync(paths, &config).expect("Should extract PDFs in batch");
+    let results = kreuzberg::batch_extract_files_sync(paths, &config).expect("Should extract PDFs in batch");
 
     assert_eq!(results.len(), 2, "Should extract both PDFs");
 

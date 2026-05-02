@@ -17,12 +17,12 @@
 
 use std::os::raw::c_int;
 
-/// Opaque handle to a [`kreuzberg::CancellationToken`].
+/// Opaque handle to a [`kreuzberg::cancellation::CancellationToken`].
 ///
 /// Allocate with [`kreuzberg_cancel_token_new`].
 /// Free with [`kreuzberg_cancel_token_free`].
 pub struct CancellationToken {
-    pub(crate) inner: kreuzberg::CancellationToken,
+    pub(crate) inner: kreuzberg::cancellation::CancellationToken,
 }
 
 /// Allocate a new, un-cancelled cancellation token.
@@ -43,7 +43,7 @@ pub struct CancellationToken {
 #[unsafe(no_mangle)]
 pub extern "C" fn kreuzberg_cancel_token_new() -> *mut CancellationToken {
     Box::into_raw(Box::new(CancellationToken {
-        inner: kreuzberg::CancellationToken::new(),
+        inner: kreuzberg::cancellation::CancellationToken::new(),
     }))
 }
 

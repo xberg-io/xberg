@@ -1,4 +1,5 @@
-version = "0.13.7"
+[workspace]
+alef_version = "0.14.1"
 languages = [
   "python",
   "node",
@@ -22,16 +23,57 @@ languages = [
 # Tool selection
 # ---------------------------------------------------------------------------
 
-[tools]
+[workspace.tools]
 python_package_manager = "uv"
 node_package_manager = "pnpm"
-# rust_dev_tools defaults: cargo-edit, cargo-sort, cargo-machete, cargo-deny, cargo-llvm-cov
 
 # ---------------------------------------------------------------------------
-# Crate configuration
+# DTO styles
 # ---------------------------------------------------------------------------
 
-[crate]
+[workspace.dto]
+python = "dataclass"
+python_output = "typed-dict"
+node = "interface"
+ruby = "struct"
+php = "readonly-class"
+elixir = "struct"
+go = "struct"
+java = "record"
+csharp = "record"
+r = "list"
+
+
+# ---------------------------------------------------------------------------
+# Generation control
+# ---------------------------------------------------------------------------
+
+[workspace.generate]
+bindings = true
+errors = true
+configs = true
+async_wrappers = true
+type_conversions = true
+package_metadata = true
+public_api = true
+
+[workspace.generate_overrides.wasm]
+async_wrappers = false
+
+# ---------------------------------------------------------------------------
+# Version synchronization
+# ---------------------------------------------------------------------------
+
+[workspace.sync]
+extra_paths = [
+  "packages/python/kreuzberg/__init__.py",
+  "packages/ruby/lib/kreuzberg/version.rb",
+  "crates/kreuzberg-node/package.json",
+  "crates/kreuzberg-node/npm/*/package.json",
+  "packages/go/v4/go.mod",
+]
+
+[[crates]]
 name = "kreuzberg"
 core_import = "kreuzberg"
 error_type = "KreuzbergError"
@@ -113,14 +155,299 @@ features = [
   "quality",
 ]
 
-# ---------------------------------------------------------------------------
-# Include / Exclude filters
-# ---------------------------------------------------------------------------
+[crates.python]
+module_name = "_kreuzberg"
+exclude_types = [
+  # Arc<Mutex<T>> opaque types — codegen doesn't generate .lock() for methods
+  "PooledString",
+]
 
-# No [include] — include everything extracted from sources
+[crates.python.stubs]
+output = "packages/python/kreuzberg/"
 
-[exclude]
+[crates.node]
+package_name = "kreuzberg"
+exclude_types = [
+  # Opaque Arc<Mutex<T>> types — codegen doesn't generate .lock() calls for methods
+  "StreamReader",
+  "PooledString",
+]
+
+[crates.ruby]
+gem_name = "kreuzberg"
+
+[crates.php]
+extension_name = "kreuzberg"
+exclude_functions = [
+  # ext-php-rs cannot derive FromZvalMut for Vec<BatchFileItem>/Vec<BatchBytesItem>
+  # without a manual blanket impl. Until that lands upstream, bindings are excluded;
+  # callers iterate single extract_file/extract_bytes calls.
+  "batch_extract_files",
+  "batch_extract_files_sync",
+  "batch_extract_bytes",
+  "batch_extract_bytes_sync",
+]
+exclude_types = [
+  # Enum types that don't have From<String> implementation for PHP
+  "ChunkerType",
+  "OutputFormat",
+  "EmbeddingModelType",
+  "UriKind",
+  "ChunkType",
+  # PooledString has methods incompatible with ext-php-rs (buffer_mut, deref_mut, fmt(f))
+  # that trigger E0716/E0596/E0507 in the #[php_impl] macro expansion.
+  "PooledString",
+  # Tagged data enums whose flat-PHP-class From<core> impls call .into() on PathBuf,
+  # usize, TableGrid, Vec<(String,String)>, [(u32,u32);4] fields that don't have the
+  # required Into<String>/Into<i64> implementations. Tracked upstream in alef-backend-php.
+  "ChunkSizing",
+  "EmbeddingModelType",
+  "NodeContent",
+  "OcrBoundingGeometry",
+]
+
+[crates.elixir]
+app_name = "kreuzberg"
+exclude_functions = [
+  # OcrBackend trait bridge: codegen captures *const ErlNifEnv which is neither Send nor Sync,
+  # and the generated impl pulls in async_trait which conflicts with Rustler's NIF ABI.
+  # Requires alef source fixes to resolve.
+  "register_ocr_backend",
+  "unregister_ocr_backend",
+  # batch_extract_* take Vec<(PathBuf, Option<FileExtractionConfig>)> or
+  # Vec<(Vec<u8>, String, Option<...>)> which codegen maps to Vec<String> —
+  # type mismatch; no safe tuple-marshalling across NIF boundary
+  "batch_extract_files_sync",
+  "batch_extract_bytes_sync",
+  "batch_extract_files",
+  "batch_extract_bytes",
+]
+exclude_types = [
+  # Trait types cannot be FFI-bound
+  "SyncExtractor",
+  "Recyclable",
+]
+
+[crates.wasm]
+exclude_types = [
+  # paddle-ocr / layout-detection / embeddings (ort-dependent)
+  "PaddleOcrConfig",
+  "PaddleLanguage",
+  "LayoutClass",
+  "LayoutDetectionConfig",
+  "LayoutDetection",
+  "DetectionResult",
+  "PSMMode",
+  "BBox",
+  "TableModel",
+  "EmbeddingConfig",
+  "EmbeddingResult",
+  "DocOrientationResult",
+  "OrientationResult",
+  "OcrFallbackDecision",
+  "ModelPaths",
+  "OcrProcessor",
+  "TesseractConfig",
+  "OcrCacheStats",
+  # Multiple CacheStats types exist (cache, paddle_ocr, types); ambiguous across bindings.
+  # Excluded until the public CacheStats is consolidated to a single definition.
+  "CacheStats",
+  "TessdataManager",
+  "PageLayoutResult",
+  "PageTiming",
+  "ProcessingWarning",
+  "RecognizedTable",
+  # Feature-gated types (not available in WASM feature set)
+  "ChunkSizing",
+  # MCP parameter types not compatible with wasm-bindgen (Option<JsValue> fields)
+  "BatchExtractFilesParams",
+]
+exclude_functions = [
+  # paddle-ocr / layout-detection / embeddings / auto-rotate
+  "embed_texts",
+  "embed_text",
+  "detect_layout",
+  "detect_orientation",
+  "run_ocr_pipeline",
+  "process_ocr_element",
+  "layout_runner",
+  "record_success_on_current_span",
+  "record_error_on_current_span",
+  # ocr module (requires full ocr, not ocr-wasm)
+  "compute_hash",
+  "assemble_ocr_markdown",
+  "validate_tesseract_version",
+  # paddle_ocr module
+  "is_language_supported",
+  "language_to_script_family",
+  "map_language_code",
+  # embeddings module
+  "normalize",
+  "list_presets",
+  # image module (ort-dependent preprocessing)
+  "calculate_optimal_dpi",
+  "calculate_smart_dpi",
+  # ort_discovery
+  "ensure_ort_available",
+  # pdf layout_runner
+  "run_layout_for_page",
+  "run_layout_for_pdf",
+  # telemetry internals
+  "sanitize_path",
+  # layout detection
+  "config_from_extraction",
+  "detect_layout_for_images",
+  # Uses excluded types WasmDetectionResult/WasmRecognizedTable
+  "recognize_page_tables",
+  # Functions using excluded types/modules
+  "generate_embeddings_for_chunks",
+  "apply_heuristics",
+  "greedy_nms",
+  # docx extraction functions (internal, not public API)
+  "detect_page_breaks_from_docx",
+  "detect_table_page_numbers",
+  # ooxml embedded object extraction (internal, returns complex types)
+  "extract_ooxml_embedded_objects",
+  "extract_and_process_embedded_files",
+  # markdown utility functions (internal)
+  "cells_to_text",
+  "cells_to_markdown",
+  # Table processing stubs (internal, incomplete implementations)
+  "calculate_quality_score",
+  "reconstruct_table",
+  "table_to_markdown",
+  "build_cell_grid",
+  "post_process_table",
+  "is_well_formed_table",
+  "parse_jotdown_attributes",
+  "parse_jotdown_inline",
+  # Vec<bool> params not supported by wasm-bindgen
+  "merge_segments",
+  # image_ocr module not available in WASM feature set
+  "process_images_with_ocr",
+  # MCP server functions (not available in WASM)
+  "start_mcp_server_http",
+  "start_mcp_server_http_with_config",
+  # Vec<&mut PdfImage> mutability mismatch
+  "reextract_raw_images_via_pdfium",
+  # Vec<&str> vs &[String] / texts_refs scope — codegen type mismatch
+  "batch_reduce_tokens",
+  "chunk_texts_batch",
+]
+features = [
+  "pdf",
+  "excel-wasm",
+  "office",
+  "hwp",
+  "iwork",
+  "email",
+  "html",
+  "xml",
+  "archives",
+  "language-detection",
+  "chunking",
+  "quality",
+  "keywords",
+  "mdx",
+  "ocr-wasm",
+  "tree-sitter-wasm",
+  "stopwords",
+  "liter-llm",
+]
+
+[crates.wasm.extra_dependencies]
+async-trait = "0.1"
+
+[crates.ffi]
+prefix = "kreuzberg"
+header_name = "kreuzberg.h"
+lib_name = "kreuzberg_ffi"
+visitor_callbacks = false
+exclude_functions = [
+  # OcrBackend trait bridge: codegen emits KreuzbergOcrBackendBridge with *const c_void which is
+  # not Send, causing tokio::task::spawn_blocking to reject it. Requires alef source fixes.
+  "register_ocr_backend",
+  "unregister_ocr_backend",
+  # Returns *mut u8 (raw byte buffer) — no kreuzberg_free_bytes FFI function exists to free
+  # the allocation, and kreuzberg_free_string(*char) is type-incompatible with *uint8_t.
+  "render_pdf_page_to_png",
+]
+exclude_types = [
+  # Multiple CacheStats structs exist in kreuzberg (cache, paddle_ocr/ModelManager, types/formats);
+  # alef-extract resolves to one definition while codegen emits accessors for fields of another,
+  # causing E0609 "no field" build errors. Excluded until the public CacheStats is consolidated.
+  "CacheStats",
+]
+
+[crates.gleam]
+app_name = "kreuzberg"
+nif_module = "Elixir.Kreuzberg.Native"
+
+[crates.go]
+module = "github.com/kreuzberg-dev/kreuzberg/v4"
+package_name = "kreuzberg"
+
+[crates.java]
+package = "dev.kreuzberg"
+ffi_style = "panama"
+
+[crates.dart]
+pubspec_name = "kreuzberg"
+lib_name = "kreuzberg"
+style = "frb"
+features = ["full"]
+
+[crates.kotlin]
+package = "dev.kreuzberg"
+target = "jvm"
+
+[crates.swift]
+module_name = "Kreuzberg"
+package_name = "Kreuzberg"
+features = ["full"]
+exclude_fields = ["ExtractionResult.ocr_internal_document", "OcrExtractionResult.internal_document"]
+exclude_functions = [
+  # Returns Option<&'static EmbeddingPreset> but EmbeddingPreset: !Serialize — cannot JSON-bridge
+  "get_preset",
+]
+
+[crates.csharp]
+namespace = "Kreuzberg"
+exclude_functions = [
+  # Returns *mut u8 (raw byte buffer); no kreuzberg_free_bytes function exists in the C FFI.
+  "render_pdf_page_to_png",
+]
+
+[crates.r]
+package_name = "kreuzberg"
+
+[crates.zig]
+module_name = "kreuzberg"
+
+[crates.output]
+python = "crates/kreuzberg-py/src/"
+node = "crates/kreuzberg-node/src/"
+ruby = "packages/ruby/ext/kreuzberg_rb/src/"
+php = "crates/kreuzberg-php/src/"
+ffi = "crates/kreuzberg-ffi/src/"
+go = "packages/go/v4/"
+elixir = "packages/elixir/native/kreuzberg_nif/src/"
+wasm = "crates/kreuzberg-wasm/src/"
+java = "packages/java/src/main/java/"
+csharp = "packages/csharp/src/"
+r = "packages/r/src/rust/src/"
+kotlin = "packages/kotlin/src/main/kotlin/dev/kreuzberg/"
+swift = "packages/swift/Sources/Kreuzberg/"
+dart = "packages/dart/lib/src/"
+gleam = "packages/gleam/src/"
+zig = "packages/zig/src/"
+
+[crates.exclude]
 types = [
+  # Multiple CacheStats structs exist (cache, paddle_ocr/ModelManager, types/formats);
+  # alef-extract resolves to one definition while codegen emits accessors for fields of another,
+  # causing E0609 build errors across bindings. Excluded globally until consolidated.
+  "CacheStats",
   # Internal types — not part of public API
   "DocumentStructureBuilder",
   "InternalDocument",
@@ -162,8 +489,8 @@ types = [
   "ConcurrencyConfig",
   "JsonDocument",
   "JsonNode",
-  "PaddleOcrBackend",
-  "ModelManager",
+  "PaddleOcrBackend", # runtime backend with engine pool — cannot serialize
+  "ModelManager", # holds Path/HashMap engines — cannot serialize
   "SecurityLimits",
   "PluginHealthStatus",
   "Run",
@@ -182,9 +509,7 @@ types = [
   "ElementKind",
   "ParagraphProperties",
   "ParagraphMeta",
-  "StyledHtmlRenderer",
-  "EmbeddingPreset",
-  "CacheStats",
+  "StyledHtmlRenderer", # runtime renderer with internal state — cannot serialize
   "ImageDpiConfig",
 
   # Internal extractor implementations (not public API — users use extract_file/extract_bytes)
@@ -413,7 +738,6 @@ types = [
 
   "VlmOcrBackend",
   "ApiError",
-  "TableGrid",
 ]
 functions = [
   # Internal functions not part of public API (kept for compatibility)
@@ -550,838 +874,213 @@ methods = [
   "LayoutRegion.class",
 ]
 
-# ---------------------------------------------------------------------------
-# Output directories
-# ---------------------------------------------------------------------------
-
-[output]
-python = "crates/kreuzberg-py/src/"
-node = "crates/kreuzberg-node/src/"
-ruby = "packages/ruby/ext/kreuzberg_rb/src/"
-php = "crates/kreuzberg-php/src/"
-ffi = "crates/kreuzberg-ffi/src/"
-go = "packages/go/v4/"
-elixir = "packages/elixir/native/kreuzberg_nif/src/"
-wasm = "crates/kreuzberg-wasm/src/"
-java = "packages/java/src/main/java/"
-csharp = "packages/csharp/src/"
-r = "packages/r/src/rust/src/"
-kotlin = "packages/kotlin/src/main/kotlin/dev/kreuzberg/"
-swift = "packages/swift/Sources/Kreuzberg/"
-dart = "packages/dart/lib/src/"
-gleam = "packages/gleam/src/"
-zig = "packages/zig/src/"
-
-# ---------------------------------------------------------------------------
-# Language-specific configuration
-# ---------------------------------------------------------------------------
-
-[python]
-module_name = "_kreuzberg"
-exclude_types = [
-  # Arc<Mutex<T>> opaque types — codegen doesn't generate .lock() for methods
-  "PooledString",
-]
-
-[python.stubs]
-output = "packages/python/kreuzberg/"
-
-[node]
-package_name = "kreuzberg"
-exclude_types = [
-  # Opaque Arc<Mutex<T>> types — codegen doesn't generate .lock() calls for methods
-  "StreamReader",
-  "PooledString",
-]
-
-[ffi]
-prefix = "kreuzberg"
-header_name = "kreuzberg.h"
-lib_name = "kreuzberg_ffi"
-visitor_callbacks = false
-exclude_functions = [
-  # OcrBackend trait bridge: codegen emits KreuzbergOcrBackendBridge with *const c_void which is
-  # not Send, causing tokio::task::spawn_blocking to reject it. Requires alef source fixes.
-  "register_ocr_backend",
-  "unregister_ocr_backend",
-  # Returns *mut u8 (raw byte buffer) — no kreuzberg_free_bytes FFI function exists to free
-  # the allocation, and kreuzberg_free_string(*char) is type-incompatible with *uint8_t.
-  "render_pdf_page_to_png",
-]
-
-[go]
-module = "github.com/kreuzberg-dev/kreuzberg/v4"
-package_name = "kreuzberg"
-
-[java]
-package = "dev.kreuzberg"
-ffi_style = "panama"
-
-[csharp]
-namespace = "Kreuzberg"
-exclude_functions = [
-  # Returns *mut u8 (raw byte buffer); no kreuzberg_free_bytes function exists in the C FFI.
-  "render_pdf_page_to_png",
-]
-
-[ruby]
-gem_name = "kreuzberg"
-
-[elixir]
-app_name = "kreuzberg"
-exclude_functions = [
-  # OcrBackend trait bridge: codegen captures *const ErlNifEnv which is neither Send nor Sync,
-  # and the generated impl pulls in async_trait which conflicts with Rustler's NIF ABI.
-  # Requires alef source fixes to resolve.
-  "register_ocr_backend",
-  "unregister_ocr_backend",
-  # batch_extract_* take Vec<(PathBuf, Option<FileExtractionConfig>)> or
-  # Vec<(Vec<u8>, String, Option<...>)> which codegen maps to Vec<String> —
-  # type mismatch; no safe tuple-marshalling across NIF boundary
-  "batch_extract_file_sync",
-  "batch_extract_bytes_sync",
-  "batch_extract_file",
-  "batch_extract_bytes",
-]
-exclude_types = [
-  # Trait types cannot be FFI-bound
-  "SyncExtractor",
-  "Recyclable",
-]
-
-[php]
-extension_name = "kreuzberg"
-exclude_types = [
-  # Enum types that don't have From<String> implementation for PHP
-  "ChunkerType",
-  "OutputFormat",
-  "EmbeddingModelType",
-  "UriKind",
-  "ChunkType",
-  # PooledString has methods incompatible with ext-php-rs (buffer_mut, deref_mut, fmt(f))
-  # that trigger E0716/E0596/E0507 in the #[php_impl] macro expansion.
-  "PooledString",
-  # Tagged data enums whose flat-PHP-class From<core> impls call .into() on PathBuf,
-  # usize, TableGrid, Vec<(String,String)>, [(u32,u32);4] fields that don't have the
-  # required Into<String>/Into<i64> implementations. Tracked upstream in alef-backend-php.
-  "ChunkSizing",
-  "EmbeddingModelType",
-  "NodeContent",
-  "OcrBoundingGeometry",
-]
-
-[r]
-package_name = "kreuzberg"
-
-[kotlin]
-package = "dev.kreuzberg"
-target = "jvm"
-
-[swift]
-module_name = "Kreuzberg"
-package_name = "Kreuzberg"
-features = ["full"]
-# Fields whose actual Rust types are excluded types mapped to String by the IR;
-# serde round-trip would fail because the underlying type is not Serialize/Deserialize.
-exclude_fields = ["ExtractionResult.ocr_internal_document", "OcrExtractionResult.internal_document"]
-exclude_functions = [
-  # Returns Option<&'static EmbeddingPreset> but EmbeddingPreset: !Serialize — cannot JSON-bridge
-  "get_preset",
-]
-
-[dart]
-pubspec_name = "kreuzberg"
-lib_name = "kreuzberg"
-style = "frb"
-features = ["full"]
-
-[gleam]
-app_name = "kreuzberg"
-nif_module = "Elixir.Kreuzberg.Native"
-
-[zig]
-module_name = "kreuzberg"
-
-[update.r]
-precondition = "command -v Rscript >/dev/null"
-update = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::update_packages(ask = FALSE)\""
-upgrade = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::update_packages(ask = FALSE)\""
-
-[update.kotlin]
-precondition = "command -v gradle >/dev/null 2>&1"
-update = "cd packages/kotlin && gradle dependencyUpdates --no-daemon"
-upgrade = "cd packages/kotlin && gradle dependencyUpdates --refresh-dependencies --no-daemon"
-
-[update.swift]
-precondition = "command -v swift >/dev/null 2>&1"
-update = "cd packages/swift && swift package update"
-upgrade = "cd packages/swift && swift package update"
-
-[update.dart]
-precondition = "command -v dart >/dev/null 2>&1"
-update = "cd packages/dart && dart pub upgrade"
-upgrade = "cd packages/dart && dart pub upgrade --major-versions"
-
-[update.gleam]
-precondition = "command -v gleam >/dev/null 2>&1"
-update = "cd packages/gleam && gleam update"
-upgrade = "cd packages/gleam && gleam update"
-
-[update.zig]
-precondition = "command -v zig >/dev/null 2>&1"
-update = "cd packages/zig && zig build --fetch"
-upgrade = "cd packages/zig && zig build --fetch"
-
-[wasm]
-# Only exclude ort-dependent types/functions (paddle-ocr, layout-detection, embeddings, auto-rotate).
-exclude_types = [
-  # paddle-ocr / layout-detection / embeddings (ort-dependent)
-  "PaddleOcrConfig",
-  "PaddleLanguage",
-  "LayoutClass",
-  "LayoutDetectionConfig",
-  "LayoutDetection",
-  "DetectionResult",
-  "PSMMode",
-  "BBox",
-  "TableModel",
-  "EmbeddingConfig",
-  "EmbeddingResult",
-  "DocOrientationResult",
-  "OrientationResult",
-  "OcrFallbackDecision",
-  "ModelPaths",
-  "OcrProcessor",
-  "TesseractConfig",
-  "OcrCacheStats",
-  "TessdataManager",
-  "PageLayoutResult",
-  "PageTiming",
-  "ProcessingWarning",
-  "RecognizedTable",
-  # Feature-gated types (not available in WASM feature set)
-  "ChunkSizing",
-  # MCP parameter types not compatible with wasm-bindgen (Option<JsValue> fields)
-  "BatchExtractFilesParams",
-]
-exclude_functions = [
-  # paddle-ocr / layout-detection / embeddings / auto-rotate
-  "embed_texts",
-  "embed_text",
-  "detect_layout",
-  "detect_orientation",
-  "run_ocr_pipeline",
-  "process_ocr_element",
-  "layout_runner",
-  "record_success_on_current_span",
-  "record_error_on_current_span",
-  # ocr module (requires full ocr, not ocr-wasm)
-  "compute_hash",
-  "assemble_ocr_markdown",
-  "validate_tesseract_version",
-  # paddle_ocr module
-  "is_language_supported",
-  "language_to_script_family",
-  "map_language_code",
-  # embeddings module
-  "normalize",
-  "list_presets",
-  # image module (ort-dependent preprocessing)
-  "calculate_optimal_dpi",
-  "calculate_smart_dpi",
-  # ort_discovery
-  "ensure_ort_available",
-  # pdf layout_runner
-  "run_layout_for_page",
-  "run_layout_for_pdf",
-  # telemetry internals
-  "sanitize_path",
-  # layout detection
-  "config_from_extraction",
-  "detect_layout_for_images",
-  # Uses excluded types WasmDetectionResult/WasmRecognizedTable
-  "recognize_page_tables",
-  # Functions using excluded types/modules
-  "generate_embeddings_for_chunks",
-  "apply_heuristics",
-  "greedy_nms",
-  # docx extraction functions (internal, not public API)
-  "detect_page_breaks_from_docx",
-  "detect_table_page_numbers",
-  # ooxml embedded object extraction (internal, returns complex types)
-  "extract_ooxml_embedded_objects",
-  "extract_and_process_embedded_files",
-  # markdown utility functions (internal)
-  "cells_to_text",
-  "cells_to_markdown",
-  # Table processing stubs (internal, incomplete implementations)
-  "calculate_quality_score",
-  "reconstruct_table",
-  "table_to_markdown",
-  "build_cell_grid",
-  "post_process_table",
-  "is_well_formed_table",
-  "parse_jotdown_attributes",
-  "parse_jotdown_inline",
-  # Vec<bool> params not supported by wasm-bindgen
-  "merge_segments",
-  # image_ocr module not available in WASM feature set
-  "process_images_with_ocr",
-  # MCP server functions (not available in WASM)
-  "start_mcp_server_http",
-  "start_mcp_server_http_with_config",
-  # Vec<&mut PdfImage> mutability mismatch
-  "reextract_raw_images_via_pdfium",
-  # Vec<&str> vs &[String] / texts_refs scope — codegen type mismatch
-  "batch_reduce_tokens",
-  "chunk_texts_batch",
-]
-# Everything except ort-dependent features (paddle-ocr, layout-detection, embeddings, auto-rotate)
-features = [
-  "pdf",
-  "excel-wasm",
-  "office",
-  "hwp",
-  "iwork",
-  "email",
-  "html",
-  "xml",
-  "archives",
-  "language-detection",
-  "chunking",
-  "quality",
-  "keywords",
-  "mdx",
-  "ocr-wasm",
-  "tree-sitter-wasm",
-  "stopwords",
-  "liter-llm",
-]
-
-[wasm.extra_dependencies]
-async-trait = "0.1"
-
-# ---------------------------------------------------------------------------
-# Trait bridges — generate FFI bridge code for plugin traits
-# ---------------------------------------------------------------------------
-
-[[trait_bridges]]
-trait_name = "OcrBackend"
-super_trait = "kreuzberg::plugins::Plugin"
-registry_getter = "kreuzberg::plugins::registry::get_ocr_backend_registry"
-register_fn = "register_ocr_backend"
-exclude_languages = ["elixir"]
-
-[[trait_bridges]]
-trait_name = "PostProcessor"
-super_trait = "kreuzberg::plugins::Plugin"
-registry_getter = "kreuzberg::plugins::registry::get_post_processor_registry"
-register_fn = "register_post_processor"
-register_extra_args = "50"
-exclude_languages = ["elixir"]
-
-[[trait_bridges]]
-trait_name = "Validator"
-super_trait = "kreuzberg::plugins::Plugin"
-registry_getter = "kreuzberg::plugins::registry::get_validator_registry"
-register_fn = "register_validator"
-exclude_languages = ["elixir"]
-
-# ---------------------------------------------------------------------------
-# DTO styles
-# ---------------------------------------------------------------------------
-
-[dto]
-python = "dataclass"
-python_output = "typed-dict"
-node = "interface"
-ruby = "struct"
-php = "readonly-class"
-elixir = "struct"
-go = "struct"
-java = "record"
-csharp = "record"
-r = "list"
-
-# ---------------------------------------------------------------------------
-# Scaffold metadata
-# ---------------------------------------------------------------------------
-
-[scaffold]
-description = "High-performance document intelligence library"
-license = "Elastic-2.0"
-repository = "https://github.com/kreuzberg-dev/kreuzberg"
-homepage = "https://kreuzberg.dev"
-authors = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]
-keywords = ["document", "extraction", "pdf", "ocr", "text"]
-
-# Opt in to alef-managed workspace .cargo/config.toml. Empty section uses
-# canonical defaults (6-target template + macOS dynamic_lookup rustflag).
-[scaffold.cargo]
-
-# ---------------------------------------------------------------------------
-# Trait bridges — generate FFI bridge code for plugin traits
-# ---------------------------------------------------------------------------
-
-# [[trait_bridges]]
-# trait_name = "OcrBackend"
-# super_trait = "kreuzberg::plugins::Plugin"
-# registry_getter = "kreuzberg::plugins::registry::get_ocr_backend_registry"
-# register_fn = "register_ocr_backend"
-# NOTE: disabled — bridge codegen emits broken code:
-#   KreuzbergError::Plugin treated as tuple variant (it's struct),
-#   Vec<u8>: From<&Path> not satisfied, mismatched types in vtable calls,
-#   OcrBackendRegistry::unregister method not found.
-#   Re-enable once alef bridge codegen is fixed upstream.
-
-[[trait_bridges]]
-trait_name = "EmbeddingBackend"
-super_trait = "kreuzberg::plugins::Plugin"
-registry_getter = "kreuzberg::plugins::registry::get_embedding_backend_registry"
-register_fn = "register_embedding_backend"
-# Elixir bridge produces code that holds rustler::OwnedEnv / SavedTerm — those
-# embed `*mut ErlNifEnv` raw pointers that are not Sync, so the generated
-# `RustlerEmbeddingBackendBridge` cannot satisfy `Plugin: Send + Sync + 'static`.
-# Mirrors the existing exclusions for OcrBackend / PostProcessor / Validator.
-exclude_languages = ["elixir"]
-
-
-# ---------------------------------------------------------------------------
-# Generation control
-# ---------------------------------------------------------------------------
-
-[generate]
-bindings = true
-errors = true
-configs = true
-async_wrappers = true
-type_conversions = true
-package_metadata = true
-public_api = true
-
-[generate_overrides.wasm]
-async_wrappers = false
-
-# ---------------------------------------------------------------------------
-# README generation
-# ---------------------------------------------------------------------------
-
-[readme]
-template_dir = "templates/readme"
-snippets_dir = "docs/snippets"
-output_pattern = "packages/{language}/README.md"
-discord_url = "https://discord.gg/xt9WY3GnKR"
-banner_url = "https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0"
-
-[readme.languages.python]
-template = "python.md"
-name = "Python"
-package_name = "kreuzberg"
-badge_url = "https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system."
-package_manager = ["pip"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "easyocr", "paddleocr"]
-optional_sections = ["async_vs_sync_performance", "ocr_backends", "system_requirements"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md", table_extraction = "getting-started/read_content.md" }
-
-[readme.languages.typescript]
-template = "language_package.md"
-output_path = "crates/kreuzberg-node/README.md"
-name = "TypeScript (Node.js)"
-package_name = "@kreuzberg/node"
-badge_url = "https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
-package_manager = ["npm", "pnpm", "yarn"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, worker_pools = true, config_discovery = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = [
-  "native_vs_wasm_comparison",
-  "ocr_support",
-  "performance",
-  "napi_implementation",
-]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file_async.md", batch_processing = "getting-started/batch_extract_files_sync.md", ocr_configuration = "config/config_ocr.md", table_extraction = "api/tables.md", config_discovery = "config/config_discovery.md", worker_pool = "advanced/worker_pool.md" }
-
-[readme.languages.go]
-template = "go.md"
-output_path = "packages/go/v4/README.md"
-name = "Go"
-package_name = "github.com/kreuzberg-dev/kreuzberg/v4"
-badge_url = "https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance."
-package_manager = ["go get"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = false, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements", "ffi_build_instructions"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md" }
-
-[readme.languages.java]
-template = "language_package.md"
-name = "Java"
-package_name = "dev.kreuzberg:kreuzberg"
-badge_url = "https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance."
-package_manager = ["maven", "gradle"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["maven_gradle_setup", "system_requirements"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md", configuration = "config/config_basic.md" }
-
-[readme.languages.php]
-template = "language_package.md"
-name = "PHP"
-package_name = "kreuzberg/kreuzberg"
-badge_url = "https://img.shields.io/packagist/v/kreuzberg/kreuzberg?label=PHP&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API."
-package_manager = ["composer"]
-features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["composer_installation", "system_requirements"]
-snippets = { basic_extraction = "quickstart/basic_extraction_oop.php", batch_processing = "extraction/batch_processing.php", ocr_configuration = "ocr/basic_ocr.php" }
-
-[readme.languages.ruby]
-template = "ruby.md"
-name = "Ruby"
-package_name = "kreuzberg"
-badge_url = "https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance."
-package_manager = ["rubygems", "bundler"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements", "development_setup"]
-snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/install_verify.md", ocr_configuration = "getting-started/extract_with_ocr.md" }
-
-[readme.languages.csharp]
-template = "language_package.md"
-name = "C#"
-package_name = "Kreuzberg"
-badge_url = "https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility."
-package_manager = ["nuget"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["dotnet_installation", "system_requirements"]
-snippets = { basic_extraction = "getting-started/basic_usage.cs", async_extraction = "advanced/async_extraction.cs", batch_processing = "advanced/batch_processing.cs", ocr_configuration = "ocr/tesseract_backend.cs" }
-
-[readme.languages.elixir]
-template = "language_package.md"
-name = "Elixir"
-package_name = "kreuzberg"
-badge_url = "https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API."
-package_manager = ["mix"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["mix_installation", "async_with_tasks", "plugin_system"]
-snippets = { basic_extraction = "getting-started/basic_usage.exs", async_extraction = "getting-started/extract_file.exs", batch_processing = "core/batch_extract_files_sync.exs", ocr_configuration = "ocr/tesseract_basic.exs", plugin_system = "plugins/word_count_processor.exs" }
-
-[readme.languages.wasm]
-template = "language_package.md"
-output_path = "crates/kreuzberg-wasm/README.md"
-name = "WebAssembly"
-package_name = "@kreuzberg/wasm"
-badge_url = "https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support."
-package_manager = ["npm", "pnpm", "yarn"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = false, code_intelligence = true }
-ocr_backends = ["tesseract-wasm"]
-optional_sections = [
-  "pdfium_initialization",
-  "multi_threading",
-  "ocr_support",
-  "performance_comparison",
-]
-snippets = { basic_extraction = "getting-started/basic-extract.ts", browser_extraction = "getting-started/browser-file-input.ts", node_extraction = "getting-started/basic-extract.ts", async_extraction = "getting-started/async-extraction.ts", cloudflare_workers = "getting-started/runtime-detection.ts", batch_processing = "getting-started/batch-processing.ts", ocr_configuration = "ocr/enable-ocr.ts" }
-
-[readme.languages.r]
-template = "language_package.md"
-name = "R"
-package_name = "kreuzberg"
-badge_url = "https://img.shields.io/badge/R-kreuzberg-007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. R bindings with native R API, data frame integration, and high-performance document extraction."
-package_manager = ["install.packages"]
-features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "getting-started/basic_extraction.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "ocr/ocr_extraction.md" }
-
-[readme.languages.ffi]
-template = "language_package.md"
-output_path = "crates/kreuzberg-ffi/README.md"
-name = "FFI (C/C++)"
-package_name = "kreuzberg-ffi"
-badge_url = "https://img.shields.io/badge/C%2FC%2B%2B-kreuzberg--ffi-007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. C/C++ FFI bindings providing a stable ABI for native integration, shared library distribution, and cross-language interop."
-package_manager = ["cargo"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-
-[readme.languages.kotlin]
-template = "language_package.md"
-name = "Kotlin"
-package_name = "dev.kreuzberg:kreuzberg-kotlin"
-badge_url = "https://img.shields.io/badge/Kotlin-kreuzberg-007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Kotlin/JVM bindings consuming the Java FFM facade, with idiomatic data classes, sealed-class enums, and coroutine-based async."
-package_manager = ["gradle", "maven"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
-
-[readme.languages.swift]
-template = "language_package.md"
-name = "Swift"
-package_name = "Kreuzberg"
-badge_url = "https://img.shields.io/badge/Swift-kreuzberg-007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Swift bindings via swift-bridge for macOS, iOS, and Linux, with native Swift types and async/await support."
-package_manager = ["spm"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
-
-[readme.languages.dart]
-template = "language_package.md"
-name = "Dart / Flutter"
-package_name = "kreuzberg"
-badge_url = "https://img.shields.io/badge/Dart-kreuzberg-007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Dart bindings via flutter_rust_bridge for both Flutter apps and pure-Dart server contexts, with isolate-safe Future/Stream APIs."
-package_manager = ["pub"]
-features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
-
-[readme.languages.gleam]
-template = "language_package.md"
-name = "Gleam"
-package_name = "kreuzberg"
-badge_url = "https://img.shields.io/badge/Gleam-kreuzberg-007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Gleam bindings on the BEAM, shimmed through the Rustler-emitted Erlang NIF for type-safe extraction across Elixir/Gleam ecosystems."
-package_manager = ["gleam", "hex"]
-features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
-
-[readme.languages.zig]
-template = "language_package.md"
-name = "Zig"
-package_name = "kreuzberg"
-badge_url = "https://img.shields.io/badge/Zig-kreuzberg-007ec6"
-docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Zig bindings consuming the C FFI surface via @cImport, idiomatic error sets, optional types, and slice-based memory management."
-package_manager = ["zig"]
-features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
-ocr_backends = ["tesseract", "paddleocr"]
-optional_sections = ["system_requirements"]
-snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
-
-# ---------------------------------------------------------------------------
-# Version synchronization
-# ---------------------------------------------------------------------------
-
-[sync]
-extra_paths = [
-  "packages/python/kreuzberg/__init__.py",
-  "packages/ruby/lib/kreuzberg/version.rb",
-  "crates/kreuzberg-node/package.json",
-  "crates/kreuzberg-node/npm/*/package.json",
-  "packages/go/v4/go.mod",
-]
-
-# ---------------------------------------------------------------------------
-# Adapters — all currently excluded (reference excluded types)
-# ---------------------------------------------------------------------------
-# Adapters will be re-added as types are brought back into include list.
-
-# ---------------------------------------------------------------------------
-# Test commands
-# ---------------------------------------------------------------------------
-
-[test.python]
-precondition = "command -v uv >/dev/null 2>&1"
-before = "cd packages/python && maturin develop --release"
-command = "cd packages/python && uv run pytest tests/ -v"
-e2e = "cd e2e/python && python3 -m pytest tests/ -q"
-
-[test.node]
-precondition = "command -v npx >/dev/null 2>&1"
-before = "cd crates/kreuzberg-node && napi build --output-dir . --release"
-command = "npx vitest run --config packages/typescript/vitest.config.ts"
-e2e = "cd e2e/typescript && npx vitest run"
-
-[test.go]
-precondition = "command -v go >/dev/null 2>&1"
-before = "cargo build --release -p kreuzberg-ffi"
-e2e = "cd e2e/go && go test ./... -count=1"
-
-[test.ruby]
-precondition = "command -v bundle >/dev/null 2>&1"
-before = "cd e2e/ruby && bundle install"
-command = "cd e2e/ruby && bundle exec rspec"
-e2e = "cd e2e/ruby && bundle exec rspec"
-
-[test.php]
-precondition = "command -v composer >/dev/null 2>&1"
-before = "cd e2e/php && composer install"
-command = "cd e2e/php && composer test"
-e2e = "cd e2e/php && composer test"
-
-[test.java]
-precondition = "command -v mvn >/dev/null 2>&1"
-before = "cargo build --release -p kreuzberg-ffi"
-command = "cd e2e/java && mvn test -q"
-e2e = "cd e2e/java && mvn test -q"
-
-[test.csharp]
-precondition = "command -v dotnet >/dev/null 2>&1"
-before = "cargo build --release -p kreuzberg-ffi"
-command = "dotnet test e2e/csharp"
-e2e = "dotnet test e2e/csharp"
-
-[test.elixir]
-precondition = "command -v mix >/dev/null 2>&1"
-before = "cd packages/elixir && mix deps.get && mix compile"
-command = "cd e2e/elixir && mix test"
-e2e = "cd e2e/elixir && mix test"
-
-[test.r]
-precondition = "command -v Rscript >/dev/null 2>&1"
-command = "cd e2e/r && Rscript -e \"devtools::load_all('../../packages/r'); testthat::set_max_fails(Inf); testthat::test_dir('tests')\""
-e2e = "cd e2e/r && Rscript -e \"devtools::load_all('../../packages/r'); testthat::set_max_fails(Inf); testthat::test_dir('tests')\""
-
-[test.wasm]
-precondition = "command -v wasm-pack >/dev/null 2>&1"
-before = "wasm-pack build crates/kreuzberg-wasm --release --target bundler && cd e2e/wasm && npm install"
-e2e = "cd e2e/wasm && npm test"
-
-[test.rust]
-precondition = "command -v cargo >/dev/null 2>&1"
-e2e = "cd e2e/rust && cargo test"
-
-[test.kotlin]
-precondition = "command -v gradle >/dev/null 2>&1"
-before = "cargo build --release -p kreuzberg-ffi"
-command = "cd packages/kotlin && gradle test --no-daemon"
-e2e = "cd e2e/kotlin && gradle test --no-daemon"
-
-[test.swift]
-precondition = "command -v swift >/dev/null 2>&1"
-before = "cargo build --release -p kreuzberg-swift"
-command = "cd packages/swift && swift test"
-e2e = "cd e2e/swift && swift test"
-
-[test.dart]
-precondition = "command -v dart >/dev/null 2>&1"
-before = "cargo build --release -p kreuzberg-dart"
-command = "cd packages/dart && dart pub get && dart test"
-e2e = "cd e2e/dart && dart pub get && dart test"
-
-[test.gleam]
-precondition = "command -v gleam >/dev/null 2>&1"
-before = "cd packages/elixir && mix deps.get && mix compile"
-command = "cd packages/gleam && gleam test"
-e2e = "cd e2e/gleam && gleam test"
-
-[test.zig]
-precondition = "command -v zig >/dev/null 2>&1"
-before = "cargo build --release -p kreuzberg-ffi"
-command = "cd packages/zig && zig build test"
-e2e = "cd e2e/zig && zig build test"
-
-# ---------------------------------------------------------------------------
-# Lint commands
-# ---------------------------------------------------------------------------
-
-[lint.python]
+[crates.lint.python]
 precondition = "command -v ruff >/dev/null 2>&1"
 before = "cd packages/python && uv sync"
 typecheck = "cd packages/python && uv run mypy ."
 
-[lint.node]
+[crates.lint.node]
 precondition = "command -v npx >/dev/null 2>&1"
 format = "npx oxfmt packages/typescript"
 check = "npx oxlint packages/typescript"
 
-[lint.ruby]
+[crates.lint.ruby]
 precondition = "command -v bundle >/dev/null 2>&1"
 before = "cd packages/ruby && bundle install"
 format = "cd packages/ruby && bundle exec rubocop -a ."
 
-[lint.php]
+[crates.lint.php]
 precondition = "command -v composer >/dev/null 2>&1"
 before = "cd packages/php && composer install"
 format = "cd packages/php && vendor/bin/php-cs-fixer fix ."
 check = "cd packages/php && vendor/bin/phpstan --configuration=phpstan.neon --memory-limit=512M"
 
-[lint.go]
+[crates.lint.go]
 before = "cargo build --release -p kreuzberg-ffi"
 
-[lint.elixir]
+[crates.lint.elixir]
 precondition = "command -v mix >/dev/null 2>&1"
 before = "cd packages/elixir && mix deps.get"
 check = "cd packages/elixir && mix credo"
 
-[lint.java]
+[crates.lint.java]
 precondition = "command -v mvn >/dev/null 2>&1"
 check = "mvn -f packages/java/pom.xml spotless:check -q"
 
-[lint.wasm]
+[crates.lint.wasm]
 precondition = "test -d crates/kreuzberg-wasm/typescript"
 format = "npx oxfmt crates/kreuzberg-wasm/typescript"
 check = "npx oxlint crates/kreuzberg-wasm/typescript"
 
-[lint.ffi]
+[crates.lint.ffi]
 precondition = "test -d e2e/c"
 format = "find e2e/c -name '*.c' -o -name '*.h' | xargs clang-format -i"
 check = "find crates/kreuzberg-ffi/include -name '*.h' | xargs clang-format --dry-run --Werror"
 
-[lint.kotlin]
+[crates.lint.kotlin]
 precondition = "command -v gradle >/dev/null 2>&1"
 format = "cd packages/kotlin && gradle ktlintFormat --no-daemon"
 check = "cd packages/kotlin && gradle ktlintCheck --no-daemon"
 
-[lint.swift]
+[crates.lint.swift]
 precondition = "command -v swift >/dev/null 2>&1"
 format = "swift format --in-place --recursive packages/swift/Sources"
 check = "swift format lint --recursive packages/swift/Sources"
 
-[lint.dart]
+[crates.lint.dart]
 precondition = "command -v dart >/dev/null 2>&1"
 format = "cd packages/dart && dart format ."
 check = "cd packages/dart && dart analyze"
 
-[lint.gleam]
+[crates.lint.gleam]
 precondition = "command -v gleam >/dev/null 2>&1"
 format = "cd packages/gleam && gleam format"
 check = "cd packages/gleam && gleam format --check"
 
-[lint.zig]
+[crates.lint.zig]
 precondition = "command -v zig >/dev/null 2>&1"
 format = "cd packages/zig && zig fmt src"
 check = "cd packages/zig && zig fmt --check src"
 
-# ---------------------------------------------------------------------------
-# E2E test generation
-# ---------------------------------------------------------------------------
+[crates.update.r]
+precondition = "command -v Rscript >/dev/null"
+update = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::update_packages(ask = FALSE)\""
+upgrade = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::update_packages(ask = FALSE)\""
 
-[e2e]
+[crates.update.kotlin]
+precondition = "command -v gradle >/dev/null 2>&1"
+update = "cd packages/kotlin && gradle dependencyUpdates --no-daemon"
+upgrade = "cd packages/kotlin && gradle dependencyUpdates --refresh-dependencies --no-daemon"
+
+[crates.update.swift]
+precondition = "command -v swift >/dev/null 2>&1"
+update = "cd packages/swift && swift package update"
+upgrade = "cd packages/swift && swift package update"
+
+[crates.update.dart]
+precondition = "command -v dart >/dev/null 2>&1"
+update = "cd packages/dart && dart pub upgrade"
+upgrade = "cd packages/dart && dart pub upgrade --major-versions"
+
+[crates.update.gleam]
+precondition = "command -v gleam >/dev/null 2>&1"
+update = "cd packages/gleam && gleam update"
+upgrade = "cd packages/gleam && gleam update"
+
+[crates.update.zig]
+precondition = "command -v zig >/dev/null 2>&1"
+update = "cd packages/zig && zig build --fetch"
+upgrade = "cd packages/zig && zig build --fetch"
+
+[crates.test.python]
+precondition = "command -v uv >/dev/null 2>&1"
+before = "cd packages/python && maturin develop --release"
+command = "cd packages/python && uv run pytest tests/ -v"
+e2e = "cd e2e/python && python3 -m pytest tests/ -q"
+
+[crates.test.node]
+precondition = "command -v npx >/dev/null 2>&1"
+before = "cd crates/kreuzberg-node && napi build --output-dir . --release"
+command = "npx vitest run --config packages/typescript/vitest.config.ts"
+e2e = "cd e2e/typescript && npx vitest run"
+
+[crates.test.go]
+precondition = "command -v go >/dev/null 2>&1"
+before = "cargo build --release -p kreuzberg-ffi"
+e2e = "cd e2e/go && go test ./... -count=1"
+
+[crates.test.ruby]
+precondition = "command -v bundle >/dev/null 2>&1"
+before = "cd e2e/ruby && bundle install"
+command = "cd e2e/ruby && bundle exec rspec"
+e2e = "cd e2e/ruby && bundle exec rspec"
+
+[crates.test.php]
+precondition = "command -v composer >/dev/null 2>&1"
+before = "cd e2e/php && composer install"
+command = "cd e2e/php && composer test"
+e2e = "cd e2e/php && composer test"
+
+[crates.test.java]
+precondition = "command -v mvn >/dev/null 2>&1"
+before = "cargo build --release -p kreuzberg-ffi"
+command = "cd e2e/java && mvn test -q"
+e2e = "cd e2e/java && mvn test -q"
+
+[crates.test.csharp]
+precondition = "command -v dotnet >/dev/null 2>&1"
+before = "cargo build --release -p kreuzberg-ffi"
+command = "dotnet test e2e/csharp"
+e2e = "dotnet test e2e/csharp"
+
+[crates.test.elixir]
+precondition = "command -v mix >/dev/null 2>&1"
+before = "cd packages/elixir && mix deps.get && mix compile"
+command = "cd e2e/elixir && mix test"
+e2e = "cd e2e/elixir && mix test"
+
+[crates.test.r]
+precondition = "command -v Rscript >/dev/null 2>&1"
+command = "cd e2e/r && Rscript -e \"devtools::load_all('../../packages/r'); testthat::set_max_fails(Inf); testthat::test_dir('tests')\""
+e2e = "cd e2e/r && Rscript -e \"devtools::load_all('../../packages/r'); testthat::set_max_fails(Inf); testthat::test_dir('tests')\""
+
+[crates.test.wasm]
+precondition = "command -v wasm-pack >/dev/null 2>&1"
+before = "wasm-pack build crates/kreuzberg-wasm --release --target bundler && cd e2e/wasm && npm install"
+e2e = "cd e2e/wasm && npm test"
+
+[crates.test.rust]
+precondition = "command -v cargo >/dev/null 2>&1"
+e2e = "cd e2e/rust && cargo test"
+
+[crates.test.kotlin]
+precondition = "command -v gradle >/dev/null 2>&1"
+before = "cargo build --release -p kreuzberg-ffi"
+command = "cd packages/kotlin && gradle test --no-daemon"
+e2e = "cd e2e/kotlin && gradle test --no-daemon"
+
+[crates.test.swift]
+precondition = "command -v swift >/dev/null 2>&1"
+before = "cargo build --release -p kreuzberg-swift"
+command = "cd packages/swift && swift test"
+e2e = "cd e2e/swift && swift test"
+
+[crates.test.dart]
+precondition = "command -v dart >/dev/null 2>&1"
+before = "cargo build --release -p kreuzberg-dart"
+command = "cd packages/dart && dart pub get && dart test"
+e2e = "cd e2e/dart && dart pub get && dart test"
+
+[crates.test.gleam]
+precondition = "command -v gleam >/dev/null 2>&1"
+before = "cd packages/elixir && mix deps.get && mix compile"
+command = "cd packages/gleam && gleam test"
+e2e = "cd e2e/gleam && gleam test"
+
+[crates.test.zig]
+precondition = "command -v zig >/dev/null 2>&1"
+before = "cargo build --release -p kreuzberg-ffi"
+command = "cd packages/zig && zig build test"
+e2e = "cd e2e/zig && zig build test"
+
+[crates.publish]
+core_crate = "crates/kreuzberg"
+
+[crates.publish.languages.ruby]
+vendor_mode = "core-only"
+
+[crates.publish.languages.elixir]
+vendor_mode = "core-only"
+nif_versions = ["2.16", "2.17"]
+
+[crates.publish.languages.r]
+vendor_mode = "full"
+
+[crates.publish.languages.ffi]
+pkg_config = true
+cmake_config = true
+
+[crates.e2e]
 fixtures = "fixtures"
 output = "e2e"
 languages = ["python", "rust", "node", "go", "ruby", "elixir", "wasm", "java", "csharp", "php", "r"]
@@ -1431,7 +1130,7 @@ fields_array = [
   "document.node_types",
 ]
 
-[e2e.call]
+[crates.e2e.call]
 function = "extract_file"
 module = "kreuzberg"
 result_var = "result"
@@ -1443,61 +1142,59 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.call.overrides.rust]
+[crates.e2e.call.overrides.rust]
 crate_name = "kreuzberg"
 function = "extract_file"
 
-[e2e.call.overrides.python]
+[crates.e2e.call.overrides.python]
 module = "kreuzberg"
 function = "extract_file"
 options_type = "ExtractionConfig"
 
-[e2e.call.overrides.node]
+[crates.e2e.call.overrides.node]
 module = "kreuzberg"
 function = "extractFile"
 options_type = "JsExtractionConfig"
 arg_order = ["path", "config", "mime_type"]
 
-[e2e.call.overrides.go]
+[crates.e2e.call.overrides.go]
 module = "github.com/kreuzberg-dev/kreuzberg/v4"
 function = "ExtractFile"
 alias = "kreuzberg"
 options_type = "ExtractionConfig"
 
-[e2e.call.overrides.java]
+[crates.e2e.call.overrides.java]
 class = "dev.kreuzberg.Kreuzberg"
 function = "extractFile"
 options_type = "ExtractionConfig"
 
-[e2e.call.overrides.csharp]
+[crates.e2e.call.overrides.csharp]
 class = "KreuzbergLib"
 function = "ExtractFile"
 options_type = "ExtractionConfig"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
 
-[e2e.call.overrides.ruby]
+[crates.e2e.call.overrides.ruby]
 options_type = "Kreuzberg::ExtractionConfig"
 
-[e2e.call.overrides.elixir]
+[crates.e2e.call.overrides.elixir]
 options_type = "ExtractionConfig"
 handle_struct_type = "ExtractionConfig"
 
-[e2e.call.overrides.wasm]
+[crates.e2e.call.overrides.wasm]
 options_type = "WasmExtractionConfig"
 bigint_fields = ["cacheTtlSecs", "extractionTimeoutSecs"]
 
-[e2e.call.overrides.php]
+[crates.e2e.call.overrides.php]
 class = "Kreuzberg\\Kreuzberg"
 function = "extractFile"
 options_type = "ExtractionConfig"
 
-[e2e.call.overrides.r]
+[crates.e2e.call.overrides.r]
 function = "extract_file"
 options_type = "ExtractionConfig"
 
-# Named call configs for multi-function testing
-
-[e2e.calls.extract_bytes]
+[crates.e2e.calls.extract_bytes]
 function = "extract_bytes"
 module = "kreuzberg"
 async = true
@@ -1508,15 +1205,15 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.extract_bytes.overrides.csharp]
+[crates.e2e.calls.extract_bytes.overrides.csharp]
 options_type = "ExtractionConfig"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
 
-[e2e.calls.extract_bytes.overrides.python]
+[crates.e2e.calls.extract_bytes.overrides.python]
 arg_name_map = { data = "content" }
 options_type = "ExtractionConfig"
 
-[e2e.calls.extract_file_sync]
+[crates.e2e.calls.extract_file_sync]
 function = "extract_file_sync"
 module = "kreuzberg"
 async = false
@@ -1528,15 +1225,15 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.extract_file_sync.overrides.node]
+[crates.e2e.calls.extract_file_sync.overrides.node]
 options_type = "JsExtractionConfig"
 arg_order = ["path", "config", "mime_type"]
 
-[e2e.calls.extract_file_sync.overrides.csharp]
+[crates.e2e.calls.extract_file_sync.overrides.csharp]
 options_type = "ExtractionConfig"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
 
-[e2e.calls.extract_bytes_sync]
+[crates.e2e.calls.extract_bytes_sync]
 function = "extract_bytes_sync"
 module = "kreuzberg"
 async = false
@@ -1548,15 +1245,15 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.extract_bytes_sync.overrides.csharp]
+[crates.e2e.calls.extract_bytes_sync.overrides.csharp]
 options_type = "ExtractionConfig"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
 
-[e2e.calls.extract_bytes_sync.overrides.python]
+[crates.e2e.calls.extract_bytes_sync.overrides.python]
 arg_name_map = { data = "content" }
 options_type = "ExtractionConfig"
 
-[e2e.calls.embed]
+[crates.e2e.calls.embed]
 result_is_simple = true
 function = "embed_texts"
 module = "kreuzberg"
@@ -1568,13 +1265,11 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.embed.overrides.java]
+[crates.e2e.calls.embed.overrides.java]
 result_is_simple = true
 options_type = "EmbeddingConfig"
 
-# --- Text extraction standalone ---
-
-[e2e.calls.render_page]
+[crates.e2e.calls.render_page]
 result_is_bytes = true
 result_is_simple = true
 function = "render_pdf_page_to_png"
@@ -1586,91 +1281,94 @@ args = [
   { name = "page_index", field = "input.page_index", type = "int" },
 ]
 
-[e2e.calls.render_page.overrides.rust]
+[crates.e2e.calls.render_page.overrides.rust]
 result_is_bytes = true
 result_is_simple = true
 extra_args = ["None", "None"]
 
-[e2e.calls.render_page.overrides.csharp]
+[crates.e2e.calls.render_page.overrides.csharp]
 result_is_bytes = true
 result_is_simple = true
 extra_args = ["null", "null"]
 
+[crates.e2e.calls.render_html.overrides.python]
+result_is_simple = true
+arg_name_map = { doc = "html" }
 
-[e2e.calls.render_html.overrides.python]
+[crates.e2e.calls.render_markdown.overrides.python]
 result_is_simple = true
 arg_name_map = { doc = "html" }
-[e2e.calls.render_markdown.overrides.python]
+
+[crates.e2e.calls.render_djot.overrides.python]
 result_is_simple = true
 arg_name_map = { doc = "html" }
-[e2e.calls.render_djot.overrides.python]
+
+[crates.e2e.calls.render_json.overrides.python]
 result_is_simple = true
 arg_name_map = { doc = "html" }
-[e2e.calls.render_json.overrides.python]
+
+[crates.e2e.calls.render_plain.overrides.python]
 result_is_simple = true
 arg_name_map = { doc = "html" }
-[e2e.calls.render_plain.overrides.python]
-result_is_simple = true
-arg_name_map = { doc = "html" }
-[e2e.calls.djot_to_html.overrides.python]
+
+[crates.e2e.calls.djot_to_html.overrides.python]
 result_is_simple = true
 arg_name_map = { djot = "djot_source" }
-[e2e.calls.chunk_text.overrides.wasm]
+
+[crates.e2e.calls.chunk_text.overrides.wasm]
 options_type = "WasmChunkingConfig"
 
-[e2e.calls.chunk_text.overrides.rust]
+[crates.e2e.calls.chunk_text.overrides.rust]
 extra_args = ["None"]
 
-[e2e.calls.chunk_text.overrides.node]
+[crates.e2e.calls.chunk_text.overrides.node]
 options_type = "JsChunkingConfig"
 
-[e2e.calls.chunk_text.overrides.csharp]
+[crates.e2e.calls.chunk_text.overrides.csharp]
 options_type = "ChunkingConfig"
 extra_args = ["null"]
 
-[e2e.calls.chunk_text.overrides.java]
+[crates.e2e.calls.chunk_text.overrides.java]
 options_type = "ChunkingConfig"
 
-[e2e.calls.chunk_semantic.overrides.wasm]
+[crates.e2e.calls.chunk_semantic.overrides.wasm]
 options_type = "WasmChunkingConfig"
 
-[e2e.calls.chunk_semantic.overrides.rust]
+[crates.e2e.calls.chunk_semantic.overrides.rust]
 extra_args = ["None"]
 
-[e2e.calls.chunk_semantic.overrides.node]
+[crates.e2e.calls.chunk_semantic.overrides.node]
 options_type = "JsChunkingConfig"
 
-[e2e.calls.chunk_semantic.overrides.csharp]
+[crates.e2e.calls.chunk_semantic.overrides.csharp]
 options_type = "ChunkingConfig"
 extra_args = ["null"]
 
-[e2e.calls.chunk_semantic.overrides.java]
+[crates.e2e.calls.chunk_semantic.overrides.java]
 options_type = "ChunkingConfig"
 
-[e2e.calls.chunk_texts_batch.overrides.node]
+[crates.e2e.calls.chunk_texts_batch.overrides.node]
 options_type = "JsChunkingConfig"
 
-[e2e.calls.chunk_texts_batch.overrides.csharp]
+[crates.e2e.calls.chunk_texts_batch.overrides.csharp]
 options_type = "ChunkingConfig"
 
-[e2e.calls.chunk_texts_batch.overrides.java]
+[crates.e2e.calls.chunk_texts_batch.overrides.java]
 options_type = "ChunkingConfig"
 
-# --- Detection ---
-
-[e2e.calls.detect_languages.overrides.go]
+[crates.e2e.calls.detect_languages.overrides.go]
 options_type = "LanguageDetectionConfig"
 
-[e2e.calls.detect_languages.overrides.node]
+[crates.e2e.calls.detect_languages.overrides.node]
 options_type = "JsLanguageDetectionConfig"
 
-[e2e.calls.detect_languages.overrides.csharp]
+[crates.e2e.calls.detect_languages.overrides.csharp]
 options_type = "LanguageDetectionConfig"
 
-[e2e.calls.detect_languages.overrides.java]
+[crates.e2e.calls.detect_languages.overrides.java]
 options_type = "LanguageDetectionConfig"
 
-[e2e.calls.detect_mime_type_standalone]
+[crates.e2e.calls.detect_mime_type_standalone]
 function = "detect_mime_type"
 module = "kreuzberg"
 async = false
@@ -1680,28 +1378,26 @@ args = [
   { name = "check_exists", field = "input.check_exists", type = "bool" },
 ]
 
-[e2e.calls.detect_mime_type_from_bytes]
+[crates.e2e.calls.detect_mime_type_from_bytes]
 function = "detect_mime_type_from_bytes"
 module = "kreuzberg"
 async = false
 returns_result = true
 args = [{ name = "content", field = "input.data", type = "bytes" }]
 
-[e2e.calls.validate_chunking_params.overrides.python]
+[crates.e2e.calls.validate_chunking_params.overrides.python]
 arg_name_map = { max_characters = "max_chars", overlap = "max_overlap" }
 
-# --- Text processing ---
-
-[e2e.calls.normalize_whitespace.overrides.python]
+[crates.e2e.calls.normalize_whitespace.overrides.python]
 result_is_simple = true
 arg_name_map = { text = "s" }
 
-[e2e.calls.dedup_text.overrides.go]
+[crates.e2e.calls.dedup_text.overrides.go]
 result_is_array = true
 result_is_simple = true
 returns_result = true
 
-[e2e.calls.embed_text]
+[crates.e2e.calls.embed_text]
 function = "embed_texts"
 module = "kreuzberg"
 async = false
@@ -1712,7 +1408,7 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.get_extensions_for_mime]
+[crates.e2e.calls.get_extensions_for_mime]
 result_is_array = true
 result_is_simple = true
 function = "get_extensions_for_mime"
@@ -1721,8 +1417,8 @@ async = false
 returns_result = true
 args = [{ name = "mime_type", field = "input.mime_type", type = "string" }]
 
-[e2e.calls.batch_extract_file]
-function = "batch_extract_file"
+[crates.e2e.calls.batch_extract_files]
+function = "batch_extract_files"
 module = "kreuzberg"
 async = true
 returns_result = true
@@ -1733,21 +1429,21 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.batch_extract_file.overrides.csharp]
+[crates.e2e.calls.batch_extract_files.overrides.csharp]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_file.overrides.java]
+[crates.e2e.calls.batch_extract_files.overrides.java]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_file.overrides.python]
+[crates.e2e.calls.batch_extract_files.overrides.python]
 result_is_vec = true
 arg_name_map = { paths = "items" }
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_file_sync]
-function = "batch_extract_file_sync"
+[crates.e2e.calls.batch_extract_files_sync]
+function = "batch_extract_files_sync"
 module = "kreuzberg"
 async = false
 returns_result = true
@@ -1758,66 +1454,59 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.batch_extract_file_sync.overrides.csharp]
+[crates.e2e.calls.batch_extract_files_sync.overrides.csharp]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_file_sync.overrides.java]
+[crates.e2e.calls.batch_extract_files_sync.overrides.java]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_file_sync.overrides.python]
+[crates.e2e.calls.batch_extract_files_sync.overrides.python]
 result_is_vec = true
 arg_name_map = { paths = "items" }
 options_type = "ExtractionConfig"
 
-# --- Image processing ---
-
-[e2e.calls.reduce_tokens.overrides.go]
+[crates.e2e.calls.reduce_tokens.overrides.go]
 result_is_simple = true
 options_type = "TokenReductionConfig"
 
-[e2e.calls.reduce_tokens.overrides.node]
+[crates.e2e.calls.reduce_tokens.overrides.node]
 result_is_simple = true
 options_type = "JsTokenReductionConfig"
 
-[e2e.calls.reduce_tokens.overrides.csharp]
+[crates.e2e.calls.reduce_tokens.overrides.csharp]
 result_is_simple = true
 options_type = "TokenReductionConfig"
 
-[e2e.calls.reduce_tokens.overrides.python]
+[crates.e2e.calls.reduce_tokens.overrides.python]
 result_is_simple = true
 options_type = "TokenReductionConfig"
 
-# --- Serialization ---
-
-
-[e2e.calls.reduce_tokens.overrides.java]
+[crates.e2e.calls.reduce_tokens.overrides.java]
 result_is_simple = true
 options_type = "TokenReductionConfig"
 
-[e2e.calls.serialize_to_toon.overrides.node]
+[crates.e2e.calls.serialize_to_toon.overrides.node]
 result_is_simple = true
 options_type = "JsExtractionConfig"
 
-[e2e.calls.serialize_to_toon.overrides.csharp]
+[crates.e2e.calls.serialize_to_toon.overrides.csharp]
 result_is_simple = true
 options_type = "ExtractionConfig"
 
-
-[e2e.calls.serialize_to_json.overrides.node]
+[crates.e2e.calls.serialize_to_json.overrides.node]
 result_is_simple = true
 options_type = "JsExtractionConfig"
 
-[e2e.calls.serialize_to_json.overrides.csharp]
+[crates.e2e.calls.serialize_to_json.overrides.csharp]
 result_is_simple = true
 options_type = "ExtractionConfig"
 
-
-[e2e.calls.detect_or_validate.overrides.go]
+[crates.e2e.calls.detect_or_validate.overrides.go]
 returns_result = true
 
-[e2e.calls.embed_texts]
+[crates.e2e.calls.embed_texts]
 result_is_simple = true
 function = "embed_texts"
 module = "kreuzberg"
@@ -1829,15 +1518,15 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.embed_texts.overrides.csharp]
+[crates.e2e.calls.embed_texts.overrides.csharp]
 result_is_simple = true
 options_type = "EmbeddingConfig"
 
-[e2e.calls.embed_texts.overrides.java]
+[crates.e2e.calls.embed_texts.overrides.java]
 result_is_simple = true
 options_type = "EmbeddingConfig"
 
-[e2e.calls.batch_extract_bytes]
+[crates.e2e.calls.batch_extract_bytes]
 function = "batch_extract_bytes"
 module = "kreuzberg"
 async = true
@@ -1849,15 +1538,15 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.batch_extract_bytes.overrides.csharp]
+[crates.e2e.calls.batch_extract_bytes.overrides.csharp]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_bytes.overrides.java]
+[crates.e2e.calls.batch_extract_bytes.overrides.java]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_bytes_sync]
+[crates.e2e.calls.batch_extract_bytes_sync]
 function = "batch_extract_bytes_sync"
 module = "kreuzberg"
 async = false
@@ -1869,131 +1558,368 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
-[e2e.calls.batch_extract_bytes_sync.overrides.csharp]
+[crates.e2e.calls.batch_extract_bytes_sync.overrides.csharp]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-[e2e.calls.batch_extract_bytes_sync.overrides.java]
+[crates.e2e.calls.batch_extract_bytes_sync.overrides.java]
 result_is_vec = true
 options_type = "ExtractionConfig"
 
-# --- Registry operations ---
-
-[e2e.calls.list_document_extractors]
+[crates.e2e.calls.list_document_extractors]
 result_is_simple = true
-# Original Rust function is `list_extractors`, re-exported at the crate root as
-# `list_document_extractors` via `pub use ... as`. Alef extracts the original
-# name; bindings expose it idiomatically.
-function = "list_extractors"
-module = "kreuzberg::plugins"
+function = "list_document_extractors"
+module = "kreuzberg"
 async = false
 args = []
 
-
-[e2e.calls.list_ocr_backends]
+[crates.e2e.calls.list_ocr_backends]
 result_is_simple = true
 function = "list_ocr_backends"
 module = "kreuzberg"
 async = false
 args = []
 
-[e2e.calls.list_ocr_backends.overrides.go]
+[crates.e2e.calls.list_ocr_backends.overrides.go]
 result_is_simple = true
 returns_result = true
 
-[e2e.calls.list_post_processors]
+[crates.e2e.calls.list_post_processors]
 result_is_simple = true
 function = "list_post_processors"
 module = "kreuzberg"
 async = false
 args = []
 
-[e2e.calls.list_post_processors.overrides.go]
+[crates.e2e.calls.list_post_processors.overrides.go]
 result_is_simple = true
 returns_result = true
 
-[e2e.calls.list_validators]
+[crates.e2e.calls.list_validators]
 result_is_simple = true
 function = "list_validators"
 module = "kreuzberg"
 async = false
 args = []
 
-[e2e.calls.list_validators.overrides.go]
+[crates.e2e.calls.list_validators.overrides.go]
 result_is_simple = true
 returns_result = true
 
-[e2e.packages.rust]
+[crates.e2e.packages.rust]
 path = "../../crates/kreuzberg"
 
-[e2e.packages.python]
+[crates.e2e.packages.python]
 name = "kreuzberg"
 path = "../../packages/python"
 
-[e2e.packages.node]
+[crates.e2e.packages.node]
 name = "kreuzberg"
 path = "../../crates/kreuzberg-node"
 
-[e2e.packages.go]
+[crates.e2e.packages.go]
 module = "github.com/kreuzberg-dev/kreuzberg/v4"
 path = "../../packages/go/v4"
-[e2e.packages.csharp]
+
+[crates.e2e.packages.csharp]
 name = "Kreuzberg"
 path = "../../packages/csharp/Kreuzberg.csproj"
 
-[e2e.packages.java]
+[crates.e2e.packages.java]
 module = "dev.kreuzberg"
 path = "../../packages/java"
 
-[e2e.packages.ruby]
+[crates.e2e.packages.ruby]
 name = "kreuzberg"
 path = "../../packages/ruby"
 
-[e2e.packages.elixir]
+[crates.e2e.packages.elixir]
 module = "Kreuzberg"
 path = "../../packages/elixir"
 
-[e2e.packages.php]
+[crates.e2e.packages.php]
 name = "kreuzberg-dev/kreuzberg"
 path = "../../packages/php"
 
-[e2e.packages.r]
+[crates.e2e.packages.r]
 module = "kreuzberg"
 path = "../../packages/r"
 
-[e2e.format]
+[crates.e2e.format]
 python = "ruff check --fix {dir} && ruff format {dir}"
 go = "gofmt -w {dir}"
 rust = "(cd {dir} && cargo fmt --all)"
 
-[e2e.fields]
+[crates.e2e.fields]
 "metadata.title" = "metadata.format"
-# Derived/synthetic fields for assertions
-"chunks_have_content" = "chunks_have_content"
+chunks_have_content = "chunks_have_content"
 
-# sheet_count / sheet_names are now real top-level Option-typed fields on
-# Metadata (mirrored from the Excel format variant) so every binding sees
-# them at metadata.sheet_count / metadata.sheet_names.
-
-[e2e.fields_c_types]
+[crates.e2e.fields_c_types]
 "extraction_result.metadata" = "Metadata"
 
-[publish]
-core_crate = "crates/kreuzberg"
-
-[publish.languages.ruby]
-vendor_mode = "core-only"
-
-[publish.languages.elixir]
-vendor_mode = "core-only"
-nif_versions = ["2.16", "2.17"]
-
-[publish.languages.r]
-vendor_mode = "full"
-
-[publish.languages.ffi]
-pkg_config = true
-cmake_config = true
-
-[e2e.registry]
+[crates.e2e.registry]
 output = "test_apps"
+
+[crates.scaffold]
+description = "High-performance document intelligence library"
+license = "Elastic-2.0"
+repository = "https://github.com/kreuzberg-dev/kreuzberg"
+homepage = "https://kreuzberg.dev"
+authors = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]
+keywords = ["document", "extraction", "pdf", "ocr", "text"]
+
+[crates.scaffold.cargo]
+
+[crates.readme]
+template_dir = "templates/readme"
+snippets_dir = "docs/snippets"
+output_pattern = "packages/{language}/README.md"
+discord_url = "https://discord.gg/xt9WY3GnKR"
+banner_url = "https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0"
+
+[crates.readme.languages.python]
+template = "python.md"
+name = "Python"
+package_name = "kreuzberg"
+badge_url = "https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system."
+package_manager = ["pip"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "easyocr", "paddleocr"]
+optional_sections = ["async_vs_sync_performance", "ocr_backends", "system_requirements"]
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md", table_extraction = "getting-started/read_content.md" }
+
+[crates.readme.languages.typescript]
+template = "language_package.md"
+output_path = "crates/kreuzberg-node/README.md"
+name = "TypeScript (Node.js)"
+package_name = "@kreuzberg/node"
+badge_url = "https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
+package_manager = ["npm", "pnpm", "yarn"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, worker_pools = true, config_discovery = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = [
+  "native_vs_wasm_comparison",
+  "ocr_support",
+  "performance",
+  "napi_implementation",
+]
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file_async.md", batch_processing = "getting-started/batch_extract_files_sync.md", ocr_configuration = "config/config_ocr.md", table_extraction = "api/tables.md", config_discovery = "config/config_discovery.md", worker_pool = "advanced/worker_pool.md" }
+
+[crates.readme.languages.go]
+template = "go.md"
+output_path = "packages/go/v4/README.md"
+name = "Go"
+package_name = "github.com/kreuzberg-dev/kreuzberg/v4"
+badge_url = "https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance."
+package_manager = ["go get"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = false, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements", "ffi_build_instructions"]
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "getting-started/hello_world.md" }
+
+[crates.readme.languages.java]
+template = "language_package.md"
+name = "Java"
+package_name = "dev.kreuzberg:kreuzberg"
+badge_url = "https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance."
+package_manager = ["maven", "gradle"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["maven_gradle_setup", "system_requirements"]
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md", configuration = "config/config_basic.md" }
+
+[crates.readme.languages.php]
+template = "language_package.md"
+name = "PHP"
+package_name = "kreuzberg/kreuzberg"
+badge_url = "https://img.shields.io/packagist/v/kreuzberg/kreuzberg?label=PHP&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API."
+package_manager = ["composer"]
+features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["composer_installation", "system_requirements"]
+snippets = { basic_extraction = "quickstart/basic_extraction_oop.php", batch_processing = "extraction/batch_processing.php", ocr_configuration = "ocr/basic_ocr.php" }
+
+[crates.readme.languages.ruby]
+template = "ruby.md"
+name = "Ruby"
+package_name = "kreuzberg"
+badge_url = "https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance."
+package_manager = ["rubygems", "bundler"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements", "development_setup"]
+snippets = { basic_extraction = "getting-started/basic_usage.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/install_verify.md", ocr_configuration = "getting-started/extract_with_ocr.md" }
+
+[crates.readme.languages.csharp]
+template = "language_package.md"
+name = "C#"
+package_name = "Kreuzberg"
+badge_url = "https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility."
+package_manager = ["nuget"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["dotnet_installation", "system_requirements"]
+snippets = { basic_extraction = "getting-started/basic_usage.cs", async_extraction = "advanced/async_extraction.cs", batch_processing = "advanced/batch_processing.cs", ocr_configuration = "ocr/tesseract_backend.cs" }
+
+[crates.readme.languages.elixir]
+template = "language_package.md"
+name = "Elixir"
+package_name = "kreuzberg"
+badge_url = "https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API."
+package_manager = ["mix"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["mix_installation", "async_with_tasks", "plugin_system"]
+snippets = { basic_extraction = "getting-started/basic_usage.exs", async_extraction = "getting-started/extract_file.exs", batch_processing = "core/batch_extract_files_sync.exs", ocr_configuration = "ocr/tesseract_basic.exs", plugin_system = "plugins/word_count_processor.exs" }
+
+[crates.readme.languages.wasm]
+template = "language_package.md"
+output_path = "crates/kreuzberg-wasm/README.md"
+name = "WebAssembly"
+package_name = "@kreuzberg/wasm"
+badge_url = "https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support."
+package_manager = ["npm", "pnpm", "yarn"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = false, code_intelligence = true }
+ocr_backends = ["tesseract-wasm"]
+optional_sections = [
+  "pdfium_initialization",
+  "multi_threading",
+  "ocr_support",
+  "performance_comparison",
+]
+snippets = { basic_extraction = "getting-started/basic-extract.ts", browser_extraction = "getting-started/browser-file-input.ts", node_extraction = "getting-started/basic-extract.ts", async_extraction = "getting-started/async-extraction.ts", cloudflare_workers = "getting-started/runtime-detection.ts", batch_processing = "getting-started/batch-processing.ts", ocr_configuration = "ocr/enable-ocr.ts" }
+
+[crates.readme.languages.r]
+template = "language_package.md"
+name = "R"
+package_name = "kreuzberg"
+badge_url = "https://img.shields.io/badge/R-kreuzberg-007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. R bindings with native R API, data frame integration, and high-performance document extraction."
+package_manager = ["install.packages"]
+features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements"]
+snippets = { basic_extraction = "getting-started/basic_extraction.md", async_extraction = "getting-started/extract_file.md", batch_processing = "getting-started/extract_with_ocr.md", ocr_configuration = "ocr/ocr_extraction.md" }
+
+[crates.readme.languages.ffi]
+template = "language_package.md"
+output_path = "crates/kreuzberg-ffi/README.md"
+name = "FFI (C/C++)"
+package_name = "kreuzberg-ffi"
+badge_url = "https://img.shields.io/badge/C%2FC%2B%2B-kreuzberg--ffi-007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. C/C++ FFI bindings providing a stable ABI for native integration, shared library distribution, and cross-language interop."
+package_manager = ["cargo"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+
+[crates.readme.languages.kotlin]
+template = "language_package.md"
+name = "Kotlin"
+package_name = "dev.kreuzberg:kreuzberg-kotlin"
+badge_url = "https://img.shields.io/badge/Kotlin-kreuzberg-007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Kotlin/JVM bindings consuming the Java FFM facade, with idiomatic data classes, sealed-class enums, and coroutine-based async."
+package_manager = ["gradle", "maven"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements"]
+snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+
+[crates.readme.languages.swift]
+template = "language_package.md"
+name = "Swift"
+package_name = "Kreuzberg"
+badge_url = "https://img.shields.io/badge/Swift-kreuzberg-007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Swift bindings via swift-bridge for macOS, iOS, and Linux, with native Swift types and async/await support."
+package_manager = ["spm"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements"]
+snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+
+[crates.readme.languages.dart]
+template = "language_package.md"
+name = "Dart / Flutter"
+package_name = "kreuzberg"
+badge_url = "https://img.shields.io/badge/Dart-kreuzberg-007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Dart bindings via flutter_rust_bridge for both Flutter apps and pure-Dart server contexts, with isolate-safe Future/Stream APIs."
+package_manager = ["pub"]
+features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements"]
+snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+
+[crates.readme.languages.gleam]
+template = "language_package.md"
+name = "Gleam"
+package_name = "kreuzberg"
+badge_url = "https://img.shields.io/badge/Gleam-kreuzberg-007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Gleam bindings on the BEAM, shimmed through the Rustler-emitted Erlang NIF for type-safe extraction across Elixir/Gleam ecosystems."
+package_manager = ["gleam", "hex"]
+features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements"]
+snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+
+[crates.readme.languages.zig]
+template = "language_package.md"
+name = "Zig"
+package_name = "kreuzberg"
+badge_url = "https://img.shields.io/badge/Zig-kreuzberg-007ec6"
+docs_url = "https://kreuzberg.dev/"
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Zig bindings consuming the C FFI surface via @cImport, idiomatic error sets, optional types, and slice-based memory management."
+package_manager = ["zig"]
+features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
+ocr_backends = ["tesseract", "paddleocr"]
+optional_sections = ["system_requirements"]
+snippets = { basic_extraction = "api/extract_file_sync.md", async_extraction = "api/extract_file_async.md", batch_processing = "api/batch_extract_files_sync.md", ocr_configuration = "ocr/ocr_extraction.md" }
+
+[[crates.trait_bridges]]
+trait_name = "OcrBackend"
+super_trait = "kreuzberg::plugins::Plugin"
+registry_getter = "kreuzberg::plugins::registry::get_ocr_backend_registry"
+register_fn = "register_ocr_backend"
+exclude_languages = ["elixir"]
+
+[[crates.trait_bridges]]
+trait_name = "PostProcessor"
+super_trait = "kreuzberg::plugins::Plugin"
+registry_getter = "kreuzberg::plugins::registry::get_post_processor_registry"
+register_fn = "register_post_processor"
+exclude_languages = ["elixir"]
+
+[[crates.trait_bridges]]
+trait_name = "Validator"
+super_trait = "kreuzberg::plugins::Plugin"
+registry_getter = "kreuzberg::plugins::registry::get_validator_registry"
+register_fn = "register_validator"
+exclude_languages = ["elixir"]
+
+[[crates.trait_bridges]]
+trait_name = "EmbeddingBackend"
+super_trait = "kreuzberg::plugins::Plugin"
+registry_getter = "kreuzberg::plugins::registry::get_embedding_backend_registry"
+register_fn = "register_embedding_backend"
+exclude_languages = ["elixir"]

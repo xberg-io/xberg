@@ -36,4 +36,7 @@ public interface IPostProcessor {
     /** estimated_duration_ms. */
     long estimated_duration_ms(ExtractionResult _result) throws Exception;
 
+    /** priority. */
+    int priority() throws Exception;
+
 }

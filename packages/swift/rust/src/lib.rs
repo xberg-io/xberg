@@ -69,9 +69,9 @@ mod ffi {
             html_output: Option<HtmlOutputConfig>,
             extraction_timeout_secs: Option<u64>,
             max_concurrent_extractions: Option<usize>,
-            result_format: String,
+            result_format: ResultFormat,
             security_limits: Option<String>,
-            output_format: String,
+            output_format: OutputFormat,
             layout: Option<LayoutDetectionConfig>,
             include_document_structure: bool,
             acceleration: Option<AccelerationConfig>,
@@ -103,9 +103,9 @@ mod ffi {
         fn html_output(&self) -> Option<HtmlOutputConfig>;
         fn extraction_timeout_secs(&self) -> Option<u64>;
         fn max_concurrent_extractions(&self) -> Option<usize>;
-        fn result_format(&self) -> String;
+        fn result_format(&self) -> ResultFormat;
         fn security_limits(&self) -> Option<String>;
-        fn output_format(&self) -> String;
+        fn output_format(&self) -> OutputFormat;
         fn layout(&self) -> Option<LayoutDetectionConfig>;
         fn include_document_structure(&self) -> bool;
         fn acceleration(&self) -> Option<AccelerationConfig>;
@@ -138,8 +138,8 @@ mod ffi {
             keywords: Option<KeywordConfig>,
             postprocessor: Option<PostProcessorConfig>,
             html_options: Option<String>,
-            result_format: Option<String>,
-            output_format: Option<String>,
+            result_format: Option<ResultFormat>,
+            output_format: Option<OutputFormat>,
             include_document_structure: Option<bool>,
             layout: Option<LayoutDetectionConfig>,
             timeout_secs: Option<u64>,
@@ -161,13 +161,26 @@ mod ffi {
         fn keywords(&self) -> Option<KeywordConfig>;
         fn postprocessor(&self) -> Option<PostProcessorConfig>;
         fn html_options(&self) -> Option<String>;
-        fn result_format(&self) -> Option<String>;
-        fn output_format(&self) -> Option<String>;
+        fn result_format(&self) -> Option<ResultFormat>;
+        fn output_format(&self) -> Option<OutputFormat>;
         fn include_document_structure(&self) -> Option<bool>;
         fn layout(&self) -> Option<LayoutDetectionConfig>;
         fn timeout_secs(&self) -> Option<u64>;
         fn tree_sitter(&self) -> Option<TreeSitterConfig>;
         fn structured_extraction(&self) -> Option<StructuredExtractionConfig>;
+    }
+
+    extern "Rust" {
+        type BatchBytesItem;
+        fn content(&self) -> Vec<u8>;
+        fn mime_type(&self) -> String;
+        fn config(&self) -> Option<FileExtractionConfig>;
+    }
+
+    extern "Rust" {
+        type BatchFileItem;
+        fn path(&self) -> String;
+        fn config(&self) -> Option<FileExtractionConfig>;
     }
 
     extern "Rust" {
@@ -338,7 +351,7 @@ mod ffi {
             backend: String,
             language: String,
             tesseract_config: Option<TesseractConfig>,
-            output_format: Option<String>,
+            output_format: Option<OutputFormat>,
             paddle_ocr_config: Option<String>,
             element_config: Option<OcrElementConfig>,
             quality_thresholds: Option<OcrQualityThresholds>,
@@ -352,7 +365,7 @@ mod ffi {
         fn backend(&self) -> String;
         fn language(&self) -> String;
         fn tesseract_config(&self) -> Option<TesseractConfig>;
-        fn output_format(&self) -> Option<String>;
+        fn output_format(&self) -> Option<OutputFormat>;
         fn paddle_ocr_config(&self) -> Option<String>;
         fn element_config(&self) -> Option<OcrElementConfig>;
         fn quality_thresholds(&self) -> Option<OcrQualityThresholds>;
@@ -924,6 +937,15 @@ mod ffi {
         fn bbox(&self) -> Option<String>;
         fn annotations(&self) -> Vec<TextAnnotation>;
         fn attributes(&self) -> String;
+    }
+
+    extern "Rust" {
+        type TableGrid;
+        #[swift_bridge(init)]
+        fn new(rows: u32, cols: u32, cells: Vec<GridCell>) -> TableGrid;
+        fn rows(&self) -> u32;
+        fn cols(&self) -> u32;
+        fn cells(&self) -> Vec<GridCell>;
     }
 
     extern "Rust" {
@@ -2022,6 +2044,18 @@ mod ffi {
     }
 
     extern "Rust" {
+        type EmbeddingPreset;
+        fn name(&self) -> String;
+        fn chunk_size(&self) -> usize;
+        fn overlap(&self) -> usize;
+        fn model_repo(&self) -> String;
+        fn pooling(&self) -> String;
+        fn model_file(&self) -> String;
+        fn dimensions(&self) -> usize;
+        fn description(&self) -> String;
+    }
+
+    extern "Rust" {
         type YakeParams;
         #[swift_bridge(init)]
         fn new(window_size: usize) -> YakeParams;
@@ -2220,6 +2254,10 @@ mod ffi {
     }
 
     extern "Rust" {
+        type OutputFormat;
+    }
+
+    extern "Rust" {
         type HtmlTheme;
     }
 
@@ -2301,6 +2339,10 @@ mod ffi {
 
     extern "Rust" {
         type ImageKind;
+    }
+
+    extern "Rust" {
+        type ResultFormat;
     }
 
     extern "Rust" {
@@ -2388,19 +2430,32 @@ mod ffi {
             mime_type: String,
             config: ExtractionConfig,
         ) -> Result<ExtractionResult, String>;
-        #[swift_bridge(swift_name = "batchExtractFileSync")]
-        fn batch_extract_file_sync(
-            items: Vec<String>,
+        #[swift_bridge(swift_name = "batchExtractFilesSync")]
+        fn batch_extract_files_sync(
+            items: Vec<BatchFileItem>,
             config: ExtractionConfig,
         ) -> Result<Vec<ExtractionResult>, String>;
-        #[swift_bridge(swift_name = "batchExtractFile")]
-        fn batch_extract_file(items: Vec<String>, config: ExtractionConfig) -> Result<Vec<ExtractionResult>, String>;
+        #[swift_bridge(swift_name = "batchExtractBytesSync")]
+        fn batch_extract_bytes_sync(
+            items: Vec<BatchBytesItem>,
+            config: ExtractionConfig,
+        ) -> Result<Vec<ExtractionResult>, String>;
+        #[swift_bridge(swift_name = "batchExtractFiles")]
+        fn batch_extract_files(
+            items: Vec<BatchFileItem>,
+            config: ExtractionConfig,
+        ) -> Result<Vec<ExtractionResult>, String>;
+        #[swift_bridge(swift_name = "batchExtractBytes")]
+        fn batch_extract_bytes(
+            items: Vec<BatchBytesItem>,
+            config: ExtractionConfig,
+        ) -> Result<Vec<ExtractionResult>, String>;
         #[swift_bridge(swift_name = "detectMimeTypeFromBytes")]
         fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String>;
         #[swift_bridge(swift_name = "getExtensionsForMime")]
         fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String>;
-        #[swift_bridge(swift_name = "listExtractors")]
-        fn list_extractors() -> Result<Vec<String>, String>;
+        #[swift_bridge(swift_name = "listDocumentExtractors")]
+        fn list_document_extractors() -> Result<Vec<String>, String>;
         #[swift_bridge(swift_name = "listOcrBackends")]
         fn list_ocr_backends() -> Result<Vec<String>, String>;
         #[swift_bridge(swift_name = "clearOcrBackends")]
@@ -2470,6 +2525,7 @@ mod ffi {
             config: ExtractionConfig,
         ) -> bool;
         fn post_processor_call_estimated_duration_ms(this: &PostProcessorBox, result: ExtractionResult) -> u64;
+        fn post_processor_call_priority(this: &PostProcessorBox) -> i32;
     }
 
     extern "Rust" {
@@ -2598,9 +2654,9 @@ impl ExtractionConfig {
         html_output: Option<HtmlOutputConfig>,
         extraction_timeout_secs: Option<u64>,
         max_concurrent_extractions: Option<usize>,
-        result_format: String,
+        result_format: ResultFormat,
         security_limits: Option<String>,
-        output_format: String,
+        output_format: OutputFormat,
         layout: Option<LayoutDetectionConfig>,
         include_document_structure: bool,
         acceleration: Option<AccelerationConfig>,
@@ -2665,11 +2721,7 @@ impl ExtractionConfig {
         }
         __target.extraction_timeout_secs = extraction_timeout_secs;
         __target.max_concurrent_extractions = max_concurrent_extractions;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&result_format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.result_format = t;
-            }
-        }
+        // alef: result_format (ResultFormat) is an enum; reverse From not generated — left at default
         if let Some(s) = security_limits {
             if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
                 if let Ok(t) = ::serde_json::from_value(v) {
@@ -2677,11 +2729,7 @@ impl ExtractionConfig {
                 }
             }
         }
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&output_format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.output_format = t;
-            }
-        }
+        // alef: output_format (OutputFormat) is an enum; reverse From not generated — left at default
         if let Some(w) = layout {
             __target.layout = Some(w.0);
         }
@@ -2804,8 +2852,8 @@ impl ExtractionConfig {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn result_format(&self) -> String {
-        serde_json::to_string(&self.0.result_format).unwrap_or_default()
+    pub fn result_format(&self) -> ResultFormat {
+        ResultFormat::from(self.0.result_format.clone())
     }
     pub fn security_limits(&self) -> Option<String> {
         self.0
@@ -2813,8 +2861,8 @@ impl ExtractionConfig {
             .as_ref()
             .and_then(|v| serde_json::to_string(v).ok())
     }
-    pub fn output_format(&self) -> String {
-        serde_json::to_string(&self.0.output_format).unwrap_or_default()
+    pub fn output_format(&self) -> OutputFormat {
+        OutputFormat::from(self.0.output_format.clone())
     }
     pub fn layout(&self) -> Option<LayoutDetectionConfig> {
         self.0.layout.clone().map(LayoutDetectionConfig)
@@ -2883,8 +2931,8 @@ impl FileExtractionConfig {
         keywords: Option<KeywordConfig>,
         postprocessor: Option<PostProcessorConfig>,
         html_options: Option<String>,
-        result_format: Option<String>,
-        output_format: Option<String>,
+        result_format: Option<ResultFormat>,
+        output_format: Option<OutputFormat>,
         include_document_structure: Option<bool>,
         layout: Option<LayoutDetectionConfig>,
         timeout_secs: Option<u64>,
@@ -2937,20 +2985,8 @@ impl FileExtractionConfig {
                 }
             }
         }
-        if let Some(s) = result_format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.result_format = Some(t);
-                }
-            }
-        }
-        if let Some(s) = output_format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.output_format = Some(t);
-                }
-            }
-        }
+        // alef: result_format (ResultFormat) is an enum; reverse From not generated — left at default
+        // alef: output_format (OutputFormat) is an enum; reverse From not generated — left at default
         __target.include_document_structure = include_document_structure;
         if let Some(w) = layout {
             __target.layout = Some(w.0);
@@ -3025,17 +3061,11 @@ impl FileExtractionConfig {
     pub fn html_options(&self) -> Option<String> {
         self.0.html_options.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
-    pub fn result_format(&self) -> Option<String> {
-        self.0
-            .result_format
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+    pub fn result_format(&self) -> Option<ResultFormat> {
+        self.0.result_format.clone().map(ResultFormat::from)
     }
-    pub fn output_format(&self) -> Option<String> {
-        self.0
-            .output_format
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+    pub fn output_format(&self) -> Option<OutputFormat> {
+        self.0.output_format.clone().map(OutputFormat::from)
     }
     pub fn include_document_structure(&self) -> Option<bool> {
         self.0.include_document_structure.as_ref().and_then(|v| {
@@ -3059,6 +3089,31 @@ impl FileExtractionConfig {
     }
     pub fn structured_extraction(&self) -> Option<StructuredExtractionConfig> {
         self.0.structured_extraction.clone().map(StructuredExtractionConfig)
+    }
+}
+
+pub struct BatchBytesItem(pub kreuzberg::BatchBytesItem);
+
+impl BatchBytesItem {
+    pub fn content(&self) -> Vec<u8> {
+        self.0.content.to_vec()
+    }
+    pub fn mime_type(&self) -> String {
+        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+    }
+    pub fn config(&self) -> Option<FileExtractionConfig> {
+        self.0.config.clone().map(FileExtractionConfig)
+    }
+}
+
+pub struct BatchFileItem(pub kreuzberg::BatchFileItem);
+
+impl BatchFileItem {
+    pub fn path(&self) -> String {
+        serde_json::to_string(&self.0.path).unwrap_or_default()
+    }
+    pub fn config(&self) -> Option<FileExtractionConfig> {
+        self.0.config.clone().map(FileExtractionConfig)
     }
 }
 
@@ -3588,7 +3643,7 @@ impl OcrConfig {
         backend: String,
         language: String,
         tesseract_config: Option<TesseractConfig>,
-        output_format: Option<String>,
+        output_format: Option<OutputFormat>,
         paddle_ocr_config: Option<String>,
         element_config: Option<OcrElementConfig>,
         quality_thresholds: Option<OcrQualityThresholds>,
@@ -3613,13 +3668,7 @@ impl OcrConfig {
         if let Some(w) = tesseract_config {
             __target.tesseract_config = Some(w.0);
         }
-        if let Some(s) = output_format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.output_format = Some(t);
-                }
-            }
-        }
+        // alef: output_format (OutputFormat) is an enum; reverse From not generated — left at default
         if let Some(s) = paddle_ocr_config {
             if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
                 if let Ok(t) = ::serde_json::from_value(v) {
@@ -3667,11 +3716,8 @@ impl OcrConfig {
     pub fn tesseract_config(&self) -> Option<TesseractConfig> {
         self.0.tesseract_config.clone().map(TesseractConfig)
     }
-    pub fn output_format(&self) -> Option<String> {
-        self.0
-            .output_format
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+    pub fn output_format(&self) -> Option<OutputFormat> {
+        self.0.output_format.clone().map(OutputFormat::from)
     }
     pub fn paddle_ocr_config(&self) -> Option<String> {
         self.0
@@ -5463,6 +5509,33 @@ impl DocumentNode {
     }
     pub fn attributes(&self) -> String {
         serde_json::to_string(&self.0.attributes).expect("serializable attributes")
+    }
+}
+
+pub struct TableGrid(pub kreuzberg::TableGrid);
+
+impl TableGrid {
+    pub fn new(rows: u32, cols: u32, cells: Vec<GridCell>) -> TableGrid {
+        let mut __target: kreuzberg::TableGrid = ::std::default::Default::default();
+        __target.rows = rows;
+        __target.cols = cols;
+        __target.cells = cells.into_iter().map(|w| w.0).collect();
+        TableGrid(__target)
+    }
+    pub fn rows(&self) -> u32 {
+        ::serde_json::to_value(&self.0.rows)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn cols(&self) -> u32 {
+        ::serde_json::to_value(&self.0.cols)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn cells(&self) -> Vec<GridCell> {
+        self.0.cells.iter().map(|elem| GridCell(elem.clone())).collect()
     }
 }
 
@@ -9083,6 +9156,44 @@ impl MergedChunk {
     }
 }
 
+pub struct EmbeddingPreset(pub kreuzberg::EmbeddingPreset);
+
+impl EmbeddingPreset {
+    pub fn name(&self) -> String {
+        serde_json::to_string(&self.0.name).unwrap_or_default()
+    }
+    pub fn chunk_size(&self) -> usize {
+        ::serde_json::to_value(&self.0.chunk_size)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn overlap(&self) -> usize {
+        ::serde_json::to_value(&self.0.overlap)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn model_repo(&self) -> String {
+        serde_json::to_string(&self.0.model_repo).unwrap_or_default()
+    }
+    pub fn pooling(&self) -> String {
+        serde_json::to_string(&self.0.pooling).unwrap_or_default()
+    }
+    pub fn model_file(&self) -> String {
+        serde_json::to_string(&self.0.model_file).unwrap_or_default()
+    }
+    pub fn dimensions(&self) -> usize {
+        ::serde_json::to_value(&self.0.dimensions)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn description(&self) -> String {
+        serde_json::to_string(&self.0.description).unwrap_or_default()
+    }
+}
+
 pub struct YakeParams(pub kreuzberg::YakeParams);
 
 impl YakeParams {
@@ -9362,16 +9473,16 @@ pub struct ModelPaths(pub kreuzberg::ModelPaths);
 
 impl ModelPaths {
     pub fn det_model(&self) -> String {
-        format!("{:?}", &self.0.det_model)
+        serde_json::to_string(&self.0.det_model).unwrap_or_default()
     }
     pub fn cls_model(&self) -> String {
-        format!("{:?}", &self.0.cls_model)
+        serde_json::to_string(&self.0.cls_model).unwrap_or_default()
     }
     pub fn rec_model(&self) -> String {
-        format!("{:?}", &self.0.rec_model)
+        serde_json::to_string(&self.0.rec_model).unwrap_or_default()
     }
     pub fn dict_file(&self) -> String {
-        format!("{:?}", &self.0.dict_file)
+        serde_json::to_string(&self.0.dict_file).unwrap_or_default()
     }
 }
 
@@ -9645,6 +9756,31 @@ impl From<kreuzberg::ExecutionProviderType> for ExecutionProviderType {
             kreuzberg::ExecutionProviderType::CoreMl => Self::CoreMl,
             kreuzberg::ExecutionProviderType::Cuda => Self::Cuda,
             kreuzberg::ExecutionProviderType::TensorRt => Self::TensorRt,
+        }
+    }
+}
+
+pub enum OutputFormat {
+    Plain,
+    Markdown,
+    Djot,
+    Html,
+    Json,
+    Structured,
+    /// Data variants not directly bridgeable — represented as Unknown.
+    Unknown,
+}
+
+impl From<kreuzberg::OutputFormat> for OutputFormat {
+    fn from(val: kreuzberg::OutputFormat) -> Self {
+        match val {
+            kreuzberg::OutputFormat::Plain => Self::Plain,
+            kreuzberg::OutputFormat::Markdown => Self::Markdown,
+            kreuzberg::OutputFormat::Djot => Self::Djot,
+            kreuzberg::OutputFormat::Html => Self::Html,
+            kreuzberg::OutputFormat::Json => Self::Json,
+            kreuzberg::OutputFormat::Structured => Self::Structured,
+            _ => Self::Unknown,
         }
     }
 }
@@ -10123,6 +10259,20 @@ impl From<kreuzberg::ImageKind> for ImageKind {
     }
 }
 
+pub enum ResultFormat {
+    Unified,
+    ElementBased,
+}
+
+impl From<kreuzberg::ResultFormat> for ResultFormat {
+    fn from(val: kreuzberg::ResultFormat) -> Self {
+        match val {
+            kreuzberg::ResultFormat::Unified => Self::Unified,
+            kreuzberg::ResultFormat::ElementBased => Self::ElementBased,
+        }
+    }
+}
+
 pub enum ElementType {
     Title,
     NarrativeText,
@@ -10507,34 +10657,53 @@ pub fn extract_bytes_sync(
         .map(ExtractionResult)
 }
 
-pub fn batch_extract_file_sync(items: Vec<String>, config: ExtractionConfig) -> Result<Vec<ExtractionResult>, String> {
-    kreuzberg::batch_extract_file_sync(
-        items
-            .into_iter()
-            .map(|p| (std::path::PathBuf::from(p), None))
-            .collect::<Vec<_>>(),
-        &config.0,
-    )
-    .map_err(|e| e.to_string())
-    .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
+pub fn batch_extract_files_sync(
+    items: Vec<BatchFileItem>,
+    config: ExtractionConfig,
+) -> Result<Vec<ExtractionResult>, String> {
+    kreuzberg::batch_extract_files_sync(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
 }
 
-pub fn batch_extract_file(items: Vec<String>, config: ExtractionConfig) -> Result<Vec<ExtractionResult>, String> {
+pub fn batch_extract_bytes_sync(
+    items: Vec<BatchBytesItem>,
+    config: ExtractionConfig,
+) -> Result<Vec<ExtractionResult>, String> {
+    kreuzberg::batch_extract_bytes_sync(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
+        .map_err(|e| e.to_string())
+        .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
+}
+
+pub fn batch_extract_files(
+    items: Vec<BatchFileItem>,
+    config: ExtractionConfig,
+) -> Result<Vec<ExtractionResult>, String> {
     ::tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("build tokio runtime")
         .block_on(async {
-            kreuzberg::batch_extract_file(
-                items
-                    .into_iter()
-                    .map(|p| (std::path::PathBuf::from(p), None))
-                    .collect::<Vec<_>>(),
-                &config.0,
-            )
-            .await
-            .map_err(|e| e.to_string())
-            .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
+            kreuzberg::batch_extract_files(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
+                .await
+                .map_err(|e| e.to_string())
+                .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
+        })
+}
+
+pub fn batch_extract_bytes(
+    items: Vec<BatchBytesItem>,
+    config: ExtractionConfig,
+) -> Result<Vec<ExtractionResult>, String> {
+    ::tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("build tokio runtime")
+        .block_on(async {
+            kreuzberg::batch_extract_bytes(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
+                .await
+                .map_err(|e| e.to_string())
+                .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
         })
 }
 
@@ -10550,8 +10719,8 @@ pub fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String>
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
 }
 
-pub fn list_extractors() -> Result<Vec<String>, String> {
-    kreuzberg::plugins::list_extractors()
+pub fn list_document_extractors() -> Result<Vec<String>, String> {
+    kreuzberg::list_document_extractors()
         .map_err(|e| e.to_string())
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
 }
@@ -10737,6 +10906,10 @@ pub fn post_processor_call_should_process(
 
 pub fn post_processor_call_estimated_duration_ms(this: &PostProcessorBox, result: ExtractionResult) -> u64 {
     this.0.estimated_duration_ms(&result.0)
+}
+
+pub fn post_processor_call_priority(this: &PostProcessorBox) -> i32 {
+    this.0.priority()
 }
 
 pub struct ValidatorBox(pub Box<dyn kreuzberg::plugins::Validator + Send + Sync>);

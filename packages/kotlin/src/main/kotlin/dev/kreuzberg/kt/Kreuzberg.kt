@@ -12,6 +12,8 @@ typealias ContentFilterConfig = dev.kreuzberg.ContentFilterConfig
 typealias EmailConfig = dev.kreuzberg.EmailConfig
 typealias ExtractionConfig = dev.kreuzberg.ExtractionConfig
 typealias FileExtractionConfig = dev.kreuzberg.FileExtractionConfig
+typealias BatchBytesItem = dev.kreuzberg.BatchBytesItem
+typealias BatchFileItem = dev.kreuzberg.BatchFileItem
 typealias ImageExtractionConfig = dev.kreuzberg.ImageExtractionConfig
 typealias TokenReductionOptions = dev.kreuzberg.TokenReductionOptions
 typealias LanguageDetectionConfig = dev.kreuzberg.LanguageDetectionConfig
@@ -185,6 +187,7 @@ typealias CommonPdfMetadata = dev.kreuzberg.CommonPdfMetadata
 typealias PdfUnifiedExtractionResult = dev.kreuzberg.PdfUnifiedExtractionResult
 
 typealias ExecutionProviderType = dev.kreuzberg.ExecutionProviderType
+typealias OutputFormat = dev.kreuzberg.OutputFormat
 typealias HtmlTheme = dev.kreuzberg.HtmlTheme
 typealias TableModel = dev.kreuzberg.TableModel
 typealias PdfBackend = dev.kreuzberg.PdfBackend
@@ -206,6 +209,7 @@ typealias AnnotationKind = dev.kreuzberg.AnnotationKind
 typealias ExtractionMethod = dev.kreuzberg.ExtractionMethod
 typealias ChunkType = dev.kreuzberg.ChunkType
 typealias ImageKind = dev.kreuzberg.ImageKind
+typealias ResultFormat = dev.kreuzberg.ResultFormat
 typealias ElementType = dev.kreuzberg.ElementType
 typealias FormatMetadata = dev.kreuzberg.FormatMetadata
 typealias TextDirection = dev.kreuzberg.TextDirection
@@ -322,7 +326,7 @@ object Kreuzberg {
      * Only available with `tokio-runtime` (WASM has no filesystem).
      */
     fun batchExtractFileSync(
-        items: List<String>,
+        items: List<BatchFileItem>,
         config: ExtractionConfig,
     ): List<ExtractionResult> = Bridge.batchExtractFileSync(items, config)
 
@@ -335,7 +339,7 @@ object Kreuzberg {
      * that iterates through items and calls `extract_bytes_sync()`.
      */
     fun batchExtractBytesSync(
-        items: List<String>,
+        items: List<BatchBytesItem>,
         config: ExtractionConfig,
     ): List<ExtractionResult> = Bridge.batchExtractBytesSync(items, config)
 
@@ -352,7 +356,7 @@ object Kreuzberg {
      * Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
      * taken from the batch-level `config`.
      *
-     *   config to use the batch-level defaults for that file.
+     *   per-file configuration overrides.
      * * `config` - Batch-level extraction configuration (provides defaults and batch settings)
      *
      * **Returns:**
@@ -370,7 +374,7 @@ object Kreuzberg {
      * Per-file configuration overrides:
      */
     suspend fun batchExtractFile(
-        items: List<String>,
+        items: List<BatchFileItem>,
         config: ExtractionConfig,
     ): List<ExtractionResult> =
         withContext(Dispatchers.IO) {
@@ -389,6 +393,9 @@ object Kreuzberg {
      * fields from the batch-level `config`. Pass `null` as the config to use
      * the batch-level defaults for that item.
      *
+     *   MIME type, and optional per-item configuration overrides.
+     * * `config` - Batch-level extraction configuration
+     *
      * **Returns:**
      *
      * A vector of `ExtractionResult` in the same order as the input items.
@@ -399,7 +406,7 @@ object Kreuzberg {
      * Per-item configuration overrides:
      */
     suspend fun batchExtractBytes(
-        items: List<String>,
+        items: List<BatchBytesItem>,
         config: ExtractionConfig,
     ): List<ExtractionResult> =
         withContext(Dispatchers.IO) {

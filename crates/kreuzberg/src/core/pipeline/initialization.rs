@@ -39,7 +39,7 @@ pub(super) fn initialize_features() {
         QUALITY_INIT.get_or_init(|| {
             let registry = crate::plugins::registry::get_post_processor_registry();
             let mut reg = registry.write();
-            let _ = reg.register(std::sync::Arc::new(crate::text::QualityProcessor), 30);
+            let _ = reg.register(std::sync::Arc::new(crate::text::QualityProcessor));
         });
     }
 }

@@ -226,6 +226,8 @@ abstract class OcrBackend {
 ///   Future<bool> shouldProcess(...) async { ... }
 ///   @override
 ///   Future<int> estimatedDurationMs(...) async { ... }
+///   @override
+///   Future<int> priority(...) async { ... }
 /// }
 ///
 /// final impl = createPostProcessorDartImpl(
@@ -233,6 +235,7 @@ abstract class OcrBackend {
 ///   processingStage: (...) => myInstance.processingStage(...),
 ///   shouldProcess: (...) => myInstance.shouldProcess(...),
 ///   estimatedDurationMs: (...) => myInstance.estimatedDurationMs(...),
+///   priority: (...) => myInstance.priority(...),
 /// );
 /// ```
 abstract class PostProcessor {
@@ -406,6 +409,13 @@ abstract class PostProcessor {
   ///
   /// Estimated processing time in milliseconds.
   Future<int> estimatedDurationMs(ExtractionResult result);
+
+  /// Execution priority within the processing stage.
+  ///
+  /// Higher values run first within the same `ProcessingStage`. Defaults to 50.
+  /// Use 0-49 for fallback processors, 50 for normal processors, and 51-255
+  /// for high-priority processors that should run early in their stage.
+  Future<int> priority();
 }
 
 /// Abstract class for the `Validator` Rust trait.

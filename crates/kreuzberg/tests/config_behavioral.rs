@@ -12,7 +12,7 @@ use kreuzberg::core::config::ChunkingConfig;
 use kreuzberg::core::config::ExtractionConfig;
 use kreuzberg::core::config::OutputFormat;
 use kreuzberg::core::extractor::extract_bytes;
-use kreuzberg::types::OutputFormat as ResultFormat;
+use kreuzberg::types::ResultFormat;
 
 mod helpers;
 

@@ -12,20 +12,20 @@ Welcome to the meeting of the Cupertino Union School District Board of Education
 
 As a courtesy to others, please turn off your cell phone upon entering the meeting.
 
-1.           CALL TO ORDER/FLAG SALUTE
-2.            PUBLIC COMMENT - ITEMS ON THE AGENDA
+1.                             CALL TO ORDER/FLAG SALUTE
+2.                              PUBLIC COMMENT - ITEMS ON THE AGENDA
 
 The public may address the Board on any agenda item and any item not on the agenda. The Board president will only call on those who have filled out comment cards before the meeting, and each speaker will be allotted three (3) minutes. The Board will not respond or take action on any non-agenda item comments at this time, although the item may be agendized at a later date (Ed. Code 35145.5). The comments shall be made from the podium. In accordance with Government Code 54954.2 - No action or discussion shall be undertaken on any item not appearing on the posted agenda. The Board shall limit the total time to 30 minutes. Please refrain from any response to the speaker including negative and positive reactions (booing and clapping). This will ensure that all members of the public feel free to voice their opinions and concerns.
 
 `
 
-3.            CLOSED SESSION
+3.                              CLOSED SESSION
 
 By law, closed sessions are not open to the public. Anyone wishing to address the Board of Education on closed session matters may do so during Agenda Item 2 - Public Comments
 
 2.1 Public Employee Performance Evaluation - Pursuant to Government Code Section 54957 District Representatives: Board President Josephine Lucey and Vice-President Anjali Kausar Unrepresented Employee: Superintendent Wendy Gudalewicz
 
-4.            REPORT FROM CLOSED SESSION
-5.            DISCUSSION
+4.                              REPORT FROM CLOSED SESSION
+5.                              DISCUSSION
 6.  5.1 Board Governance
-7.            ADJOURNMENT
+7.                              ADJOURNMENT

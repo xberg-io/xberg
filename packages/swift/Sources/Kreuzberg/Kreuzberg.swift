@@ -59,7 +59,7 @@ public typealias ExtractionConfig = RustBridge.ExtractionConfig
 /// Per-file extraction configuration overrides for batch processing.
 ///
 /// All fields are `Option<T>` — `None` means "use the batch-level default."
-/// This type is used with [`crate::batch_extract_file`] and
+/// This type is used with [`crate::batch_extract_files`] and
 /// [`crate::batch_extract_bytes`] to allow heterogeneous
 /// extraction settings within a single batch.
 ///
@@ -84,6 +84,18 @@ public typealias ExtractionConfig = RustBridge.ExtractionConfig
 /// };
 /// ```
 public typealias FileExtractionConfig = RustBridge.FileExtractionConfig
+
+/// Batch item for byte array extraction.
+///
+/// Used with [`crate::batch_extract_bytes`] and [`crate::batch_extract_bytes_sync`]
+/// to represent a single item in a batch extraction job.
+public typealias BatchBytesItem = RustBridge.BatchBytesItem
+
+/// Batch item for file extraction.
+///
+/// Used with [`crate::batch_extract_files`] and [`crate::batch_extract_files_sync`]
+/// to represent a single file in a batch extraction job.
+public typealias BatchFileItem = RustBridge.BatchFileItem
 
 /// Image extraction configuration.
 public typealias ImageExtractionConfig = RustBridge.ImageExtractionConfig
@@ -761,6 +773,11 @@ public typealias DocumentRelationship = RustBridge.DocumentRelationship
 /// for tree structure, and metadata like page number, bounding box, and content layer.
 public typealias DocumentNode = RustBridge.DocumentNode
 
+/// Structured table grid with cell-level metadata.
+///
+/// Stores row/column dimensions and a flat list of cells with position info.
+public typealias TableGrid = RustBridge.TableGrid
+
 /// Individual grid cell with position and span metadata.
 public typealias GridCell = RustBridge.GridCell
 
@@ -1209,6 +1226,15 @@ public typealias ChunkingResult = RustBridge.ChunkingResult
 /// A merged chunk produced by [`merge_segments`].
 public typealias MergedChunk = RustBridge.MergedChunk
 
+/// Preset configurations for common RAG use cases.
+///
+/// Each preset combines chunk size, overlap, and embedding model
+/// to provide an optimized configuration for specific scenarios.
+///
+/// All string fields are owned `String` for FFI compatibility — instances
+/// are safe to clone and pass across language boundaries.
+public typealias EmbeddingPreset = RustBridge.EmbeddingPreset
+
 /// YAKE-specific parameters.
 public typealias YakeParams = RustBridge.YakeParams
 
@@ -1291,6 +1317,15 @@ public typealias PdfUnifiedExtractionResult = RustBridge.PdfUnifiedExtractionRes
 /// Determines which hardware backend is used for model inference.
 /// `Auto` (default) selects the best available provider per platform.
 public typealias ExecutionProviderType = RustBridge.ExecutionProviderType
+
+/// Output format for extraction results.
+///
+/// Controls the format of the `content` field in `ExtractionResult`.
+/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
+/// accordingly. `Plain` returns the raw extracted text.
+/// `Structured` returns JSON with full OCR element data including bounding
+/// boxes and confidence scores.
+public typealias OutputFormat = RustBridge.OutputFormat
 
 /// Built-in HTML theme selection.
 public typealias HtmlTheme = RustBridge.HtmlTheme
@@ -1395,6 +1430,13 @@ public typealias ChunkType = RustBridge.ChunkType
 
 /// Heuristic classification of what an image likely depicts.
 public typealias ImageKind = RustBridge.ImageKind
+
+/// Result-shape selection for extraction results.
+///
+/// Distinct from [`crate::OutputFormat`] (which controls rendering — Plain, Markdown,
+/// HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
+/// blob vs. an element-based decomposition.
+public typealias ResultFormat = RustBridge.ResultFormat
 
 /// Semantic element type classification.
 ///

@@ -114,19 +114,21 @@ pub mod layout;
 pub mod pdf;
 
 // ── Error, Result, and all types ─────────────────────────────────────────────
-pub use cancellation::CancellationToken;
+// NOTE: `CancellationToken` is intentionally NOT re-exported here.
+// It is an `Arc<AtomicBool>` wrapper that does not cross FFI cleanly.
+// Internal callers and FFI shims should reach it via `kreuzberg::cancellation::CancellationToken`.
 pub use error::{KreuzbergError, Result};
 pub use types::*;
 
 // ── Extraction — public API (8 functions) ────────────────────────────────────
 #[cfg(feature = "tokio-runtime")]
-pub use core::extractor::{batch_extract_bytes, batch_extract_file};
+pub use core::extractor::{batch_extract_bytes, batch_extract_files};
 pub use core::extractor::{extract_bytes, extract_file};
 
 pub use core::extractor::{batch_extract_bytes_sync, extract_bytes_sync};
 
 #[cfg(feature = "tokio-runtime")]
-pub use core::extractor::{batch_extract_file_sync, extract_file_sync};
+pub use core::extractor::{batch_extract_files_sync, extract_file_sync};
 
 // ── Extraction config types ───────────────────────────────────────────────────
 pub use core::config::{
@@ -203,7 +205,7 @@ pub fn detect_mime_type(path: String, check_exists: bool) -> crate::Result<Strin
 pub use pdf::rendering::render_pdf_page_to_png;
 
 // ── Plugin Lifecycle — public API (13 functions) ─────────────────────────────
-pub use plugins::extractor::list_extractors as list_document_extractors;
+pub use plugins::extractor::list_document_extractors;
 pub use plugins::list_ocr_backends;
 pub use plugins::list_post_processors;
 pub use plugins::list_validators;
@@ -229,14 +231,17 @@ pub use embeddings::embed_texts_async;
 
 /// Get an embedding preset by name.
 ///
-/// Returns `None` if no preset with the given name exists.
+/// Returns `None` if no preset with the given name exists. Returns an owned
+/// clone so the value is safe to pass across FFI boundaries.
 #[cfg(feature = "embeddings")]
-pub fn get_embedding_preset(name: &str) -> Option<&'static embeddings::EmbeddingPreset> {
+pub fn get_embedding_preset(name: &str) -> Option<embeddings::EmbeddingPreset> {
     embeddings::get_preset(name)
 }
 
 /// List the names of all available embedding presets.
+///
+/// Returns owned `String`s so the values are safe to pass across FFI boundaries.
 #[cfg(feature = "embeddings")]
-pub fn list_embedding_presets() -> Vec<&'static str> {
+pub fn list_embedding_presets() -> Vec<String> {
     embeddings::list_presets()
 }

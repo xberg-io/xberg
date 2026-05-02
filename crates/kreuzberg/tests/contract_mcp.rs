@@ -16,7 +16,7 @@ fn test_mcp_basic_config_json_matches_rust_core() {
         enable_quality_processing: true,
         force_ocr: false,
         output_format: OutputFormat::Plain,
-        result_format: kreuzberg::types::OutputFormat::Unified,
+        result_format: kreuzberg::types::ResultFormat::Unified,
         ..Default::default()
     };
     let rust_json = serde_json::to_value(&rust_config).expect("Failed to serialize rust config");

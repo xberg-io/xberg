@@ -15,13 +15,16 @@ readme = "README.md"
 
 [package.metadata.cargo-machete]
 ignored = [
-    "liter-llm",
-    "minijinja",
-    "opentelemetry",
-    "opentelemetry_sdk",
-    "tracing-opentelemetry",
-    "kamadak-exif",
-    "serde_toon_format",
+  "liter-llm",
+  "minijinja",
+  "opentelemetry",
+  "opentelemetry_sdk",
+  "tracing-opentelemetry",
+  "kamadak-exif",
+  # icu_provider is feature-gated and consumed transitively by language-detection;
+  # cargo-machete cannot resolve `dep:icu_provider` references in feature flag chains.
+  "icu_provider",
+  "serde_toon_format",
 ]
 
 [lib]
@@ -53,15 +56,15 @@ system-pdfium = ["pdf"]
 excel = ["dep:calamine", "tokio-runtime"]
 excel-wasm = ["dep:calamine"]
 office = [
-    "dep:cfb",
-    "dep:roxmltree",
-    "dep:zip",
-    "dep:quick-xml",
-    "dep:biblatex",
-    "dep:biblib",
-    "dep:org",
-    "dep:dbase",
-    "html",
+  "dep:cfb",
+  "dep:roxmltree",
+  "dep:zip",
+  "dep:quick-xml",
+  "dep:biblatex",
+  "dep:biblib",
+  "dep:org",
+  "dep:dbase",
+  "html",
 ]
 hwp = ["dep:cfb", "dep:flate2"]
 iwork = ["dep:zip", "dep:snap"]
@@ -77,37 +80,32 @@ tree-sitter = ["dep:tree-sitter-language-pack"]
 tree-sitter-wasm = ["tree-sitter"]
 
 ocr = [
-    "dep:kreuzberg-tesseract",
-    "dep:image",
-    "dep:tiff",
-    "dep:fast_image_resize",
-    "dep:kamadak-exif",
-    "dep:hayro-jpeg2000",
-    "dep:hayro-jbig2",
-    "html",
+  "dep:kreuzberg-tesseract",
+  "dep:image",
+  "dep:tiff",
+  "dep:fast_image_resize",
+  "dep:kamadak-exif",
+  "dep:hayro-jpeg2000",
+  "dep:hayro-jbig2",
+  "html",
 ]
 # Minimal OCR for WASM: Tesseract + basic image support, without heavy native deps
 # (tiff, fast_image_resize, kamadak-exif)
-ocr-wasm = [
-    "dep:kreuzberg-tesseract",
-    "dep:image",
-    "dep:hayro-jpeg2000",
-    "dep:hayro-jbig2",
-]
+ocr-wasm = ["dep:kreuzberg-tesseract", "dep:image", "dep:hayro-jpeg2000", "dep:hayro-jbig2"]
 # PaddleOCR via ONNX Runtime
 # Requires 'ocr' feature for shared conversion utilities and table reconstruction
 paddle-ocr = [
-    "dep:kreuzberg-paddle-ocr",
-    "dep:sha2",
-    "dep:image",
-    "dep:hf-hub",
-    "dep:ureq",
-    "dep:ort",
-    "dep:ndarray",
-    "html",
-    "tokio-runtime",
-    "ocr",
-    "auto-rotate",
+  "dep:kreuzberg-paddle-ocr",
+  "dep:sha2",
+  "dep:image",
+  "dep:hf-hub",
+  "dep:ureq",
+  "dep:ort",
+  "dep:ndarray",
+  "html",
+  "tokio-runtime",
+  "ocr",
+  "auto-rotate",
 ]
 # Bundle ORT binaries via the official Microsoft release (includes CoreML on macOS, CUDA on Linux).
 # When active, no system ORT library is required and ort_discovery is skipped.
@@ -118,41 +116,41 @@ ort-dynamic = ["ort/load-dynamic"]
 # Layout detection via ONNX Runtime (YOLO + RT-DETR)
 # Document orientation detection using PP-LCNet for auto_rotate
 auto-rotate = [
-    "dep:ort",
-    "dep:ndarray",
-    "dep:hf-hub",
-    "dep:sha2",
-    "dep:image",
-    "dep:ureq",
-    "ort-bundled",
+  "dep:ort",
+  "dep:ndarray",
+  "dep:hf-hub",
+  "dep:sha2",
+  "dep:image",
+  "dep:ureq",
+  "ort-bundled",
 ]
 layout-detection = [
-    "dep:ort",
-    "dep:ndarray",
-    "dep:hf-hub",
-    "dep:sha2",
-    "dep:image",
-    "tokio-runtime",
-    "ort-bundled",
+  "dep:ort",
+  "dep:ndarray",
+  "dep:hf-hub",
+  "dep:sha2",
+  "dep:image",
+  "tokio-runtime",
+  "ort-bundled",
 ]
 language-detection = ["dep:whatlang"]
 chunking = [
-    "dep:auto_enums",
-    "dep:either",
-    "dep:icu_provider",
-    "dep:icu_segmenter",
-    "dep:itertools",
-    "dep:strum",
+  "dep:auto_enums",
+  "dep:either",
+  "dep:icu_provider",
+  "dep:icu_segmenter",
+  "dep:itertools",
+  "dep:strum",
 ]
 chunking-tokenizers = ["chunking", "dep:tokenizers"]
 embeddings = [
-    "dep:hf-hub",
-    "dep:ort",
-    "dep:ndarray",
-    "dep:tokenizers",
-    "chunking",
-    "tokio-runtime",
-    "ort-bundled",
+  "dep:hf-hub",
+  "dep:ort",
+  "dep:ndarray",
+  "dep:tokenizers",
+  "chunking",
+  "tokio-runtime",
+  "ort-bundled",
 ]
 stopwords = []
 quality = ["dep:unicode-normalization", "dep:chardetng", "stopwords"]
@@ -163,36 +161,29 @@ keywords = ["keywords-yake", "keywords-rake"]
 
 tower-service = ["dep:tower", "tokio-runtime"]
 
-api = [
-    "tower-service",
-    "dep:axum",
-    "dep:tower-http",
-    "dep:utoipa",
-    "tokio-runtime",
-    "chunking",
-]
+api = ["tower-service", "dep:axum", "dep:tower-http", "dep:utoipa", "tokio-runtime", "chunking"]
 mcp = ["tower-service", "dep:rmcp", "tokio-runtime"]
 mcp-http = ["mcp", "api"]
 
 otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 
 wasm-target = [
-    "pdf",
-    "html",
-    "xml",
-    "email",
-    "language-detection",
-    "chunking",
-    "quality",
-    "keywords",
-    "office",
-    "mdx",
-    "excel-wasm",
-    "archives",
-    "tree-sitter-wasm",
-    "ocr-wasm",
-    "liter-llm",
-    "stopwords",
+  "pdf",
+  "html",
+  "xml",
+  "email",
+  "language-detection",
+  "chunking",
+  "quality",
+  "keywords",
+  "office",
+  "mdx",
+  "excel-wasm",
+  "archives",
+  "tree-sitter-wasm",
+  "ocr-wasm",
+  "liter-llm",
+  "stopwords",
 ]
 # WASM only: enables wasm-bindgen-rayon for multi-threaded WASM builds.
 # No #[cfg] gates — activates the wasm-bindgen-rayon dependency.
@@ -200,35 +191,24 @@ wasm-threads = ["dep:wasm-bindgen-rayon"]
 # --- Aggregate features ---
 
 # Document format extractors only — no infrastructure or text analysis.
-formats = [
-    "pdf",
-    "excel",
-    "office",
-    "hwp",
-    "iwork",
-    "email",
-    "html",
-    "xml",
-    "archives",
-    "mdx",
-]
+formats = ["pdf", "excel", "office", "hwp", "iwork", "email", "html", "xml", "archives", "mdx"]
 # Text processing and analysis capabilities.
 analysis = ["language-detection", "chunking", "quality", "keywords"]
 # Network services and observability infrastructure.
 services = ["api", "mcp", "otel"]
 # Everything — all formats, analysis, services, OCR, ML, and code intelligence.
 full = [
-    "formats",
-    "analysis",
-    "services",
-    "ocr",
-    "paddle-ocr",
-    "layout-detection",
-    "embeddings",
-    "chunking-tokenizers",
-    "tree-sitter",
-    "liter-llm",
-    "tokio-runtime",
+  "formats",
+  "analysis",
+  "services",
+  "ocr",
+  "paddle-ocr",
+  "layout-detection",
+  "embeddings",
+  "chunking-tokenizers",
+  "tree-sitter",
+  "liter-llm",
+  "tokio-runtime",
 ]
 # Server deployment preset — formats + analysis + services + OCR.
 server = ["formats", "analysis", "services", "ocr", "paddle-ocr", "layout-detection"]
@@ -243,10 +223,10 @@ axum = { version = "0.8", features = ["macros", "json", "multipart"], optional =
 base64 = { workspace = true }
 biblatex = { version = "0.11", optional = true }
 biblib = { version = "0.4", default-features = false, features = [
-    "ris",
-    "pubmed",
-    "xml",
-    "regex",
+  "ris",
+  "pubmed",
+  "xml",
+  "regex",
 ], optional = true }
 bitvec = "1.0"
 blake3 = { workspace = true }
@@ -265,25 +245,25 @@ fast_image_resize = { version = "6.0.0", optional = true }
 flate2 = { version = "1.1", optional = true }
 hayro-jbig2 = { version = "0.3", default-features = false, features = ["std"], optional = true }
 hayro-jpeg2000 = { version = "0.3", default-features = false, features = [
-    "std",
-    "simd",
+  "std",
+  "simd",
 ], optional = true }
 hex = { workspace = true }
 html-to-markdown-rs = { workspace = true, features = [
-    "inline-images",
-    "metadata",
+  "inline-images",
+  "metadata",
 ], optional = true }
 icu_provider = { version = "2", features = ["sync"], optional = true }
 icu_segmenter = { version = "2", optional = true }
 image = { workspace = true, default-features = false, features = [
-    "png",
-    "jpeg",
-    "webp",
-    "bmp",
-    "tiff",
-    "gif",
-    "pnm",
-    "rayon",
+  "png",
+  "jpeg",
+  "webp",
+  "bmp",
+  "tiff",
+  "gif",
+  "pnm",
+  "rayon",
 ], optional = true }
 indexmap = "2.14.0"
 infer = "0.19.0"
@@ -310,9 +290,9 @@ opentelemetry = { version = "0.31", features = ["trace"], optional = true }
 opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
 org = { version = "0.3", optional = true }
 ort = { version = "2.0.0-rc.12", default-features = false, features = [
-    "std",
-    "ndarray",
-    "api-18",
+  "std",
+  "ndarray",
+  "api-18",
 ], optional = true }
 outlook-pst = { version = "1.2.0", optional = true }
 parking_lot = { workspace = true }
@@ -325,12 +305,12 @@ rake = { version = "0.3.6", optional = true }
 rayon = { workspace = true }
 regex = "1.12.3"
 rmcp = { version = "1.6.0", features = [
-    "server",
-    "macros",
-    "base64",
-    "transport-io",
-    "transport-streamable-http-server",
-    "server-side-http",
+  "server",
+  "macros",
+  "base64",
+  "transport-io",
+  "transport-streamable-http-server",
+  "server-side-http",
 ], optional = true }
 rmp-serde = "1.3"
 
@@ -349,20 +329,20 @@ tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tiff = { version = "0.11", optional = true }
 tokenizers = { version = "0.23", optional = true, default-features = false, features = [
-    "http",
-    "fancy-regex",
+  "http",
+  "fancy-regex",
 ] }
 tokio = { workspace = true, optional = true }
 toml = { workspace = true }
 tower = { version = "0.5", features = ["timeout", "limit", "util"], optional = true }
 tower-http = { version = "0.6", features = [
-    "cors",
-    "trace",
-    "limit",
-    "catch-panic",
-    "request-id",
-    "sensitive-headers",
-    "compression-full",
+  "cors",
+  "trace",
+  "limit",
+  "catch-panic",
+  "request-id",
+  "sensitive-headers",
+  "compression-full",
 ], optional = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { version = "0.32", optional = true }
@@ -372,7 +352,7 @@ utoipa = { version = "5.4", features = ["axum_extras"], optional = true }
 v_htmlescape = { version = "0.17", optional = true }
 whatlang = { version = "0.18.0", optional = true }
 zip = { version = ">=7.0.0", optional = true, default-features = false, features = [
-    "deflate-flate2",
+  "deflate-flate2",
 ] }
 
 [target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32")))'.dependencies]
@@ -394,8 +374,8 @@ hf-hub = { version = "0.5", default-features = false, features = ["ureq"], optio
 kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "4.10.0-rc.2", optional = true }
 # Force ureq (transitive dep via hf-hub) to use native-tls on Windows
 ureq = { version = "3.3", default-features = false, features = [
-    "native-tls",
-    "json",
+  "native-tls",
+  "json",
 ], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.tree-sitter-language-pack]
@@ -409,7 +389,7 @@ optional = true
 getrandom = { workspace = true }
 liter-llm = { workspace = true, optional = true, features = ["wasm-http"] }
 tree-sitter-language-pack = { workspace = true, default-features = false, features = [
-    "serde",
+  "serde",
 ], optional = true }
 wasm-bindgen-rayon = { version = "1.3", optional = true }
 

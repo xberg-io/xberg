@@ -3788,7 +3788,7 @@ version = "4.10.0-rc.15"
 dependencies = [
  "async-trait",
  "futures-util",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "js-sys",
  "kreuzberg",
  "serde-wasm-bindgen",

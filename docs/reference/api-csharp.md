@@ -152,9 +152,9 @@ public static ExtractionResult ExtractBytesSync(byte[] content, string mimeType,
 
 ---
 
-#### BatchExtractFileSync()
+#### BatchExtractFilesSync()
 
-Synchronous wrapper for `batch_extract_file`.
+Synchronous wrapper for `batch_extract_files`.
 
 Uses the global Tokio runtime for optimal performance.
 Only available with `tokio-runtime` (WASM has no filesystem).
@@ -162,15 +162,15 @@ Only available with `tokio-runtime` (WASM has no filesystem).
 **Signature:**
 
 ```csharp
-public static List<ExtractionResult> BatchExtractFileSync(List<string> items, ExtractionConfig config)
+public static List<ExtractionResult> BatchExtractFilesSync(List<BatchFileItem> items, ExtractionConfig config)
 ```
 
 **Parameters:**
 
-| Name     | Type               | Required | Description               |
-| -------- | ------------------ | -------- | ------------------------- |
-| `Items`  | `List<string>`     | Yes      | The items                 |
-| `Config` | `ExtractionConfig` | Yes      | The configuration options |
+| Name     | Type                  | Required | Description               |
+| -------- | --------------------- | -------- | ------------------------- |
+| `Items`  | `List<BatchFileItem>` | Yes      | The items                 |
+| `Config` | `ExtractionConfig`    | Yes      | The configuration options |
 
 **Returns:** `List<ExtractionResult>`
 
@@ -190,15 +190,15 @@ that iterates through items and calls `extract_bytes_sync()`.
 **Signature:**
 
 ```csharp
-public static List<ExtractionResult> BatchExtractBytesSync(List<string> items, ExtractionConfig config)
+public static List<ExtractionResult> BatchExtractBytesSync(List<BatchBytesItem> items, ExtractionConfig config)
 ```
 
 **Parameters:**
 
-| Name     | Type               | Required | Description               |
-| -------- | ------------------ | -------- | ------------------------- |
-| `Items`  | `List<string>`     | Yes      | The items                 |
-| `Config` | `ExtractionConfig` | Yes      | The configuration options |
+| Name     | Type                   | Required | Description               |
+| -------- | ---------------------- | -------- | ------------------------- |
+| `Items`  | `List<BatchBytesItem>` | Yes      | The items                 |
+| `Config` | `ExtractionConfig`     | Yes      | The configuration options |
 
 **Returns:** `List<ExtractionResult>`
 
@@ -206,7 +206,7 @@ public static List<ExtractionResult> BatchExtractBytesSync(List<string> items, E
 
 ---
 
-#### BatchExtractFile()
+#### BatchExtractFiles()
 
 Extract content from multiple files concurrently.
 
@@ -220,7 +220,7 @@ fields from the batch-level `config`. Pass `null` for a file to use the batch de
 Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
 taken from the batch-level `config`.
 
-config to use the batch-level defaults for that file.
+per-file configuration overrides.
 
 - `config` - Batch-level extraction configuration (provides defaults and batch settings)
 
@@ -240,15 +240,15 @@ Per-file configuration overrides:
 **Signature:**
 
 ```csharp
-public static async Task<List<ExtractionResult>> BatchExtractFileAsync(List<string> items, ExtractionConfig config)
+public static async Task<List<ExtractionResult>> BatchExtractFilesAsync(List<BatchFileItem> items, ExtractionConfig config)
 ```
 
 **Parameters:**
 
-| Name     | Type               | Required | Description                                                                 |
-| -------- | ------------------ | -------- | --------------------------------------------------------------------------- |
-| `Items`  | `List<string>`     | Yes      | Vector of `(path, optional_file_config)` tuples. Pass `None` as the         |
-| `Config` | `ExtractionConfig` | Yes      | Batch-level extraction configuration (provides defaults and batch settings) |
+| Name     | Type                  | Required | Description                                                                 |
+| -------- | --------------------- | -------- | --------------------------------------------------------------------------- |
+| `Items`  | `List<BatchFileItem>` | Yes      | Vector of [`BatchFileItem`] structs, each containing a path and optional    |
+| `Config` | `ExtractionConfig`    | Yes      | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `List<ExtractionResult>`
 
@@ -269,6 +269,10 @@ Each item can optionally specify a `FileExtractionConfig` that overrides specifi
 fields from the batch-level `config`. Pass `null` as the config to use
 the batch-level defaults for that item.
 
+MIME type, and optional per-item configuration overrides.
+
+- `config` - Batch-level extraction configuration
+
 **Returns:**
 
 A vector of `ExtractionResult` in the same order as the input items.
@@ -280,15 +284,15 @@ Per-item configuration overrides:
 **Signature:**
 
 ```csharp
-public static async Task<List<ExtractionResult>> BatchExtractBytesAsync(List<string> items, ExtractionConfig config)
+public static async Task<List<ExtractionResult>> BatchExtractBytesAsync(List<BatchBytesItem> items, ExtractionConfig config)
 ```
 
 **Parameters:**
 
-| Name     | Type               | Required | Description                                                 |
-| -------- | ------------------ | -------- | ----------------------------------------------------------- |
-| `Items`  | `List<string>`     | Yes      | Vector of `(bytes, mime_type, optional_file_config)` tuples |
-| `Config` | `ExtractionConfig` | Yes      | Batch-level extraction configuration                        |
+| Name     | Type                   | Required | Description                                                          |
+| -------- | ---------------------- | -------- | -------------------------------------------------------------------- |
+| `Items`  | `List<BatchBytesItem>` | Yes      | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `Config` | `ExtractionConfig`     | Yes      | Batch-level extraction configuration                                 |
 
 **Returns:** `List<ExtractionResult>`
 
@@ -360,16 +364,14 @@ public static List<string> GetExtensionsForMime(string mimeType)
 
 ---
 
-#### ListExtractors()
+#### ListDocumentExtractors()
 
 List names of all registered document extractors.
-
-Re-exported at the crate root as `list_document_extractors`.
 
 **Signature:**
 
 ```csharp
-public static List<string> ListExtractors()
+public static List<string> ListDocumentExtractors()
 ```
 
 **Returns:** `List<string>`
@@ -580,12 +582,13 @@ public static List<List<float>> EmbedTexts(List<string> texts, EmbeddingConfig? 
 
 Get an embedding preset by name.
 
-Returns `null` if no preset with the given name exists.
+Returns `null` if no preset with the given name exists. Returns an owned
+clone so the value is safe to pass across FFI boundaries.
 
 **Signature:**
 
 ```csharp
-public static string? GetEmbeddingPreset(string name)
+public static EmbeddingPreset? GetEmbeddingPreset(string name)
 ```
 
 **Parameters:**
@@ -594,13 +597,15 @@ public static string? GetEmbeddingPreset(string name)
 | ------ | -------- | -------- | ----------- |
 | `Name` | `string` | Yes      | The name    |
 
-**Returns:** `string?`
+**Returns:** `EmbeddingPreset?`
 
 ---
 
 #### ListEmbeddingPresets()
 
 List the names of all available embedding presets.
+
+Returns owned `String`s so the values are safe to pass across FFI boundaries.
 
 **Signature:**
 
@@ -710,6 +715,21 @@ Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-ri
 
 ---
 
+#### BatchBytesItem
+
+Batch item for byte array extraction.
+
+Used with `crate.batch_extract_bytes` and `crate.batch_extract_bytes_sync`
+to represent a single item in a batch extraction job.
+
+| Field      | Type                    | Default | Description                                                       |
+| ---------- | ----------------------- | ------- | ----------------------------------------------------------------- |
+| `Content`  | `byte[]`                | —       | The content bytes to extract from                                 |
+| `MimeType` | `string`                | —       | MIME type of the content (e.g., "application/pdf", "text/html")   |
+| `Config`   | `FileExtractionConfig?` | `null`  | Per-item configuration overrides (None uses batch-level defaults) |
+
+---
+
 #### BatchExtractFilesParams
 
 Request parameters for batch file extraction.
@@ -721,6 +741,20 @@ Request parameters for batch file extraction.
 | `PdfPassword`    | `string?`        | `null`  | Password for encrypted PDFs                                                                                                                           |
 | `FileConfigs`    | `List<object?>?` | `null`  | Per-file extraction configuration overrides (parallel array to paths). Each entry is either null (use default) or a FileExtractionConfig JSON object. |
 | `ResponseFormat` | `string?`        | `null`  | Wire format for the response: "json" (default) or "toon"                                                                                              |
+
+---
+
+#### BatchFileItem
+
+Batch item for file extraction.
+
+Used with `crate.batch_extract_files` and `crate.batch_extract_files_sync`
+to represent a single file in a batch extraction job.
+
+| Field    | Type                    | Default | Description                                                       |
+| -------- | ----------------------- | ------- | ----------------------------------------------------------------- |
+| `Path`   | `string`                | —       | Path to the file to extract from                                  |
+| `Config` | `FileExtractionConfig?` | `null`  | Per-file configuration overrides (None uses batch-level defaults) |
 
 ---
 
@@ -1648,6 +1682,29 @@ public EmbeddingConfig CreateDefault()
 
 ---
 
+#### EmbeddingPreset
+
+Preset configurations for common RAG use cases.
+
+Each preset combines chunk size, overlap, and embedding model
+to provide an optimized configuration for specific scenarios.
+
+All string fields are owned `String` for FFI compatibility — instances
+are safe to clone and pass across language boundaries.
+
+| Field         | Type     | Default | Description                                  |
+| ------------- | -------- | ------- | -------------------------------------------- |
+| `Name`        | `string` | —       | The name                                     |
+| `ChunkSize`   | `nuint`  | —       | Chunk size                                   |
+| `Overlap`     | `nuint`  | —       | Overlap                                      |
+| `ModelRepo`   | `string` | —       | HuggingFace repository name for the model.   |
+| `Pooling`     | `string` | —       | Pooling strategy: "cls" or "mean".           |
+| `ModelFile`   | `string` | —       | Path to the ONNX model file within the repo. |
+| `Dimensions`  | `nuint`  | —       | Dimensions                                   |
+| `Description` | `string` | —       | Human-readable description                   |
+
+---
+
 #### EpubMetadata
 
 EPUB metadata (Dublin Core extensions).
@@ -1819,41 +1876,41 @@ Main extraction configuration.
 This struct contains all configuration options for the extraction process.
 It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 
-| Field                      | Type                          | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| -------------------------- | ----------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `UseCache`                 | `bool`                        | `true`  | Enable caching of extraction results                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `EnableQualityProcessing`  | `bool`                        | `true`  | Enable quality post-processing                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `Ocr`                      | `OcrConfig?`                  | `null`  | OCR configuration (None = OCR disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `ForceOcr`                 | `bool`                        | `false` | Force OCR even for searchable PDFs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `ForceOcrPages`            | `List<nuint>?`                | `null`  | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent.                                                                                                  |
-| `DisableOcr`               | `bool`                        | `false` | Disable OCR entirely, even for images. When `true`, OCR is skipped for all document types. Images return metadata only (dimensions, format, EXIF) without text extraction. PDFs use only native text extraction without OCR fallback. Cannot be `true` simultaneously with `force_ocr`. _Added in v4.7.0._                                                                                                                                                                                                 |
-| `Chunking`                 | `ChunkingConfig?`             | `null`  | Text chunking configuration (None = chunking disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `ContentFilter`            | `ContentFilterConfig?`        | `null`  | Content filtering configuration (None = use extractor defaults). Controls whether document "furniture" (headers, footers, watermarks, repeating text) is included in or stripped from extraction results. See `ContentFilterConfig` for per-field documentation.                                                                                                                                                                                                                                           |
-| `Images`                   | `ImageExtractionConfig?`      | `null`  | Image extraction configuration (None = no image extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `PdfOptions`               | `PdfConfig?`                  | `null`  | PDF-specific options (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `TokenReduction`           | `TokenReductionOptions?`      | `null`  | Token reduction configuration (None = no token reduction)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `LanguageDetection`        | `LanguageDetectionConfig?`    | `null`  | Language detection configuration (None = no language detection)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `Pages`                    | `PageConfig?`                 | `null`  | Page extraction configuration (None = no page tracking)                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `Keywords`                 | `KeywordConfig?`              | `null`  | Keyword extraction configuration (None = no keyword extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `Postprocessor`            | `PostProcessorConfig?`        | `null`  | Post-processor configuration (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `HtmlOptions`              | `string?`                     | `null`  | HTML to Markdown conversion options (None = use defaults) Configure how HTML documents are converted to Markdown, including heading styles, list formatting, code block styles, and preprocessing options.                                                                                                                                                                                                                                                                                                 |
-| `HtmlOutput`               | `HtmlOutputConfig?`           | `null`  | Styled HTML output configuration. When set alongside `output_format = OutputFormat.Html`, the extraction pipeline uses `StyledHtmlRenderer` which emits stable `kb-*` CSS class hooks on every structural element and optionally embeds theme CSS or user-supplied CSS in a `<style>` block. When `null`, the existing plain comrak-based HTML renderer is used.                                                                                                                                           |
-| `ExtractionTimeoutSecs`    | `ulong?`                      | `null`  | Default per-file timeout in seconds for batch extraction. When set, each file in a batch will be canceled after this duration unless overridden by `FileExtractionConfig.timeout_secs`. `null` means no timeout (unbounded extraction time).                                                                                                                                                                                                                                                               |
-| `MaxConcurrentExtractions` | `nuint?`                      | `null`  | Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()). Limits parallelism to prevent resource exhaustion when processing large batches. Defaults to (num_cpus × 1.5).ceil() when not set.                                                                                                                                                                                                                                                                                    |
-| `ResultFormat`             | `string`                      | —       | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output).                                                                                                                                                                                                                                                                                    |
-| `SecurityLimits`           | `string?`                     | `null`  | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `null`, default limits are used.                                                                                                              |
-| `OutputFormat`             | `string`                      | `Plain` | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied.                                                                              |
-| `Layout`                   | `LayoutDetectionConfig?`      | `null`  | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature.                                              |
-| `IncludeDocumentStructure` | `bool`                        | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased.                                                                                                                                                               |
-| `Acceleration`             | `AccelerationConfig?`         | `null`  | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `null`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows).                                                                                                                                                                                                                                                                        |
-| `CacheNamespace`           | `string?`                     | `null`  | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem.                                                                                                                                                                                                                                                      |
-| `CacheTtlSecs`             | `ulong?`                      | `null`  | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `null`, the global TTL applies.                                                                                                                                                                                                                                                                                                       |
-| `Email`                    | `EmailConfig?`                | `null`  | Email extraction configuration (None = use defaults). Currently supports configuring the fallback codepage for MSG files that do not specify one. See `crate.core.config.EmailConfig` for details.                                                                                                                                                                                                                                                                                                         |
-| `Concurrency`              | `string?`                     | `null`  | Concurrency limits for constrained environments (None = use defaults). Controls Rayon thread pool size, ONNX Runtime intra-op threads, and (when `max_concurrent_extractions` is unset) the batch concurrency semaphore. See `crate.core.config.ConcurrencyConfig` for details.                                                                                                                                                                                                                            |
-| `MaxArchiveDepth`          | `nuint`                       | —       | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior).                                                                                                                                                                                                                                                                                                                                                                                   |
-| `TreeSitter`               | `TreeSitterConfig?`           | `null`  | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options.                                                                                                                                                                                                                                                                                                     |
-| `StructuredExtraction`     | `StructuredExtractionConfig?` | `null`  | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`.                                                                                                                                                                                                                                                                                      |
-| `CancelToken`              | `string?`                     | `null`  | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
+| Field                      | Type                          | Default                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------- | ----------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UseCache`                 | `bool`                        | `true`                 | Enable caching of extraction results                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `EnableQualityProcessing`  | `bool`                        | `true`                 | Enable quality post-processing                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `Ocr`                      | `OcrConfig?`                  | `null`                 | OCR configuration (None = OCR disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `ForceOcr`                 | `bool`                        | `false`                | Force OCR even for searchable PDFs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `ForceOcrPages`            | `List<nuint>?`                | `null`                 | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent.                                                                                                  |
+| `DisableOcr`               | `bool`                        | `false`                | Disable OCR entirely, even for images. When `true`, OCR is skipped for all document types. Images return metadata only (dimensions, format, EXIF) without text extraction. PDFs use only native text extraction without OCR fallback. Cannot be `true` simultaneously with `force_ocr`. _Added in v4.7.0._                                                                                                                                                                                                 |
+| `Chunking`                 | `ChunkingConfig?`             | `null`                 | Text chunking configuration (None = chunking disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `ContentFilter`            | `ContentFilterConfig?`        | `null`                 | Content filtering configuration (None = use extractor defaults). Controls whether document "furniture" (headers, footers, watermarks, repeating text) is included in or stripped from extraction results. See `ContentFilterConfig` for per-field documentation.                                                                                                                                                                                                                                           |
+| `Images`                   | `ImageExtractionConfig?`      | `null`                 | Image extraction configuration (None = no image extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `PdfOptions`               | `PdfConfig?`                  | `null`                 | PDF-specific options (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `TokenReduction`           | `TokenReductionOptions?`      | `null`                 | Token reduction configuration (None = no token reduction)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `LanguageDetection`        | `LanguageDetectionConfig?`    | `null`                 | Language detection configuration (None = no language detection)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `Pages`                    | `PageConfig?`                 | `null`                 | Page extraction configuration (None = no page tracking)                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `Keywords`                 | `KeywordConfig?`              | `null`                 | Keyword extraction configuration (None = no keyword extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `Postprocessor`            | `PostProcessorConfig?`        | `null`                 | Post-processor configuration (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `HtmlOptions`              | `string?`                     | `null`                 | HTML to Markdown conversion options (None = use defaults) Configure how HTML documents are converted to Markdown, including heading styles, list formatting, code block styles, and preprocessing options.                                                                                                                                                                                                                                                                                                 |
+| `HtmlOutput`               | `HtmlOutputConfig?`           | `null`                 | Styled HTML output configuration. When set alongside `output_format = OutputFormat.Html`, the extraction pipeline uses `StyledHtmlRenderer` which emits stable `kb-*` CSS class hooks on every structural element and optionally embeds theme CSS or user-supplied CSS in a `<style>` block. When `null`, the existing plain comrak-based HTML renderer is used.                                                                                                                                           |
+| `ExtractionTimeoutSecs`    | `ulong?`                      | `null`                 | Default per-file timeout in seconds for batch extraction. When set, each file in a batch will be canceled after this duration unless overridden by `FileExtractionConfig.timeout_secs`. `null` means no timeout (unbounded extraction time).                                                                                                                                                                                                                                                               |
+| `MaxConcurrentExtractions` | `nuint?`                      | `null`                 | Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()). Limits parallelism to prevent resource exhaustion when processing large batches. Defaults to (num_cpus × 1.5).ceil() when not set.                                                                                                                                                                                                                                                                                    |
+| `ResultFormat`             | `ResultFormat`                | `ResultFormat.Unified` | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output).                                                                                                                                                                                                                                                                                    |
+| `SecurityLimits`           | `string?`                     | `null`                 | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `null`, default limits are used.                                                                                                              |
+| `OutputFormat`             | `OutputFormat`                | `OutputFormat.Plain`   | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied.                                                                              |
+| `Layout`                   | `LayoutDetectionConfig?`      | `null`                 | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature.                                              |
+| `IncludeDocumentStructure` | `bool`                        | `false`                | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased.                                                                                                                                                               |
+| `Acceleration`             | `AccelerationConfig?`         | `null`                 | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `null`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows).                                                                                                                                                                                                                                                                        |
+| `CacheNamespace`           | `string?`                     | `null`                 | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem.                                                                                                                                                                                                                                                      |
+| `CacheTtlSecs`             | `ulong?`                      | `null`                 | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `null`, the global TTL applies.                                                                                                                                                                                                                                                                                                       |
+| `Email`                    | `EmailConfig?`                | `null`                 | Email extraction configuration (None = use defaults). Currently supports configuring the fallback codepage for MSG files that do not specify one. See `crate.core.config.EmailConfig` for details.                                                                                                                                                                                                                                                                                                         |
+| `Concurrency`              | `string?`                     | `null`                 | Concurrency limits for constrained environments (None = use defaults). Controls Rayon thread pool size, ONNX Runtime intra-op threads, and (when `max_concurrent_extractions` is unset) the batch concurrency semaphore. See `crate.core.config.ConcurrencyConfig` for details.                                                                                                                                                                                                                            |
+| `MaxArchiveDepth`          | `nuint`                       | —                      | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior).                                                                                                                                                                                                                                                                                                                                                                                   |
+| `TreeSitter`               | `TreeSitterConfig?`           | `null`                 | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options.                                                                                                                                                                                                                                                                                                     |
+| `StructuredExtraction`     | `StructuredExtractionConfig?` | `null`                 | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`.                                                                                                                                                                                                                                                                                      |
+| `CancelToken`              | `string?`                     | `null`                 | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
 
 ##### Methods
 
@@ -1940,7 +1997,7 @@ FictionBook (FB2) metadata.
 Per-file extraction configuration overrides for batch processing.
 
 All fields are `Option<T>` — `null` means "use the batch-level default."
-This type is used with `crate.batch_extract_file` and
+This type is used with `crate.batch_extract_files` and
 `crate.batch_extract_bytes` to allow heterogeneous
 extraction settings within a single batch.
 
@@ -1971,8 +2028,8 @@ cannot be overridden per file:
 | `Keywords`                 | `KeywordConfig?`              | `null`              | Override keyword extraction for this file.                                                                                                                                                                                                                       |
 | `Postprocessor`            | `PostProcessorConfig?`        | `null`              | Override post-processor for this file.                                                                                                                                                                                                                           |
 | `HtmlOptions`              | `string?`                     | `null`              | Override HTML conversion options for this file.                                                                                                                                                                                                                  |
-| `ResultFormat`             | `string?`                     | `null`              | Override result format for this file.                                                                                                                                                                                                                            |
-| `OutputFormat`             | `string?`                     | `null`              | Override output content format for this file.                                                                                                                                                                                                                    |
+| `ResultFormat`             | `ResultFormat?`               | `null`              | Override result format for this file.                                                                                                                                                                                                                            |
+| `OutputFormat`             | `OutputFormat?`               | `null`              | Override output content format for this file.                                                                                                                                                                                                                    |
 | `IncludeDocumentStructure` | `bool?`                       | `null`              | Override document structure output for this file.                                                                                                                                                                                                                |
 | `Layout`                   | `LayoutDetectionConfig?`      | `null`              | Override layout detection for this file.                                                                                                                                                                                                                         |
 | `TimeoutSecs`              | `ulong?`                      | `null`              | Override per-file extraction timeout in seconds. When set, the extraction for this file will be canceled after the specified duration. A timed-out file produces an error result without affecting other files in the batch.                                     |
@@ -2798,7 +2855,7 @@ OCR configuration.
 | `Backend`           | `string`                | —       | OCR backend: tesseract, easyocr, paddleocr                                                                                                                                                                                                                                                                                               |
 | `Language`          | `string`                | —       | Language code (e.g., "eng", "deu")                                                                                                                                                                                                                                                                                                       |
 | `TesseractConfig`   | `TesseractConfig?`      | `null`  | Tesseract-specific configuration (optional)                                                                                                                                                                                                                                                                                              |
-| `OutputFormat`      | `string?`               | `null`  | Output format for OCR results (optional, for format conversion)                                                                                                                                                                                                                                                                          |
+| `OutputFormat`      | `OutputFormat?`         | `null`  | Output format for OCR results (optional, for format conversion)                                                                                                                                                                                                                                                                          |
 | `PaddleOcrConfig`   | `object?`               | `null`  | PaddleOCR-specific configuration (optional, JSON passthrough)                                                                                                                                                                                                                                                                            |
 | `ElementConfig`     | `OcrElementConfig?`     | `null`  | OCR element extraction configuration                                                                                                                                                                                                                                                                                                     |
 | `QualityThresholds` | `OcrQualityThresholds?` | `null`  | Quality thresholds for the native-text-to-OCR fallback decision. When None, uses compiled defaults (matching previous hardcoded behavior).                                                                                                                                                                                               |
@@ -3678,6 +3735,20 @@ Estimated processing time in milliseconds.
 public ulong EstimatedDurationMs(ExtractionResult result)
 ```
 
+###### Priority()
+
+Execution priority within the processing stage.
+
+Higher values run first within the same `ProcessingStage`. Defaults to 50.
+Use 0-49 for fallback processors, 50 for normal processors, and 51-255
+for high-priority processors that should run early in their stage.
+
+**Signature:**
+
+```csharp
+public int Priority()
+```
+
 ---
 
 #### PostProcessorConfig
@@ -4083,6 +4154,20 @@ public string ExtractSync(byte[] content, string mimeType, ExtractionConfig conf
 
 ---
 
+#### TableGrid
+
+Structured table grid with cell-level metadata.
+
+Stores row/column dimensions and a flat list of cells with position info.
+
+| Field   | Type             | Default                | Description                     |
+| ------- | ---------------- | ---------------------- | ------------------------------- |
+| `Rows`  | `uint`           | —                      | Number of rows in the table.    |
+| `Cols`  | `uint`           | —                      | Number of columns in the table. |
+| `Cells` | `List<GridCell>` | `new List<GridCell>()` | All cells in row-major order.   |
+
+---
+
 #### TableProperties
 
 Table-level properties from `<w:tblPr>`.
@@ -4151,29 +4236,29 @@ Provides fine-grained control over Tesseract OCR engine parameters.
 Most users can use the defaults, but these settings allow optimization
 for specific document types (invoices, handwriting, etc.).
 
-| Field                            | Type                        | Default      | Description                                                                                                                                                                          |
-| -------------------------------- | --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Language`                       | `string`                    | `"eng"`      | Language code (e.g., "eng", "deu", "fra")                                                                                                                                            |
-| `Psm`                            | `int`                       | `3`          | Page Segmentation Mode (0-13). Common values: - 3: Fully automatic page segmentation (default) - 6: Assume a single uniform block of text - 11: Sparse text with no particular order |
-| `OutputFormat`                   | `string`                    | `"markdown"` | Output format ("text" or "markdown")                                                                                                                                                 |
-| `Oem`                            | `int`                       | `3`          | OCR Engine Mode (0-3). - 0: Legacy engine only - 1: Neural nets (LSTM) only (usually best) - 2: Legacy + LSTM - 3: Default (based on what's available)                               |
-| `MinConfidence`                  | `double`                    | `0`          | Minimum confidence threshold (0.0-100.0). Words with confidence below this threshold may be rejected or flagged.                                                                     |
-| `Preprocessing`                  | `ImagePreprocessingConfig?` | `null`       | Image preprocessing configuration. Controls how images are preprocessed before OCR. Can significantly improve quality for scanned documents or low-quality images.                   |
-| `EnableTableDetection`           | `bool`                      | `true`       | Enable automatic table detection and reconstruction                                                                                                                                  |
-| `TableMinConfidence`             | `double`                    | `0`          | Minimum confidence threshold for table detection (0.0-1.0)                                                                                                                           |
-| `TableColumnThreshold`           | `int`                       | `50`         | Column threshold for table detection (pixels)                                                                                                                                        |
-| `TableRowThresholdRatio`         | `double`                    | `0.5`        | Row threshold ratio for table detection (0.0-1.0)                                                                                                                                    |
-| `UseCache`                       | `bool`                      | `true`       | Enable OCR result caching                                                                                                                                                            |
-| `ClassifyUsePreAdaptedTemplates` | `bool`                      | `true`       | Use pre-adapted templates for character classification                                                                                                                               |
-| `LanguageModelNgramOn`           | `bool`                      | `false`      | Enable N-gram language model                                                                                                                                                         |
-| `TesseditDontBlkrejGoodWds`      | `bool`                      | `true`       | Don't reject good words during block-level processing                                                                                                                                |
-| `TesseditDontRowrejGoodWds`      | `bool`                      | `true`       | Don't reject good words during row-level processing                                                                                                                                  |
-| `TesseditEnableDictCorrection`   | `bool`                      | `true`       | Enable dictionary correction                                                                                                                                                         |
-| `TesseditCharWhitelist`          | `string`                    | `""`         | Whitelist of allowed characters (empty = all allowed)                                                                                                                                |
-| `TesseditCharBlacklist`          | `string`                    | `""`         | Blacklist of forbidden characters (empty = none forbidden)                                                                                                                           |
-| `TesseditUsePrimaryParamsModel`  | `bool`                      | `true`       | Use primary language params model                                                                                                                                                    |
-| `TextordSpaceSizeIsVariable`     | `bool`                      | `true`       | Variable-width space detection                                                                                                                                                       |
-| `ThresholdingMethod`             | `bool`                      | `false`      | Use adaptive thresholding method                                                                                                                                                     |
+| Field                            | Type                        | Default      | Description                                                                                                                                                                                                                              |
+| -------------------------------- | --------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Language`                       | `string`                    | `"eng"`      | Language code (e.g., "eng", "deu", "fra")                                                                                                                                                                                                |
+| `Psm`                            | `int`                       | `3`          | Page Segmentation Mode (0-13). Common values: - 3: Fully automatic page segmentation (native default) - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang) - 11: Sparse text with no particular order |
+| `OutputFormat`                   | `string`                    | `"markdown"` | Output format ("text" or "markdown")                                                                                                                                                                                                     |
+| `Oem`                            | `int`                       | `3`          | OCR Engine Mode (0-3). - 0: Legacy engine only - 1: Neural nets (LSTM) only (usually best) - 2: Legacy + LSTM - 3: Default (based on what's available)                                                                                   |
+| `MinConfidence`                  | `double`                    | `0`          | Minimum confidence threshold (0.0-100.0). Words with confidence below this threshold may be rejected or flagged.                                                                                                                         |
+| `Preprocessing`                  | `ImagePreprocessingConfig?` | `null`       | Image preprocessing configuration. Controls how images are preprocessed before OCR. Can significantly improve quality for scanned documents or low-quality images.                                                                       |
+| `EnableTableDetection`           | `bool`                      | `true`       | Enable automatic table detection and reconstruction                                                                                                                                                                                      |
+| `TableMinConfidence`             | `double`                    | `0`          | Minimum confidence threshold for table detection (0.0-1.0)                                                                                                                                                                               |
+| `TableColumnThreshold`           | `int`                       | `50`         | Column threshold for table detection (pixels)                                                                                                                                                                                            |
+| `TableRowThresholdRatio`         | `double`                    | `0.5`        | Row threshold ratio for table detection (0.0-1.0)                                                                                                                                                                                        |
+| `UseCache`                       | `bool`                      | `true`       | Enable OCR result caching                                                                                                                                                                                                                |
+| `ClassifyUsePreAdaptedTemplates` | `bool`                      | `true`       | Use pre-adapted templates for character classification                                                                                                                                                                                   |
+| `LanguageModelNgramOn`           | `bool`                      | `false`      | Enable N-gram language model                                                                                                                                                                                                             |
+| `TesseditDontBlkrejGoodWds`      | `bool`                      | `true`       | Don't reject good words during block-level processing                                                                                                                                                                                    |
+| `TesseditDontRowrejGoodWds`      | `bool`                      | `true`       | Don't reject good words during row-level processing                                                                                                                                                                                      |
+| `TesseditEnableDictCorrection`   | `bool`                      | `true`       | Enable dictionary correction                                                                                                                                                                                                             |
+| `TesseditCharWhitelist`          | `string`                    | `""`         | Whitelist of allowed characters (empty = all allowed)                                                                                                                                                                                    |
+| `TesseditCharBlacklist`          | `string`                    | `""`         | Blacklist of forbidden characters (empty = none forbidden)                                                                                                                                                                               |
+| `TesseditUsePrimaryParamsModel`  | `bool`                      | `true`       | Use primary language params model                                                                                                                                                                                                        |
+| `TextordSpaceSizeIsVariable`     | `bool`                      | `true`       | Variable-width space detection                                                                                                                                                                                                           |
+| `ThresholdingMethod`             | `bool`                      | `false`      | Use adaptive thresholding method                                                                                                                                                                                                         |
 
 ##### Methods
 
@@ -4614,6 +4699,28 @@ Determines which hardware backend is used for model inference.
 
 ---
 
+#### OutputFormat
+
+Output format for extraction results.
+
+Controls the format of the `content` field in `ExtractionResult`.
+When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
+accordingly. `Plain` returns the raw extracted text.
+`Structured` returns JSON with full OCR element data including bounding
+boxes and confidence scores.
+
+| Value        | Description                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `Plain`      | Plain text content only (default)                                                                                                     |
+| `Markdown`   | Markdown format                                                                                                                       |
+| `Djot`       | Djot markup format                                                                                                                    |
+| `Html`       | HTML format                                                                                                                           |
+| `Json`       | JSON tree format with heading-driven sections.                                                                                        |
+| `Structured` | Structured JSON format with full OCR element metadata.                                                                                |
+| `Custom`     | Custom renderer registered via the RendererRegistry. The string is the renderer name (e.g., "docx", "latex"). — Fields: `0`: `string` |
+
+---
+
 #### HtmlTheme
 
 Built-in HTML theme selection.
@@ -4898,7 +5005,7 @@ Go/Java/TypeScript bindings.
 | `Paragraph`      | Body text paragraph. — Fields: `Text`: `string`                                                                                                                                                                                                                      |
 | `List`           | List container — children are `ListItem` nodes. — Fields: `Ordered`: `bool`                                                                                                                                                                                          |
 | `ListItem`       | Individual list item. — Fields: `Text`: `string`                                                                                                                                                                                                                     |
-| `Table`          | Table with structured cell grid. — Fields: `Grid`: `string`                                                                                                                                                                                                          |
+| `Table`          | Table with structured cell grid. — Fields: `Grid`: `TableGrid`                                                                                                                                                                                                       |
 | `Image`          | Image reference. — Fields: `Description`: `string`, `ImageIndex`: `uint`, `Src`: `string`                                                                                                                                                                            |
 | `Code`           | Code block. — Fields: `Text`: `string`, `Language`: `string`                                                                                                                                                                                                         |
 | `Quote`          | Block quote — container, children carry the quoted content.                                                                                                                                                                                                          |
@@ -4992,6 +5099,21 @@ Heuristic classification of what an image likely depicts.
 | `TileFragment` | Fragment of a larger tiled image (tile of a technical drawing) |
 | `Mask`         | Mask or transparency map                                       |
 | `Unknown`      | Could not classify with reasonable confidence                  |
+
+---
+
+#### ResultFormat
+
+Result-shape selection for extraction results.
+
+Distinct from `crate.OutputFormat` (which controls rendering — Plain, Markdown,
+HTML, etc.). `ResultFormat` controls the _shape_ of the result: a unified content
+blob vs. an element-based decomposition.
+
+| Value          | Description                                           |
+| -------------- | ----------------------------------------------------- |
+| `Unified`      | Unified format with all content in `content` field    |
+| `ElementBased` | Element-based format with semantic element extraction |
 
 ---
 

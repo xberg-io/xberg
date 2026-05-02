@@ -80,6 +80,10 @@ impl PostProcessor for LanguageDetector {
         let text_length = result.content.len();
         (text_length / 1024).max(1) as u64
     }
+
+    fn priority(&self) -> i32 {
+        40
+    }
 }
 
 #[cfg(test)]

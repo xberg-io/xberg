@@ -199,7 +199,7 @@ impl KreuzbergMcp {
         use super::errors::map_kreuzberg_error_to_mcp;
         use super::format::build_config;
         use crate::BatchFileItem;
-        use crate::batch_extract_file;
+        use crate::batch_extract_files;
 
         if params.paths.is_empty() {
             return Err(rmcp::ErrorData::invalid_params("paths array must not be empty", None));
@@ -253,7 +253,7 @@ impl KreuzbergMcp {
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
 
-        let results = batch_extract_file(items, &config)
+        let results = batch_extract_files(items, &config)
             .await
             .map_err(map_kreuzberg_error_to_mcp)?;
 
@@ -496,13 +496,13 @@ impl KreuzbergMcp {
         #[cfg(feature = "embeddings")]
         {
             let embeddings_dir = cache_base.join("embeddings");
-            let presets_to_warm: Vec<&crate::EmbeddingPreset> = if params.all_embeddings {
-                crate::embeddings::EMBEDDING_PRESETS.iter().collect()
+            let presets_to_warm: Vec<crate::EmbeddingPreset> = if params.all_embeddings {
+                crate::embeddings::EMBEDDING_PRESETS.clone()
             } else if let Some(ref name) = params.embedding_model {
                 match crate::embeddings::get_preset(name) {
                     Some(preset) => vec![preset],
                     None => {
-                        let available: Vec<&str> = crate::embeddings::list_presets();
+                        let available: Vec<String> = crate::embeddings::list_presets();
                         return Err(rmcp::ErrorData::invalid_params(
                             format!(
                                 "Unknown embedding preset '{}'. Available: {}",
@@ -521,7 +521,7 @@ impl KreuzbergMcp {
                 let label = format!("embedding ({})", preset.name);
                 crate::embeddings::warm_model(
                     &crate::core::config::EmbeddingModelType::Preset {
-                        name: preset.name.to_string(),
+                        name: preset.name.clone(),
                     },
                     Some(embeddings_dir.clone()),
                 )
@@ -748,7 +748,7 @@ fn embed_text_impl(params: super::params::EmbedTextParams) -> Result<CallToolRes
         let preset_name = params.preset.as_deref().unwrap_or("balanced");
 
         if crate::embeddings::get_preset(preset_name).is_none() {
-            let available: Vec<&str> = crate::embeddings::list_presets();
+            let available: Vec<String> = crate::embeddings::list_presets();
             return Err(rmcp::ErrorData::invalid_params(
                 format!(
                     "Unknown embedding preset '{}'. Available: {}",

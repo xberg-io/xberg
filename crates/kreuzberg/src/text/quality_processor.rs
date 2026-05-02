@@ -83,6 +83,10 @@ impl PostProcessor for QualityProcessor {
         let text_length = result.content.len();
         (text_length / 102400).max(1) as u64
     }
+
+    fn priority(&self) -> i32 {
+        30
+    }
 }
 
 /// Check if metadata contains any important fields without allocation.

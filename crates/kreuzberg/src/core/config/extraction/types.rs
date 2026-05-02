@@ -28,7 +28,7 @@ pub struct BatchBytesItem {
 
 /// Batch item for file extraction.
 ///
-/// Used with [`crate::batch_extract_file`] and [`crate::batch_extract_file_sync`]
+/// Used with [`crate::batch_extract_files`] and [`crate::batch_extract_files_sync`]
 /// to represent a single file in a batch extraction job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchFileItem {

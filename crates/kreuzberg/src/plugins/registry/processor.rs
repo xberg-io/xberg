@@ -24,11 +24,14 @@ impl PostProcessorRegistry {
 
     /// Register a post-processor.
     ///
+    /// Priority comes from the [`PostProcessor::priority`] trait method
+    /// (default: 50; higher = runs first within stage).
+    ///
     /// # Arguments
     ///
     /// * `processor` - The post-processor to register
-    /// * `priority` - Execution priority (higher = runs first within stage)
-    pub fn register(&mut self, processor: Arc<dyn PostProcessor>, priority: i32) -> Result<()> {
+    pub fn register(&mut self, processor: Arc<dyn PostProcessor>) -> Result<()> {
+        let priority = processor.priority();
         let name = processor.name().to_string();
         let stage = processor.processing_stage();
 
@@ -197,6 +200,18 @@ mod tests {
     struct MockPostProcessor {
         name: String,
         stage: ProcessingStage,
+        priority: i32,
+    }
+
+    #[allow(dead_code)]
+    impl MockPostProcessor {
+        fn new(name: impl Into<String>, stage: ProcessingStage, priority: i32) -> Self {
+            Self {
+                name: name.into(),
+                stage,
+                priority,
+            }
+        }
     }
 
     impl Plugin for MockPostProcessor {
@@ -223,6 +238,10 @@ mod tests {
         fn processing_stage(&self) -> ProcessingStage {
             self.stage
         }
+
+        fn priority(&self) -> i32 {
+            self.priority
+        }
     }
 
     #[test]
@@ -232,15 +251,17 @@ mod tests {
         let early = Arc::new(MockPostProcessor {
             name: "early-processor".to_string(),
             stage: ProcessingStage::Early,
+            priority: 100,
         });
 
         let middle = Arc::new(MockPostProcessor {
             name: "middle-processor".to_string(),
             stage: ProcessingStage::Middle,
+            priority: 50,
         });
 
-        registry.register(early, 100).unwrap();
-        registry.register(middle, 50).unwrap();
+        registry.register(early).unwrap();
+        registry.register(middle).unwrap();
 
         let early_processors = registry.get_for_stage(ProcessingStage::Early);
         assert_eq!(early_processors.len(), 1);
@@ -260,9 +281,10 @@ mod tests {
         let processor = Arc::new(MockPostProcessor {
             name: "test-processor".to_string(),
             stage: ProcessingStage::Early,
+            priority: 50,
         });
 
-        registry.register(processor, 50).unwrap();
+        registry.register(processor).unwrap();
         assert_eq!(registry.get_for_stage(ProcessingStage::Early).len(), 1);
 
         registry.remove("test-processor").unwrap();
@@ -282,9 +304,10 @@ mod tests {
         let processor = Arc::new(MockPostProcessor {
             name: "".to_string(),
             stage: ProcessingStage::Early,
+            priority: 50,
         });
 
-        let result = registry.register(processor, 50);
+        let result = registry.register(processor);
         assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
     }
 
@@ -295,9 +318,10 @@ mod tests {
         let processor = Arc::new(MockPostProcessor {
             name: "my processor".to_string(),
             stage: ProcessingStage::Early,
+            priority: 50,
         });
 
-        let result = registry.register(processor, 50);
+        let result = registry.register(processor);
         assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
     }
 
@@ -308,15 +332,17 @@ mod tests {
         let early = Arc::new(MockPostProcessor {
             name: "early".to_string(),
             stage: ProcessingStage::Early,
+            priority: 100,
         });
 
         let late = Arc::new(MockPostProcessor {
             name: "late".to_string(),
             stage: ProcessingStage::Late,
+            priority: 50,
         });
 
-        registry.register(early, 100).unwrap();
-        registry.register(late, 50).unwrap();
+        registry.register(early).unwrap();
+        registry.register(late).unwrap();
 
         assert_eq!(registry.list().len(), 2);
 
@@ -331,15 +357,17 @@ mod tests {
         let low = Arc::new(MockPostProcessor {
             name: "low-priority".to_string(),
             stage: ProcessingStage::Early,
+            priority: 10,
         });
 
         let high = Arc::new(MockPostProcessor {
             name: "high-priority".to_string(),
             stage: ProcessingStage::Early,
+            priority: 100,
         });
 
-        registry.register(low, 10).unwrap();
-        registry.register(high, 100).unwrap();
+        registry.register(low).unwrap();
+        registry.register(high).unwrap();
 
         let processors = registry.get_for_stage(ProcessingStage::Early);
         assert_eq!(processors.len(), 2);
@@ -404,7 +432,7 @@ mod tests {
             fail_on_init: true,
         });
 
-        let result = registry.register(processor, 50);
+        let result = registry.register(processor);
         assert!(result.is_err());
         assert_eq!(registry.list().len(), 0);
     }
@@ -416,9 +444,10 @@ mod tests {
         let processor = Arc::new(MockPostProcessor {
             name: "".to_string(),
             stage: ProcessingStage::Early,
+            priority: 50,
         });
 
-        let result = registry.register(processor, 50);
+        let result = registry.register(processor);
         assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
     }
 
@@ -429,9 +458,10 @@ mod tests {
         let processor = Arc::new(MockPostProcessor {
             name: "invalid processor".to_string(),
             stage: ProcessingStage::Early,
+            priority: 50,
         });
 
-        let result = registry.register(processor, 50);
+        let result = registry.register(processor);
         assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
     }
 
@@ -442,9 +472,10 @@ mod tests {
         let processor = Arc::new(MockPostProcessor {
             name: "valid-processor".to_string(),
             stage: ProcessingStage::Early,
+            priority: 50,
         });
 
-        let result = registry.register(processor, 50);
+        let result = registry.register(processor);
         assert!(result.is_ok());
         assert_eq!(registry.list().len(), 1);
     }
@@ -465,12 +496,13 @@ mod tests {
         let processor = Arc::new(MockPostProcessor {
             name: "duplicate-processor".to_string(),
             stage: ProcessingStage::Early,
+            priority: 50,
         });
 
-        registry.register(processor.clone(), 50).unwrap();
+        registry.register(processor.clone()).unwrap();
         assert_eq!(registry.list().len(), 1);
 
-        registry.register(processor, 75).unwrap();
+        registry.register(processor).unwrap();
         assert_eq!(registry.list().len(), 1);
     }
 
@@ -481,21 +513,24 @@ mod tests {
         let early_processor = Arc::new(MockPostProcessor {
             name: "early-proc".to_string(),
             stage: ProcessingStage::Early,
+            priority: 100,
         });
 
         let middle_processor = Arc::new(MockPostProcessor {
             name: "middle-proc".to_string(),
             stage: ProcessingStage::Middle,
+            priority: 50,
         });
 
         let late_processor = Arc::new(MockPostProcessor {
             name: "late-proc".to_string(),
             stage: ProcessingStage::Late,
+            priority: 25,
         });
 
-        registry.register(early_processor, 100).unwrap();
-        registry.register(middle_processor, 50).unwrap();
-        registry.register(late_processor, 25).unwrap();
+        registry.register(early_processor).unwrap();
+        registry.register(middle_processor).unwrap();
+        registry.register(late_processor).unwrap();
 
         assert_eq!(registry.get_for_stage(ProcessingStage::Early).len(), 1);
         assert_eq!(registry.get_for_stage(ProcessingStage::Middle).len(), 1);

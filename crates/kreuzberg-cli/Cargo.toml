@@ -21,15 +21,15 @@ path = "src/main.rs"
 
 [features]
 default = [
-    "bundled-pdfium",
-    "embeddings",
-    "html",
-    "liter-llm",
-    "ocr",
-    "paddle-ocr",
-    "layout-detection",
-    "chunking-tokenizers",
-    "tree-sitter",
+  "bundled-pdfium",
+  "embeddings",
+  "html",
+  "liter-llm",
+  "ocr",
+  "paddle-ocr",
+  "layout-detection",
+  "chunking-tokenizers",
+  "tree-sitter",
 ]
 
 bundled-pdfium = ["kreuzberg/bundled-pdfium"]
@@ -49,14 +49,14 @@ html = ["kreuzberg/html"]
 liter-llm = ["kreuzberg/liter-llm"]
 tree-sitter = ["kreuzberg/tree-sitter", "dep:tree-sitter-language-pack"]
 all = [
-    "default",
-    "api",
-    "html",
-    "mcp",
-    "mcp-http",
-    "chunking-tokenizers",
-    "tree-sitter",
-    "liter-llm",
+  "default",
+  "api",
+  "html",
+  "mcp",
+  "mcp-http",
+  "chunking-tokenizers",
+  "tree-sitter",
+  "liter-llm",
 ]
 
 [dependencies]
@@ -67,11 +67,11 @@ base64 = { workspace = true }
 clap = { workspace = true }
 clap_complete = "4.6"
 kreuzberg = { workspace = true, features = [
-    "formats",
-    "analysis",
-    "tokio-runtime",
-    "simd-utf8",
-    "cli",
+  "formats",
+  "analysis",
+  "tokio-runtime",
+  "simd-utf8",
+  "cli",
 ] }
 serde_json = { workspace = true }
 serde_toon_format = { workspace = true }
@@ -79,9 +79,9 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tree-sitter-language-pack = { workspace = true, features = [
-    "dynamic-loading",
-    "download",
-    "serde",
+  "dynamic-loading",
+  "download",
+  "serde",
 ], optional = true }
 
 [dev-dependencies]

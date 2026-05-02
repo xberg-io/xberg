@@ -442,7 +442,7 @@ pub(crate) async fn embed_handler(JsonApi(request): JsonApi<EmbedRequest>) -> Re
     if let crate::core::config::EmbeddingModelType::Preset { ref name } = config.model
         && crate::embeddings::get_preset(name).is_none()
     {
-        let available: Vec<&str> = crate::embeddings::list_presets();
+        let available: Vec<String> = crate::embeddings::list_presets();
         return Err(ApiError::validation(crate::error::KreuzbergError::validation(format!(
             "Unknown embedding preset '{}'. Available: {}",
             name,
@@ -1086,13 +1086,13 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
     #[cfg(feature = "embeddings")]
     {
         let embeddings_dir = cache_base.join("embeddings");
-        let presets_to_warm: Vec<&crate::EmbeddingPreset> = if request.all_embeddings {
-            crate::embeddings::EMBEDDING_PRESETS.iter().collect()
+        let presets_to_warm: Vec<crate::EmbeddingPreset> = if request.all_embeddings {
+            crate::embeddings::EMBEDDING_PRESETS.clone()
         } else if let Some(ref name) = request.embedding_model {
             match crate::embeddings::get_preset(name) {
                 Some(preset) => vec![preset],
                 None => {
-                    let available: Vec<&str> = crate::embeddings::list_presets();
+                    let available: Vec<String> = crate::embeddings::list_presets();
                     return Err(ApiError::validation(crate::error::KreuzbergError::validation(format!(
                         "Unknown embedding preset '{}'. Available: {}",
                         name,
@@ -1108,7 +1108,7 @@ pub(crate) async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -
             let label = format!("embedding ({})", preset.name);
             crate::embeddings::warm_model(
                 &crate::core::config::EmbeddingModelType::Preset {
-                    name: preset.name.to_string(),
+                    name: preset.name.clone(),
                 },
                 Some(embeddings_dir.clone()),
             )

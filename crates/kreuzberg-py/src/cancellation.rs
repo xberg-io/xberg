@@ -40,7 +40,7 @@ use pyo3::prelude::*;
 #[pyclass(name = "CancellationToken", module = "kreuzberg", from_py_object)]
 #[derive(Clone)]
 pub struct PyCancellationToken {
-    pub(crate) inner: kreuzberg::CancellationToken,
+    pub(crate) inner: kreuzberg::cancellation::CancellationToken,
 }
 
 impl Default for PyCancellationToken {
@@ -55,7 +55,7 @@ impl PyCancellationToken {
     #[new]
     pub fn new() -> Self {
         Self {
-            inner: kreuzberg::CancellationToken::new(),
+            inner: kreuzberg::cancellation::CancellationToken::new(),
         }
     }
 

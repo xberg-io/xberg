@@ -8,8 +8,8 @@ use crate::monitoring::ResourceMonitor;
 use crate::types::{BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, PerformanceMetrics};
 use crate::{Error, Result};
 use async_trait::async_trait;
-use kreuzberg::{ExtractionConfig, ExtractionResult, FormatMetadata, batch_extract_file, extract_file};
-use std::path::{Path, PathBuf};
+use kreuzberg::{ExtractionConfig, ExtractionResult, FormatMetadata, batch_extract_files, extract_file};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 /// Determine OCR status by inspecting the actual extraction result metadata.
@@ -296,10 +296,15 @@ impl FrameworkAdapter for NativeAdapter {
 
         let start = Instant::now();
 
-        let items: Vec<(PathBuf, Option<kreuzberg::FileExtractionConfig>)> =
-            file_paths.iter().map(|p| (p.to_path_buf(), None)).collect();
+        let items: Vec<kreuzberg::BatchFileItem> = file_paths
+            .iter()
+            .map(|p| kreuzberg::BatchFileItem {
+                path: p.to_path_buf(),
+                config: None,
+            })
+            .collect();
 
-        let timed_result = tokio::time::timeout(timeout, batch_extract_file(items.clone(), &config)).await;
+        let timed_result = tokio::time::timeout(timeout, batch_extract_files(items.clone(), &config)).await;
         let timed_out = timed_result.is_err();
         let batch_result = match timed_result {
             Ok(inner) => inner.map_err(|e| Error::Benchmark(format!("Batch extraction failed: {}", e))),

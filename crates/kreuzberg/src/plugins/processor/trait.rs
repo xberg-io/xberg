@@ -282,4 +282,13 @@ pub trait PostProcessor: Plugin {
     fn estimated_duration_ms(&self, _result: &ExtractionResult) -> u64 {
         0
     }
+
+    /// Execution priority within the processing stage.
+    ///
+    /// Higher values run first within the same `ProcessingStage`. Defaults to 50.
+    /// Use 0-49 for fallback processors, 50 for normal processors, and 51-255
+    /// for high-priority processors that should run early in their stage.
+    fn priority(&self) -> i32 {
+        50
+    }
 }

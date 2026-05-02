@@ -91,68 +91,73 @@ static EMBED_SEMAPHORE: LazyLock<Arc<tokio::sync::Semaphore>> = LazyLock::new(||
 ///
 /// Each preset combines chunk size, overlap, and embedding model
 /// to provide an optimized configuration for specific scenarios.
+///
+/// All string fields are owned `String` for FFI compatibility — instances
+/// are safe to clone and pass across language boundaries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingPreset {
-    pub name: &'static str,
+    pub name: String,
     pub chunk_size: usize,
     pub overlap: usize,
     /// HuggingFace repository name for the model.
-    pub model_repo: &'static str,
+    pub model_repo: String,
     /// Pooling strategy: "cls" or "mean".
-    pub pooling: &'static str,
+    pub pooling: String,
     /// Path to the ONNX model file within the repo.
-    pub model_file: &'static str,
+    pub model_file: String,
     pub dimensions: usize,
-    pub description: &'static str,
+    pub description: String,
 }
 
 /// All available embedding presets.
-pub const EMBEDDING_PRESETS: &[EmbeddingPreset] = &[
-    EmbeddingPreset {
-        name: "fast",
-        chunk_size: 512,
-        overlap: 50,
-        model_repo: "Xenova/all-MiniLM-L6-v2",
-        pooling: "mean",
-        model_file: "onnx/model_quantized.onnx",
-        dimensions: 384,
-        description: "Fast embedding with quantized model (384 dims, ~22M params). Best for: Quick prototyping, development, resource-constrained environments.",
-    },
-    EmbeddingPreset {
-        name: "balanced",
-        chunk_size: 1024,
-        overlap: 100,
-        model_repo: "Xenova/bge-base-en-v1.5",
-        pooling: "cls",
-        model_file: "onnx/model.onnx",
-        dimensions: 768,
-        description: "Balanced quality and speed (768 dims, ~109M params). Best for: General-purpose RAG, production deployments, English documents.",
-    },
-    EmbeddingPreset {
-        name: "quality",
-        chunk_size: 2000,
-        overlap: 200,
-        model_repo: "Xenova/bge-large-en-v1.5",
-        pooling: "cls",
-        model_file: "onnx/model.onnx",
-        dimensions: 1024,
-        description: "High quality with larger context (1024 dims, ~335M params). Best for: Complex documents, maximum accuracy, sufficient compute resources.",
-    },
-    EmbeddingPreset {
-        name: "multilingual",
-        chunk_size: 1024,
-        overlap: 100,
-        model_repo: "intfloat/multilingual-e5-base",
-        pooling: "mean",
-        model_file: "onnx/model.onnx",
-        dimensions: 768,
-        description: "Multilingual support (768 dims, 100+ languages). Best for: International documents, mixed-language content, global applications.",
-    },
-];
+pub static EMBEDDING_PRESETS: LazyLock<Vec<EmbeddingPreset>> = LazyLock::new(|| {
+    vec![
+        EmbeddingPreset {
+            name: "fast".to_string(),
+            chunk_size: 512,
+            overlap: 50,
+            model_repo: "Xenova/all-MiniLM-L6-v2".to_string(),
+            pooling: "mean".to_string(),
+            model_file: "onnx/model_quantized.onnx".to_string(),
+            dimensions: 384,
+            description: "Fast embedding with quantized model (384 dims, ~22M params). Best for: Quick prototyping, development, resource-constrained environments.".to_string(),
+        },
+        EmbeddingPreset {
+            name: "balanced".to_string(),
+            chunk_size: 1024,
+            overlap: 100,
+            model_repo: "Xenova/bge-base-en-v1.5".to_string(),
+            pooling: "cls".to_string(),
+            model_file: "onnx/model.onnx".to_string(),
+            dimensions: 768,
+            description: "Balanced quality and speed (768 dims, ~109M params). Best for: General-purpose RAG, production deployments, English documents.".to_string(),
+        },
+        EmbeddingPreset {
+            name: "quality".to_string(),
+            chunk_size: 2000,
+            overlap: 200,
+            model_repo: "Xenova/bge-large-en-v1.5".to_string(),
+            pooling: "cls".to_string(),
+            model_file: "onnx/model.onnx".to_string(),
+            dimensions: 1024,
+            description: "High quality with larger context (1024 dims, ~335M params). Best for: Complex documents, maximum accuracy, sufficient compute resources.".to_string(),
+        },
+        EmbeddingPreset {
+            name: "multilingual".to_string(),
+            chunk_size: 1024,
+            overlap: 100,
+            model_repo: "intfloat/multilingual-e5-base".to_string(),
+            pooling: "mean".to_string(),
+            model_file: "onnx/model.onnx".to_string(),
+            dimensions: 768,
+            description: "Multilingual support (768 dims, 100+ languages). Best for: International documents, mixed-language content, global applications.".to_string(),
+        },
+    ]
+});
 
-/// Get a preset by name.
-pub(crate) fn get_preset(name: &str) -> Option<&'static EmbeddingPreset> {
-    EMBEDDING_PRESETS.iter().find(|p| p.name == name)
+/// Get a preset by name (returns an owned clone for FFI compatibility).
+pub(crate) fn get_preset(name: &str) -> Option<EmbeddingPreset> {
+    EMBEDDING_PRESETS.iter().find(|p| p.name == name).cloned()
 }
 
 /// Get the chunk_size for a preset by name.
@@ -160,9 +165,9 @@ pub(crate) fn preset_chunk_size(name: &str) -> Option<usize> {
     get_preset(name).map(|p| p.chunk_size)
 }
 
-/// List all available preset names.
-pub(crate) fn list_presets() -> Vec<&'static str> {
-    EMBEDDING_PRESETS.iter().map(|p| p.name).collect()
+/// List all available preset names (owned clones for FFI compatibility).
+pub(crate) fn list_presets() -> Vec<String> {
+    EMBEDDING_PRESETS.iter().map(|p| p.name.clone()).collect()
 }
 
 /// Returns installation instructions for ONNX Runtime.
@@ -201,12 +206,12 @@ fn resolve_cache_dir(cache_dir: Option<std::path::PathBuf>) -> std::path::PathBu
 /// Resolve model info (repo, model file, pooling) from an EmbeddingModelType config.
 fn resolve_model_info(
     model_type: &crate::core::config::EmbeddingModelType,
-) -> crate::Result<(&str, &str, engine::Pooling)> {
+) -> crate::Result<(String, String, engine::Pooling)> {
     match model_type {
         crate::core::config::EmbeddingModelType::Preset { name } => {
             let preset = get_preset(name)
                 .ok_or_else(|| crate::KreuzbergError::embedding(format!("Unknown embedding preset: {name}")))?;
-            let pooling = match preset.pooling {
+            let pooling = match preset.pooling.as_str() {
                 "cls" => engine::Pooling::Cls,
                 _ => engine::Pooling::Mean,
             };
@@ -215,7 +220,7 @@ fn resolve_model_info(
         crate::core::config::EmbeddingModelType::Custom { model_id, .. } => {
             // For custom models, default to mean pooling and standard model path.
             // Users providing custom HF models should ensure the repo has the expected layout.
-            Ok((model_id.as_str(), "onnx/model.onnx", engine::Pooling::Mean))
+            Ok((model_id.clone(), "onnx/model.onnx".to_string(), engine::Pooling::Mean))
         }
         crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::KreuzbergError::embedding(
             "LLM embeddings have no local model to warm or download — the provider serves them over HTTP at embed time.",
@@ -602,7 +607,7 @@ pub fn warm_model(
     cache_dir: Option<std::path::PathBuf>,
 ) -> crate::Result<()> {
     let (repo, model_file, pooling) = resolve_model_info(model_type)?;
-    get_or_init_engine(repo, model_file, pooling, cache_dir, None).map(|_| ())
+    get_or_init_engine(&repo, &model_file, pooling, cache_dir, None).map(|_| ())
 }
 
 /// Normalize an embedding vector in-place (L2 normalization).
@@ -844,8 +849,8 @@ pub fn embed_texts<T: AsRef<str>>(
             let chunk_count = texts.len();
             let (repo, model_file, pooling) = resolve_model_info(&config.model)?;
             let engine = get_or_init_engine(
-                repo,
-                model_file,
+                &repo,
+                &model_file,
                 pooling,
                 config.cache_dir.clone(),
                 config.acceleration.clone(),
@@ -1003,10 +1008,10 @@ mod tests {
     fn test_list_presets() {
         let presets = list_presets();
         assert_eq!(presets.len(), 4);
-        assert!(presets.contains(&"fast"));
-        assert!(presets.contains(&"balanced"));
-        assert!(presets.contains(&"quality"));
-        assert!(presets.contains(&"multilingual"));
+        assert!(presets.iter().any(|n| n == "fast"));
+        assert!(presets.iter().any(|n| n == "balanced"));
+        assert!(presets.iter().any(|n| n == "quality"));
+        assert!(presets.iter().any(|n| n == "multilingual"));
     }
 
     #[test]

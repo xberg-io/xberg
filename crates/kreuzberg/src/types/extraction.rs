@@ -558,11 +558,15 @@ pub struct ExtractedImage {
 // Element-based Output Format Types (Unstructured-compatible)
 // ============================================================================
 
-/// Output format selection for extraction results.
+/// Result-shape selection for extraction results.
+///
+/// Distinct from [`crate::OutputFormat`] (which controls rendering — Plain, Markdown,
+/// HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
+/// blob vs. an element-based decomposition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
-pub enum OutputFormat {
+pub enum ResultFormat {
     /// Unified format with all content in `content` field
     #[default]
     Unified,

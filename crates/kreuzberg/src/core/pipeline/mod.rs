@@ -323,7 +323,7 @@ pub fn run_pipeline_sync(doc: InternalDocument, config: &ExtractionConfig) -> Re
 
 /// Transform to element-based output if requested by the config.
 fn apply_element_transform(result: &mut ExtractionResult, config: &ExtractionConfig) {
-    if config.result_format == crate::types::OutputFormat::ElementBased {
+    if config.result_format == crate::types::ResultFormat::ElementBased {
         result.elements = Some(crate::extraction::transform::transform_extraction_result_to_elements(
             result,
         ));

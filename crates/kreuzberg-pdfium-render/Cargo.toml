@@ -37,7 +37,7 @@ bitflags = "2"
 bytemuck = "1"
 chrono = { workspace = true }
 image_025 = { package = "image", version = "0.25", optional = true, default-features = false, features = [
-    "jpeg",
+  "jpeg",
 ] }
 itertools = { workspace = true }
 log = { workspace = true }

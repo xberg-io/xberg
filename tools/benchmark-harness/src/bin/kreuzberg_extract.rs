@@ -12,7 +12,7 @@
 //! - On error: {"error": "message"}
 
 use kreuzberg::{
-    ExtractionConfig, FileExtractionConfig, FormatMetadata, OcrConfig, PdfBackend, PdfConfig, batch_extract_file_sync,
+    BatchFileItem, ExtractionConfig, FormatMetadata, OcrConfig, PdfBackend, PdfConfig, batch_extract_files_sync,
     extract_file_sync,
 };
 use serde_json::json;
@@ -117,10 +117,13 @@ fn main() {
             .map(PathBuf::from)
             .collect();
 
-        let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = file_paths.into_iter().map(|p| (p, None)).collect();
+        let items: Vec<BatchFileItem> = file_paths
+            .into_iter()
+            .map(|path| BatchFileItem { path, config: None })
+            .collect();
 
         let start = Instant::now();
-        match batch_extract_file_sync(items, &config) {
+        match batch_extract_files_sync(items, &config) {
             Ok(results) => {
                 let total_ms = start.elapsed().as_secs_f64() * 1000.0;
                 let per_file_ms = total_ms / results.len().max(1) as f64;

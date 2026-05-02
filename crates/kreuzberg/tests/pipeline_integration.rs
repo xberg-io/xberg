@@ -31,6 +31,25 @@ fn mock_doc(text: &str) -> InternalDocument {
 struct OrderTrackingProcessor {
     name: String,
     stage: ProcessingStage,
+    priority: i32,
+}
+
+impl OrderTrackingProcessor {
+    fn new(name: impl Into<String>, stage: ProcessingStage) -> Self {
+        Self {
+            name: name.into(),
+            stage,
+            priority: 50,
+        }
+    }
+
+    fn with_priority(name: impl Into<String>, stage: ProcessingStage, priority: i32) -> Self {
+        Self {
+            name: name.into(),
+            stage,
+            priority,
+        }
+    }
 }
 
 impl Plugin for OrderTrackingProcessor {
@@ -57,6 +76,10 @@ impl PostProcessor for OrderTrackingProcessor {
 
     fn processing_stage(&self) -> ProcessingStage {
         self.stage
+    }
+
+    fn priority(&self) -> i32 {
+        self.priority
     }
 }
 
@@ -159,22 +182,13 @@ async fn test_pipeline_single_processor_per_stage() {
     {
         let mut reg = registry.write();
 
-        let early = Arc::new(OrderTrackingProcessor {
-            name: "early".to_string(),
-            stage: ProcessingStage::Early,
-        });
-        let middle = Arc::new(OrderTrackingProcessor {
-            name: "middle".to_string(),
-            stage: ProcessingStage::Middle,
-        });
-        let late = Arc::new(OrderTrackingProcessor {
-            name: "late".to_string(),
-            stage: ProcessingStage::Late,
-        });
+        let early = Arc::new(OrderTrackingProcessor::new("early", ProcessingStage::Early));
+        let middle = Arc::new(OrderTrackingProcessor::new("middle", ProcessingStage::Middle));
+        let late = Arc::new(OrderTrackingProcessor::new("late", ProcessingStage::Late));
 
-        reg.register(early, 50).expect("Operation failed");
-        reg.register(middle, 50).expect("Operation failed");
-        reg.register(late, 50).expect("Operation failed");
+        reg.register(early).expect("Operation failed");
+        reg.register(middle).expect("Operation failed");
+        reg.register(late).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -193,22 +207,25 @@ async fn test_pipeline_multiple_processors_per_stage() {
     {
         let mut reg = registry.write();
 
-        let early_high = Arc::new(OrderTrackingProcessor {
-            name: "early-high".to_string(),
-            stage: ProcessingStage::Early,
-        });
-        let early_medium = Arc::new(OrderTrackingProcessor {
-            name: "early-medium".to_string(),
-            stage: ProcessingStage::Early,
-        });
-        let early_low = Arc::new(OrderTrackingProcessor {
-            name: "early-low".to_string(),
-            stage: ProcessingStage::Early,
-        });
+        let early_high = Arc::new(OrderTrackingProcessor::with_priority(
+            "early-high",
+            ProcessingStage::Early,
+            100,
+        ));
+        let early_medium = Arc::new(OrderTrackingProcessor::with_priority(
+            "early-medium",
+            ProcessingStage::Early,
+            50,
+        ));
+        let early_low = Arc::new(OrderTrackingProcessor::with_priority(
+            "early-low",
+            ProcessingStage::Early,
+            10,
+        ));
 
-        reg.register(early_low, 10).expect("Operation failed");
-        reg.register(early_high, 100).expect("Operation failed");
-        reg.register(early_medium, 50).expect("Operation failed");
+        reg.register(early_low).expect("Operation failed");
+        reg.register(early_high).expect("Operation failed");
+        reg.register(early_medium).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -228,11 +245,8 @@ async fn test_pipeline_all_stages_enabled() {
         let mut reg = registry.write();
 
         for stage in [ProcessingStage::Early, ProcessingStage::Middle, ProcessingStage::Late] {
-            let processor = Arc::new(OrderTrackingProcessor {
-                name: format!("{:?}", stage),
-                stage,
-            });
-            reg.register(processor, 50).expect("Operation failed");
+            let processor = Arc::new(OrderTrackingProcessor::new(format!("{:?}", stage), stage));
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -252,11 +266,8 @@ async fn test_pipeline_postprocessing_disabled() {
     {
         let mut reg = registry.write();
 
-        let processor = Arc::new(OrderTrackingProcessor {
-            name: "processor".to_string(),
-            stage: ProcessingStage::Early,
-        });
-        reg.register(processor, 50).expect("Operation failed");
+        let processor = Arc::new(OrderTrackingProcessor::new("processor", ProcessingStage::Early));
+        reg.register(processor).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -284,17 +295,11 @@ async fn test_pipeline_early_stage_runs_first() {
     {
         let mut reg = registry.write();
 
-        let late = Arc::new(OrderTrackingProcessor {
-            name: "late".to_string(),
-            stage: ProcessingStage::Late,
-        });
-        let early = Arc::new(OrderTrackingProcessor {
-            name: "early".to_string(),
-            stage: ProcessingStage::Early,
-        });
+        let late = Arc::new(OrderTrackingProcessor::new("late", ProcessingStage::Late));
+        let early = Arc::new(OrderTrackingProcessor::new("early", ProcessingStage::Early));
 
-        reg.register(late, 50).expect("Operation failed");
-        reg.register(early, 50).expect("Operation failed");
+        reg.register(late).expect("Operation failed");
+        reg.register(early).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -313,17 +318,11 @@ async fn test_pipeline_middle_stage_runs_second() {
     {
         let mut reg = registry.write();
 
-        let early = Arc::new(OrderTrackingProcessor {
-            name: "early".to_string(),
-            stage: ProcessingStage::Early,
-        });
-        let middle = Arc::new(OrderTrackingProcessor {
-            name: "middle".to_string(),
-            stage: ProcessingStage::Middle,
-        });
+        let early = Arc::new(OrderTrackingProcessor::new("early", ProcessingStage::Early));
+        let middle = Arc::new(OrderTrackingProcessor::new("middle", ProcessingStage::Middle));
 
-        reg.register(middle, 50).expect("Operation failed");
-        reg.register(early, 50).expect("Operation failed");
+        reg.register(middle).expect("Operation failed");
+        reg.register(early).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -343,11 +342,8 @@ async fn test_pipeline_late_stage_runs_last() {
         let mut reg = registry.write();
 
         for stage in [ProcessingStage::Late, ProcessingStage::Early, ProcessingStage::Middle] {
-            let processor = Arc::new(OrderTrackingProcessor {
-                name: format!("{:?}", stage),
-                stage,
-            });
-            reg.register(processor, 50).expect("Operation failed");
+            let processor = Arc::new(OrderTrackingProcessor::new(format!("{:?}", stage), stage));
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -368,11 +364,12 @@ async fn test_pipeline_within_stage_priority_order() {
         let mut reg = registry.write();
 
         for (name, priority) in [("p1", 100), ("p2", 10), ("p3", 50), ("p4", 75)] {
-            let processor = Arc::new(OrderTrackingProcessor {
-                name: name.to_string(),
-                stage: ProcessingStage::Early,
-            });
-            reg.register(processor, priority).expect("Operation failed");
+            let processor = Arc::new(OrderTrackingProcessor::with_priority(
+                name,
+                ProcessingStage::Early,
+                priority,
+            ));
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -429,8 +426,8 @@ async fn test_pipeline_cross_stage_data_flow() {
             }
         }
 
-        reg.register(early, 50).expect("Operation failed");
-        reg.register(Arc::new(MiddleProcessor), 50).expect("Operation failed");
+        reg.register(early).expect("Operation failed");
+        reg.register(Arc::new(MiddleProcessor)).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -476,8 +473,7 @@ async fn test_pipeline_early_stage_error_recorded() {
     let registry = get_post_processor_registry();
     {
         let mut reg = registry.write();
-        reg.register(Arc::new(EarlyFailingProcessor), 50)
-            .expect("Operation failed");
+        reg.register(Arc::new(EarlyFailingProcessor)).expect("Operation failed");
     }
 
     let doc = mock_doc("content");
@@ -508,7 +504,7 @@ async fn test_pipeline_middle_stage_error_propagation() {
             error_message: "Middle stage error".to_string(),
         });
 
-        reg.register(failing, 50).expect("Operation failed");
+        reg.register(failing).expect("Operation failed");
     }
 
     let doc = mock_doc("content");
@@ -562,14 +558,11 @@ async fn test_pipeline_late_stage_error_doesnt_affect_earlier_stages() {
     {
         let mut reg = registry.write();
 
-        let early = Arc::new(OrderTrackingProcessor {
-            name: "early".to_string(),
-            stage: ProcessingStage::Early,
-        });
+        let early = Arc::new(OrderTrackingProcessor::new("early", ProcessingStage::Early));
         let late_failing = Arc::new(LateFailingProcessor);
 
-        reg.register(early, 50).expect("Operation failed");
-        reg.register(late_failing, 50).expect("Operation failed");
+        reg.register(early).expect("Operation failed");
+        reg.register(late_failing).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -595,18 +588,12 @@ async fn test_pipeline_processor_error_doesnt_stop_other_processors() {
     {
         let mut reg = registry.write();
 
-        let p1 = Arc::new(OrderTrackingProcessor {
-            name: "p1".to_string(),
-            stage: ProcessingStage::Early,
-        });
+        let p1 = Arc::new(OrderTrackingProcessor::with_priority("p1", ProcessingStage::Early, 100));
         let _p2_failing = Arc::new(FailingProcessor {
             name: "p2-failing".to_string(),
             error_message: "Test error".to_string(),
         });
-        let p3 = Arc::new(OrderTrackingProcessor {
-            name: "p3".to_string(),
-            stage: ProcessingStage::Late,
-        });
+        let p3 = Arc::new(OrderTrackingProcessor::new("p3", ProcessingStage::Late));
 
         struct EarlyFailingProcessor {
             name: String,
@@ -638,15 +625,12 @@ async fn test_pipeline_processor_error_doesnt_stop_other_processors() {
             }
         }
 
-        reg.register(p1, 100).expect("Operation failed");
-        reg.register(
-            Arc::new(EarlyFailingProcessor {
-                name: "p2-failing".to_string(),
-            }),
-            50,
-        )
+        reg.register(p1).expect("Operation failed");
+        reg.register(Arc::new(EarlyFailingProcessor {
+            name: "p2-failing".to_string(),
+        }))
         .expect("Operation failed");
-        reg.register(p3, 50).expect("Operation failed");
+        reg.register(p3).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -712,7 +696,7 @@ async fn test_pipeline_multiple_processor_errors() {
                 name: name.to_string(),
                 stage,
             });
-            reg.register(processor, 50).expect("Operation failed");
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -744,7 +728,7 @@ async fn test_pipeline_error_context_preservation() {
             error_message: "Detailed error message with context".to_string(),
         });
 
-        reg.register(failing, 50).expect("Operation failed");
+        reg.register(failing).expect("Operation failed");
     }
 
     let doc = mock_doc("content");
@@ -807,8 +791,8 @@ async fn test_pipeline_metadata_added_in_early_visible_in_middle() {
             }
         }
 
-        reg.register(early, 50).expect("Operation failed");
-        reg.register(Arc::new(MiddleReadingProcessor), 50)
+        reg.register(early).expect("Operation failed");
+        reg.register(Arc::new(MiddleReadingProcessor))
             .expect("Operation failed");
     }
 
@@ -837,10 +821,7 @@ async fn test_pipeline_content_modified_in_middle_visible_in_late() {
     {
         let mut reg = registry.write();
 
-        let middle = Arc::new(OrderTrackingProcessor {
-            name: "middle-content".to_string(),
-            stage: ProcessingStage::Middle,
-        });
+        let middle = Arc::new(OrderTrackingProcessor::new("middle-content", ProcessingStage::Middle));
 
         struct LateReadingProcessor;
         impl Plugin for LateReadingProcessor {
@@ -868,9 +849,8 @@ async fn test_pipeline_content_modified_in_middle_visible_in_late() {
             }
         }
 
-        reg.register(middle, 50).expect("Operation failed");
-        reg.register(Arc::new(LateReadingProcessor), 50)
-            .expect("Operation failed");
+        reg.register(middle).expect("Operation failed");
+        reg.register(Arc::new(LateReadingProcessor)).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -894,6 +874,7 @@ async fn test_pipeline_multiple_processors_modifying_same_metadata() {
             struct MetadataOverwritingProcessor {
                 name: String,
                 value: String,
+                priority: i32,
             }
             impl Plugin for MetadataOverwritingProcessor {
                 fn name(&self) -> &str {
@@ -921,13 +902,17 @@ async fn test_pipeline_multiple_processors_modifying_same_metadata() {
                 fn processing_stage(&self) -> ProcessingStage {
                     ProcessingStage::Early
                 }
+                fn priority(&self) -> i32 {
+                    self.priority
+                }
             }
 
             let processor = Arc::new(MetadataOverwritingProcessor {
                 name: format!("proc{}", i),
                 value: format!("value{}", i),
+                priority: 100 - i * 10,
             });
-            reg.register(processor, 100 - i * 10).expect("Operation failed");
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -1004,7 +989,7 @@ async fn test_pipeline_processors_reading_previous_output() {
                 name: name.to_string(),
                 stage,
             });
-            reg.register(processor, 50).expect("Operation failed");
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -1058,8 +1043,7 @@ async fn test_pipeline_large_content_modification() {
     let registry = get_post_processor_registry();
     {
         let mut reg = registry.write();
-        reg.register(Arc::new(LargeContentProcessor), 50)
-            .expect("Operation failed");
+        reg.register(Arc::new(LargeContentProcessor)).expect("Operation failed");
     }
 
     let doc = mock_doc("start");
@@ -1079,11 +1063,8 @@ async fn test_pipeline_enabled_processors_whitelist() {
         let mut reg = registry.write();
 
         for name in ["proc1", "proc2", "proc3"] {
-            let processor = Arc::new(OrderTrackingProcessor {
-                name: name.to_string(),
-                stage: ProcessingStage::Early,
-            });
-            reg.register(processor, 50).expect("Operation failed");
+            let processor = Arc::new(OrderTrackingProcessor::new(name, ProcessingStage::Early));
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -1115,11 +1096,8 @@ async fn test_pipeline_disabled_processors_blacklist() {
         let mut reg = registry.write();
 
         for name in ["proc1", "proc2", "proc3"] {
-            let processor = Arc::new(OrderTrackingProcessor {
-                name: name.to_string(),
-                stage: ProcessingStage::Early,
-            });
-            reg.register(processor, 50).expect("Operation failed");
+            let processor = Arc::new(OrderTrackingProcessor::new(name, ProcessingStage::Early));
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -1151,11 +1129,8 @@ async fn test_pipeline_no_filtering_runs_all() {
         let mut reg = registry.write();
 
         for name in ["proc1", "proc2", "proc3"] {
-            let processor = Arc::new(OrderTrackingProcessor {
-                name: name.to_string(),
-                stage: ProcessingStage::Early,
-            });
-            reg.register(processor, 50).expect("Operation failed");
+            let processor = Arc::new(OrderTrackingProcessor::new(name, ProcessingStage::Early));
+            reg.register(processor).expect("Operation failed");
         }
     }
 
@@ -1178,11 +1153,8 @@ async fn test_pipeline_empty_whitelist_runs_none() {
         let mut reg = registry.write();
 
         for name in ["proc1", "proc2"] {
-            let processor = Arc::new(OrderTrackingProcessor {
-                name: name.to_string(),
-                stage: ProcessingStage::Early,
-            });
-            reg.register(processor, 50).expect("Operation failed");
+            let processor = Arc::new(OrderTrackingProcessor::new(name, ProcessingStage::Early));
+            reg.register(processor).expect("Operation failed");
         }
     }
 

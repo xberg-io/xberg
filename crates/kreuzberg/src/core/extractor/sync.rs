@@ -17,7 +17,7 @@ use std::path::Path;
 use once_cell::sync::OnceCell;
 
 #[cfg(feature = "tokio-runtime")]
-use super::batch::{batch_extract_bytes, batch_extract_file};
+use super::batch::{batch_extract_bytes, batch_extract_files};
 #[cfg(feature = "tokio-runtime")]
 use super::bytes::extract_bytes;
 #[cfg(feature = "tokio-runtime")]
@@ -119,7 +119,7 @@ pub fn extract_bytes_sync(content: &[u8], mime_type: &str, config: &ExtractionCo
     super::legacy::extract_bytes_sync_impl(content, Some(mime_type), Some(config))
 }
 
-/// Synchronous wrapper for `batch_extract_file`.
+/// Synchronous wrapper for `batch_extract_files`.
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
@@ -127,7 +127,7 @@ pub fn extract_bytes_sync(content: &[u8], mime_type: &str, config: &ExtractionCo
 /// # Example
 ///
 /// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_file_sync;
+/// use kreuzberg::core::extractor::batch_extract_files_sync;
 /// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
 ///
 /// let config = ExtractionConfig::default();
@@ -138,12 +138,12 @@ pub fn extract_bytes_sync(content: &[u8], mime_type: &str, config: &ExtractionCo
 ///     },
 ///     BatchFileItem { path: "doc2.pdf".into(), config: None },
 /// ];
-/// let results = batch_extract_file_sync(items, &config)?;
+/// let results = batch_extract_files_sync(items, &config)?;
 /// # Ok::<(), kreuzberg::KreuzbergError>(())
 /// ```
 #[cfg(feature = "tokio-runtime")]
-pub fn batch_extract_file_sync(items: Vec<BatchFileItem>, config: &ExtractionConfig) -> Result<Vec<ExtractionResult>> {
-    global_runtime()?.block_on(batch_extract_file(items, config))
+pub fn batch_extract_files_sync(items: Vec<BatchFileItem>, config: &ExtractionConfig) -> Result<Vec<ExtractionResult>> {
+    global_runtime()?.block_on(batch_extract_files(items, config))
 }
 
 /// Synchronous wrapper for `batch_extract_bytes`.

@@ -4,7 +4,7 @@
 //! or multiple documents with customizable extraction configurations.
 
 use anyhow::{Context, Result};
-use kreuzberg::{BatchFileItem, ExtractionConfig, FileExtractionConfig, batch_extract_file_sync, extract_file_sync};
+use kreuzberg::{BatchFileItem, ExtractionConfig, FileExtractionConfig, batch_extract_files_sync, extract_file_sync};
 use std::path::PathBuf;
 
 use crate::{WireFormat, style};
@@ -78,7 +78,7 @@ pub fn batch_command(
             .collect()
     };
 
-    let results = batch_extract_file_sync(items, &config).with_context(
+    let results = batch_extract_files_sync(items, &config).with_context(
         || "Failed to batch extract documents. Check that all files are readable and formats are supported.",
     )?;
 

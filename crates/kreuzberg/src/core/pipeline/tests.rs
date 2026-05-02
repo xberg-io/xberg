@@ -37,7 +37,7 @@ const ORDER_VALIDATION_MARKER: &str = "order_validation_test";
 fn ensure_quality_processor() {
     let registry = crate::plugins::registry::get_post_processor_registry();
     let mut reg = registry.write();
-    let _ = reg.register(std::sync::Arc::new(crate::text::QualityProcessor), 30);
+    let _ = reg.register(std::sync::Arc::new(crate::text::QualityProcessor));
     drop(reg);
     let _ = clear_processor_cache();
 }
@@ -433,7 +433,7 @@ async fn test_postprocessor_runs_before_validator() {
 
     {
         let mut registry = pp_registry.write();
-        registry.register(Arc::new(TestPostProcessor), 0).unwrap();
+        registry.register(Arc::new(TestPostProcessor)).unwrap();
     }
 
     {
@@ -702,8 +702,8 @@ async fn test_multiple_postprocessors_run_before_validator() {
 
     {
         let mut registry = pp_registry.write();
-        registry.register(Arc::new(EarlyProcessor), 0).unwrap();
-        registry.register(Arc::new(LateProcessor), 0).unwrap();
+        registry.register(Arc::new(EarlyProcessor)).unwrap();
+        registry.register(Arc::new(LateProcessor)).unwrap();
     }
 
     {

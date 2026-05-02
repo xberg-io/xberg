@@ -446,6 +446,9 @@ public interface IPostProcessor {
     /// <summary>estimated_duration_ms</summary>
     ulong EstimatedDurationMs(ExtractionResult Result);
 
+    /// <summary>priority</summary>
+    int Priority();
+
 }
 
 /// <summary>
@@ -458,7 +461,7 @@ public sealed class PostProcessorBridge : IDisposable {
     internal IntPtr _vtable;
     private bool _disposed;
 
-    // Vtable slot delegates (9)
+    // Vtable slot delegates (10)
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int NameFn(IntPtr userData, out IntPtr outName);
 
@@ -484,6 +487,9 @@ public sealed class PostProcessorBridge : IDisposable {
     private delegate int EstimatedDurationMsFn(IntPtr userData, IntPtr Result, out IntPtr outResult, out IntPtr outError);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int PriorityFn(IntPtr userData, out IntPtr outResult, out IntPtr outError);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void FreeUserDataFn(IntPtr userData);
 
     public PostProcessorBridge(IPostProcessor impl) {
@@ -496,7 +502,7 @@ public sealed class PostProcessorBridge : IDisposable {
 
     private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
-        _vtable = Marshal.AllocHGlobal(IntPtr.Size * 9);
+        _vtable = Marshal.AllocHGlobal(IntPtr.Size * 10);
 
         // Slot 0: name_fn
         var nameFn = new NameFn(NameFnCallback);
@@ -530,9 +536,13 @@ public sealed class PostProcessorBridge : IDisposable {
         var estimatedDurationMsFn = new EstimatedDurationMsFn(EstimatedDurationMsFnCallback);
         Marshal.WriteIntPtr(_vtable, 56, Marshal.GetFunctionPointerForDelegate(estimatedDurationMsFn));
 
-        // Slot 8: free_user_data
+        // Slot 8: priority_fn
+        var priorityFn = new PriorityFn(PriorityFnCallback);
+        Marshal.WriteIntPtr(_vtable, 64, Marshal.GetFunctionPointerForDelegate(priorityFn));
+
+        // Slot 9: free_user_data
         var freeFn = new FreeUserDataFn(FreeUserDataCallback);
-        Marshal.WriteIntPtr(_vtable, 64, Marshal.GetFunctionPointerForDelegate(freeFn));
+        Marshal.WriteIntPtr(_vtable, 72, Marshal.GetFunctionPointerForDelegate(freeFn));
     }
 
     private static string ToJsonString<T>(T value) {
@@ -635,6 +645,19 @@ public sealed class PostProcessorBridge : IDisposable {
             var json_Result = Marshal.PtrToStringUTF8(Result) ?? "{}";
             var managed_Result = JsonSerializer.Deserialize<ExtractionResult>(json_Result)!;
             var result = _impl.EstimatedDurationMs(managed_Result);
+            outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
+            outError = IntPtr.Zero;
+            return 0;
+        } catch (Exception ex) {
+            outResult = IntPtr.Zero;
+            outError = Marshal.StringToCoTaskMemUTF8(ex.Message);
+            return 1;
+        }
+    }
+
+    private int PriorityFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
+        try {
+            var result = _impl.Priority();
             outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
             outError = IntPtr.Zero;
             return 0;

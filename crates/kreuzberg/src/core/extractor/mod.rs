@@ -8,7 +8,7 @@
 //!
 //! - [`extract_file`] - Extract content from a file path
 //! - [`extract_bytes`] - Extract content from a byte array
-//! - [`batch_extract_file`] - Extract content from multiple files concurrently
+//! - [`batch_extract_files`] - Extract content from multiple files concurrently
 //! - [`batch_extract_bytes`] - Extract content from multiple byte arrays concurrently
 
 mod bytes;
@@ -29,9 +29,9 @@ pub use sync::{batch_extract_bytes_sync, extract_bytes_sync};
 pub use sync::extract_file_sync;
 
 #[cfg(feature = "tokio-runtime")]
-pub use batch::{batch_extract_bytes, batch_extract_file};
+pub use batch::{batch_extract_bytes, batch_extract_files};
 #[cfg(feature = "tokio-runtime")]
-pub use sync::batch_extract_file_sync;
+pub use sync::batch_extract_files_sync;
 
 #[cfg(test)]
 mod tests {
@@ -124,7 +124,7 @@ mod tests {
                 config: None,
             },
         ];
-        let results = batch_extract_file(items, &config).await;
+        let results = batch_extract_files(items, &config).await;
 
         assert!(results.is_ok());
         let results = results.unwrap();
@@ -137,7 +137,7 @@ mod tests {
     async fn test_batch_extract_file_empty() {
         let config = ExtractionConfig::default();
         let items: Vec<BatchFileItem> = vec![];
-        let results = batch_extract_file(items, &config).await;
+        let results = batch_extract_files(items, &config).await;
 
         assert!(results.is_ok());
         assert_eq!(results.unwrap().len(), 0);
@@ -309,7 +309,7 @@ mod tests {
                 config: None,
             },
         ];
-        let results = batch_extract_file(items, &config).await;
+        let results = batch_extract_files(items, &config).await;
 
         assert!(results.is_ok());
         let results = results.unwrap();
@@ -402,7 +402,7 @@ mod tests {
         }
 
         let config = ExtractionConfig::default();
-        let results = batch_extract_file(items, &config).await;
+        let results = batch_extract_files(items, &config).await;
 
         assert!(results.is_ok());
         let results = results.unwrap();
@@ -455,7 +455,7 @@ mod tests {
     fn test_sync_wrapper_batch_empty() {
         let config = ExtractionConfig::default();
         let items: Vec<BatchFileItem> = vec![];
-        let results = batch_extract_file_sync(items, &config);
+        let results = batch_extract_files_sync(items, &config);
 
         assert!(results.is_ok());
         assert_eq!(results.unwrap().len(), 0);
@@ -545,7 +545,7 @@ mod tests {
                 config: None,
             },
         ];
-        let results = batch_extract_file(items, &config).await;
+        let results = batch_extract_files(items, &config).await;
 
         assert!(results.is_ok());
         let results = results.unwrap();
@@ -558,7 +558,7 @@ mod tests {
     async fn test_batch_extract_file_with_configs_empty() {
         let config = ExtractionConfig::default();
         let items: Vec<BatchFileItem> = vec![];
-        let results = batch_extract_file(items, &config).await;
+        let results = batch_extract_files(items, &config).await;
 
         assert!(results.is_ok());
         assert_eq!(results.unwrap().len(), 0);
@@ -623,7 +623,7 @@ mod tests {
             path: file_path,
             config: None,
         }];
-        let results = batch_extract_file_sync(items, &config);
+        let results = batch_extract_files_sync(items, &config);
 
         assert!(results.is_ok());
         let results = results.unwrap();

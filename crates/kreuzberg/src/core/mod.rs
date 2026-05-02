@@ -55,5 +55,5 @@ pub use batch_optimizations::{BatchProcessor, BatchProcessorConfig};
 #[cfg(feature = "pdf")]
 pub use config::PdfConfig;
 #[cfg(feature = "tokio-runtime")]
-pub use extractor::{batch_extract_bytes, batch_extract_file};
+pub use extractor::{batch_extract_bytes, batch_extract_files};
 pub use extractor::{extract_bytes, extract_file};

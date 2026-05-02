@@ -15,17 +15,20 @@ use std::sync::Arc;
 
 /// Register a post-processor plugin with the global registry.
 ///
+/// The processor's execution priority is taken from its
+/// [`PostProcessor::priority`] method (default: 50). Higher values run first
+/// within the same processing stage.
+///
 /// # Arguments
 ///
 /// * `processor` - The post-processor to register
-/// * `priority` - Execution priority (higher = runs first within stage)
-pub fn register_post_processor(processor: Arc<dyn PostProcessor>, priority: i32) -> crate::Result<()> {
+pub fn register_post_processor(processor: Arc<dyn PostProcessor>) -> crate::Result<()> {
     use crate::plugins::registry::get_post_processor_registry;
 
     let registry = get_post_processor_registry();
     let mut registry = registry.write();
 
-    registry.register(processor, priority)
+    registry.register(processor)
 }
 
 /// Unregister a post-processor by name.

@@ -154,7 +154,7 @@ pub struct ExtractionConfig {
     /// content in the `content` field, or element-based format with semantic
     /// elements (for Unstructured-compatible output).
     #[serde(default)]
-    pub result_format: crate::types::OutputFormat,
+    pub result_format: crate::types::ResultFormat,
 
     /// Security limits for archive extraction.
     ///
@@ -305,7 +305,7 @@ impl Default for ExtractionConfig {
             security_limits: None,
             #[cfg(feature = "layout-detection")]
             layout: None,
-            result_format: crate::types::OutputFormat::Unified,
+            result_format: crate::types::ResultFormat::Unified,
             output_format: OutputFormat::Plain,
             include_document_structure: false,
             acceleration: None,
@@ -470,7 +470,7 @@ impl ExtractionConfig {
         };
 
         let needs_pages_for_elements =
-            self.result_format == crate::types::OutputFormat::ElementBased && needs_pages(self);
+            self.result_format == crate::types::ResultFormat::ElementBased && needs_pages(self);
         let needs_pages_for_chunking = self.chunking.is_some() && needs_pages(self);
 
         if needs_pages_for_elements || needs_pages_for_chunking {

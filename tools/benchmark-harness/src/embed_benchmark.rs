@@ -45,7 +45,7 @@ const BATCH_SIZES: &[usize] = &[8, 16, 32, 64, 128];
 /// Per-preset benchmark results.
 #[derive(Debug)]
 pub struct PresetResult {
-    pub name: &'static str,
+    pub name: String,
     pub dimensions: usize,
     /// Model warm-up time in milliseconds (first call: download check + ONNX init).
     pub warm_ms: f64,
@@ -219,7 +219,7 @@ pub fn run_embed_benchmark() -> EmbedBenchmarkResults {
     // --- Per-preset throughput ---
     let mut preset_results: Vec<PresetResult> = Vec::new();
 
-    for preset in EMBEDDING_PRESETS {
+    for preset in EMBEDDING_PRESETS.iter() {
         println!(
             "\n[{}] {} dims — {}",
             preset.name, preset.dimensions, preset.description
@@ -264,7 +264,7 @@ pub fn run_embed_benchmark() -> EmbedBenchmarkResults {
         );
 
         preset_results.push(PresetResult {
-            name: preset.name,
+            name: preset.name.clone(),
             dimensions: preset.dimensions,
             warm_ms,
             total_ms,

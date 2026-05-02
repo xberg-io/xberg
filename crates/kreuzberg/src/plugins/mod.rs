@@ -186,7 +186,7 @@ mod traits;
 mod validator;
 
 pub use embedding::{EmbeddingBackend, list_embedding_backends};
-pub use extractor::{DocumentExtractor, list_extractors};
+pub use extractor::{DocumentExtractor, list_document_extractors};
 pub use ocr::{
     OcrBackend, OcrBackendType, clear_ocr_backends, list_ocr_backends, register_ocr_backend, unregister_ocr_backend,
 };

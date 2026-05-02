@@ -21,11 +21,7 @@ dev = [
   "types-psutil>=7.2.2.20260408",
   "validate-pyproject>=0.24.1",
 ]
-docs = [
-  "mkdocstrings>=1.0.4",
-  "mkdocstrings-python>=2.0.3",
-  "zensical",
-]
+docs = [ "mkdocstrings>=1.0.4", "mkdocstrings-python>=2.0.3", "zensical" ]
 
 [tool.uv]
 workspace.members = [ "packages/python" ]

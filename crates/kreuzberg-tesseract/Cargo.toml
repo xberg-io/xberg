@@ -41,20 +41,20 @@ thiserror = { workspace = true }
 cc = { version = "^1.2.61", optional = true }
 cmake = { version = "0.1.58", optional = true }
 zip = { version = ">=7.0.0", optional = true, default-features = false, features = [
-    "deflate-flate2-zlib-rs",
+  "deflate-flate2-zlib-rs",
 ] }
 
 [target.'cfg(not(target_os = "windows"))'.build-dependencies]
 reqwest = { workspace = true, default-features = false, features = [
-    "blocking",
-    "rustls",
+  "blocking",
+  "rustls",
 ], optional = true }
 
 # Use native-tls on Windows to avoid aws-lc-sys CMake build issues with MinGW
 [target.'cfg(target_os = "windows")'.build-dependencies]
 reqwest = { workspace = true, default-features = false, features = [
-    "blocking",
-    "native-tls",
+  "blocking",
+  "native-tls",
 ], optional = true }
 
 [dev-dependencies]

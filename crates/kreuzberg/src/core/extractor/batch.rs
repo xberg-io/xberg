@@ -156,7 +156,7 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
 /// Simple usage with no per-file overrides:
 ///
 /// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_file;
+/// use kreuzberg::core::extractor::batch_extract_files;
 /// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem};
 /// use std::path::PathBuf;
 ///
@@ -166,7 +166,7 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
 ///     BatchFileItem { path: "doc1.pdf".into(), config: None },
 ///     BatchFileItem { path: "doc2.pdf".into(), config: None },
 /// ];
-/// let results = batch_extract_file(items, &config).await?;
+/// let results = batch_extract_files(items, &config).await?;
 /// println!("Processed {} files", results.len());
 /// # Ok(())
 /// # }
@@ -175,7 +175,7 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
 /// Per-file configuration overrides:
 ///
 /// ```rust,no_run
-/// use kreuzberg::core::extractor::batch_extract_file;
+/// use kreuzberg::core::extractor::batch_extract_files;
 /// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
 /// use std::path::PathBuf;
 ///
@@ -188,7 +188,7 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
 ///     },
 ///     BatchFileItem { path: "notes.txt".into(), config: None },
 /// ];
-/// let results = batch_extract_file(items, &config).await?;
+/// let results = batch_extract_files(items, &config).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -199,7 +199,10 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
         extraction.batch_size = items.len(),
     )
 ))]
-pub async fn batch_extract_file(items: Vec<BatchFileItem>, config: &ExtractionConfig) -> Result<Vec<ExtractionResult>> {
+pub async fn batch_extract_files(
+    items: Vec<BatchFileItem>,
+    config: &ExtractionConfig,
+) -> Result<Vec<ExtractionResult>> {
     let config_arc = Arc::new(config.clone());
     // Use Arc<Vec> for file items — paths are small, so keeping them all alive is fine.
     let items_arc = Arc::new(items);

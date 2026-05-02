@@ -328,10 +328,10 @@ pub fn warm_command(
     #[cfg(feature = "embeddings")]
     {
         let embeddings_dir = cache_base.join("embeddings");
-        let presets_to_warm: Vec<&kreuzberg::EmbeddingPreset> = if all_embeddings {
+        let presets_to_warm: Vec<kreuzberg::EmbeddingPreset> = if all_embeddings {
             kreuzberg::list_embedding_presets()
                 .into_iter()
-                .filter_map(kreuzberg::get_embedding_preset)
+                .filter_map(|name| kreuzberg::get_embedding_preset(&name))
                 .collect()
         } else if let Some(ref name) = embedding_model {
             match kreuzberg::get_embedding_preset(name) {
@@ -353,7 +353,7 @@ pub fn warm_command(
             let label = format!("embedding ({})", preset.name);
             kreuzberg::embeddings::warm_model(
                 &kreuzberg::core::config::EmbeddingModelType::Preset {
-                    name: preset.name.to_string(),
+                    name: preset.name.clone(),
                 },
                 Some(embeddings_dir.clone()),
             )

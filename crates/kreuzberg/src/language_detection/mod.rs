@@ -196,7 +196,7 @@ pub(crate) fn register_language_detection_processor() -> Result<()> {
     let registry = crate::plugins::registry::get_post_processor_registry();
     let mut registry = registry.write();
 
-    registry.register(Arc::new(LanguageDetector), 40)?;
+    registry.register(Arc::new(LanguageDetector))?;
 
     Ok(())
 }

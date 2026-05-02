@@ -5,7 +5,7 @@
 
 use kreuzberg::core::mime::validate_mime_type;
 use kreuzberg::{
-    ExtractionConfig, batch_extract_bytes, batch_extract_bytes_sync, batch_extract_file, batch_extract_file_sync,
+    ExtractionConfig, batch_extract_bytes, batch_extract_bytes_sync, batch_extract_files, batch_extract_files_sync,
     detect_mime_type, extract_bytes, extract_bytes_sync, extract_file, extract_file_sync,
 };
 use std::fs::{self, File};
@@ -146,8 +146,12 @@ async fn test_batch_extract_file_concurrency() {
         paths.push(file_path);
     }
 
-    let results = batch_extract_file(
-        paths.clone().into_iter().map(|p| (p, None)).collect::<Vec<_>>(),
+    let results = batch_extract_files(
+        paths
+            .clone()
+            .into_iter()
+            .map(|path| kreuzberg::BatchFileItem { path, config: None })
+            .collect::<Vec<_>>(),
         &config,
     )
     .await;
@@ -172,9 +176,9 @@ async fn test_batch_extract_file_concurrency() {
 #[tokio::test]
 async fn test_batch_extract_empty() {
     let config = ExtractionConfig::default();
-    let paths: Vec<(std::path::PathBuf, Option<kreuzberg::FileExtractionConfig>)> = vec![];
+    let paths: Vec<kreuzberg::BatchFileItem> = vec![];
 
-    let results = batch_extract_file(paths, &config).await;
+    let results = batch_extract_files(paths, &config).await;
     assert!(results.is_ok());
     assert_eq!(results.expect("Operation failed").len(), 0);
 }
@@ -192,9 +196,13 @@ async fn test_batch_extract_bytes_concurrency() {
         (b"content 5".as_slice(), "text/plain"),
     ];
 
-    let owned_contents: Vec<(Vec<u8>, String, Option<kreuzberg::FileExtractionConfig>)> = contents
+    let owned_contents: Vec<kreuzberg::BatchBytesItem> = contents
         .into_iter()
-        .map(|(bytes, mime)| (bytes.to_vec(), mime.to_string(), None))
+        .map(|(bytes, mime)| kreuzberg::BatchBytesItem {
+            content: bytes.to_vec(),
+            mime_type: mime.to_string(),
+            config: None,
+        })
         .collect();
 
     let results = batch_extract_bytes(owned_contents, &config).await;
@@ -239,8 +247,11 @@ fn test_sync_wrappers() {
     assert_text_content(&extraction.content, "test bytes");
     assert!(extraction.chunks.is_none(), "Chunks should be None");
 
-    let paths = vec![(file_path, None::<kreuzberg::FileExtractionConfig>)];
-    let results = batch_extract_file_sync(paths, &config);
+    let paths = vec![kreuzberg::BatchFileItem {
+        path: file_path,
+        config: None,
+    }];
+    let results = batch_extract_files_sync(paths, &config);
     assert!(results.is_ok(), "Batch sync file should succeed");
     let results = results.expect("Operation failed");
     assert_eq!(results.len(), 1);
@@ -248,9 +259,13 @@ fn test_sync_wrappers() {
     assert!(results[0].chunks.is_none(), "Chunks should be None");
 
     let contents = vec![(b"test".as_slice(), "text/plain")];
-    let owned_contents: Vec<(Vec<u8>, String, Option<kreuzberg::FileExtractionConfig>)> = contents
+    let owned_contents: Vec<kreuzberg::BatchBytesItem> = contents
         .into_iter()
-        .map(|(bytes, mime)| (bytes.to_vec(), mime.to_string(), None))
+        .map(|(bytes, mime)| kreuzberg::BatchBytesItem {
+            content: bytes.to_vec(),
+            mime_type: mime.to_string(),
+            config: None,
+        })
         .collect();
     let results = batch_extract_bytes_sync(owned_contents, &config);
     assert!(results.is_ok(), "Batch bytes sync should succeed");

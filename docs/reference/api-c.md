@@ -152,9 +152,9 @@ KreuzbergExtractionResult* kreuzberg_extract_bytes_sync(const uint8_t* content, 
 
 ---
 
-#### kreuzberg_batch_extract_file_sync()
+#### kreuzberg_batch_extract_files_sync()
 
-Synchronous wrapper for `batch_extract_file`.
+Synchronous wrapper for `batch_extract_files`.
 
 Uses the global Tokio runtime for optimal performance.
 Only available with `tokio-runtime` (WASM has no filesystem).
@@ -162,14 +162,14 @@ Only available with `tokio-runtime` (WASM has no filesystem).
 **Signature:**
 
 ```c
-KreuzbergExtractionResult* kreuzberg_batch_extract_file_sync(const char** items, KreuzbergExtractionConfig config);
+KreuzbergExtractionResult* kreuzberg_batch_extract_files_sync(KreuzbergBatchFileItem* items, KreuzbergExtractionConfig config);
 ```
 
 **Parameters:**
 
 | Name     | Type                        | Required | Description               |
 | -------- | --------------------------- | -------- | ------------------------- |
-| `items`  | `const char**`              | Yes      | The items                 |
+| `items`  | `KreuzbergBatchFileItem*`   | Yes      | The items                 |
 | `config` | `KreuzbergExtractionConfig` | Yes      | The configuration options |
 
 **Returns:** `KreuzbergExtractionResult*`
@@ -190,14 +190,14 @@ that iterates through items and calls `extract_bytes_sync()`.
 **Signature:**
 
 ```c
-KreuzbergExtractionResult* kreuzberg_batch_extract_bytes_sync(const char** items, KreuzbergExtractionConfig config);
+KreuzbergExtractionResult* kreuzberg_batch_extract_bytes_sync(KreuzbergBatchBytesItem* items, KreuzbergExtractionConfig config);
 ```
 
 **Parameters:**
 
 | Name     | Type                        | Required | Description               |
 | -------- | --------------------------- | -------- | ------------------------- |
-| `items`  | `const char**`              | Yes      | The items                 |
+| `items`  | `KreuzbergBatchBytesItem*`  | Yes      | The items                 |
 | `config` | `KreuzbergExtractionConfig` | Yes      | The configuration options |
 
 **Returns:** `KreuzbergExtractionResult*`
@@ -206,7 +206,7 @@ KreuzbergExtractionResult* kreuzberg_batch_extract_bytes_sync(const char** items
 
 ---
 
-#### kreuzberg_batch_extract_file()
+#### kreuzberg_batch_extract_files()
 
 Extract content from multiple files concurrently.
 
@@ -220,7 +220,7 @@ fields from the batch-level `config`. Pass `NULL` for a file to use the batch de
 Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
 taken from the batch-level `config`.
 
-config to use the batch-level defaults for that file.
+per-file configuration overrides.
 
 - `config` - Batch-level extraction configuration (provides defaults and batch settings)
 
@@ -240,14 +240,14 @@ Per-file configuration overrides:
 **Signature:**
 
 ```c
-KreuzbergExtractionResult* kreuzberg_batch_extract_file(const char** items, KreuzbergExtractionConfig config);
+KreuzbergExtractionResult* kreuzberg_batch_extract_files(KreuzbergBatchFileItem* items, KreuzbergExtractionConfig config);
 ```
 
 **Parameters:**
 
 | Name     | Type                        | Required | Description                                                                 |
 | -------- | --------------------------- | -------- | --------------------------------------------------------------------------- |
-| `items`  | `const char**`              | Yes      | Vector of `(path, optional_file_config)` tuples. Pass `None` as the         |
+| `items`  | `KreuzbergBatchFileItem*`   | Yes      | Vector of [`BatchFileItem`] structs, each containing a path and optional    |
 | `config` | `KreuzbergExtractionConfig` | Yes      | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `KreuzbergExtractionResult*`
@@ -269,6 +269,10 @@ Each item can optionally specify a `FileExtractionConfig` that overrides specifi
 fields from the batch-level `config`. Pass `NULL` as the config to use
 the batch-level defaults for that item.
 
+MIME type, and optional per-item configuration overrides.
+
+- `config` - Batch-level extraction configuration
+
 **Returns:**
 
 A vector of `ExtractionResult` in the same order as the input items.
@@ -280,15 +284,15 @@ Per-item configuration overrides:
 **Signature:**
 
 ```c
-KreuzbergExtractionResult* kreuzberg_batch_extract_bytes(const char** items, KreuzbergExtractionConfig config);
+KreuzbergExtractionResult* kreuzberg_batch_extract_bytes(KreuzbergBatchBytesItem* items, KreuzbergExtractionConfig config);
 ```
 
 **Parameters:**
 
-| Name     | Type                        | Required | Description                                                 |
-| -------- | --------------------------- | -------- | ----------------------------------------------------------- |
-| `items`  | `const char**`              | Yes      | Vector of `(bytes, mime_type, optional_file_config)` tuples |
-| `config` | `KreuzbergExtractionConfig` | Yes      | Batch-level extraction configuration                        |
+| Name     | Type                        | Required | Description                                                          |
+| -------- | --------------------------- | -------- | -------------------------------------------------------------------- |
+| `items`  | `KreuzbergBatchBytesItem*`  | Yes      | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `config` | `KreuzbergExtractionConfig` | Yes      | Batch-level extraction configuration                                 |
 
 **Returns:** `KreuzbergExtractionResult*`
 
@@ -360,16 +364,14 @@ const char** kreuzberg_get_extensions_for_mime(const char* mime_type);
 
 ---
 
-#### kreuzberg_list_extractors()
+#### kreuzberg_list_document_extractors()
 
 List names of all registered document extractors.
-
-Re-exported at the crate root as `list_document_extractors`.
 
 **Signature:**
 
 ```c
-const char** kreuzberg_list_extractors();
+const char** kreuzberg_list_document_extractors();
 ```
 
 **Returns:** `const char**`
@@ -580,12 +582,13 @@ float** kreuzberg_embed_texts(const char** texts, KreuzbergEmbeddingConfig confi
 
 Get an embedding preset by name.
 
-Returns `NULL` if no preset with the given name exists.
+Returns `NULL` if no preset with the given name exists. Returns an owned
+clone so the value is safe to pass across FFI boundaries.
 
 **Signature:**
 
 ```c
-const char** kreuzberg_get_embedding_preset(const char* name);
+KreuzbergEmbeddingPreset* kreuzberg_get_embedding_preset(const char* name);
 ```
 
 **Parameters:**
@@ -594,13 +597,15 @@ const char** kreuzberg_get_embedding_preset(const char* name);
 | ------ | ------------- | -------- | ----------- |
 | `name` | `const char*` | Yes      | The name    |
 
-**Returns:** `const char**`
+**Returns:** `KreuzbergEmbeddingPreset*`
 
 ---
 
 #### kreuzberg_list_embedding_presets()
 
 List the names of all available embedding presets.
+
+Returns owned `String`s so the values are safe to pass across FFI boundaries.
 
 **Signature:**
 
@@ -710,6 +715,21 @@ Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-ri
 
 ---
 
+#### KreuzbergBatchBytesItem
+
+Batch item for byte array extraction.
+
+Used with `crate.batch_extract_bytes` and `crate.batch_extract_bytes_sync`
+to represent a single item in a batch extraction job.
+
+| Field       | Type                             | Default | Description                                                       |
+| ----------- | -------------------------------- | ------- | ----------------------------------------------------------------- |
+| `content`   | `const uint8_t*`                 | —       | The content bytes to extract from                                 |
+| `mime_type` | `const char*`                    | —       | MIME type of the content (e.g., "application/pdf", "text/html")   |
+| `config`    | `KreuzbergFileExtractionConfig*` | `NULL`  | Per-item configuration overrides (None uses batch-level defaults) |
+
+---
+
 #### KreuzbergBatchExtractFilesParams
 
 Request parameters for batch file extraction.
@@ -721,6 +741,20 @@ Request parameters for batch file extraction.
 | `pdf_password`    | `const char**` | `NULL`  | Password for encrypted PDFs                                                                                                                           |
 | `file_configs`    | `void****`     | `NULL`  | Per-file extraction configuration overrides (parallel array to paths). Each entry is either null (use default) or a FileExtractionConfig JSON object. |
 | `response_format` | `const char**` | `NULL`  | Wire format for the response: "json" (default) or "toon"                                                                                              |
+
+---
+
+#### KreuzbergBatchFileItem
+
+Batch item for file extraction.
+
+Used with `crate.batch_extract_files` and `crate.batch_extract_files_sync`
+to represent a single file in a batch extraction job.
+
+| Field    | Type                             | Default | Description                                                       |
+| -------- | -------------------------------- | ------- | ----------------------------------------------------------------- |
+| `path`   | `const char*`                    | —       | Path to the file to extract from                                  |
+| `config` | `KreuzbergFileExtractionConfig*` | `NULL`  | Per-file configuration overrides (None uses batch-level defaults) |
 
 ---
 
@@ -1648,6 +1682,29 @@ KreuzbergEmbeddingConfig kreuzberg_default();
 
 ---
 
+#### KreuzbergEmbeddingPreset
+
+Preset configurations for common RAG use cases.
+
+Each preset combines chunk size, overlap, and embedding model
+to provide an optimized configuration for specific scenarios.
+
+All string fields are owned `String` for FFI compatibility — instances
+are safe to clone and pass across language boundaries.
+
+| Field         | Type          | Default | Description                                  |
+| ------------- | ------------- | ------- | -------------------------------------------- |
+| `name`        | `const char*` | —       | The name                                     |
+| `chunk_size`  | `uintptr_t`   | —       | Chunk size                                   |
+| `overlap`     | `uintptr_t`   | —       | Overlap                                      |
+| `model_repo`  | `const char*` | —       | HuggingFace repository name for the model.   |
+| `pooling`     | `const char*` | —       | Pooling strategy: "cls" or "mean".           |
+| `model_file`  | `const char*` | —       | Path to the ONNX model file within the repo. |
+| `dimensions`  | `uintptr_t`   | —       | Dimensions                                   |
+| `description` | `const char*` | —       | Human-readable description                   |
+
+---
+
 #### KreuzbergEpubMetadata
 
 EPUB metadata (Dublin Core extensions).
@@ -1819,41 +1876,41 @@ Main extraction configuration.
 This struct contains all configuration options for the extraction process.
 It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 
-| Field                        | Type                                   | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ---------------------------- | -------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `use_cache`                  | `bool`                                 | `true`  | Enable caching of extraction results                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `enable_quality_processing`  | `bool`                                 | `true`  | Enable quality post-processing                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `ocr`                        | `KreuzbergOcrConfig*`                  | `NULL`  | OCR configuration (None = OCR disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `force_ocr`                  | `bool`                                 | `false` | Force OCR even for searchable PDFs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `force_ocr_pages`            | `uintptr_t**`                          | `NULL`  | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent.                                                                                                  |
-| `disable_ocr`                | `bool`                                 | `false` | Disable OCR entirely, even for images. When `true`, OCR is skipped for all document types. Images return metadata only (dimensions, format, EXIF) without text extraction. PDFs use only native text extraction without OCR fallback. Cannot be `true` simultaneously with `force_ocr`. _Added in v4.7.0._                                                                                                                                                                                                 |
-| `chunking`                   | `KreuzbergChunkingConfig*`             | `NULL`  | Text chunking configuration (None = chunking disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `content_filter`             | `KreuzbergContentFilterConfig*`        | `NULL`  | Content filtering configuration (None = use extractor defaults). Controls whether document "furniture" (headers, footers, watermarks, repeating text) is included in or stripped from extraction results. See `ContentFilterConfig` for per-field documentation.                                                                                                                                                                                                                                           |
-| `images`                     | `KreuzbergImageExtractionConfig*`      | `NULL`  | Image extraction configuration (None = no image extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `pdf_options`                | `KreuzbergPdfConfig*`                  | `NULL`  | PDF-specific options (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `token_reduction`            | `KreuzbergTokenReductionOptions*`      | `NULL`  | Token reduction configuration (None = no token reduction)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `language_detection`         | `KreuzbergLanguageDetectionConfig*`    | `NULL`  | Language detection configuration (None = no language detection)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `pages`                      | `KreuzbergPageConfig*`                 | `NULL`  | Page extraction configuration (None = no page tracking)                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `keywords`                   | `KreuzbergKeywordConfig*`              | `NULL`  | Keyword extraction configuration (None = no keyword extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `postprocessor`              | `KreuzbergPostProcessorConfig*`        | `NULL`  | Post-processor configuration (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `html_options`               | `const char**`                         | `NULL`  | HTML to Markdown conversion options (None = use defaults) Configure how HTML documents are converted to Markdown, including heading styles, list formatting, code block styles, and preprocessing options.                                                                                                                                                                                                                                                                                                 |
-| `html_output`                | `KreuzbergHtmlOutputConfig*`           | `NULL`  | Styled HTML output configuration. When set alongside `output_format = OutputFormat.Html`, the extraction pipeline uses `StyledHtmlRenderer` which emits stable `kb-*` CSS class hooks on every structural element and optionally embeds theme CSS or user-supplied CSS in a `<style>` block. When `NULL`, the existing plain comrak-based HTML renderer is used.                                                                                                                                           |
-| `extraction_timeout_secs`    | `uint64_t*`                            | `NULL`  | Default per-file timeout in seconds for batch extraction. When set, each file in a batch will be canceled after this duration unless overridden by `FileExtractionConfig.timeout_secs`. `NULL` means no timeout (unbounded extraction time).                                                                                                                                                                                                                                                               |
-| `max_concurrent_extractions` | `uintptr_t*`                           | `NULL`  | Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()). Limits parallelism to prevent resource exhaustion when processing large batches. Defaults to (num_cpus × 1.5).ceil() when not set.                                                                                                                                                                                                                                                                                    |
-| `result_format`              | `const char*`                          | —       | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output).                                                                                                                                                                                                                                                                                    |
-| `security_limits`            | `const char**`                         | `NULL`  | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `NULL`, default limits are used.                                                                                                              |
-| `output_format`              | `const char*`                          | `Plain` | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied.                                                                              |
-| `layout`                     | `KreuzbergLayoutDetectionConfig*`      | `NULL`  | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature.                                              |
-| `include_document_structure` | `bool`                                 | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased.                                                                                                                                                               |
-| `acceleration`               | `KreuzbergAccelerationConfig*`         | `NULL`  | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `NULL`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows).                                                                                                                                                                                                                                                                        |
-| `cache_namespace`            | `const char**`                         | `NULL`  | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem.                                                                                                                                                                                                                                                      |
-| `cache_ttl_secs`             | `uint64_t*`                            | `NULL`  | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `NULL`, the global TTL applies.                                                                                                                                                                                                                                                                                                       |
-| `email`                      | `KreuzbergEmailConfig*`                | `NULL`  | Email extraction configuration (None = use defaults). Currently supports configuring the fallback codepage for MSG files that do not specify one. See `crate.core.config.EmailConfig` for details.                                                                                                                                                                                                                                                                                                         |
-| `concurrency`                | `const char**`                         | `NULL`  | Concurrency limits for constrained environments (None = use defaults). Controls Rayon thread pool size, ONNX Runtime intra-op threads, and (when `max_concurrent_extractions` is unset) the batch concurrency semaphore. See `crate.core.config.ConcurrencyConfig` for details.                                                                                                                                                                                                                            |
-| `max_archive_depth`          | `uintptr_t`                            | —       | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior).                                                                                                                                                                                                                                                                                                                                                                                   |
-| `tree_sitter`                | `KreuzbergTreeSitterConfig*`           | `NULL`  | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options.                                                                                                                                                                                                                                                                                                     |
-| `structured_extraction`      | `KreuzbergStructuredExtractionConfig*` | `NULL`  | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`.                                                                                                                                                                                                                                                                                      |
-| `cancel_token`               | `const char**`                         | `NULL`  | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
+| Field                        | Type                                   | Default                       | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------- | -------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `use_cache`                  | `bool`                                 | `true`                        | Enable caching of extraction results                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `enable_quality_processing`  | `bool`                                 | `true`                        | Enable quality post-processing                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `ocr`                        | `KreuzbergOcrConfig*`                  | `NULL`                        | OCR configuration (None = OCR disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `force_ocr`                  | `bool`                                 | `false`                       | Force OCR even for searchable PDFs                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `force_ocr_pages`            | `uintptr_t**`                          | `NULL`                        | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent.                                                                                                  |
+| `disable_ocr`                | `bool`                                 | `false`                       | Disable OCR entirely, even for images. When `true`, OCR is skipped for all document types. Images return metadata only (dimensions, format, EXIF) without text extraction. PDFs use only native text extraction without OCR fallback. Cannot be `true` simultaneously with `force_ocr`. _Added in v4.7.0._                                                                                                                                                                                                 |
+| `chunking`                   | `KreuzbergChunkingConfig*`             | `NULL`                        | Text chunking configuration (None = chunking disabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `content_filter`             | `KreuzbergContentFilterConfig*`        | `NULL`                        | Content filtering configuration (None = use extractor defaults). Controls whether document "furniture" (headers, footers, watermarks, repeating text) is included in or stripped from extraction results. See `ContentFilterConfig` for per-field documentation.                                                                                                                                                                                                                                           |
+| `images`                     | `KreuzbergImageExtractionConfig*`      | `NULL`                        | Image extraction configuration (None = no image extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `pdf_options`                | `KreuzbergPdfConfig*`                  | `NULL`                        | PDF-specific options (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `token_reduction`            | `KreuzbergTokenReductionOptions*`      | `NULL`                        | Token reduction configuration (None = no token reduction)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `language_detection`         | `KreuzbergLanguageDetectionConfig*`    | `NULL`                        | Language detection configuration (None = no language detection)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `pages`                      | `KreuzbergPageConfig*`                 | `NULL`                        | Page extraction configuration (None = no page tracking)                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `keywords`                   | `KreuzbergKeywordConfig*`              | `NULL`                        | Keyword extraction configuration (None = no keyword extraction)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `postprocessor`              | `KreuzbergPostProcessorConfig*`        | `NULL`                        | Post-processor configuration (None = use defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `html_options`               | `const char**`                         | `NULL`                        | HTML to Markdown conversion options (None = use defaults) Configure how HTML documents are converted to Markdown, including heading styles, list formatting, code block styles, and preprocessing options.                                                                                                                                                                                                                                                                                                 |
+| `html_output`                | `KreuzbergHtmlOutputConfig*`           | `NULL`                        | Styled HTML output configuration. When set alongside `output_format = OutputFormat.Html`, the extraction pipeline uses `StyledHtmlRenderer` which emits stable `kb-*` CSS class hooks on every structural element and optionally embeds theme CSS or user-supplied CSS in a `<style>` block. When `NULL`, the existing plain comrak-based HTML renderer is used.                                                                                                                                           |
+| `extraction_timeout_secs`    | `uint64_t*`                            | `NULL`                        | Default per-file timeout in seconds for batch extraction. When set, each file in a batch will be canceled after this duration unless overridden by `FileExtractionConfig.timeout_secs`. `NULL` means no timeout (unbounded extraction time).                                                                                                                                                                                                                                                               |
+| `max_concurrent_extractions` | `uintptr_t*`                           | `NULL`                        | Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()). Limits parallelism to prevent resource exhaustion when processing large batches. Defaults to (num_cpus × 1.5).ceil() when not set.                                                                                                                                                                                                                                                                                    |
+| `result_format`              | `KreuzbergResultFormat`                | `KREUZBERG_KREUZBERG_UNIFIED` | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output).                                                                                                                                                                                                                                                                                    |
+| `security_limits`            | `const char**`                         | `NULL`                        | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `NULL`, default limits are used.                                                                                                              |
+| `output_format`              | `KreuzbergOutputFormat`                | `KREUZBERG_KREUZBERG_PLAIN`   | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied.                                                                              |
+| `layout`                     | `KreuzbergLayoutDetectionConfig*`      | `NULL`                        | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature.                                              |
+| `include_document_structure` | `bool`                                 | `false`                       | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased.                                                                                                                                                               |
+| `acceleration`               | `KreuzbergAccelerationConfig*`         | `NULL`                        | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `NULL`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows).                                                                                                                                                                                                                                                                        |
+| `cache_namespace`            | `const char**`                         | `NULL`                        | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem.                                                                                                                                                                                                                                                      |
+| `cache_ttl_secs`             | `uint64_t*`                            | `NULL`                        | Per-request cache TTL in seconds. Overrides the global `max_age_days` for this specific extraction. When `0`, caching is completely skipped (no read or write). When `NULL`, the global TTL applies.                                                                                                                                                                                                                                                                                                       |
+| `email`                      | `KreuzbergEmailConfig*`                | `NULL`                        | Email extraction configuration (None = use defaults). Currently supports configuring the fallback codepage for MSG files that do not specify one. See `crate.core.config.EmailConfig` for details.                                                                                                                                                                                                                                                                                                         |
+| `concurrency`                | `const char**`                         | `NULL`                        | Concurrency limits for constrained environments (None = use defaults). Controls Rayon thread pool size, ONNX Runtime intra-op threads, and (when `max_concurrent_extractions` is unset) the batch concurrency semaphore. See `crate.core.config.ConcurrencyConfig` for details.                                                                                                                                                                                                                            |
+| `max_archive_depth`          | `uintptr_t`                            | —                             | Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive extraction (legacy behavior).                                                                                                                                                                                                                                                                                                                                                                                   |
+| `tree_sitter`                | `KreuzbergTreeSitterConfig*`           | `NULL`                        | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options.                                                                                                                                                                                                                                                                                                     |
+| `structured_extraction`      | `KreuzbergStructuredExtractionConfig*` | `NULL`                        | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`.                                                                                                                                                                                                                                                                                      |
+| `cancel_token`               | `const char**`                         | `NULL`                        | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
 
 ##### Methods
 
@@ -1940,7 +1997,7 @@ FictionBook (FB2) metadata.
 Per-file extraction configuration overrides for batch processing.
 
 All fields are `Option<T>` — `NULL` means "use the batch-level default."
-This type is used with `crate.batch_extract_file` and
+This type is used with `crate.batch_extract_files` and
 `crate.batch_extract_bytes` to allow heterogeneous
 extraction settings within a single batch.
 
@@ -1971,8 +2028,8 @@ cannot be overridden per file:
 | `keywords`                   | `KreuzbergKeywordConfig*`              | `NULL`  | Override keyword extraction for this file.                                                                                                                                                                                                                       |
 | `postprocessor`              | `KreuzbergPostProcessorConfig*`        | `NULL`  | Override post-processor for this file.                                                                                                                                                                                                                           |
 | `html_options`               | `const char**`                         | `NULL`  | Override HTML conversion options for this file.                                                                                                                                                                                                                  |
-| `result_format`              | `const char**`                         | `NULL`  | Override result format for this file.                                                                                                                                                                                                                            |
-| `output_format`              | `const char**`                         | `NULL`  | Override output content format for this file.                                                                                                                                                                                                                    |
+| `result_format`              | `KreuzbergResultFormat*`               | `NULL`  | Override result format for this file.                                                                                                                                                                                                                            |
+| `output_format`              | `KreuzbergOutputFormat*`               | `NULL`  | Override output content format for this file.                                                                                                                                                                                                                    |
 | `include_document_structure` | `bool*`                                | `NULL`  | Override document structure output for this file.                                                                                                                                                                                                                |
 | `layout`                     | `KreuzbergLayoutDetectionConfig*`      | `NULL`  | Override layout detection for this file.                                                                                                                                                                                                                         |
 | `timeout_secs`               | `uint64_t*`                            | `NULL`  | Override per-file extraction timeout in seconds. When set, the extraction for this file will be canceled after the specified duration. A timed-out file produces an error result without affecting other files in the batch.                                     |
@@ -2798,7 +2855,7 @@ OCR configuration.
 | `backend`            | `const char*`                    | —       | OCR backend: tesseract, easyocr, paddleocr                                                                                                                                                                                                                                                                                               |
 | `language`           | `const char*`                    | —       | Language code (e.g., "eng", "deu")                                                                                                                                                                                                                                                                                                       |
 | `tesseract_config`   | `KreuzbergTesseractConfig*`      | `NULL`  | Tesseract-specific configuration (optional)                                                                                                                                                                                                                                                                                              |
-| `output_format`      | `const char**`                   | `NULL`  | Output format for OCR results (optional, for format conversion)                                                                                                                                                                                                                                                                          |
+| `output_format`      | `KreuzbergOutputFormat*`         | `NULL`  | Output format for OCR results (optional, for format conversion)                                                                                                                                                                                                                                                                          |
 | `paddle_ocr_config`  | `void**`                         | `NULL`  | PaddleOCR-specific configuration (optional, JSON passthrough)                                                                                                                                                                                                                                                                            |
 | `element_config`     | `KreuzbergOcrElementConfig*`     | `NULL`  | OCR element extraction configuration                                                                                                                                                                                                                                                                                                     |
 | `quality_thresholds` | `KreuzbergOcrQualityThresholds*` | `NULL`  | Quality thresholds for the native-text-to-OCR fallback decision. When None, uses compiled defaults (matching previous hardcoded behavior).                                                                                                                                                                                               |
@@ -3678,6 +3735,20 @@ Estimated processing time in milliseconds.
 uint64_t kreuzberg_estimated_duration_ms(KreuzbergExtractionResult result);
 ```
 
+###### kreuzberg_priority()
+
+Execution priority within the processing stage.
+
+Higher values run first within the same `ProcessingStage`. Defaults to 50.
+Use 0-49 for fallback processors, 50 for normal processors, and 51-255
+for high-priority processors that should run early in their stage.
+
+**Signature:**
+
+```c
+int32_t kreuzberg_priority();
+```
+
 ---
 
 #### KreuzbergPostProcessorConfig
@@ -4083,6 +4154,20 @@ const char* kreuzberg_extract_sync(const uint8_t* content, const char* mime_type
 
 ---
 
+#### KreuzbergTableGrid
+
+Structured table grid with cell-level metadata.
+
+Stores row/column dimensions and a flat list of cells with position info.
+
+| Field   | Type                 | Default | Description                     |
+| ------- | -------------------- | ------- | ------------------------------- |
+| `rows`  | `uint32_t`           | —       | Number of rows in the table.    |
+| `cols`  | `uint32_t`           | —       | Number of columns in the table. |
+| `cells` | `KreuzbergGridCell*` | `NULL`  | All cells in row-major order.   |
+
+---
+
 #### KreuzbergTableProperties
 
 Table-level properties from `<w:tblPr>`.
@@ -4151,29 +4236,29 @@ Provides fine-grained control over Tesseract OCR engine parameters.
 Most users can use the defaults, but these settings allow optimization
 for specific document types (invoices, handwriting, etc.).
 
-| Field                                | Type                                 | Default      | Description                                                                                                                                                                          |
-| ------------------------------------ | ------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `language`                           | `const char*`                        | `"eng"`      | Language code (e.g., "eng", "deu", "fra")                                                                                                                                            |
-| `psm`                                | `int32_t`                            | `3`          | Page Segmentation Mode (0-13). Common values: - 3: Fully automatic page segmentation (default) - 6: Assume a single uniform block of text - 11: Sparse text with no particular order |
-| `output_format`                      | `const char*`                        | `"markdown"` | Output format ("text" or "markdown")                                                                                                                                                 |
-| `oem`                                | `int32_t`                            | `3`          | OCR Engine Mode (0-3). - 0: Legacy engine only - 1: Neural nets (LSTM) only (usually best) - 2: Legacy + LSTM - 3: Default (based on what's available)                               |
-| `min_confidence`                     | `double`                             | `0`          | Minimum confidence threshold (0.0-100.0). Words with confidence below this threshold may be rejected or flagged.                                                                     |
-| `preprocessing`                      | `KreuzbergImagePreprocessingConfig*` | `NULL`       | Image preprocessing configuration. Controls how images are preprocessed before OCR. Can significantly improve quality for scanned documents or low-quality images.                   |
-| `enable_table_detection`             | `bool`                               | `true`       | Enable automatic table detection and reconstruction                                                                                                                                  |
-| `table_min_confidence`               | `double`                             | `0`          | Minimum confidence threshold for table detection (0.0-1.0)                                                                                                                           |
-| `table_column_threshold`             | `int32_t`                            | `50`         | Column threshold for table detection (pixels)                                                                                                                                        |
-| `table_row_threshold_ratio`          | `double`                             | `0.5`        | Row threshold ratio for table detection (0.0-1.0)                                                                                                                                    |
-| `use_cache`                          | `bool`                               | `true`       | Enable OCR result caching                                                                                                                                                            |
-| `classify_use_pre_adapted_templates` | `bool`                               | `true`       | Use pre-adapted templates for character classification                                                                                                                               |
-| `language_model_ngram_on`            | `bool`                               | `false`      | Enable N-gram language model                                                                                                                                                         |
-| `tessedit_dont_blkrej_good_wds`      | `bool`                               | `true`       | Don't reject good words during block-level processing                                                                                                                                |
-| `tessedit_dont_rowrej_good_wds`      | `bool`                               | `true`       | Don't reject good words during row-level processing                                                                                                                                  |
-| `tessedit_enable_dict_correction`    | `bool`                               | `true`       | Enable dictionary correction                                                                                                                                                         |
-| `tessedit_char_whitelist`            | `const char*`                        | `""`         | Whitelist of allowed characters (empty = all allowed)                                                                                                                                |
-| `tessedit_char_blacklist`            | `const char*`                        | `""`         | Blacklist of forbidden characters (empty = none forbidden)                                                                                                                           |
-| `tessedit_use_primary_params_model`  | `bool`                               | `true`       | Use primary language params model                                                                                                                                                    |
-| `textord_space_size_is_variable`     | `bool`                               | `true`       | Variable-width space detection                                                                                                                                                       |
-| `thresholding_method`                | `bool`                               | `false`      | Use adaptive thresholding method                                                                                                                                                     |
+| Field                                | Type                                 | Default      | Description                                                                                                                                                                                                                              |
+| ------------------------------------ | ------------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `language`                           | `const char*`                        | `"eng"`      | Language code (e.g., "eng", "deu", "fra")                                                                                                                                                                                                |
+| `psm`                                | `int32_t`                            | `3`          | Page Segmentation Mode (0-13). Common values: - 3: Fully automatic page segmentation (native default) - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang) - 11: Sparse text with no particular order |
+| `output_format`                      | `const char*`                        | `"markdown"` | Output format ("text" or "markdown")                                                                                                                                                                                                     |
+| `oem`                                | `int32_t`                            | `3`          | OCR Engine Mode (0-3). - 0: Legacy engine only - 1: Neural nets (LSTM) only (usually best) - 2: Legacy + LSTM - 3: Default (based on what's available)                                                                                   |
+| `min_confidence`                     | `double`                             | `0`          | Minimum confidence threshold (0.0-100.0). Words with confidence below this threshold may be rejected or flagged.                                                                                                                         |
+| `preprocessing`                      | `KreuzbergImagePreprocessingConfig*` | `NULL`       | Image preprocessing configuration. Controls how images are preprocessed before OCR. Can significantly improve quality for scanned documents or low-quality images.                                                                       |
+| `enable_table_detection`             | `bool`                               | `true`       | Enable automatic table detection and reconstruction                                                                                                                                                                                      |
+| `table_min_confidence`               | `double`                             | `0`          | Minimum confidence threshold for table detection (0.0-1.0)                                                                                                                                                                               |
+| `table_column_threshold`             | `int32_t`                            | `50`         | Column threshold for table detection (pixels)                                                                                                                                                                                            |
+| `table_row_threshold_ratio`          | `double`                             | `0.5`        | Row threshold ratio for table detection (0.0-1.0)                                                                                                                                                                                        |
+| `use_cache`                          | `bool`                               | `true`       | Enable OCR result caching                                                                                                                                                                                                                |
+| `classify_use_pre_adapted_templates` | `bool`                               | `true`       | Use pre-adapted templates for character classification                                                                                                                                                                                   |
+| `language_model_ngram_on`            | `bool`                               | `false`      | Enable N-gram language model                                                                                                                                                                                                             |
+| `tessedit_dont_blkrej_good_wds`      | `bool`                               | `true`       | Don't reject good words during block-level processing                                                                                                                                                                                    |
+| `tessedit_dont_rowrej_good_wds`      | `bool`                               | `true`       | Don't reject good words during row-level processing                                                                                                                                                                                      |
+| `tessedit_enable_dict_correction`    | `bool`                               | `true`       | Enable dictionary correction                                                                                                                                                                                                             |
+| `tessedit_char_whitelist`            | `const char*`                        | `""`         | Whitelist of allowed characters (empty = all allowed)                                                                                                                                                                                    |
+| `tessedit_char_blacklist`            | `const char*`                        | `""`         | Blacklist of forbidden characters (empty = none forbidden)                                                                                                                                                                               |
+| `tessedit_use_primary_params_model`  | `bool`                               | `true`       | Use primary language params model                                                                                                                                                                                                        |
+| `textord_space_size_is_variable`     | `bool`                               | `true`       | Variable-width space detection                                                                                                                                                                                                           |
+| `thresholding_method`                | `bool`                               | `false`      | Use adaptive thresholding method                                                                                                                                                                                                         |
 
 ##### Methods
 
@@ -4614,6 +4699,28 @@ Determines which hardware backend is used for model inference.
 
 ---
 
+#### KreuzbergOutputFormat
+
+Output format for extraction results.
+
+Controls the format of the `content` field in `ExtractionResult`.
+When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
+accordingly. `Plain` returns the raw extracted text.
+`Structured` returns JSON with full OCR element data including bounding
+boxes and confidence scores.
+
+| Value                  | Description                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `KREUZBERG_PLAIN`      | Plain text content only (default)                                                                                                          |
+| `KREUZBERG_MARKDOWN`   | Markdown format                                                                                                                            |
+| `KREUZBERG_DJOT`       | Djot markup format                                                                                                                         |
+| `KREUZBERG_HTML`       | HTML format                                                                                                                                |
+| `KREUZBERG_JSON`       | JSON tree format with heading-driven sections.                                                                                             |
+| `KREUZBERG_STRUCTURED` | Structured JSON format with full OCR element metadata.                                                                                     |
+| `KREUZBERG_CUSTOM`     | Custom renderer registered via the RendererRegistry. The string is the renderer name (e.g., "docx", "latex"). — Fields: `0`: `const char*` |
+
+---
+
 #### KreuzbergHtmlTheme
 
 Built-in HTML theme selection.
@@ -4898,7 +5005,7 @@ Go/Java/TypeScript bindings.
 | `KREUZBERG_PARAGRAPH`       | Body text paragraph. — Fields: `text`: `const char*`                                                                                                                                                                                                                                |
 | `KREUZBERG_LIST`            | List container — children are `ListItem` nodes. — Fields: `ordered`: `bool`                                                                                                                                                                                                         |
 | `KREUZBERG_LIST_ITEM`       | Individual list item. — Fields: `text`: `const char*`                                                                                                                                                                                                                               |
-| `KREUZBERG_TABLE`           | Table with structured cell grid. — Fields: `grid`: `const char*`                                                                                                                                                                                                                    |
+| `KREUZBERG_TABLE`           | Table with structured cell grid. — Fields: `grid`: `KreuzbergTableGrid`                                                                                                                                                                                                             |
 | `KREUZBERG_IMAGE`           | Image reference. — Fields: `description`: `const char*`, `image_index`: `uint32_t`, `src`: `const char*`                                                                                                                                                                            |
 | `KREUZBERG_CODE`            | Code block. — Fields: `text`: `const char*`, `language`: `const char*`                                                                                                                                                                                                              |
 | `KREUZBERG_QUOTE`           | Block quote — container, children carry the quoted content.                                                                                                                                                                                                                         |
@@ -4992,6 +5099,21 @@ Heuristic classification of what an image likely depicts.
 | `KREUZBERG_TILE_FRAGMENT` | Fragment of a larger tiled image (tile of a technical drawing) |
 | `KREUZBERG_MASK`          | Mask or transparency map                                       |
 | `KREUZBERG_UNKNOWN`       | Could not classify with reasonable confidence                  |
+
+---
+
+#### KreuzbergResultFormat
+
+Result-shape selection for extraction results.
+
+Distinct from `crate.OutputFormat` (which controls rendering — Plain, Markdown,
+HTML, etc.). `ResultFormat` controls the _shape_ of the result: a unified content
+blob vs. an element-based decomposition.
+
+| Value                     | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| `KREUZBERG_UNIFIED`       | Unified format with all content in `content` field    |
+| `KREUZBERG_ELEMENT_BASED` | Element-based format with semantic element extraction |
 
 ---
 

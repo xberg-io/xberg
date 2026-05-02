@@ -60,9 +60,9 @@ pub type ExtractionConfig {
     html_output: Option(HtmlOutputConfig),
     extraction_timeout_secs: Option(Int),
     max_concurrent_extractions: Option(Int),
-    result_format: String,
+    result_format: ResultFormat,
     security_limits: Option(String),
-    output_format: String,
+    output_format: OutputFormat,
     layout: Option(LayoutDetectionConfig),
     include_document_structure: Bool,
     acceleration: Option(AccelerationConfig),
@@ -80,7 +80,7 @@ pub type ExtractionConfig {
 /// Per-file extraction configuration overrides for batch processing.
 ///
 /// All fields are `Option<T>` — `null` means "use the batch-level default."
-/// This type is used with `crate.batch_extract_file` and
+/// This type is used with `crate.batch_extract_files` and
 /// `crate.batch_extract_bytes` to allow heterogeneous
 /// extraction settings within a single batch.
 ///
@@ -109,14 +109,34 @@ pub type FileExtractionConfig {
     keywords: Option(KeywordConfig),
     postprocessor: Option(PostProcessorConfig),
     html_options: Option(String),
-    result_format: Option(String),
-    output_format: Option(String),
+    result_format: Option(ResultFormat),
+    output_format: Option(OutputFormat),
     include_document_structure: Option(Bool),
     layout: Option(LayoutDetectionConfig),
     timeout_secs: Option(Int),
     tree_sitter: Option(TreeSitterConfig),
     structured_extraction: Option(StructuredExtractionConfig),
   )
+}
+
+/// Batch item for byte array extraction.
+///
+/// Used with `crate.batch_extract_bytes` and `crate.batch_extract_bytes_sync`
+/// to represent a single item in a batch extraction job.
+pub type BatchBytesItem {
+  BatchBytesItem(
+    content: BitArray,
+    mime_type: String,
+    config: Option(FileExtractionConfig),
+  )
+}
+
+/// Batch item for file extraction.
+///
+/// Used with `crate.batch_extract_files` and `crate.batch_extract_files_sync`
+/// to represent a single file in a batch extraction job.
+pub type BatchFileItem {
+  BatchFileItem(path: String, config: Option(FileExtractionConfig))
 }
 
 /// Image extraction configuration.
@@ -265,7 +285,7 @@ pub type OcrConfig {
     backend: String,
     language: String,
     tesseract_config: Option(TesseractConfig),
-    output_format: Option(String),
+    output_format: Option(OutputFormat),
     paddle_ocr_config: Option(String),
     element_config: Option(OcrElementConfig),
     quality_thresholds: Option(OcrQualityThresholds),
@@ -967,6 +987,13 @@ pub type DocumentNode {
     annotations: List(TextAnnotation),
     attributes: Option(Dict(String, String)),
   )
+}
+
+/// Structured table grid with cell-level metadata.
+///
+/// Stores row/column dimensions and a flat list of cells with position info.
+pub type TableGrid {
+  TableGrid(rows: Int, cols: Int, cells: List(GridCell))
 }
 
 /// Individual grid cell with position and span metadata.
@@ -2060,6 +2087,26 @@ pub type MergedChunk {
   MergedChunk(text: String, byte_start: Int, byte_end: Int)
 }
 
+/// Preset configurations for common RAG use cases.
+///
+/// Each preset combines chunk size, overlap, and embedding model
+/// to provide an optimized configuration for specific scenarios.
+///
+/// All string fields are owned `String` for FFI compatibility — instances
+/// are safe to clone and pass across language boundaries.
+pub type EmbeddingPreset {
+  EmbeddingPreset(
+    name: String,
+    chunk_size: Int,
+    overlap: Int,
+    model_repo: String,
+    pooling: String,
+    model_file: String,
+    dimensions: Int,
+    description: String,
+  )
+}
+
 /// YAKE-specific parameters.
 pub type YakeParams {
   YakeParams(window_size: Int)
@@ -2244,6 +2291,23 @@ pub type ExecutionProviderType {
   TensorRt
 }
 
+/// Output format for extraction results.
+///
+/// Controls the format of the `content` field in `ExtractionResult`.
+/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
+/// accordingly. `Plain` returns the raw extracted text.
+/// `Structured` returns JSON with full OCR element data including bounding
+/// boxes and confidence scores.
+pub type OutputFormat {
+  Plain
+  OutputFormatMarkdown
+  Djot
+  OutputFormatHtml
+  Json
+  Structured
+  OutputFormatCustom(String)
+}
+
 /// Built-in HTML theme selection.
 pub type HtmlTheme {
   Default
@@ -2294,7 +2358,7 @@ pub type PdfBackend {
 ///   fallback path. For best results, pair with an embedding model.
 pub type ChunkerType {
   ChunkerTypeText
-  Markdown
+  ChunkerTypeMarkdown
   Yaml
   Semantic
 }
@@ -2445,7 +2509,7 @@ pub type NodeContent {
   NodeContentParagraph(text: String)
   List(ordered: Bool)
   NodeContentListItem(text: String)
-  NodeContentTable(grid: String)
+  NodeContentTable(grid: TableGrid)
   NodeContentImage(
     description: Option(String),
     image_index: Option(Int),
@@ -2529,6 +2593,16 @@ pub type ImageKind {
   ImageKindUnknown
 }
 
+/// Result-shape selection for extraction results.
+///
+/// Distinct from `crate.OutputFormat` (which controls rendering — Plain, Markdown,
+/// HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
+/// blob vs. an element-based decomposition.
+pub type ResultFormat {
+  Unified
+  ElementBased
+}
+
 /// Semantic element type classification.
 ///
 /// Categorizes text content into semantic units for downstream processing.
@@ -2561,7 +2635,7 @@ pub type FormatMetadata {
   FormatMetadataImage(String)
   Xml(XmlMetadata)
   FormatMetadataText(TextMetadata)
-  Html(HtmlMetadata)
+  FormatMetadataHtml(HtmlMetadata)
   FormatMetadataOcr(OcrMetadata)
   Csv(CsvMetadata)
   Bibtex(BibtexMetadata)
@@ -2836,13 +2910,13 @@ pub fn extract_bytes_sync(
   config: ExtractionConfig,
 ) -> Result(ExtractionResult, KreuzbergError)
 
-/// Synchronous wrapper for `batch_extract_file`.
+/// Synchronous wrapper for `batch_extract_files`.
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_file_sync")
-pub fn batch_extract_file_sync(
-  items: List(String),
+@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_files_sync")
+pub fn batch_extract_files_sync(
+  items: List(BatchFileItem),
   config: ExtractionConfig,
 ) -> Result(List(ExtractionResult), KreuzbergError)
 
@@ -2854,7 +2928,7 @@ pub fn batch_extract_file_sync(
 /// that iterates through items and calls `extract_bytes_sync()`.
 @external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_bytes_sync")
 pub fn batch_extract_bytes_sync(
-  items: List(String),
+  items: List(BatchBytesItem),
   config: ExtractionConfig,
 ) -> Result(List(ExtractionResult), KreuzbergError)
 
@@ -2870,7 +2944,7 @@ pub fn batch_extract_bytes_sync(
 /// Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
 /// taken from the batch-level `config`.
 ///
-///   config to use the batch-level defaults for that file.
+///   per-file configuration overrides.
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
 /// **Returns:**
@@ -2886,9 +2960,9 @@ pub fn batch_extract_bytes_sync(
 ///
 ///
 /// Per-file configuration overrides:
-@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_file")
-pub fn batch_extract_file(
-  items: List(String),
+@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_files")
+pub fn batch_extract_files(
+  items: List(BatchFileItem),
   config: ExtractionConfig,
 ) -> Result(List(ExtractionResult), KreuzbergError)
 
@@ -2903,6 +2977,9 @@ pub fn batch_extract_file(
 /// fields from the batch-level `config`. Pass `null` as the config to use
 /// the batch-level defaults for that item.
 ///
+///   MIME type, and optional per-item configuration overrides.
+/// * `config` - Batch-level extraction configuration
+///
 /// **Returns:**
 ///
 /// A vector of `ExtractionResult` in the same order as the input items.
@@ -2913,7 +2990,7 @@ pub fn batch_extract_file(
 /// Per-item configuration overrides:
 @external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_bytes")
 pub fn batch_extract_bytes(
-  items: List(String),
+  items: List(BatchBytesItem),
   config: ExtractionConfig,
 ) -> Result(List(ExtractionResult), KreuzbergError)
 
@@ -2950,10 +3027,8 @@ pub fn get_extensions_for_mime(
 ) -> Result(List(String), KreuzbergError)
 
 /// List names of all registered document extractors.
-///
-/// Re-exported at the crate root as `list_document_extractors`.
-@external(erlang, "Elixir.Kreuzberg.Native", "list_extractors")
-pub fn list_extractors() -> Result(List(String), KreuzbergError)
+@external(erlang, "Elixir.Kreuzberg.Native", "list_document_extractors")
+pub fn list_document_extractors() -> Result(List(String), KreuzbergError)
 
 /// List all registered OCR backends.
 ///
@@ -3035,11 +3110,14 @@ pub fn embed_texts(
 
 /// Get an embedding preset by name.
 ///
-/// Returns `null` if no preset with the given name exists.
+/// Returns `null` if no preset with the given name exists. Returns an owned
+/// clone so the value is safe to pass across FFI boundaries.
 @external(erlang, "Elixir.Kreuzberg.Native", "get_embedding_preset")
-pub fn get_embedding_preset(name: String) -> Option(String)
+pub fn get_embedding_preset(name: String) -> Option(EmbeddingPreset)
 
 /// List the names of all available embedding presets.
+///
+/// Returns owned `String`s so the values are safe to pass across FFI boundaries.
 @external(erlang, "Elixir.Kreuzberg.Native", "list_embedding_presets")
 pub fn list_embedding_presets() -> List(String)
 
@@ -3459,6 +3537,28 @@ pub fn post_processor_should_process_response(
 /// ```
 @external(erlang, "Elixir.Kreuzberg.Native", "post_processor_estimated_duration_ms_response")
 pub fn post_processor_estimated_duration_ms_response(
+  call_id: Dynamic,
+  result: Result(Int, String),
+) -> Nil
+
+/// Send the `priority` response back to the Rustler reply-registry.
+///
+/// Call this from your `handle_info/2` after processing a
+/// `{:trait_call, "priority", args_json, call_id}` message:
+///
+/// ```gleam
+/// // pub fn handle_info(msg, state) {
+/// //   case msg {
+/// //     #(atom.create("priority"), args_json, call_id) ->
+/// //       let result = do_priority(args_json)
+/// //       post_processor_priority_response(call_id, result)
+/// //       actor.continue(state)
+/// //     _ -> actor.continue(state)
+/// //   }
+/// // }
+/// ```
+@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_priority_response")
+pub fn post_processor_priority_response(
   call_id: Dynamic,
   result: Result(Int, String),
 ) -> Nil

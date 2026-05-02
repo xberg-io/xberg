@@ -29,7 +29,10 @@ class AccelerationConfig {
 
   /// GPU device ID (for CUDA/TensorRT). Ignored for CPU/CoreML/Auto.
   final int deviceId;
-  AccelerationConfig({required this.provider, required this.deviceId});
+  AccelerationConfig({
+    required this.provider,
+    required this.deviceId,
+  });
 }
 
 /// Cross-extractor content filtering configuration.
@@ -232,7 +235,7 @@ class ExtractionConfig {
   /// Controls whether results are returned in unified format (default) with all
   /// content in the `content` field, or element-based format with semantic
   /// elements (for Unstructured-compatible output).
-  final String resultFormat;
+  final ResultFormat resultFormat;
 
   /// Security limits for archive extraction.
   ///
@@ -255,7 +258,7 @@ class ExtractionConfig {
   /// When set to a structured format, extraction results will include
   /// formatted output. The `formatted_content` field may be populated
   /// when format conversion is applied.
-  final String outputFormat;
+  final OutputFormat outputFormat;
 
   /// Layout detection configuration (None = layout detection disabled).
   ///
@@ -377,7 +380,7 @@ class ExtractionConfig {
 /// Per-file extraction configuration overrides for batch processing.
 ///
 /// All fields are `Option<T>` — `None` means "use the batch-level default."
-/// This type is used with [`crate::batch_extract_file`] and
+/// This type is used with [`crate::batch_extract_files`] and
 /// [`crate::batch_extract_bytes`] to allow heterogeneous
 /// extraction settings within a single batch.
 ///
@@ -448,10 +451,10 @@ class FileExtractionConfig {
   final String? htmlOptions;
 
   /// Override result format for this file.
-  final String? resultFormat;
+  final ResultFormat? resultFormat;
 
   /// Override output content format for this file.
-  final String? outputFormat;
+  final OutputFormat? outputFormat;
 
   /// Override document structure output for this file.
   final bool? includeDocumentStructure;
@@ -498,6 +501,42 @@ class FileExtractionConfig {
     required this.timeoutSecs,
     required this.treeSitter,
     required this.structuredExtraction,
+  });
+}
+
+/// Batch item for byte array extraction.
+///
+/// Used with [`crate::batch_extract_bytes`] and [`crate::batch_extract_bytes_sync`]
+/// to represent a single item in a batch extraction job.
+class BatchBytesItem {
+  /// The content bytes to extract from
+  final Uint8List content;
+
+  /// MIME type of the content (e.g., "application/pdf", "text/html")
+  final String mimeType;
+
+  /// Per-item configuration overrides (None uses batch-level defaults)
+  final FileExtractionConfig? config;
+  BatchBytesItem({
+    required this.content,
+    required this.mimeType,
+    required this.config,
+  });
+}
+
+/// Batch item for file extraction.
+///
+/// Used with [`crate::batch_extract_files`] and [`crate::batch_extract_files_sync`]
+/// to represent a single file in a batch extraction job.
+class BatchFileItem {
+  /// Path to the file to extract from
+  final String path;
+
+  /// Per-file configuration overrides (None uses batch-level defaults)
+  final FileExtractionConfig? config;
+  BatchFileItem({
+    required this.path,
+    required this.config,
   });
 }
 
@@ -883,7 +922,10 @@ class OcrPipelineConfig {
 
   /// Quality thresholds for deciding whether to accept a result or try the next backend.
   final OcrQualityThresholds qualityThresholds;
-  OcrPipelineConfig({required this.stages, required this.qualityThresholds});
+  OcrPipelineConfig({
+    required this.stages,
+    required this.qualityThresholds,
+  });
 }
 
 /// OCR configuration.
@@ -907,7 +949,7 @@ class OcrConfig {
   final TesseractConfig? tesseractConfig;
 
   /// Output format for OCR results (optional, for format conversion)
-  final String? outputFormat;
+  final OutputFormat? outputFormat;
 
   /// PaddleOCR-specific configuration (optional, JSON passthrough)
   final String? paddleOcrConfig;
@@ -1325,7 +1367,10 @@ class SupportedFormat {
 
   /// MIME type string, e.g., "application/pdf"
   final String mimeType;
-  SupportedFormat({required this.extension_, required this.mimeType});
+  SupportedFormat({
+    required this.extension_,
+    required this.mimeType,
+  });
 }
 
 /// API server configuration.
@@ -1478,7 +1523,11 @@ class Note {
   final String id;
   final String noteType;
   final List<String> paragraphs;
-  Note({required this.id, required this.noteType, required this.paragraphs});
+  Note({
+    required this.id,
+    required this.noteType,
+    required this.paragraphs,
+  });
 }
 
 /// Page margins converted to points (1/72 inch).
@@ -2347,7 +2396,10 @@ class Footnote {
 
   /// Footnote content blocks
   final List<FormattedBlock> content;
-  Footnote({required this.label, required this.content});
+  Footnote({
+    required this.label,
+    required this.content,
+  });
 }
 
 /// Top-level structured document representation.
@@ -2463,6 +2515,25 @@ class DocumentNode {
   });
 }
 
+/// Structured table grid with cell-level metadata.
+///
+/// Stores row/column dimensions and a flat list of cells with position info.
+class TableGrid {
+  /// Number of rows in the table.
+  final int rows;
+
+  /// Number of columns in the table.
+  final int cols;
+
+  /// All cells in row-major order.
+  final List<GridCell> cells;
+  TableGrid({
+    required this.rows,
+    required this.cols,
+    required this.cells,
+  });
+}
+
 /// Individual grid cell with position and span metadata.
 class GridCell {
   /// Cell text content.
@@ -2509,7 +2580,11 @@ class TextAnnotation {
 
   /// Annotation type.
   final AnnotationKind kind;
-  TextAnnotation({required this.start, required this.end, required this.kind});
+  TextAnnotation({
+    required this.start,
+    required this.end,
+    required this.kind,
+  });
 }
 
 /// General extraction result used by the core extraction API.
@@ -2735,7 +2810,10 @@ class ProcessingWarning {
 
   /// Human-readable description of what went wrong.
   final String message;
-  ProcessingWarning({required this.source, required this.message});
+  ProcessingWarning({
+    required this.source,
+    required this.message,
+  });
 }
 
 /// Token usage and cost data for a single LLM call made during extraction.
@@ -2824,7 +2902,10 @@ class HeadingLevel {
 
   /// The text content of the heading.
   final String text;
-  HeadingLevel({required this.level, required this.text});
+  HeadingLevel({
+    required this.level,
+    required this.text,
+  });
 }
 
 /// Metadata about a chunk's position in the original document.
@@ -3014,7 +3095,10 @@ class ExcelWorkbook {
 
   /// Workbook-level metadata (author, creation date, etc.)
   final Map<String, String> metadata;
-  ExcelWorkbook({required this.sheets, required this.metadata});
+  ExcelWorkbook({
+    required this.sheets,
+    required this.metadata,
+  });
 }
 
 /// Single Excel worksheet.
@@ -3377,8 +3461,8 @@ class TesseractConfig {
   /// Page Segmentation Mode (0-13).
   ///
   /// Common values:
-  /// - 3: Fully automatic page segmentation (default)
-  /// - 6: Assume a single uniform block of text
+  /// - 3: Fully automatic page segmentation (native default)
+  /// - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang)
   /// - 11: Sparse text with no particular order
   final int psm;
 
@@ -3732,7 +3816,10 @@ class XmlMetadata {
 
   /// List of unique element tag names (sorted)
   final List<String> uniqueElements;
-  XmlMetadata({required this.elementCount, required this.uniqueElements});
+  XmlMetadata({
+    required this.elementCount,
+    required this.uniqueElements,
+  });
 }
 
 /// Text/Markdown metadata.
@@ -3969,7 +4056,10 @@ class OcrMetadata {
 class ErrorMetadata {
   final String errorType;
   final String message;
-  ErrorMetadata({required this.errorType, required this.message});
+  ErrorMetadata({
+    required this.errorType,
+    required this.message,
+  });
 }
 
 /// PowerPoint presentation metadata.
@@ -4080,7 +4170,11 @@ class YearRange {
   final int? min;
   final int? max;
   final List<int> years;
-  YearRange({required this.min, required this.max, required this.years});
+  YearRange({
+    required this.min,
+    required this.max,
+    required this.years,
+  });
 }
 
 /// FictionBook (FB2) metadata.
@@ -4111,7 +4205,10 @@ class DbfMetadata {
 class DbfFieldInfo {
   final String name;
   final String fieldType;
-  DbfFieldInfo({required this.name, required this.fieldType});
+  DbfFieldInfo({
+    required this.name,
+    required this.fieldType,
+  });
 }
 
 /// JATS (Journal Article Tag Suite) metadata.
@@ -4132,7 +4229,10 @@ class JatsMetadata {
 class ContributorRole {
   final String name;
   final String? role;
-  ContributorRole({required this.name, required this.role});
+  ContributorRole({
+    required this.name,
+    required this.role,
+  });
 }
 
 /// EPUB metadata (Dublin Core extensions).
@@ -4174,7 +4274,10 @@ class OcrConfidence {
   ///
   /// Range: 0.0 to 1.0.
   final double recognition;
-  OcrConfidence({required this.detection, required this.recognition});
+  OcrConfidence({
+    required this.detection,
+    required this.recognition,
+  });
 }
 
 /// Rotation information for an OCR element.
@@ -4184,7 +4287,10 @@ class OcrRotation {
 
   /// Confidence score for the rotation detection.
   final double? confidence;
-  OcrRotation({required this.angleDegrees, required this.confidence});
+  OcrRotation({
+    required this.angleDegrees,
+    required this.confidence,
+  });
 }
 
 /// A unified OCR element representing detected text with full metadata.
@@ -4458,7 +4564,10 @@ class PageHierarchy {
 
   /// Hierarchical blocks with heading levels
   final List<HierarchicalBlock> blocks;
-  PageHierarchy({required this.blockCount, required this.blocks});
+  PageHierarchy({
+    required this.blockCount,
+    required this.blocks,
+  });
 }
 
 /// A text block with hierarchy level assignment.
@@ -4566,7 +4675,10 @@ class InfoResponse {
 
   /// Whether using Rust backend
   final bool rustBackend;
-  InfoResponse({required this.version, required this.rustBackend});
+  InfoResponse({
+    required this.version,
+    required this.rustBackend,
+  });
 }
 
 /// Extraction response (list of results).
@@ -4586,7 +4698,10 @@ class ApiState {
   /// while `ApiState` must be `Clone + Sync` for Axum's state requirement.
   /// The lock is held only long enough to clone the service.
   final String extractionService;
-  ApiState({required this.defaultConfig, required this.extractionService});
+  ApiState({
+    required this.defaultConfig,
+    required this.extractionService,
+  });
 }
 
 /// Cache statistics response.
@@ -4642,7 +4757,10 @@ class EmbedRequest {
 
   /// Optional embedding configuration (model, batch size, etc.)
   final EmbeddingConfig? config;
-  EmbedRequest({required this.texts, required this.config});
+  EmbedRequest({
+    required this.texts,
+    required this.config,
+  });
 }
 
 /// Embedding response containing generated embeddings.
@@ -4722,7 +4840,10 @@ class DetectResponse {
 
   /// Original filename (if provided)
   final String? filename;
-  DetectResponse({required this.mimeType, required this.filename});
+  DetectResponse({
+    required this.mimeType,
+    required this.filename,
+  });
 }
 
 /// Model manifest entry for cache management.
@@ -4774,7 +4895,10 @@ class WarmRequest {
 
   /// Specific embedding model preset to download
   final String? embeddingModel;
-  WarmRequest({required this.allEmbeddings, required this.embeddingModel});
+  WarmRequest({
+    required this.allEmbeddings,
+    required this.embeddingModel,
+  });
 }
 
 /// Cache warm response.
@@ -4820,7 +4944,10 @@ class OpenWebDocumentResponse {
 
   /// Document metadata
   final String metadata;
-  OpenWebDocumentResponse({required this.pageContent, required this.metadata});
+  OpenWebDocumentResponse({
+    required this.pageContent,
+    required this.metadata,
+  });
 }
 
 /// OpenWebUI "Docling" engine response format.
@@ -4832,7 +4959,10 @@ class DoclingCompatResponse {
 
   /// Processing status
   final String status;
-  DoclingCompatResponse({required this.document, required this.status});
+  DoclingCompatResponse({
+    required this.document,
+    required this.status,
+  });
 }
 
 /// Request parameters for file extraction.
@@ -4918,7 +5048,10 @@ class DetectMimeTypeParams {
 
   /// Use content-based detection (default: true)
   final bool useContent;
-  DetectMimeTypeParams({required this.path, required this.useContent});
+  DetectMimeTypeParams({
+    required this.path,
+    required this.useContent,
+  });
 }
 
 /// Request parameters for cache warm (model download).
@@ -4928,7 +5061,10 @@ class CacheWarmParams {
 
   /// Specific embedding preset name to download (e.g. "balanced", "speed", "quality")
   final String? embeddingModel;
-  CacheWarmParams({required this.allEmbeddings, required this.embeddingModel});
+  CacheWarmParams({
+    required this.allEmbeddings,
+    required this.embeddingModel,
+  });
 }
 
 /// Request parameters for embedding generation.
@@ -5028,7 +5164,10 @@ class DetectedBoundary {
 
   /// Whether this boundary looks like a header/section title.
   final bool isHeader;
-  DetectedBoundary({required this.byteOffset, required this.isHeader});
+  DetectedBoundary({
+    required this.byteOffset,
+    required this.isHeader,
+  });
 }
 
 /// Result of a text chunking operation.
@@ -5040,7 +5179,10 @@ class ChunkingResult {
 
   /// Total number of chunks generated
   final int chunkCount;
-  ChunkingResult({required this.chunks, required this.chunkCount});
+  ChunkingResult({
+    required this.chunks,
+    required this.chunkCount,
+  });
 }
 
 /// A merged chunk produced by [`merge_segments`].
@@ -5052,6 +5194,40 @@ class MergedChunk {
     required this.text,
     required this.byteStart,
     required this.byteEnd,
+  });
+}
+
+/// Preset configurations for common RAG use cases.
+///
+/// Each preset combines chunk size, overlap, and embedding model
+/// to provide an optimized configuration for specific scenarios.
+///
+/// All string fields are owned `String` for FFI compatibility — instances
+/// are safe to clone and pass across language boundaries.
+class EmbeddingPreset {
+  final String name;
+  final int chunkSize;
+  final int overlap;
+
+  /// HuggingFace repository name for the model.
+  final String modelRepo;
+
+  /// Pooling strategy: "cls" or "mean".
+  final String pooling;
+
+  /// Path to the ONNX model file within the repo.
+  final String modelFile;
+  final int dimensions;
+  final String description;
+  EmbeddingPreset({
+    required this.name,
+    required this.chunkSize,
+    required this.overlap,
+    required this.modelRepo,
+    required this.pooling,
+    required this.modelFile,
+    required this.dimensions,
+    required this.description,
   });
 }
 
@@ -5071,7 +5247,10 @@ class RakeParams {
 
   /// Maximum words in a keyword phrase (default: 3).
   final int maxWordsPerPhrase;
-  RakeParams({required this.minWordLength, required this.maxWordsPerPhrase});
+  RakeParams({
+    required this.minWordLength,
+    required this.maxWordsPerPhrase,
+  });
 }
 
 /// Keyword extraction configuration.
@@ -5140,7 +5319,10 @@ class Keyword {
 class OcrCacheStats {
   final int totalFiles;
   final double totalSizeMb;
-  OcrCacheStats({required this.totalFiles, required this.totalSizeMb});
+  OcrCacheStats({
+    required this.totalFiles,
+    required this.totalSizeMb,
+  });
 }
 
 /// Pre-computed table markdown for a table detection region.
@@ -5276,7 +5458,10 @@ class OrientationResult {
 
   /// Confidence score (0.0-1.0).
   final double confidence;
-  OrientationResult({required this.degrees, required this.confidence});
+  OrientationResult({
+    required this.degrees,
+    required this.confidence,
+  });
 }
 
 /// Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
@@ -5469,7 +5654,41 @@ enum ExecutionProviderType {
   cuda,
 
   /// NVIDIA TensorRT (optimized CUDA inference).
-  tensorRt,
+  tensorRt;
+}
+
+/// Output format for extraction results.
+///
+/// Controls the format of the `content` field in `ExtractionResult`.
+/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
+/// accordingly. `Plain` returns the raw extracted text.
+/// `Structured` returns JSON with full OCR element data including bounding
+/// boxes and confidence scores.
+sealed class OutputFormat {}
+
+/// Plain text content only (default)
+final class Plain extends OutputFormat {}
+
+/// Markdown format
+final class Markdown extends OutputFormat {}
+
+/// Djot markup format
+final class Djot extends OutputFormat {}
+
+/// HTML format
+final class Html extends OutputFormat {}
+
+/// JSON tree format with heading-driven sections.
+final class Json extends OutputFormat {}
+
+/// Structured JSON format with full OCR element metadata.
+final class Structured extends OutputFormat {}
+
+/// Custom renderer registered via the RendererRegistry.
+/// The string is the renderer name (e.g., "docx", "latex").
+final class Custom extends OutputFormat {
+  final String field0;
+  Custom(this.field0);
 }
 
 /// Built-in HTML theme selection.
@@ -5490,7 +5709,7 @@ enum HtmlTheme {
 
   /// No built-in stylesheet emitted. CSS custom properties are still defined
   /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
-  unstyled,
+  unstyled;
 }
 
 /// Which table structure recognition model to use.
@@ -5515,7 +5734,7 @@ enum TableModel {
   slanetAuto,
 
   /// Disable table structure model inference entirely; use heuristic path only.
-  disabled,
+  disabled;
 }
 
 /// PDF extraction backend selection.
@@ -5532,7 +5751,7 @@ enum PdfBackend {
   pdfOxide,
 
   /// Automatically select the best available backend.
-  auto,
+  auto;
 }
 
 /// Type of text chunker to use.
@@ -5549,7 +5768,12 @@ enum PdfBackend {
 ///   blank-line paragraphs) and merges groups into chunks capped at
 ///   `max_characters` (default 1000). `topic_threshold` has no effect in the
 ///   fallback path. For best results, pair with an embedding model.
-enum ChunkerType { text, markdown, yaml, semantic }
+enum ChunkerType {
+  text,
+  markdown,
+  yaml,
+  semantic;
+}
 
 /// How chunk size is measured.
 ///
@@ -5568,7 +5792,10 @@ final class Characters extends ChunkSizing {}
 final class Tokenizer extends ChunkSizing {
   final String model;
   final String cacheDir;
-  Tokenizer({required this.model, required this.cacheDir});
+  Tokenizer({
+    required this.model,
+    required this.cacheDir,
+  });
 }
 
 /// Embedding model types supported by Kreuzberg.
@@ -5584,7 +5811,10 @@ final class Preset extends EmbeddingModelType {
 final class Custom extends EmbeddingModelType {
   final String modelId;
   final int dimensions;
-  Custom({required this.modelId, required this.dimensions});
+  Custom({
+    required this.modelId,
+    required this.dimensions,
+  });
 }
 
 /// Provider-hosted embedding model via liter-llm.
@@ -5632,10 +5862,15 @@ enum CodeContentMode {
   raw,
 
   /// Emit function/class headings + docstrings (no code bodies).
-  structure,
+  structure;
 }
 
-enum FracType { bar, noBar, linear, skewed }
+enum FracType {
+  bar,
+  noBar,
+  linear,
+  skewed;
+}
 
 /// OCR backend types.
 enum OcrBackendType {
@@ -5649,7 +5884,7 @@ enum OcrBackendType {
   paddleOcr,
 
   /// Custom/third-party OCR backend
-  custom,
+  custom;
 }
 
 /// Processing stages for post-processors.
@@ -5682,10 +5917,16 @@ enum ProcessingStage {
   /// - Analytics/logging
   /// - Final validation
   /// - Output formatting
-  late_,
+  late_;
 }
 
-enum ReductionLevel { off, light, moderate, aggressive, maximum }
+enum ReductionLevel {
+  off,
+  light,
+  moderate,
+  aggressive,
+  maximum;
+}
 
 /// Type of PDF annotation.
 enum PdfAnnotationType {
@@ -5708,7 +5949,7 @@ enum PdfAnnotationType {
   strikeOut,
 
   /// Any other annotation type
-  other,
+  other;
 }
 
 /// Types of block-level elements in Djot.
@@ -5728,7 +5969,7 @@ enum BlockType {
   section,
   thematicBreak,
   rawBlock,
-  mathDisplay,
+  mathDisplay;
 }
 
 /// Types of inline elements in Djot.
@@ -5748,7 +5989,7 @@ enum InlineType {
   math,
   rawInline,
   footnoteRef,
-  symbol,
+  symbol;
 }
 
 /// Semantic kind of a relationship between document elements.
@@ -5772,7 +6013,7 @@ enum RelationshipKind {
   tocEntry,
 
   /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
-  crossReference,
+  crossReference;
 }
 
 /// Content layer classification for document nodes.
@@ -5789,7 +6030,7 @@ enum ContentLayer {
   footer,
 
   /// Footnote content.
-  footnote,
+  footnote;
 }
 
 /// Tagged enum for node content. Each variant carries only type-specific data.
@@ -5808,7 +6049,10 @@ final class Title extends NodeContent {
 final class Heading extends NodeContent {
   final int level;
   final String text;
-  Heading({required this.level, required this.text});
+  Heading({
+    required this.level,
+    required this.text,
+  });
 }
 
 /// Body text paragraph.
@@ -5831,7 +6075,7 @@ final class ListItem extends NodeContent {
 
 /// Table with structured cell grid.
 final class Table extends NodeContent {
-  final String grid;
+  final TableGrid grid;
   Table(this.grid);
 }
 
@@ -5851,7 +6095,10 @@ final class Image extends NodeContent {
 final class Code extends NodeContent {
   final String text;
   final String language;
-  Code({required this.text, required this.language});
+  Code({
+    required this.text,
+    required this.language,
+  });
 }
 
 /// Block quote — container, children carry the quoted content.
@@ -5891,7 +6138,10 @@ final class PageBreak extends NodeContent {}
 final class Slide extends NodeContent {
   final int number;
   final String title;
-  Slide({required this.number, required this.title});
+  Slide({
+    required this.number,
+    required this.title,
+  });
 }
 
 /// Definition list container — children are `DefinitionItem` nodes.
@@ -5901,14 +6151,20 @@ final class DefinitionList extends NodeContent {}
 final class DefinitionItem extends NodeContent {
   final String term;
   final String definition;
-  DefinitionItem({required this.term, required this.definition});
+  DefinitionItem({
+    required this.term,
+    required this.definition,
+  });
 }
 
 /// Citation or bibliographic reference.
 final class Citation extends NodeContent {
   final String key;
   final String text;
-  Citation({required this.key, required this.text});
+  Citation({
+    required this.key,
+    required this.text,
+  });
 }
 
 /// Admonition / callout container (note, warning, tip, etc.).
@@ -5917,7 +6173,10 @@ final class Citation extends NodeContent {
 final class Admonition extends NodeContent {
   final String kind;
   final String title;
-  Admonition({required this.kind, required this.title});
+  Admonition({
+    required this.kind,
+    required this.title,
+  });
 }
 
 /// Raw block preserved verbatim from the source format.
@@ -5927,7 +6186,10 @@ final class Admonition extends NodeContent {
 final class RawBlock extends NodeContent {
   final String format;
   final String content;
-  RawBlock({required this.format, required this.content});
+  RawBlock({
+    required this.format,
+    required this.content,
+  });
 }
 
 /// Structured metadata block (email headers, YAML frontmatter, etc.).
@@ -5956,7 +6218,10 @@ final class Superscript extends AnnotationKind {}
 final class Link extends AnnotationKind {
   final String url;
   final String title;
-  Link({required this.url, required this.title});
+  Link({
+    required this.url,
+    required this.title,
+  });
 }
 
 /// Highlighted text (PDF highlights, HTML `<mark>`).
@@ -5978,11 +6243,18 @@ final class FontSize extends AnnotationKind {
 final class Custom extends AnnotationKind {
   final String name;
   final String value;
-  Custom({required this.name, required this.value});
+  Custom({
+    required this.name,
+    required this.value,
+  });
 }
 
 /// How the extracted text was produced.
-enum ExtractionMethod { native, ocr, mixed }
+enum ExtractionMethod {
+  native,
+  ocr,
+  mixed;
+}
 
 /// Semantic structural classification of a text chunk.
 ///
@@ -6027,7 +6299,7 @@ enum ChunkType {
   diagram,
 
   /// Unclassified or mixed content.
-  unknown,
+  unknown;
 }
 
 /// Heuristic classification of what an image likely depicts.
@@ -6063,7 +6335,20 @@ enum ImageKind {
   mask,
 
   /// Could not classify with reasonable confidence
-  unknown,
+  unknown;
+}
+
+/// Result-shape selection for extraction results.
+///
+/// Distinct from [`crate::OutputFormat`] (which controls rendering — Plain, Markdown,
+/// HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
+/// blob vs. an element-based decomposition.
+enum ResultFormat {
+  /// Unified format with all content in `content` field
+  unified,
+
+  /// Element-based format with semantic element extraction
+  elementBased;
 }
 
 /// Semantic element type classification.
@@ -6102,7 +6387,7 @@ enum ElementType {
   footer,
 
   /// Header text
-  header,
+  header;
 }
 
 /// Format-specific metadata (discriminated union).
@@ -6220,7 +6505,7 @@ enum TextDirection {
   rightToLeft,
 
   /// Automatic text direction detection
-  auto,
+  auto;
 }
 
 /// Link type classification.
@@ -6241,7 +6526,7 @@ enum LinkType {
   phone,
 
   /// Other link type
-  other,
+  other;
 }
 
 /// Image type classification.
@@ -6256,7 +6541,7 @@ enum ImageType {
   external_,
 
   /// Relative path image
-  relative,
+  relative;
 }
 
 /// Structured data type classification.
@@ -6268,7 +6553,7 @@ enum StructuredDataType {
   microdata,
 
   /// RDFa
-  rdFa,
+  rdFa;
 }
 
 /// Bounding geometry for an OCR element.
@@ -6315,7 +6600,7 @@ enum OcrElementLevel {
   block,
 
   /// Page-level element
-  page,
+  page;
 }
 
 /// Type of paginated unit in a document.
@@ -6329,7 +6614,7 @@ enum PageUnitType {
   slide,
 
   /// Spreadsheet sheets (XLSX, ODS)
-  sheet,
+  sheet;
 }
 
 /// Semantic classification of an extracted URI.
@@ -6350,7 +6635,7 @@ enum UriKind {
   reference,
 
   /// An email address (`mailto:` link or bare email).
-  email,
+  email;
 }
 
 /// Error type for pool operations.
@@ -6359,7 +6644,7 @@ enum PoolError {
   ///
   /// This indicates a panic occurred while holding the lock.
   /// The pool is in a locked state and cannot be recovered.
-  lockPoisoned,
+  lockPoisoned;
 }
 
 /// Keyword algorithm selection.
@@ -6368,7 +6653,7 @@ enum KeywordAlgorithm {
   yake,
 
   /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
-  rake,
+  rake;
 }
 
 /// Page Segmentation Mode for Tesseract OCR
@@ -6383,7 +6668,7 @@ enum PSMMode {
   singleLine,
   singleWord,
   circleWord,
-  singleChar,
+  singleChar;
 }
 
 /// Supported languages in PaddleOCR.
@@ -6436,7 +6721,7 @@ enum PaddleLanguage {
   tamil,
 
   /// Telugu
-  telugu,
+  telugu;
 }
 
 /// The 17 canonical document layout classes.
@@ -6461,7 +6746,7 @@ enum LayoutClass {
   checkboxSelected,
   checkboxUnselected,
   form,
-  keyValueRegion,
+  keyValueRegion;
 }
 
 /// Main error type for all Kreuzberg operations.
@@ -6499,7 +6784,10 @@ final class Parsing implements KreuzbergError {
   final String source;
   @override
   String get message => 'Parsing error: {message}';
-  Parsing({required this.message, required this.source});
+  Parsing({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class Ocr implements KreuzbergError {
@@ -6507,7 +6795,10 @@ final class Ocr implements KreuzbergError {
   final String source;
   @override
   String get message => 'OCR error: {message}';
-  Ocr({required this.message, required this.source});
+  Ocr({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class Validation implements KreuzbergError {
@@ -6515,7 +6806,10 @@ final class Validation implements KreuzbergError {
   final String source;
   @override
   String get message => 'Validation error: {message}';
-  Validation({required this.message, required this.source});
+  Validation({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class Cache implements KreuzbergError {
@@ -6523,7 +6817,10 @@ final class Cache implements KreuzbergError {
   final String source;
   @override
   String get message => 'Cache error: {message}';
-  Cache({required this.message, required this.source});
+  Cache({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class ImageProcessing implements KreuzbergError {
@@ -6531,7 +6828,10 @@ final class ImageProcessing implements KreuzbergError {
   final String source;
   @override
   String get message => 'Image processing error: {message}';
-  ImageProcessing({required this.message, required this.source});
+  ImageProcessing({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class Serialization implements KreuzbergError {
@@ -6539,7 +6839,10 @@ final class Serialization implements KreuzbergError {
   final String source;
   @override
   String get message => 'Serialization error: {message}';
-  Serialization({required this.message, required this.source});
+  Serialization({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class MissingDependency implements KreuzbergError {
@@ -6554,7 +6857,10 @@ final class Plugin implements KreuzbergError {
   final String pluginName;
   @override
   String get message => 'Plugin error in \'{plugin_name}\': {message}';
-  Plugin({required this.message, required this.pluginName});
+  Plugin({
+    required this.message,
+    required this.pluginName,
+  });
 }
 
 final class LockPoisoned implements KreuzbergError {
@@ -6576,7 +6882,10 @@ final class Embedding implements KreuzbergError {
   final String source;
   @override
   String get message => 'Embedding error: {message}';
-  Embedding({required this.message, required this.source});
+  Embedding({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class Timeout implements KreuzbergError {
@@ -6585,7 +6894,10 @@ final class Timeout implements KreuzbergError {
   @override
   String get message =>
       'Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)';
-  Timeout({required this.elapsedMs, required this.limitMs});
+  Timeout({
+    required this.elapsedMs,
+    required this.limitMs,
+  });
 }
 
 final class Cancelled implements KreuzbergError {
@@ -6599,7 +6911,10 @@ final class Security implements KreuzbergError {
   final String source;
   @override
   String get message => 'Security violation: {message}';
-  Security({required this.message, required this.source});
+  Security({
+    required this.message,
+    required this.source,
+  });
 }
 
 final class Other implements KreuzbergError {
@@ -6650,10 +6965,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractBytes(
-    Uint8List content,
-    String mimeType,
-    ExtractionConfig config,
-  ) async {
+      Uint8List content, String mimeType, ExtractionConfig config) async {
     return await rust_bridge.extractBytes(content, mimeType, config);
   }
 
@@ -6697,10 +7009,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractFile(
-    String path,
-    String? mimeType,
-    ExtractionConfig config,
-  ) async {
+      String path, String? mimeType, ExtractionConfig config) async {
     return await rust_bridge.extractFile(path, mimeType, config);
   }
 
@@ -6728,10 +7037,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static ExtractionResult extractFileSync(
-    String path,
-    String? mimeType,
-    ExtractionConfig config,
-  ) {
+      String path, String? mimeType, ExtractionConfig config) {
     return rust_bridge.extractFileSync(path, mimeType, config);
   }
 
@@ -6757,14 +7063,11 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static ExtractionResult extractBytesSync(
-    Uint8List content,
-    String mimeType,
-    ExtractionConfig config,
-  ) {
+      Uint8List content, String mimeType, ExtractionConfig config) {
     return rust_bridge.extractBytesSync(content, mimeType, config);
   }
 
-  /// Synchronous wrapper for `batch_extract_file`.
+  /// Synchronous wrapper for `batch_extract_files`.
   ///
   /// Uses the global Tokio runtime for optimal performance.
   /// Only available with `tokio-runtime` (WASM has no filesystem).
@@ -6772,25 +7075,24 @@ class KreuzbergBridge {
   /// # Example
   ///
   /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_file_sync;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
-  /// use std::path::PathBuf;
+  /// use kreuzberg::core::extractor::batch_extract_files_sync;
+  /// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
   ///
   /// let config = ExtractionConfig::default();
-  /// let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
-  ///     ("doc1.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-  ///     ("doc2.pdf".into(), None),
+  /// let items = vec![
+  ///     BatchFileItem {
+  ///         path: "doc1.pdf".into(),
+  ///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+  ///     },
+  ///     BatchFileItem { path: "doc2.pdf".into(), config: None },
   /// ];
-  /// let results = batch_extract_file_sync(items, &config)?;
+  /// let results = batch_extract_files_sync(items, &config)?;
   /// # Ok::<(), kreuzberg::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
-  static List<ExtractionResult> batchExtractFileSync(
-    List<String> items,
-    ExtractionConfig config,
-  ) {
-    return rust_bridge.batchExtractFileSync(items, config);
+  static List<ExtractionResult> batchExtractFilesSync(
+      List<BatchFileItem> items, ExtractionConfig config) {
+    return rust_bridge.batchExtractFilesSync(items, config);
   }
 
   /// Synchronous wrapper for `batch_extract_bytes`.
@@ -6804,23 +7106,23 @@ class KreuzbergBridge {
   ///
   /// ```rust,no_run
   /// use kreuzberg::core::extractor::batch_extract_bytes_sync;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
+  /// use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem, FileExtractionConfig};
   ///
   /// let config = ExtractionConfig::default();
   /// let items = vec![
-  ///     (b"content".to_vec(), "text/plain".to_string(), None),
-  ///     (b"other".to_vec(), "text/plain".to_string(),
-  ///      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+  ///     BatchBytesItem { content: b"content".to_vec(), mime_type: "text/plain".to_string(), config: None },
+  ///     BatchBytesItem {
+  ///         content: b"other".to_vec(),
+  ///         mime_type: "text/plain".to_string(),
+  ///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+  ///     },
   /// ];
   /// let results = batch_extract_bytes_sync(items, &config)?;
   /// # Ok::<(), kreuzberg::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
   static List<ExtractionResult> batchExtractBytesSync(
-    List<String> items,
-    ExtractionConfig config,
-  ) {
+      List<BatchBytesItem> items, ExtractionConfig config) {
     return rust_bridge.batchExtractBytesSync(items, config);
   }
 
@@ -6838,8 +7140,8 @@ class KreuzbergBridge {
   ///
   /// # Arguments
   ///
-  /// * `items` - Vector of `(path, optional_file_config)` tuples. Pass `None` as the
-  ///   config to use the batch-level defaults for that file.
+  /// * `items` - Vector of [`BatchFileItem`] structs, each containing a path and optional
+  ///   per-file configuration overrides.
   /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
   ///
   /// # Returns
@@ -6856,17 +7158,17 @@ class KreuzbergBridge {
   /// Simple usage with no per-file overrides:
   ///
   /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_file;
-  /// use kreuzberg::core::config::ExtractionConfig;
+  /// use kreuzberg::core::extractor::batch_extract_files;
+  /// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem};
   /// use std::path::PathBuf;
   ///
   /// # async fn example() -> kreuzberg::Result<()> {
   /// let config = ExtractionConfig::default();
-  /// let items: Vec<(PathBuf, Option<kreuzberg::FileExtractionConfig>)> = vec![
-  ///     ("doc1.pdf".into(), None),
-  ///     ("doc2.pdf".into(), None),
+  /// let items = vec![
+  ///     BatchFileItem { path: "doc1.pdf".into(), config: None },
+  ///     BatchFileItem { path: "doc2.pdf".into(), config: None },
   /// ];
-  /// let results = batch_extract_file(items, &config).await?;
+  /// let results = batch_extract_files(items, &config).await?;
   /// println!("Processed {} files", results.len());
   /// # Ok(())
   /// # }
@@ -6875,27 +7177,27 @@ class KreuzbergBridge {
   /// Per-file configuration overrides:
   ///
   /// ```rust,no_run
-  /// use kreuzberg::core::extractor::batch_extract_file;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
+  /// use kreuzberg::core::extractor::batch_extract_files;
+  /// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
   /// use std::path::PathBuf;
   ///
   /// # async fn example() -> kreuzberg::Result<()> {
   /// let config = ExtractionConfig::default();
-  /// let items: Vec<(PathBuf, Option<FileExtractionConfig>)> = vec![
-  ///     ("scan.pdf".into(), Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
-  ///     ("notes.txt".into(), None),
+  /// let items = vec![
+  ///     BatchFileItem {
+  ///         path: "scan.pdf".into(),
+  ///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+  ///     },
+  ///     BatchFileItem { path: "notes.txt".into(), config: None },
   /// ];
-  /// let results = batch_extract_file(items, &config).await?;
+  /// let results = batch_extract_files(items, &config).await?;
   /// # Ok(())
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static Future<List<ExtractionResult>> batchExtractFile(
-    List<String> items,
-    ExtractionConfig config,
-  ) async {
-    return await rust_bridge.batchExtractFile(items, config);
+  static Future<List<ExtractionResult>> batchExtractFiles(
+      List<BatchFileItem> items, ExtractionConfig config) async {
+    return await rust_bridge.batchExtractFiles(items, config);
   }
 
   /// Extract content from multiple byte arrays concurrently.
@@ -6911,7 +7213,8 @@ class KreuzbergBridge {
   ///
   /// # Arguments
   ///
-  /// * `items` - Vector of `(bytes, mime_type, optional_file_config)` tuples
+  /// * `items` - Vector of [`BatchBytesItem`] structs, each containing content bytes,
+  ///   MIME type, and optional per-item configuration overrides.
   /// * `config` - Batch-level extraction configuration
   ///
   /// # Returns
@@ -6924,13 +7227,13 @@ class KreuzbergBridge {
   ///
   /// ```rust,no_run
   /// use kreuzberg::core::extractor::batch_extract_bytes;
-  /// use kreuzberg::core::config::ExtractionConfig;
+  /// use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem};
   ///
   /// # async fn example() -> kreuzberg::Result<()> {
   /// let config = ExtractionConfig::default();
   /// let items = vec![
-  ///     (b"content 1".to_vec(), "text/plain".to_string(), None),
-  ///     (b"content 2".to_vec(), "text/plain".to_string(), None),
+  ///     BatchBytesItem { content: b"content 1".to_vec(), mime_type: "text/plain".to_string(), config: None },
+  ///     BatchBytesItem { content: b"content 2".to_vec(), mime_type: "text/plain".to_string(), config: None },
   /// ];
   /// let results = batch_extract_bytes(items, &config).await?;
   /// println!("Processed {} items", results.len());
@@ -6942,15 +7245,17 @@ class KreuzbergBridge {
   ///
   /// ```rust,no_run
   /// use kreuzberg::core::extractor::batch_extract_bytes;
-  /// use kreuzberg::core::config::ExtractionConfig;
-  /// use kreuzberg::FileExtractionConfig;
+  /// use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem, FileExtractionConfig};
   ///
   /// # async fn example() -> kreuzberg::Result<()> {
   /// let config = ExtractionConfig::default();
   /// let items = vec![
-  ///     (b"content".to_vec(), "text/plain".to_string(), None),
-  ///     (b"<html>test</html>".to_vec(), "text/html".to_string(),
-  ///      Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() })),
+  ///     BatchBytesItem { content: b"content".to_vec(), mime_type: "text/plain".to_string(), config: None },
+  ///     BatchBytesItem {
+  ///         content: b"<html>test</html>".to_vec(),
+  ///         mime_type: "text/html".to_string(),
+  ///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+  ///     },
   /// ];
   /// let results = batch_extract_bytes(items, &config).await?;
   /// # Ok(())
@@ -6958,9 +7263,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<List<ExtractionResult>> batchExtractBytes(
-    List<String> items,
-    ExtractionConfig config,
-  ) async {
+      List<BatchBytesItem> items, ExtractionConfig config) async {
     return await rust_bridge.batchExtractBytes(items, config);
   }
 
@@ -7017,11 +7320,9 @@ class KreuzbergBridge {
   }
 
   /// List names of all registered document extractors.
-  ///
-  /// Re-exported at the crate root as `list_document_extractors`.
   /// throws anyhow::Error on failure
-  static List<String> listExtractors() {
-    return rust_bridge.listExtractors();
+  static List<String> listDocumentExtractors() {
+    return rust_bridge.listDocumentExtractors();
   }
 
   /// List all registered OCR backends.
@@ -7141,11 +7442,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Uint8List renderPdfPageToPng(
-    Uint8List pdfBytes,
-    int pageIndex,
-    int? dpi,
-    String? password,
-  ) {
+      Uint8List pdfBytes, int pageIndex, int? dpi, String? password) {
     return rust_bridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password);
   }
 
@@ -7163,20 +7460,21 @@ class KreuzbergBridge {
   /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
   /// throws anyhow::Error on failure
   static List<List<double>> embedTexts(
-    List<String> texts,
-    EmbeddingConfig? config,
-  ) {
+      List<String> texts, EmbeddingConfig? config) {
     return rust_bridge.embedTexts(texts, config);
   }
 
   /// Get an embedding preset by name.
   ///
-  /// Returns `None` if no preset with the given name exists.
-  static String? getEmbeddingPreset(String name) {
+  /// Returns `None` if no preset with the given name exists. Returns an owned
+  /// clone so the value is safe to pass across FFI boundaries.
+  static EmbeddingPreset? getEmbeddingPreset(String name) {
     return rust_bridge.getEmbeddingPreset(name);
   }
 
   /// List the names of all available embedding presets.
+  ///
+  /// Returns owned `String`s so the values are safe to pass across FFI boundaries.
   static List<String> listEmbeddingPresets() {
     return rust_bridge.listEmbeddingPresets();
   }

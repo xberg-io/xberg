@@ -110,9 +110,13 @@ async fn test_concurrent_batch_extractions() {
         let contents_clone = contents.clone();
 
         handles.push(tokio::spawn(async move {
-            let owned_data: Vec<(Vec<u8>, String, Option<kreuzberg::FileExtractionConfig>)> = contents_clone
+            let owned_data: Vec<kreuzberg::BatchBytesItem> = contents_clone
                 .iter()
-                .map(|c| (c.to_vec(), "text/plain".to_string(), None))
+                .map(|c| kreuzberg::BatchBytesItem {
+                    content: c.to_vec(),
+                    mime_type: "text/plain".to_string(),
+                    config: None,
+                })
                 .collect();
             batch_extract_bytes(owned_data, &config).await
         }));
@@ -356,7 +360,7 @@ async fn test_concurrent_pipeline_processing() {
         let mut reg = registry.write();
         let processor = Arc::new(ConcurrentTestProcessor);
         let _ = reg.remove("concurrent-test");
-        reg.register(processor, 50).expect("Should register processor");
+        reg.register(processor).expect("Should register processor");
     }
 
     let config = ExtractionConfig {

@@ -12,9 +12,7 @@ pub(crate) mod instrumented;
 pub use r#trait::DocumentExtractor;
 
 /// List names of all registered document extractors.
-///
-/// Re-exported at the crate root as `list_document_extractors`.
-pub fn list_extractors() -> crate::Result<Vec<String>> {
+pub fn list_document_extractors() -> crate::Result<Vec<String>> {
     use crate::plugins::registry::get_document_extractor_registry;
 
     let registry = get_document_extractor_registry();

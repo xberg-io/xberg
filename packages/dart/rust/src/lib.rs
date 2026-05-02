@@ -51,9 +51,9 @@ pub struct ExtractionConfig {
     pub html_output: Option<HtmlOutputConfig>,
     pub extraction_timeout_secs: Option<i64>,
     pub max_concurrent_extractions: Option<i64>,
-    pub result_format: String,
+    pub result_format: ResultFormat,
     pub security_limits: Option<String>,
-    pub output_format: String,
+    pub output_format: OutputFormat,
     pub layout: Option<LayoutDetectionConfig>,
     pub include_document_structure: bool,
     pub acceleration: Option<AccelerationConfig>,
@@ -84,13 +84,26 @@ pub struct FileExtractionConfig {
     pub keywords: Option<KeywordConfig>,
     pub postprocessor: Option<PostProcessorConfig>,
     pub html_options: Option<String>,
-    pub result_format: Option<String>,
-    pub output_format: Option<String>,
+    pub result_format: Option<ResultFormat>,
+    pub output_format: Option<OutputFormat>,
     pub include_document_structure: Option<bool>,
     pub layout: Option<LayoutDetectionConfig>,
     pub timeout_secs: Option<i64>,
     pub tree_sitter: Option<TreeSitterConfig>,
     pub structured_extraction: Option<StructuredExtractionConfig>,
+}
+
+#[frb(mirror(BatchBytesItem))]
+pub struct BatchBytesItem {
+    pub content: Vec<u8>,
+    pub mime_type: String,
+    pub config: Option<FileExtractionConfig>,
+}
+
+#[frb(mirror(BatchFileItem))]
+pub struct BatchFileItem {
+    pub path: String,
+    pub config: Option<FileExtractionConfig>,
 }
 
 #[frb(mirror(ImageExtractionConfig))]
@@ -199,7 +212,7 @@ pub struct OcrConfig {
     pub backend: String,
     pub language: String,
     pub tesseract_config: Option<TesseractConfig>,
-    pub output_format: Option<String>,
+    pub output_format: Option<OutputFormat>,
     pub paddle_ocr_config: Option<String>,
     pub element_config: Option<OcrElementConfig>,
     pub quality_thresholds: Option<OcrQualityThresholds>,
@@ -580,6 +593,13 @@ pub struct DocumentNode {
     pub bbox: Option<String>,
     pub annotations: Vec<TextAnnotation>,
     pub attributes: Option<std::collections::HashMap<String, String>>,
+}
+
+#[frb(mirror(TableGrid))]
+pub struct TableGrid {
+    pub rows: i64,
+    pub cols: i64,
+    pub cells: Vec<GridCell>,
 }
 
 #[frb(mirror(GridCell))]
@@ -1437,6 +1457,18 @@ pub struct MergedChunk {
     pub byte_end: i64,
 }
 
+#[frb(mirror(EmbeddingPreset))]
+pub struct EmbeddingPreset {
+    pub name: String,
+    pub chunk_size: i64,
+    pub overlap: i64,
+    pub model_repo: String,
+    pub pooling: String,
+    pub model_file: String,
+    pub dimensions: i64,
+    pub description: String,
+}
+
 #[frb(mirror(YakeParams))]
 pub struct YakeParams {
     pub window_size: i64,
@@ -1599,6 +1631,17 @@ pub enum ExecutionProviderType {
     CoreMl,
     Cuda,
     TensorRt,
+}
+
+#[frb(mirror(OutputFormat))]
+pub enum OutputFormat {
+    Plain,
+    Markdown,
+    Djot,
+    Html,
+    Json,
+    Structured,
+    Custom { field0: String },
 }
 
 #[frb(mirror(HtmlTheme))]
@@ -1777,7 +1820,7 @@ pub enum NodeContent {
         text: String,
     },
     Table {
-        grid: String,
+        grid: TableGrid,
     },
     Image {
         description: String,
@@ -1880,6 +1923,12 @@ pub enum ImageKind {
     TileFragment,
     Mask,
     Unknown,
+}
+
+#[frb(mirror(ResultFormat))]
+pub enum ResultFormat {
+    Unified,
+    ElementBased,
 }
 
 #[frb(mirror(ElementType))]
@@ -2152,23 +2201,32 @@ pub fn extract_bytes_sync(
         .map_err(|e| e.to_string())
 }
 
-/// Synchronous wrapper for `batch_extract_file`.
+/// Synchronous wrapper for `batch_extract_files`.
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-pub fn batch_extract_file_sync(
-    items: Vec<String>,
+pub fn batch_extract_files_sync(
+    items: Vec<kreuzberg::BatchFileItem>,
     config: kreuzberg::ExtractionConfig,
 ) -> Result<Vec<kreuzberg::ExtractionResult>, String> {
-    kreuzberg::batch_extract_file_sync(
-        items
-            .into_iter()
-            .map(|p| (std::path::PathBuf::from(p), None))
-            .collect::<Vec<_>>(),
-        &config,
-    )
-    .map(|v| v)
-    .map_err(|e| e.to_string())
+    kreuzberg::batch_extract_files_sync(items, &config)
+        .map(|v| v)
+        .map_err(|e| e.to_string())
+}
+
+/// Synchronous wrapper for `batch_extract_bytes`.
+///
+/// Uses the global Tokio runtime for optimal performance.
+/// With the `tokio-runtime` feature, this blocks the current thread using the global
+/// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
+/// that iterates through items and calls `extract_bytes_sync()`.
+pub fn batch_extract_bytes_sync(
+    items: Vec<kreuzberg::BatchBytesItem>,
+    config: kreuzberg::ExtractionConfig,
+) -> Result<Vec<kreuzberg::ExtractionResult>, String> {
+    kreuzberg::batch_extract_bytes_sync(items, &config)
+        .map(|v| v)
+        .map_err(|e| e.to_string())
 }
 
 /// Extract content from multiple files concurrently.
@@ -2183,7 +2241,7 @@ pub fn batch_extract_file_sync(
 /// Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
 /// taken from the batch-level `config`.
 ///
-///   config to use the batch-level defaults for that file.
+///   per-file configuration overrides.
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
 /// **Returns:**
@@ -2199,20 +2257,46 @@ pub fn batch_extract_file_sync(
 ///
 ///
 /// Per-file configuration overrides:
-pub async fn batch_extract_file(
-    items: Vec<String>,
+pub async fn batch_extract_files(
+    items: Vec<kreuzberg::BatchFileItem>,
     config: kreuzberg::ExtractionConfig,
 ) -> Result<Vec<kreuzberg::ExtractionResult>, String> {
-    kreuzberg::batch_extract_file(
-        items
-            .into_iter()
-            .map(|p| (std::path::PathBuf::from(p), None))
-            .collect::<Vec<_>>(),
-        &config,
-    )
-    .await
-    .map(|v| v)
-    .map_err(|e| e.to_string())
+    kreuzberg::batch_extract_files(items, &config)
+        .await
+        .map(|v| v)
+        .map_err(|e| e.to_string())
+}
+
+/// Extract content from multiple byte arrays concurrently.
+///
+/// This function processes multiple byte arrays in parallel, automatically managing
+/// concurrency to prevent resource exhaustion. The concurrency limit can be
+/// configured via `ExtractionConfig.max_concurrent_extractions` or defaults
+/// to `(num_cpus * 1.5).ceil()`.
+///
+/// Each item can optionally specify a `FileExtractionConfig` that overrides specific
+/// fields from the batch-level `config`. Pass `null` as the config to use
+/// the batch-level defaults for that item.
+///
+///   MIME type, and optional per-item configuration overrides.
+/// * `config` - Batch-level extraction configuration
+///
+/// **Returns:**
+///
+/// A vector of `ExtractionResult` in the same order as the input items.
+///
+/// Simple usage with no per-item overrides:
+///
+///
+/// Per-item configuration overrides:
+pub async fn batch_extract_bytes(
+    items: Vec<kreuzberg::BatchBytesItem>,
+    config: kreuzberg::ExtractionConfig,
+) -> Result<Vec<kreuzberg::ExtractionResult>, String> {
+    kreuzberg::batch_extract_bytes(items, &config)
+        .await
+        .map(|v| v)
+        .map_err(|e| e.to_string())
 }
 
 /// Detect MIME type from raw file bytes.
@@ -2250,10 +2334,8 @@ pub fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String>
 }
 
 /// List names of all registered document extractors.
-///
-/// Re-exported at the crate root as `list_document_extractors`.
-pub fn list_extractors() -> Result<Vec<String>, String> {
-    kreuzberg::plugins::list_extractors()
+pub fn list_document_extractors() -> Result<Vec<String>, String> {
+    kreuzberg::list_document_extractors()
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
 }
@@ -2362,12 +2444,15 @@ pub fn embed_texts(texts: Vec<String>, config: Option<kreuzberg::EmbeddingConfig
 
 /// Get an embedding preset by name.
 ///
-/// Returns `null` if no preset with the given name exists.
-pub fn get_embedding_preset(name: String) -> Option<String> {
-    kreuzberg::get_embedding_preset(&name).map(|v| format!("{:?}", v))
+/// Returns `null` if no preset with the given name exists. Returns an owned
+/// clone so the value is safe to pass across FFI boundaries.
+pub fn get_embedding_preset(name: String) -> Option<kreuzberg::EmbeddingPreset> {
+    kreuzberg::get_embedding_preset(&name)
 }
 
 /// List the names of all available embedding presets.
+///
+/// Returns owned `String`s so the values are safe to pass across FFI boundaries.
 pub fn list_embedding_presets() -> Vec<String> {
     kreuzberg::list_embedding_presets()
         .into_iter()
@@ -2546,6 +2631,7 @@ pub struct PostProcessorDartImpl {
     >,
     estimated_duration_ms:
         Box<dyn Fn(kreuzberg::ExtractionResult) -> flutter_rust_bridge::DartFnFuture<i64> + Send + Sync>,
+    priority: Box<dyn Fn() -> flutter_rust_bridge::DartFnFuture<i64> + Send + Sync>,
 }
 
 impl kreuzberg::plugins::Plugin for PostProcessorDartImpl {
@@ -2597,6 +2683,11 @@ impl kreuzberg::plugins::PostProcessor for PostProcessorDartImpl {
             tokio::runtime::Handle::current().block_on(async { (self.estimated_duration_ms)(_result).await });
         __result as u64
     }
+
+    fn priority(&self) -> i32 {
+        let __result = tokio::runtime::Handle::current().block_on(async { (self.priority)().await });
+        __result as i32
+    }
 }
 
 /// Create a `PostProcessorDartImpl` from Dart callback closures.
@@ -2621,6 +2712,7 @@ pub fn create_post_processor_dart_impl(
     estimated_duration_ms: Box<
         dyn Fn(kreuzberg::ExtractionResult) -> flutter_rust_bridge::DartFnFuture<i64> + Send + Sync,
     >,
+    priority: Box<dyn Fn() -> flutter_rust_bridge::DartFnFuture<i64> + Send + Sync>,
 ) -> PostProcessorDartImpl {
     PostProcessorDartImpl {
         plugin_name,
@@ -2629,6 +2721,7 @@ pub fn create_post_processor_dart_impl(
         processing_stage,
         should_process,
         estimated_duration_ms,
+        priority,
     }
 }
 

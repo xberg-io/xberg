@@ -25,8 +25,8 @@ public final class PostProcessorBridge implements AutoCloseable {
     /** Live registry — keeps Arenas and upcall stubs alive past the register call. */
     private static final ConcurrentHashMap<String, PostProcessorBridge> POST_PROCESSOR_BRIDGES = new ConcurrentHashMap<>();
 
-    // C vtable: 9 fields (4 plugin methods + 4 trait methods + free_user_data)
-    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 9L;
+    // C vtable: 10 fields (4 plugin methods + 5 trait methods + free_user_data)
+    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 10L;
 
     private final Arena arena;
     private final MemorySegment vtable;
@@ -104,6 +104,16 @@ public final class PostProcessorBridge implements AutoCloseable {
                             ValueLayout.ADDRESS, ValueLayout.ADDRESS),
                     arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubEstimatedDurationMs);
+            offset += ValueLayout.ADDRESS.byteSize();
+
+            var stubPriority = LINKER.upcallStub(
+                    LOOKUP.bind(this, "handlePriority",
+                            MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class,
+                                    MemorySegment.class)),
+                    FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS),
+                    arena);
+            vtable.set(ValueLayout.ADDRESS, offset, stubPriority);
             offset += ValueLayout.ADDRESS.byteSize();
 
             vtable.set(ValueLayout.ADDRESS, offset, MemorySegment.NULL);
@@ -206,6 +216,19 @@ public final class PostProcessorBridge implements AutoCloseable {
             String _result_json = _result_in.reinterpret(Long.MAX_VALUE).getString(0);
             ExtractionResult _result = JSON.readValue(_result_json, ExtractionResult.class);
             long result = impl.estimated_duration_ms(_result);
+            String json = JSON.writeValueAsString(result);
+            MemorySegment jsonCs = arena.allocateFrom(json);
+            outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
+            return 0;
+        } catch (Throwable e) {
+            writeError(outError, e);
+            return 1;
+        }
+    }
+
+    private int handlePriority(MemorySegment userData, MemorySegment outResult, MemorySegment outError) {
+        try {
+            int result = impl.priority();
             String json = JSON.writeValueAsString(result);
             MemorySegment jsonCs = arena.allocateFrom(json);
             outResult.set(ValueLayout.ADDRESS, 0, jsonCs);

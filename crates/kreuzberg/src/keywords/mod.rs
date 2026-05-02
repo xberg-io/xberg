@@ -157,7 +157,7 @@ pub(crate) fn register_keyword_processor() -> Result<()> {
     let registry = get_post_processor_registry();
     let mut registry = registry.write();
 
-    registry.register(Arc::new(KeywordExtractor), 50)?;
+    registry.register(Arc::new(KeywordExtractor))?;
 
     Ok(())
 }
