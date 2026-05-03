@@ -5,7 +5,8 @@
   "tags": ["smoke", "structured", "json"],
   "input": {
     "path": "json/simple.json",
-    "media_type": "application/json"
+    "mime_type": "application/json",
+    "config": {}
   },
   "assertions": [
     {

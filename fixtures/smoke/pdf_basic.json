@@ -5,7 +5,8 @@
   "tags": ["smoke", "pdf", "basic"],
   "input": {
     "path": "pdf/fake_memo.pdf",
-    "media_type": "application/pdf"
+    "mime_type": "application/pdf",
+    "config": {}
   },
   "assertions": [
     {

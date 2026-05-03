@@ -5,7 +5,8 @@
   "tags": ["smoke", "office", "xlsx", "tables"],
   "input": {
     "path": "xlsx/stanley_cups.xlsx",
-    "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "config": {}
   },
   "assertions": [
     {

@@ -5,7 +5,7 @@
   "call": "render_pdf_page_to_png",
   "input": {
     "pdf_bytes": "pdf/fake_memo.pdf",
-    "page_number": 999
+    "page_index": 999
   },
   "assertions": [
     {

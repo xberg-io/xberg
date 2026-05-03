@@ -1637,7 +1637,7 @@ async = false
 returns_result = true
 args = [
   { name = "pdf_bytes", field = "input.pdf_bytes", type = "bytes" },
-  { name = "page_number", field = "input.page_number", type = "int" },
+  { name = "page_index", field = "input.page_index", type = "int" },
 ]
 
 [crates.e2e.calls.render_pdf_page_to_png.overrides.rust]

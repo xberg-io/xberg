@@ -5,7 +5,8 @@
   "tags": ["smoke", "text", "plaintext"],
   "input": {
     "path": "text/report.txt",
-    "media_type": "text/plain"
+    "mime_type": "text/plain",
+    "config": {}
   },
   "assertions": [
     {

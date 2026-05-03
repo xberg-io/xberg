@@ -13,7 +13,6 @@
     },
     {
       "type": "contains",
-      "field": "result",
       "value": "pdf"
     }
   ]

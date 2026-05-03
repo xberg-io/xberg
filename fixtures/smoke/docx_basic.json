@@ -5,7 +5,8 @@
   "tags": ["smoke", "office", "docx"],
   "input": {
     "path": "docx/fake.docx",
-    "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "config": {}
   },
   "assertions": [
     {

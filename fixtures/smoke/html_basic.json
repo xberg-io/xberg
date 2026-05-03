@@ -5,7 +5,8 @@
   "tags": ["smoke", "html"],
   "input": {
     "path": "html/simple_table.html",
-    "media_type": "text/html"
+    "mime_type": "text/html",
+    "config": {}
   },
   "assertions": [
     {

@@ -8,6 +8,22 @@ Target: Drive Go e2e test suite to 100% green
 
 Note: original go-agent triage misattributed these to "missing fixtures". Verified against `fixtures/batch/batch_bytes_invalid_mime.json` — fixtures are present and correctly structured. Real cause: alef-backend-go's e2e codegen.
 
+### Python Binding Bugs (Cycle 5)
+
+7. **alef-backend-python: missing `embed_texts_async` export**
+   `kreuzberg.embed_texts_async` is configured in `alef.toml` (line 1581-1591) with `skip_languages = ["wasm"]`, meaning it should be generated for Python. But it's missing from `packages/python/kreuzberg/api.py`. Root cause: unclear — may be conditional feature flag not enabled in PyO3 binding generation.
+
+8. **alef-backend-python: missing `unregister_*` function exports**
+   `unregister_post_processor` and `unregister_validator` are configured in `alef.toml` e2e calls (lines 1721-1733) but excluded from `gen_function` (lines 855-857) because they're supposed to be generated via `gen_trait_bridge`. However, the trait_bridge variants are not appearing in `packages/python/kreuzberg/api.py`. Root cause: trait_bridge codegen may not be emitting Python wrappers, or wrappers are not being exported to **init**.py.
+
+9. **alef-backend-python: optional config parameter not handled correctly**
+   Functions `extract_file`, `extract_bytes`, and batch variants have `config: ExtractionConfig | None = None` signatures in the Python API but the Rust binding expects config to always be provided (`.expect("'config' is required")`). When tests call these functions without config, it panics. Solution: Python wrapper should use `ExtractionConfig()` (default) when config is None, OR Rust wrapper should handle None and create default config. Currently, neither does this conversion properly.
+
+10. **alef-backend-python: config type conversion doesn't handle None enum fields**
+   The generated `_to_rust_extraction_config()` function tries to wrap enum fields like `output_format` with `_rust.OutputFormat(None)` when the field is absent. This raises TypeError. Fix: check `if value is not None` before wrapping in enum constructors.
+
+### Go Binding Bugs (Cycle 4)
+
 1. **alef-backend-go e2e: wrong Unmarshal target for batch items**
    Fixture has `input.items = [{ data, mime_type }]`. Rust e2e correctly emits `Vec<BatchBytesItem>`. Go e2e at `e2e/go/batch_test.go:20` emits `var items []string`. Backend should derive the parameter type from the Go function signature (`BatchBytesItem`).
 

@@ -9,7 +9,7 @@
   },
   "input": {
     "pdf_path": "nonexistent/file.pdf",
-    "page_number": 0
+    "page_index": 0
   },
   "assertions": [
     {
