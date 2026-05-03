@@ -5,7 +5,7 @@
   "tags": ["batch", "sync", "multiple_files"],
   "call": "batch_extract_files_sync",
   "input": {
-    "paths": [{"path": "pdf/fake_memo.pdf"}, {"path": "text/fake_text.txt"}]
+    "paths": [{ "path": "pdf/fake_memo.pdf" }, { "path": "text/fake_text.txt" }]
   },
   "assertions": [
     {

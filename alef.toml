@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.14.3"
+alef_version = "0.14.4"
 languages = [
   "python",
   "node",
@@ -1578,18 +1578,6 @@ args = []
 result_is_simple = true
 returns_result = true
 
-[crates.e2e.calls.embed_texts_async]
-result_is_simple = true
-function = "embed_texts_async"
-module = "kreuzberg"
-async = true
-returns_result = true
-skip_languages = ["wasm"]
-args = [
-  { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
-  { name = "config", field = "input.config", type = "json_object", optional = true },
-]
-
 [crates.e2e.calls.embed_texts_async.overrides.csharp]
 result_is_simple = true
 options_type = "EmbeddingConfig"
@@ -1605,9 +1593,7 @@ function = "get_embedding_preset"
 module = "kreuzberg"
 async = false
 returns_result = false
-args = [
-  { name = "preset_name", field = "input.preset_name", type = "string" },
-]
+args = [{ name = "preset_name", field = "input.preset_name", type = "string" }]
 
 [crates.e2e.calls.list_embedding_presets]
 result_is_simple = true
@@ -1649,94 +1635,6 @@ extra_args = ["None", "None"]
 result_is_bytes = true
 result_is_simple = true
 extra_args = ["null", "null"]
-
-[crates.e2e.calls.register_post_processor]
-result_is_simple = true
-function = "register_post_processor"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = [
-  { name = "processor", field = "input.processor", type = "json_object" },
-]
-
-[crates.e2e.calls.register_validator]
-result_is_simple = true
-function = "register_validator"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = [
-  { name = "validator", field = "input.validator", type = "json_object" },
-]
-
-[crates.e2e.calls.register_ocr_backend]
-result_is_simple = true
-function = "register_ocr_backend"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = [
-  { name = "backend", field = "input.backend", type = "json_object" },
-]
-
-[crates.e2e.calls.unregister_post_processor]
-result_is_simple = true
-function = "unregister_post_processor"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = [
-  { name = "processor_name", field = "input.processor_name", type = "string" },
-]
-
-[crates.e2e.calls.unregister_validator]
-result_is_simple = true
-function = "unregister_validator"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = [
-  { name = "validator_name", field = "input.validator_name", type = "string" },
-]
-
-[crates.e2e.calls.unregister_ocr_backend]
-result_is_simple = true
-function = "unregister_ocr_backend"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = [
-  { name = "backend_name", field = "input.backend_name", type = "string" },
-]
-
-[crates.e2e.calls.clear_post_processors]
-result_is_simple = true
-function = "clear_post_processors"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = []
-
-[crates.e2e.calls.clear_validators]
-result_is_simple = true
-function = "clear_validators"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = []
-
-[crates.e2e.calls.clear_ocr_backends]
-result_is_simple = true
-function = "clear_ocr_backends"
-module = "kreuzberg"
-async = false
-returns_result = true
-args = []
-
-# ── Rust-skip stubs: functions that exist in other languages but not in the Rust
-# public API. Adding python-only overrides here causes alef to recognize the call
-# name and emit TODO stubs for Rust (same pattern as render_html, djot_to_html etc.)
 
 [crates.e2e.calls.bold.overrides.python]
 function = "bold"

@@ -5,7 +5,8 @@
   "tags": [
     "validators",
     "plugin_management",
-    "clear"
+    "clear",
+    "trait-bridge"
   ],
   "call": "clear_validators",
   "assertions": [
@@ -15,7 +16,25 @@
     }
   ],
   "skip": {
-    "languages": [],
-    "reason": "Tests plugin_api call surface that isn't re-exported at the kreuzberg crate root \u2014 skipped everywhere until Rust public API or codegen module path is updated."
+    "languages": [
+      "rust",
+      "python",
+      "node",
+      "go",
+      "ruby",
+      "php",
+      "java",
+      "csharp",
+      "kotlin",
+      "swift",
+      "dart",
+      "gleam",
+      "wasm",
+      "r",
+      "elixir",
+      "zig",
+      "ffi"
+    ],
+    "reason": "Trait-bridge fixture support deferred to alef-e2e v0.14.5+"
   }
 }

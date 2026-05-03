@@ -4,6 +4,6 @@
   "description": "batch_extract_file_sync nonexistent",
   "tags": ["batch", "error"],
   "call": "batch_extract_files_sync",
-  "input": { "paths": [{"path": "/nonexistent/a.pdf"}, {"path": "/nonexistent/b.txt"}] },
+  "input": { "paths": [{ "path": "/nonexistent/a.pdf" }, { "path": "/nonexistent/b.txt" }] },
   "assertions": [{ "type": "not_error" }]
 }

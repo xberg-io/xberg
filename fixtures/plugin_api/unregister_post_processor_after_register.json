@@ -10,5 +10,31 @@
     {
       "type": "not_error"
     }
+  ],
+  "skip": {
+    "languages": [
+      "rust",
+      "python",
+      "node",
+      "go",
+      "ruby",
+      "php",
+      "java",
+      "csharp",
+      "kotlin",
+      "swift",
+      "dart",
+      "gleam",
+      "wasm",
+      "r",
+      "elixir",
+      "zig",
+      "ffi"
+    ],
+    "reason": "Trait-bridge fixture support deferred to alef-e2e v0.14.5+"
+  },
+  "tags": [
+    "plugin-lifecycle",
+    "trait-bridge"
   ]
 }

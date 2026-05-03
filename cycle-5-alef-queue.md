@@ -15,7 +15,7 @@ Target: Drive Python e2e test suite to 100% green; investigate Go e2e failures
   - No kreuzberg core bugs found
 - Uncollected: 2 files (import errors)
   - test_embeddings.py: missing embed_texts_async export (P7)
-  - test_plugin_api.py: missing unregister_* exports (P8)
+  - test*plugin_api.py: missing unregister*\* exports (P8)
 
 **Go E2E Tests: 5/68 green (7%), 3 red (4%), 60 skipped (88%)**
 
@@ -63,7 +63,7 @@ Note: original go-agent triage misattributed these to "missing fixtures". Verifi
    Functions `extract_file`, `extract_bytes`, and batch variants have `config: ExtractionConfig | None = None` signatures in the Python API but the Rust binding expects config to always be provided (`.expect("'config' is required")`). When tests call these functions without config, it panics. Solution: Python wrapper should use `ExtractionConfig()` (default) when config is None, OR Rust wrapper should handle None and create default config. Currently, neither does this conversion properly.
 
 10. **alef-backend-python: config type conversion doesn't handle None enum fields**
-   The generated `_to_rust_extraction_config()` function tries to wrap enum fields like `output_format` with `_rust.OutputFormat(None)` when the field is absent. This raises TypeError. Fix: check `if value is not None` before wrapping in enum constructors.
+    The generated `_to_rust_extraction_config()` function tries to wrap enum fields like `output_format` with `_rust.OutputFormat(None)` when the field is absent. This raises TypeError. Fix: check `if value is not None` before wrapping in enum constructors.
 
 ### Go Binding Bugs (Cycle 4)
 
@@ -98,7 +98,7 @@ Note: original go-agent triage misattributed these to "missing fixtures". Verifi
 
 ## Bucket B — Fixture/Test Bugs
 
-Issues in test fixtures (tools/benchmark-harness/fixtures/*.json) or alef.toml call overrides.
+Issues in test fixtures (tools/benchmark-harness/fixtures/\*.json) or alef.toml call overrides.
 
 (To be updated as failures are discovered and triaged)
 
