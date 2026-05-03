@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = ["setuptools>=68", "wheel"]
+requires = [ "setuptools>=68", "wheel" ]
 
 [project]
 name = "kreuzberg-e2e-tests"
@@ -15,21 +15,21 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
-dependencies = ["pytest>=7.4", "pytest-asyncio>=0.23", "pytest-timeout>=2.1", "kreuzberg"]
+dependencies = [ "pytest>=7.4", "pytest-asyncio>=0.23", "pytest-timeout>=2.1", "kreuzberg" ]
 
 [tool.setuptools]
-packages = []
+packages = [  ]
 
 [tool.uv]
 sources.kreuzberg = { path = "../../packages/python" }
 
 [tool.ruff]
-lint.ignore = ["PLR2004"]
-lint.per-file-ignores."tests/**" = ["B017", "PT011", "S101", "S108"]
+lint.ignore = [ "PLR2004" ]
+lint.per-file-ignores."tests/**" = [ "B017", "PT011", "S101", "S108" ]
 
 [tool.pytest]
 ini_options.asyncio_mode = "auto"
-ini_options.testpaths = ["tests"]
+ini_options.testpaths = [ "tests" ]
 ini_options.python_files = "test_*.py"
 ini_options.python_functions = "test_*"
 ini_options.addopts = "-v --strict-markers --tb=short"

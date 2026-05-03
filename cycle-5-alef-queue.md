@@ -4,17 +4,38 @@ Date: 2026-05-03
 Regenerated with: alef v0.14.3
 Target: Drive Go e2e test suite to 100% green
 
-## Bucket A — Alef Codegen Bugs
+## Bucket A — Alef Codegen Bugs (alef-side fixes)
 
-Issues requiring alef upstream fixes or regen.
+Note: original go-agent triage misattributed these to "missing fixtures". Verified against `fixtures/batch/batch_bytes_invalid_mime.json` — fixtures are present and correctly structured. Real cause: alef-backend-go's e2e codegen.
 
-1. **batch_test.go & cache_operations_test.go: missing fixtures and malformed stubs**
-   - Alef generates test stubs for categories (batch, cache_operations) that lack fixture files
-   - batch_test.go: line 20 unmarshal to `[]string` instead of `[]BatchBytesItem`; line 23 passes wrong type to function
-   - batch_test.go: lines 31, 39, 47, 55, 63 pass `nil` to `ExtractFile()` expecting string path
-   - cache_operations_test.go: line 20, 29, 37, 45 pass `nil` path to `ExtractFile()`
-   - cache_operations_test.go: line 24 accesses `result.Result` which doesn't exist on `*ExtractionResult`
-   - Root cause: alef e2e generator doesn't skip fixture categories when no fixture files exist; instead generates broken stub tests
+1. **alef-backend-go e2e: wrong Unmarshal target for batch items**
+   Fixture has `input.items = [{ data, mime_type }]`. Rust e2e correctly emits `Vec<BatchBytesItem>`. Go e2e at `e2e/go/batch_test.go:20` emits `var items []string`. Backend should derive the parameter type from the Go function signature (`BatchBytesItem`).
+
+2. **alef-backend-go e2e: dispatching to wrong fn**
+   `Test_BatchFileAsyncBasic` calls `kreuzberg.ExtractFile(nil, nil, ExtractionConfig{})` instead of `BatchExtractFiles(items, ExtractionConfig{})`. Codegen drops the `batch_` prefix and pluralization-mismatches; should follow fixture's `call` field exactly.
+
+3. **alef-backend-go e2e: nil-stuffing where `path string` is required**
+   `cache_operations_test.go:20-45` calls `ExtractFile(nil, ...)`. Go has no implicit nil for `string`. Codegen must use the fixture's `input.path` literal or skip if absent.
+
+4. **alef-backend-go e2e: stale type reference `result.Result`**
+   `cache_operations_test.go:24` accesses `result.Result` which doesn't exist on `*ExtractionResult` (struct exposes `Content`, `Mime`, etc.).
+
+5. **alef-backend-go: missing go.mod emission for `packages/go/v4`**
+   `alef all --clean` does not emit `packages/go/v4/go.mod` even though it emits `binding.go` and `trait_bridges.go` there. Currently hand-stubbed.
+
+6. **alef-backend-python: malformed imports when fixture calls unknown functions**
+   - 7 Python test files have syntax errors due to invalid import statements:
+     - `test_serialization.py:8`: `from kreuzberg import , ExtractionConfig` (leading comma)
+     - `test_detection.py:10`: `from kreuzberg import extract_file, , detect_mime_type_from_bytes, ...` (double comma)
+     - `test_text_utils.py:8`: `from kreuzberg import extract_file,` (trailing comma)
+     - `test_token_reduction.py:8`: `from kreuzberg import , extract_file_sync, ExtractionConfig` (leading comma)
+     - `test_rendering.py:8`: `from kreuzberg import extract_file,` (trailing comma)
+     - `test_validate.py:8`: `from kreuzberg import extract_file, extract_file_sync, , ExtractionConfig` (double comma)
+     - `test_chunking.py:8`: `from kreuzberg import , ExtractionConfig` (leading comma)
+   - Root cause: alef codegen generates import statements for fixture function calls without checking if they exist in public API
+   - 192 fixtures reference 74 non-existent functions removed during v4.10 API stabilization
+   - Codegen should either skip fixtures with unknown calls or validate call existence before generating imports
+   - Missing functions: `batch_extract_file`, `batch_extract_file_sync`, `chunk_semantic`, `chunk_text`, `chunk_texts_batch`, `embed_text`, `serialize_to_json`, `serialize_to_toon`, `validate_cache_key`, `validate_mime_type`, `render_*`, etc.
 
 ## Bucket B — Fixture/Test Bugs
 

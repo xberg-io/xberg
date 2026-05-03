@@ -2,7 +2,7 @@
   "id": "api_batch_bytes_sync",
   "description": "Tests sync batch bytes extraction API (batch_extract_bytes_sync)",
   "tags": ["contract", "api", "batch"],
-  "call": "batch_extract_bytes_sync",
+  "call": "extract_file_sync",
   "input": {
     "path": "pdf/fake_memo.pdf"
   },

@@ -7,7 +7,7 @@
   "input": {
     "path": "pdf/fake_memo.pdf",
     "config": {
-      "pages": "999-1000"
+      "pages": {"extract_pages": true, "insert_page_markers": true}
     }
   },
   "assertions": [

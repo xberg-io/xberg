@@ -3,7 +3,7 @@
   "category": "batch",
   "description": "batch_extract_file_sync mixed",
   "tags": ["batch"],
-  "call": "batch_extract_file_sync",
-  "input": { "paths": ["test_documents/text/plain.txt", "/nonexistent/missing.pdf"] },
+  "call": "batch_extract_files_sync",
+  "input": { "paths": [{"path": "text/plain.txt"}, {"path": "/nonexistent/missing.pdf"}] },
   "assertions": [{ "type": "not_error" }]
 }

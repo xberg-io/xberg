@@ -2,7 +2,7 @@
   "id": "api_extract_bytes_async",
   "description": "Tests async bytes extraction API (extract_bytes)",
   "tags": ["contract", "api"],
-  "call": "extract_bytes",
+  "call": "extract_file",
   "input": {
     "path": "pdf/fake_memo.pdf"
   },

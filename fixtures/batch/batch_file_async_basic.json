@@ -3,9 +3,9 @@
   "category": "batch",
   "description": "Extract text from multiple files asynchronously",
   "tags": ["batch", "async", "concurrent", "multiple_files"],
-  "call": "batch_extract_file",
+  "call": "batch_extract_files",
   "input": {
-    "paths": ["pdf/fake_memo.pdf", "text/fake_text.txt"]
+    "paths": [{"path": "pdf/fake_memo.pdf"}, {"path": "text/fake_text.txt"}]
   },
   "assertions": [
     {

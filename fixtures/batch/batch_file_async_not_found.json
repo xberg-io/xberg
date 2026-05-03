@@ -3,7 +3,7 @@
   "category": "batch",
   "description": "batch_extract_file async nonexistent",
   "tags": ["batch", "async"],
-  "call": "batch_extract_file",
-  "input": { "paths": ["/nonexistent/a.pdf"] },
+  "call": "batch_extract_files",
+  "input": { "paths": [{"path": "/nonexistent/a.pdf"}] },
   "assertions": [{ "type": "not_error" }]
 }

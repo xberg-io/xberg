@@ -4,6 +4,6 @@
   "description": "batch_extract_bytes_sync invalid MIME",
   "tags": ["batch", "error"],
   "call": "batch_extract_bytes_sync",
-  "input": { "items": [{ "data": "SGVsbG8=", "mime_type": "application/x-nonexistent" }] },
+  "input": { "items": [{ "content": [72, 101, 108, 108, 111], "mime_type": "application/x-nonexistent" }] },
   "assertions": [{ "type": "not_error" }]
 }

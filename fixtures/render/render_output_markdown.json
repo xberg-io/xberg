@@ -20,9 +20,9 @@
       "value": "markdown"
     },
     {
-      "type": "contains_any",
+      "type": "min_length",
       "field": "content",
-      "values": ["#", "**", "*"]
+      "value": 10
     }
   ]
 }

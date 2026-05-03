@@ -5,7 +5,7 @@
   "tags": ["format_specific", "docx", "text_extraction"],
   "call": "extract_bytes_sync",
   "input": {
-    "path": "docx/fake.docx",
+    "data": "docx/fake.docx",
     "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   },
   "assertions": [

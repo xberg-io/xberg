@@ -4,7 +4,7 @@
   "tags": ["contract", "output_format", "bytes"],
   "call": "extract_bytes_sync",
   "input": {
-    "path": "pdf/fake_memo.pdf",
+    "data": "pdf/fake_memo.pdf",
     "config": {
       "output_format": "markdown"
     }

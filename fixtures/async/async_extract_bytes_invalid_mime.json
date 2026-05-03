@@ -4,6 +4,6 @@
   "description": "extract_bytes unsupported MIME async",
   "tags": ["async", "error"],
   "call": "extract_bytes",
-  "input": { "data": "SGVsbG8=", "mime_type": "application/x-nonexistent", "config": {} },
+  "input": { "data": "text/plain.txt", "mime_type": "application/x-nonexistent", "config": {} },
   "assertions": [{ "type": "error" }]
 }

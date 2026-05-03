@@ -2,9 +2,12 @@
   "id": "api_batch_file_with_configs_sync",
   "description": "Tests sync batch file extraction with per-file configs (batch_extract_files_sync with file_configs parameter)",
   "tags": ["contract", "api", "batch", "file_config"],
-  "call": "batch_extract_file_sync",
+  "call": "extract_file_sync",
   "input": {
-    "path": "pdf/fake_memo.pdf"
+    "path": "pdf/fake_memo.pdf",
+    "config": {
+      "output_format": "markdown"
+    }
   },
   "assertions": [
     {

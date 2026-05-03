@@ -5,7 +5,7 @@
   "tags": ["format_specific", "pdf", "text_extraction"],
   "call": "extract_bytes_sync",
   "input": {
-    "path": "pdf/fake_memo.pdf",
+    "data": "pdf/fake_memo.pdf",
     "mime_type": "application/pdf"
   },
   "assertions": [

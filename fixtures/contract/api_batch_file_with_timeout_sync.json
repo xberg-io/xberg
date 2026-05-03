@@ -2,7 +2,7 @@
   "id": "api_batch_file_with_timeout_sync",
   "description": "Tests sync batch file extraction with per-file timeout config override",
   "tags": ["contract", "api", "batch", "file_config", "timeout"],
-  "call": "batch_extract_file_sync",
+  "call": "extract_file_sync",
   "input": {
     "path": "pdf/fake_memo.pdf",
     "config": {

@@ -5,7 +5,7 @@
   "tags": ["async", "api", "extract_bytes"],
   "call": "extract_bytes",
   "input": {
-    "path": "pdf/fake_memo.pdf",
+    "data": "pdf/fake_memo.pdf",
     "mime_type": "application/pdf"
   },
   "assertions": [

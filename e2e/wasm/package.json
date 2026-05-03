@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "kreuzberg": "file:../../crates/kreuzberg-wasm/pkg",
+    "rollup": "^4.53.3",
     "vite-plugin-top-level-await": "^1.4.0",
     "vite-plugin-wasm": "^3.4.0",
     "vitest": "^4.1.5"

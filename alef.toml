@@ -1637,6 +1637,109 @@ args = []
 result_is_simple = true
 returns_result = true
 
+# ── Rust-skip stubs: functions that exist in other languages but not in the Rust
+# public API. Adding python-only overrides here causes alef to recognize the call
+# name and emit TODO stubs for Rust (same pattern as render_html, djot_to_html etc.)
+
+[crates.e2e.calls.bold.overrides.python]
+function = "bold"
+
+[crates.e2e.calls.italic.overrides.python]
+function = "italic"
+
+[crates.e2e.calls.link.overrides.python]
+function = "link"
+
+[crates.e2e.calls.code_markup.overrides.python]
+function = "code_markup"
+
+[crates.e2e.calls.strikethrough.overrides.python]
+function = "strikethrough"
+
+[crates.e2e.calls.underline.overrides.python]
+function = "underline"
+
+[crates.e2e.calls.classify_uri.overrides.python]
+function = "classify_uri"
+
+[crates.e2e.calls.clean_extracted_text.overrides.python]
+function = "clean_extracted_text"
+
+[crates.e2e.calls.escape_html_entities.overrides.python]
+function = "escape_html_entities"
+
+[crates.e2e.calls.fix_mojibake.overrides.python]
+function = "fix_mojibake"
+
+[crates.e2e.calls.is_valid_utf8.overrides.python]
+function = "is_valid_utf8"
+
+[crates.e2e.calls.convert_html_to_markdown.overrides.python]
+function = "convert_html_to_markdown"
+
+[crates.e2e.calls.generate_cache_key.overrides.python]
+function = "generate_cache_key"
+
+[crates.e2e.calls.validate_cache_key.overrides.python]
+function = "validate_cache_key"
+
+[crates.e2e.calls.detect_image_format.overrides.python]
+function = "detect_image_format"
+
+[crates.e2e.calls.is_valid_format_field.overrides.python]
+function = "is_valid_format_field"
+
+[crates.e2e.calls.normalize_vec.overrides.python]
+function = "normalize_vec"
+
+[crates.e2e.calls.list_supported_formats.overrides.python]
+function = "list_supported_formats"
+
+[crates.e2e.calls.validate_confidence_fn.overrides.python]
+function = "validate_confidence_fn"
+
+[crates.e2e.calls.validate_port.overrides.python]
+function = "validate_port"
+
+[crates.e2e.calls.validate_output_format_fn.overrides.python]
+function = "validate_output_format_fn"
+
+[crates.e2e.calls.validate_mime_type.overrides.python]
+function = "validate_mime_type"
+
+[crates.e2e.calls.validate_tesseract_oem.overrides.python]
+function = "validate_tesseract_oem"
+
+[crates.e2e.calls.validate_tesseract_psm.overrides.python]
+function = "validate_tesseract_psm"
+
+[crates.e2e.calls.validate_token_reduction_level.overrides.python]
+function = "validate_token_reduction_level"
+
+[crates.e2e.calls.validate_language_code.overrides.python]
+function = "validate_language_code"
+
+[crates.e2e.calls.validate_ocr_backend.overrides.python]
+function = "validate_ocr_backend"
+
+[crates.e2e.calls.validate_binarization_method.overrides.python]
+function = "validate_binarization_method"
+
+[crates.e2e.calls.validate_host.overrides.python]
+function = "validate_host"
+
+[crates.e2e.calls.extract_doc_text.overrides.python]
+function = "extract_doc_text"
+
+[crates.e2e.calls.extract_email_content.overrides.python]
+function = "extract_email_content"
+
+[crates.e2e.calls.extract_pptx_from_bytes.overrides.python]
+function = "extract_pptx_from_bytes"
+
+[crates.e2e.calls.extract_text_from_pdf.overrides.python]
+function = "extract_text_from_pdf"
+
 [crates.e2e.packages.rust]
 path = "../../crates/kreuzberg"
 
