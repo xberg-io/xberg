@@ -42,6 +42,7 @@ pub(crate) const SOURCE_CODE_MIME_TYPE: &str = "text/x-source-code";
 
 pub(crate) const EXCEL_MIME_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+pub(crate) const HWPX_MIME_TYPE: &str = "application/haansofthwpx";
 pub(crate) const IWORK_PAGES_MIME_TYPE: &str = "application/x-iwork-pages-sffpages";
 pub(crate) const IWORK_NUMBERS_MIME_TYPE: &str = "application/x-iwork-numbers-sffnumbers";
 pub(crate) const IWORK_KEYNOTE_MIME_TYPE: &str = "application/x-iwork-keynote-sffkey";
@@ -783,6 +784,12 @@ fn detect_office_format_from_zip(content: &[u8]) -> Option<&'static str> {
     const PAGES_MARKER: &[u8] = b"Index/Document.iwa";
     const NUMBERS_MARKER: &[u8] = b"Index/CalculationEngine.iwa";
     const KEYNOTE_MARKER: &[u8] = b"Index/Presentation.iwa";
+
+    // HWPX: ZIP of OWPML XML, contains Contents/content.hpf manifest
+    const HWPX_MARKER: &[u8] = b"Contents/content.hpf";
+    if contains_subsequence(content, HWPX_MARKER) {
+        return Some(HWPX_MIME_TYPE);
+    }
 
     // Check iWork first (before generic Office) since iWork ZIPs also contain XML
     if contains_subsequence(content, PAGES_MARKER) {

@@ -587,6 +587,7 @@ types = [
   "GzipExtractor",
   "HtmlExtractor",
   "HwpExtractor",
+  "HwpxExtractor",
   "ImageExtractor",
   "JatsExtractor",
   "JupyterExtractor",
