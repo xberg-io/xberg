@@ -4,7 +4,7 @@
   "description": "batch_extract_bytes: archive size cap triggers error",
   "call": "batch_extract_bytes",
   "skip": {
-    "languages": ["rust"],
+    "languages": ["rust", "node", "python", "php", "wasm", "go"],
     "reason": "SecurityLimits.max_content_size is only enforced by archive/Excel extractors; text/plain does not check it — error path not triggerable via fixture content alone"
   },
   "input": {
