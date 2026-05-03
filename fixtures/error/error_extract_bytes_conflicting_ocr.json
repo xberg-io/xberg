@@ -5,7 +5,7 @@
   "tags": ["error", "validation"],
   "call": "extract_bytes_sync",
   "input": {
-    "data": "SGVsbG8=",
+    "data": "text/fake_text.txt",
     "mime_type": "text/plain",
     "config": { "force_ocr": true, "disable_ocr": true }
   },
