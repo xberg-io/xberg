@@ -1869,7 +1869,7 @@ path = "../../packages/go/v4"
 
 [crates.e2e.packages.csharp]
 name = "Kreuzberg"
-path = "../../packages/csharp/Kreuzberg.csproj"
+path = "../../packages/csharp/Kreuzberg/Kreuzberg.csproj"
 
 [crates.e2e.packages.java]
 module = "dev.kreuzberg"

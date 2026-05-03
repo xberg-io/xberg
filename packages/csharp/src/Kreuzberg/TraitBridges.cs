@@ -62,6 +62,7 @@ public sealed class OcrBackendBridge : IDisposable {
     private readonly GCHandle _implHandle;
     internal IntPtr _vtable;
     private bool _disposed;
+    private readonly object[] _delegates;
 
     // Vtable slot delegates (13)
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -108,6 +109,7 @@ public sealed class OcrBackendBridge : IDisposable {
         _implHandle = GCHandle.Alloc(impl, GCHandleType.Normal);
         _vtable = IntPtr.Zero;
         _disposed = false;
+        _delegates = new object[13];
         BuildVtable();
     }
 
@@ -117,54 +119,67 @@ public sealed class OcrBackendBridge : IDisposable {
 
         // Slot 0: name_fn
         var nameFn = new NameFn(NameFnCallback);
+        _delegates[0] = nameFn;
         Marshal.WriteIntPtr(_vtable, 0, Marshal.GetFunctionPointerForDelegate(nameFn));
 
         // Slot 1: version_fn
         var versionFn = new VersionFn(VersionFnCallback);
+        _delegates[1] = versionFn;
         Marshal.WriteIntPtr(_vtable, 8, Marshal.GetFunctionPointerForDelegate(versionFn));
 
         // Slot 2: initialize_fn
         var initFn = new InitializeFn(InitializeFnCallback);
+        _delegates[2] = initFn;
         Marshal.WriteIntPtr(_vtable, 16, Marshal.GetFunctionPointerForDelegate(initFn));
 
         // Slot 3: shutdown_fn
         var shutdownFn = new ShutdownFn(ShutdownFnCallback);
+        _delegates[3] = shutdownFn;
         Marshal.WriteIntPtr(_vtable, 24, Marshal.GetFunctionPointerForDelegate(shutdownFn));
 
         // Slot 4: process_image_fn
         var processImageFn = new ProcessImageFn(ProcessImageFnCallback);
+        _delegates[4] = processImageFn;
         Marshal.WriteIntPtr(_vtable, 32, Marshal.GetFunctionPointerForDelegate(processImageFn));
 
         // Slot 5: process_image_file_fn
         var processImageFileFn = new ProcessImageFileFn(ProcessImageFileFnCallback);
+        _delegates[5] = processImageFileFn;
         Marshal.WriteIntPtr(_vtable, 40, Marshal.GetFunctionPointerForDelegate(processImageFileFn));
 
         // Slot 6: supports_language_fn
         var supportsLanguageFn = new SupportsLanguageFn(SupportsLanguageFnCallback);
+        _delegates[6] = supportsLanguageFn;
         Marshal.WriteIntPtr(_vtable, 48, Marshal.GetFunctionPointerForDelegate(supportsLanguageFn));
 
         // Slot 7: backend_type_fn
         var backendTypeFn = new BackendTypeFn(BackendTypeFnCallback);
+        _delegates[7] = backendTypeFn;
         Marshal.WriteIntPtr(_vtable, 56, Marshal.GetFunctionPointerForDelegate(backendTypeFn));
 
         // Slot 8: supported_languages_fn
         var supportedLanguagesFn = new SupportedLanguagesFn(SupportedLanguagesFnCallback);
+        _delegates[8] = supportedLanguagesFn;
         Marshal.WriteIntPtr(_vtable, 64, Marshal.GetFunctionPointerForDelegate(supportedLanguagesFn));
 
         // Slot 9: supports_table_detection_fn
         var supportsTableDetectionFn = new SupportsTableDetectionFn(SupportsTableDetectionFnCallback);
+        _delegates[9] = supportsTableDetectionFn;
         Marshal.WriteIntPtr(_vtable, 72, Marshal.GetFunctionPointerForDelegate(supportsTableDetectionFn));
 
         // Slot 10: supports_document_processing_fn
         var supportsDocumentProcessingFn = new SupportsDocumentProcessingFn(SupportsDocumentProcessingFnCallback);
+        _delegates[10] = supportsDocumentProcessingFn;
         Marshal.WriteIntPtr(_vtable, 80, Marshal.GetFunctionPointerForDelegate(supportsDocumentProcessingFn));
 
         // Slot 11: process_document_fn
         var processDocumentFn = new ProcessDocumentFn(ProcessDocumentFnCallback);
+        _delegates[11] = processDocumentFn;
         Marshal.WriteIntPtr(_vtable, 88, Marshal.GetFunctionPointerForDelegate(processDocumentFn));
 
         // Slot 12: free_user_data
         var freeFn = new FreeUserDataFn(FreeUserDataCallback);
+        _delegates[12] = freeFn;
         Marshal.WriteIntPtr(_vtable, 96, Marshal.GetFunctionPointerForDelegate(freeFn));
     }
 
@@ -460,6 +475,7 @@ public sealed class PostProcessorBridge : IDisposable {
     private readonly GCHandle _implHandle;
     internal IntPtr _vtable;
     private bool _disposed;
+    private readonly object[] _delegates;
 
     // Vtable slot delegates (10)
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -497,6 +513,7 @@ public sealed class PostProcessorBridge : IDisposable {
         _implHandle = GCHandle.Alloc(impl, GCHandleType.Normal);
         _vtable = IntPtr.Zero;
         _disposed = false;
+        _delegates = new object[10];
         BuildVtable();
     }
 
@@ -506,42 +523,52 @@ public sealed class PostProcessorBridge : IDisposable {
 
         // Slot 0: name_fn
         var nameFn = new NameFn(NameFnCallback);
+        _delegates[0] = nameFn;
         Marshal.WriteIntPtr(_vtable, 0, Marshal.GetFunctionPointerForDelegate(nameFn));
 
         // Slot 1: version_fn
         var versionFn = new VersionFn(VersionFnCallback);
+        _delegates[1] = versionFn;
         Marshal.WriteIntPtr(_vtable, 8, Marshal.GetFunctionPointerForDelegate(versionFn));
 
         // Slot 2: initialize_fn
         var initFn = new InitializeFn(InitializeFnCallback);
+        _delegates[2] = initFn;
         Marshal.WriteIntPtr(_vtable, 16, Marshal.GetFunctionPointerForDelegate(initFn));
 
         // Slot 3: shutdown_fn
         var shutdownFn = new ShutdownFn(ShutdownFnCallback);
+        _delegates[3] = shutdownFn;
         Marshal.WriteIntPtr(_vtable, 24, Marshal.GetFunctionPointerForDelegate(shutdownFn));
 
         // Slot 4: process_fn
         var processFn = new ProcessFn(ProcessFnCallback);
+        _delegates[4] = processFn;
         Marshal.WriteIntPtr(_vtable, 32, Marshal.GetFunctionPointerForDelegate(processFn));
 
         // Slot 5: processing_stage_fn
         var processingStageFn = new ProcessingStageFn(ProcessingStageFnCallback);
+        _delegates[5] = processingStageFn;
         Marshal.WriteIntPtr(_vtable, 40, Marshal.GetFunctionPointerForDelegate(processingStageFn));
 
         // Slot 6: should_process_fn
         var shouldProcessFn = new ShouldProcessFn(ShouldProcessFnCallback);
+        _delegates[6] = shouldProcessFn;
         Marshal.WriteIntPtr(_vtable, 48, Marshal.GetFunctionPointerForDelegate(shouldProcessFn));
 
         // Slot 7: estimated_duration_ms_fn
         var estimatedDurationMsFn = new EstimatedDurationMsFn(EstimatedDurationMsFnCallback);
+        _delegates[7] = estimatedDurationMsFn;
         Marshal.WriteIntPtr(_vtable, 56, Marshal.GetFunctionPointerForDelegate(estimatedDurationMsFn));
 
         // Slot 8: priority_fn
         var priorityFn = new PriorityFn(PriorityFnCallback);
+        _delegates[8] = priorityFn;
         Marshal.WriteIntPtr(_vtable, 64, Marshal.GetFunctionPointerForDelegate(priorityFn));
 
         // Slot 9: free_user_data
         var freeFn = new FreeUserDataFn(FreeUserDataCallback);
+        _delegates[9] = freeFn;
         Marshal.WriteIntPtr(_vtable, 72, Marshal.GetFunctionPointerForDelegate(freeFn));
     }
 
@@ -784,6 +811,7 @@ public sealed class ValidatorBridge : IDisposable {
     private readonly GCHandle _implHandle;
     internal IntPtr _vtable;
     private bool _disposed;
+    private readonly object[] _delegates;
 
     // Vtable slot delegates (8)
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -815,6 +843,7 @@ public sealed class ValidatorBridge : IDisposable {
         _implHandle = GCHandle.Alloc(impl, GCHandleType.Normal);
         _vtable = IntPtr.Zero;
         _disposed = false;
+        _delegates = new object[8];
         BuildVtable();
     }
 
@@ -824,34 +853,42 @@ public sealed class ValidatorBridge : IDisposable {
 
         // Slot 0: name_fn
         var nameFn = new NameFn(NameFnCallback);
+        _delegates[0] = nameFn;
         Marshal.WriteIntPtr(_vtable, 0, Marshal.GetFunctionPointerForDelegate(nameFn));
 
         // Slot 1: version_fn
         var versionFn = new VersionFn(VersionFnCallback);
+        _delegates[1] = versionFn;
         Marshal.WriteIntPtr(_vtable, 8, Marshal.GetFunctionPointerForDelegate(versionFn));
 
         // Slot 2: initialize_fn
         var initFn = new InitializeFn(InitializeFnCallback);
+        _delegates[2] = initFn;
         Marshal.WriteIntPtr(_vtable, 16, Marshal.GetFunctionPointerForDelegate(initFn));
 
         // Slot 3: shutdown_fn
         var shutdownFn = new ShutdownFn(ShutdownFnCallback);
+        _delegates[3] = shutdownFn;
         Marshal.WriteIntPtr(_vtable, 24, Marshal.GetFunctionPointerForDelegate(shutdownFn));
 
         // Slot 4: validate_fn
         var validateFn = new ValidateFn(ValidateFnCallback);
+        _delegates[4] = validateFn;
         Marshal.WriteIntPtr(_vtable, 32, Marshal.GetFunctionPointerForDelegate(validateFn));
 
         // Slot 5: should_validate_fn
         var shouldValidateFn = new ShouldValidateFn(ShouldValidateFnCallback);
+        _delegates[5] = shouldValidateFn;
         Marshal.WriteIntPtr(_vtable, 40, Marshal.GetFunctionPointerForDelegate(shouldValidateFn));
 
         // Slot 6: priority_fn
         var priorityFn = new PriorityFn(PriorityFnCallback);
+        _delegates[6] = priorityFn;
         Marshal.WriteIntPtr(_vtable, 48, Marshal.GetFunctionPointerForDelegate(priorityFn));
 
         // Slot 7: free_user_data
         var freeFn = new FreeUserDataFn(FreeUserDataCallback);
+        _delegates[7] = freeFn;
         Marshal.WriteIntPtr(_vtable, 56, Marshal.GetFunctionPointerForDelegate(freeFn));
     }
 
@@ -1063,6 +1100,7 @@ public sealed class EmbeddingBackendBridge : IDisposable {
     private readonly GCHandle _implHandle;
     internal IntPtr _vtable;
     private bool _disposed;
+    private readonly object[] _delegates;
 
     // Vtable slot delegates (7)
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -1091,6 +1129,7 @@ public sealed class EmbeddingBackendBridge : IDisposable {
         _implHandle = GCHandle.Alloc(impl, GCHandleType.Normal);
         _vtable = IntPtr.Zero;
         _disposed = false;
+        _delegates = new object[7];
         BuildVtable();
     }
 
@@ -1100,30 +1139,37 @@ public sealed class EmbeddingBackendBridge : IDisposable {
 
         // Slot 0: name_fn
         var nameFn = new NameFn(NameFnCallback);
+        _delegates[0] = nameFn;
         Marshal.WriteIntPtr(_vtable, 0, Marshal.GetFunctionPointerForDelegate(nameFn));
 
         // Slot 1: version_fn
         var versionFn = new VersionFn(VersionFnCallback);
+        _delegates[1] = versionFn;
         Marshal.WriteIntPtr(_vtable, 8, Marshal.GetFunctionPointerForDelegate(versionFn));
 
         // Slot 2: initialize_fn
         var initFn = new InitializeFn(InitializeFnCallback);
+        _delegates[2] = initFn;
         Marshal.WriteIntPtr(_vtable, 16, Marshal.GetFunctionPointerForDelegate(initFn));
 
         // Slot 3: shutdown_fn
         var shutdownFn = new ShutdownFn(ShutdownFnCallback);
+        _delegates[3] = shutdownFn;
         Marshal.WriteIntPtr(_vtable, 24, Marshal.GetFunctionPointerForDelegate(shutdownFn));
 
         // Slot 4: dimensions_fn
         var dimensionsFn = new DimensionsFn(DimensionsFnCallback);
+        _delegates[4] = dimensionsFn;
         Marshal.WriteIntPtr(_vtable, 32, Marshal.GetFunctionPointerForDelegate(dimensionsFn));
 
         // Slot 5: embed_fn
         var embedFn = new EmbedFn(EmbedFnCallback);
+        _delegates[5] = embedFn;
         Marshal.WriteIntPtr(_vtable, 40, Marshal.GetFunctionPointerForDelegate(embedFn));
 
         // Slot 6: free_user_data
         var freeFn = new FreeUserDataFn(FreeUserDataCallback);
+        _delegates[6] = freeFn;
         Marshal.WriteIntPtr(_vtable, 48, Marshal.GetFunctionPointerForDelegate(freeFn));
     }
 
