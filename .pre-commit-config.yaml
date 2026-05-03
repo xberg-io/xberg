@@ -239,7 +239,7 @@ repos:
 
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.13.6
+    rev: v0.14.6
     hooks:
       - id: alef-verify
       - id: alef-sync-versions
