@@ -11626,6 +11626,43 @@ char *kreuzberg_list_validators(void);
 int32_t kreuzberg_clear_validators(void);
 
 /**
+ * Generate embeddings asynchronously for a list of text strings.
+ *
+ * This is the async counterpart to [`embed_texts`]. It offloads the blocking
+ * ONNX inference work to a dedicated blocking thread pool via Tokio's
+ * `spawn_blocking`, keeping the async executor free.
+ *
+ * Returns one embedding vector per input text in the same order.
+ *
+ * # Arguments
+ *
+ * * `texts` - Vec of strings to embed (owned, sent to blocking thread)
+ * * `config` - Embedding configuration specifying model, batch size, and normalization
+ *
+ * # Errors
+ *
+ * - `KreuzbergError::MissingDependency` if ONNX Runtime is not installed
+ * - `KreuzbergError::Embedding` if the preset name is unknown, model download fails,
+ *   or the blocking inference task panics
+ *
+ * # Example
+ *
+ * ```rust,ignore
+ * use kreuzberg::{embed_texts_async, EmbeddingConfig};
+ *
+ * let embeddings = embed_texts_async(
+ *     vec!["Hello!".to_string()],
+ *     &EmbeddingConfig::default(),
+ * ).await?;
+ * ```
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_embed_texts_async(const char *texts,
+                                  const KREUZBERGEmbeddingConfig *config);
+
+/**
  * Detect the MIME type of a file at the given path.
  *
  * Uses the file extension and optionally the file content to determine the MIME type.

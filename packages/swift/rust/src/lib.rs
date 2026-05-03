@@ -2398,6 +2398,8 @@ mod ffi {
         fn list_validators() -> Result<Vec<String>, String>;
         #[swift_bridge(swift_name = "clearValidators")]
         fn clear_validators() -> Result<(), String>;
+        #[swift_bridge(swift_name = "embedTextsAsync")]
+        fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<String, String>;
         #[swift_bridge(swift_name = "renderPdfPageToPng")]
         fn render_pdf_page_to_png(
             pdf_bytes: Vec<u8>,
@@ -10491,6 +10493,19 @@ pub fn list_validators() -> Result<Vec<String>, String> {
 
 pub fn clear_validators() -> Result<(), String> {
     kreuzberg::clear_validators().map_err(|e| e.to_string())
+}
+
+pub fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<String, String> {
+    ::tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("build tokio runtime")
+        .block_on(async {
+            kreuzberg::embed_texts_async(texts, &config.0)
+                .await
+                .map_err(|e| e.to_string())
+                .map(|v| serde_json::to_string(&v).expect("serializable return"))
+        })
 }
 
 pub fn render_pdf_page_to_png(

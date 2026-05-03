@@ -525,6 +525,44 @@ function clearValidators(): void;
 
 ---
 
+#### embedTextsAsync()
+
+Generate embeddings asynchronously for a list of text strings.
+
+This is the async counterpart to `embed_texts`. It offloads the blocking
+ONNX inference work to a dedicated blocking thread pool via Tokio's
+`spawn_blocking`, keeping the async executor free.
+
+Returns one embedding vector per input text in the same order.
+
+**Errors:**
+
+- `KreuzbergError.MissingDependency` if ONNX Runtime is not installed
+- `KreuzbergError.Embedding` if the preset name is unknown, model download fails,
+  or the blocking inference task panics
+
+**Signature:**
+
+```typescript
+function embedTextsAsync(
+  texts: Array<string>,
+  config: EmbeddingConfig,
+): Promise<Array<Array<number>>>;
+```
+
+**Parameters:**
+
+| Name     | Type              | Required | Description                                                             |
+| -------- | ----------------- | -------- | ----------------------------------------------------------------------- |
+| `texts`  | `Array<string>`   | Yes      | Vec of strings to embed (owned, sent to blocking thread)                |
+| `config` | `EmbeddingConfig` | Yes      | Embedding configuration specifying model, batch size, and normalization |
+
+**Returns:** `Array<Array<number>>`
+
+**Errors:** Throws `Error` with a descriptive message.
+
+---
+
 #### renderPdfPageToPng()
 
 Render a single PDF page to a PNG-encoded byte buffer.

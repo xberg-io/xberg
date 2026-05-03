@@ -7209,6 +7209,41 @@ class KreuzbergBridge {
     return rust_bridge.clearValidators();
   }
 
+  /// Generate embeddings asynchronously for a list of text strings.
+  ///
+  /// This is the async counterpart to [`embed_texts`]. It offloads the blocking
+  /// ONNX inference work to a dedicated blocking thread pool via Tokio's
+  /// `spawn_blocking`, keeping the async executor free.
+  ///
+  /// Returns one embedding vector per input text in the same order.
+  ///
+  /// # Arguments
+  ///
+  /// * `texts` - Vec of strings to embed (owned, sent to blocking thread)
+  /// * `config` - Embedding configuration specifying model, batch size, and normalization
+  ///
+  /// # Errors
+  ///
+  /// - `KreuzbergError::MissingDependency` if ONNX Runtime is not installed
+  /// - `KreuzbergError::Embedding` if the preset name is unknown, model download fails,
+  ///   or the blocking inference task panics
+  ///
+  /// # Example
+  ///
+  /// ```rust,ignore
+  /// use kreuzberg::{embed_texts_async, EmbeddingConfig};
+  ///
+  /// let embeddings = embed_texts_async(
+  ///     vec!["Hello!".to_string()],
+  ///     &EmbeddingConfig::default(),
+  /// ).await?;
+  /// ```
+  /// throws anyhow::Error on failure
+  static Future<List<List<double>>> embedTextsAsync(
+      List<String> texts, EmbeddingConfig config) async {
+    return await rust_bridge.embedTextsAsync(texts, config);
+  }
+
   /// Render a single PDF page to a PNG-encoded byte buffer.
   ///
   /// # Errors

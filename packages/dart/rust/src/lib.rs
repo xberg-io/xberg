@@ -2329,6 +2329,33 @@ pub fn clear_validators() -> Result<(), String> {
     kreuzberg::clear_validators().map(|v| v).map_err(|e| e.to_string())
 }
 
+/// Generate embeddings asynchronously for a list of text strings.
+///
+/// This is the async counterpart to `embed_texts`. It offloads the blocking
+/// ONNX inference work to a dedicated blocking thread pool via Tokio's
+/// `spawn_blocking`, keeping the async executor free.
+///
+/// Returns one embedding vector per input text in the same order.
+///
+/// **Errors:**
+///
+/// - `KreuzbergError.MissingDependency` if ONNX Runtime is not installed
+/// - `KreuzbergError.Embedding` if the preset name is unknown, model download fails,
+///   or the blocking inference task panics
+pub async fn embed_texts_async(
+    texts: Vec<String>,
+    config: kreuzberg::EmbeddingConfig,
+) -> Result<Vec<Vec<f64>>, String> {
+    kreuzberg::embed_texts_async(texts, &config)
+        .await
+        .map(|v| {
+            v.into_iter()
+                .map(|row| row.into_iter().map(|x| x as f64).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        })
+        .map_err(|e| e.to_string())
+}
+
 /// Render a single PDF page to a PNG-encoded byte buffer.
 ///
 /// **Errors:**

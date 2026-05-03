@@ -12,6 +12,6 @@
     }
   },
   "scripts": {
-    "test": "phpunit"
+    "test": "php run_tests.php"
   }
 }

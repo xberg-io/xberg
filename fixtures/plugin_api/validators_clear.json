@@ -2,12 +2,7 @@
   "id": "validators_clear",
   "category": "validator_management",
   "description": "Clear all validators and verify list is empty",
-  "tags": [
-    "validators",
-    "plugin_management",
-    "clear",
-    "trait-bridge"
-  ],
+  "tags": ["validators", "plugin_management", "clear", "trait-bridge"],
   "call": "clear_validators",
   "assertions": [
     {

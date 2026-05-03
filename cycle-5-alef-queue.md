@@ -215,12 +215,15 @@ Alef should either:
 ## Cycle 5.5 — alef v0.14.5 backlog (after v0.14.4 regen)
 
 ### Python
+
 - **P11 (alef-backend-pyo3)**: every public type emits `#[pyclass(unsendable, from_py_object)]`. ExtractionResult panics in async tests because PyO3 panics when sending unsendable across threads. Should default to `#[pyclass]` (sendable) for plain data structs; only mark `unsendable` when the struct contains genuinely non-Send fields.
 - **P12 (alef-extract)**: cfg-gated `#[cfg(all(feature = "embeddings", feature = "tokio-runtime"))] pub use embeddings::embed_texts_async;` is not picked up by alef-extract's strict surface check. Generic `pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(...)` may also confuse the parser. Fix: extract should evaluate cfg attrs against the canonical feature set (`full`?) and accept generic functions.
 
 ### Go
+
 - **#15 (alef-backend-go e2e)**: `var items []string` still emitted for `batch_extract_bytes_sync` despite v0.14.4 #14 work. The "real test body" is generated but type derivation from `e2e.calls.<name>.args` ArgMapping is still wrong. Need to look up the binding-side function param type and use it.
 - **#16 (alef-backend-go bindings)**: batch fn return type is `*[]ExtractionResult` instead of `[]ExtractionResult`. Test code does `len(result)` which fails on `*[]T`. Make batch returns be `[]T` directly.
 
 ### Rust
+
 - (no new items — rust e2e is stable at 62/62)

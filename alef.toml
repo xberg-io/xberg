@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.14.4"
+alef_version = "0.14.8"
 languages = [
   "python",
   "node",
@@ -1397,7 +1397,7 @@ returns_result = true
 result_is_vec = true
 skip_languages = ["wasm"]
 args = [
-  { name = "paths", field = "input.paths", type = "json_object", owned = true },
+  { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
@@ -1422,7 +1422,7 @@ returns_result = true
 result_is_vec = true
 skip_languages = ["wasm"]
 args = [
-  { name = "paths", field = "input.paths", type = "json_object", owned = true },
+  { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
@@ -1506,7 +1506,7 @@ returns_result = true
 result_is_vec = true
 skip_languages = ["wasm"]
 args = [
-  { name = "items", field = "input.items", type = "json_object", owned = true },
+  { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
@@ -1526,7 +1526,7 @@ returns_result = true
 result_is_vec = true
 skip_languages = ["wasm"]
 args = [
-  { name = "items", field = "input.items", type = "json_object", owned = true },
+  { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
@@ -1577,6 +1577,18 @@ args = []
 [crates.e2e.calls.list_validators.overrides.go]
 result_is_simple = true
 returns_result = true
+
+[crates.e2e.calls.embed_texts_async]
+result_is_simple = true
+function = "embed_texts_async"
+module = "kreuzberg"
+async = true
+returns_result = true
+skip_languages = ["wasm"]
+args = [
+  { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
+  { name = "config", field = "input.config", type = "json_object", optional = true },
+]
 
 [crates.e2e.calls.embed_texts_async.overrides.csharp]
 result_is_simple = true

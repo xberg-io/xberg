@@ -4,10 +4,7 @@
   "description": "embed_texts_async: basic async embedding",
   "call": "embed_texts_async",
   "input": {
-    "texts": [
-      "First",
-      "Second"
-    ]
+    "texts": ["First", "Second"]
   },
   "assertions": [
     {

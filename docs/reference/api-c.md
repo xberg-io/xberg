@@ -497,6 +497,41 @@ void kreuzberg_clear_validators();
 
 ---
 
+#### kreuzberg_embed_texts_async()
+
+Generate embeddings asynchronously for a list of text strings.
+
+This is the async counterpart to `embed_texts`. It offloads the blocking
+ONNX inference work to a dedicated blocking thread pool via Tokio's
+`spawn_blocking`, keeping the async executor free.
+
+Returns one embedding vector per input text in the same order.
+
+**Errors:**
+
+- `KreuzbergError.MissingDependency` if ONNX Runtime is not installed
+- `KreuzbergError.Embedding` if the preset name is unknown, model download fails,
+  or the blocking inference task panics
+
+**Signature:**
+
+```c
+float** kreuzberg_embed_texts_async(const char** texts, KreuzbergEmbeddingConfig config);
+```
+
+**Parameters:**
+
+| Name     | Type                       | Required | Description                                                             |
+| -------- | -------------------------- | -------- | ----------------------------------------------------------------------- |
+| `texts`  | `const char**`             | Yes      | Vec of strings to embed (owned, sent to blocking thread)                |
+| `config` | `KreuzbergEmbeddingConfig` | Yes      | Embedding configuration specifying model, batch size, and normalization |
+
+**Returns:** `float**`
+
+**Errors:** Returns `NULL` on error.
+
+---
+
 #### kreuzberg_render_pdf_page_to_png()
 
 Render a single PDF page to a PNG-encoded byte buffer.
