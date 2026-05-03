@@ -31,7 +31,7 @@ repos:
       - id: check-json
       - id: check-yaml
         args: ["--allow-multiple-documents", "--unsafe"]
-        exclude: ^charts/.*/templates/
+        exclude: ^charts/
       - id: check-toml
       - id: check-case-conflict
 
@@ -96,7 +96,7 @@ repos:
     rev: "v0.1.86"
     hooks:
       - id: rumdl-fmt
-        exclude: '^(tools/benchmark-harness/vendored/|docs/reference/(api-|configuration\.md|errors\.md|types\.md)|templates/readme/)'
+        exclude: '^(tools/benchmark-harness/vendored/|docs/reference/(api-|configuration\.md|errors\.md|types\.md)|templates/readme/|charts/)'
 
   # Python: ruff (linting + formatting)
   - repo: https://github.com/astral-sh/ruff-pre-commit
