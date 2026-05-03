@@ -5,6 +5,7 @@
   "call": "extract_bytes_sync",
   "input": {
     "data": "pdf/fake_memo.pdf",
+    "mime_type": "application/pdf",
     "config": {
       "output_format": "markdown"
     }

@@ -5,7 +5,7 @@
   "tags": ["mime_detection", "bytes", "png"],
   "call": "detect_mime_type_from_bytes",
   "input": {
-    "data": "images/hello_world.png"
+    "data": "images/test_hello_world.png"
   },
   "assertions": [
     {

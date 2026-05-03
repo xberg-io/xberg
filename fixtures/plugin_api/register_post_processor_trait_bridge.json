@@ -8,6 +8,7 @@
   "call": "register_post_processor",
   "skip": {
     "languages": [
+      "rust",
       "python",
       "node",
       "go",

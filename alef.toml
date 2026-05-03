@@ -1486,7 +1486,7 @@ async = false
 returns_result = true
 skip_languages = ["wasm"]
 args = [
-  { name = "texts", field = "input.texts", type = "json_object" },
+  { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
@@ -1586,7 +1586,7 @@ async = true
 returns_result = true
 skip_languages = ["wasm"]
 args = [
-  { name = "texts", field = "input.texts", type = "json_object" },
+  { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
@@ -1600,10 +1600,11 @@ options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.get_embedding_preset]
 result_is_simple = true
+result_is_option = true
 function = "get_embedding_preset"
 module = "kreuzberg"
 async = false
-returns_result = true
+returns_result = false
 args = [
   { name = "preset_name", field = "input.preset_name", type = "string" },
 ]
@@ -1613,7 +1614,7 @@ result_is_simple = true
 function = "list_embedding_presets"
 module = "kreuzberg"
 async = false
-returns_result = true
+returns_result = false
 args = []
 
 [crates.e2e.calls.detect_mime_type]
@@ -1635,7 +1636,7 @@ module = "kreuzberg"
 async = false
 returns_result = true
 args = [
-  { name = "pdf_path", field = "input.pdf_path", type = "string" },
+  { name = "pdf_bytes", field = "input.pdf_bytes", type = "bytes" },
   { name = "page_number", field = "input.page_number", type = "int" },
 ]
 

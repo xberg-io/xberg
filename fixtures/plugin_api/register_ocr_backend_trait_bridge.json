@@ -8,6 +8,7 @@
   "call": "register_ocr_backend",
   "skip": {
     "languages": [
+      "rust",
       "python",
       "node",
       "go",

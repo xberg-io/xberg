@@ -5,7 +5,7 @@
   "tags": ["mime_detection", "bytes"],
   "call": "detect_mime_type_from_bytes",
   "input": {
-    "data": "<!DOCTYPE html><html><body>Hello</body></html>"
+    "data": "html/html.html"
   },
   "assertions": [{ "type": "not_error" }]
 }

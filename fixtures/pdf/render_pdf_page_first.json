@@ -4,7 +4,7 @@
   "description": "render_pdf_page_to_png: first page",
   "call": "render_pdf_page_to_png",
   "input": {
-    "pdf_path": "pdf/fake_memo.pdf",
+    "pdf_bytes": "pdf/fake_memo.pdf",
     "page_number": 0
   },
   "assertions": [
@@ -13,7 +13,6 @@
     },
     {
       "type": "min_length",
-      "field": "png_data",
       "value": 100
     }
   ]

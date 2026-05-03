@@ -12,7 +12,6 @@
     },
     {
       "type": "count_equals",
-      "field": "results",
       "value": 0
     }
   ]

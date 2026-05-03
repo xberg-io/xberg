@@ -4,7 +4,7 @@
   "description": "render_pdf_page_to_png: page out of range",
   "call": "render_pdf_page_to_png",
   "input": {
-    "pdf_path": "pdf/fake_memo.pdf",
+    "pdf_bytes": "pdf/fake_memo.pdf",
     "page_number": 999
   },
   "assertions": [

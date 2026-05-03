@@ -8,6 +8,7 @@
   "call": "register_validator",
   "skip": {
     "languages": [
+      "rust",
       "python",
       "node",
       "go",

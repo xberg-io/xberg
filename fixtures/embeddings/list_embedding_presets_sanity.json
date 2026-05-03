@@ -6,12 +6,7 @@
   "input": {},
   "assertions": [
     {
-      "type": "not_error"
-    },
-    {
-      "type": "count_min",
-      "field": "presets",
-      "value": 1
+      "type": "not_empty"
     }
   ]
 }

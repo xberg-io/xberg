@@ -6,7 +6,7 @@
   "input": {
     "items": [
       {
-        "content": "data",
+        "content": [100, 97, 116, 97],
         "mime_type": "application/x-unknown"
       }
     ]

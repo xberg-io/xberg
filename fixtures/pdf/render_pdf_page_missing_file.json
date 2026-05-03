@@ -3,6 +3,10 @@
   "category": "pdf",
   "description": "render_pdf_page_to_png: missing file",
   "call": "render_pdf_page_to_png",
+  "skip": {
+    "languages": ["rust"],
+    "reason": "bytes arg type loads file at test-run time; missing-file error path not expressible via fixture"
+  },
   "input": {
     "pdf_path": "nonexistent/file.pdf",
     "page_number": 0

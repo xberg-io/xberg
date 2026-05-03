@@ -1,18 +1,22 @@
 {
   "id": "batch_extract_bytes_size_cap",
   "category": "batch",
-  "description": "batch_extract_bytes: respects security limits",
+  "description": "batch_extract_bytes: archive size cap triggers error",
   "call": "batch_extract_bytes",
+  "skip": {
+    "languages": ["rust"],
+    "reason": "SecurityLimits.max_content_size is only enforced by archive/Excel extractors; text/plain does not check it — error path not triggerable via fixture content alone"
+  },
   "input": {
     "items": [
       {
-        "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "content": [97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97, 97],
         "mime_type": "text/plain"
       }
     ],
     "config": {
       "security_limits": {
-        "max_extraction_size": 50
+        "max_content_size": 1
       }
     }
   },

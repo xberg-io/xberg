@@ -6,7 +6,7 @@
   "input": {
     "items": [
       {
-        "content": "PDF placeholder",
+        "content": [80, 68, 70, 32, 112, 108, 97, 99, 101, 104, 111, 108, 100, 101, 114],
         "mime_type": "application/x-unknown"
       }
     ]
