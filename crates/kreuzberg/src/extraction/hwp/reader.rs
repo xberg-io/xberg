@@ -39,6 +39,20 @@ impl<F: Read + Seek> CfbReader<F> {
     pub(crate) fn stream_exists(&self, path: &str) -> bool {
         self.cfb.exists(path)
     }
+
+    /// List all streams in the compound file.
+    pub(crate) fn list_streams(&self) -> Vec<String> {
+        self.cfb
+            .walk()
+            .filter_map(|entry| {
+                if entry.is_stream() {
+                    Some(entry.path().to_string_lossy().into_owned())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 // ---------------------------------------------------------------------------

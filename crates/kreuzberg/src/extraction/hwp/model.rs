@@ -13,6 +13,10 @@ use super::parser::Record;
 pub struct HwpDocument {
     /// All sections from all BodyText/SectionN streams.
     pub sections: Vec<Section>,
+    /// Global character shape table from DocInfo.
+    pub char_shapes: Vec<CharShape>,
+    /// Extracted images from BinData.
+    pub images: Vec<HwpImage>,
 }
 
 impl HwpDocument {
@@ -42,6 +46,7 @@ impl HwpDocument {
 #[derive(Debug, Default)]
 pub struct Section {
     pub paragraphs: Vec<Paragraph>,
+    pub tables: Vec<HwpTable>,
 }
 
 // ---------------------------------------------------------------------------
@@ -52,6 +57,41 @@ pub struct Section {
 #[derive(Debug, Default)]
 pub struct Paragraph {
     pub text: Option<ParaText>,
+    pub outline_level: u8,
+    /// Mappings from character position to char_shape index.
+    pub char_shape_runs: Vec<(u32, u16)>,
+}
+
+// ---------------------------------------------------------------------------
+// CharShape — character formatting attributes
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CharShape {
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Table
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Default)]
+pub struct HwpTable {
+    pub rows: u16,
+    pub cols: u16,
+    pub cells: Vec<Vec<String>>,
+}
+
+// ---------------------------------------------------------------------------
+// Images
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Default)]
+pub struct HwpImage {
+    pub name: String,
+    pub data: Vec<u8>,
 }
 
 // ---------------------------------------------------------------------------

@@ -16,17 +16,12 @@ pub mod parser;
 pub mod reader;
 
 use error::{HwpError, Result};
-use model::HwpDocument;
-use parser::{FileHeader, parse_body_text};
+use crate::extraction::hwp::model::HwpDocument;
+use parser::{FileHeader, parse_body_text, parse_doc_info};
 use reader::CfbReader;
 
-/// Extract all plain text from an HWP 5.0 document given its raw bytes.
-///
-/// # Errors
-///
-/// Returns `HwpError` if the bytes do not form a valid HWP 5.0 compound file,
-/// if the document is password-encrypted, or if a critical parsing step fails.
-pub(crate) fn extract_hwp_text(bytes: &[u8]) -> Result<String> {
+/// Extract the structured document model from an HWP 5.0 document.
+pub(crate) fn extract_hwp_document(bytes: &[u8]) -> Result<HwpDocument> {
     let mut cfb = CfbReader::from_bytes(bytes)?;
 
     // Parse the 256-byte file header
@@ -39,34 +34,50 @@ pub(crate) fn extract_hwp_text(bytes: &[u8]) -> Result<String> {
         ));
     }
 
-    // Distribution documents store body text under ViewText/SectionN
-    let stream_prefix = if header.is_distribute() {
-        "ViewText/Section"
-    } else {
-        "BodyText/Section"
-    };
-
     let mut doc = HwpDocument::default();
-    let mut section_idx = 0u32;
 
-    loop {
-        let section_name = format!("{stream_prefix}{section_idx}");
-        if !cfb.stream_exists(&section_name) {
-            break;
+    // Parse DocInfo for global tables (char shapes, etc.)
+    if cfb.stream_exists("DocInfo") {
+        let doc_info_data = cfb.read_stream("DocInfo")?;
+        if let Ok(char_shapes) = parse_doc_info(doc_info_data) {
+            doc.char_shapes = char_shapes;
         }
-
-        let section_data = cfb.read_stream(&section_name)?;
-        let sections = parse_body_text(section_data, header.is_compressed())?;
-        doc.sections.extend(sections);
-
-        section_idx += 1;
     }
 
-    if doc.sections.is_empty() {
-        return Err(HwpError::InvalidFormat(
-            "No BodyText sections found in HWP document".to_string(),
-        ));
+    // Body text is distributed across Section0..SectionN streams inside BodyText
+    let mut streams = cfb.list_streams();
+    streams.sort();
+
+    for path in streams {
+        if path.starts_with("BodyText/Section") {
+            let section_data = cfb.read_stream(&path)?;
+            if let Ok(sections) = parse_body_text(section_data, header.is_compressed()) {
+                doc.sections.extend(sections);
+            }
+        }
     }
 
-    Ok(doc.extract_text())
+    // Attempt to extract images from BinData streams
+    for path in cfb.list_streams() {
+        if path.starts_with("BinData/") {
+            let image_data = cfb.read_stream(&path)?;
+            doc.images.push(model::HwpImage {
+                name: path.clone(),
+                data: image_data,
+            });
+        }
+    }
+
+    Ok(doc)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_invalid_hwp() {
+        let bytes = b"Not a valid HWP file";
+        assert!(extract_hwp_document(bytes).is_err());
+    }
 }
