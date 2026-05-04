@@ -130,6 +130,9 @@ sources = [
   "crates/kreuzberg/src/chunking/mod.rs",
   "crates/kreuzberg/src/embeddings/mod.rs",
   "crates/kreuzberg/src/language_detection/mod.rs",
+  # Batch extraction functions (re-exported from lib.rs)
+  "crates/kreuzberg/src/core/extractor/mod.rs",
+  "crates/kreuzberg/src/core/extractor/sync.rs",
   # OCR/PaddleOCR types (re-exported from lib.rs)
   "crates/kreuzberg/src/ocr/types.rs",
   "crates/kreuzberg/src/paddle_ocr/mod.rs",
