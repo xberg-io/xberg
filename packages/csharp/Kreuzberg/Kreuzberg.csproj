@@ -16,4 +16,8 @@
     <None Include="../../LICENSE" Pack="true" PackagePath="/" />
     <None Include="runtimes/**" Pack="true" PackagePath="runtimes/" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../src/**/*.cs" />
+  </ItemGroup>
 </Project>

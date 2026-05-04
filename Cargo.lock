@@ -3688,6 +3688,7 @@ dependencies = [
 name = "kreuzberg-node"
 version = "4.10.0-rc.15"
 dependencies = [
+ "async-trait",
  "kreuzberg",
  "napi",
  "napi-build",

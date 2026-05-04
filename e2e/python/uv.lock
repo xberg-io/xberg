@@ -49,23 +49,6 @@ source = { directory = "../../packages/python" }
 [package.metadata]
 
 [package.metadata.requires-dev]
-bench-docling = [{ name = "docling", specifier = ">=2.64.1" }]
-bench-markitdown = [{ name = "markitdown", extras = ["all"], specifier = ">=0.1.5" }]
-bench-mineru = [
-    { name = "mineru", extras = ["pipeline"], specifier = ">=2.6.7" },
-    { name = "onnxruntime" },
-]
-bench-pdfminer = [{ name = "pdfminer-six", specifier = ">=20260107" }]
-bench-pdfplumber = [{ name = "pdfplumber", specifier = ">=0.11.4" }]
-bench-pdftotext = [{ name = "pdftotext", specifier = ">=3.0.0" }]
-bench-playa-pdf = [{ name = "playa-pdf", specifier = ">=1.1.0" }]
-bench-pymupdf4llm = [
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pymupdf-layout", specifier = ">=1.27.2.3" },
-    { name = "pymupdf4llm", specifier = ">=1.27.2.3" },
-]
-bench-pypdf = [{ name = "pypdf", specifier = ">=6.10.2" }]
-bench-unstructured = [{ name = "unstructured", extras = ["all-docs"], specifier = ">=0.18.21" }]
 dev = [
     { name = "mypy", specifier = ">=1.19.0" },
     { name = "ruff", specifier = ">=0.14.8" },

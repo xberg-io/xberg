@@ -12,6 +12,7 @@ categories = ["text-processing"]
 crate-type = ["cdylib"]
 
 [dependencies]
+async-trait = "0.1"
 kreuzberg = { path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "layout-detection", "embeddings", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 napi = { version = "3", features = ["async"] }
 napi-derive = "3"

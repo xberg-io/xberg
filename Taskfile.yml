@@ -223,6 +223,65 @@ tasks:
     cmds:
       - task: test:e2e
 
+  python:e2e:
+    desc: "Run Python e2e tests (builds kreuzberg-py via maturin first)"
+    cmds:
+      - alef test --e2e --lang python
+
+  go:e2e:
+    desc: "Run Go e2e tests (builds kreuzberg-ffi first)"
+    env:
+      DYLD_LIBRARY_PATH: "{{.ROOT_DIR}}/target/release"
+      LD_LIBRARY_PATH: "{{.ROOT_DIR}}/target/release"
+    cmds:
+      - alef test --e2e --lang go
+
+  node:e2e:
+    desc: "Run Node/TypeScript e2e tests (builds NAPI module first)"
+    cmds:
+      - alef test --e2e --lang node
+
+  ruby:e2e:
+    desc: "Run Ruby e2e tests"
+    cmds:
+      - alef test --e2e --lang ruby
+
+  php:e2e:
+    desc: "Run PHP e2e tests"
+    cmds:
+      - alef test --e2e --lang php
+
+  wasm:e2e:
+    desc: "Run WASM e2e tests (builds wasm-pack bundle first)"
+    cmds:
+      - alef test --e2e --lang wasm
+
+  elixir:e2e:
+    desc: "Run Elixir e2e tests (compiles NIF first)"
+    cmds:
+      - alef test --e2e --lang elixir
+
+  java:e2e:
+    desc: "Run Java e2e tests (builds kreuzberg-ffi first)"
+    env:
+      DYLD_LIBRARY_PATH: "{{.ROOT_DIR}}/target/release"
+      LD_LIBRARY_PATH: "{{.ROOT_DIR}}/target/release"
+    cmds:
+      - alef test --e2e --lang java
+
+  csharp:e2e:
+    desc: "Run C# e2e tests (builds kreuzberg-ffi first)"
+    env:
+      DYLD_LIBRARY_PATH: "{{.ROOT_DIR}}/target/release"
+      LD_LIBRARY_PATH: "{{.ROOT_DIR}}/target/release"
+    cmds:
+      - alef test --e2e --lang csharp
+
+  r:e2e:
+    desc: "Run R e2e tests"
+    cmds:
+      - alef test --e2e --lang r
+
   # === Publish ===
   publish:validate:
     desc: "Validate publish manifests are consistent"

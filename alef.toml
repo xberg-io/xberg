@@ -1506,6 +1506,7 @@ returns_result = true
 
 [crates.e2e.calls.embed_texts]
 result_is_simple = true
+result_is_array = true
 function = "embed_texts"
 module = "kreuzberg"
 async = false
@@ -1693,6 +1694,7 @@ args = []
 
 [crates.e2e.calls.embed_texts_async]
 result_is_simple = true
+result_is_array = true
 function = "embed_texts_async"
 module = "kreuzberg"
 async = true
@@ -1726,6 +1728,7 @@ args = [{ name = "name", field = "input.preset_name", type = "string" }]
 
 [crates.e2e.calls.list_embedding_presets]
 result_is_simple = true
+result_is_array = true
 function = "list_embedding_presets"
 module = "kreuzberg"
 async = false

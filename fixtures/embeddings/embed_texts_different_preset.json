@@ -6,7 +6,7 @@
   "input": {
     "texts": ["Hello world", "Test"],
     "config": {
-      "embedding_model": "multilingual"
+      "model": "multilingual"
     }
   },
   "assertions": [
