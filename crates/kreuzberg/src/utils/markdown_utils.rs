@@ -20,7 +20,7 @@ pub(crate) fn is_markdown_header(line: &str) -> bool {
     MARKDOWN_HEADER_RE.is_match(line)
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "chunking", feature = "quality")))]
 mod tests {
     use super::*;
 

@@ -114,7 +114,7 @@ impl Uri {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "pdf", feature = "xml", feature = "office")))]
 mod tests {
     use super::*;
 
