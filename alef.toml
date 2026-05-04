@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.14.19"
+alef_version = "0.14.20"
 languages = [
   "python",
   "node",
@@ -1527,6 +1527,7 @@ options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.embed_texts.overrides.go]
 result_is_simple = true
+result_is_array = true
 options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.batch_extract_bytes]
@@ -1715,6 +1716,7 @@ options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.embed_texts_async.overrides.go]
 result_is_simple = true
+result_is_array = true
 options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.get_embedding_preset]
