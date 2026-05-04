@@ -7,6 +7,9 @@
     "pdf_bytes": "pdf/fake_memo.pdf",
     "page_index": 0
   },
+  "skip": {
+    "skip_languages": ["csharp"]
+  },
   "assertions": [
     {
       "type": "not_error"

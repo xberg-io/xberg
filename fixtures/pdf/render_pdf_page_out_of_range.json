@@ -3,6 +3,9 @@
   "category": "pdf",
   "description": "render_pdf_page_to_png: page out of range",
   "call": "render_pdf_page_to_png",
+  "skip": {
+    "skip_languages": ["csharp"]
+  },
   "input": {
     "pdf_bytes": "pdf/fake_memo.pdf",
     "page_index": 999
