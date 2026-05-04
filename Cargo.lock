@@ -3680,6 +3680,7 @@ dependencies = [
  "cbindgen",
  "kreuzberg",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -3687,7 +3688,6 @@ dependencies = [
 name = "kreuzberg-node"
 version = "4.10.0-rc.15"
 dependencies = [
- "async-trait",
  "kreuzberg",
  "napi",
  "napi-build",
@@ -3738,7 +3738,6 @@ dependencies = [
 name = "kreuzberg-php"
 version = "4.10.0-rc.15"
 dependencies = [
- "async-trait",
  "ext-php-rs",
  "kreuzberg",
  "serde",
@@ -3750,13 +3749,11 @@ dependencies = [
 name = "kreuzberg-py"
 version = "4.10.0-rc.15"
 dependencies = [
- "async-trait",
  "kreuzberg",
  "pyo3",
  "pyo3-async-runtimes",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]

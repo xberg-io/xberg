@@ -1,10 +1,10 @@
 name: Kotlin
 
 on:
-  workflow_dispatch:
-  # Kotlin binding is alef-experimental (added v0.10.0). ktlint flags style
-  # issues in the generated Kotlin source; re-enable on push/PR once
-  # alef-backend-kotlin matures.
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
@@ -20,7 +20,7 @@ jobs:
           java-version: "21"
           distribution: temurin
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v4
       - name: Run Gradle build
         run: gradle build
       - name: Run Gradle tests

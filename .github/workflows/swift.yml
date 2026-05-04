@@ -1,10 +1,10 @@
 name: Swift
 
 on:
-  workflow_dispatch:
-  # Swift binding is alef-experimental (added v0.10.0). The C interop fails
-  # to build against Xcode 16's SDK; re-enable on push/PR once
-  # alef-backend-swift matures.
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Swift
-        uses: swift-actions/setup-swift@v3
+        uses: swift-actions/setup-swift@v2
         with:
           swift-version: "5.10"
       - name: Build Swift package

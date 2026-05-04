@@ -13,7 +13,7 @@
   },
   "autoload": {
     "psr-4": {
-      "Kreuzberg\\": "src/"
+      "Kreuzberg\\\\": "src/"
     }
   },
   "scripts": {
@@ -29,11 +29,5 @@
     "support-zts": true,
     "support-nts": true
   },
-  "keywords": [
-    "document",
-    "extraction",
-    "pdf",
-    "ocr",
-    "text"
-  ]
+  "keywords": ["document", "extraction", "pdf", "ocr", "text"]
 }

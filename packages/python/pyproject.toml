@@ -16,7 +16,9 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
-authors = [{ name = "Na'aman Hirschfeld <naaman@kreuzberg.dev>" }]
+authors = [
+    { name = "Na'aman Hirschfeld <naaman@kreuzberg.dev>" }
+]
 keywords = ["document", "extraction", "pdf", "ocr", "text"]
 homepage = "https://kreuzberg.dev"
 [project.urls]
@@ -30,16 +32,6 @@ python-packages = ["kreuzberg"]
 
 [dependency-groups]
 dev = ["ruff>=0.14.8", "mypy>=1.19.0"]
-bench-docling = ["docling>=2.64.1"]
-bench-markitdown = ["markitdown[all]>=0.1.5"]
-bench-mineru = ["mineru[pipeline]>=2.6.7", "onnxruntime"]
-bench-pdfminer = ["pdfminer-six>=20260107"]
-bench-pdfplumber = ["pdfplumber>=0.11.4"]
-bench-pdftotext = ["pdftotext>=3.0.0"]
-bench-playa-pdf = ["playa-pdf>=1.1.0"]
-bench-pymupdf4llm = ["pillow>=10.0.0", "pymupdf-layout>=1.27.2.3", "pymupdf4llm>=1.27.2.3"]
-bench-pypdf = ["pypdf>=6.10.2"]
-bench-unstructured = ["unstructured[all-docs]>=0.18.21"]
 
 [tool.ruff]
 target-version = "py310"
@@ -48,29 +40,10 @@ line-length = 120
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "ANN401",
-  "ASYNC109",
-  "ASYNC110",
-  "BLE001",
-  "COM812",
-  "D100",
-  "D104",
-  "D107",
-  "D205",
-  "E501",
-  "EM",
-  "FBT",
-  "FIX",
-  "ISC001",
-  "PD011",
-  "PGH003",
-  "PLR2004",
-  "PLW0603",
-  "S104",
-  "S110",
-  "S603",
-  "TD",
-  "TRY",
+  "ANN401", "ASYNC109", "ASYNC110", "BLE001", "COM812",
+  "D100", "D104", "D107", "D205", "E501", "EM",
+  "FBT", "FIX", "ISC001", "PD011", "PGH003", "PLR2004",
+  "PLW0603", "S104", "S110", "S603", "TD", "TRY",
 ]
 
 [tool.ruff.lint.mccabe]

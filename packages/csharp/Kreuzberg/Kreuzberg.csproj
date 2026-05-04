@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Kreuzberg</RootNamespace>
     <PackageId>Kreuzberg</PackageId>
     <Version>4.10.0-rc.15</Version>
@@ -10,8 +10,6 @@
     <Authors>Na&apos;aman Hirschfeld &lt;naaman@kreuzberg.dev&gt;</Authors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
-    <LangVersion>13</LangVersion>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

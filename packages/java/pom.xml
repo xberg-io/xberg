@@ -35,7 +35,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <junit.version>5.11.4</junit.version>
         <maven.version>3.9.11</maven.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
@@ -70,12 +70,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.21.3</version>
+            <version>2.21.2</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jdk8</artifactId>
-            <version>2.21.3</version>
+            <version>2.21.2</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -137,7 +137,10 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven-compiler-plugin.version}</version>
                 <configuration>
-                    <release>21</release>
+                    <release>25</release>
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>
@@ -145,7 +148,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
-                    <argLine>@{argLine} -XX:-ClassUnloading -XX:-ClassUnloadingWithConcurrentMark --enable-native-access=ALL-UNNAMED -Djava.library.path=${project.basedir}/../../target/release</argLine>
+                    <argLine>@{argLine} -XX:-ClassUnloading -XX:-ClassUnloadingWithConcurrentMark --enable-native-access=ALL-UNNAMED --enable-preview -Djava.library.path=${project.basedir}/../../target/release</argLine>
                     <forkedProcessExitTimeoutInSeconds>600</forkedProcessExitTimeoutInSeconds>
                     <parallel>classes</parallel>
                     <threadCount>4</threadCount>
@@ -192,7 +195,9 @@
                 <version>${maven-javadoc-plugin.version}</version>
                 <configuration>
                     <doclint>all,-missing</doclint>
+                    <failOnWarning>true</failOnWarning>
                     <show>protected</show>
+                    <additionalOptions>--enable-preview</additionalOptions>
                     <sourcepath>${project.basedir}/src/main/java</sourcepath>
                 </configuration>
                 <executions>

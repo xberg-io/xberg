@@ -7,10 +7,10 @@ AllCops:
   NewCops: enable
   SuggestExtensions: false
   Exclude:
-    - "vendor/**/*"
-    - "tmp/**/*"
-    - "lib/**/*.bundle"
-    - "ext/**/*"
+    - 'vendor/**/*'
+    - 'tmp/**/*'
+    - 'lib/**/*.bundle'
+    - 'ext/**/*'
 
 Style/FrozenStringLiteralComment:
   Enabled: true
@@ -32,12 +32,12 @@ Layout/LineLength:
   AllowedPatterns:
     - '\A\s*#'
   Exclude:
-    - "spec/**/*"
+    - 'spec/**/*'
 
 Metrics/MethodLength:
   Max: 20
   Exclude:
-    - "spec/**/*"
+    - 'spec/**/*'
 
 Metrics/BlockLength:
   Enabled: true
@@ -47,7 +47,7 @@ Metrics/BlockLength:
 Metrics/AbcSize:
   Max: 20
   Exclude:
-    - "spec/**/*"
+    - 'spec/**/*'
 
 RSpec/ExampleLength:
   Max: 50

@@ -33,6 +33,12 @@ license = "Elastic-2.0"
 repository = "https://github.com/kreuzberg-dev/kreuzberg"
 homepage = "https://kreuzberg.dev"
 
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = "warn"
+
 [workspace.dependencies]
 ahash = { version = "0.8.12", features = ["serde"] }
 anyhow = "1.0"

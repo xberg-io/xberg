@@ -1,48 +1,42 @@
 {
-	"name": "kreuzberg",
-	"version": "4.10.0-rc.15",
-	"description": "High-performance document intelligence library",
-	"keywords": [
-		"document",
-		"extraction",
-		"ocr",
-		"pdf",
-		"text"
-	],
-	"homepage": "https://kreuzberg.dev",
-	"license": "Elastic-2.0",
-	"author": "Na'aman Hirschfeld <naaman@kreuzberg.dev>",
-	"repository": "https://github.com/kreuzberg-dev/kreuzberg",
-	"files": [
-		"index.js",
-		"index.d.ts",
-		"**/*.node"
-	],
-	"main": "index.js",
-	"types": "index.d.ts",
-	"scripts": {
-		"build": "napi build --release",
-		"build:debug": "napi build",
-		"build:ts": "echo 'No TypeScript wrapper to build'",
-		"test": "node -e \"console.log('Add test command')\"",
-		"format": "oxfmt",
-		"format:check": "oxfmt --check",
-		"lint": "oxlint",
-		"lint:fix": "oxlint --fix"
-	},
-	"devDependencies": {
-		"@napi-rs/cli": "^3.0.0",
-		"oxfmt": "latest",
-		"oxlint": "latest",
-		"typescript": "^6.0.3"
-	},
-	"napi": {
-		"name": "kreuzberg",
-		"triples": [
-			"x86_64-unknown-linux-gnu",
-			"x86_64-apple-darwin",
-			"aarch64-apple-darwin",
-			"x86_64-pc-windows-msvc"
-		]
-	}
+  "name": "kreuzberg",
+  "version": "4.10.0-rc.15",
+  "description": "High-performance document intelligence library",
+  "license": "Elastic-2.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "repository": "https://github.com/kreuzberg-dev/kreuzberg",
+  "homepage": "https://kreuzberg.dev",
+  "author": "Na'aman Hirschfeld <naaman@kreuzberg.dev>",
+  "keywords": ["document", "extraction", "pdf", "ocr", "text"],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "**/*.node"
+  ],
+  "scripts": {
+    "build": "napi build --release",
+    "build:debug": "napi build",
+    "build:ts": "echo 'No TypeScript wrapper to build'",
+    "test": "node -e \"console.log('Add test command')\"",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
+  },
+  "napi": {
+    "name": "kreuzberg",
+    "triples": [
+      "x86_64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0",
+    "oxfmt": "latest",
+    "oxlint": "latest",
+    "typescript": "^6.0.3"
+  }
 }

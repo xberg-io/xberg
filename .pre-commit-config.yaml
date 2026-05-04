@@ -6,7 +6,7 @@ exclude: ^docs/snippets/|vendor/|node_modules/|target/|invalid*|dist/|artifacts/
 repos:
   # AI-Rulez: auto-generate AI assistant configuration files
   - repo: https://github.com/Goldziher/ai-rulez
-    rev: v4.1.5
+    rev: v4.1.6
     hooks:
       - id: ai-rulez-generate
 
@@ -93,7 +93,7 @@ repos:
 
   # Markdown: linting
   - repo: https://github.com/rvben/rumdl-pre-commit
-    rev: "v0.1.86"
+    rev: "v0.1.87"
     hooks:
       - id: rumdl-fmt
         exclude: '^(tools/benchmark-harness/vendored/|docs/reference/(api-|configuration\.md|errors\.md|types\.md)|templates/readme/|charts/)'
@@ -108,7 +108,7 @@ repos:
 
   # Node/TS/WASM: oxlint
   - repo: https://github.com/oxc-project/mirrors-oxlint
-    rev: v1.62.0
+    rev: v1.61.1
     hooks:
       - id: oxlint
         args: ["--fix"]
@@ -239,7 +239,7 @@ repos:
 
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.13.6
+    rev: v0.14.14
     hooks:
       - id: alef-verify
       - id: alef-sync-versions

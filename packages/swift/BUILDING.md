@@ -20,9 +20,8 @@ into `target/debug/build/kreuzberg-swift-*/out/`.
 ### 2. Copy generated sources into the SwiftPM targets
 
 The package uses two internal targets:
-
 - `Sources/RustBridgeC/` — pure C target with the combined C header
-- `Sources/RustBridge/` — Swift bridge files that `import RustBridgeC`
+- `Sources/RustBridge/`  — Swift bridge files that `import RustBridgeC`
 
 ```sh
 OUT=$(ls -dt target/debug/build/kreuzberg-swift-*/out 2>/dev/null | head -1)

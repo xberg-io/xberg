@@ -1,10 +1,10 @@
 name: Gleam
 
 on:
-  workflow_dispatch:
-  # Gleam binding is alef-experimental (added v0.10.0). gleam.toml pins a
-  # gleam_stdlib that requires Gleam >= 1.14 while the workflow installs 1.4;
-  # version mismatch will be resolved when alef-backend-gleam matures.
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
