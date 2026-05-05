@@ -1427,7 +1427,7 @@ module = "kreuzberg"
 async = true
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm"]
+skip_languages = ["wasm", "php"]
 args = [
   { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem", element_type = "BatchFileItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1455,7 +1455,7 @@ module = "kreuzberg"
 async = false
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm"]
+skip_languages = ["wasm", "php"]
 args = [
   { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem", element_type = "BatchFileItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1523,7 +1523,7 @@ function = "embed_texts"
 module = "kreuzberg"
 async = false
 returns_result = true
-skip_languages = ["wasm"]
+skip_languages = ["wasm", "php"]
 args = [
   { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1548,7 +1548,7 @@ module = "kreuzberg"
 async = true
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm"]
+skip_languages = ["wasm", "php"]
 args = [
   { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem", element_type = "BatchBytesItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1568,7 +1568,7 @@ module = "kreuzberg"
 async = false
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm"]
+skip_languages = ["wasm", "php"]
 args = [
   { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem", element_type = "BatchBytesItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1712,7 +1712,7 @@ function = "embed_texts_async"
 module = "kreuzberg"
 async = true
 returns_result = true
-skip_languages = ["wasm"]
+skip_languages = ["wasm", "php"]
 args = [
   { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
