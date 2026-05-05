@@ -194,10 +194,15 @@ gem_name = "kreuzberg"
 [crates.php]
 extension_name = "kreuzberg"
 exclude_functions = [
-  # Note: batch_extract_* functions are now supported via alef PHP backend's
-  # Vec<NonOpaqueCustomType> handling (helpers.rs:256-274).
-  # Batch functions removed from exclusion; DTOs (BatchBytesItem, BatchFileItem)
-  # are auto-emitted.
+  # ext-php-rs 0.15 does not impl `FromZvalMut` for `Vec<T>` where `T: #[php_class]`,
+  # so batch_extract_* fns (which take `Vec<BatchBytesItem>` / `Vec<BatchFileItem>`)
+  # fail to compile in the PHP binding. The DTOs themselves are still emitted, but
+  # the batch entry-point fns are excluded until ext-php-rs adds Vec<custom-type>
+  # FromZval support. Callers iterate single extract_file / extract_bytes calls.
+  "batch_extract_files",
+  "batch_extract_files_sync",
+  "batch_extract_bytes",
+  "batch_extract_bytes_sync",
 ]
 exclude_types = [
   # Enum types that don't have From<String> implementation for PHP
