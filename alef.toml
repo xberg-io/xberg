@@ -749,6 +749,8 @@ types = [
   "kreuzberg::extraction::docx::parser::Table",
   "kreuzberg::extraction::docx::parser::TableCell",
   "kreuzberg::extraction::docx::parser::TableRow",
+  "kreuzberg::extraction::docx::parser::HeaderFooter",
+  "kreuzberg::extraction::docx::parser::Note",
   "kreuzberg::extraction::hwp::model::Section",
 
   # Duplicate types with internal-only versions — use public types instead
