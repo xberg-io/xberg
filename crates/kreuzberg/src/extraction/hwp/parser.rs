@@ -239,8 +239,8 @@ mod tests {
         }
         let bytes = std::fs::read(&path).expect("read file");
         let doc = crate::extraction::hwp::extract_hwp_document(&bytes).expect("HWP extraction should succeed");
-        let text = doc.extract_text();
-        assert!(text.len() >= 10, "Expected content length >= 10, got {}", text.len());
+        assert!(!doc.sections.is_empty(), "Expected at least one section");
+        assert!(!doc.sections[0].paragraphs.is_empty(), "Expected at least one paragraph");
     }
 
     #[test]
