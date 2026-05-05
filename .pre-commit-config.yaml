@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/Goldziher/ai-rulez
-    rev: v3.14.2
+    rev: v4.1.6
     hooks:
       - id: ai-rulez-generate
 
@@ -15,15 +15,16 @@ repos:
       - id: check-added-large-files
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.11
+    rev: v0.15.12
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
-    rev: v0.1.0
+    rev: v1.0.0
     hooks:
       - id: mypy
         args: ["--strict", "src"]
         exclude: "^(examples|tests|benchmarks|e2e|docs)/"
+      - id: oxfmt
