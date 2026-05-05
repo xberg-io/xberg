@@ -7,10 +7,10 @@ use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::extraction::hwp::model::{CharShape, HwpDocument};
 use crate::plugins::{DocumentExtractor, Plugin};
+use crate::types::ExtractedImage;
 use crate::types::document_structure::{AnnotationKind, TextAnnotation};
 use crate::types::internal::InternalDocument;
 use crate::types::internal_builder::InternalDocumentBuilder;
-use crate::types::{ExtractedImage, tables::Table};
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::borrow::Cow;
@@ -82,23 +82,6 @@ fn build_hwp_internal_document(hwp_doc: &HwpDocument) -> InternalDocument {
                     builder.push_paragraph(&t.content, annotations, None, None);
                 }
             }
-        }
-        for hwp_table in &section.tables {
-            let mut rows = Vec::new();
-            for r in 0..hwp_table.rows {
-                let mut cells = Vec::new();
-                for c in 0..hwp_table.cols {
-                    cells.push(hwp_table.cells[r as usize][c as usize].clone());
-                }
-                rows.push(cells);
-            }
-            let table = Table {
-                cells: rows,
-                markdown: String::new(),
-                page_number: 1,
-                bounding_box: None,
-            };
-            builder.push_table(table, None, None);
         }
     }
 
@@ -260,27 +243,20 @@ mod tests {
 
     #[test]
     fn test_build_hwp_internal_document() {
-        use crate::extraction::hwp::model::{Section, Paragraph, ParaText, HwpTable, HwpImage};
-        
+        use crate::extraction::hwp::model::{HwpImage, ParaText, Paragraph, Section};
+
         let mut shape1 = CharShape::default();
         shape1.bold = true;
 
         let para = Paragraph {
             outline_level: 1, // Heading 1
-            text: Some(ParaText { content: "My Heading".to_string() }),
+            text: Some(ParaText {
+                content: "My Heading".to_string(),
+            }),
             char_shape_runs: vec![(0, 0)],
         };
 
-        let table = HwpTable {
-            rows: 1,
-            cols: 2,
-            cells: vec![vec!["A".to_string(), "B".to_string()]],
-        };
-
-        let section = Section {
-            paragraphs: vec![para],
-            tables: vec![table],
-        };
+        let section = Section { paragraphs: vec![para] };
 
         let image = HwpImage {
             name: "image1.png".to_string(),
@@ -295,9 +271,8 @@ mod tests {
         };
 
         let internal_doc = build_hwp_internal_document(&hwp_doc);
-        
-        // Assert headings
-        assert_eq!(internal_doc.elements.len(), 3); // 1 heading + 1 table + 1 image
+
+        assert_eq!(internal_doc.elements.len(), 2); // 1 heading + 1 image
 
         let first_elem = &internal_doc.elements[0];
         match first_elem.kind {
@@ -306,27 +281,18 @@ mod tests {
                 assert_eq!(first_elem.text, "My Heading");
                 assert_eq!(first_elem.annotations.len(), 1);
                 assert_eq!(first_elem.annotations[0].kind, AnnotationKind::Bold);
-            },
+            }
             _ => panic!("Expected Heading"),
         }
 
         let second_elem = &internal_doc.elements[1];
         match second_elem.kind {
-            crate::types::internal::ElementKind::Table { table_index } => {
-                let t = &internal_doc.tables[table_index as usize];
-                assert_eq!(t.cells, vec![vec!["A".to_string(), "B".to_string()]]);
-            },
-            _ => panic!("Expected Table"),
-        }
-
-        let third_elem = &internal_doc.elements[2];
-        match third_elem.kind {
             crate::types::internal::ElementKind::Image { image_index } => {
                 let i = &internal_doc.images[image_index as usize];
                 assert_eq!(i.source_path.as_deref(), Some("image1.png"));
                 // infer crate should detect PNG from magic bytes
                 assert_eq!(i.format, Cow::Borrowed("image/png"));
-            },
+            }
             _ => panic!("Expected Image"),
         }
     }

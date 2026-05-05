@@ -588,8 +588,11 @@ mod tests {
             v.validate("01234567890"),
             Err(SecurityError::EntityTooLong { length: 11, max: 10 })
         ));
-        assert!(v.check_attr("href", "http://x").is_ok());
-        assert!(v.check_attr("data", &"x".repeat(50)).is_err());
+        #[cfg(any(feature = "xml", feature = "office"))]
+        {
+            assert!(v.check_attr("href", "http://x").is_ok());
+            assert!(v.check_attr("data", &"x".repeat(50)).is_err());
+        }
     }
 
     #[test]

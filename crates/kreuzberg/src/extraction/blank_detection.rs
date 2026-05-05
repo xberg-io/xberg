@@ -28,7 +28,10 @@ pub(crate) fn is_page_text_blank(text: &str) -> bool {
     non_whitespace_count < MIN_NON_WHITESPACE_CHARS
 }
 
-#[cfg(test)]
+#[cfg(all(
+    test,
+    any(feature = "pdf", feature = "office", feature = "ocr", feature = "ocr-wasm")
+))]
 mod tests {
     use super::*;
 

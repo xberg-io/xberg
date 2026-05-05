@@ -173,12 +173,26 @@ mod tests {
         assert_eq!(lower, mixed);
     }
 
+    #[cfg(any(
+        feature = "excel",
+        feature = "excel-wasm",
+        feature = "office",
+        feature = "html",
+        feature = "xml"
+    ))]
     #[test]
     fn test_table_markdown_capacity() {
         let capacity = estimate_table_markdown_capacity(10, 5);
         assert_eq!(capacity, 675);
     }
 
+    #[cfg(any(
+        feature = "excel",
+        feature = "excel-wasm",
+        feature = "office",
+        feature = "html",
+        feature = "xml"
+    ))]
     #[test]
     fn test_table_markdown_capacity_minimum() {
         let capacity = estimate_table_markdown_capacity(0, 0);

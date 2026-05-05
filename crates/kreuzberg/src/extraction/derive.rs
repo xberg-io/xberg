@@ -1028,6 +1028,7 @@ mod tests {
         assert!(result.document.is_none());
     }
 
+    #[cfg(any(feature = "pdf", feature = "ocr"))]
     #[test]
     fn test_derive_extraction_result_with_structure() {
         let mut doc = make_doc("pdf");
@@ -1041,6 +1042,7 @@ mod tests {
         assert_eq!(ds.source_format.as_deref(), Some("pdf"));
     }
 
+    #[cfg(any(feature = "pdf", feature = "ocr"))]
     #[test]
     fn test_source_format_cow_owned_propagates() {
         // Regression test for #622: Cow::Owned variant must not fail type inference

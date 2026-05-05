@@ -3,7 +3,7 @@
 /// Consolidated from hwpers parser/record.rs, parser/header.rs, and
 /// parser/body_text.rs.
 use super::error::{HwpError, Result};
-use super::model::{CharShape, HwpTable, ParaText, Paragraph, Section};
+use super::model::{CharShape, ParaText, Paragraph, Section};
 use super::reader::{StreamReader, decompress_stream};
 
 // ---------------------------------------------------------------------------
@@ -49,11 +49,6 @@ impl FileHeader {
     /// Whether the document is password-encrypted.
     pub(crate) fn is_encrypted(&self) -> bool {
         (self.flags & 0x02) != 0
-    }
-
-    /// Whether the document is a distribution document (text in ViewText/).
-    pub(crate) fn is_distribute(&self) -> bool {
-        (self.flags & 0x04) != 0
     }
 }
 
@@ -127,9 +122,6 @@ const TAG_PARA_SHAPE: u16 = HWPTAG_BEGIN + 66; // 0x52
 /// HWP 5.x body-text record tag: char shape (HWPTAG_BEGIN + 67 = 0x53).
 const TAG_CHAR_SHAPE: u16 = HWPTAG_BEGIN + 67; // 0x53
 
-const TAG_TABLE: u16 = HWPTAG_BEGIN + 81; // 0x61
-const TAG_CELL: u16 = HWPTAG_BEGIN + 83; // 0x63
-
 const TAG_CHAR_SHAPE_INFO: u16 = HWPTAG_BEGIN + 30; // 0x2E
 
 // ---------------------------------------------------------------------------
@@ -146,15 +138,13 @@ pub(crate) fn parse_doc_info(data: Vec<u8>) -> Result<Vec<CharShape>> {
             Err(_) => break,
         };
 
-        if record.tag_id == TAG_CHAR_SHAPE_INFO {
-            if record.data.len() >= 4 {
-                let font_attr = u32::from_le_bytes([record.data[0], record.data[1], record.data[2], record.data[3]]);
-                char_shapes.push(CharShape {
-                    bold: (font_attr & 0x01) != 0,
-                    italic: (font_attr & 0x02) != 0,
-                    underline: (font_attr & 0x04) != 0,
-                });
-            }
+        if record.tag_id == TAG_CHAR_SHAPE_INFO && record.data.len() >= 4 {
+            let font_attr = u32::from_le_bytes([record.data[0], record.data[1], record.data[2], record.data[3]]);
+            char_shapes.push(CharShape {
+                bold: (font_attr & 0x01) != 0,
+                italic: (font_attr & 0x02) != 0,
+                underline: (font_attr & 0x04) != 0,
+            });
         }
     }
 
@@ -176,7 +166,6 @@ pub(crate) fn parse_body_text(data: Vec<u8>, is_compressed: bool) -> Result<Vec<
     let mut sections: Vec<Section> = Vec::new();
     let mut current_paragraphs: Vec<Paragraph> = Vec::new();
     let mut current_paragraph: Option<Paragraph> = None;
-    let mut current_tables: Vec<HwpTable> = Vec::new();
 
     while reader.remaining() >= 4 {
         let record = match Record::parse(&mut reader) {
@@ -219,31 +208,7 @@ pub(crate) fn parse_body_text(data: Vec<u8>, is_compressed: bool) -> Result<Vec<
                     }
                 }
             }
-            TAG_TABLE => {
-                // Basic table info: rows, cols are in here
-                if record.data.len() >= 48 {
-                    let rows = u16::from_le_bytes([record.data[44], record.data[45]]);
-                    let cols = u16::from_le_bytes([record.data[46], record.data[47]]);
-                    current_tables.push(HwpTable {
-                        rows,
-                        cols,
-                        cells: vec![vec![String::new(); cols as usize]; rows as usize],
-                    });
-                }
-            }
-            TAG_CELL => {
-                // Cell info: row, col indices
-                if record.data.len() >= 4 {
-                    let row = u16::from_le_bytes([record.data[0], record.data[1]]);
-                    let col = u16::from_le_bytes([record.data[2], record.data[3]]);
-                    if let Some(table) = current_tables.last_mut() {
-                        if (row as usize) < table.cells.len() && (col as usize) < table.cells[0].len() {
-                            // Cell content follows in sub-records.
-                            // Tracking this accurately requires more state.
-                        }
-                    }
-                }
-            }
+
             _ => {
                 // Skip all other tags — we only need plain text
             }
@@ -257,7 +222,6 @@ pub(crate) fn parse_body_text(data: Vec<u8>, is_compressed: bool) -> Result<Vec<
 
     sections.push(Section {
         paragraphs: current_paragraphs,
-        tables: current_tables,
     });
 
     Ok(sections)

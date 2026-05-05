@@ -15,8 +15,8 @@ pub mod model;
 pub mod parser;
 pub mod reader;
 
-use error::{HwpError, Result};
 use crate::extraction::hwp::model::HwpDocument;
+use error::{HwpError, Result};
 use parser::{FileHeader, parse_body_text, parse_doc_info};
 use reader::CfbReader;
 

@@ -19,25 +19,6 @@ pub struct HwpDocument {
     pub images: Vec<HwpImage>,
 }
 
-impl HwpDocument {
-    /// Concatenate the text of every paragraph in every section, separated by
-    /// newlines.
-    pub(crate) fn extract_text(&self) -> String {
-        let mut out = String::new();
-        for section in &self.sections {
-            for para in &section.paragraphs {
-                if let Some(ref t) = para.text
-                    && !t.content.is_empty()
-                {
-                    out.push_str(&t.content);
-                    out.push('\n');
-                }
-            }
-        }
-        out
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Section
 // ---------------------------------------------------------------------------
@@ -46,7 +27,6 @@ impl HwpDocument {
 #[derive(Debug, Default)]
 pub struct Section {
     pub paragraphs: Vec<Paragraph>,
-    pub tables: Vec<HwpTable>,
 }
 
 // ---------------------------------------------------------------------------
@@ -71,17 +51,6 @@ pub struct CharShape {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
-}
-
-// ---------------------------------------------------------------------------
-// Table
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Default)]
-pub struct HwpTable {
-    pub rows: u16,
-    pub cols: u16,
-    pub cells: Vec<Vec<String>>,
 }
 
 // ---------------------------------------------------------------------------

@@ -40,7 +40,16 @@ where
     BATCH_MODE.scope(Cell::new(true), future).await
 }
 
-#[cfg(test)]
+#[cfg(all(
+    test,
+    any(
+        feature = "pdf",
+        feature = "office",
+        feature = "excel",
+        feature = "excel-wasm",
+        feature = "archives"
+    )
+))]
 mod tests {
     use super::*;
 

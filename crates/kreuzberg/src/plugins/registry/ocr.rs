@@ -1,6 +1,5 @@
 //! OCR backend registry.
 
-#[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
 use crate::KreuzbergError;
 use crate::Result;
 use crate::plugins::OcrBackend;
