@@ -31,7 +31,7 @@ features = ["pyo3/extension-module"]
 python-packages = ["kreuzberg"]
 
 [dependency-groups]
-dev = ["ruff>=0.14.8", "mypy>=1.19.0"]
+dev = ["ruff>=0.14.8", "mypy>=1.20.2"]
 
 [tool.ruff]
 target-version = "py310"
