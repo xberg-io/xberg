@@ -71,6 +71,39 @@ fn mime_to_format(mime: &str) -> Cow<'static, str> {
 fn build_hwpx_internal_document(doc: unhwp::model::Document, mime_type: &str) -> InternalDocument {
     let mut builder = InternalDocumentBuilder::new("hwpx");
     builder.set_mime_type(Cow::Owned(mime_type.to_string()));
+
+    let mut metadata = crate::types::metadata::Metadata::default();
+    if let Some(title) = &doc.metadata.title {
+        metadata.title = Some(title.clone());
+    }
+    if let Some(author) = &doc.metadata.author {
+        metadata.authors = Some(vec![author.clone()]);
+    }
+    if let Some(subject) = &doc.metadata.subject {
+        metadata.subject = Some(subject.clone());
+    }
+    if !doc.metadata.keywords.is_empty() {
+        metadata.keywords = Some(doc.metadata.keywords.clone());
+    }
+    if let Some(created) = &doc.metadata.created {
+        metadata.created_at = Some(created.clone());
+    }
+    if let Some(modified) = &doc.metadata.modified {
+        metadata.modified_at = Some(modified.clone());
+    }
+    if let Some(creator_app) = &doc.metadata.creator_app {
+        metadata.additional.insert(
+            Cow::Borrowed("creator_app"),
+            serde_json::Value::String(creator_app.clone()),
+        );
+    }
+    if let Some(version) = &doc.metadata.format_version {
+        metadata.document_version = Some(version.clone());
+    }
+    if !metadata.is_empty() {
+        builder.set_metadata(metadata);
+    }
+
     let mut image_index: usize = 0;
 
     for section in &doc.sections {
