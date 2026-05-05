@@ -184,7 +184,21 @@ pub struct ApiState {
     /// while `ApiState` must be `Clone + Sync` for Axum's state requirement.
     /// The lock is held only long enough to clone the service.
     pub extraction_service: Arc<Mutex<BoxCloneService<ExtractionRequest, ExtractionResult, KreuzbergError>>>,
+    /// In-memory job store for async extraction polling.
+    #[cfg(feature = "api")]
+    pub job_store: Arc<super::jobs::JobStore>,
 }
+
+/// Response from `POST /extract-async`: a job identifier the client polls.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct AsyncJobResponse {
+    /// Unique ID to pass to `GET /jobs/{job_id}`.
+    pub job_id: String,
+}
+
+/// Response from `GET /jobs/{job_id}`.
+pub type JobStatusResponse = crate::types::events::JobStatus;
 
 /// Cache statistics response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

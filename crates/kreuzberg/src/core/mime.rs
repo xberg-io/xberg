@@ -24,6 +24,7 @@ pub struct SupportedFormat {
     pub mime_type: String,
 }
 
+pub const OCTET_STREAM_MIME_TYPE: &str = "application/octet-stream";
 pub(crate) const HTML_MIME_TYPE: &str = "text/html";
 pub(crate) const PDF_MIME_TYPE: &str = "application/pdf";
 pub(crate) const PLAIN_TEXT_MIME_TYPE: &str = "text/plain";

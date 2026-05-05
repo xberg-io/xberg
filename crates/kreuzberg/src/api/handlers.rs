@@ -7,12 +7,14 @@ use tower::Service;
 
 use crate::{BatchBytesItem, batch_extract_bytes, cache, service::ExtractionRequest};
 
+use std::sync::Arc;
+
 use super::{
     error::{ApiError, JsonApi, MultipartApi},
     types::{
-        ApiState, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse, DetectResponse, EmbedRequest,
-        EmbedResponse, ExtractResponse, HealthResponse, InfoResponse, ManifestEntryResponse, ManifestResponse,
-        VersionResponse, WarmRequest, WarmResponse,
+        ApiState, AsyncJobResponse, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse,
+        DetectResponse, EmbedRequest, EmbedResponse, ExtractResponse, HealthResponse, InfoResponse, JobStatusResponse,
+        ManifestEntryResponse, ManifestResponse, VersionResponse, WarmRequest, WarmResponse,
     },
 };
 
@@ -154,10 +156,11 @@ pub(crate) async fn extract_handler(
                     .await
                     .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?;
 
-                let mut mime_type = content_type.unwrap_or_else(|| "application/octet-stream".to_string());
+                let mut mime_type =
+                    content_type.unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string());
 
                 // When the client sends a generic content type, try to detect from the filename
-                if mime_type == "application/octet-stream"
+                if mime_type == crate::core::mime::OCTET_STREAM_MIME_TYPE
                     && let Some(ref name) = file_name
                     && let Ok(detected) = crate::core::mime::detect_mime_type(name, false)
                 {
@@ -205,9 +208,14 @@ pub(crate) async fn extract_handler(
                     .text()
                     .await
                     .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?;
-                let cfg = config.get_or_insert_with(|| (*state.default_config).clone());
-                let pdf_opts = cfg.pdf_options.get_or_insert_with(Default::default);
-                pdf_opts.passwords.get_or_insert_with(Vec::new).push(pwd);
+                #[cfg(feature = "pdf")]
+                {
+                    let cfg = config.get_or_insert_with(|| (*state.default_config).clone());
+                    let pdf_opts = cfg.pdf_options.get_or_insert_with(Default::default);
+                    pdf_opts.passwords.get_or_insert_with(Vec::new).push(pwd);
+                }
+                #[cfg(not(feature = "pdf"))]
+                let _ = pwd;
             }
             "format" => {
                 let format_str = field
@@ -581,9 +589,10 @@ pub(crate) async fn extract_structured_handler(
                     .await
                     .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?;
 
-                let mut mime_type = content_type.unwrap_or_else(|| "application/octet-stream".to_string());
+                let mut mime_type =
+                    content_type.unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string());
 
-                if mime_type == "application/octet-stream"
+                if mime_type == crate::core::mime::OCTET_STREAM_MIME_TYPE
                     && let Some(ref name) = file_name
                     && let Ok(detected) = crate::core::mime::detect_mime_type(name, false)
                 {
@@ -1143,6 +1152,192 @@ fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
 }
 
+/// Submit an async extraction job.
+///
+/// POST /extract-async
+///
+/// Accepts multipart form data with:
+/// - `files`: One or more files to extract
+/// - `config` (optional): JSON extraction configuration
+///
+/// Returns immediately with a job ID. Poll `GET /jobs/{job_id}` for status.
+///
+/// # Size Limits
+///
+/// Request body size limits are enforced at the router layer via `DefaultBodyLimit` and `RequestBodyLimitLayer`.
+/// Default limits:
+/// - Total request body: 100 MB (all files + form data combined)
+/// - Individual multipart fields: 100 MB (controlled by Axum's `DefaultBodyLimit`)
+///
+/// Limits can be configured via environment variables or programmatically when creating the router.
+/// If a request exceeds the size limit, it will be rejected with HTTP 413 (Payload Too Large).
+#[cfg(feature = "api")]
+#[utoipa::path(
+    post,
+    path = "/extract-async",
+    tag = "extraction",
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 202, description = "Job accepted", body = AsyncJobResponse),
+        (status = 400, description = "Bad request", body = crate::api::types::ErrorResponse),
+        (status = 413, description = "Payload too large", body = crate::api::types::ErrorResponse),
+    )
+)]
+pub(crate) async fn extract_async_handler(
+    State(state): State<ApiState>,
+    MultipartApi(mut multipart): MultipartApi,
+) -> Result<axum::response::Response, ApiError> {
+    let mut files: Vec<(Vec<u8>, String, Option<String>)> = Vec::new();
+    let mut config: Option<crate::core::config::ExtractionConfig> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?
+    {
+        let field_name = field.name().unwrap_or("").to_string();
+        match field_name.as_str() {
+            "files" => {
+                let file_name = field.file_name().map(|s| s.to_string());
+                let content_type = field.content_type().map(|s| s.to_string());
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?;
+                let mut mime_type =
+                    content_type.unwrap_or_else(|| crate::core::mime::OCTET_STREAM_MIME_TYPE.to_string());
+                if mime_type == crate::core::mime::OCTET_STREAM_MIME_TYPE
+                    && let Some(ref name) = file_name
+                    && let Ok(detected) = crate::core::mime::detect_mime_type(name, false)
+                {
+                    mime_type = detected;
+                }
+                files.push((data.to_vec(), mime_type, file_name));
+            }
+            "config" => {
+                let config_str = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?;
+                config = Some(serde_json::from_str(&config_str).map_err(|e| {
+                    ApiError::validation(crate::error::KreuzbergError::validation(format!(
+                        "Invalid extraction configuration: {}",
+                        e
+                    )))
+                })?);
+            }
+            _ => {}
+        }
+    }
+
+    if files.is_empty() {
+        return Err(ApiError::validation(crate::error::KreuzbergError::validation(
+            "No files provided",
+        )));
+    }
+
+    let job_id = state.job_store.create_job();
+    let effective_config = config.unwrap_or_else(|| (*state.default_config).clone());
+
+    let job_store = Arc::clone(&state.job_store);
+    let job_id_bg = job_id.clone();
+    let mut svc = state
+        .extraction_service
+        .lock()
+        .expect("extraction service lock poisoned")
+        .clone();
+
+    tokio::spawn(async move {
+        let store = job_store;
+        let jid = job_id_bg;
+
+        store.set_running(&jid, super::jobs::now_rfc3339());
+
+        // Default to 5 minutes if no extraction timeout is configured.
+        let timeout_secs = effective_config.extraction_timeout_secs.unwrap_or(300);
+        let timeout_dur = std::time::Duration::from_secs(timeout_secs);
+
+        let extraction_fut = async {
+            let mut results = Vec::with_capacity(files.len());
+            for (data, mime_type, _file_name) in files {
+                let req = crate::service::ExtractionRequest::bytes(data, &mime_type, effective_config.clone());
+                match svc.call(req).await {
+                    Ok(result) => results.push(result),
+                    Err(e) => {
+                        return Err(e.to_string());
+                    }
+                }
+            }
+
+            serde_json::to_value(&results).map_err(|e| format!("failed to serialize results: {e}"))
+        };
+
+        match tokio::time::timeout(timeout_dur, extraction_fut).await {
+            Ok(Ok(value)) => store.complete(&jid, value, super::jobs::now_rfc3339()),
+            Ok(Err(e)) => store.fail(&jid, e, super::jobs::now_rfc3339()),
+            Err(_elapsed) => store.fail(
+                &jid,
+                format!("extraction timed out after {}s", timeout_secs),
+                super::jobs::now_rfc3339(),
+            ),
+        }
+    });
+
+    Ok((
+        axum::http::StatusCode::ACCEPTED,
+        axum::Json(AsyncJobResponse { job_id }),
+    )
+        .into_response())
+}
+
+/// Poll the status of an async extraction job.
+///
+/// GET /jobs/{job_id}
+///
+/// Returns the current `JobStatus`. Once `state == completed` the `result`
+/// field is populated; once `state == failed` the `error` field is populated.
+/// Jobs expire after 5 minutes and return 404 once evicted.
+#[cfg(feature = "api")]
+#[utoipa::path(
+    get,
+    path = "/jobs/{job_id}",
+    tag = "extraction",
+    params(
+        ("job_id" = String, Path, description = "Job ID returned by POST /extract-async"),
+    ),
+    responses(
+        (status = 200, description = "Job status", body = crate::types::events::JobStatus),
+        (status = 404, description = "Job not found or expired", body = crate::api::types::ErrorResponse),
+    )
+)]
+pub(crate) async fn job_status_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(job_id): axum::extract::Path<String>,
+) -> Result<axum::Json<JobStatusResponse>, ApiError> {
+    match state.job_store.get(&job_id) {
+        Some(status) => Ok(axum::Json(status)),
+        None => Err(ApiError {
+            status: axum::http::StatusCode::NOT_FOUND,
+            body: super::types::ErrorResponse {
+                error_type: "NotFoundError".to_string(),
+                message: format!("Job '{}' not found or expired", job_id),
+                traceback: None,
+                status_code: axum::http::StatusCode::NOT_FOUND.as_u16(),
+            },
+        }),
+    }
+}
+
+/// Handler for 404 Not Found errors.
+///
+/// Returns a JSON error response instead of the default plain text.
+pub async fn not_found_handler() -> ApiError {
+    ApiError::new(
+        axum::http::StatusCode::NOT_FOUND,
+        crate::error::KreuzbergError::validation("The requested resource was not found"),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1159,15 +1354,24 @@ mod tests {
         let state = ApiState {
             default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
+            #[cfg(feature = "api")]
+            job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
         };
-        Router::new()
+        #[allow(unused_mut)]
+        let mut router = Router::new()
             .route("/version", get(version_handler))
             .route("/detect", post(detect_handler))
             .route("/cache/manifest", get(cache_manifest_handler))
             .route("/cache/warm", post(cache_warm_handler))
             .route("/embed", post(embed_handler))
-            .route("/chunk", post(chunk_handler))
-            .with_state(state)
+            .route("/chunk", post(chunk_handler));
+
+        #[cfg(feature = "api")]
+        let router = router
+            .route("/extract-async", post(extract_async_handler))
+            .route("/jobs/{job_id}", get(job_status_handler));
+
+        router.with_state(state)
     }
 
     #[tokio::test]
@@ -1446,5 +1650,224 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["config"]["topic_threshold"], 0.5);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_returns_job_id() {
+        let app = test_router();
+        let boundary = "testboundary123";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"test.txt\"\r\nContent-Type: text/plain\r\n\r\nhello world\r\n--{boundary}--\r\n",
+            boundary = boundary
+        );
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/extract-async")
+                    .header("content-type", format!("multipart/form-data; boundary={}", boundary))
+                    .body(Body::from(body))
+                    .expect("valid request"),
+            )
+            .await
+            .expect("handler responded");
+
+        assert_eq!(
+            response.status(),
+            StatusCode::ACCEPTED,
+            "expected HTTP 202 Accepted from POST /extract-async"
+        );
+
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes readable");
+        let resp: AsyncJobResponse = serde_json::from_slice(&bytes).expect("response parses as AsyncJobResponse");
+        assert!(!resp.job_id.is_empty(), "job_id must be non-empty");
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_job_status_not_found() {
+        let app = test_router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/jobs/does-not-exist")
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
+            .await
+            .expect("handler responded");
+
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "expected HTTP 404 for unknown job ID"
+        );
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_then_poll_job_id() {
+        use crate::types::events::{JobState, JobStatus};
+        use tower::Service;
+
+        // Use a single mutable service so both requests share the same ApiState.
+        let mut app = test_router();
+        let boundary = "pollboundary456";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"hello.txt\"\r\nContent-Type: text/plain\r\n\r\nhello world\r\n--{boundary}--\r\n",
+            boundary = boundary
+        );
+
+        let post_req: Request<Body> = Request::builder()
+            .method("POST")
+            .uri("/extract-async")
+            .header("content-type", format!("multipart/form-data; boundary={}", boundary))
+            .body(Body::from(body))
+            .expect("valid request");
+        let post_response = tower::ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .expect("service ready")
+            .call(post_req)
+            .await
+            .expect("POST handler responded");
+
+        assert_eq!(
+            post_response.status(),
+            StatusCode::ACCEPTED,
+            "expected HTTP 202 from POST /extract-async"
+        );
+
+        let post_bytes = axum::body::to_bytes(post_response.into_body(), usize::MAX)
+            .await
+            .expect("POST body bytes readable");
+        let async_resp: AsyncJobResponse =
+            serde_json::from_slice(&post_bytes).expect("POST response parses as AsyncJobResponse");
+        let job_id = async_resp.job_id;
+        assert!(!job_id.is_empty(), "job_id from POST must be non-empty");
+
+        // Poll until the background task completes (or 2 s).
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        let final_status = loop {
+            let poll_req: Request<Body> = Request::builder()
+                .method("GET")
+                .uri(format!("/jobs/{}", job_id))
+                .body(Body::empty())
+                .expect("valid request");
+            let resp = tower::ServiceExt::<Request<Body>>::ready(&mut app)
+                .await
+                .expect("service ready")
+                .call(poll_req)
+                .await
+                .expect("GET responded");
+            assert_eq!(
+                resp.status(),
+                StatusCode::OK,
+                "expected HTTP 200 from GET /jobs/{{job_id}}"
+            );
+            let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .expect("body readable");
+            let status: JobStatus = serde_json::from_slice(&bytes).expect("response is JobStatus");
+            if matches!(status.state, JobState::Completed | JobState::Failed) {
+                break status;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "job did not reach terminal state within 2s"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        };
+
+        assert_eq!(
+            final_status.job_id, job_id,
+            "JobStatus.job_id must match the submitted job_id"
+        );
+        assert_eq!(
+            final_status.state,
+            JobState::Completed,
+            "job must complete successfully"
+        );
+        assert!(
+            final_status.result.is_some(),
+            "completed job must carry an extraction result"
+        );
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_bad_file_fails() {
+        use crate::types::events::{JobState, JobStatus};
+        use tower::Service;
+
+        let mut app = test_router();
+        let boundary = "badboundary789";
+        // Submit a file with a MIME type that no extractor supports.
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"files\"; filename=\"bad.xyz\"\r\nContent-Type: application/x-unsupported-format\r\n\r\ngarbage\r\n--{boundary}--\r\n",
+            boundary = boundary
+        );
+
+        let post_req: Request<Body> = Request::builder()
+            .method("POST")
+            .uri("/extract-async")
+            .header("content-type", format!("multipart/form-data; boundary={}", boundary))
+            .body(Body::from(body))
+            .expect("valid request");
+        let post_response = tower::ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .expect("service ready")
+            .call(post_req)
+            .await
+            .expect("POST handler responded");
+
+        assert_eq!(post_response.status(), StatusCode::ACCEPTED);
+
+        let post_bytes = axum::body::to_bytes(post_response.into_body(), usize::MAX)
+            .await
+            .expect("body readable");
+        let async_resp: AsyncJobResponse = serde_json::from_slice(&post_bytes).expect("parses as AsyncJobResponse");
+        let job_id = async_resp.job_id;
+
+        // Poll until the background task reaches a terminal state (or 2s).
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        let final_status = loop {
+            let poll_req: Request<Body> = Request::builder()
+                .method("GET")
+                .uri(format!("/jobs/{}", job_id))
+                .body(Body::empty())
+                .expect("valid request");
+            let resp = tower::ServiceExt::<Request<Body>>::ready(&mut app)
+                .await
+                .expect("service ready")
+                .call(poll_req)
+                .await
+                .expect("GET responded");
+            assert_eq!(resp.status(), StatusCode::OK);
+            let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .expect("body readable");
+            let status: JobStatus = serde_json::from_slice(&bytes).expect("response is JobStatus");
+            if matches!(status.state, JobState::Completed | JobState::Failed) {
+                break status;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "job did not reach terminal state within 2s"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        };
+
+        assert_eq!(
+            final_status.state,
+            JobState::Failed,
+            "extraction of unsupported format must fail"
+        );
+        assert!(final_status.error.is_some(), "failed job must carry an error message");
     }
 }

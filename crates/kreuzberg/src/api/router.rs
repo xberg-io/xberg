@@ -22,8 +22,8 @@ use crate::{ExtractionConfig, core::ServerConfig, service::ExtractionServiceBuil
 use super::{
     handlers::{
         cache_clear_handler, cache_manifest_handler, cache_stats_handler, cache_warm_handler, chunk_handler,
-        detect_handler, embed_handler, extract_handler, extract_structured_handler, formats_handler, health_handler,
-        info_handler, version_handler,
+        detect_handler, embed_handler, extract_async_handler, extract_handler, extract_structured_handler,
+        formats_handler, health_handler, info_handler, job_status_handler, not_found_handler, version_handler,
     },
     openweb::{openweb_docling_handler, openweb_external_handler},
     types::{ApiSizeLimits, ApiState},
@@ -130,6 +130,8 @@ pub(crate) fn create_router_with_limits_and_server_config(
     let state = ApiState {
         default_config: Arc::new(config),
         extraction_service: Arc::new(std::sync::Mutex::new(extraction_service)),
+        #[cfg(feature = "api")]
+        job_store: Arc::new(super::jobs::JobStore::new()),
     };
 
     // CORS configuration based on ServerConfig
@@ -165,6 +167,8 @@ pub(crate) fn create_router_with_limits_and_server_config(
     let mut router = Router::new()
         .route("/extract", post(extract_handler))
         .route("/extract-structured", post(extract_structured_handler))
+        .route("/extract-async", post(extract_async_handler))
+        .route("/jobs/{job_id}", get(job_status_handler))
         .route("/detect", post(detect_handler))
         .route("/embed", post(embed_handler))
         .route("/chunk", post(chunk_handler))
@@ -178,7 +182,8 @@ pub(crate) fn create_router_with_limits_and_server_config(
         .route("/cache/warm", post(cache_warm_handler))
         // OpenWebUI compatibility endpoints
         .route("/process", put(openweb_external_handler))
-        .route("/v1/convert/file", post(openweb_docling_handler));
+        .route("/v1/convert/file", post(openweb_docling_handler))
+        .fallback(not_found_handler);
 
     // Add OpenAPI schema endpoint if API feature is enabled
     #[cfg(feature = "api")]

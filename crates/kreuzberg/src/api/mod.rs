@@ -95,6 +95,8 @@ mod config;
 mod error;
 mod handlers;
 #[cfg(feature = "api")]
+pub(crate) mod jobs;
+#[cfg(feature = "api")]
 pub mod openapi;
 mod openweb;
 mod router;

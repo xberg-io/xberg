@@ -83,6 +83,7 @@ repos:
     rev: v0.9.2
     hooks:
       - id: cargo-machete
+        args: ["crates/", "packages/", "tools/"]
         exclude: ^e2e/
 
   - repo: https://github.com/EmbarkStudios/cargo-deny

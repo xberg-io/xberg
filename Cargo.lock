@@ -3587,6 +3587,7 @@ dependencies = [
  "memmap2",
  "mime_guess",
  "minijinja",
+ "moka",
  "ndarray",
  "num_cpus",
  "once_cell",
@@ -3636,6 +3637,7 @@ dependencies = [
  "ureq 3.3.0",
  "urlencoding",
  "utoipa",
+ "uuid",
  "v_htmlescape",
  "wasm-bindgen-rayon",
  "whatlang",
@@ -4196,6 +4198,23 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "moka"
+version = "0.12.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "957228ad12042ee839f93c8f257b62b4c0ab5eaae1d4fa60de53b27c9d7c5046"
+dependencies = [
+ "crossbeam-channel",
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "equivalent",
+ "parking_lot",
+ "portable-atomic",
+ "smallvec",
+ "tagptr",
+ "uuid",
 ]
 
 [[package]]
@@ -6690,6 +6709,12 @@ dependencies = [
  "serde",
  "slotmap",
 ]
+
+[[package]]
+name = "tagptr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 
 [[package]]
 name = "tap"
