@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+-   **MIME Detection**: Added `detect_office_format_from_zip` support for `application/haansofthwpx` (`.hwpx`) based on `Contents/content.hpf` magic marker.
+
 ## [5.0.0-rc.1] - 2026-05-05
 
 ### Breaking Changes

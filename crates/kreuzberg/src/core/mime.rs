@@ -44,6 +44,7 @@ pub(crate) const EXCEL_MIME_TYPE: &str = "application/vnd.openxmlformats-officed
 pub(crate) const IWORK_PAGES_MIME_TYPE: &str = "application/x-iwork-pages-sffpages";
 pub(crate) const IWORK_NUMBERS_MIME_TYPE: &str = "application/x-iwork-numbers-sffnumbers";
 pub(crate) const IWORK_KEYNOTE_MIME_TYPE: &str = "application/x-iwork-keynote-sffkey";
+pub(crate) const HWPX_MIME_TYPE: &str = "application/haansofthwpx";
 
 /// A format definition in the centralized registry.
 ///
@@ -258,7 +259,7 @@ static FORMATS: &[FormatEntry] = &[
     },
     FormatEntry {
         extensions: &["hwpx"],
-        mime_type: "application/haansofthwpx",
+        mime_type: HWPX_MIME_TYPE,
         aliases: &[],
     },
     // ── Images ──────────────────────────────────────────────────────────
@@ -773,6 +774,9 @@ pub fn detect_mime_type_from_bytes(content: &[u8]) -> Result<String> {
 /// This function scans the ZIP's local file headers without fully parsing the archive,
 /// making it efficient for MIME type detection.
 fn detect_office_format_from_zip(content: &[u8]) -> Option<&'static str> {
+    // Hangul Word Processor (Next Generation) marker
+    const HWPX_MARKER: &[u8] = b"Contents/content.hpf";
+
     // Office format markers - these are file paths within the ZIP that identify the format
     const DOCX_MARKER: &[u8] = b"word/document.xml";
     const XLSX_MARKER: &[u8] = b"xl/workbook.xml";
@@ -783,7 +787,12 @@ fn detect_office_format_from_zip(content: &[u8]) -> Option<&'static str> {
     const NUMBERS_MARKER: &[u8] = b"Index/CalculationEngine.iwa";
     const KEYNOTE_MARKER: &[u8] = b"Index/Presentation.iwa";
 
-    // Check iWork first (before generic Office) since iWork ZIPs also contain XML
+    // Check HWPX first as recommended (it may contain XML files that could false-match)
+    if contains_subsequence(content, HWPX_MARKER) {
+        return Some(HWPX_MIME_TYPE);
+    }
+
+    // Check iWork next (before generic Office) since iWork ZIPs also contain XML
     if contains_subsequence(content, PAGES_MARKER) {
         return Some(IWORK_PAGES_MIME_TYPE);
     }
@@ -1156,6 +1165,47 @@ mod tests {
         ];
         let mime = detect_mime_type_from_bytes(plain_zip_bytes).unwrap();
         assert_eq!(mime, "application/zip", "Plain ZIP should remain as application/zip");
+
+        // Test HWPX detection
+        let hwpx_bytes: &[u8] = &[
+            0x50, 0x4b, 0x03, 0x04, // ZIP signature
+            0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x14, 0x00, // file name length (20)
+            0x00, 0x00, // extra field length
+            b'C', b'o', b'n', b't', b'e', b'n', b't', b's', b'/', b'c', b'o', b'n', b't', b'e', b'n', b't', b'.', b'h',
+            b'p', b'f', // "Contents/content.hpf"
+        ];
+        let mime = detect_mime_type_from_bytes(hwpx_bytes).unwrap();
+        assert_eq!(
+            mime, HWPX_MIME_TYPE,
+            "Should detect HWPX from ZIP with Contents/content.hpf"
+        );
+
+        // Test negative HWPX: ZIP containing an XML file, but not the HWPX marker
+        let negative_hwpx_bytes: &[u8] = &[
+            0x50, 0x4b, 0x03, 0x04, // ZIP signature
+            0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x12, 0x00, // file name length (18)
+            0x00, 0x00, // extra field length
+            b'C', b'o', b'n', b't', b'e', b'n', b't', b's', b'/', b'o', b't', b'h', b'e', b'r', b'.', b'x', b'm',
+            b'l', // "Contents/other.xml"
+        ];
+        let mime = detect_mime_type_from_bytes(negative_hwpx_bytes).unwrap();
+        assert_eq!(
+            mime, "application/zip",
+            "Plain ZIP with random XML should remain as application/zip"
+        );
+    }
+
+    #[test]
+    fn test_detect_hwpx_from_real_file() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/hwpx/simple.hwpx");
+
+        if path.exists() {
+            let content = std::fs::read(path).unwrap();
+            let mime = detect_mime_type_from_bytes(&content).unwrap();
+            assert_eq!(mime, HWPX_MIME_TYPE, "Should detect HWPX from real file bytes");
+        }
     }
 
     #[test]
