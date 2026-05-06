@@ -7,7 +7,7 @@ async def main() -> None:
 
     content: str = result.content
     tables: int = len(result.tables)
-    format_type: str | None = result.metadata.format_type
+    format_type: str | None = result.metadata.format.format_type if result.metadata.format else None
 
     print(f"Content length: {len(content)} characters")
     print(f"Tables found: {tables}")

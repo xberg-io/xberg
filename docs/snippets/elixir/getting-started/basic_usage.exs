@@ -8,6 +8,6 @@ IO.puts("Extracted Content:")
 IO.puts(result.content)
 
 IO.puts("\nMetadata:")
-IO.puts("Format: #{inspect(result.metadata.format_type)}")
+IO.puts("Format: #{inspect(result.metadata.format)}")
 IO.puts("Tables found: #{length(result.tables)}")
 ```

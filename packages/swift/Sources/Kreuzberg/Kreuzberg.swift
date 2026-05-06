@@ -926,12 +926,10 @@ public typealias ImagePreprocessingMetadata = RustBridge.ImagePreprocessingMetad
 /// via a discriminated union, and additional custom fields from postprocessors.
 public typealias Metadata = RustBridge.Metadata
 
-/// Excel/spreadsheet metadata marker.
+/// Excel/spreadsheet format metadata.
 ///
-/// Sheet count and sheet names are now exposed directly on [`Metadata`] as
-/// `sheet_count: Option<usize>` and `sheet_names: Option<Vec<String>>` so that
-/// every binding (Rust, Python, Node, …) sees them at the same path. This
-/// struct remains as a `FormatMetadata` variant tag for spreadsheet sources.
+/// Identifies the document as a spreadsheet source via the `FormatMetadata::Excel`
+/// discriminant. Sheet count and sheet names are stored inside this struct.
 public typealias ExcelMetadata = RustBridge.ExcelMetadata
 
 /// Email metadata extracted from .eml and .msg files.

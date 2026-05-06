@@ -1345,18 +1345,17 @@ pub const Metadata = struct {
     document_version: ?[:0]const u8,
     abstract_text: ?[:0]const u8,
     output_format: ?[:0]const u8,
-    sheet_count: ?u64,
-    sheet_names: ?[]const [:0]const u8,
     additional: std.StringHashMap([:0]const u8),
 };
 
-/// Excel/spreadsheet metadata marker.
+/// Excel/spreadsheet format metadata.
 ///
-/// Sheet count and sheet names are now exposed directly on `Metadata` as
-/// `sheet_count: Option<usize>` and `sheet_names: Option<Vec<String>>` so that
-/// every binding (Rust, Python, Node, …) sees them at the same path. This
-/// struct remains as a `FormatMetadata` variant tag for spreadsheet sources.
-pub const ExcelMetadata = struct {};
+/// Identifies the document as a spreadsheet source via the `FormatMetadata.Excel`
+/// discriminant. Sheet count and sheet names are stored inside this struct.
+pub const ExcelMetadata = struct {
+    sheet_count: ?u64,
+    sheet_names: ?[]const [:0]const u8,
+};
 
 /// Email metadata extracted from .eml and .msg files.
 ///

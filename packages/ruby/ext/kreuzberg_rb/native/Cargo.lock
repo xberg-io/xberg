@@ -598,7 +598,7 @@ dependencies = [
  "log",
  "quick-xml 0.39.3",
  "serde",
- "zip 7.2.0",
+ "zip",
 ]
 
 [[package]]
@@ -2625,7 +2625,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg"
-version = "4.10.0-rc.15"
+version = "5.0.0-rc.1"
 dependencies = [
  "ahash",
  "async-trait",
@@ -2721,12 +2721,12 @@ dependencies = [
  "utoipa",
  "v_htmlescape",
  "whatlang",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
 name = "kreuzberg-paddle-ocr"
-version = "4.10.0-rc.15"
+version = "5.0.0-rc.1"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -2740,7 +2740,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-pdfium-render"
-version = "4.10.0-rc.15"
+version = "5.0.0-rc.1"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -2763,7 +2763,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-rb"
-version = "4.10.0-rc.15"
+version = "5.0.0-rc.1"
 dependencies = [
  "async-trait",
  "kreuzberg",
@@ -2775,13 +2775,13 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-tesseract"
-version = "4.10.0-rc.15"
+version = "5.0.0-rc.1"
 dependencies = [
  "cc",
  "cmake",
  "reqwest",
  "thiserror",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
@@ -6516,19 +6516,6 @@ dependencies = [
  "memchr",
  "typed-path",
  "zopfli",
-]
-
-[[package]]
-name = "zip"
-version = "8.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
-dependencies = [
- "crc32fast",
- "flate2",
- "indexmap",
- "memchr",
- "typed-path",
 ]
 
 [[package]]

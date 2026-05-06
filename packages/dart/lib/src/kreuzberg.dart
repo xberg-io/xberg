@@ -3644,7 +3644,7 @@ class Metadata {
   /// Format-specific metadata (discriminated union)
   ///
   /// Contains detailed metadata specific to the document format.
-  /// Serializes with a `format_type` discriminator field.
+  /// Serialized as a nested `"format"` object with a `format_type` discriminator field.
   final FormatMetadata? format;
 
   /// Image preprocessing metadata (when OCR preprocessing was applied)
@@ -3680,27 +3680,9 @@ class Metadata {
   /// Previously stored in `metadata.additional["output_format"]`.
   final String? outputFormat;
 
-  /// Number of sheets in the workbook (Excel/spreadsheet sources only).
-  ///
-  /// `None` for non-spreadsheet documents. Mirrors the JSON-flat field
-  /// already exposed via the `FormatMetadata::Excel` flatten so all bindings
-  /// see it at `metadata.sheet_count`.
-  final int? sheetCount;
-
-  /// Sheet names in the workbook (Excel/spreadsheet sources only).
-  ///
-  /// `None` for non-spreadsheet documents.
-  final List<String>? sheetNames;
-
   /// Additional custom fields from postprocessors.
   ///
-  /// **Deprecated**: Prefer using typed fields on `ExtractionResult` and `Metadata`
-  /// instead of inserting into this map. Typed fields provide better cross-language
-  /// compatibility and type safety. This field will be removed in a future major version.
-  ///
-  /// This flattened map allows Python/TypeScript postprocessors to add
-  /// arbitrary fields (entity extraction, keyword extraction, etc.).
-  /// Fields are merged at the root level during serialization.
+  /// Serialized as a nested `"additional"` object (not flattened at root level).
   /// Uses `Cow<'static, str>` keys so static string keys avoid allocation.
   final Map<String, String> additional;
   Metadata({
@@ -3724,19 +3706,22 @@ class Metadata {
     required this.documentVersion,
     required this.abstractText,
     required this.outputFormat,
-    required this.sheetCount,
-    required this.sheetNames,
     required this.additional,
   });
 }
 
-/// Excel/spreadsheet metadata marker.
+/// Excel/spreadsheet format metadata.
 ///
-/// Sheet count and sheet names are now exposed directly on [`Metadata`] as
-/// `sheet_count: Option<usize>` and `sheet_names: Option<Vec<String>>` so that
-/// every binding (Rust, Python, Node, …) sees them at the same path. This
-/// struct remains as a `FormatMetadata` variant tag for spreadsheet sources.
-class ExcelMetadata {}
+/// Identifies the document as a spreadsheet source via the `FormatMetadata::Excel`
+/// discriminant. Sheet count and sheet names are stored inside this struct.
+class ExcelMetadata {
+  /// Number of sheets in the workbook.
+  final int? sheetCount;
+
+  /// Names of all sheets in the workbook.
+  final List<String>? sheetNames;
+  ExcelMetadata({required this.sheetCount, required this.sheetNames});
+}
 
 /// Email metadata extracted from .eml and .msg files.
 ///

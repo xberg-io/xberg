@@ -17,6 +17,6 @@ images = result.images
 IO.puts("Images found: #{length(images)}")
 
 # Access metadata
-format_type = result.metadata.format_type
-IO.puts("Format: #{inspect(format_type)}")
+format = result.metadata.format
+IO.puts("Format: #{inspect(format)}")
 ```

@@ -4,7 +4,7 @@
 case Kreuzberg.extract_file("document.pdf") do
   {:ok, result} ->
     IO.puts("Content: #{result.content}")
-    IO.puts("MIME Type: #{result.metadata.format_type}")
+    IO.puts("Format: #{inspect(result.metadata.format)}")
     IO.puts("Tables: #{length(result.tables)}")
 
   {:error, reason} ->

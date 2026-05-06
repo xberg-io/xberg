@@ -914,13 +914,14 @@ pub struct Metadata {
     pub document_version: Option<String>,
     pub abstract_text: Option<String>,
     pub output_format: Option<String>,
-    pub sheet_count: Option<i64>,
-    pub sheet_names: Option<Vec<String>>,
     pub additional: std::collections::HashMap<String, String>,
 }
 
 #[frb(mirror(ExcelMetadata))]
-pub struct ExcelMetadata {}
+pub struct ExcelMetadata {
+    pub sheet_count: Option<i64>,
+    pub sheet_names: Option<Vec<String>>,
+}
 
 #[frb(mirror(EmailMetadata))]
 pub struct EmailMetadata {

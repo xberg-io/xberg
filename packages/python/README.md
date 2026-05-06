@@ -121,7 +121,7 @@ async def main() -> None:
     result = await extract_file(file_path)
 
     print(f"Content: {result.content}")
-    print(f"MIME Type: {result.metadata.format_type}")
+    print(f"Format: {result.metadata.format.format_type if result.metadata.format else None}")
     print(f"Tables: {len(result.tables)}")
 
 asyncio.run(main())
@@ -138,7 +138,7 @@ async def main() -> None:
 
     content: str = result.content
     tables: int = len(result.tables)
-    format_type: str | None = result.metadata.format_type
+    format_type: str | None = result.metadata.format.format_type if result.metadata.format else None
 
     print(f"Content length: {len(content)} characters")
     print(f"Tables found: {tables}")

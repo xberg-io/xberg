@@ -6613,20 +6613,6 @@ char *kreuzberg_metadata_abstract_text(const KREUZBERGMetadata *ptr);
 char *kreuzberg_metadata_output_format(const KREUZBERGMetadata *ptr);
 
 /**
- * Get the `sheet_count` field from a `Metadata`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-uintptr_t kreuzberg_metadata_sheet_count(const KREUZBERGMetadata *ptr);
-
-/**
- * Get the `sheet_names` field from a `Metadata`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-char *kreuzberg_metadata_sheet_names(const KREUZBERGMetadata *ptr);
-
-/**
  * Get the `additional` field from a `Metadata`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -6664,6 +6650,20 @@ char *kreuzberg_excel_metadata_to_json(const KREUZBERGExcelMetadata *ptr);
  * Pointer must have been returned by this library, or be null.
  */
 void kreuzberg_excel_metadata_free(KREUZBERGExcelMetadata *ptr);
+
+/**
+ * Get the `sheet_count` field from a `ExcelMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t kreuzberg_excel_metadata_sheet_count(const KREUZBERGExcelMetadata *ptr);
+
+/**
+ * Get the `sheet_names` field from a `ExcelMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_excel_metadata_sheet_names(const KREUZBERGExcelMetadata *ptr);
 
 /**
  * Create a `EmailMetadata` from a JSON string. Returns null on failure.

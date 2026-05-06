@@ -1343,8 +1343,6 @@ mod ffi {
             document_version: Option<String>,
             abstract_text: Option<String>,
             output_format: Option<String>,
-            sheet_count: Option<usize>,
-            sheet_names: Option<Vec<String>>,
             additional: String,
         ) -> Metadata;
         fn title(&self) -> Option<String>;
@@ -1367,13 +1365,15 @@ mod ffi {
         fn document_version(&self) -> Option<String>;
         fn abstract_text(&self) -> Option<String>;
         fn output_format(&self) -> Option<String>;
-        fn sheet_count(&self) -> Option<usize>;
-        fn sheet_names(&self) -> Option<Vec<String>>;
         fn additional(&self) -> String;
     }
 
     extern "Rust" {
         type ExcelMetadata;
+        #[swift_bridge(init)]
+        fn new(sheet_count: Option<usize>, sheet_names: Option<Vec<String>>) -> ExcelMetadata;
+        fn sheet_count(&self) -> Option<usize>;
+        fn sheet_names(&self) -> Option<Vec<String>>;
     }
 
     extern "Rust" {
@@ -6831,8 +6831,6 @@ impl Metadata {
         document_version: Option<String>,
         abstract_text: Option<String>,
         output_format: Option<String>,
-        sheet_count: Option<usize>,
-        sheet_names: Option<Vec<String>>,
         additional: String,
     ) -> Metadata {
         let mut __target: kreuzberg::Metadata = ::std::default::Default::default();
@@ -6946,12 +6944,6 @@ impl Metadata {
                 }
             }
         }
-        __target.sheet_count = sheet_count;
-        if let Ok(__v) = ::serde_json::to_value(sheet_names) {
-            if let Ok(t) = ::serde_json::from_value(__v) {
-                __target.sheet_names = t;
-            }
-        }
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&additional) {
             if let Ok(t) = ::serde_json::from_value(v) {
                 __target.additional = t;
@@ -7044,6 +7036,24 @@ impl Metadata {
             .as_ref()
             .and_then(|v| serde_json::to_string(v).ok())
     }
+    pub fn additional(&self) -> String {
+        serde_json::to_string(&self.0.additional).expect("serializable additional")
+    }
+}
+
+pub struct ExcelMetadata(pub kreuzberg::ExcelMetadata);
+
+impl ExcelMetadata {
+    pub fn new(sheet_count: Option<usize>, sheet_names: Option<Vec<String>>) -> ExcelMetadata {
+        let mut __target: kreuzberg::ExcelMetadata = ::std::default::Default::default();
+        __target.sheet_count = sheet_count;
+        if let Ok(__v) = ::serde_json::to_value(sheet_names) {
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.sheet_names = t;
+            }
+        }
+        ExcelMetadata(__target)
+    }
     pub fn sheet_count(&self) -> Option<usize> {
         self.0.sheet_count.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
@@ -7058,12 +7068,7 @@ impl Metadata {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn additional(&self) -> String {
-        serde_json::to_string(&self.0.additional).expect("serializable additional")
-    }
 }
-
-pub struct ExcelMetadata(pub kreuzberg::ExcelMetadata);
 
 pub struct EmailMetadata(pub kreuzberg::EmailMetadata);
 

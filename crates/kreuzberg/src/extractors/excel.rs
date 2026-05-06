@@ -130,8 +130,8 @@ impl ExcelExtractor {
         // Put remaining metadata into additional map (excluding standard fields)
         for (key, value) in &workbook.metadata {
             match key.as_str() {
-                "title" | "subject" | "created_by" | "creator" | "modified_by"
-                | "created_at" | "modified_at" | "keywords" | "language" => {}
+                "title" | "subject" | "created_by" | "creator" | "modified_by" | "created_at" | "modified_at"
+                | "keywords" | "language" => {}
                 _ => {
                     additional.insert(Cow::Owned(key.clone()), serde_json::json!(value));
                 }
@@ -159,11 +159,7 @@ impl ExcelExtractor {
 
 impl SyncExtractor for ExcelExtractor {
     fn extract_sync(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
-        let _span = tracing::debug_span!(
-            "extract_excel",
-            element_count = tracing::field::Empty,
-        )
-        .entered();
+        let _span = tracing::debug_span!("extract_excel", element_count = tracing::field::Empty,).entered();
 
         let extension = match mime_type {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => ".xlsx",

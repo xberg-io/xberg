@@ -41,12 +41,12 @@
     },
     {
       "type": "greater_than_or_equal",
-      "field": "metadata.sheet_count",
+      "field": "metadata.format.excel.sheet_count",
       "value": 2
     },
     {
       "type": "contains_all",
-      "field": "metadata.sheet_names",
+      "field": "metadata.format.excel.sheet_names",
       "values": ["Stanley Cups"]
     }
   ],

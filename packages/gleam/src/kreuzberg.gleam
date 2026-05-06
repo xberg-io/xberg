@@ -1410,20 +1410,16 @@ pub type Metadata {
     document_version: Option(String),
     abstract_text: Option(String),
     output_format: Option(String),
-    sheet_count: Option(Int),
-    sheet_names: Option(List(String)),
     additional: Dict(String, String),
   )
 }
 
-/// Excel/spreadsheet metadata marker.
+/// Excel/spreadsheet format metadata.
 ///
-/// Sheet count and sheet names are now exposed directly on `Metadata` as
-/// `sheet_count: Option<usize>` and `sheet_names: Option<Vec<String>>` so that
-/// every binding (Rust, Python, Node, …) sees them at the same path. This
-/// struct remains as a `FormatMetadata` variant tag for spreadsheet sources.
+/// Identifies the document as a spreadsheet source via the `FormatMetadata.Excel`
+/// discriminant. Sheet count and sheet names are stored inside this struct.
 pub type ExcelMetadata {
-  ExcelMetadata
+  ExcelMetadata(sheet_count: Option(Int), sheet_names: Option(List(String)))
 }
 
 /// Email metadata extracted from .eml and .msg files.

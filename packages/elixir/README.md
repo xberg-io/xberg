@@ -114,7 +114,7 @@ IO.puts("Extracted Content:")
 IO.puts(result.content)
 
 IO.puts("\nMetadata:")
-IO.puts("Format: #{inspect(result.metadata.format_type)}")
+IO.puts("Format: #{inspect(result.metadata.format)}")
 IO.puts("Tables found: #{length(result.tables)}")
 ```
 ```
@@ -184,7 +184,7 @@ For non-blocking document processing:
 case Kreuzberg.extract_file("document.pdf") do
   {:ok, result} ->
     IO.puts("Content: #{result.content}")
-    IO.puts("MIME Type: #{result.metadata.format_type}")
+    IO.puts("Format: #{inspect(result.metadata.format)}")
     IO.puts("Tables: #{length(result.tables)}")
 
   {:error, reason} ->
@@ -343,7 +343,7 @@ This binding provides full async/await support for non-blocking document process
 case Kreuzberg.extract_file("document.pdf") do
   {:ok, result} ->
     IO.puts("Content: #{result.content}")
-    IO.puts("MIME Type: #{result.metadata.format_type}")
+    IO.puts("Format: #{inspect(result.metadata.format)}")
     IO.puts("Tables: #{length(result.tables)}")
 
   {:error, reason} ->
