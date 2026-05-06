@@ -470,7 +470,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-wasm/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-wasm/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

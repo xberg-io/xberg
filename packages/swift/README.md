@@ -277,7 +277,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-swift/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-swift/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

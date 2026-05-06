@@ -271,7 +271,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-gleam/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-gleam/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

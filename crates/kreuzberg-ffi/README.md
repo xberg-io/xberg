@@ -249,7 +249,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-ffi/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-ffi/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

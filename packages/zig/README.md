@@ -268,7 +268,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-zig/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-zig/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

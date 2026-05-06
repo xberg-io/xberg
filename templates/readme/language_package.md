@@ -90,7 +90,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-{{ language }}/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-{{ language }}/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

@@ -277,7 +277,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-dart/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-dart/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

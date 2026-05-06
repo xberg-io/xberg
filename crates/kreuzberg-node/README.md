@@ -456,7 +456,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-typescript/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-typescript/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

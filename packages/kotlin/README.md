@@ -296,7 +296,7 @@ For advanced configuration options including language detection, table extractio
 ## Documentation
 
 - **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](<https://kreuzberg.dev/reference/api-kotlin/)**
+- **[API Reference](https://kreuzberg.dev/reference/api-kotlin/)**
 - **[Examples & Guides](https://kreuzberg.dev/guides/)**
 
 ## Contributing

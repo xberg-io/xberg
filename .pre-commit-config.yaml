@@ -184,6 +184,7 @@ repos:
       - id: oxfmt
       - id: cppcheck
       - id: rumdl-fmt
+        exclude: ^templates/  # Handlebars {{}} syntax confuses rumdl-fmt
       - id: cpd
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
@@ -191,6 +192,7 @@ repos:
     hooks:
       - id: alef-verify
       - id: alef-sync-versions
+        exclude: ^e2e/java/pom\.xml$  # alef v0.14.23 replaces all 4.0.0 occurrences incl Maven modelVersion
 
   # GitHub Actions: linting
   - repo: https://github.com/rhysd/actionlint
