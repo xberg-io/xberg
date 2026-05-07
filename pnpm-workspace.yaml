@@ -7,4 +7,4 @@ packages:
   - "e2e/*"
   - "!e2e/wasm" # excluded: depends on wasm-pack build output (crates/kreuzberg-wasm/pkg)
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
