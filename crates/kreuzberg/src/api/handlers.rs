@@ -1236,6 +1236,13 @@ pub(crate) async fn extract_async_handler(
         )));
     }
 
+    if state.job_store.active_count() >= super::jobs::MAX_ACTIVE_JOBS {
+        return Err(ApiError::new(
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            crate::error::KreuzbergError::Other("too many concurrent jobs; try again later".into()),
+        ));
+    }
+
     let job_id = state.job_store.create_job();
     let effective_config = config.unwrap_or_else(|| (*state.default_config).clone());
 
@@ -1244,7 +1251,16 @@ pub(crate) async fn extract_async_handler(
     let mut svc = state
         .extraction_service
         .lock()
-        .expect("extraction service lock poisoned")
+        .map_err(|_| {
+            state.job_store.fail(
+                &job_id,
+                "extraction service unavailable".into(),
+                super::jobs::now_rfc3339(),
+            );
+            ApiError::internal(crate::error::KreuzbergError::Other(
+                "extraction service unavailable".into(),
+            ))
+        })?
         .clone();
 
     tokio::spawn(async move {

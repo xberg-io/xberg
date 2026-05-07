@@ -240,7 +240,10 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read file");
         let doc = crate::extraction::hwp::extract_hwp_document(&bytes).expect("HWP extraction should succeed");
         assert!(!doc.sections.is_empty(), "Expected at least one section");
-        assert!(!doc.sections[0].paragraphs.is_empty(), "Expected at least one paragraph");
+        assert!(
+            !doc.sections[0].paragraphs.is_empty(),
+            "Expected at least one paragraph"
+        );
     }
 
     #[test]

@@ -1,5 +1,7 @@
 //! In-memory job store for async extraction polling.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use moka::sync::Cache;
@@ -12,6 +14,9 @@ const JOB_TTL: Duration = Duration::from_secs(300);
 /// Maximum number of concurrent jobs held in the cache.
 const MAX_CAPACITY: u64 = 10_000;
 
+/// Maximum number of jobs in Pending or Running state at any one time.
+pub const MAX_ACTIVE_JOBS: usize = 100;
+
 /// Thread-safe in-memory store for async extraction jobs.
 ///
 /// Uses [`moka::sync::Cache`] with built-in TTL eviction — no background
@@ -20,6 +25,7 @@ const MAX_CAPACITY: u64 = 10_000;
 #[derive(Clone)]
 pub struct JobStore {
     jobs: Cache<String, JobStatus>,
+    active: Arc<AtomicUsize>,
 }
 
 impl Default for JobStore {
@@ -35,7 +41,15 @@ impl JobStore {
             .max_capacity(MAX_CAPACITY)
             .time_to_live(JOB_TTL)
             .build();
-        Self { jobs }
+        Self {
+            jobs,
+            active: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    /// Return the number of jobs currently in Pending or Running state.
+    pub fn active_count(&self) -> usize {
+        self.active.load(Ordering::Relaxed)
     }
 
     /// Create a new job in the store and return its ID.
@@ -44,6 +58,7 @@ impl JobStore {
     pub fn create_job(&self) -> String {
         let job_id = generate_job_id();
         let now = now_rfc3339();
+        self.active.fetch_add(1, Ordering::Relaxed);
         self.create(job_id.clone(), now);
         job_id
     }
@@ -83,6 +98,7 @@ impl JobStore {
             status.result = Some(result);
             status.updated_at = timestamp;
             self.jobs.insert(job_id.to_string(), status);
+            self.active.fetch_sub(1, Ordering::Relaxed);
         }
     }
 
@@ -93,6 +109,7 @@ impl JobStore {
             status.error = Some(error);
             status.updated_at = timestamp;
             self.jobs.insert(job_id.to_string(), status);
+            self.active.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }
