@@ -7,6 +7,12 @@
 
 declare(strict_types=1);
 
+// Set working directory to test documents root so fixture paths resolve correctly.
+$testDocumentsDir = __DIR__ . '/../../test_documents';
+if (is_dir($testDocumentsDir)) {
+    chdir($testDocumentsDir);
+}
+
 // Load the e2e project autoloader (PHPUnit, test helpers).
 require_once __DIR__ . '/vendor/autoload.php';
 
