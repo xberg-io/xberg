@@ -88,7 +88,7 @@ impl DocumentExtractor for HwpExtractor {
     }
 
     fn supported_mime_types(&self) -> &[&str] {
-        &["application/x-hwp", "application/haansofthwpx"]
+        &["application/x-hwp"]
     }
 
     fn priority(&self) -> i32 {
@@ -106,10 +106,7 @@ mod tests {
         assert_eq!(extractor.name(), "hwp-extractor");
         assert_eq!(extractor.version(), env!("CARGO_PKG_VERSION"));
         assert_eq!(extractor.priority(), 50);
-        assert_eq!(
-            extractor.supported_mime_types(),
-            &["application/x-hwp", "application/haansofthwpx"]
-        );
+        assert_eq!(extractor.supported_mime_types(), &["application/x-hwp"]);
     }
 
     #[test]
@@ -117,5 +114,21 @@ mod tests {
         let extractor = HwpExtractor::new();
         assert!(extractor.initialize().is_ok());
         assert!(extractor.shutdown().is_ok());
+    }
+
+    #[test]
+    fn test_hwpx_mime_not_routed_to_hwp_extractor() {
+        use crate::KreuzbergError;
+        use crate::plugins::registry::DocumentExtractorRegistry;
+        use std::sync::Arc;
+
+        let mut registry = DocumentExtractorRegistry::new();
+        registry.register(Arc::new(HwpExtractor::new())).unwrap();
+
+        let result = registry.get("application/haansofthwpx");
+        assert!(
+            matches!(result, Err(KreuzbergError::UnsupportedFormat(_))),
+            "application/haansofthwpx must not be routed to HwpExtractor"
+        );
     }
 }
