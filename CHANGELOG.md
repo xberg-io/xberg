@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **#853**: HWP structured extraction now returns an error instead of silently returning an empty document when no BodyText sections are found. Fixes a regression introduced in the structured extraction refactor.
 - **#619 follow-up**: `POST /extract-async` handler no longer panics on mutex poison — returns HTTP 500 and marks the job as Failed instead.
 - Fixed dead conditional-import warning on `KreuzbergError` in `plugins/registry/ocr.rs` under non-OCR feature sets.
+- **Zig e2e tests**: Added `default_extraction_config` constant and `extract_file_sync_default`, `extract_bytes_sync_default` overloads for e2e test generation. Configured alef codegen to emit these default variants.
 
 ## [5.0.0-rc.1] - 2026-05-05
 

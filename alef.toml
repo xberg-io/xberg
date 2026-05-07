@@ -14,7 +14,6 @@ languages = [
   "r",
   "kotlin",
   "swift",
-  "dart",
   "gleam",
   "zig",
 ]
@@ -1288,8 +1287,9 @@ options_type = "ExtractionConfig"
 arg_name_map = { data = "content" }
 
 [crates.e2e.calls.extract_bytes.overrides.zig]
-function = "extract_bytes_sync"
+function = "extract_bytes_sync_default"
 async = false
+skip_arguments = ["config"]
 
 [crates.e2e.calls.extract_file_sync]
 function = "extract_file_sync"
@@ -1310,6 +1310,11 @@ arg_order = ["path", "config", "mime_type"]
 [crates.e2e.calls.extract_file_sync.overrides.csharp]
 options_type = "ExtractionConfig"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
+
+[crates.e2e.calls.extract_file_sync.overrides.zig]
+function = "extract_file_sync_default"
+async = false
+skip_arguments = ["config"]
 
 [crates.e2e.calls.extract_bytes_sync]
 function = "extract_bytes_sync"
@@ -1333,6 +1338,11 @@ options_type = "ExtractionConfig"
 
 [crates.e2e.calls.extract_bytes_sync.overrides.r]
 arg_name_map = { data = "content" }
+
+[crates.e2e.calls.extract_bytes_sync.overrides.zig]
+function = "extract_bytes_sync_default"
+async = false
+skip_arguments = ["config"]
 
 [crates.e2e.calls.render_html.overrides.python]
 result_is_simple = true
