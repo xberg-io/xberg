@@ -37,10 +37,17 @@ pub mod core_properties;
 pub mod custom_properties;
 pub mod odt_properties;
 
+// Re-export types (required for Alef type resolution across FFI boundaries)
+pub use app_properties::DocxAppProperties;
+pub use core_properties::CoreProperties;
+pub use custom_properties::CustomProperties;
+pub use odt_properties::OdtProperties;
+
+// Private re-exports for internal extraction APIs
 pub(crate) use app_properties::{
-    DocxAppProperties, extract_docx_app_properties, extract_pptx_app_properties, extract_xlsx_app_properties,
+    extract_docx_app_properties, extract_pptx_app_properties, extract_xlsx_app_properties,
 };
-pub(crate) use core_properties::{CoreProperties, extract_core_properties};
+pub(crate) use core_properties::extract_core_properties;
 pub(crate) use custom_properties::extract_custom_properties;
 pub(crate) use odt_properties::extract_odt_properties;
 

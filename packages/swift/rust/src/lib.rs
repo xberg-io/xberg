@@ -4273,7 +4273,7 @@ impl HwpImage {
     pub fn new(name: String, data: Vec<u8>) -> HwpImage {
         let mut __target: kreuzberg::extraction::hwp::model::HwpImage = ::std::default::Default::default();
         // alef: name — String fallback in non-serde struct, left at default
-        __target.data = data;
+        __target.data = data.into();
         HwpImage(__target)
     }
     pub fn name(&self) -> String {
@@ -4929,9 +4929,9 @@ impl PptxAppProperties {
     }
 }
 
-pub struct CustomProperties(pub kreuzberg::extraction::office_metadata::custom_properties::CustomProperties);
+pub struct CustomProperties(pub kreuzberg::CustomProperties);
 
-pub struct OdtProperties(pub kreuzberg::extraction::office_metadata::odt_properties::OdtProperties);
+pub struct OdtProperties(pub kreuzberg::OdtProperties);
 
 impl OdtProperties {
     pub fn new(
@@ -4954,8 +4954,7 @@ impl OdtProperties {
         table_count: Option<i32>,
         image_count: Option<i32>,
     ) -> OdtProperties {
-        let mut __target: kreuzberg::extraction::office_metadata::odt_properties::OdtProperties =
-            ::std::default::Default::default();
+        let mut __target: kreuzberg::OdtProperties = ::std::default::Default::default();
         // alef: title — String fallback in non-serde struct, left at default
         // alef: subject — String fallback in non-serde struct, left at default
         // alef: creator — String fallback in non-serde struct, left at default

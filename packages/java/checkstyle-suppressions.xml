@@ -12,8 +12,4 @@
     <suppress checks="AvoidStarImport" files=".*Test\.java"/>
     <suppress checks="MagicNumber" files=".*Test\.java"/>
     <suppress checks="MethodLength" files=".*Test\.java"/>
-
-    <!-- Alef-generated files may have long lines due to code generation constraints -->
-    <suppress checks="LineLength" files="Kreuzberg\.java|KreuzbergRs\.java|.*Bridge\.java"/>
-    <suppress checks="LineLength" files=".*Exception\.java"/>
 </suppressions>

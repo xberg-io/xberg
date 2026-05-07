@@ -2614,43 +2614,6 @@ pub const LayoutClass = enum {
     key_value_region,
 };
 
-/// Default extraction configuration with sensible defaults.
-pub const default_extraction_config: ExtractionConfig = .{
-    .use_cache = false,
-    .enable_quality_processing = false,
-    .ocr = null,
-    .force_ocr = false,
-    .force_ocr_pages = null,
-    .disable_ocr = false,
-    .chunking = null,
-    .content_filter = null,
-    .images = null,
-    .pdf_options = null,
-    .token_reduction = null,
-    .language_detection = null,
-    .pages = null,
-    .keywords = null,
-    .postprocessor = null,
-    .html_options = null,
-    .html_output = null,
-    .extraction_timeout_secs = null,
-    .max_concurrent_extractions = null,
-    .result_format = ResultFormat.text,
-    .security_limits = null,
-    .output_format = OutputFormat.text,
-    .layout = null,
-    .include_document_structure = false,
-    .acceleration = null,
-    .cache_namespace = null,
-    .cache_ttl_secs = null,
-    .email = null,
-    .concurrency = null,
-    .max_archive_depth = 32,
-    .tree_sitter = null,
-    .structured_extraction = null,
-    .cancel_token = null,
-};
-
 /// Synchronous wrapper for `extract_file`.
 ///
 /// This is a convenience function that blocks the current thread until extraction completes.
@@ -2694,18 +2657,6 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: Ex
     }
     std.heap.c_allocator.free(mime_type_z[0..std.mem.len(mime_type_z)]);
     return _result;
-}
-
-/// Overload: extract_file_sync with default config, ignoring JSON string parameter.
-pub fn extract_file_sync_default(path: []const u8, mime_type: ?[]const u8, _config_json: ?[]const u8) (KreuzbergError||error{OutOfMemory})!ExtractionResult {
-    _ = _config_json; // Unused; tests pass JSON string but we use default
-    return extract_file_sync(path, mime_type, default_extraction_config);
-}
-
-/// Overload: extract_bytes_sync with default config, ignoring JSON string parameter.
-pub fn extract_bytes_sync_default(content: []const u8, mime_type: []const u8, _config_json: ?[]const u8) (KreuzbergError||error{OutOfMemory})!ExtractionResult {
-    _ = _config_json; // Unused; tests pass JSON string but we use default
-    return extract_bytes_sync(content, mime_type, default_extraction_config);
 }
 
 /// Synchronous wrapper for `batch_extract_files`.
