@@ -115,9 +115,10 @@ pub(crate) fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
 
     let subject = message.subject().map(|s| s.to_string());
 
-    let from_email = message.from().and_then(|from| from.first()).and_then(|addr| {
-        addr.address().map(|email| email.to_string())
-    });
+    let from_email = message
+        .from()
+        .and_then(|from| from.first())
+        .and_then(|addr| addr.address().map(|email| email.to_string()));
 
     let to_emails: Vec<String> = message
         .to()
