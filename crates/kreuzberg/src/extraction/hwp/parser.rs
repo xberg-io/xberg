@@ -238,7 +238,7 @@ mod tests {
             return;
         }
         let bytes = std::fs::read(&path).expect("read file");
-        let doc = crate::extraction::hwp::extract_hwp_document(&bytes).expect("HWP extraction should succeed");
+        let _doc = crate::extraction::hwp::extract_hwp_document(&bytes).expect("HWP extraction should succeed");
         // converted_output.hwp is a valid HWP 5.0 file that parses successfully;
         // it may have no BodyText sections, which is valid. Just verify extraction succeeds.
     }

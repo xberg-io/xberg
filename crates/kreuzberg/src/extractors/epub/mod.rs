@@ -207,6 +207,8 @@ impl EpubExtractor {
     ) -> Option<InternalDocument> {
         use crate::types::internal::{ElementKind, InternalElement};
 
+        eprintln!("DEBUG: build_internal_document called, spine_hrefs.len()={}, output_format={:?}", spine_hrefs.len(), config.output_format);
+
         let mut builder = InternalDocumentBuilder::new("epub");
 
         // Accumulate pre-rendered markdown/djot when all chapters convert successfully

@@ -65,37 +65,35 @@ impl EmailExtractor {
         if let Some(ref html) = email_result.html_content {
             let html_doc = crate::extraction::html::structure::build_document_structure(html);
             for node in &html_doc.nodes {
-                if node.parent.is_none() {
-                    match &node.content {
-                        crate::types::NodeContent::Paragraph { text } => {
+                match &node.content {
+                    crate::types::NodeContent::Paragraph { text } => {
+                        let trimmed = text.trim();
+                        if !trimmed.is_empty() {
+                            builder.push_paragraph(trimmed, node.annotations.clone(), None, None);
+                        }
+                    }
+                    crate::types::NodeContent::Heading { level, text } => {
+                        builder.push_heading(*level, text.as_str(), None, None);
+                    }
+                    crate::types::NodeContent::List { ordered } => {
+                        builder.push_list(*ordered);
+                        for &child_idx in &node.children {
+                            if let Some(child) = html_doc.nodes.get(child_idx.0 as usize)
+                                && let crate::types::NodeContent::ListItem { text } = &child.content
+                            {
+                                builder.push_list_item(text.as_str(), *ordered, vec![], None, None);
+                            }
+                        }
+                        builder.end_list();
+                    }
+                    crate::types::NodeContent::Code { text, language } => {
+                        builder.push_code(text.as_str(), language.as_deref(), None, None);
+                    }
+                    _ => {
+                        if let Some(text) = node.content.text() {
                             let trimmed = text.trim();
                             if !trimmed.is_empty() {
                                 builder.push_paragraph(trimmed, node.annotations.clone(), None, None);
-                            }
-                        }
-                        crate::types::NodeContent::Heading { level, text } => {
-                            builder.push_heading(*level, text.as_str(), None, None);
-                        }
-                        crate::types::NodeContent::List { ordered } => {
-                            builder.push_list(*ordered);
-                            for &child_idx in &node.children {
-                                if let Some(child) = html_doc.nodes.get(child_idx.0 as usize)
-                                    && let crate::types::NodeContent::ListItem { text } = &child.content
-                                {
-                                    builder.push_list_item(text.as_str(), *ordered, vec![], None, None);
-                                }
-                            }
-                            builder.end_list();
-                        }
-                        crate::types::NodeContent::Code { text, language } => {
-                            builder.push_code(text.as_str(), language.as_deref(), None, None);
-                        }
-                        _ => {
-                            if let Some(text) = node.content.text() {
-                                let trimmed = text.trim();
-                                if !trimmed.is_empty() {
-                                    builder.push_paragraph(trimmed, node.annotations.clone(), None, None);
-                                }
                             }
                         }
                     }

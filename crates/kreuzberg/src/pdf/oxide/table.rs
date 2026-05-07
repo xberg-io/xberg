@@ -59,7 +59,7 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
                 tracing::debug!(
                     page = page_idx,
                     rows = cells.len(),
-                    cols = cells.get(0).map(|r| r.len()).unwrap_or(0),
+                    cols = cells.first().map(|r| r.len()).unwrap_or(0),
                     "Skipping table below minimum dimensions (need ≥2 rows and ≥2 cols)"
                 );
                 continue;

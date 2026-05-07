@@ -49,7 +49,12 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
                         out.push_str(&elem.text);
                     }
 
-                    out.push_str("\n\n");
+                    // Headings (XML elements) use single newlines; paragraphs/titles use double
+                    if matches!(elem.kind, ElementKind::Heading { .. }) {
+                        out.push('\n');
+                    } else {
+                        out.push_str("\n\n");
+                    }
                 }
             }
             ElementKind::ListItem { .. } => {
