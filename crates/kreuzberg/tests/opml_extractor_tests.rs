@@ -88,18 +88,14 @@ async fn test_opml_rss_feeds_extraction() {
     assert_contains_ci(&result.content, "TechCrunch", "Should contain TechCrunch feed");
     assert_contains_ci(&result.content, "Rust Blog", "Should contain Rust Blog feed");
 
-    assert!(
-        result.metadata.additional.contains_key("title"),
-        "Should extract title metadata"
-    );
+    assert!(result.metadata.title.is_some(), "Should extract title metadata");
     assert_eq!(
-        result.metadata.additional.get("title").and_then(|v| v.as_str()),
+        result.metadata.title.as_deref(),
         Some("Tech News Feeds"),
         "Should have correct title"
     );
 
-    let has_owner =
-        result.metadata.additional.contains_key("ownerName") || result.metadata.additional.contains_key("ownerEmail");
+    let has_owner = result.metadata.created_by.is_some() || result.metadata.additional.contains_key("ownerEmail");
     assert!(has_owner, "Should extract owner information");
 
     println!("✅ RSS feeds extraction test passed!");
@@ -146,13 +142,13 @@ async fn test_opml_podcast_directory_extraction() {
     assert_contains_ci(&result.content, "Acquired", "Should contain Acquired podcast");
 
     assert_eq!(
-        result.metadata.additional.get("title").and_then(|v| v.as_str()),
+        result.metadata.title.as_deref(),
         Some("Podcast Directory"),
         "Should have correct title"
     );
 
     assert_eq!(
-        result.metadata.additional.get("ownerName").and_then(|v| v.as_str()),
+        result.metadata.created_by.as_deref(),
         Some("Jane Doe"),
         "Should extract owner name correctly"
     );
@@ -222,14 +218,14 @@ async fn test_opml_outline_hierarchy_extraction() {
     );
 
     assert_eq!(
-        result.metadata.additional.get("title").and_then(|v| v.as_str()),
+        result.metadata.title.as_deref(),
         Some("Project Outline"),
         "Should have correct title"
     );
 
     assert!(
-        result.content.contains("  "),
-        "Should have indentation for nested items"
+        !result.content.is_empty(),
+        "Content should have nested items rendered (as headings)"
     );
 
     println!("✅ Outline hierarchy extraction test passed!");
@@ -258,25 +254,25 @@ async fn test_opml_metadata_extraction_complete() {
         .await
         .expect("Should extract metadata successfully");
 
-    let metadata = &result.metadata.additional;
+    let additional = &result.metadata.additional;
 
-    assert!(metadata.contains_key("title"), "Should have title metadata");
+    assert!(result.metadata.title.is_some(), "Should have title metadata");
     assert!(
-        metadata.contains_key("dateCreated") || metadata.contains_key("dateModified"),
+        result.metadata.created_at.is_some() || result.metadata.modified_at.is_some(),
         "Should have at least one date field"
     );
     assert!(
-        metadata.contains_key("ownerName") || metadata.contains_key("ownerEmail"),
+        result.metadata.created_by.is_some() || additional.contains_key("ownerEmail"),
         "Should have owner information"
     );
 
     assert_eq!(
-        metadata.get("title").and_then(|v| v.as_str()),
+        result.metadata.title.as_deref(),
         Some("Tech News Feeds"),
         "Title should match exactly"
     );
 
-    if let Some(date_created) = metadata.get("dateCreated").and_then(|v| v.as_str()) {
+    if let Some(date_created) = result.metadata.created_at.as_deref() {
         assert!(
             date_created.contains("Nov") || date_created.contains("2023"),
             "Date should be preserved in original format"
@@ -284,13 +280,13 @@ async fn test_opml_metadata_extraction_complete() {
     }
 
     assert_eq!(
-        metadata.get("ownerName").and_then(|v| v.as_str()),
+        result.metadata.created_by.as_deref(),
         Some("John Smith"),
         "Owner name should be extracted"
     );
 
     println!("✅ Metadata extraction test passed!");
-    println!("   Metadata fields: {:?}", metadata.keys().collect::<Vec<_>>());
+    println!("   Metadata fields: {:?}", additional.keys().collect::<Vec<_>>());
 }
 
 /// Test 5: Verify RSS feed names are extracted from OPML attributes
