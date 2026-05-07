@@ -2664,7 +2664,6 @@ dependencies = [
  "jotdown",
  "kamadak-exif",
  "kreuzberg-paddle-ocr",
- "kreuzberg-pdfium-render",
  "kreuzberg-tesseract",
  "libc",
  "liter-llm",
@@ -2738,28 +2737,6 @@ dependencies = [
  "thiserror",
 ]
 
-[[package]]
-name = "kreuzberg-pdfium-render"
-version = "5.0.0-rc.1"
-dependencies = [
- "bitflags",
- "bytemuck",
- "chrono",
- "console_error_panic_hook",
- "console_log",
- "image",
- "itertools 0.14.0",
- "js-sys",
- "libloading 0.9.0",
- "log",
- "maybe-owned",
- "once_cell",
- "utf16string",
- "vecmath",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
 
 [[package]]
 name = "kreuzberg-rb"

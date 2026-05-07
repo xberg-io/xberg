@@ -10,7 +10,6 @@
 FROM alpine:3.21 AS builder
 
 ARG RUST_TOOLCHAIN=nightly-2026-03-10
-ARG PDFIUM_VERSION=7678
 
 WORKDIR /build
 
@@ -31,17 +30,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     echo "Default target: $(~/.cargo/bin/rustc --print cfg | grep target)"
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Download pdfium (musl build)
-RUN mkdir -p /build/pdfium && \
-    ARCH=$(uname -m) && \
-    if [ "$ARCH" = "aarch64" ]; then PDFIUM_ARCH="arm64"; else PDFIUM_ARCH="x64"; fi && \
-    curl -fL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/pdfium-linux-musl-${PDFIUM_ARCH}.tgz" \
-        -o /build/pdfium.tgz && \
-    tar -xzf /build/pdfium.tgz -C /build/pdfium && \
-    rm /build/pdfium.tgz
-
-ENV KREUZBERG_PDFIUM_PREBUILT=/build/pdfium
-
 # Point ort-sys to Alpine's system ORT library instead of downloading prebuilt binaries.
 ENV ORT_LIB_LOCATION=/usr/lib
 ENV ORT_PREFER_DYNAMIC_LINK=1
@@ -55,7 +43,6 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/kreuzberg/ crates/kreuzberg/
 COPY crates/kreuzberg-tesseract/ crates/kreuzberg-tesseract/
 COPY crates/kreuzberg-paddle-ocr/ crates/kreuzberg-paddle-ocr/
-COPY crates/kreuzberg-pdfium-render/ crates/kreuzberg-pdfium-render/
 COPY packages/elixir/native/kreuzberg_nif/ packages/elixir/native/kreuzberg_nif/
 
 # Remove workspace members that aren't included

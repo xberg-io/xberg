@@ -50,7 +50,6 @@ yarn-debug.log*
 yarn-error.log*
 # NAPI-RS generated files (index.d.ts is committed for TypeScript type resolution)
 crates/kreuzberg-node/index.js
-libpdfium.a
 .wrangler/
 .pnpm-store/
 
@@ -177,9 +176,6 @@ tests/e2e/logs/
 tests/e2e/test_report.json
 temp-test-*
 packages/csharp/test_html_debug.cs
-
-# Pdfium test artifacts
-crates/kreuzberg-pdfium-render/*.jpg
 
 # AI / MCP / Agent config
 .claude/

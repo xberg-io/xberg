@@ -187,7 +187,7 @@ tasks:
     desc: "Update Rust dependencies (compatible only)"
     cmds:
       - cargo update
-      - cmd: cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
+      - cmd: cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/native/Cargo.toml
         ignore_error: true
 
   upgrade:
@@ -195,9 +195,9 @@ tasks:
     cmds:
       - cargo upgrade --incompatible
       - cargo update
-      - cmd: cargo upgrade --incompatible --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
+      - cmd: cargo upgrade --incompatible --manifest-path packages/ruby/ext/kreuzberg_rb/native/Cargo.toml
         ignore_error: true
-      - cmd: cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/Cargo.toml
+      - cmd: cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/native/Cargo.toml
         ignore_error: true
 
   e2e:format:

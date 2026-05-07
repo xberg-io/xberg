@@ -13,7 +13,6 @@
 !crates/kreuzberg-cli/
 !crates/kreuzberg-tesseract/
 !crates/kreuzberg-paddle-ocr/
-!crates/kreuzberg-pdfium-render/
 !crates/kreuzberg-ffi/
 !crates/kreuzberg-py/
 !crates/kreuzberg-node/

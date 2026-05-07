@@ -21,27 +21,10 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Set pdfium and onnxruntime versions (can be overridden via build-arg)
-ARG PDFIUM_VERSION=7678
+# Set onnxruntime version (can be overridden via build-arg)
 ARG ONNXRUNTIME_VERSION=1.24.2
 ARG TARGETARCH
-ENV PDFIUM_VERSION=${PDFIUM_VERSION}
 ENV ONNXRUNTIME_VERSION=${ONNXRUNTIME_VERSION}
-
-# Download and extract pdfium to a location that can be reused
-# TARGETARCH is automatically set by Docker: amd64, arm64, etc.
-RUN mkdir -p /build/pdfium && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-        PDFIUM_ARCH="arm64"; \
-    else \
-        PDFIUM_ARCH="x64"; \
-    fi && \
-    (curl -fL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/pdfium-linux-${PDFIUM_ARCH}.tgz" \
-        -o /build/pdfium.tgz \
-        || curl -fL "https://storage.googleapis.com/chromium-browser-snapshots/Linux_${PDFIUM_ARCH}/pdfium-${PDFIUM_VERSION}.tgz" \
-        -o /build/pdfium.tgz) && \
-    tar -xzf /build/pdfium.tgz -C /build/pdfium && \
-    rm /build/pdfium.tgz
 
 # Download and extract ONNX Runtime
 RUN mkdir -p /build/onnxruntime && \
@@ -55,16 +38,12 @@ RUN mkdir -p /build/onnxruntime && \
     tar -xzf /build/onnxruntime.tgz -C /build/onnxruntime --strip-components=1 && \
     rm /build/onnxruntime.tgz
 
-# Set environment variable to use prebuilt pdfium
-ENV KREUZBERG_PDFIUM_PREBUILT=/build/pdfium
-
 # Copy workspace manifests and crates
 COPY Cargo.toml Cargo.lock ./
 COPY crates/kreuzberg/ crates/kreuzberg/
 COPY crates/kreuzberg-cli/ crates/kreuzberg-cli/
 COPY crates/kreuzberg-tesseract/ crates/kreuzberg-tesseract/
 COPY crates/kreuzberg-paddle-ocr/ crates/kreuzberg-paddle-ocr/
-COPY crates/kreuzberg-pdfium-render/ crates/kreuzberg-pdfium-render/
 
 # Remove workspace members that aren't included (Ruby, Node, Python, PHP, Elixir, tools, e2e)
 RUN sed -i '/kreuzberg-py/d; /kreuzberg_rb/d; /kreuzberg-node/d; /kreuzberg-ffi/d; /kreuzberg-php/d; /kreuzberg_rustler/d; /kreuzberg_nif/d; /packages\/dart\/rust/d; /packages\/swift\/rust/d; /"crates\/kreuzberg-wasm"/d; /^\[profile\.release\.package\.kreuzberg-wasm\]$/,$d; /benchmark-harness/d; /e2e-generator/d; /snippet-runner/d; /e2e\/rust/d' Cargo.toml
@@ -114,8 +93,7 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Copy pdfium and ONNX Runtime libraries from builder
-COPY --from=builder /build/pdfium/lib/libpdfium.so /usr/local/lib/
+# Copy ONNX Runtime libraries from builder
 COPY --from=builder /build/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/
 RUN ldconfig
 
