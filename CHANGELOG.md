@@ -24,6 +24,12 @@ LTS patch release. Bug fixes backported from `main` (v5 development). The
 - **#872**: `HwpExtractor` no longer claims the `application/haansofthwpx` MIME type — that format is ZIP-based XML and cannot be handled by the CFB-based HWP parser.
 - Latex extractor uses the correct `inject_placeholders: bool` type from `ImageExtractionConfig`.
 - `extraction_timeout_secs` enforcement is now correctly gated on the `tokio-runtime` feature.
+- **Email HTML body fallback**: when `mail_parser::Message::body_html()` returns nothing, the EML extractor now walks `message.parts` for HTML subtype and as a final fallback scans raw bytes after the headers/body separator. `clean_html_content` also reorders to try regex stripping before the html-to-markdown converter (more lenient on malformed HTML). Previously, HTML-only emails that mail-parser failed to surface via `body_html` returned empty content. (Refs upstream `2ff490b4b`; sender-format and Attachments-section hunks intentionally not backported.)
+- **Image decode pixel cap**: all four call sites that pass attacker-controlled bytes to `image::load_from_memory` (layout-detection, generic image metadata, PDF→PNG TATR loop, doc-orientation auto-rotate) now go through `decode_with_pixel_cap` which probes header dimensions cheaply and rejects images above 64 MP. A crafted 20000x20000 PNG previously triggered multi-GB allocations; now it returns a clean error. (Refs upstream `346d45557`.)
+- **CLI `--log-level` no longer panics on malformed input**: replaces `EnvFilter::new(level)` with `EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"))`. (Refs upstream `346d45557`.)
+- **Markdown rendering**: collapse runs of 3+ consecutive newlines to exactly 2 — comrak emits an extra blank line after lists when followed by a code block or table, which violated MD012. (Refs upstream `c01edcebb`.)
+- **WASI SDK v33+ build compatibility**: `kreuzberg-tesseract/build.rs` now adds the `noeh/` subdirectory of the WASI sysroot to the rustc link-search path. WASI SDK v33+ moved `libc++.a`/`libc++abi.a` there; without the addition the linker failed on v33+. Older WASI SDKs lacking that directory are unaffected. (Refs upstream `2712f86c3`.)
+- **MCP `file_configs` schema**: emits `{"type":"array","items":{"anyOf":[{"type":"null"},{"type":"object"}]}}` instead of schemars' default `{"items":true}`. The default is valid JSON Schema 2019-09+ but Moonshot AI / Kimi rejects it. Runtime deserialization is unchanged. (Refs upstream `8e18ebc83`.)
 
 ### API surface
 
