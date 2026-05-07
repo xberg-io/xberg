@@ -94,10 +94,10 @@ async fn test_odt_metadata_extraction() {
         assert_eq!(authors_array[0].as_str(), Some("John Doe"), "Author name should match");
     }
 
-    assert!(metadata.get("created_at").is_some(), "Creation date should be present");
+    assert!(result.metadata.created_at.is_some(), "Creation date should be present");
 
     assert!(
-        metadata.get("modified_at").is_some(),
+        result.metadata.modified_at.is_some(),
         "Modification date should be present"
     );
 

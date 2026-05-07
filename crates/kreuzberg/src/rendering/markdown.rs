@@ -86,6 +86,13 @@ pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
             .join("\n");
     }
 
+    // Collapse runs of 3+ newlines (double blank lines) into exactly 2 newlines.
+    // comrak emits an extra blank line after lists when followed by a code block or table.
+    // MD012 forbids multiple consecutive blank lines.
+    while output.contains("\n\n\n") {
+        output = output.replace("\n\n\n", "\n\n");
+    }
+
     // Strip arXiv watermark/sidebar noise that gets concatenated with body text.
     // Only applies to the first ~2000 chars (first page area) to avoid touching references.
     output = strip_arxiv_watermark_noise(output);

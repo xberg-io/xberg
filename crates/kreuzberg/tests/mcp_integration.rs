@@ -647,17 +647,25 @@ async fn test_mcp_batch_extraction_semantics() {
     }
 }
 
-/// Test MCP error cases with invalid configurations
+/// Test MCP config deserialization with unknown format string.
+///
+/// `OutputFormat` has a `Custom(String)` catch-all variant, so an unknown format
+/// string deserializes successfully rather than erroring. This allows registering
+/// custom renderers by name.
 #[test]
 fn test_mcp_error_invalid_format_field() {
-    let invalid_config = json!({
+    let config_json = json!({
         "output_format": "invalid_format_that_does_not_exist",
     });
 
-    let result: Result<kreuzberg::core::config::ExtractionConfig, _> = serde_json::from_value(invalid_config);
+    let result: Result<kreuzberg::core::config::ExtractionConfig, _> = serde_json::from_value(config_json);
 
-    // This should fail during deserialization
-    assert!(result.is_err());
+    // Custom formats are accepted at deserialization time; unknown names produce Custom(...)
+    assert!(result.is_ok());
+    assert_eq!(
+        result.unwrap().output_format,
+        kreuzberg::OutputFormat::Custom("invalid_format_that_does_not_exist".to_string())
+    );
 }
 
 /// Test MCP parameter validation with zero concurrent count
