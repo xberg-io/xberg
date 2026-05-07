@@ -170,19 +170,6 @@ final class Kreuzberg
      */
     public static function extractBytesSync(string $content, string $mime_type, ?ExtractionConfig $config = null): ExtractionResult
     {
-        // Create default config if not provided
-        if ($config === null) {
-            $config = new ExtractionConfig(
-                use_cache: true,
-                enable_quality_processing: false,
-                force_ocr: false,
-                disable_ocr: false,
-                result_format: ResultFormat::Full,
-                output_format: OutputFormat::Text,
-                include_document_structure: false,
-                max_archive_depth: 32
-            );
-        }
         return \Kreuzberg\KreuzbergApi::extractBytesSync($content, $mime_type, $config); // delegate to native extension class
     }
 
