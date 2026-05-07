@@ -280,21 +280,22 @@ pub fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
         // Final fallback: if still no HTML found, manually extract body from raw bytes.
         // Mail-parser sometimes doesn't parse simple single-part HTML emails correctly.
         if all_html.is_empty()
-            && let Ok(data_str) = std::str::from_utf8(&data) {
-                // Find the blank line that separates headers from body
-                // Try both CRLF and LF line endings
-                let body = if let Some(pos) = data_str.find("\r\n\r\n") {
-                    &data_str[pos + 4..]
-                } else if let Some(pos) = data_str.find("\n\n") {
-                    &data_str[pos + 2..]
-                } else {
-                    ""
-                };
+            && let Ok(data_str) = std::str::from_utf8(&data)
+        {
+            // Find the blank line that separates headers from body
+            // Try both CRLF and LF line endings
+            let body = if let Some(pos) = data_str.find("\r\n\r\n") {
+                &data_str[pos + 4..]
+            } else if let Some(pos) = data_str.find("\n\n") {
+                &data_str[pos + 2..]
+            } else {
+                ""
+            };
 
-                if !body.is_empty() {
-                    all_html.push(body.to_string());
-                }
+            if !body.is_empty() {
+                all_html.push(body.to_string());
             }
+        }
 
         if all_html.is_empty() {
             None

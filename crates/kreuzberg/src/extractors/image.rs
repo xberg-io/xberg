@@ -162,8 +162,8 @@ impl ImageExtractor {
         })?;
 
         // 1. Decode image (pixel-capped to prevent OOM on crafted inputs)
-        let img = crate::utils::image_decode::decode_with_pixel_cap(content)
-            .map_err(|e| crate::KreuzbergError::Parsing {
+        let img =
+            crate::utils::image_decode::decode_with_pixel_cap(content).map_err(|e| crate::KreuzbergError::Parsing {
                 message: format!("Failed to decode image for layout detection: {e}"),
                 source: None,
             })?;

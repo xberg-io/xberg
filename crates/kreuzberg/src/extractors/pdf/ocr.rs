@@ -797,13 +797,12 @@ pub(crate) async fn extract_with_ocr(
                             slice[offset].to_rgb8()
                         } else {
                             let png_data = &encoded_batch[offset].1;
-                            let decoded =
-                                crate::utils::image_decode::decode_with_pixel_cap(png_data).map_err(|e| {
-                                    crate::KreuzbergError::Parsing {
-                                        message: format!("Failed to decode PNG for TATR: {e}"),
-                                        source: None,
-                                    }
-                                })?;
+                            let decoded = crate::utils::image_decode::decode_with_pixel_cap(png_data).map_err(|e| {
+                                crate::KreuzbergError::Parsing {
+                                    message: format!("Failed to decode PNG for TATR: {e}"),
+                                    source: None,
+                                }
+                            })?;
                             decoded.to_rgb8()
                         };
                         crate::ocr::layout_assembly::recognize_page_tables(&rgb, scaled_det, elements, model)

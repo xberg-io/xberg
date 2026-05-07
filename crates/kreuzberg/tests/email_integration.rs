@@ -372,7 +372,10 @@ async fn test_msg_unicode() {
         kreuzberg::FormatMetadata::Email(m) => m,
         _ => panic!("Expected Email metadata"),
     };
-    assert_eq!(email_meta.from_email, Some("\"Brian Zhou\" <brizhou@gmail.com>".to_string()));
+    assert_eq!(
+        email_meta.from_email,
+        Some("\"Brian Zhou\" <brizhou@gmail.com>".to_string())
+    );
     assert!(email_meta.to_emails.iter().any(|e| e.contains("brianzhou@me.com")));
     assert!(email_meta.message_id.is_some());
     assert!(result.metadata.created_at.is_some());
@@ -417,7 +420,10 @@ async fn test_msg_truncated_fat() {
         kreuzberg::FormatMetadata::Email(m) => m,
         _ => panic!("Expected Email metadata"),
     };
-    assert_eq!(email_meta.from_email, Some("\"peterpan@neverland.com\" <peterpan@neverland.com>".to_string()));
+    assert_eq!(
+        email_meta.from_email,
+        Some("\"peterpan@neverland.com\" <peterpan@neverland.com>".to_string())
+    );
 }
 
 /// Test MSG with truncated FAT and attachments.
@@ -439,7 +445,10 @@ async fn test_msg_truncated_fat_with_attachments() {
         kreuzberg::FormatMetadata::Email(m) => m,
         _ => panic!("Expected Email metadata"),
     };
-    assert!(!email_meta.attachments.is_empty(), "Should have attachments in metadata");
+    assert!(
+        !email_meta.attachments.is_empty(),
+        "Should have attachments in metadata"
+    );
 }
 
 /// Test that a large MSG with big attachments completes in reasonable time

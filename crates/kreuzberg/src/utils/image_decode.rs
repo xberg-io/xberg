@@ -32,13 +32,11 @@ pub(crate) fn decode_with_pixel_cap(bytes: &[u8]) -> Result<image::DynamicImage>
     // --- header probe (no pixel allocation) ---
     let probe = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
-        .map_err(|e| {
-            KreuzbergError::image_processing(format!("image format probe failed: {e}"))
-        })?;
+        .map_err(|e| KreuzbergError::image_processing(format!("image format probe failed: {e}")))?;
 
-    let (w, h) = probe.into_dimensions().map_err(|e| {
-        KreuzbergError::image_processing(format!("image dimension probe failed: {e}"))
-    })?;
+    let (w, h) = probe
+        .into_dimensions()
+        .map_err(|e| KreuzbergError::image_processing(format!("image dimension probe failed: {e}")))?;
 
     if (w as u64) * (h as u64) > MAX_DECODE_PIXELS {
         return Err(KreuzbergError::image_processing(format!(
@@ -51,9 +49,7 @@ pub(crate) fn decode_with_pixel_cap(bytes: &[u8]) -> Result<image::DynamicImage>
     // --- full decode ---
     let reader = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
-        .map_err(|e| {
-            KreuzbergError::image_processing(format!("image format probe failed: {e}"))
-        })?;
+        .map_err(|e| KreuzbergError::image_processing(format!("image format probe failed: {e}")))?;
 
     reader
         .decode()
