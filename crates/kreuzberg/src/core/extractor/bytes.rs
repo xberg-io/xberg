@@ -66,7 +66,7 @@ use super::file::extract_bytes_with_extractor;
 pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
     use crate::core::mime;
 
-    let result = async {
+    let extraction_future = async {
         if config.force_ocr && config.effective_disable_ocr() {
             return Err(crate::KreuzbergError::Validation {
                 message: "force_ocr and disable_ocr cannot both be true".to_string(),
@@ -105,8 +105,25 @@ pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionC
         }
 
         extract_bytes_with_extractor(content, &validated_mime, config).await
-    }
-    .await;
+    };
+
+    let result = if let Some(secs) = config.extraction_timeout_secs {
+        let start = std::time::Instant::now();
+        match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
+            Ok(inner) => inner,
+            Err(_elapsed) => {
+                if let Some(ref token) = config.cancel_token {
+                    token.cancel();
+                }
+                Err(crate::KreuzbergError::Timeout {
+                    elapsed_ms: start.elapsed().as_millis() as u64,
+                    limit_ms: secs * 1000,
+                })
+            }
+        }
+    } else {
+        extraction_future.await
+    };
 
     #[cfg(feature = "otel")]
     if let Err(ref e) = result {
