@@ -1,0 +1,15 @@
+{
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "overrides": [
+    {
+      "includes": ["*.html"],
+      "formatter": {
+        "enabled": true
+      }
+    }
+  ]
+}

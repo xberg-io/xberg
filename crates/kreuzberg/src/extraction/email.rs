@@ -245,21 +245,21 @@ pub(crate) fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
         }
     };
 
-    // If MIME type is HTML but body_html didn't extract anything, try to get content
-    // via body_text and treat it as HTML
+    // For single-part HTML emails, mail-parser may not find any parts via body_html()
+    // when the message structure is NOT multipart. Fallback: if MIME type is HTML-only
+    // and we have plain_text from body_text(), use that as the HTML content.
     let html_content = if should_treat_as_html && html_content.is_none() && plain_text.is_some() {
         plain_text.clone()
     } else {
         html_content
     };
 
-    let content = if should_treat_as_html && html_content.is_some() {
-        // Prefer cleaned HTML for text/html MIME type
-        clean_html_content(html_content.as_ref().unwrap())
-    } else if let Some(ref plain) = plain_text {
+    let content = if let Some(html) = &html_content {
+        // For HTML emails, pass raw HTML to extractor for structure parsing
+        // The extractor will call build_document_structure() which handles script/style removal
+        html.clone()
+    } else if let Some(plain) = &plain_text {
         plain.clone()
-    } else if let Some(html) = &html_content {
-        clean_html_content(html)
     } else {
         String::new()
     };

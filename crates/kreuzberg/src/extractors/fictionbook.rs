@@ -18,6 +18,7 @@ use crate::extraction::cells_to_markdown;
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{DocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
+use crate::OutputFormat;
 use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::uri::Uri;
 use crate::types::{ExtractedImage, Metadata, Table};
@@ -1062,6 +1063,12 @@ impl DocumentExtractor for FictionBookExtractor {
         // Add extracted links
         for uri in links {
             doc.push_uri(uri);
+        }
+
+        // Pre-render markdown for Markdown output format to preserve formatting
+        if config.output_format == OutputFormat::Markdown {
+            doc.pre_rendered_content = Some(crate::rendering::render_markdown(&doc));
+            doc.metadata.output_format = Some("markdown".to_string());
         }
 
         Ok(doc)

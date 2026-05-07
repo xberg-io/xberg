@@ -579,10 +579,34 @@ impl JupyterExtractor {
 
         let mut builder = InternalDocumentBuilder::new("jupyter");
 
+        // Emit kernel language at start of document
+        if let Some(lang) = kernel_lang {
+            builder.push_paragraph(&format!("[kernel_language: {}]", lang), vec![], None, None);
+        }
+
         for cell in cells {
             let cell_type = cell.get("cell_type").and_then(|t| t.as_str()).unwrap_or("unknown");
             let source_text = Self::extract_source(cell.get("source").unwrap_or(&Value::Null));
             let trimmed = source_text.trim();
+
+            // Emit cell ID and type markers at start of cell
+            if let Some(cell_id) = cell.get("id").and_then(|id| id.as_str()) {
+                builder.push_paragraph(&format!("[cell_id: {}]", cell_id), vec![], None, None);
+            }
+
+            // Emit tags if present
+            if let Some(tags) = cell
+                .get("metadata")
+                .and_then(|m| m.get("tags"))
+                .and_then(|t| t.as_array())
+                && !tags.is_empty()
+            {
+                let tag_strs: Vec<String> = tags.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                if !tag_strs.is_empty() {
+                    builder.push_paragraph(&format!("[tags: {}]", tag_strs.join(",")), vec![], None, None);
+                }
+            }
+
             if trimmed.is_empty() {
                 continue;
             }
@@ -653,9 +677,34 @@ impl JupyterExtractor {
                         builder.set_attributes(idx, attrs);
                     }
 
-                    // Emit cell outputs as paragraphs
+                    // Emit execution_count metadata as paragraph
+                    if let Some(exec_count) = cell.get("execution_count") {
+                        match exec_count {
+                            Value::Number(n) => {
+                                builder.push_paragraph(&format!("execution_count: {}", n), vec![], None, None);
+                            }
+                            Value::Null => {
+                                builder.push_paragraph("execution_count: null", vec![], None, None);
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // Emit cell outputs as paragraphs with type markers
                     if let Some(outputs) = cell.get("outputs").and_then(|o| o.as_array()) {
                         for output in outputs {
+                            let output_type = output.get("output_type").and_then(|t| t.as_str()).unwrap_or("unknown");
+
+                            // Emit output type marker
+                            builder.push_paragraph(&format!("[output_type: {}]", output_type), vec![], None, None);
+
+                            // Emit MIME type markers if present
+                            if let Some(data) = output.get("data").and_then(|d| d.as_object()) {
+                                for mime_type in data.keys() {
+                                    builder.push_paragraph(&format!("[mime: {}]", mime_type), vec![], None, None);
+                                }
+                            }
+
                             let output_text = Self::collect_output_text(output);
                             let output_trimmed = output_text.trim();
                             if !output_trimmed.is_empty() {

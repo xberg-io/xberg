@@ -84,6 +84,12 @@ impl SyncExtractor for PstExtractor {
             ..Default::default()
         };
 
+        // Add message count to additional metadata
+        doc.metadata.additional.insert(
+            std::borrow::Cow::Borrowed("message_count"),
+            serde_json::json!(messages.len()),
+        );
+
         Ok(doc)
     }
 }
@@ -158,6 +164,12 @@ impl DocumentExtractor for PstExtractor {
             created_at,
             ..Default::default()
         };
+
+        // Add message count to additional metadata
+        doc.metadata.additional.insert(
+            std::borrow::Cow::Borrowed("message_count"),
+            serde_json::json!(messages.len()),
+        );
 
         // Recursively extract attachments from all messages when depth allows.
         if config.max_archive_depth > 0 {
