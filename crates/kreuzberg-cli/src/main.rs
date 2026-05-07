@@ -634,7 +634,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let env_filter = if let Some(ref level) = cli.log_level {
-        EnvFilter::new(level)
+        EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"))
     } else {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
     };
