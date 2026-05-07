@@ -6,6 +6,14 @@
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
     <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
     <title>Kreuzberg | Live Demo</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "tesseract-wasm": "https://cdn.jsdelivr.net/npm/tesseract-wasm@0.11.0/dist/lib.js",
+          "comlink": "https://cdn.jsdelivr.net/npm/comlink@4.4.1/dist/esm/comlink.min.js"
+        }
+      }
+    </script>
 
     <!-- SEO Meta Tags -->
     <link rel="icon" type="image/x-icon" href="./assets/favicon.ico" />
@@ -237,8 +245,8 @@
               class="w-full p-6 flex flex-col bg-app-red/10 border border-app-red rounded-[12px]"
             >
               <div class="space-y-1">
-                <p class="text-base font-semibold text-white">File too large</p>
-                <p class="text-sm font-light text-white">
+                <p id="error-title" class="text-base font-semibold text-white">File too large</p>
+                <p id="error-desc" class="text-sm font-light text-white">
                   File exceeds the 1MB sandbox limit. Reduce file size or use the API for larger
                   documents.
                 </p>
@@ -521,15 +529,28 @@
           if (errorBox) {
             errorBox.style.display = "flex";
             fileInfo.style.borderColor = "#FF456D";
+            document.getElementById("error-title").textContent = "File too large";
+            document.getElementById("error-desc").textContent = "File exceeds the 1MB sandbox limit. Reduce file size or use the API for larger documents.";
           }
           return;
         }
 
+        const mdEl = document.getElementById("content-markdown");
+        if (mdEl) mdEl.innerHTML = '<p style="color:#888; text-align:center; margin-top:2rem;">Extracting content...</p>';
+        const jsonEl = document.getElementById("content-json");
+        if (jsonEl) jsonEl.innerHTML = '{ "status": "processing" }';
+
         outputScreen.style.display = "flex";
         try {
-          const result = await extractFromFile(file, file.type || null);
-          const mdEl = document.getElementById("content-markdown");
-          const jsonEl = document.getElementById("content-json");
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Extraction timed out after 30 seconds.")), 30000);
+          });
+
+          const result = await Promise.race([
+            extractFromFile(file, file.type || null),
+            timeoutPromise
+          ]);
+
           if (mdEl)
             mdEl.innerHTML = result.content
               ? renderMarkdown(result.content)
@@ -537,6 +558,14 @@
           if (jsonEl) jsonEl.innerHTML = highlightJson(result);
         } catch (e) {
           console.error("WASM Extraction failed:", e);
+          outputScreen.style.display = "none";
+          const errorBox = document.getElementById("error-message");
+          if (errorBox) {
+            errorBox.style.display = "flex";
+            fileInfo.style.borderColor = "#FF456D";
+            document.getElementById("error-title").textContent = "Extraction failed";
+            document.getElementById("error-desc").textContent = e instanceof Error ? e.message : String(e);
+          }
         }
       }
 
