@@ -6112,19 +6112,19 @@ dependencies = [
 
 [[package]]
 name = "sevenz-rust2"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29225600349ef74beda5a9fffb36ac660a24613c0bde9315d0c49be1d51e9c24"
+checksum = "dbbd24232798280d6bc896e3429a3469174de008ec8b1b591a96618b46664195"
 dependencies = [
- "aes 0.8.4",
+ "aes 0.9.0",
  "bzip2",
- "cbc 0.1.2",
+ "cbc 0.2.0",
  "crc32fast",
  "getrandom 0.4.2",
  "js-sys",
  "lzma-rust2 0.16.2",
  "ppmd-rust",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "wasm-bindgen",
 ]
 
