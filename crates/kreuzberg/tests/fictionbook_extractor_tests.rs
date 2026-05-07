@@ -155,10 +155,7 @@ async fn test_fictionbook_markdown_formatting_preservation() {
         .await
         .expect("Failed to extract FB2 file");
 
-    let md = result
-        .formatted_content
-        .as_deref()
-        .expect("formatted_content should be set for Markdown output");
+    let md = &result.content;
     assert!(
         md.contains("**strong**"),
         "Strong text should be formatted as **bold** in markdown"
@@ -188,10 +185,7 @@ async fn test_fictionbook_formatting_in_body_paragraphs() {
         .await
         .expect("Failed to extract FB2 file");
 
-    let md = result
-        .formatted_content
-        .as_deref()
-        .expect("formatted_content should be set for Markdown output");
+    let md = &result.content;
     assert!(
         md.contains("*emphasized*"),
         "Emphasis formatting should be preserved in body content"

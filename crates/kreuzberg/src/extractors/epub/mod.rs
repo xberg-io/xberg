@@ -203,10 +203,16 @@ impl EpubExtractor {
         nav_hrefs: &AHashSet<String>,
         cover_image_path: Option<&str>,
         budget: &mut SecurityBudget,
+        config: &ExtractionConfig,
     ) -> Option<InternalDocument> {
         use crate::types::internal::{ElementKind, InternalElement};
 
         let mut builder = InternalDocumentBuilder::new("epub");
+
+        // Accumulate pre-rendered markdown/djot when all chapters convert successfully
+        let wants_markup = matches!(config.output_format, OutputFormat::Markdown | OutputFormat::Djot);
+        let mut pre_rendered_fragments = Vec::new();
+        let mut all_converted_successfully = wants_markup;
 
         // Emit cover image as the first element if present
         if let Some(cover_path) = cover_image_path {
@@ -277,6 +283,20 @@ impl EpubExtractor {
 
             let normalized = content::normalize_xhtml(&xhtml_content);
             let sanitized = strip_specialized_navigation_sections(&strip_document_head(&normalized));
+
+            // If markdown/djot output requested, try to pre-render this chapter
+            if wants_markup {
+                let spine_doc = content::EpubSpineDocument {
+                    file_path: file_path.clone(),
+                    xhtml: sanitized.clone(),
+                };
+                let rendered = Self::render_spine_document(&spine_doc, index, config);
+                if rendered.content_fully_converted {
+                    pre_rendered_fragments.push(rendered.content_fragment);
+                } else {
+                    all_converted_successfully = false;
+                }
+            }
 
             // Skip navigation documents (TOC pages, etc.)
             if looks_like_navigation_document(&sanitized) {
@@ -457,7 +477,22 @@ impl EpubExtractor {
         // These anchors are set automatically by push_heading (slug-based),
         // so the derivation step can resolve TOC entries to headings by key.
 
-        Some(builder.build())
+        let mut doc = builder.build();
+
+        // If markdown format was requested and all chapters converted successfully,
+        // store the pre-rendered content and mark output format
+        if all_converted_successfully && !pre_rendered_fragments.is_empty() {
+            let combined = pre_rendered_fragments.join("\n\n");
+            doc.pre_rendered_content = Some(combined);
+            let format_name = match config.output_format {
+                OutputFormat::Markdown => "markdown",
+                OutputFormat::Djot => "djot",
+                _ => "plain",
+            };
+            doc.metadata.output_format = Some(format_name.to_string());
+        }
+
+        Some(doc)
     }
 }
 
@@ -630,6 +665,7 @@ impl DocumentExtractor for EpubExtractor {
             &nav_hrefs,
             cover_image_path,
             &mut budget,
+            config,
         )
         .unwrap_or_else(|| InternalDocumentBuilder::new("epub").build());
         doc.mime_type = Cow::Owned(mime_type.to_string());

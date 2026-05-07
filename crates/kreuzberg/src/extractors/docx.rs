@@ -309,9 +309,11 @@ fn build_internal_document(
 
     let mut builder = InternalDocumentBuilder::new("docx");
 
-    // Track current list state for grouping consecutive list items
+    // Track current list state for grouping consecutive list items and nesting
     let mut current_list_numbering_id: Option<i64> = None;
     let mut current_list_ordered: bool = false;
+    let mut current_list_nesting_level: i64 = 0;
+    let mut open_list_count: i64 = 0; // Track nested list depth for closing
 
     // Process body elements in document order
     for element in &doc.elements {
@@ -325,8 +327,11 @@ fn build_internal_document(
                 if text.is_empty() && math_formulas.is_empty() {
                     // Close any open list if we hit an empty paragraph
                     if current_list_numbering_id.is_some() {
-                        builder.end_list();
+                        for _ in 0..open_list_count {
+                            builder.end_list();
+                        }
                         current_list_numbering_id = None;
+                        open_list_count = 0;
                     }
                     continue;
                 }
@@ -349,8 +354,11 @@ fn build_internal_document(
                 let element_idx: Option<u32> = if let Some(level) = heading_level {
                     // Close any open list before a heading
                     if current_list_numbering_id.is_some() {
-                        builder.end_list();
+                        for _ in 0..open_list_count {
+                            builder.end_list();
+                        }
                         current_list_numbering_id = None;
+                        open_list_count = 0;
                     }
                     let heading_text = if text.is_empty() {
                         paragraph.runs_to_markdown()
@@ -365,8 +373,11 @@ fn build_internal_document(
                 } else if is_quote_style {
                     // Close any open list before a blockquote
                     if current_list_numbering_id.is_some() {
-                        builder.end_list();
+                        for _ in 0..open_list_count {
+                            builder.end_list();
+                        }
                         current_list_numbering_id = None;
+                        open_list_count = 0;
                     }
                     builder.push_quote_start();
                     let para_idx = builder.push_paragraph(&text, annotations.clone(), None, None);
@@ -378,6 +389,7 @@ fn build_internal_document(
                         builder.push_formula(formula, None, None);
                     }
                     if !text.is_empty() {
+                        let nlvl = paragraph.numbering_level.unwrap_or(0);
                         let is_ordered = paragraph
                             .numbering_id
                             .zip(paragraph.numbering_level)
@@ -387,11 +399,31 @@ fn build_internal_document(
                         if current_list_numbering_id != Some(nid) {
                             // Close previous list if open
                             if current_list_numbering_id.is_some() {
-                                builder.end_list();
+                                for _ in 0..open_list_count {
+                                    builder.end_list();
+                                }
                             }
                             builder.push_list(is_ordered);
                             current_list_numbering_id = Some(nid);
                             current_list_ordered = is_ordered;
+                            current_list_nesting_level = nlvl;
+                            open_list_count = 1;
+                        } else if nlvl > current_list_nesting_level {
+                            // Nesting deeper: open new lists
+                            let depth_increase = nlvl - current_list_nesting_level;
+                            for _ in 0..depth_increase {
+                                builder.push_list(is_ordered);
+                                open_list_count += 1;
+                            }
+                            current_list_nesting_level = nlvl;
+                        } else if nlvl < current_list_nesting_level {
+                            // Nesting shallower: close lists
+                            let depth_decrease = current_list_nesting_level - nlvl;
+                            for _ in 0..depth_decrease {
+                                builder.end_list();
+                                open_list_count = open_list_count.saturating_sub(1);
+                            }
+                            current_list_nesting_level = nlvl;
                         }
                         let li_idx =
                             builder.push_list_item(&text, current_list_ordered, annotations.clone(), None, None);
@@ -402,8 +434,11 @@ fn build_internal_document(
                 } else {
                     // Close any open list before a non-list paragraph
                     if current_list_numbering_id.is_some() {
-                        builder.end_list();
+                        for _ in 0..open_list_count {
+                            builder.end_list();
+                        }
                         current_list_numbering_id = None;
+                        open_list_count = 0;
                     }
                     // Push any math formulas as standalone Formula nodes
                     for formula in &math_formulas {
@@ -574,9 +609,11 @@ fn build_internal_document(
         }
     }
 
-    // Close any remaining open list
+    // Close any remaining open lists
     if current_list_numbering_id.is_some() {
-        builder.end_list();
+        for _ in 0..open_list_count {
+            builder.end_list();
+        }
     }
 
     // Add headers and footers with appropriate content layers

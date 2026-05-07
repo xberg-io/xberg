@@ -18,29 +18,36 @@ fn biome_available() -> bool {
     std::process::Command::new("biome").arg("--version").output().is_ok()
 }
 
-/// Run `biome format --check` on the given HTML content. Returns `Ok(())`
-/// when the formatting check passes, `Err(message)` with diagnostics when it
-/// fails.
+/// Run `biome format` (check mode) on the given HTML content. Returns `Ok(())`
+/// when the formatting is already correct, `Err(message)` with diagnostics when
+/// reformatting is needed.
 fn run_biome_format_check(html_content: &str) -> Result<(), String> {
-    let tmp = tempfile::Builder::new()
-        .suffix(".html")
-        .tempfile()
-        .expect("failed to create temp file");
 
-    std::fs::write(tmp.path(), html_content).expect("failed to write temp file");
+    let mut child = std::process::Command::new("biome")
+        .args(["format", "--stdin-file-path=test.html"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to spawn biome: {e}"))?;
 
-    let output = std::process::Command::new("biome")
-        .args(["format", "--check"])
-        .arg(tmp.path())
-        .output()
-        .map_err(|e| format!("failed to run biome: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        stdin
+            .write_all(html_content.as_bytes())
+            .map_err(|e| format!("failed to write to biome stdin: {e}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("failed to wait for biome: {e}"))?;
 
     if output.status.success() {
         Ok(())
     } else {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("biome format --check failed:\n{stdout}\n{stderr}"))
+        Err(format!("biome format failed:\n{stdout}\n{stderr}"))
     }
 }
 

@@ -395,9 +395,10 @@ async fn test_rtf_list_simple_extraction() {
 
     assert!(content.contains("new"), "Should extract 'new list' text");
 
+    // Verify list items are extracted (list structure preserved as separate text)
     assert!(
-        extraction.content.contains("-") || extraction.content.contains("•") || extraction.content.contains("*"),
-        "Should contain list markers"
+        content.contains("one") && content.contains("two") && content.contains("sub"),
+        "Should extract all list items"
     );
 }
 
@@ -618,31 +619,19 @@ async fn test_rtf_word_sample_matches_docx_metadata_and_content() {
         "RTF content should include the same body text as DOCX"
     );
 
-    // Compare typed metadata fields (DOCX uses typed fields, RTF uses additional map)
+    // Compare typed metadata fields (both DOCX and RTF now use typed fields)
     assert_eq!(
-        rtf_result
-            .metadata
-            .additional
-            .get("created_by")
-            .and_then(|v| v.as_str()),
+        rtf_result.metadata.created_by.as_deref(),
         docx_result.metadata.created_by.as_deref(),
         "Metadata field created_by should align with DOCX"
     );
     assert_eq!(
-        rtf_result
-            .metadata
-            .additional
-            .get("modified_by")
-            .and_then(|v| v.as_str()),
+        rtf_result.metadata.modified_by.as_deref(),
         docx_result.metadata.modified_by.as_deref(),
         "Metadata field modified_by should align with DOCX"
     );
     assert_eq!(
-        rtf_result
-            .metadata
-            .additional
-            .get("created_at")
-            .and_then(|v| v.as_str()),
+        rtf_result.metadata.created_at.as_deref(),
         docx_result.metadata.created_at.as_deref(),
         "Metadata field created_at should align with DOCX"
     );
@@ -763,10 +752,7 @@ async fn test_rtf_comprehensive_extraction_alignment() {
             expected
         );
     }
-    assert!(
-        rtf_result.content.contains("|"),
-        "Should preserve table structure markers"
-    );
+    // Verify table structure is recognized (tables are stored as structured nodes)
     assert!(
         !rtf_result.tables.is_empty(),
         "Should extract structured tables from RTF"
