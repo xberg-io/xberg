@@ -12,13 +12,13 @@
 //! - Embedded images from `<binary>` elements (base64-encoded)
 //! - Hyperlinks from `<a>` elements
 
+use crate::OutputFormat;
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::extraction::cells_to_markdown;
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{DocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
-use crate::OutputFormat;
 use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::uri::Uri;
 use crate::types::{ExtractedImage, Metadata, Table};

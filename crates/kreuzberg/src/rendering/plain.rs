@@ -12,7 +12,7 @@ use super::common::{get_admonition_kind, get_admonition_title, parse_metadata_en
 pub(crate) fn render_plain(doc: &InternalDocument) -> String {
     let mut out = String::with_capacity(doc.elements.len() * 80);
 
-    for (idx, elem) in doc.elements.iter().enumerate() {
+    for elem in &doc.elements {
         // Only render body-layer elements in main pass
         if elem.layer != ContentLayer::Body {
             continue;
@@ -26,33 +26,11 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
         match elem.kind {
             ElementKind::Title | ElementKind::Heading { .. } | ElementKind::Paragraph => {
                 if !elem.text.is_empty() {
-                    // For top-level headings, add a blank line before if not at start
-                    if matches!(elem.kind, ElementKind::Heading { .. }) && elem.depth == 0 && !out.is_empty() && !out.ends_with("\n\n") {
-                        // Check if previous non-skipped element was also a top-level heading
-                        let prev_was_top_heading = doc.elements[..idx]
-                            .iter()
-                            .rev()
-                            .find(|e| e.layer == ContentLayer::Body && !e.kind.is_container_start() && !e.kind.is_container_end())
-                            .map(|e| matches!(e.kind, ElementKind::Heading { .. }) && e.depth == 0)
-                            .unwrap_or(false);
-                        if prev_was_top_heading {
-                            out.push('\n');
-                        }
-                    }
-
                     // Apply depth-based indentation (2 spaces per depth level)
                     let indent = "  ".repeat(elem.depth as usize);
                     out.push_str(&indent);
 
-                    // Add heading markers for Heading elements
-                    if let ElementKind::Heading { level } = elem.kind {
-                        for _ in 0..level {
-                            out.push('=');
-                        }
-                        out.push(' ');
-                    }
-
-                    // Format element with attributes if present
+                    // Format heading with attributes if present
                     if matches!(elem.kind, ElementKind::Heading { .. }) && elem.attributes.is_some() {
                         out.push_str(&elem.text);
                         let attrs = elem.attributes.as_ref().unwrap();
@@ -71,12 +49,7 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
                         out.push_str(&elem.text);
                     }
 
-                    out.push('\n');
-
-                    // For non-heading paragraphs or title, add double newline
-                    if !matches!(elem.kind, ElementKind::Heading { .. }) {
-                        out.push('\n');
-                    }
+                    out.push_str("\n\n");
                 }
             }
             ElementKind::ListItem { .. } => {

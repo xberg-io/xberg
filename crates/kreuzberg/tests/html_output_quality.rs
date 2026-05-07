@@ -22,7 +22,6 @@ fn biome_available() -> bool {
 /// when the formatting is already correct, `Err(message)` with diagnostics when
 /// reformatting is needed.
 fn run_biome_format_check(html_content: &str) -> Result<(), String> {
-
     let mut child = std::process::Command::new("biome")
         .args(["format", "--stdin-file-path=test.html"])
         .stdin(std::process::Stdio::piped())

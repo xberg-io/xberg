@@ -238,7 +238,12 @@ fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: 
     let mut text = String::with_capacity(page_text_data.spans.len() * 20);
     let mut prev_span: Option<&pdf_oxide::layout::TextSpan> = None;
 
-    eprintln!("DEBUG: Processing {} spans, median_height={}, threshold={}", page_text_data.spans.len(), median_height, paragraph_gap_threshold);
+    eprintln!(
+        "DEBUG: Processing {} spans, median_height={}, threshold={}",
+        page_text_data.spans.len(),
+        median_height,
+        paragraph_gap_threshold
+    );
 
     for (i, span) in page_text_data.spans.iter().enumerate() {
         if let Some(prev) = prev_span {
@@ -247,7 +252,10 @@ fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: 
             let same_line = y_gap < span.bbox.height.max(prev.bbox.height) * 0.5;
 
             if i < 5 {
-                eprintln!("  span[{}]: text='{}', y_gap={:.2}, same_line={}, threshold={:.2}", i, span.text, y_gap, same_line, paragraph_gap_threshold);
+                eprintln!(
+                    "  span[{}]: text='{}', y_gap={:.2}, same_line={}, threshold={:.2}",
+                    i, span.text, y_gap, same_line, paragraph_gap_threshold
+                );
             }
 
             if same_line {
@@ -259,7 +267,10 @@ fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: 
                 // Different line: check if gap is large enough to be a paragraph break.
                 if y_gap > paragraph_gap_threshold {
                     text.push_str("\n\n");
-                    eprintln!("    -> paragraph break (gap {:.2} > threshold {:.2})", y_gap, paragraph_gap_threshold);
+                    eprintln!(
+                        "    -> paragraph break (gap {:.2} > threshold {:.2})",
+                        y_gap, paragraph_gap_threshold
+                    );
                 } else {
                     text.push('\n');
                 }
