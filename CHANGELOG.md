@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.9.6] - 2026-05-07
+
+LTS patch release. Bug fixes backported from `main` (v5 development). The
+`chore/v4.9-lts` branch is now the long-lived line for the 4.9.x series.
+
+### Fixed
+
+- **#789, #800**: `max_images_per_page` cap now enforced in `extract_images_from_pdf` itself — previously only the structure pipeline honoured it, so PDFs with thousands of image objects per page hung indefinitely. Image decoding is also moved off the async executor via `spawn_blocking` so `extraction_timeout_secs` can fire while images are processing.
+- **#838**: OCR elements are now propagated through the extraction pipeline.
+- **#839**: `extraction_timeout_secs` is now enforced in single-file extraction paths (previously the timeout was only applied to multi-file batch flows).
+- **#836**: PDF image data no longer leaks into structured output when image extraction is disabled.
+- **#797**: Preset-only chunking config no longer auto-injects an `EmbeddingConfig` — every chunk previously gained an unwanted `.embedding` field. Explicit embedding config still takes effect.
+- **#782**: PDF heading and image-placeholder element classification corrected.
+- **#870**: PSM defaults to `SINGLE_BLOCK` (6) on the WASM target (native default `PSM_AUTO=3` unchanged).
+- **#872**: `HwpExtractor` no longer claims the `application/haansofthwpx` MIME type — that format is ZIP-based XML and cannot be handled by the CFB-based HWP parser.
+- Latex extractor uses the correct `inject_placeholders: bool` type from `ImageExtractionConfig`.
+- `extraction_timeout_secs` enforcement is now correctly gated on the `tokio-runtime` feature.
+
+### API surface
+
+- `kreuzberg::pdf::extract_images_from_pdf`, `extract_images_from_pdf_with_password`, and `PdfImageExtractor::{extract_images, get_image_count, extract_images_from_page}` gain a required `max_images_per_page: Option<u32>` parameter. Pass `None` to preserve previous unbounded behaviour. (See #789, #800.)
+
+### Not backported from main
+
+The following fixes on `main` could not be applied to v4.9.x because they
+build on v5 architecture (`SecurityBudget`, `image_kind` classification,
+restructured `pdf::structure`):
+
+- #834 (DOCX `inject_placeholders`/OCR pipeline integration) — depends on `SecurityBudget`.
+- #799 (Form XObject image extraction) — full v5 rewrite of `pdf::images`.
+- #824 (image extraction across XObject references) — full v5 rewrite of `pdf::images`.
+
+---
+
 ## [4.9.5] - 2026-04-23
 
 ### Fixed

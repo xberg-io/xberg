@@ -1,21 +1,21 @@
 {
-	"name": "@kreuzberg/e2e-tests",
-	"version": "4.9.5",
-	"type": "module",
-	"description": "End-to-end tests for Kreuzberg TypeScript bindings",
-	"scripts": {
-		"test": "vitest run",
-		"test:watch": "vitest",
-		"test:ui": "vitest --ui"
-	},
-	"dependencies": {
-		"@kreuzberg/node": "workspace:*"
-	},
-	"devDependencies": {
-		"@types/node": "^25.6.0",
-		"@vitest/ui": "^4.1.5",
-		"oxlint": "^1.61.0",
-		"typescript": "^6.0.3",
-		"vitest": "^4.1.5"
-	}
+  "name": "@kreuzberg/e2e-tests",
+  "version": "4.9.6",
+  "type": "module",
+  "description": "End-to-end tests for Kreuzberg TypeScript bindings",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "dependencies": {
+    "@kreuzberg/node": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@vitest/ui": "^4.1.5",
+    "oxlint": "^1.61.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
 }

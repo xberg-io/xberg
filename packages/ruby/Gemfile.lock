@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    kreuzberg (4.9.5)
+    kreuzberg (4.9.6)
       rb_sys (~> 0.9.119)
       sorbet-runtime (~> 0.5)
 
