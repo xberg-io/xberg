@@ -52,6 +52,19 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
                 continue;
             }
 
+            // Guard: require minimum 2 rows and 2 columns for a valid table.
+            // Single-column tables and single-row tables are typically not real tables.
+            // This filters out Google Docs paragraph borders and other styling artifacts.
+            if cells.len() < 2 || cells.iter().all(|row| row.len() < 2) {
+                tracing::debug!(
+                    page = page_idx,
+                    rows = cells.len(),
+                    cols = cells.get(0).map(|r| r.len()).unwrap_or(0),
+                    "Skipping table below minimum dimensions (need ≥2 rows and ≥2 cols)"
+                );
+                continue;
+            }
+
             let bounding_box = extracted_table.bbox.map(|rect| BoundingBox {
                 x0: rect.x as f64,
                 y0: rect.y as f64,
