@@ -230,7 +230,8 @@ pub(crate) fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
         None
     };
 
-    let html_content = {
+    let has_genuine_html_part = has_genuine_html_body(&message);
+    let html_content = if has_genuine_html_part || should_treat_as_html {
         let mut all_html = Vec::new();
         let mut i = 0;
         while let Some(html) = message.body_html(i) {
@@ -244,6 +245,8 @@ pub(crate) fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
         } else {
             Some(all_html.join("\n\n"))
         }
+    } else {
+        None
     };
 
     // For single-part HTML emails, mail-parser may not find any parts via body_html()
@@ -256,9 +259,9 @@ pub(crate) fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
     };
 
     let content = if let Some(html) = &html_content {
-        // For HTML emails, pass raw HTML to extractor for structure parsing
-        // The extractor will call build_document_structure() which handles script/style removal
-        html.clone()
+        // Strip script/style and tags so direct callers see clean text.
+        // The extractor pipeline rebuilds structure from html_content separately.
+        clean_html_content(html)
     } else if let Some(plain) = &plain_text {
         plain.clone()
     } else {
@@ -361,6 +364,23 @@ fn has_genuine_text_body(message: &mail_parser::Message<'_>) -> bool {
     for &part_id in &message.text_body {
         if let Some(part) = message.parts.get(part_id as usize)
             && matches!(&part.body, PartType::Text(_))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Check whether a message has at least one genuine `text/html` body part.
+///
+/// `mail-parser`'s `body_html()` auto-converts text/plain bodies into HTML when
+/// no real HTML part exists. This helper inspects each `html_body` entry's
+/// `PartType` so callers can avoid treating plain-text emails as HTML.
+fn has_genuine_html_body(message: &mail_parser::Message<'_>) -> bool {
+    use mail_parser::PartType;
+    for &part_id in &message.html_body {
+        if let Some(part) = message.parts.get(part_id as usize)
+            && matches!(&part.body, PartType::Html(_))
         {
             return true;
         }
@@ -1290,21 +1310,7 @@ pub(crate) fn build_email_text_output(result: &EmailExtractionResult) -> String 
 
     text_parts.push(result.content.clone());
 
-    // Add attachments section if any exist
-    if !result.attachments.is_empty() {
-        text_parts.push("Attachments:".to_string());
-        let attachment_lines: Vec<String> = result
-            .attachments
-            .iter()
-            .filter_map(|att| {
-                let name = att.filename.as_deref().or(att.name.as_deref()).unwrap_or("unnamed");
-                let size = att.size.unwrap_or(0);
-                Some(format!("  {} ({}B)", name, size))
-            })
-            .collect();
-        text_parts.extend(attachment_lines);
-    }
-
+    // Attachment names live in metadata only; do not inline an "Attachments:" section.
     text_parts.join("\n")
 }
 

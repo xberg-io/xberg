@@ -26,9 +26,11 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
         match elem.kind {
             ElementKind::Title | ElementKind::Heading { .. } | ElementKind::Paragraph => {
                 if !elem.text.is_empty() {
-                    // Apply depth-based indentation (2 spaces per depth level)
-                    let indent = "  ".repeat(elem.depth as usize);
-                    out.push_str(&indent);
+                    // Paragraphs get depth-based indentation; titles/headings are flush-left.
+                    if matches!(elem.kind, ElementKind::Paragraph) {
+                        let indent = "  ".repeat(elem.depth as usize);
+                        out.push_str(&indent);
+                    }
 
                     // Format heading with attributes if present
                     if matches!(elem.kind, ElementKind::Heading { .. }) && elem.attributes.is_some() {
