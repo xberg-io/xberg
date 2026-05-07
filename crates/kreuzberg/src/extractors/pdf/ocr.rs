@@ -798,9 +798,11 @@ pub(crate) async fn extract_with_ocr(
                         } else {
                             let png_data = &encoded_batch[offset].1;
                             let decoded =
-                                image::load_from_memory(png_data).map_err(|e| crate::KreuzbergError::Parsing {
-                                    message: format!("Failed to decode PNG for TATR: {}", e),
-                                    source: None,
+                                crate::utils::image_decode::decode_with_pixel_cap(png_data).map_err(|e| {
+                                    crate::KreuzbergError::Parsing {
+                                        message: format!("Failed to decode PNG for TATR: {e}"),
+                                        source: None,
+                                    }
                                 })?;
                             decoded.to_rgb8()
                         };

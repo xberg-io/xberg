@@ -342,8 +342,8 @@ pub fn load_image_for_ocr(image_bytes: &[u8]) -> Result<image::DynamicImage> {
     } else if is_jbig2(image_bytes) {
         decode_jbig2_to_gray(image_bytes).map(image::DynamicImage::ImageLuma8)
     } else {
-        image::load_from_memory(image_bytes)
-            .map_err(|e| KreuzbergError::parsing(format!("Failed to decode image: {}", e)))
+        crate::utils::image_decode::decode_with_pixel_cap(image_bytes)
+            .map_err(|e| KreuzbergError::parsing(format!("Failed to decode image: {e}")))
     }
 }
 

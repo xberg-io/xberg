@@ -11,6 +11,14 @@ pub mod quality;
 #[cfg(feature = "quality")]
 pub mod string_utils;
 
+#[cfg(any(
+    feature = "ocr",
+    feature = "ocr-wasm",
+    feature = "auto-rotate",
+    feature = "layout-detection",
+    feature = "pdf",
+))]
+pub mod image_decode;
 pub mod json_utils;
 pub mod markdown_utils;
 pub mod pool;

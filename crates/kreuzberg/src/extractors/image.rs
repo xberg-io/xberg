@@ -161,11 +161,12 @@ impl ImageExtractor {
             source: None,
         })?;
 
-        // 1. Decode image
-        let img = image::load_from_memory(content).map_err(|e| crate::KreuzbergError::Parsing {
-            message: format!("Failed to decode image for layout detection: {e}"),
-            source: None,
-        })?;
+        // 1. Decode image (pixel-capped to prevent OOM on crafted inputs)
+        let img = crate::utils::image_decode::decode_with_pixel_cap(content)
+            .map_err(|e| crate::KreuzbergError::Parsing {
+                message: format!("Failed to decode image for layout detection: {e}"),
+                source: None,
+            })?;
         let rgb = img.to_rgb8();
 
         // 2. Run layout detection (reuse cached engine when available)

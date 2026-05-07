@@ -229,7 +229,7 @@ pub fn resolve_cache_dir() -> PathBuf {
 /// Returns `Ok(Some(rotated_bytes))` if rotation was applied,
 /// `Ok(None)` if no rotation needed (0° or low confidence).
 pub fn detect_and_rotate(detector: &DocOrientationDetector, image_bytes: &[u8]) -> Result<Option<Vec<u8>>> {
-    let img = image::load_from_memory(image_bytes)
+    let img = crate::utils::image_decode::decode_with_pixel_cap(image_bytes)
         .map_err(|e| KreuzbergError::Ocr {
             message: format!("Failed to load image for orientation detection: {e}"),
             source: None,
