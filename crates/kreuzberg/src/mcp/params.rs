@@ -55,7 +55,8 @@ pub struct BatchExtractFilesParams {
     pub pdf_password: Option<String>,
     /// Per-file extraction configuration overrides (parallel array to paths).
     /// Each entry is either null (use default) or a FileExtractionConfig JSON object.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(schema_with = "file_configs_schema")]
     pub file_configs: Option<Vec<Option<serde_json::Value>>>,
     /// Wire format for the response: "json" (default) or "toon"
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -164,6 +165,21 @@ pub struct ChunkTextParams {
     /// Topic threshold for semantic chunking (0.0-1.0, default: 0.75)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topic_threshold: Option<f32>,
+}
+
+// Emits `{"type":"array","items":{"anyOf":[{"type":"null"},{"type":"object"}]}}` instead
+// of the default `{"type":"array","items":true}` that schemars derives for Vec<Option<Value>>.
+// `items: true` is valid JSON Schema 2019-09+ but Moonshot AI rejects it (issue #877).
+fn file_configs_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "array",
+        "items": {
+            "anyOf": [
+                {"type": "null"},
+                {"type": "object"}
+            ]
+        }
+    })
 }
 
 // These param structs are constructed by the rmcp framework via serde deserialization,
