@@ -308,22 +308,27 @@ mod tests {
         // Verify we have elements
         assert!(!elements.is_empty());
 
-        // Find Title elements from hierarchy
+        // h1 → Title, h2..h6 → Heading (#782)
         let titles: Vec<_> = elements
             .iter()
             .filter(|e| e.element_type == ElementType::Title)
             .collect();
-        assert_eq!(titles.len(), 2, "Should have 2 title elements from hierarchy");
+        let headings: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::Heading)
+            .collect();
+        assert_eq!(titles.len(), 1, "h1 should produce one Title element");
+        assert_eq!(headings.len(), 1, "h2 should produce one Heading element");
         assert_eq!(titles[0].text, "Main Title");
-        assert_eq!(titles[1].text, "Subtitle");
+        assert_eq!(headings[0].text, "Subtitle");
 
         // Verify page numbers
         assert_eq!(titles[0].metadata.page_number, Some(1));
-        assert_eq!(titles[1].metadata.page_number, Some(1));
+        assert_eq!(headings[0].metadata.page_number, Some(1));
 
         // Verify coordinates were extracted
         assert!(titles[0].metadata.coordinates.is_some());
-        assert!(titles[1].metadata.coordinates.is_some());
+        assert!(headings[0].metadata.coordinates.is_some());
 
         // Find list items
         let list_items: Vec<_> = elements
