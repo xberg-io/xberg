@@ -267,15 +267,10 @@ impl ChunkingConfig {
             }
         };
 
-        let embedding = match &self.embedding {
-            Some(existing) => Some(existing.clone()),
-            None => Some(EmbeddingConfig {
-                model: EmbeddingModelType::Preset {
-                    name: preset_name.clone(),
-                },
-                ..EmbeddingConfig::default()
-            }),
-        };
+        // Preserve the caller's embedding choice, including None.
+        // Presets configure chunking parameters only; users must explicitly
+        // provide an EmbeddingConfig to opt into embedding generation.
+        let embedding = self.embedding.clone();
 
         Self {
             max_characters: preset.chunk_size,
@@ -568,11 +563,9 @@ mod tests {
         let resolved = config.resolve_preset();
         assert_eq!(resolved.max_characters, 1024);
         assert_eq!(resolved.overlap, 100);
-        assert!(resolved.embedding.is_some());
-        match &resolved.embedding.unwrap().model {
-            EmbeddingModelType::Preset { name } => assert_eq!(name, "balanced"),
-            _ => panic!("Expected Preset model type"),
-        }
+        // Preset configures chunking parameters only; embedding stays None unless
+        // the caller explicitly provided one (#797).
+        assert!(resolved.embedding.is_none());
     }
 
     #[test]
@@ -685,5 +678,70 @@ mod tests {
             }
             _ => panic!("Expected Custom variant"),
         }
+    }
+
+    // --- Issue #797 regression tests ---
+
+    /// Preset with no explicit embedding: embedding must remain None.
+    ///
+    /// Before the fix, `resolve_preset()` would silently inject an
+    /// `EmbeddingConfig` whenever a preset was configured, causing every
+    /// chunk to have an unexpected `.embedding` field populated.
+    #[test]
+    #[cfg(feature = "embeddings")]
+    fn test_resolve_preset_does_not_inject_embedding_when_none() {
+        let config = ChunkingConfig {
+            preset: Some("multilingual".to_string()),
+            embedding: None,
+            ..Default::default()
+        };
+        let resolved = config.resolve_preset();
+        assert!(
+            resolved.embedding.is_none(),
+            "preset alone must not inject an EmbeddingConfig (#797)"
+        );
+    }
+
+    /// Preset with an explicit embedding: the embedding must be preserved unchanged.
+    #[test]
+    #[cfg(feature = "embeddings")]
+    fn test_resolve_preset_preserves_explicit_embedding_config() {
+        let explicit = EmbeddingConfig {
+            model: EmbeddingModelType::Custom {
+                model_id: "my-org/model".to_string(),
+                dimensions: 768,
+            },
+            batch_size: 16,
+            ..Default::default()
+        };
+        let config = ChunkingConfig {
+            preset: Some("multilingual".to_string()),
+            embedding: Some(explicit),
+            ..Default::default()
+        };
+        let resolved = config.resolve_preset();
+        let emb = resolved
+            .embedding
+            .expect("explicit embedding must survive resolve_preset");
+        assert_eq!(emb.batch_size, 16);
+        match emb.model {
+            EmbeddingModelType::Custom { model_id, dimensions } => {
+                assert_eq!(model_id, "my-org/model");
+                assert_eq!(dimensions, 768);
+            }
+            other => panic!("expected Custom model type, got {other:?}"),
+        }
+    }
+
+    /// No preset, no embedding: embedding must stay None (regression guard).
+    #[test]
+    fn test_resolve_preset_no_preset_no_embedding_stays_none() {
+        let config = ChunkingConfig {
+            preset: None,
+            embedding: None,
+            ..Default::default()
+        };
+        let resolved = config.resolve_preset();
+        assert!(resolved.embedding.is_none(), "no-preset path must not touch embedding");
     }
 }
