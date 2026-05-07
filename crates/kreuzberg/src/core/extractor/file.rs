@@ -121,6 +121,7 @@ pub async fn extract_file(
         extract_file_with_extractor(path, &detected_mime, config).await
     };
 
+    #[cfg(feature = "tokio-runtime")]
     let result = if let Some(secs) = config.extraction_timeout_secs {
         let start = std::time::Instant::now();
         match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
@@ -136,6 +137,12 @@ pub async fn extract_file(
             }
         }
     } else {
+        extraction_future.await
+    };
+
+    #[cfg(not(feature = "tokio-runtime"))]
+    let result = {
+        let _ = config.extraction_timeout_secs;
         extraction_future.await
     };
 

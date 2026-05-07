@@ -107,6 +107,7 @@ pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionC
         extract_bytes_with_extractor(content, &validated_mime, config).await
     };
 
+    #[cfg(feature = "tokio-runtime")]
     let result = if let Some(secs) = config.extraction_timeout_secs {
         let start = std::time::Instant::now();
         match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
@@ -122,6 +123,12 @@ pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionC
             }
         }
     } else {
+        extraction_future.await
+    };
+
+    #[cfg(not(feature = "tokio-runtime"))]
+    let result = {
+        let _ = config.extraction_timeout_secs;
         extraction_future.await
     };
 
