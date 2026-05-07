@@ -1533,6 +1533,11 @@ Installation instructions:
         eprintln!("Linking WASI SDK sysroot from: {}", sysroot_lib.display());
 
         println!("cargo:rustc-link-search=native={}", sysroot_lib.display());
+        // WASI SDK v33+ moved libc++.a/libc++abi.a to the noeh subdirectory
+        let sysroot_lib_noeh = sysroot_lib.join("noeh");
+        if sysroot_lib_noeh.exists() {
+            println!("cargo:rustc-link-search=native={}", sysroot_lib_noeh.display());
+        }
         // C++ libs from non-threaded sysroot (no atomic operations)
         println!("cargo:rustc-link-lib=static=c++");
         println!("cargo:rustc-link-lib=static=c++abi");

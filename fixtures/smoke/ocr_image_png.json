@@ -1,0 +1,29 @@
+{
+  "id": "ocr_image_png",
+  "category": "smoke",
+  "description": "OCR: PNG image extraction with OCR enabled. In WASM this exercises the Uint8Array bridge parameter and Promise await in the generated OcrBackend bridge.",
+  "tags": ["smoke", "ocr", "image", "png"],
+  "call": "extract_bytes",
+  "input": {
+    "data": "images/test_hello_world.png",
+    "mime_type": "image/png",
+    "config": {}
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "mime_type",
+      "value": "image/png"
+    },
+    {
+      "type": "min_length",
+      "field": "content",
+      "value": 1
+    },
+    {
+      "type": "contains_any",
+      "field": "content",
+      "values": ["Hello", "World", "hello", "world"]
+    }
+  ]
+}

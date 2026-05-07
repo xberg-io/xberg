@@ -12490,9 +12490,19 @@ mod __alef_wasm_bridge_ocrbackend {
                 return Err(format!("JS object missing required method: {}", "backend_type"));
             }
 
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
+
             Ok(Self {
                 inner: js_obj,
-                cached_name: "wasm_bridge".to_string(),
+                cached_name,
             })
         }
     }
@@ -12606,14 +12616,25 @@ mod __alef_wasm_bridge_ocrbackend {
             })?;
 
             let args = js_sys::Array::new();
-            args.push(&wasm_bindgen::JsValue::from_str(&format!("{:?}", image_bytes)));
-            args.push(&wasm_bindgen::JsValue::from_str(&format!("{:?}", config)));
+            // Pass image bytes as Uint8Array (not debug string)
+            let uint8arr = js_sys::Uint8Array::from(image_bytes);
+            args.push(&uint8arr);
+            // Pass the language string (not the full config debug repr)
+            args.push(&wasm_bindgen::JsValue::from_str(&config.language));
 
-            let result = func.apply(&self.inner, &args).map_err(|_| {
+            let promise_val = func.apply(&self.inner, &args).map_err(|_| {
                 kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "process_image"))
             })?;
 
-            result
+            // processImage is async in JS — await the returned Promise
+            let promise: js_sys::Promise = promise_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other("processImage did not return a Promise".to_string()))?;
+            let resolved = wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| kreuzberg::KreuzbergError::Other(format!("processImage Promise rejected: {:?}", e)))?;
+
+            resolved
                 .as_string()
                 .ok_or_else(|| kreuzberg::KreuzbergError::Other("Failed to convert result".to_string()))
                 .and_then(|s| {
@@ -12900,9 +12921,19 @@ mod __alef_wasm_bridge_postprocessor {
                 return Err(format!("JS object missing required method: {}", "processing_stage"));
             }
 
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
+
             Ok(Self {
                 inner: js_obj,
-                cached_name: "wasm_bridge".to_string(),
+                cached_name,
             })
         }
     }
@@ -13195,9 +13226,19 @@ mod __alef_wasm_bridge_validator {
                 return Err(format!("JS object missing required method: {}", "validate"));
             }
 
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
+
             Ok(Self {
                 inner: js_obj,
-                cached_name: "wasm_bridge".to_string(),
+                cached_name,
             })
         }
     }
@@ -13436,9 +13477,19 @@ mod __alef_wasm_bridge_embeddingbackend {
                 return Err(format!("JS object missing required method: {}", "embed"));
             }
 
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
+
             Ok(Self {
                 inner: js_obj,
-                cached_name: "wasm_bridge".to_string(),
+                cached_name,
             })
         }
     }
