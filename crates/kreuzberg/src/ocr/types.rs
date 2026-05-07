@@ -86,6 +86,11 @@ impl Default for TesseractConfig {
     fn default() -> Self {
         Self {
             language: "eng".to_string(),
+            // PSM_AUTO (3) triggers full layout analysis which hangs 60-90s on sparse/no-text
+            // images in WASM (issue #855). PSM_SINGLE_BLOCK (6) skips layout analysis entirely.
+            #[cfg(target_arch = "wasm32")]
+            psm: 6,
+            #[cfg(not(target_arch = "wasm32"))]
             psm: 3,
             output_format: "markdown".to_string(),
             oem: 3,
@@ -232,13 +237,18 @@ mod tests {
         let config = TesseractConfig::default();
 
         assert_eq!(config.language, "eng");
-        assert_eq!(config.psm, 3);
         assert_eq!(config.output_format, "markdown");
         assert!(config.enable_table_detection);
         assert_eq!(config.table_min_confidence, 0.0);
         assert_eq!(config.table_column_threshold, 50);
         assert_eq!(config.table_row_threshold_ratio, 0.5);
         assert!(config.use_cache);
+
+        // PSM default is target-specific: WASM avoids layout-analysis hang (issue #855)
+        #[cfg(target_arch = "wasm32")]
+        assert_eq!(config.psm, 6, "WASM default must be PSM_SINGLE_BLOCK (6)");
+        #[cfg(not(target_arch = "wasm32"))]
+        assert_eq!(config.psm, 3, "native default must be PSM_AUTO (3)");
     }
 
     #[test]
