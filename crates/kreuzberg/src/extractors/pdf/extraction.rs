@@ -121,7 +121,15 @@ pub(crate) fn extract_all_from_document(
             .map(|cf| (cf.strip_repeating_text, cf.include_headers, cf.include_footers))
             .unwrap_or((true, false, false)); // defaults match current behavior
 
-        let inject_placeholders = config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(true);
+        // Image extraction must be explicitly enabled before we inject placeholders.
+        // Checking both config paths so that either flag (`images.extract_images` or
+        // `pdf_options.extract_images`) correctly suppresses image rendering in the
+        // structure pipeline. When disabled, `populate_images_from_pdfium` is skipped
+        // entirely, preventing base64 image data from leaking into the result.
+        let images_extraction_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
+            || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
+        let inject_placeholders =
+            images_extraction_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(true);
 
         tracing::debug!(
             k_clusters = k,
@@ -510,7 +518,13 @@ pub(crate) fn extract_all_from_oxide_document(
                 "oxide structure: extracted segments for heading detection"
             );
 
-            let inject_placeholders = config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(true);
+            // Same gate as the pdfium path: only inject placeholders when image extraction
+            // is explicitly enabled. Prevents base64 data from leaking into results when
+            // the caller sets extract_images=false (fixes #796).
+            let images_extraction_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
+                || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
+            let inject_placeholders =
+                images_extraction_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(true);
 
             match crate::pdf::structure::extract_document_structure_from_segments(
                 segments,
