@@ -803,7 +803,7 @@ impl PdfExtractor {
         let (images, image_fallback_warning) = if config.images.as_ref().map(|c| c.extract_images).unwrap_or(false) {
             let content_owned = content.to_vec();
             let max_images_per_page = config.images.as_ref().and_then(|i| i.max_images_per_page);
-            let result = tokio::task::spawn_blocking(move || {
+            let extract = move || -> std::result::Result<(Vec<crate::pdf::images::PdfImage>, u32), crate::pdf::error::PdfError> {
                 let mut pdf_images = crate::pdf::images::extract_images_from_pdf(&content_owned, max_images_per_page)?;
                 // Fallback: re-extract unusable images via pdfium bitmap rendering.
                 #[cfg(feature = "pdf")]
@@ -811,10 +811,14 @@ impl PdfExtractor {
                     crate::pdf::images::reextract_raw_images_via_pdfium(&content_owned, &mut pdf_images).unwrap_or(0);
                 #[cfg(not(feature = "pdf"))]
                 let fallback_count = 0u32;
-                Ok::<_, crate::pdf::error::PdfError>((pdf_images, fallback_count))
-            })
-            .await
-            .map_err(|e| crate::error::KreuzbergError::Other(format!("image extraction task panicked: {e}")))?;
+                Ok((pdf_images, fallback_count))
+            };
+            #[cfg(feature = "tokio-runtime")]
+            let result = tokio::task::spawn_blocking(extract)
+                .await
+                .map_err(|e| crate::error::KreuzbergError::Other(format!("image extraction task panicked: {e}")))?;
+            #[cfg(not(feature = "tokio-runtime"))]
+            let result = extract();
 
             match result {
                 Ok((pdf_images, fallback_count)) => {
@@ -1078,6 +1082,7 @@ impl PdfExtractor {
                 doc.processing_warnings.push(warning);
             }
             doc.annotations = pdf_annotations;
+            #[cfg(feature = "ocr")]
             if !ocr_elements.is_empty() {
                 doc.prebuilt_ocr_elements = Some(ocr_elements);
             }
@@ -1308,11 +1313,13 @@ impl PdfExtractor {
         let (images, image_fallback_warning) = if config.images.as_ref().map(|c| c.extract_images).unwrap_or(false) {
             let content_owned = content.to_vec();
             let max_images_per_page = config.images.as_ref().and_then(|i| i.max_images_per_page);
-            let result = tokio::task::spawn_blocking(move || {
-                crate::pdf::images::extract_images_from_pdf(&content_owned, max_images_per_page)
-            })
-            .await
-            .map_err(|e| crate::error::KreuzbergError::Other(format!("image extraction task panicked: {e}")))?;
+            let extract = move || crate::pdf::images::extract_images_from_pdf(&content_owned, max_images_per_page);
+            #[cfg(feature = "tokio-runtime")]
+            let result = tokio::task::spawn_blocking(extract)
+                .await
+                .map_err(|e| crate::error::KreuzbergError::Other(format!("image extraction task panicked: {e}")))?;
+            #[cfg(not(feature = "tokio-runtime"))]
+            let result = extract();
 
             match result {
                 Ok(pdf_images) => {
