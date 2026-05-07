@@ -1445,6 +1445,10 @@ impl PdfExtractor {
             doc.processing_warnings.push(warning);
         }
         doc.annotations = pdf_annotations;
+        #[cfg(feature = "ocr")]
+        if !ocr_elements.is_empty() {
+            doc.prebuilt_ocr_elements = Some(ocr_elements);
+        }
 
         // Extract URIs from annotations (links).
         {
