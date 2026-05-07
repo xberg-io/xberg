@@ -142,7 +142,7 @@ jobs:
         run: scripts/ci/rust/pre-build-diagnostics.sh
 
       - name: Build kreuzberg-ffi (release)
-        run: cargo build --release -p kreuzberg-ffi
+        run: cargo build --release -p kreuzberg-ffi --features embeddings
         shell: bash
 
       - name: Build kreuzberg-cli (release, --features all)
