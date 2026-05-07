@@ -1,4 +1,4 @@
-# Jason
+# Jason [![Hex Version](https://img.shields.io/hexpm/v/jason.svg)](https://hex.pm/packages/jason) [![Hex Docs](https://img.shields.io/badge/docs-hexpm-blue.svg)](https://hexdocs.pm/jason/)
 
 A blazing fast JSON parser and generator in pure Elixir.
 
@@ -9,7 +9,7 @@ Jason is usually only twice as slow.
 
 Both parser and generator fully conform to
 [RFC 8259](https://tools.ietf.org/html/rfc8259) and
-[ECMA 404](http://www.ecma-international.org/publications/standards/Ecma-404.htm)
+[ECMA 404](https://ecma-international.org/publications-and-standards/standards/ecma-404/)
 standards. The parser is tested using [JSONTestSuite](https://github.com/nst/JSONTestSuite).
 
 ## Installation

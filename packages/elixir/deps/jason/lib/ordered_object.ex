@@ -15,6 +15,18 @@ defmodule Jason.OrderedObject do
 
   defstruct values: []
 
+  @doc ~S"""
+  Creates a new ordered object from a list of key-value pairs.
+
+  ## Example
+
+      iex> %{a: 1, c: 3, b: 2}
+      ...> |> Enum.sort()
+      ...> |> Jason.OrderedObject.new()
+      ...> |> Jason.encode!()
+      "{\"a\":1,\"b\":2,\"c\":3}"
+
+  """
   def new(values) when is_list(values) do
     %__MODULE__{values: values}
   end

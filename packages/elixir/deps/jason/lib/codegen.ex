@@ -104,12 +104,12 @@ defmodule Jason.Codegen do
   end
 
   defp encode_pair({key, value}, encode_args) do
-    key = IO.iodata_to_binary(Encode.key(key, &escape_key/3))
+    key = IO.iodata_to_binary(Encode.key(key, &escape_key/1))
     key = "\"" <> key <> "\":"
     [key, quote(do: Encode.value(unquote(value), unquote_splicing(encode_args)))]
   end
 
-  defp escape_key(binary, _original, _skip) do
+  defp escape_key(binary) do
     check_safe_key!(binary)
     binary
   end

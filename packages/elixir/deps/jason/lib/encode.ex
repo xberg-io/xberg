@@ -20,7 +20,7 @@ defmodule Jason.Encode do
 
   alias Jason.{Codegen, EncodeError, Encoder, Fragment, OrderedObject}
 
-  @typep escape :: (String.t, String.t, integer -> iodata)
+  @typep escape :: (String.t -> iodata)
   @typep encode_map :: (map, escape, encode_map -> iodata)
   @opaque opts :: {escape, encode_map}
 
@@ -52,13 +52,13 @@ defmodule Jason.Encode do
 
   defp escape_function(%{escape: escape}) do
     case escape do
-      :json -> &escape_json/3
-      :html_safe -> &escape_html/3
-      :unicode_safe -> &escape_unicode/3
-      :javascript_safe -> &escape_javascript/3
+      :json -> &escape_json/1
+      :html_safe -> &escape_html/1
+      :unicode_safe -> &escape_unicode/1
+      :javascript_safe -> &escape_javascript/1
       # Keep for compatibility with Poison
-      :javascript -> &escape_javascript/3
-      :unicode -> &escape_unicode/3
+      :javascript -> &escape_javascript/1
+      :unicode -> &escape_unicode/1
     end
   end
 
@@ -261,15 +261,15 @@ defmodule Jason.Encode do
   @doc false
   # This is used in the helpers and deriving implementation
   def key(string, escape) when is_binary(string) do
-    escape.(string, string, 0)
+    escape.(string)
   end
   def key(atom, escape) when is_atom(atom) do
     string = Atom.to_string(atom)
-    escape.(string, string, 0)
+    escape.(string)
   end
   def key(other, escape) do
     string = String.Chars.to_string(other)
-    escape.(string, string, 0)
+    escape.(string)
   end
 
   @spec string(String.t, opts) :: iodata
@@ -278,7 +278,7 @@ defmodule Jason.Encode do
   end
 
   defp encode_string(string, escape) do
-    [?", escape.(string, string, 0), ?"]
+    [?", escape.(string), ?"]
   end
 
   slash_escapes = Enum.zip(~c'\b\t\n\f\r\"\\', ~c'btnfr"\\')
@@ -301,8 +301,8 @@ defmodule Jason.Encode do
 
   json_jt = Codegen.jump_table(ranges, :chunk, 0x7F + 1)
 
-  defp escape_json(data, original, skip) do
-    escape_json(data, [], original, skip)
+  defp escape_json(data) do
+    escape_json(data, [], data, 0)
   end
 
   Enum.map(json_jt, fn
@@ -371,8 +371,8 @@ defmodule Jason.Encode do
 
   ## javascript safe JSON escape
 
-  defp escape_javascript(data, original, skip) do
-    escape_javascript(data, [], original, skip)
+  defp escape_javascript(data) do
+    escape_javascript(data, [], data, 0)
   end
 
   Enum.map(json_jt, fn
@@ -456,8 +456,8 @@ defmodule Jason.Encode do
 
   html_jt = Codegen.jump_table(html_ranges, :chunk, 0x7F + 1)
 
-  defp escape_html(data, original, skip) do
-    escape_html(data, [], original, skip)
+  defp escape_html(data) do
+    escape_html(data, [], data, 0)
   end
 
   Enum.map(html_jt, fn
@@ -539,8 +539,8 @@ defmodule Jason.Encode do
 
   ## unicode escape
 
-  defp escape_unicode(data, original, skip) do
-    escape_unicode(data, [], original, skip)
+  defp escape_unicode(data) do
+    escape_unicode(data, [], data, 0)
   end
 
   Enum.map(json_jt, fn

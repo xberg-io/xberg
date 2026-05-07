@@ -13,7 +13,7 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
-  "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8",
+  "packageManager": "pnpm@11.0.8+sha512.4c4097e1dd2d42372c4e7fa5a791ff28fc75a484c7ac192e64b1df0fdef17594ba982f9b4fed9adfb3c757846f565b799b2763fb3733d1de1bcb82cf46684912",
   "pnpm": {
     "overrides": {
       "glob": "10.5.0"

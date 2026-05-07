@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.5 (05.05.2026)
+
+* Add support for Decimal 3.0
+
 ## 1.4.4 (26.07.2024)
 
 * Fix warnings on Elixir 1.17 by conditionally compiling Decimal support
