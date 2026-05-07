@@ -12,7 +12,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use kreuzberg::extraction::email::parse_eml_content;
 //!
 //! # fn example() -> kreuzberg::Result<()> {

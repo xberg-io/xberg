@@ -113,7 +113,8 @@ fn build_internal_document(content: &[u8], mime_type: &str, budget: &mut Securit
                     }
                 }
 
-                let mut elem = InternalElement::text(ElementKind::Paragraph, &name, depth).with_index(index);
+                let level = ((depth as u8) + 1).min(6);
+                let mut elem = InternalElement::text(ElementKind::Heading { level }, &name, depth).with_index(index);
                 if !attrs.is_empty() {
                     elem = elem.with_attributes(attrs);
                 }

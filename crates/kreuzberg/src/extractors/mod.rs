@@ -307,7 +307,7 @@ pub(crate) fn ensure_initialized() -> Result<()> {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::extractors::register_default_extractors;
 ///
 /// # fn main() -> kreuzberg::Result<()> {

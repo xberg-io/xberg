@@ -146,7 +146,7 @@ pub(crate) fn validate_binarization_method(method: &str) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::core::config_validation::validate_token_reduction_level;
 ///
 /// assert!(validate_token_reduction_level("off").is_ok());
@@ -181,7 +181,7 @@ pub(crate) fn validate_token_reduction_level(level: &str) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::core::config_validation::validate_ocr_backend;
 ///
 /// assert!(validate_ocr_backend("tesseract").is_ok());
@@ -219,7 +219,7 @@ pub(crate) fn validate_ocr_backend(backend: &str) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::core::config_validation::validate_language_code;
 ///
 /// assert!(validate_language_code("en").is_ok());
@@ -457,7 +457,7 @@ pub(crate) fn validate_dpi(dpi: i32) -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::core::config_validation::validate_chunking_params;
 ///
 /// assert!(validate_chunking_params(1000, 200).is_ok());

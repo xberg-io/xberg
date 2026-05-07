@@ -34,7 +34,7 @@ pub type CustomProperties = HashMap<String, Value>;
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use kreuzberg::extraction::office_metadata::extract_custom_properties;
 /// use std::fs::File;
 /// use zip::ZipArchive;

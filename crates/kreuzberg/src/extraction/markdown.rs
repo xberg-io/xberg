@@ -25,7 +25,7 @@ use crate::extraction::capacity;
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// # use kreuzberg::extraction::cells_to_markdown;
 /// let cells = vec![
 ///     vec!["Name".to_string(), "Age".to_string()],

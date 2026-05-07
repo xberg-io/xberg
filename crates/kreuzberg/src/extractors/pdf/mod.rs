@@ -19,7 +19,7 @@ use std::path::Path;
 use extraction::extract_all_from_oxide_document;
 #[cfg(feature = "ocr")]
 use ocr::extract_with_ocr;
-use pages::assign_tables_and_images_to_pages;
+use pages::{assign_hierarchy_to_pages, assign_tables_and_images_to_pages};
 
 /// Run OCR with optional layout detection on PDF bytes.
 ///
@@ -353,7 +353,7 @@ impl PdfExtractor {
         };
 
         // --- Page assembly ---
-        let final_pages = assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
+        let mut final_pages = assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
 
         // --- Build InternalDocument ---
         let pre_formatted_output: Option<String> = None;
@@ -492,6 +492,11 @@ impl PdfExtractor {
             for warning in embedded_warnings {
                 doc.processing_warnings.push(warning);
             }
+        }
+
+        // Assign hierarchy information from structured document to pages
+        if let Some(ref mut pages) = final_pages {
+            assign_hierarchy_to_pages(pages, &doc);
         }
 
         doc.prebuilt_pages = final_pages;

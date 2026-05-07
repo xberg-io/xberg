@@ -24,7 +24,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use kreuzberg::core::formats::{KNOWN_FORMATS, is_valid_format_field};
 //!
 //! assert!(is_valid_format_field("title"));

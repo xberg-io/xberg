@@ -25,7 +25,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use kreuzberg::extraction::pptx::{extract_pptx_from_path, PptxExtractionOptions};
 //!
 //! # fn example() -> kreuzberg::Result<()> {

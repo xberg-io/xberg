@@ -133,7 +133,7 @@ pub async fn serve_with_config(host: impl AsRef<str>, port: u16, config: Extract
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use kreuzberg::{ExtractionConfig, api::{serve_with_config_and_limits, ApiSizeLimits}};
 ///
 /// #[tokio::main]

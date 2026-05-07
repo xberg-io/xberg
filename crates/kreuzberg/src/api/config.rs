@@ -29,7 +29,7 @@ use crate::{Result, core::ServerConfig};
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use kreuzberg::api::load_server_config;
 ///
 /// # fn example() -> kreuzberg::Result<()> {

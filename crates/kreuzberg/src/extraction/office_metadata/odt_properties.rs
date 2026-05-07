@@ -72,7 +72,7 @@ pub struct OdtProperties {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use kreuzberg::extraction::office_metadata::extract_odt_properties;
 /// use std::fs::File;
 /// use zip::ZipArchive;

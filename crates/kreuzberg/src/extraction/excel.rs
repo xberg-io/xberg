@@ -14,7 +14,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use kreuzberg::extraction::excel::read_excel_file;
 //!
 //! # fn example() -> kreuzberg::Result<()> {

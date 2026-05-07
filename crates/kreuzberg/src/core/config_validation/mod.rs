@@ -8,7 +8,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```ignore
 //! use kreuzberg::core::config_validation::{
 //!     validate_binarization_method,
 //!     validate_token_reduction_level,

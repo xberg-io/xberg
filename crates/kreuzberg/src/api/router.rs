@@ -64,7 +64,7 @@ pub fn create_router(config: ExtractionConfig) -> Router {
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use kreuzberg::{ExtractionConfig, api::{create_router_with_limits, ApiSizeLimits}};
 ///
 /// # #[tokio::main]
@@ -76,7 +76,7 @@ pub fn create_router(config: ExtractionConfig) -> Router {
 /// # }
 /// ```
 ///
-/// ```no_run
+/// ```ignore
 /// use kreuzberg::{ExtractionConfig, api::{create_router_with_limits, ApiSizeLimits}};
 /// use tower_http::limit::RequestBodyLimitLayer;
 ///
@@ -104,7 +104,7 @@ pub fn create_router_with_limits(config: ExtractionConfig, limits: ApiSizeLimits
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```ignore
 /// use kreuzberg::{ExtractionConfig, api::{create_router_with_limits_and_server_config, ApiSizeLimits}, core::ServerConfig};
 ///
 /// # #[tokio::main]

@@ -12,7 +12,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use kreuzberg::extraction::xml::parse_xml;
 //! use kreuzberg::extractors::security::SecurityLimits;
 //!

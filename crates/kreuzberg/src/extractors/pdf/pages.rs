@@ -1,8 +1,62 @@
 //! Page content management for PDF extraction.
 //!
-//! Handles assignment of tables, images, and layout regions to specific pages.
+//! Handles assignment of tables, images, layout regions, and hierarchy to specific pages.
 
-use crate::types::PageContent;
+use crate::types::internal::{ElementKind, InternalDocument};
+use crate::types::{HierarchicalBlock, PageContent, PageHierarchy};
+
+/// Extract hierarchy information from an InternalDocument and assign to pages.
+///
+/// Examines all heading elements in the document, maps them to pages using the
+/// `page` field, and creates PageHierarchy structures for each page.
+///
+/// Only processes ElementKind::Heading elements and ignores other element types.
+pub(crate) fn assign_hierarchy_to_pages(pages: &mut [PageContent], doc: &InternalDocument) {
+    // Group heading/block elements by page number
+    let mut page_hierarchies: std::collections::HashMap<usize, Vec<HierarchicalBlock>> =
+        std::collections::HashMap::new();
+
+    for element in &doc.elements {
+        let page_num = match element.page {
+            Some(p) => p as usize,
+            None => continue,
+        };
+
+        match element.kind {
+            ElementKind::Heading { level } => {
+                let block = HierarchicalBlock {
+                    text: element.text.clone(),
+                    font_size: 12.0, // Default font size (not available in InternalElement)
+                    level: format!("h{}", level),
+                    bbox: element
+                        .bbox
+                        .map(|b| (b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32)),
+                };
+                page_hierarchies.entry(page_num).or_insert_with(Vec::new).push(block);
+            }
+            ElementKind::Paragraph => {
+                let block = HierarchicalBlock {
+                    text: element.text.clone(),
+                    font_size: 12.0,
+                    level: "body".to_string(),
+                    bbox: element
+                        .bbox
+                        .map(|b| (b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32)),
+                };
+                page_hierarchies.entry(page_num).or_insert_with(Vec::new).push(block);
+            }
+            _ => {}
+        }
+    }
+
+    // Assign hierarchy to each page
+    for page in pages.iter_mut() {
+        if let Some(blocks) = page_hierarchies.remove(&page.page_number) {
+            let block_count = blocks.len();
+            page.hierarchy = Some(PageHierarchy { block_count, blocks });
+        }
+    }
+}
 
 /// Helper function to assign tables and images to pages.
 ///

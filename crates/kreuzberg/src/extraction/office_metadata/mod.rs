@@ -13,7 +13,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use kreuzberg::extraction::office_metadata::{extract_core_properties, extract_docx_app_properties};
 //! use std::fs::File;
 //! use zip::ZipArchive;

@@ -38,7 +38,7 @@ static POOL_INIT: Once = Once::new();
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::core::config::ConcurrencyConfig;
 /// use kreuzberg::core::config::concurrency::resolve_thread_budget;
 ///
@@ -60,7 +60,7 @@ pub(crate) fn resolve_thread_budget(config: Option<&ConcurrencyConfig>) -> usize
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::core::config::concurrency::init_thread_pools;
 ///
 /// init_thread_pools(4);

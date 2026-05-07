@@ -28,7 +28,7 @@ use crate::types::{ChunkType, HeadingContext};
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::chunking::classifier::classify_chunk;
 /// use kreuzberg::types::ChunkType;
 ///

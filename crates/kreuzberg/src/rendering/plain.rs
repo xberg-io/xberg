@@ -11,6 +11,7 @@ use super::common::{get_admonition_kind, get_admonition_title, parse_metadata_en
 /// Render an `InternalDocument` to plain text.
 pub(crate) fn render_plain(doc: &InternalDocument) -> String {
     let mut out = String::with_capacity(doc.elements.len() * 80);
+    let mut last_heading_depth: Option<u16> = None;
 
     for elem in &doc.elements {
         // Only render body-layer elements in main pass
@@ -26,8 +27,21 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
         match elem.kind {
             ElementKind::Title | ElementKind::Heading { .. } | ElementKind::Paragraph => {
                 if !elem.text.is_empty() {
-                    // Paragraphs get depth-based indentation; titles/headings are flush-left.
-                    if matches!(elem.kind, ElementKind::Paragraph) {
+                    // Insert blank line between XML element siblings at depth 0 and depth 1
+                    if matches!(elem.kind, ElementKind::Heading { .. }) {
+                        if let Some(last_depth) = last_heading_depth {
+                            // Only insert blank lines between siblings at the same depth, depth 0 or 1
+                            if (last_depth == 0 || last_depth == 1) && last_depth == elem.depth && !out.is_empty() && !out.ends_with("\n\n") {
+                                out.push('\n');
+                            }
+                        }
+                        last_heading_depth = Some(elem.depth);
+                    }
+
+                    // Paragraphs and headings with depth > 0 get depth-based indentation; titles/headings at depth 0 are flush-left.
+                    if matches!(elem.kind, ElementKind::Paragraph)
+                        || (matches!(elem.kind, ElementKind::Heading { .. }) && elem.depth > 0)
+                    {
                         let indent = "  ".repeat(elem.depth as usize);
                         out.push_str(&indent);
                     }

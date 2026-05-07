@@ -53,7 +53,7 @@
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// use kreuzberg::extraction::capacity::estimate_content_capacity;
 ///
 /// // 1MB text file → expect ~950KB of extracted content

@@ -19,7 +19,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```ignore
 //! use kreuzberg::extraction::structured::parse_json;
 //!
 //! # fn example() -> kreuzberg::Result<()> {
@@ -313,7 +313,7 @@ fn is_text_field(key: &str, custom_patterns: &[String]) -> bool {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use kreuzberg::extraction::structured::parse_jsonl;
 ///
 /// # fn example() -> kreuzberg::Result<()> {

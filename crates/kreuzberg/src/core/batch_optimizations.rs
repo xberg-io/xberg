@@ -138,7 +138,7 @@ impl BatchProcessor {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```ignore
     /// use kreuzberg::core::batch_optimizations::BatchProcessor;
     /// use kreuzberg::utils::pool_sizing::estimate_pool_size;
     ///

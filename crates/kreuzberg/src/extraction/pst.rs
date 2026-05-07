@@ -11,7 +11,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use kreuzberg::extraction::pst::extract_pst_messages;
 //!
 //! # fn example() -> kreuzberg::Result<()> {

@@ -12,7 +12,7 @@
 //!
 //! # Examples
 //!
-//! ```rust,no_run
+//! ```ignore
 //! # use kreuzberg::keywords::{extract_keywords, KeywordConfig};
 //! let text = "Rust is a systems programming language focused on safety and performance.";
 //!

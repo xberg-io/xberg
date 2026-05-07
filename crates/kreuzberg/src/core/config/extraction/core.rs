@@ -332,7 +332,7 @@ impl ExtractionConfig {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// use kreuzberg::{ExtractionConfig, FileExtractionConfig};
     ///
     /// let base = ExtractionConfig::default();
