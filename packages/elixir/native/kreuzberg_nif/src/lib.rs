@@ -3847,10 +3847,11 @@ impl Default for LayoutClass {
 /// ```
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn extract_bytes_async(
-    content: Vec<u8>,
+    content: rustler::Binary,
     mime_type: String,
     config: Option<String>,
 ) -> Result<ExtractionResult, String> {
+    let content_vec = content.as_slice().to_vec();
     let config_core: Option<kreuzberg::ExtractionConfig> = config
         .map(|s| serde_json::from_str::<kreuzberg::ExtractionConfig>(&s))
         .transpose()
@@ -3862,7 +3863,7 @@ pub fn extract_bytes_async(
             let result = rt
                 .block_on(async {
                     kreuzberg::extract_bytes(
-                        &content,
+                        &content_vec,
                         &mime_type,
                         config_core.as_ref().unwrap_or(&Default::default()),
                     )
@@ -4003,16 +4004,17 @@ pub fn extract_file_sync(
 /// ```
 #[rustler::nif]
 pub fn extract_bytes_sync(
-    content: Vec<u8>,
+    content: rustler::Binary,
     mime_type: String,
     config: Option<String>,
 ) -> Result<ExtractionResult, String> {
+    let content_slice = content.as_slice();
     let config_core: Option<kreuzberg::ExtractionConfig> = config
         .map(|s| serde_json::from_str::<kreuzberg::ExtractionConfig>(&s))
         .transpose()
         .map_err(|e| e.to_string())?;
     let result = kreuzberg::extract_bytes_sync(
-        &content,
+        content_slice,
         &mime_type,
         config_core.as_ref().unwrap_or(&Default::default()),
     )
@@ -4040,8 +4042,8 @@ pub fn extract_bytes_sync(
 ///
 /// Returns `KreuzbergError::UnsupportedFormat` if MIME type cannot be determined.
 #[rustler::nif]
-pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String> {
-    let result = kreuzberg::detect_mime_type_from_bytes(&content).map_err(|e| e.to_string())?;
+pub fn detect_mime_type_from_bytes(content: rustler::Binary) -> Result<String, String> {
+    let result = kreuzberg::detect_mime_type_from_bytes(content.as_slice()).map_err(|e| e.to_string())?;
     Ok(result)
 }
 
