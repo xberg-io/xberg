@@ -1,42 +1,42 @@
 {
-  "name": "kreuzberg-root",
-  "private": true,
-  "packageManager": "pnpm@10.33.1+sha512.05ba3c1d5d1c18f68df06470d74055e62d41fc110a0c660db1b2dfb2785327f04cf0f68345d4609bc52089e7fa0343c31593b2f9594e2c5d5da426230acc9820",
-  "scripts": {
-    "typecheck": "pnpm -r --if-present run typecheck"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.12",
-    "@emnapi/core": "^1.10.0",
-    "@emnapi/runtime": "1.10.0",
-    "@textlint-rule/textlint-rule-no-invalid-control-character": "^3.0.0",
-    "@textlint-rule/textlint-rule-no-unmatched-pair": "^2.0.4",
-    "@vitest/coverage-v8": "^4.1.5",
-    "oxlint": "^1.61.0",
-    "textlint": "^15.5.4",
-    "textlint-filter-rule-comments": "^1.3.0",
-    "textlint-filter-rule-node-types": "^1.1.0",
-    "textlint-rule-alex": "^5.0.0",
-    "textlint-rule-common-misspellings": "^1.0.1",
-    "textlint-rule-doubled-spaces": "^1.0.2",
-    "textlint-rule-en-capitalization": "^2.0.3",
-    "textlint-rule-en-max-word-count": "^2.0.1",
-    "textlint-rule-no-empty-section": "^1.1.0",
-    "textlint-rule-no-start-duplicated-conjunction": "^2.0.2",
-    "textlint-rule-no-surrogate-pair": "^1.0.1",
-    "textlint-rule-no-todo": "^2.0.1",
-    "textlint-rule-no-zero-width-spaces": "^1.0.1",
-    "textlint-rule-stop-words": "^5.2.0",
-    "textlint-rule-terminology": "^5.2.16",
-    "textlint-rule-write-good": "^2.0.0",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "glob": "10.5.0"
-    }
-  },
-  "version": "4.9.6"
+	"name": "kreuzberg-root",
+	"private": true,
+	"packageManager": "pnpm@10.33.1+sha512.05ba3c1d5d1c18f68df06470d74055e62d41fc110a0c660db1b2dfb2785327f04cf0f68345d4609bc52089e7fa0343c31593b2f9594e2c5d5da426230acc9820",
+	"scripts": {
+		"typecheck": "pnpm -r --if-present run typecheck"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.12",
+		"@emnapi/core": "^1.10.0",
+		"@emnapi/runtime": "1.10.0",
+		"@textlint-rule/textlint-rule-no-invalid-control-character": "^3.0.0",
+		"@textlint-rule/textlint-rule-no-unmatched-pair": "^2.0.4",
+		"@vitest/coverage-v8": "^4.1.5",
+		"oxlint": "^1.61.0",
+		"textlint": "^15.5.4",
+		"textlint-filter-rule-comments": "^1.3.0",
+		"textlint-filter-rule-node-types": "^1.1.0",
+		"textlint-rule-alex": "^5.0.0",
+		"textlint-rule-common-misspellings": "^1.0.1",
+		"textlint-rule-doubled-spaces": "^1.0.2",
+		"textlint-rule-en-capitalization": "^2.0.3",
+		"textlint-rule-en-max-word-count": "^2.0.1",
+		"textlint-rule-no-empty-section": "^1.1.0",
+		"textlint-rule-no-start-duplicated-conjunction": "^2.0.2",
+		"textlint-rule-no-surrogate-pair": "^1.0.1",
+		"textlint-rule-no-todo": "^2.0.1",
+		"textlint-rule-no-zero-width-spaces": "^1.0.1",
+		"textlint-rule-stop-words": "^5.2.0",
+		"textlint-rule-terminology": "^5.2.16",
+		"textlint-rule-write-good": "^2.0.0",
+		"tsx": "^4.21.0",
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.5"
+	},
+	"pnpm": {
+		"overrides": {
+			"glob": "10.5.0"
+		}
+	},
+	"version": "4.9.6"
 }

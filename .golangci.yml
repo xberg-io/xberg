@@ -83,6 +83,11 @@ linters:
     rules:
       - linters:
           - goconst
+        # metadata.go mirrors JSON field names from the Rust core; the repeated
+        # string literals are field tags, not duplicate magic strings.
+        path: packages/go/v4/metadata\.go
+      - linters:
+          - goconst
         path: _test\.go
       - linters:
           - gocyclo

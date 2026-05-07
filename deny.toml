@@ -13,6 +13,9 @@ ignore = [
     "RUSTSEC-2024-0436", # paste crate unmaintained - transitive dep from biblatex/tokenizers
     "RUSTSEC-2025-0119", # number_prefix unmaintained - transitive dep from indicatif -> hf-hub -> fastembed
     "RUSTSEC-2020-0144", # lzw unmaintained - transitive dep from pdf_oxide
+    "RUSTSEC-2026-0115", # imageproc 0.26.1 fragile bounds check - transitive via fastembed; not on user-controlled input paths
+    "RUSTSEC-2026-0116", # imageproc 0.26.1 kernel bounds check - same upstream, no v4.9-LTS-compatible fix available
+    "RUSTSEC-2026-0117", # imageproc 0.26.1 NaN bounds check - same upstream, no v4.9-LTS-compatible fix available
 ]
 
 [licenses]
