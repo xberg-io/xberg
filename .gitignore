@@ -244,6 +244,8 @@ scratch/
 
 .php-cs-fixer.*
 
+e2e/zig/.zig-cache/
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .agents/
 .cursor/
@@ -252,4 +254,3 @@ scratch/
 .github/copilot-instructions.md
 .github/skills/
 # END ai-rulez
-e2e/zig/.zig-cache/

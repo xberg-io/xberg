@@ -80,8 +80,8 @@ ocr = [
     "dep:hayro-jbig2",
     "html",
 ]
-# Minimal OCR for WASM: Tesseract + basic image support, without heavy native deps
-# (tiff, fast_image_resize, kamadak-exif)
+# WASM OCR: Minimal Tesseract backend without html-to-markdown (which has WASI imports)
+# Includes only the core OCR processing dependencies needed for Tesseract on WASM
 ocr-wasm = [
     "dep:kreuzberg-tesseract",
     "dep:image",

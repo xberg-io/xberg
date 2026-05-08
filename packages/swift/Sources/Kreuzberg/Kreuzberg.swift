@@ -1648,3 +1648,98 @@ public enum KreuzbergError: Error {
     case security(message: String, source: String)
     case other(message: String, field0: String)
 }
+
+// MARK: - Extraction Wrapper Functions
+// These wrappers bridge String/JSON inputs to RustBridge's
+// RustVec<UInt8> and ExtractionConfig requirements.
+
+/// Extract text from byte content with optional JSON config.
+/// - Parameters:
+///   - content: Document bytes as String (UTF-8) or array of bytes
+///   - mimeType: MIME type (e.g., "application/pdf")
+///   - configJson: Optional JSON config string; defaults to `{}`
+/// - Returns: ExtractionResult with extracted text
+public func extractBytes(
+    content: String,
+    mimeType: String,
+    configJson: String? = nil
+) throws -> ExtractionResult {
+    let contentBytes = Array(content.utf8)
+    let contentVec = RustVec<UInt8>(contentBytes)
+    let config = try parseExtractionConfig(configJson)
+    return try extractBytesSync(contentVec, mimeType, config)
+}
+
+/// Extract text from a file at the given path with optional JSON config.
+/// - Parameters:
+///   - path: File path
+///   - mimeType: Optional MIME type; auto-detected if nil
+///   - configJson: Optional JSON config string; defaults to `{}`
+/// - Returns: ExtractionResult with extracted text
+public func extractFile(
+    path: String,
+    mimeType: String? = nil,
+    configJson: String? = nil
+) throws -> ExtractionResult {
+    let config = try parseExtractionConfig(configJson)
+    return try extractFileSync(path, mimeType, config)
+}
+
+/// Batch extract from multiple byte inputs with optional JSON config.
+/// - Parameters:
+///   - items: Array of (content: String, mimeType: String) tuples
+///   - configJson: Optional JSON config string; defaults to `{}`
+/// - Returns: Array of ExtractionResult
+public func batchExtractBytes(
+    items: [(content: String, mimeType: String)],
+    configJson: String? = nil
+) throws -> [ExtractionResult] {
+    let config = try parseExtractionConfig(configJson)
+    let batchItems = items.map { item -> BatchBytesItem in
+        let contentBytes = Array(item.content.utf8)
+        let contentVec = RustVec<UInt8>(contentBytes)
+        return BatchBytesItem(content: contentVec, mime_type: item.mimeType)
+    }
+    let itemsVec = RustVec<BatchBytesItem>(batchItems)
+    let results = try RustBridge.batchExtractBytesSync(itemsVec, config)
+    return results.allElements
+}
+
+/// Batch extract from multiple files with optional JSON config.
+/// - Parameters:
+///   - items: Array of (path: String, mimeType: String?) tuples
+///   - configJson: Optional JSON config string; defaults to `{}`
+/// - Returns: Array of ExtractionResult
+public func batchExtractFiles(
+    items: [(path: String, mimeType: String?)],
+    configJson: String? = nil
+) throws -> [ExtractionResult] {
+    let config = try parseExtractionConfig(configJson)
+    let batchItems = items.map { item -> BatchFileItem in
+        return BatchFileItem(path: item.path, mime_type: item.mimeType)
+    }
+    let itemsVec = RustVec<BatchFileItem>(batchItems)
+    let results = try RustBridge.batchExtractFilesSync(itemsVec, config)
+    return results.allElements
+}
+
+// MARK: - Config Parsing Helper
+
+/// Parse JSON string to ExtractionConfig, defaulting to ExtractionConfig() on empty/nil.
+private func parseExtractionConfig(_ jsonString: String?) throws -> ExtractionConfig {
+    let json = jsonString ?? "{}"
+    if json.trimmingCharacters(in: .whitespaces).isEmpty {
+        return ExtractionConfig()
+    }
+    guard let data = json.data(using: .utf8) else {
+        throw NSError(domain: "parseExtractionConfig", code: -1,
+                      userInfo: [NSLocalizedDescriptionKey: "Invalid UTF-8 in config JSON"])
+    }
+    do {
+        let decoder = JSONDecoder()
+        return try decoder.decode(ExtractionConfig.self, from: data)
+    } catch {
+        throw NSError(domain: "parseExtractionConfig", code: -2,
+                      userInfo: [NSLocalizedDescriptionKey: "Failed to decode config JSON: \(error.localizedDescription)"])
+    }
+}
