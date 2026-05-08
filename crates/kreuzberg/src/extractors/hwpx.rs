@@ -267,6 +267,19 @@ mod tests {
         buf.into_inner()
     }
 
+    fn make_zip_with_n_files(n: usize) -> Vec<u8> {
+        use std::io::Write as _;
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let mut zw = zip::ZipWriter::new(&mut buf);
+        let opts = zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+        for i in 0..n {
+            zw.start_file(format!("f{i}.bin"), opts).unwrap();
+            zw.write_all(b"x").unwrap();
+        }
+        zw.finish().unwrap();
+        buf.into_inner()
+    }
+
     #[tokio::test]
     async fn test_hwpx_rejects_zip_bomb_default_limits() {
         let zip_bytes = make_zip_with_ratio(256 * 1024);
@@ -326,6 +339,63 @@ mod tests {
         assert!(
             err.contains("size limit") || err.contains("validation"),
             "error should mention size limit, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_hwpx_rejects_too_many_files() {
+        use crate::extractors::security::SecurityLimits;
+        let zip_bytes = make_zip_with_n_files(3);
+        let config = ExtractionConfig {
+            security_limits: Some(SecurityLimits {
+                max_files_in_archive: 2,
+                ..SecurityLimits::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+        let extractor = HwpxExtractor::new();
+        let result = extractor
+            .extract_bytes(&zip_bytes, "application/haansofthwpx", &config)
+            .await;
+        assert!(result.is_err(), "archive exceeding file-count limit must be rejected");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("files") || err.contains("count") || err.contains("validation"),
+            "error should mention file count, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_hwpx_valid_zip_passes_security_check() {
+        use crate::extractors::security::SecurityLimits;
+        let zip_bytes = make_zip_with_ratio(1024);
+        let config = ExtractionConfig {
+            security_limits: Some(SecurityLimits {
+                max_compression_ratio: 10_000,
+                max_archive_size: 10 * 1024 * 1024,
+                max_files_in_archive: 1_000,
+                ..SecurityLimits::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+        let extractor = HwpxExtractor::new();
+        let result = extractor
+            .extract_bytes(&zip_bytes, "application/haansofthwpx", &config)
+            .await;
+        // The ZIP is valid but not a real HWPX — we expect a parse error, not a security error.
+        let is_parse_err = match &result {
+            Err(e) => {
+                let msg = e.to_string();
+                !msg.contains("ZIP bomb")
+                    && !msg.contains("ratio")
+                    && !msg.contains("size limit")
+                    && !msg.contains("too many files")
+            }
+            Ok(_) => true,
+        };
+        assert!(
+            is_parse_err,
+            "security validator must not reject a safe ZIP; got: {result:?}"
         );
     }
 }
