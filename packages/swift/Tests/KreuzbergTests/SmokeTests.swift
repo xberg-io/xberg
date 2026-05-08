@@ -65,7 +65,7 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(result.content.contains("Stanley Cups"), "expected to contain: \("Stanley Cups")")
         XCTAssertTrue(result.content.contains("Blues"), "expected to contain: \("Blues")")
         XCTAssertTrue(result.content.contains("Flyers"), "expected to contain: \("Flyers")")
-        XCTAssertTrue(result.content.contains("Maple Leaves"), "expected to contain: \("Maple Leaves")")
+        XCTAssertTrue(result.content.contains("Maple Leafs"), "expected to contain: \("Maple Leafs")")
         XCTAssertTrue(result.content.contains("STL"), "expected to contain: \("STL")")
         XCTAssertTrue(result.content.contains("PHI"), "expected to contain: \("PHI")")
         XCTAssertTrue(result.content.contains("TOR"), "expected to contain: \("TOR")")

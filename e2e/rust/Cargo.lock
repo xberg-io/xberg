@@ -2872,7 +2872,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-e2e-rust"
-version = "5.0.0-rc.1"
+version = "0.1.0"
 dependencies = [
  "kreuzberg",
  "serde_json",
