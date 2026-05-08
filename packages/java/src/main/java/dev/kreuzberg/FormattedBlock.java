@@ -16,13 +16,8 @@ import org.jspecify.annotations.Nullable;
  * Represents structural elements like headings, paragraphs, lists, code blocks, etc.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record FormattedBlock(
-    @JsonProperty("block_type") BlockType blockType,
-    @Nullable Long level,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("inline_content") List<InlineElement> inlineContent,
-    @Nullable String attributes,
-    @Nullable String language,
-    @Nullable String code,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<FormattedBlock> children
-) {
+public record FormattedBlock(@JsonProperty("block_type") BlockType blockType, @Nullable Long level,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("inline_content") List<InlineElement> inlineContent,
+        @Nullable String attributes, @Nullable String language, @Nullable String code,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<FormattedBlock> children) {
 }

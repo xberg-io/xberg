@@ -13,28 +13,17 @@ import org.jspecify.annotations.Nullable;
 /**
  * Dublin Core metadata from docProps/core.xml
  *
- * Contains standard metadata fields defined by the Dublin Core standard
- * and Office-specific extensions.
+ * Contains standard metadata fields defined by the Dublin Core standard and Office-specific extensions.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = CorePropertiesBuilder.class)
-public record CoreProperties(
-    @Nullable String title,
-    @Nullable String subject,
-    @Nullable String creator,
-    @Nullable String keywords,
-    @Nullable String description,
-    @Nullable @JsonProperty("last_modified_by") String lastModifiedBy,
-    @Nullable String revision,
-    @Nullable String created,
-    @Nullable String modified,
-    @Nullable String category,
-    @Nullable @JsonProperty("content_status") String contentStatus,
-    @Nullable String language,
-    @Nullable String identifier,
-    @Nullable String version,
-    @Nullable @JsonProperty("last_printed") String lastPrinted
-) {
+public record CoreProperties(@Nullable String title, @Nullable String subject, @Nullable String creator,
+        @Nullable String keywords, @Nullable String description,
+        @Nullable @JsonProperty("last_modified_by") String lastModifiedBy, @Nullable String revision,
+        @Nullable String created, @Nullable String modified, @Nullable String category,
+        @Nullable @JsonProperty("content_status") String contentStatus, @Nullable String language,
+        @Nullable String identifier, @Nullable String version,
+        @Nullable @JsonProperty("last_printed") String lastPrinted) {
     public static CorePropertiesBuilder builder() {
         return new CorePropertiesBuilder();
     }

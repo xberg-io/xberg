@@ -80,16 +80,8 @@ public class TablePropertiesBuilder {
 
     /** Builds the TableProperties instance. */
     public TableProperties build() {
-        return new TableProperties(
-            styleId.orElse(null),
-            width.orElse(null),
-            alignment.orElse(null),
-            layout.orElse(null),
-            look.orElse(null),
-            borders.orElse(null),
-            cellMargins.orElse(null),
-            indent.orElse(null),
-            caption.orElse(null)
-        );
+        return new TableProperties(styleId.orElse(null), width.orElse(null), alignment.orElse(null),
+                layout.orElse(null), look.orElse(null), borders.orElse(null), cellMargins.orElse(null),
+                indent.orElse(null), caption.orElse(null));
     }
 }

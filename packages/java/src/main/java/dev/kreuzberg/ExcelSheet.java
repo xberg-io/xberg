@@ -13,16 +13,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * Single Excel worksheet.
  *
- * Represents one sheet from an Excel workbook with its content
- * converted to Markdown format and dimensional statistics.
+ * Represents one sheet from an Excel workbook with its content converted to Markdown format and dimensional statistics.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ExcelSheet(
-    String name,
-    String markdown,
-    @JsonProperty("row_count") long rowCount,
-    @JsonProperty("col_count") long colCount,
-    @JsonProperty("cell_count") long cellCount,
-    @Nullable @JsonProperty("table_cells") List<List<String>> tableCells
-) {
+public record ExcelSheet(String name, String markdown, @JsonProperty("row_count") long rowCount,
+        @JsonProperty("col_count") long colCount, @JsonProperty("cell_count") long cellCount,
+        @Nullable @JsonProperty("table_cells") List<List<String>> tableCells) {
 }

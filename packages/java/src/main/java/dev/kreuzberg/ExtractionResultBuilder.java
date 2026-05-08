@@ -188,31 +188,11 @@ public class ExtractionResultBuilder {
 
     /** Builds the ExtractionResult instance. */
     public ExtractionResult build() {
-        return new ExtractionResult(
-            content,
-            mimeType,
-            metadata,
-            extractionMethod.orElse(null),
-            tables,
-            detectedLanguages.orElse(null),
-            chunks.orElse(null),
-            images.orElse(null),
-            pages.orElse(null),
-            elements.orElse(null),
-            djotContent.orElse(null),
-            ocrElements.orElse(null),
-            document.orElse(null),
-            extractedKeywords.orElse(null),
-            qualityScore.orElse(null),
-            processingWarnings,
-            annotations.orElse(null),
-            children.orElse(null),
-            uris.orElse(null),
-            structuredOutput.orElse(null),
-            codeIntelligence.orElse(null),
-            llmUsage.orElse(null),
-            formattedContent.orElse(null),
-            ocrInternalDocument.orElse(null)
-        );
+        return new ExtractionResult(content, mimeType, metadata, extractionMethod.orElse(null), tables,
+                detectedLanguages.orElse(null), chunks.orElse(null), images.orElse(null), pages.orElse(null),
+                elements.orElse(null), djotContent.orElse(null), ocrElements.orElse(null), document.orElse(null),
+                extractedKeywords.orElse(null), qualityScore.orElse(null), processingWarnings, annotations.orElse(null),
+                children.orElse(null), uris.orElse(null), structuredOutput.orElse(null), codeIntelligence.orElse(null),
+                llmUsage.orElse(null), formattedContent.orElse(null), ocrInternalDocument.orElse(null));
     }
 }

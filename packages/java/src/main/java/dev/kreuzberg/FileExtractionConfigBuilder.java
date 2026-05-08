@@ -12,19 +12,15 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Per-file extraction configuration overrides for batch processing.
  *
- * All fields are {@code Option&lt;T&gt;} — {@code None} means "use the batch-level default."
- * This type is used with {@code batch_extract_files} and
- * {@code batch_extract_bytes} to allow heterogeneous
- * extraction settings within a single batch.
+ * All fields are {@code Option&lt;T&gt;} — {@code None} means "use the batch-level default." This type is used with
+ * {@code batch_extract_files} and {@code batch_extract_bytes} to allow heterogeneous extraction settings within a
+ * single batch.
  *
  * # Excluded Fields
  *
- * The following {@code ExtractionConfig} fields are batch-level only and
- * cannot be overridden per file:
- * - {@code max_concurrent_extractions} — controls batch parallelism
- * - {@code use_cache} — global caching policy
- * - {@code acceleration} — shared ONNX execution provider
- * - {@code security_limits} — global archive security policy
+ * The following {@code ExtractionConfig} fields are batch-level only and cannot be overridden per file: -
+ * {@code max_concurrent_extractions} — controls batch parallelism - {@code use_cache} — global caching policy -
+ * {@code acceleration} — shared ONNX execution provider - {@code security_limits} — global archive security policy
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class FileExtractionConfigBuilder {
@@ -186,29 +182,12 @@ public class FileExtractionConfigBuilder {
 
     /** Builds the FileExtractionConfig instance. */
     public FileExtractionConfig build() {
-        return new FileExtractionConfig(
-            enableQualityProcessing.orElse(null),
-            ocr.orElse(null),
-            forceOcr.orElse(null),
-            forceOcrPages.orElse(null),
-            disableOcr.orElse(null),
-            chunking.orElse(null),
-            contentFilter.orElse(null),
-            images.orElse(null),
-            pdfOptions.orElse(null),
-            tokenReduction.orElse(null),
-            languageDetection.orElse(null),
-            pages.orElse(null),
-            keywords.orElse(null),
-            postprocessor.orElse(null),
-            htmlOptions.orElse(null),
-            resultFormat.orElse(null),
-            outputFormat.orElse(null),
-            includeDocumentStructure.orElse(null),
-            layout.orElse(null),
-            timeoutSecs.orElse(null),
-            treeSitter.orElse(null),
-            structuredExtraction.orElse(null)
-        );
+        return new FileExtractionConfig(enableQualityProcessing.orElse(null), ocr.orElse(null), forceOcr.orElse(null),
+                forceOcrPages.orElse(null), disableOcr.orElse(null), chunking.orElse(null), contentFilter.orElse(null),
+                images.orElse(null), pdfOptions.orElse(null), tokenReduction.orElse(null),
+                languageDetection.orElse(null), pages.orElse(null), keywords.orElse(null), postprocessor.orElse(null),
+                htmlOptions.orElse(null), resultFormat.orElse(null), outputFormat.orElse(null),
+                includeDocumentStructure.orElse(null), layout.orElse(null), timeoutSecs.orElse(null),
+                treeSitter.orElse(null), structuredExtraction.orElse(null));
     }
 }

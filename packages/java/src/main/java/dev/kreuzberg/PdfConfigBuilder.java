@@ -74,15 +74,8 @@ public class PdfConfigBuilder {
 
     /** Builds the PdfConfig instance. */
     public PdfConfig build() {
-        return new PdfConfig(
-            extractImages,
-            passwords.orElse(null),
-            extractMetadata,
-            hierarchy.orElse(null),
-            extractAnnotations,
-            topMarginFraction.orElse(null),
-            bottomMarginFraction.orElse(null),
-            allowSingleColumnTables
-        );
+        return new PdfConfig(extractImages, passwords.orElse(null), extractMetadata, hierarchy.orElse(null),
+                extractAnnotations, topMarginFraction.orElse(null), bottomMarginFraction.orElse(null),
+                allowSingleColumnTables);
     }
 }

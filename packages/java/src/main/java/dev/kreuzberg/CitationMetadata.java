@@ -16,14 +16,11 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = CitationMetadataBuilder.class)
-public record CitationMetadata(
-    @JsonProperty("citation_count") long citationCount,
-    @Nullable String format,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> authors,
-    @Nullable @JsonProperty("year_range") YearRange yearRange,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> dois,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> keywords
-) {
+public record CitationMetadata(@JsonProperty("citation_count") long citationCount, @Nullable String format,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> authors,
+        @Nullable @JsonProperty("year_range") YearRange yearRange,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> dois,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> keywords) {
     public static CitationMetadataBuilder builder() {
         return new CitationMetadataBuilder();
     }

@@ -16,11 +16,7 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TableGridBuilder.class)
-public record TableGrid(
-    int rows,
-    int cols,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<GridCell> cells
-) {
+public record TableGrid(int rows, int cols, @JsonInclude(JsonInclude.Include.NON_NULL) List<GridCell> cells) {
     public static TableGridBuilder builder() {
         return new TableGridBuilder();
     }

@@ -17,10 +17,8 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = XmlMetadataBuilder.class)
-public record XmlMetadata(
-    @JsonProperty("element_count") long elementCount,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("unique_elements") List<String> uniqueElements
-) {
+public record XmlMetadata(@JsonProperty("element_count") long elementCount,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("unique_elements") List<String> uniqueElements) {
     public static XmlMetadataBuilder builder() {
         return new XmlMetadataBuilder();
     }

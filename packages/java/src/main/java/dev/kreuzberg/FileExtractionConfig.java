@@ -14,46 +14,34 @@ import org.jspecify.annotations.Nullable;
 /**
  * Per-file extraction configuration overrides for batch processing.
  *
- * All fields are {@code Option&lt;T&gt;} — {@code None} means "use the batch-level default."
- * This type is used with {@code batch_extract_files} and
- * {@code batch_extract_bytes} to allow heterogeneous
- * extraction settings within a single batch.
+ * All fields are {@code Option&lt;T&gt;} — {@code None} means "use the batch-level default." This type is used with
+ * {@code batch_extract_files} and {@code batch_extract_bytes} to allow heterogeneous extraction settings within a
+ * single batch.
  *
  * # Excluded Fields
  *
- * The following {@code ExtractionConfig} fields are batch-level only and
- * cannot be overridden per file:
- * - {@code max_concurrent_extractions} — controls batch parallelism
- * - {@code use_cache} — global caching policy
- * - {@code acceleration} — shared ONNX execution provider
- * - {@code security_limits} — global archive security policy
+ * The following {@code ExtractionConfig} fields are batch-level only and cannot be overridden per file: -
+ * {@code max_concurrent_extractions} — controls batch parallelism - {@code use_cache} — global caching policy -
+ * {@code acceleration} — shared ONNX execution provider - {@code security_limits} — global archive security policy
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = FileExtractionConfigBuilder.class)
-public record FileExtractionConfig(
-    @Nullable @JsonProperty("enable_quality_processing") Boolean enableQualityProcessing,
-    @Nullable OcrConfig ocr,
-    @Nullable @JsonProperty("force_ocr") Boolean forceOcr,
-    @Nullable @JsonProperty("force_ocr_pages") List<Long> forceOcrPages,
-    @Nullable @JsonProperty("disable_ocr") Boolean disableOcr,
-    @Nullable ChunkingConfig chunking,
-    @Nullable @JsonProperty("content_filter") ContentFilterConfig contentFilter,
-    @Nullable ImageExtractionConfig images,
-    @Nullable @JsonProperty("pdf_options") PdfConfig pdfOptions,
-    @Nullable @JsonProperty("token_reduction") TokenReductionOptions tokenReduction,
-    @Nullable @JsonProperty("language_detection") LanguageDetectionConfig languageDetection,
-    @Nullable PageConfig pages,
-    @Nullable KeywordConfig keywords,
-    @Nullable PostProcessorConfig postprocessor,
-    @Nullable @JsonProperty("html_options") String htmlOptions,
-    @Nullable @JsonProperty("result_format") ResultFormat resultFormat,
-    @Nullable @JsonProperty("output_format") Object outputFormat,
-    @Nullable @JsonProperty("include_document_structure") Boolean includeDocumentStructure,
-    @Nullable LayoutDetectionConfig layout,
-    @Nullable @JsonProperty("timeout_secs") Long timeoutSecs,
-    @Nullable @JsonProperty("tree_sitter") TreeSitterConfig treeSitter,
-    @Nullable @JsonProperty("structured_extraction") StructuredExtractionConfig structuredExtraction
-) {
+public record FileExtractionConfig(@Nullable @JsonProperty("enable_quality_processing") Boolean enableQualityProcessing,
+        @Nullable OcrConfig ocr, @Nullable @JsonProperty("force_ocr") Boolean forceOcr,
+        @Nullable @JsonProperty("force_ocr_pages") List<Long> forceOcrPages,
+        @Nullable @JsonProperty("disable_ocr") Boolean disableOcr, @Nullable ChunkingConfig chunking,
+        @Nullable @JsonProperty("content_filter") ContentFilterConfig contentFilter,
+        @Nullable ImageExtractionConfig images, @Nullable @JsonProperty("pdf_options") PdfConfig pdfOptions,
+        @Nullable @JsonProperty("token_reduction") TokenReductionOptions tokenReduction,
+        @Nullable @JsonProperty("language_detection") LanguageDetectionConfig languageDetection,
+        @Nullable PageConfig pages, @Nullable KeywordConfig keywords, @Nullable PostProcessorConfig postprocessor,
+        @Nullable @JsonProperty("html_options") String htmlOptions,
+        @Nullable @JsonProperty("result_format") ResultFormat resultFormat,
+        @Nullable @JsonProperty("output_format") Object outputFormat,
+        @Nullable @JsonProperty("include_document_structure") Boolean includeDocumentStructure,
+        @Nullable LayoutDetectionConfig layout, @Nullable @JsonProperty("timeout_secs") Long timeoutSecs,
+        @Nullable @JsonProperty("tree_sitter") TreeSitterConfig treeSitter,
+        @Nullable @JsonProperty("structured_extraction") StructuredExtractionConfig structuredExtraction) {
     public static FileExtractionConfigBuilder builder() {
         return new FileExtractionConfigBuilder();
     }

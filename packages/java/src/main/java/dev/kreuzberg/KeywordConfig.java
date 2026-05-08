@@ -16,19 +16,16 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = KeywordConfigBuilder.class)
-public record KeywordConfig(
-    KeywordAlgorithm algorithm,
-    @JsonProperty("max_keywords") long maxKeywords,
-    @JsonProperty("min_score") float minScore,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("ngram_range") List<Long> ngramRange,
-    @Nullable String language,
-    @Nullable @JsonProperty("yake_params") YakeParams yakeParams,
-    @Nullable @JsonProperty("rake_params") RakeParams rakeParams
-) {
+public record KeywordConfig(KeywordAlgorithm algorithm, @JsonProperty("max_keywords") long maxKeywords,
+        @JsonProperty("min_score") float minScore,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("ngram_range") List<Long> ngramRange,
+        @Nullable String language, @Nullable @JsonProperty("yake_params") YakeParams yakeParams,
+        @Nullable @JsonProperty("rake_params") RakeParams rakeParams) {
     public static KeywordConfigBuilder builder() {
         return new KeywordConfigBuilder();
     }
-    public KeywordConfig{
-        if (maxKeywords == 0) maxKeywords = 10;
+    public KeywordConfig {
+        if (maxKeywords == 0)
+            maxKeywords = 10;
     }
 }

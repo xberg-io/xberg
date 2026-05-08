@@ -11,8 +11,7 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Dublin Core metadata from docProps/core.xml
  *
- * Contains standard metadata fields defined by the Dublin Core standard
- * and Office-specific extensions.
+ * Contains standard metadata fields defined by the Dublin Core standard and Office-specific extensions.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class CorePropertiesBuilder {
@@ -125,22 +124,9 @@ public class CorePropertiesBuilder {
 
     /** Builds the CoreProperties instance. */
     public CoreProperties build() {
-        return new CoreProperties(
-            title.orElse(null),
-            subject.orElse(null),
-            creator.orElse(null),
-            keywords.orElse(null),
-            description.orElse(null),
-            lastModifiedBy.orElse(null),
-            revision.orElse(null),
-            created.orElse(null),
-            modified.orElse(null),
-            category.orElse(null),
-            contentStatus.orElse(null),
-            language.orElse(null),
-            identifier.orElse(null),
-            version.orElse(null),
-            lastPrinted.orElse(null)
-        );
+        return new CoreProperties(title.orElse(null), subject.orElse(null), creator.orElse(null), keywords.orElse(null),
+                description.orElse(null), lastModifiedBy.orElse(null), revision.orElse(null), created.orElse(null),
+                modified.orElse(null), category.orElse(null), contentStatus.orElse(null), language.orElse(null),
+                identifier.orElse(null), version.orElse(null), lastPrinted.orElse(null));
     }
 }

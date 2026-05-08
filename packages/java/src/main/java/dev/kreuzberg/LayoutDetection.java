@@ -12,9 +12,5 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * A single layout detection result.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record LayoutDetection(
-    @JsonProperty("class_name") LayoutClass className,
-    float confidence,
-    BBox bbox
-) {
+public record LayoutDetection(@JsonProperty("class_name") LayoutClass className, float confidence, BBox bbox) {
 }

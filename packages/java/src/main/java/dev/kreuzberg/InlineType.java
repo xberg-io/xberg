@@ -12,22 +12,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * Types of inline elements in Djot.
  */
 public enum InlineType {
-    Text("text"),
-    Strong("strong"),
-    Emphasis("emphasis"),
-    Highlight("highlight"),
-    Subscript("subscript"),
-    Superscript("superscript"),
-    Insert("insert"),
-    Delete("delete"),
-    Code("code"),
-    Link("link"),
-    Image("image"),
-    Span("span"),
-    Math("math"),
-    RawInline("raw_inline"),
-    FootnoteRef("footnote_ref"),
-    Symbol("symbol");
+    Text("text"), Strong("strong"), Emphasis("emphasis"), Highlight("highlight"), Subscript("subscript"), Superscript(
+            "superscript"), Insert("insert"), Delete("delete"), Code("code"), Link("link"), Image("image"), Span(
+                    "span"), Math("math"), RawInline("raw_inline"), FootnoteRef("footnote_ref"), Symbol("symbol");
 
     /** The string value. */
     private final String value;

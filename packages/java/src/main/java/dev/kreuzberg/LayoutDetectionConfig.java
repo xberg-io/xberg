@@ -13,18 +13,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * Layout detection configuration.
  *
- * Controls layout detection behavior in the extraction pipeline.
- * When set on ExtractionConfig(super::ExtractionConfig), layout detection
- * is enabled for PDF extraction.
+ * Controls layout detection behavior in the extraction pipeline. When set on ExtractionConfig(super::ExtractionConfig),
+ * layout detection is enabled for PDF extraction.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = LayoutDetectionConfigBuilder.class)
-public record LayoutDetectionConfig(
-    @Nullable @JsonProperty("confidence_threshold") Float confidenceThreshold,
-    @JsonProperty("apply_heuristics") boolean applyHeuristics,
-    @JsonProperty("table_model") TableModel tableModel,
-    @Nullable AccelerationConfig acceleration
-) {
+public record LayoutDetectionConfig(@Nullable @JsonProperty("confidence_threshold") Float confidenceThreshold,
+        @JsonProperty("apply_heuristics") boolean applyHeuristics, @JsonProperty("table_model") TableModel tableModel,
+        @Nullable AccelerationConfig acceleration) {
     public static LayoutDetectionConfigBuilder builder() {
         return new LayoutDetectionConfigBuilder();
     }

@@ -80,16 +80,7 @@ public class ImageExtractionConfigBuilder {
 
     /** Builds the ImageExtractionConfig instance. */
     public ImageExtractionConfig build() {
-        return new ImageExtractionConfig(
-            extractImages,
-            targetDpi,
-            maxImageDimension,
-            injectPlaceholders,
-            autoAdjustDpi,
-            minDpi,
-            maxDpi,
-            maxImagesPerPage.orElse(null),
-            classify
-        );
+        return new ImageExtractionConfig(extractImages, targetDpi, maxImageDimension, injectPlaceholders, autoAdjustDpi,
+                minDpi, maxDpi, maxImagesPerPage.orElse(null), classify);
     }
 }

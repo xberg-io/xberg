@@ -12,10 +12,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Embedding response containing generated embeddings.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record EmbedResponse(
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<List<Float>> embeddings,
-    String model,
-    long dimensions,
-    long count
-) {
+public record EmbedResponse(@JsonInclude(JsonInclude.Include.NON_NULL) List<List<Float>> embeddings, String model,
+        long dimensions, long count) {
 }

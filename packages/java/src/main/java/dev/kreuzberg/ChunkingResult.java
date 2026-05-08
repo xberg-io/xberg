@@ -15,8 +15,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Contains the generated chunks and metadata about the chunking.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ChunkingResult(
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<Chunk> chunks,
-    @JsonProperty("chunk_count") long chunkCount
-) {
+public record ChunkingResult(@JsonInclude(JsonInclude.Include.NON_NULL) List<Chunk> chunks,
+        @JsonProperty("chunk_count") long chunkCount) {
 }

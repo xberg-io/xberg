@@ -12,9 +12,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Response from structured extraction endpoint.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record StructuredExtractionResponse(
-    @JsonProperty("structured_output") Object structuredOutput,
-    String content,
-    @JsonProperty("mime_type") String mimeType
-) {
+public record StructuredExtractionResponse(@JsonProperty("structured_output") Object structuredOutput, String content,
+        @JsonProperty("mime_type") String mimeType) {
 }

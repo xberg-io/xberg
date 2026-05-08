@@ -10,9 +10,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * A merged chunk produced by merge_segments.
  */
-public record MergedChunk(
-    String text,
-    @JsonProperty("byte_start") long byteStart,
-    @JsonProperty("byte_end") long byteEnd
-) {
+public record MergedChunk(String text, @JsonProperty("byte_start") long byteStart,
+        @JsonProperty("byte_end") long byteEnd) {
 }

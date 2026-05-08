@@ -12,9 +12,6 @@ import org.jspecify.annotations.Nullable;
 /**
  * Result of OCR extraction from an image with optional page tracking.
  */
-public record ImageOcrResult(
-    String content,
-    @Nullable List<PageBoundary> boundaries,
-    @Nullable @JsonProperty("page_contents") List<PageContent> pageContents
-) {
+public record ImageOcrResult(String content, @Nullable List<PageBoundary> boundaries,
+        @Nullable @JsonProperty("page_contents") List<PageContent> pageContents) {
 }

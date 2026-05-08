@@ -14,21 +14,15 @@ import org.jspecify.annotations.Nullable;
 /**
  * A unified OCR element representing detected text with full metadata.
  *
- * This is the primary type for structured OCR output, preserving all information
- * from both Tesseract and PaddleOCR backends.
+ * This is the primary type for structured OCR output, preserving all information from both Tesseract and PaddleOCR
+ * backends.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrElementBuilder.class)
-public record OcrElement(
-    String text,
-    OcrBoundingGeometry geometry,
-    OcrConfidence confidence,
-    OcrElementLevel level,
-    @Nullable OcrRotation rotation,
-    @JsonProperty("page_number") long pageNumber,
-    @Nullable @JsonProperty("parent_id") String parentId,
-    @JsonProperty("backend_metadata") Map<String, Object> backendMetadata
-) {
+public record OcrElement(String text, OcrBoundingGeometry geometry, OcrConfidence confidence, OcrElementLevel level,
+        @Nullable OcrRotation rotation, @JsonProperty("page_number") long pageNumber,
+        @Nullable @JsonProperty("parent_id") String parentId,
+        @JsonProperty("backend_metadata") Map<String, Object> backendMetadata) {
     public static OcrElementBuilder builder() {
         return new OcrElementBuilder();
     }

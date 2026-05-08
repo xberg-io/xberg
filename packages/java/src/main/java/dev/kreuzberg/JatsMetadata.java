@@ -17,12 +17,9 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = JatsMetadataBuilder.class)
-public record JatsMetadata(
-    @Nullable String copyright,
-    @Nullable String license,
-    @JsonProperty("history_dates") Map<String, String> historyDates,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("contributor_roles") List<ContributorRole> contributorRoles
-) {
+public record JatsMetadata(@Nullable String copyright, @Nullable String license,
+        @JsonProperty("history_dates") Map<String, String> historyDates,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("contributor_roles") List<ContributorRole> contributorRoles) {
     public static JatsMetadataBuilder builder() {
         return new JatsMetadataBuilder();
     }

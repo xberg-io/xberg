@@ -11,13 +11,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * A single file extracted from an archive.
  *
- * When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
- * enabled, each processable file produces its own full {@code ExtractionResult}.
+ * When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction enabled, each processable file produces
+ * its own full {@code ExtractionResult}.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ArchiveEntry(
-    String path,
-    @JsonProperty("mime_type") String mimeType,
-    ExtractionResult result
-) {
+public record ArchiveEntry(String path, @JsonProperty("mime_type") String mimeType, ExtractionResult result) {
 }

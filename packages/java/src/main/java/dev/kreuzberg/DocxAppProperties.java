@@ -17,24 +17,16 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DocxAppPropertiesBuilder.class)
-public record DocxAppProperties(
-    @Nullable String application,
-    @Nullable @JsonProperty("app_version") String appVersion,
-    @Nullable String template,
-    @Nullable @JsonProperty("total_time") Integer totalTime,
-    @Nullable Integer pages,
-    @Nullable Integer words,
-    @Nullable Integer characters,
-    @Nullable @JsonProperty("characters_with_spaces") Integer charactersWithSpaces,
-    @Nullable Integer lines,
-    @Nullable Integer paragraphs,
-    @Nullable String company,
-    @Nullable @JsonProperty("doc_security") Integer docSecurity,
-    @Nullable @JsonProperty("scale_crop") Boolean scaleCrop,
-    @Nullable @JsonProperty("links_up_to_date") Boolean linksUpToDate,
-    @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
-    @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged
-) {
+public record DocxAppProperties(@Nullable String application, @Nullable @JsonProperty("app_version") String appVersion,
+        @Nullable String template, @Nullable @JsonProperty("total_time") Integer totalTime, @Nullable Integer pages,
+        @Nullable Integer words, @Nullable Integer characters,
+        @Nullable @JsonProperty("characters_with_spaces") Integer charactersWithSpaces, @Nullable Integer lines,
+        @Nullable Integer paragraphs, @Nullable String company,
+        @Nullable @JsonProperty("doc_security") Integer docSecurity,
+        @Nullable @JsonProperty("scale_crop") Boolean scaleCrop,
+        @Nullable @JsonProperty("links_up_to_date") Boolean linksUpToDate,
+        @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
+        @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged) {
     public static DocxAppPropertiesBuilder builder() {
         return new DocxAppPropertiesBuilder();
     }

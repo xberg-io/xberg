@@ -17,17 +17,11 @@ import org.jspecify.annotations.Nullable;
  * Contains extracted slide content, metadata, and embedded images/tables.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record PptxExtractionResult(
-    String content,
-    PptxMetadata metadata,
-    @JsonProperty("slide_count") long slideCount,
-    @JsonProperty("image_count") long imageCount,
-    @JsonProperty("table_count") long tableCount,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<ExtractedImage> images,
-    @Nullable @JsonProperty("page_structure") PageStructure pageStructure,
-    @Nullable @JsonProperty("page_contents") List<PageContent> pageContents,
-    @Nullable DocumentStructure document,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> hyperlinks,
-    @JsonProperty("office_metadata") Map<String, String> officeMetadata
-) {
+public record PptxExtractionResult(String content, PptxMetadata metadata, @JsonProperty("slide_count") long slideCount,
+        @JsonProperty("image_count") long imageCount, @JsonProperty("table_count") long tableCount,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<ExtractedImage> images,
+        @Nullable @JsonProperty("page_structure") PageStructure pageStructure,
+        @Nullable @JsonProperty("page_contents") List<PageContent> pageContents, @Nullable DocumentStructure document,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> hyperlinks,
+        @JsonProperty("office_metadata") Map<String, String> officeMetadata) {
 }

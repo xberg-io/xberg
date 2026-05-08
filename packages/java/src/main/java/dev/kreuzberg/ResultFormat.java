@@ -11,9 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Result-shape selection for extraction results.
  *
- * Distinct from {@code OutputFormat} (which controls rendering — Plain, Markdown,
- * HTML, etc.). {@code ResultFormat} controls the *shape* of the result: a unified content
- * blob vs. an element-based decomposition.
+ * Distinct from {@code OutputFormat} (which controls rendering — Plain, Markdown, HTML, etc.). {@code ResultFormat}
+ * controls the *shape* of the result: a unified content blob vs. an element-based decomposition.
  */
 public enum ResultFormat {
     /** Unified format with all content in {@code content} field */

@@ -13,14 +13,9 @@ import org.jspecify.annotations.Nullable;
  * Metadata about a chunk's position in the original document.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ChunkMetadata(
-    @JsonProperty("byte_start") long byteStart,
-    @JsonProperty("byte_end") long byteEnd,
-    @Nullable @JsonProperty("token_count") Long tokenCount,
-    @JsonProperty("chunk_index") long chunkIndex,
-    @JsonProperty("total_chunks") long totalChunks,
-    @Nullable @JsonProperty("first_page") Long firstPage,
-    @Nullable @JsonProperty("last_page") Long lastPage,
-    @Nullable @JsonProperty("heading_context") HeadingContext headingContext
-) {
+public record ChunkMetadata(@JsonProperty("byte_start") long byteStart, @JsonProperty("byte_end") long byteEnd,
+        @Nullable @JsonProperty("token_count") Long tokenCount, @JsonProperty("chunk_index") long chunkIndex,
+        @JsonProperty("total_chunks") long totalChunks, @Nullable @JsonProperty("first_page") Long firstPage,
+        @Nullable @JsonProperty("last_page") Long lastPage,
+        @Nullable @JsonProperty("heading_context") HeadingContext headingContext) {
 }

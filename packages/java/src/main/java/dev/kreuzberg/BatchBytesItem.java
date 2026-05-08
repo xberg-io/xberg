@@ -12,13 +12,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * Batch item for byte array extraction.
  *
- * Used with {@code batch_extract_bytes} and {@code batch_extract_bytes_sync}
- * to represent a single item in a batch extraction job.
+ * Used with {@code batch_extract_bytes} and {@code batch_extract_bytes_sync} to represent a single item in a batch
+ * extraction job.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record BatchBytesItem(
-    byte[] content,
-    @JsonProperty("mime_type") String mimeType,
-    @Nullable FileExtractionConfig config
-) {
+public record BatchBytesItem(byte[] content, @JsonProperty("mime_type") String mimeType,
+        @Nullable FileExtractionConfig config) {
 }

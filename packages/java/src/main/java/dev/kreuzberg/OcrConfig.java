@@ -15,21 +15,15 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrConfigBuilder.class)
-public record OcrConfig(
-    boolean enabled,
-    String backend,
-    String language,
-    @Nullable @JsonProperty("tesseract_config") TesseractConfig tesseractConfig,
-    @Nullable @JsonProperty("output_format") Object outputFormat,
-    @Nullable @JsonProperty("paddle_ocr_config") Object paddleOcrConfig,
-    @Nullable @JsonProperty("element_config") OcrElementConfig elementConfig,
-    @Nullable @JsonProperty("quality_thresholds") OcrQualityThresholds qualityThresholds,
-    @Nullable OcrPipelineConfig pipeline,
-    @JsonProperty("auto_rotate") boolean autoRotate,
-    @Nullable @JsonProperty("vlm_config") LlmConfig vlmConfig,
-    @Nullable @JsonProperty("vlm_prompt") String vlmPrompt,
-    @Nullable AccelerationConfig acceleration
-) {
+public record OcrConfig(boolean enabled, String backend, String language,
+        @Nullable @JsonProperty("tesseract_config") TesseractConfig tesseractConfig,
+        @Nullable @JsonProperty("output_format") Object outputFormat,
+        @Nullable @JsonProperty("paddle_ocr_config") Object paddleOcrConfig,
+        @Nullable @JsonProperty("element_config") OcrElementConfig elementConfig,
+        @Nullable @JsonProperty("quality_thresholds") OcrQualityThresholds qualityThresholds,
+        @Nullable OcrPipelineConfig pipeline, @JsonProperty("auto_rotate") boolean autoRotate,
+        @Nullable @JsonProperty("vlm_config") LlmConfig vlmConfig,
+        @Nullable @JsonProperty("vlm_prompt") String vlmPrompt, @Nullable AccelerationConfig acceleration) {
     public static OcrConfigBuilder builder() {
         return new OcrConfigBuilder();
     }

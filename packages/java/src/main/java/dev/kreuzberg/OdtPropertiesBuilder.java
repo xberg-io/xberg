@@ -11,8 +11,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * OpenDocument metadata from meta.xml
  *
- * Contains metadata fields defined by the OASIS OpenDocument Format standard.
- * Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
+ * Contains metadata fields defined by the OASIS OpenDocument Format standard. Uses Dublin Core elements (dc:) and
+ * OpenDocument meta elements (meta:).
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class OdtPropertiesBuilder {
@@ -146,25 +146,10 @@ public class OdtPropertiesBuilder {
 
     /** Builds the OdtProperties instance. */
     public OdtProperties build() {
-        return new OdtProperties(
-            title.orElse(null),
-            subject.orElse(null),
-            creator.orElse(null),
-            initialCreator.orElse(null),
-            keywords.orElse(null),
-            description.orElse(null),
-            date.orElse(null),
-            creationDate.orElse(null),
-            language.orElse(null),
-            generator.orElse(null),
-            editingDuration.orElse(null),
-            editingCycles.orElse(null),
-            pageCount.orElse(null),
-            wordCount.orElse(null),
-            characterCount.orElse(null),
-            paragraphCount.orElse(null),
-            tableCount.orElse(null),
-            imageCount.orElse(null)
-        );
+        return new OdtProperties(title.orElse(null), subject.orElse(null), creator.orElse(null),
+                initialCreator.orElse(null), keywords.orElse(null), description.orElse(null), date.orElse(null),
+                creationDate.orElse(null), language.orElse(null), generator.orElse(null), editingDuration.orElse(null),
+                editingCycles.orElse(null), pageCount.orElse(null), wordCount.orElse(null), characterCount.orElse(null),
+                paragraphCount.orElse(null), tableCount.orElse(null), imageCount.orElse(null));
     }
 }

@@ -13,25 +13,18 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for PaddleOCR backend.
  *
- * Configures PaddleOCR text detection and recognition with multi-language support.
- * Uses a builder pattern for convenient configuration.
+ * Configures PaddleOCR text detection and recognition with multi-language support. Uses a builder pattern for
+ * convenient configuration.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PaddleOcrConfigBuilder.class)
-public record PaddleOcrConfig(
-    String language,
-    @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir,
-    @JsonProperty("use_angle_cls") boolean useAngleCls,
-    @JsonProperty("enable_table_detection") boolean enableTableDetection,
-    @JsonProperty("det_db_thresh") float detDbThresh,
-    @JsonProperty("det_db_box_thresh") float detDbBoxThresh,
-    @JsonProperty("det_db_unclip_ratio") float detDbUnclipRatio,
-    @JsonProperty("det_limit_side_len") int detLimitSideLen,
-    @JsonProperty("rec_batch_num") int recBatchNum,
-    int padding,
-    @JsonProperty("drop_score") float dropScore,
-    @JsonProperty("model_tier") String modelTier
-) {
+public record PaddleOcrConfig(String language, @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir,
+        @JsonProperty("use_angle_cls") boolean useAngleCls,
+        @JsonProperty("enable_table_detection") boolean enableTableDetection,
+        @JsonProperty("det_db_thresh") float detDbThresh, @JsonProperty("det_db_box_thresh") float detDbBoxThresh,
+        @JsonProperty("det_db_unclip_ratio") float detDbUnclipRatio,
+        @JsonProperty("det_limit_side_len") int detLimitSideLen, @JsonProperty("rec_batch_num") int recBatchNum,
+        int padding, @JsonProperty("drop_score") float dropScore, @JsonProperty("model_tier") String modelTier) {
     public static PaddleOcrConfigBuilder builder() {
         return new PaddleOcrConfigBuilder();
     }

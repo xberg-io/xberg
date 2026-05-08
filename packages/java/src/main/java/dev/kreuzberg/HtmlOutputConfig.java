@@ -13,20 +13,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for styled HTML output.
  *
- * When set on ExtractionConfig::html_output alongside
- * {@code output_format = OutputFormat::Html}, the pipeline builds a
- * StyledHtmlRenderer(crate::rendering::StyledHtmlRenderer) instead of
- * the plain comrak-based renderer.
+ * When set on ExtractionConfig::html_output alongside {@code output_format = OutputFormat::Html}, the pipeline builds a
+ * StyledHtmlRenderer(crate::rendering::StyledHtmlRenderer) instead of the plain comrak-based renderer.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HtmlOutputConfigBuilder.class)
-public record HtmlOutputConfig(
-    @Nullable String css,
-    @JsonProperty("css_file") java.nio.file.@Nullable Path cssFile,
-    HtmlTheme theme,
-    @JsonProperty("class_prefix") String classPrefix,
-    @JsonProperty("embed_css") boolean embedCss
-) {
+public record HtmlOutputConfig(@Nullable String css, @JsonProperty("css_file") java.nio.file.@Nullable Path cssFile,
+        HtmlTheme theme, @JsonProperty("class_prefix") String classPrefix,
+        @JsonProperty("embed_css") boolean embedCss) {
     public static HtmlOutputConfigBuilder builder() {
         return new HtmlOutputConfigBuilder();
     }

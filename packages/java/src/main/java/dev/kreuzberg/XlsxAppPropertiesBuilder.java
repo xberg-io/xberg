@@ -83,16 +83,8 @@ public class XlsxAppPropertiesBuilder {
 
     /** Builds the XlsxAppProperties instance. */
     public XlsxAppProperties build() {
-        return new XlsxAppProperties(
-            application.orElse(null),
-            appVersion.orElse(null),
-            docSecurity.orElse(null),
-            scaleCrop.orElse(null),
-            linksUpToDate.orElse(null),
-            sharedDoc.orElse(null),
-            hyperlinksChanged.orElse(null),
-            company.orElse(null),
-            worksheetNames
-        );
+        return new XlsxAppProperties(application.orElse(null), appVersion.orElse(null), docSecurity.orElse(null),
+                scaleCrop.orElse(null), linksUpToDate.orElse(null), sharedDoc.orElse(null),
+                hyperlinksChanged.orElse(null), company.orElse(null), worksheetNames);
     }
 }

@@ -12,8 +12,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * A unified OCR element representing detected text with full metadata.
  *
- * This is the primary type for structured OCR output, preserving all information
- * from both Tesseract and PaddleOCR backends.
+ * This is the primary type for structured OCR output, preserving all information from both Tesseract and PaddleOCR
+ * backends.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class OcrElementBuilder {
@@ -77,15 +77,7 @@ public class OcrElementBuilder {
 
     /** Builds the OcrElement instance. */
     public OcrElement build() {
-        return new OcrElement(
-            text,
-            geometry,
-            confidence,
-            level,
-            rotation.orElse(null),
-            pageNumber,
-            parentId.orElse(null),
-            backendMetadata
-        );
+        return new OcrElement(text, geometry, confidence, level, rotation.orElse(null), pageNumber,
+                parentId.orElse(null), backendMetadata);
     }
 }

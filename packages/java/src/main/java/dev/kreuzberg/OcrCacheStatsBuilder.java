@@ -27,9 +27,6 @@ public class OcrCacheStatsBuilder {
 
     /** Builds the OcrCacheStats instance. */
     public OcrCacheStats build() {
-        return new OcrCacheStats(
-            totalFiles,
-            totalSizeMb
-        );
+        return new OcrCacheStats(totalFiles, totalSizeMb);
     }
 }

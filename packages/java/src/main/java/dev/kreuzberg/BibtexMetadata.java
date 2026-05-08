@@ -17,13 +17,11 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = BibtexMetadataBuilder.class)
-public record BibtexMetadata(
-    @JsonProperty("entry_count") long entryCount,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("citation_keys") List<String> citationKeys,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> authors,
-    @Nullable @JsonProperty("year_range") YearRange yearRange,
-    @Nullable @JsonProperty("entry_types") Map<String, Long> entryTypes
-) {
+public record BibtexMetadata(@JsonProperty("entry_count") long entryCount,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("citation_keys") List<String> citationKeys,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> authors,
+        @Nullable @JsonProperty("year_range") YearRange yearRange,
+        @Nullable @JsonProperty("entry_types") Map<String, Long> entryTypes) {
     public static BibtexMetadataBuilder builder() {
         return new BibtexMetadataBuilder();
     }

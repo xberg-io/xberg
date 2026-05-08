@@ -14,23 +14,27 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 public final class KreuzbergRs {
-    private KreuzbergRs() { }
+    private KreuzbergRs() {
+    }
 
-    public static ExtractionResult extractBytes(final byte[] content, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractBytes(final byte[] content, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var ccontent = arena.allocateFrom(ValueLayout.JAVA_BYTE, content);
             var cmimeType = arena.allocateFrom(mimeType);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACT_BYTES.invoke(ccontent, cmimeType, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
             if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             var jsonPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr);
             NativeLib.KREUZBERG_EXTRACTION_RESULT_FREE.invoke(resultPtr);
             if (jsonPtr.equals(MemorySegment.NULL)) {
@@ -45,7 +49,8 @@ public final class KreuzbergRs {
         }
     }
 
-    public static CompletableFuture<ExtractionResult> extractBytesAsync(final byte[] content, final String mimeType, final ExtractionConfig config) {
+    public static CompletableFuture<ExtractionResult> extractBytesAsync(final byte[] content, final String mimeType,
+            final ExtractionConfig config) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return extractBytes(content, mimeType, config);
@@ -55,21 +60,24 @@ public final class KreuzbergRs {
         });
     }
 
-    public static ExtractionResult extractFile(final java.nio.file.Path path, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractFile(final java.nio.file.Path path, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var cpath = arena.allocateFrom(path.toString());
             var cmimeType = mimeType != null ? arena.allocateFrom(mimeType) : MemorySegment.NULL;
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACT_FILE.invoke(cpath, cmimeType, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
             if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             var jsonPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr);
             NativeLib.KREUZBERG_EXTRACTION_RESULT_FREE.invoke(resultPtr);
             if (jsonPtr.equals(MemorySegment.NULL)) {
@@ -84,7 +92,8 @@ public final class KreuzbergRs {
         }
     }
 
-    public static CompletableFuture<ExtractionResult> extractFileAsync(final java.nio.file.Path path, final String mimeType, final ExtractionConfig config) {
+    public static CompletableFuture<ExtractionResult> extractFileAsync(final java.nio.file.Path path,
+            final String mimeType, final ExtractionConfig config) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return extractFile(path, mimeType, config);
@@ -94,21 +103,24 @@ public final class KreuzbergRs {
         });
     }
 
-    public static ExtractionResult extractFileSync(final java.nio.file.Path path, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractFileSync(final java.nio.file.Path path, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var cpath = arena.allocateFrom(path.toString());
             var cmimeType = mimeType != null ? arena.allocateFrom(mimeType) : MemorySegment.NULL;
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACT_FILE_SYNC.invoke(cpath, cmimeType, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
             if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             var jsonPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr);
             NativeLib.KREUZBERG_EXTRACTION_RESULT_FREE.invoke(resultPtr);
             if (jsonPtr.equals(MemorySegment.NULL)) {
@@ -123,21 +135,24 @@ public final class KreuzbergRs {
         }
     }
 
-    public static ExtractionResult extractBytesSync(final byte[] content, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractBytesSync(final byte[] content, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var ccontent = arena.allocateFrom(ValueLayout.JAVA_BYTE, content);
             var cmimeType = arena.allocateFrom(mimeType);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACT_BYTES_SYNC.invoke(ccontent, cmimeType, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
             if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             var jsonPtr = (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr);
             NativeLib.KREUZBERG_EXTRACTION_RESULT_FREE.invoke(resultPtr);
             if (jsonPtr.equals(MemorySegment.NULL)) {
@@ -152,64 +167,74 @@ public final class KreuzbergRs {
         }
     }
 
-    public static List<ExtractionResult> batchExtractFilesSync(final List<BatchFileItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractFilesSync(final List<BatchFileItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var citemsJson = MAPPER.writeValueAsString(items);
             var citems = arena.allocateFrom(citemsJson);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_BATCH_EXTRACT_FILES_SYNC.invoke(citems, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() { });
+            return readJsonList(resultPtr,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() {
+                    });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
     }
 
-    public static List<ExtractionResult> batchExtractBytesSync(final List<BatchBytesItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractBytesSync(final List<BatchBytesItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var citemsJson = MAPPER.writeValueAsString(items);
             var citems = arena.allocateFrom(citemsJson);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_BATCH_EXTRACT_BYTES_SYNC.invoke(citems, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() { });
+            return readJsonList(resultPtr,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() {
+                    });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
     }
 
-    public static List<ExtractionResult> batchExtractFiles(final List<BatchFileItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractFiles(final List<BatchFileItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var citemsJson = MAPPER.writeValueAsString(items);
             var citems = arena.allocateFrom(citemsJson);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_BATCH_EXTRACT_FILES.invoke(citems, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() { });
+            return readJsonList(resultPtr,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() {
+                    });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
     }
 
-    public static CompletableFuture<List<ExtractionResult>> batchExtractFilesAsync(final List<BatchFileItem> items, final ExtractionConfig config) {
+    public static CompletableFuture<List<ExtractionResult>> batchExtractFilesAsync(final List<BatchFileItem> items,
+            final ExtractionConfig config) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return batchExtractFiles(items, config);
@@ -219,26 +244,30 @@ public final class KreuzbergRs {
         });
     }
 
-    public static List<ExtractionResult> batchExtractBytes(final List<BatchBytesItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractBytes(final List<BatchBytesItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var citemsJson = MAPPER.writeValueAsString(items);
             var citems = arena.allocateFrom(citemsJson);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EXTRACTION_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_BATCH_EXTRACT_BYTES.invoke(citems, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EXTRACTION_CONFIG_FREE.invoke(cconfig);
             }
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() { });
+            return readJsonList(resultPtr,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ExtractionResult>>() {
+                    });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
     }
 
-    public static CompletableFuture<List<ExtractionResult>> batchExtractBytesAsync(final List<BatchBytesItem> items, final ExtractionConfig config) {
+    public static CompletableFuture<List<ExtractionResult>> batchExtractBytesAsync(final List<BatchBytesItem> items,
+            final ExtractionConfig config) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return batchExtractBytes(items, config);
@@ -253,7 +282,9 @@ public final class KreuzbergRs {
             var ccontent = arena.allocateFrom(ValueLayout.JAVA_BYTE, content);
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_DETECT_MIME_TYPE_FROM_BYTES.invoke(ccontent);
             if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             String str = resultPtr.reinterpret(Long.MAX_VALUE).getString(0);
             NativeLib.KREUZBERG_FREE_STRING.invoke(resultPtr);
             return str;
@@ -266,7 +297,8 @@ public final class KreuzbergRs {
         try (var arena = Arena.ofConfined()) {
             var cmimeType = arena.allocateFrom(mimeType);
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_GET_EXTENSIONS_FOR_MIME.invoke(cmimeType);
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() { });
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
+            });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
@@ -275,7 +307,8 @@ public final class KreuzbergRs {
     public static List<String> listDocumentExtractors() throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_LIST_DOCUMENT_EXTRACTORS.invoke();
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() { });
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
+            });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
@@ -284,7 +317,8 @@ public final class KreuzbergRs {
     public static List<String> listOcrBackends() throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_LIST_OCR_BACKENDS.invoke();
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() { });
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
+            });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
@@ -301,7 +335,8 @@ public final class KreuzbergRs {
     public static List<String> listPostProcessors() throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_LIST_POST_PROCESSORS.invoke();
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() { });
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
+            });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
@@ -318,7 +353,8 @@ public final class KreuzbergRs {
     public static List<String> listValidators() throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_LIST_VALIDATORS.invoke();
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() { });
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
+            });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
@@ -332,26 +368,30 @@ public final class KreuzbergRs {
         }
     }
 
-    public static List<List<Float>> embedTextsAsync(final List<String> texts, final EmbeddingConfig config) throws KreuzbergRsException {
+    public static List<List<Float>> embedTextsAsync(final List<String> texts, final EmbeddingConfig config)
+            throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var ctextsJson = MAPPER.writeValueAsString(texts);
             var ctexts = arena.allocateFrom(ctextsJson);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EMBEDDING_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EMBEDDING_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_EMBED_TEXTS_ASYNC.invoke(ctexts, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EMBEDDING_CONFIG_FREE.invoke(cconfig);
             }
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<List<Float>>>() { });
+            return readJsonList(resultPtr,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<List<Float>>>() {
+                    });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
     }
 
-    public static CompletableFuture<List<List<Float>>> embedTextsAsyncAsync(final List<String> texts, final EmbeddingConfig config) {
+    public static CompletableFuture<List<List<Float>>> embedTextsAsyncAsync(final List<String> texts,
+            final EmbeddingConfig config) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return embedTextsAsync(texts, config);
@@ -361,23 +401,31 @@ public final class KreuzbergRs {
         });
     }
 
-    public static byte[] renderPdfPageToPng(final byte[] pdfBytes, final long pageIndex, final Integer dpi, final String password) throws KreuzbergRsException {
+    public static byte[] renderPdfPageToPng(final byte[] pdfBytes, final long pageIndex, final Integer dpi,
+            final String password) throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var cpdfBytes = arena.allocateFrom(ValueLayout.JAVA_BYTE, pdfBytes);
             var cpassword = password != null ? arena.allocateFrom(password) : MemorySegment.NULL;
             var outPtrHolder = arena.allocate(ValueLayout.ADDRESS);
             var outLenHolder = arena.allocate(ValueLayout.JAVA_LONG);
             var outCapHolder = arena.allocate(ValueLayout.JAVA_LONG);
-            int rc = (int) NativeLib.KREUZBERG_RENDER_PDF_PAGE_TO_PNG.invoke(cpdfBytes, pageIndex, dpi, cpassword, outPtrHolder, outLenHolder, outCapHolder);
+            int rc = (int) NativeLib.KREUZBERG_RENDER_PDF_PAGE_TO_PNG.invoke(cpdfBytes, pageIndex, dpi, cpassword,
+                    outPtrHolder, outLenHolder, outCapHolder);
             if (rc != 0) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             var outPtr = outPtrHolder.get(ValueLayout.ADDRESS, 0);
             long outLen = outLenHolder.get(ValueLayout.JAVA_LONG, 0);
             long outCap = outCapHolder.get(ValueLayout.JAVA_LONG, 0);
             if (outPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             byte[] result = outPtr.reinterpret(outLen).toArray(ValueLayout.JAVA_BYTE);
-            NativeLib.KREUZBERG_FREE_BYTES.invoke(outPtr, outLen, outCap);            return result;        } catch (Throwable e) {
+            NativeLib.KREUZBERG_FREE_BYTES.invoke(outPtr, outLen, outCap);
+            return result;
+        } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
     }
@@ -387,7 +435,9 @@ public final class KreuzbergRs {
             var cpath = arena.allocateFrom(path);
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_DETECT_MIME_TYPE.invoke(cpath, checkExists);
             if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return null;            }
+                checkLastError();
+                return null;
+            }
             String str = resultPtr.reinterpret(Long.MAX_VALUE).getString(0);
             NativeLib.KREUZBERG_FREE_STRING.invoke(resultPtr);
             return str;
@@ -396,20 +446,23 @@ public final class KreuzbergRs {
         }
     }
 
-    public static List<List<Float>> embedTexts(final List<String> texts, final EmbeddingConfig config) throws KreuzbergRsException {
+    public static List<List<Float>> embedTexts(final List<String> texts, final EmbeddingConfig config)
+            throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var ctextsJson = MAPPER.writeValueAsString(texts);
             var ctexts = arena.allocateFrom(ctextsJson);
             var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
             var cconfigJsonSeg = cconfigJson != null ? arena.allocateFrom(cconfigJson) : MemorySegment.NULL;
             var cconfig = cconfigJson != null
-                ? (MemorySegment) NativeLib.KREUZBERG_EMBEDDING_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
-                : MemorySegment.NULL;
+                    ? (MemorySegment) NativeLib.KREUZBERG_EMBEDDING_CONFIG_FROM_JSON.invoke(cconfigJsonSeg)
+                    : MemorySegment.NULL;
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_EMBED_TEXTS.invoke(ctexts, cconfig);
             if (!cconfig.equals(MemorySegment.NULL)) {
                 NativeLib.KREUZBERG_EMBEDDING_CONFIG_FREE.invoke(cconfig);
             }
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<List<Float>>>() { });
+            return readJsonList(resultPtr,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<List<Float>>>() {
+                    });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
@@ -420,7 +473,9 @@ public final class KreuzbergRs {
             var cname = arena.allocateFrom(name);
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_GET_EMBEDDING_PRESET.invoke(cname);
             if (resultPtr.equals(MemorySegment.NULL)) {
-                checkLastError();                return Optional.empty();            }
+                checkLastError();
+                return Optional.empty();
+            }
             var jsonPtr = (MemorySegment) NativeLib.KREUZBERG_EMBEDDING_PRESET_TO_JSON.invoke(resultPtr);
             NativeLib.KREUZBERG_EMBEDDING_PRESET_FREE.invoke(resultPtr);
             if (jsonPtr.equals(MemorySegment.NULL)) {
@@ -438,7 +493,8 @@ public final class KreuzbergRs {
     public static List<String> listEmbeddingPresets() throws KreuzbergRsException {
         try (var arena = Arena.ofConfined()) {
             var resultPtr = (MemorySegment) NativeLib.KREUZBERG_LIST_EMBEDDING_PRESETS.invoke();
-            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() { });
+            return readJsonList(resultPtr, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
+            });
         } catch (Throwable e) {
             throw new KreuzbergRsException("FFI call failed", e);
         }
@@ -460,15 +516,15 @@ public final class KreuzbergRs {
     }
     private static com.fasterxml.jackson.databind.ObjectMapper createObjectMapper() {
         return new com.fasterxml.jackson.databind.ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module())
-            .findAndRegisterModules()
-            .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
-            .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-            .configure(com.fasterxml.jackson.databind.MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS, true);
+                .registerModule(new com.fasterxml.jackson.datatype.jdk8.Jdk8Module()).findAndRegisterModules()
+                .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
+                .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                .configure(com.fasterxml.jackson.databind.MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS, true);
     }
 
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = createObjectMapper();
-    private static <T> java.util.List<T> readJsonList(MemorySegment resultPtr, com.fasterxml.jackson.core.type.TypeReference<java.util.List<T>> typeRef) throws KreuzbergRsException {
+    private static <T> java.util.List<T> readJsonList(MemorySegment resultPtr,
+            com.fasterxml.jackson.core.type.TypeReference<java.util.List<T>> typeRef) throws KreuzbergRsException {
         try {
             if (resultPtr.equals(MemorySegment.NULL)) {
                 checkLastError();

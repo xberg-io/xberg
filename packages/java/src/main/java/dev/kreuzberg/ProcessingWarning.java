@@ -10,8 +10,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * A non-fatal warning from a processing pipeline stage.
  *
- * Captures errors from optional features that don't prevent extraction
- * but may indicate degraded results.
+ * Captures errors from optional features that don't prevent extraction but may indicate degraded results.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 public record ProcessingWarning(String source, String message) {

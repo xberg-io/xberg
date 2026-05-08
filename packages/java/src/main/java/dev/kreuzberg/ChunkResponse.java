@@ -13,11 +13,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Chunk response with chunks and metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ChunkResponse(
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> chunks,
-    @JsonProperty("chunk_count") long chunkCount,
-    String config,
-    @JsonProperty("input_size_bytes") long inputSizeBytes,
-    @JsonProperty("chunker_type") String chunkerType
-) {
+public record ChunkResponse(@JsonInclude(JsonInclude.Include.NON_NULL) List<String> chunks,
+        @JsonProperty("chunk_count") long chunkCount, String config,
+        @JsonProperty("input_size_bytes") long inputSizeBytes, @JsonProperty("chunker_type") String chunkerType) {
 }

@@ -16,13 +16,11 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PostProcessorConfigBuilder.class)
-public record PostProcessorConfig(
-    boolean enabled,
-    @Nullable @JsonProperty("enabled_processors") List<String> enabledProcessors,
-    @Nullable @JsonProperty("disabled_processors") List<String> disabledProcessors,
-    @Nullable @JsonProperty("enabled_set") String enabledSet,
-    @Nullable @JsonProperty("disabled_set") String disabledSet
-) {
+public record PostProcessorConfig(boolean enabled,
+        @Nullable @JsonProperty("enabled_processors") List<String> enabledProcessors,
+        @Nullable @JsonProperty("disabled_processors") List<String> disabledProcessors,
+        @Nullable @JsonProperty("enabled_set") String enabledSet,
+        @Nullable @JsonProperty("disabled_set") String disabledSet) {
     public static PostProcessorConfigBuilder builder() {
         return new PostProcessorConfigBuilder();
     }

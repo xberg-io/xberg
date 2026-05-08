@@ -13,10 +13,5 @@ import org.jspecify.annotations.Nullable;
  * Extracted keyword with metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record Keyword(
-    String text,
-    float score,
-    KeywordAlgorithm algorithm,
-    @Nullable List<Long> positions
-) {
+public record Keyword(String text, float score, KeywordAlgorithm algorithm, @Nullable List<Long> positions) {
 }

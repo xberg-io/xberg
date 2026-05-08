@@ -18,7 +18,8 @@ public record YakeParams(@JsonProperty("window_size") long windowSize) {
     public static YakeParamsBuilder builder() {
         return new YakeParamsBuilder();
     }
-    public YakeParams{
-        if (windowSize == 0) windowSize = 2;
+    public YakeParams {
+        if (windowSize == 0)
+            windowSize = 2;
     }
 }

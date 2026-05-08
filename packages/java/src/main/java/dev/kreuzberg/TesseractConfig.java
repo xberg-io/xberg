@@ -13,41 +13,37 @@ import org.jspecify.annotations.Nullable;
 /**
  * Tesseract OCR configuration.
  *
- * Provides fine-grained control over Tesseract OCR engine parameters.
- * Most users can use the defaults, but these settings allow optimization
- * for specific document types (invoices, handwriting, etc.).
+ * Provides fine-grained control over Tesseract OCR engine parameters. Most users can use the defaults, but these
+ * settings allow optimization for specific document types (invoices, handwriting, etc.).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TesseractConfigBuilder.class)
-public record TesseractConfig(
-    String language,
-    int psm,
-    @JsonProperty("output_format") String outputFormat,
-    int oem,
-    @JsonProperty("min_confidence") double minConfidence,
-    @Nullable ImagePreprocessingConfig preprocessing,
-    @JsonProperty("enable_table_detection") boolean enableTableDetection,
-    @JsonProperty("table_min_confidence") double tableMinConfidence,
-    @JsonProperty("table_column_threshold") int tableColumnThreshold,
-    @JsonProperty("table_row_threshold_ratio") double tableRowThresholdRatio,
-    @JsonProperty("use_cache") boolean useCache,
-    @JsonProperty("classify_use_pre_adapted_templates") boolean classifyUsePreAdaptedTemplates,
-    @JsonProperty("language_model_ngram_on") boolean languageModelNgramOn,
-    @JsonProperty("tessedit_dont_blkrej_good_wds") boolean tesseditDontBlkrejGoodWds,
-    @JsonProperty("tessedit_dont_rowrej_good_wds") boolean tesseditDontRowrejGoodWds,
-    @JsonProperty("tessedit_enable_dict_correction") boolean tesseditEnableDictCorrection,
-    @JsonProperty("tessedit_char_whitelist") String tesseditCharWhitelist,
-    @JsonProperty("tessedit_char_blacklist") String tesseditCharBlacklist,
-    @JsonProperty("tessedit_use_primary_params_model") boolean tesseditUsePrimaryParamsModel,
-    @JsonProperty("textord_space_size_is_variable") boolean textordSpaceSizeIsVariable,
-    @JsonProperty("thresholding_method") boolean thresholdingMethod
-) {
+public record TesseractConfig(String language, int psm, @JsonProperty("output_format") String outputFormat, int oem,
+        @JsonProperty("min_confidence") double minConfidence, @Nullable ImagePreprocessingConfig preprocessing,
+        @JsonProperty("enable_table_detection") boolean enableTableDetection,
+        @JsonProperty("table_min_confidence") double tableMinConfidence,
+        @JsonProperty("table_column_threshold") int tableColumnThreshold,
+        @JsonProperty("table_row_threshold_ratio") double tableRowThresholdRatio,
+        @JsonProperty("use_cache") boolean useCache,
+        @JsonProperty("classify_use_pre_adapted_templates") boolean classifyUsePreAdaptedTemplates,
+        @JsonProperty("language_model_ngram_on") boolean languageModelNgramOn,
+        @JsonProperty("tessedit_dont_blkrej_good_wds") boolean tesseditDontBlkrejGoodWds,
+        @JsonProperty("tessedit_dont_rowrej_good_wds") boolean tesseditDontRowrejGoodWds,
+        @JsonProperty("tessedit_enable_dict_correction") boolean tesseditEnableDictCorrection,
+        @JsonProperty("tessedit_char_whitelist") String tesseditCharWhitelist,
+        @JsonProperty("tessedit_char_blacklist") String tesseditCharBlacklist,
+        @JsonProperty("tessedit_use_primary_params_model") boolean tesseditUsePrimaryParamsModel,
+        @JsonProperty("textord_space_size_is_variable") boolean textordSpaceSizeIsVariable,
+        @JsonProperty("thresholding_method") boolean thresholdingMethod) {
     public static TesseractConfigBuilder builder() {
         return new TesseractConfigBuilder();
     }
-    public TesseractConfig{
-        if (psm == 0) psm = 3;
-        if (oem == 0) oem = 3;
-        if (tableColumnThreshold == 0) tableColumnThreshold = 50;
+    public TesseractConfig {
+        if (psm == 0)
+            psm = 3;
+        if (oem == 0)
+            oem = 3;
+        if (tableColumnThreshold == 0)
+            tableColumnThreshold = 50;
     }
 }

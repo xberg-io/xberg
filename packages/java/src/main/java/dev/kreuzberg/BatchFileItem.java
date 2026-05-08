@@ -11,8 +11,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Batch item for file extraction.
  *
- * Used with {@code batch_extract_files} and {@code batch_extract_files_sync}
- * to represent a single file in a batch extraction job.
+ * Used with {@code batch_extract_files} and {@code batch_extract_files_sync} to represent a single file in a batch
+ * extraction job.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 public record BatchFileItem(java.nio.file.Path path, @Nullable FileExtractionConfig config) {

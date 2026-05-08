@@ -12,22 +12,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * Types of block-level elements in Djot.
  */
 public enum BlockType {
-    Paragraph("paragraph"),
-    Heading("heading"),
-    Blockquote("blockquote"),
-    CodeBlock("code_block"),
-    ListItem("list_item"),
-    OrderedList("ordered_list"),
-    BulletList("bullet_list"),
-    TaskList("task_list"),
-    DefinitionList("definition_list"),
-    DefinitionTerm("definition_term"),
-    DefinitionDescription("definition_description"),
-    Div("div"),
-    Section("section"),
-    ThematicBreak("thematic_break"),
-    RawBlock("raw_block"),
-    MathDisplay("math_display");
+    Paragraph("paragraph"), Heading("heading"), Blockquote("blockquote"), CodeBlock("code_block"), ListItem(
+            "list_item"), OrderedList("ordered_list"), BulletList("bullet_list"), TaskList("task_list"), DefinitionList(
+                    "definition_list"), DefinitionTerm("definition_term"), DefinitionDescription(
+                            "definition_description"), Div("div"), Section("section"), ThematicBreak(
+                                    "thematic_break"), RawBlock("raw_block"), MathDisplay("math_display");
 
     /** The string value. */
     private final String value;

@@ -15,14 +15,9 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = EpubMetadataBuilder.class)
-public record EpubMetadata(
-    @Nullable String coverage,
-    @Nullable @JsonProperty("dc_format") String dcFormat,
-    @Nullable String relation,
-    @Nullable String source,
-    @Nullable @JsonProperty("dc_type") String dcType,
-    @Nullable @JsonProperty("cover_image") String coverImage
-) {
+public record EpubMetadata(@Nullable String coverage, @Nullable @JsonProperty("dc_format") String dcFormat,
+        @Nullable String relation, @Nullable String source, @Nullable @JsonProperty("dc_type") String dcType,
+        @Nullable @JsonProperty("cover_image") String coverImage) {
     public static EpubMetadataBuilder builder() {
         return new EpubMetadataBuilder();
     }

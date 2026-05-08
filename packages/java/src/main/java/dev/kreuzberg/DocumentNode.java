@@ -14,20 +14,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * A single node in the document tree.
  *
- * Each node has deterministic {@code id}, typed {@code content}, optional {@code parent}/{@code children}
- * for tree structure, and metadata like page number, bounding box, and content layer.
+ * Each node has deterministic {@code id}, typed {@code content}, optional {@code parent}/{@code children} for tree
+ * structure, and metadata like page number, bounding box, and content layer.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record DocumentNode(
-    String id,
-    NodeContent content,
-    @Nullable Integer parent,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<Integer> children,
-    @JsonProperty("content_layer") ContentLayer contentLayer,
-    @Nullable Integer page,
-    @Nullable @JsonProperty("page_end") Integer pageEnd,
-    @Nullable String bbox,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<TextAnnotation> annotations,
-    @Nullable Map<String, String> attributes
-) {
+public record DocumentNode(String id, NodeContent content, @Nullable Integer parent,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<Integer> children,
+        @JsonProperty("content_layer") ContentLayer contentLayer, @Nullable Integer page,
+        @Nullable @JsonProperty("page_end") Integer pageEnd, @Nullable String bbox,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<TextAnnotation> annotations,
+        @Nullable Map<String, String> attributes) {
 }

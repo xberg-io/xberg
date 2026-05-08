@@ -11,14 +11,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * A single style definition parsed from {@code &lt;w:style&gt;} in {@code word/styles.xml}.
  */
-public record StyleDefinition(
-    String id,
-    @Nullable String name,
-    @JsonProperty("style_type") String styleType,
-    @Nullable @JsonProperty("based_on") String basedOn,
-    @Nullable @JsonProperty("next_style") String nextStyle,
-    @JsonProperty("is_default") boolean isDefault,
-    @JsonProperty("paragraph_properties") String paragraphProperties,
-    @JsonProperty("run_properties") String runProperties
-) {
+public record StyleDefinition(String id, @Nullable String name, @JsonProperty("style_type") String styleType,
+        @Nullable @JsonProperty("based_on") String basedOn, @Nullable @JsonProperty("next_style") String nextStyle,
+        @JsonProperty("is_default") boolean isDefault, @JsonProperty("paragraph_properties") String paragraphProperties,
+        @JsonProperty("run_properties") String runProperties) {
 }

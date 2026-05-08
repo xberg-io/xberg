@@ -14,17 +14,13 @@ import org.jspecify.annotations.Nullable;
 /**
  * Extracted table structure.
  *
- * Represents a table detected and extracted from a document (PDF, image, etc.).
- * Tables are converted to both structured cell data and Markdown format.
+ * Represents a table detected and extracted from a document (PDF, image, etc.). Tables are converted to both structured
+ * cell data and Markdown format.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TableBuilder.class)
-public record Table(
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<List<String>> cells,
-    String markdown,
-    @JsonProperty("page_number") long pageNumber,
-    @Nullable @JsonProperty("bounding_box") String boundingBox
-) {
+public record Table(@JsonInclude(JsonInclude.Include.NON_NULL) List<List<String>> cells, String markdown,
+        @JsonProperty("page_number") long pageNumber, @Nullable @JsonProperty("bounding_box") String boundingBox) {
     public static TableBuilder builder() {
         return new TableBuilder();
     }

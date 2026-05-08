@@ -13,10 +13,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Model manifest response.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ManifestResponse(
-    @JsonProperty("kreuzberg_version") String kreuzbergVersion,
-    @JsonProperty("total_size_bytes") long totalSizeBytes,
-    @JsonProperty("model_count") long modelCount,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<ManifestEntryResponse> models
-) {
+public record ManifestResponse(@JsonProperty("kreuzberg_version") String kreuzbergVersion,
+        @JsonProperty("total_size_bytes") long totalSizeBytes, @JsonProperty("model_count") long modelCount,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<ManifestEntryResponse> models) {
 }

@@ -12,22 +12,18 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 /**
  * Cross-extractor content filtering configuration.
  *
- * Controls whether "furniture" content (headers, footers, page numbers,
- * watermarks, repeating text) is included in or stripped from extraction
- * results. Applies across all extractors (PDF, DOCX, RTF, ODT, HTML, etc.)
- * with format-specific implementation.
+ * Controls whether "furniture" content (headers, footers, page numbers, watermarks, repeating text) is included in or
+ * stripped from extraction results. Applies across all extractors (PDF, DOCX, RTF, ODT, HTML, etc.) with
+ * format-specific implementation.
  *
- * When {@code None} on {@code ExtractionConfig}, each extractor uses its current
- * default behavior unchanged.
+ * When {@code None} on {@code ExtractionConfig}, each extractor uses its current default behavior unchanged.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ContentFilterConfigBuilder.class)
-public record ContentFilterConfig(
-    @JsonProperty("include_headers") boolean includeHeaders,
-    @JsonProperty("include_footers") boolean includeFooters,
-    @JsonProperty("strip_repeating_text") boolean stripRepeatingText,
-    @JsonProperty("include_watermarks") boolean includeWatermarks
-) {
+public record ContentFilterConfig(@JsonProperty("include_headers") boolean includeHeaders,
+        @JsonProperty("include_footers") boolean includeFooters,
+        @JsonProperty("strip_repeating_text") boolean stripRepeatingText,
+        @JsonProperty("include_watermarks") boolean includeWatermarks) {
     public static ContentFilterConfigBuilder builder() {
         return new ContentFilterConfigBuilder();
     }

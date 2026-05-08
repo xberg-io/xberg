@@ -12,30 +12,22 @@ import org.jspecify.annotations.Nullable;
 /**
  * OpenDocument metadata from meta.xml
  *
- * Contains metadata fields defined by the OASIS OpenDocument Format standard.
- * Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
+ * Contains metadata fields defined by the OASIS OpenDocument Format standard. Uses Dublin Core elements (dc:) and
+ * OpenDocument meta elements (meta:).
  */
 @JsonDeserialize(builder = OdtPropertiesBuilder.class)
-public record OdtProperties(
-    @Nullable String title,
-    @Nullable String subject,
-    @Nullable String creator,
-    @Nullable @JsonProperty("initial_creator") String initialCreator,
-    @Nullable String keywords,
-    @Nullable String description,
-    @Nullable String date,
-    @Nullable @JsonProperty("creation_date") String creationDate,
-    @Nullable String language,
-    @Nullable String generator,
-    @Nullable @JsonProperty("editing_duration") String editingDuration,
-    @Nullable @JsonProperty("editing_cycles") String editingCycles,
-    @Nullable @JsonProperty("page_count") Integer pageCount,
-    @Nullable @JsonProperty("word_count") Integer wordCount,
-    @Nullable @JsonProperty("character_count") Integer characterCount,
-    @Nullable @JsonProperty("paragraph_count") Integer paragraphCount,
-    @Nullable @JsonProperty("table_count") Integer tableCount,
-    @Nullable @JsonProperty("image_count") Integer imageCount
-) {
+public record OdtProperties(@Nullable String title, @Nullable String subject, @Nullable String creator,
+        @Nullable @JsonProperty("initial_creator") String initialCreator, @Nullable String keywords,
+        @Nullable String description, @Nullable String date,
+        @Nullable @JsonProperty("creation_date") String creationDate, @Nullable String language,
+        @Nullable String generator, @Nullable @JsonProperty("editing_duration") String editingDuration,
+        @Nullable @JsonProperty("editing_cycles") String editingCycles,
+        @Nullable @JsonProperty("page_count") Integer pageCount,
+        @Nullable @JsonProperty("word_count") Integer wordCount,
+        @Nullable @JsonProperty("character_count") Integer characterCount,
+        @Nullable @JsonProperty("paragraph_count") Integer paragraphCount,
+        @Nullable @JsonProperty("table_count") Integer tableCount,
+        @Nullable @JsonProperty("image_count") Integer imageCount) {
     public static OdtPropertiesBuilder builder() {
         return new OdtPropertiesBuilder();
     }

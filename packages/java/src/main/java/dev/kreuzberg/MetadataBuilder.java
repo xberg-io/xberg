@@ -13,8 +13,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Extraction result metadata.
  *
- * Contains common fields applicable to all formats, format-specific metadata
- * via a discriminated union, and additional custom fields from postprocessors.
+ * Contains common fields applicable to all formats, format-specific metadata via a discriminated union, and additional
+ * custom fields from postprocessors.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class MetadataBuilder {
@@ -169,28 +169,11 @@ public class MetadataBuilder {
 
     /** Builds the Metadata instance. */
     public Metadata build() {
-        return new Metadata(
-            title.orElse(null),
-            subject.orElse(null),
-            authors.orElse(null),
-            keywords.orElse(null),
-            language.orElse(null),
-            createdAt.orElse(null),
-            modifiedAt.orElse(null),
-            createdBy.orElse(null),
-            modifiedBy.orElse(null),
-            pages.orElse(null),
-            format.orElse(null),
-            imagePreprocessing.orElse(null),
-            jsonSchema.orElse(null),
-            error.orElse(null),
-            extractionDurationMs.orElse(null),
-            category.orElse(null),
-            tags.orElse(null),
-            documentVersion.orElse(null),
-            abstractText.orElse(null),
-            outputFormat.orElse(null),
-            additional
-        );
+        return new Metadata(title.orElse(null), subject.orElse(null), authors.orElse(null), keywords.orElse(null),
+                language.orElse(null), createdAt.orElse(null), modifiedAt.orElse(null), createdBy.orElse(null),
+                modifiedBy.orElse(null), pages.orElse(null), format.orElse(null), imagePreprocessing.orElse(null),
+                jsonSchema.orElse(null), error.orElse(null), extractionDurationMs.orElse(null), category.orElse(null),
+                tags.orElse(null), documentVersion.orElse(null), abstractText.orElse(null), outputFormat.orElse(null),
+                additional);
     }
 }

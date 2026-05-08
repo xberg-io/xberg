@@ -11,21 +11,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * Preset configurations for common RAG use cases.
  *
- * Each preset combines chunk size, overlap, and embedding model
- * to provide an optimized configuration for specific scenarios.
+ * Each preset combines chunk size, overlap, and embedding model to provide an optimized configuration for specific
+ * scenarios.
  *
- * All string fields are owned {@code String} for FFI compatibility — instances
- * are safe to clone and pass across language boundaries.
+ * All string fields are owned {@code String} for FFI compatibility — instances are safe to clone and pass across
+ * language boundaries.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record EmbeddingPreset(
-    String name,
-    @JsonProperty("chunk_size") long chunkSize,
-    long overlap,
-    @JsonProperty("model_repo") String modelRepo,
-    String pooling,
-    @JsonProperty("model_file") String modelFile,
-    long dimensions,
-    String description
-) {
+public record EmbeddingPreset(String name, @JsonProperty("chunk_size") long chunkSize, long overlap,
+        @JsonProperty("model_repo") String modelRepo, String pooling, @JsonProperty("model_file") String modelFile,
+        long dimensions, String description) {
 }

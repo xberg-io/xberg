@@ -53,12 +53,7 @@ public class PostProcessorConfigBuilder {
 
     /** Builds the PostProcessorConfig instance. */
     public PostProcessorConfig build() {
-        return new PostProcessorConfig(
-            enabled,
-            enabledProcessors.orElse(null),
-            disabledProcessors.orElse(null),
-            enabledSet.orElse(null),
-            disabledSet.orElse(null)
-        );
+        return new PostProcessorConfig(enabled, enabledProcessors.orElse(null), disabledProcessors.orElse(null),
+                enabledSet.orElse(null), disabledSet.orElse(null));
     }
 }

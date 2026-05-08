@@ -16,16 +16,12 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PdfConfigBuilder.class)
-public record PdfConfig(
-    @JsonProperty("extract_images") boolean extractImages,
-    @Nullable List<String> passwords,
-    @JsonProperty("extract_metadata") boolean extractMetadata,
-    @Nullable HierarchyConfig hierarchy,
-    @JsonProperty("extract_annotations") boolean extractAnnotations,
-    @Nullable @JsonProperty("top_margin_fraction") Float topMarginFraction,
-    @Nullable @JsonProperty("bottom_margin_fraction") Float bottomMarginFraction,
-    @JsonProperty("allow_single_column_tables") boolean allowSingleColumnTables
-) {
+public record PdfConfig(@JsonProperty("extract_images") boolean extractImages, @Nullable List<String> passwords,
+        @JsonProperty("extract_metadata") boolean extractMetadata, @Nullable HierarchyConfig hierarchy,
+        @JsonProperty("extract_annotations") boolean extractAnnotations,
+        @Nullable @JsonProperty("top_margin_fraction") Float topMarginFraction,
+        @Nullable @JsonProperty("bottom_margin_fraction") Float bottomMarginFraction,
+        @JsonProperty("allow_single_column_tables") boolean allowSingleColumnTables) {
     public static PdfConfigBuilder builder() {
         return new PdfConfigBuilder();
     }

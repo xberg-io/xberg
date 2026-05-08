@@ -12,10 +12,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Model manifest entry for cache management.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ManifestEntryResponse(
-    @JsonProperty("relative_path") String relativePath,
-    String sha256,
-    @JsonProperty("size_bytes") long sizeBytes,
-    @JsonProperty("source_url") String sourceUrl
-) {
+public record ManifestEntryResponse(@JsonProperty("relative_path") String relativePath, String sha256,
+        @JsonProperty("size_bytes") long sizeBytes, @JsonProperty("source_url") String sourceUrl) {
 }

@@ -13,17 +13,12 @@ import org.jspecify.annotations.Nullable;
 /**
  * Plain text and Markdown extraction result.
  *
- * Contains the extracted text along with statistics and,
- * for Markdown files, structural elements like headers and links.
+ * Contains the extracted text along with statistics and, for Markdown files, structural elements like headers and
+ * links.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record TextExtractionResult(
-    String content,
-    @JsonProperty("line_count") long lineCount,
-    @JsonProperty("word_count") long wordCount,
-    @JsonProperty("character_count") long characterCount,
-    @Nullable List<String> headers,
-    @Nullable List<String> links,
-    @Nullable @JsonProperty("code_blocks") List<String> codeBlocks
-) {
+public record TextExtractionResult(String content, @JsonProperty("line_count") long lineCount,
+        @JsonProperty("word_count") long wordCount, @JsonProperty("character_count") long characterCount,
+        @Nullable List<String> headers, @Nullable List<String> links,
+        @Nullable @JsonProperty("code_blocks") List<String> codeBlocks) {
 }

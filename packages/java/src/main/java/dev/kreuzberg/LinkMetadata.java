@@ -14,12 +14,7 @@ import org.jspecify.annotations.Nullable;
  * Link element metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record LinkMetadata(
-    String href,
-    String text,
-    @Nullable String title,
-    @JsonProperty("link_type") LinkType linkType,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> rel,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes
-) {
+public record LinkMetadata(String href, String text, @Nullable String title,
+        @JsonProperty("link_type") LinkType linkType, @JsonInclude(JsonInclude.Include.NON_NULL) List<String> rel,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes) {
 }

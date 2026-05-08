@@ -7,18 +7,15 @@ package dev.kreuzberg;
 
 import java.util.List;
 public final class Kreuzberg {
-    private Kreuzberg() { }
+    private Kreuzberg() {
+    }
 
     /**
      * Extract content from a byte array.
      *
-     * This is the main entry point for in-memory extraction. It performs the following steps:
-     * 1. Validate MIME type
-     * 2. Handle legacy format conversion if needed
-     * 3. Select appropriate extractor from registry
-     * 4. Extract content
-     * 5. Run post-processing pipeline
-     * {@literal @}param content The byte array to extract
+     * This is the main entry point for in-memory extraction. It performs the following steps: 1. Validate MIME type 2.
+     * Handle legacy format conversion if needed 3. Select appropriate extractor from registry 4. Extract content 5. Run
+     * post-processing pipeline {@literal @}param content The byte array to extract
      *
      * {@literal @}param mime_type MIME type of the content
      *
@@ -29,7 +26,8 @@ public final class Kreuzberg {
      * {@literal @}throws KreuzbergRsException Returns {@code KreuzbergError::Validation} if MIME type is invalid.
      * Returns {@code KreuzbergError::UnsupportedFormat} if MIME type is not supported.
      */
-    public static ExtractionResult extractBytes(final byte[] content, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractBytes(final byte[] content, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(content, "content must not be null");
         java.util.Objects.requireNonNull(mimeType, "mimeType must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
@@ -39,13 +37,9 @@ public final class Kreuzberg {
     /**
      * Extract content from a file.
      *
-     * This is the main entry point for file-based extraction. It performs the following steps:
-     * 1. Check cache for existing result (if caching enabled)
-     * 2. Detect or validate MIME type
-     * 3. Select appropriate extractor from registry
-     * 4. Extract content
-     * 5. Run post-processing pipeline
-     * 6. Store result in cache (if caching enabled)
+     * This is the main entry point for file-based extraction. It performs the following steps: 1. Check cache for
+     * existing result (if caching enabled) 2. Detect or validate MIME type 3. Select appropriate extractor from
+     * registry 4. Extract content 5. Run post-processing pipeline 6. Store result in cache (if caching enabled)
      * {@literal @}param path Path to the file to extract
      *
      * {@literal @}param mime_type Optional MIME type override. If None, will be auto-detected
@@ -54,51 +48,55 @@ public final class Kreuzberg {
      *
      * {@literal @}return An {@code ExtractionResult} containing the extracted content and metadata.
      *
-     * {@literal @}throws KreuzbergRsException Returns {@code KreuzbergError::Io} if the file doesn't exist (NotFound) or for other file I/O errors.
-     * Returns {@code KreuzbergError::UnsupportedFormat} if MIME type is not supported.
+     * {@literal @}throws KreuzbergRsException Returns {@code KreuzbergError::Io} if the file doesn't exist (NotFound)
+     * or for other file I/O errors. Returns {@code KreuzbergError::UnsupportedFormat} if MIME type is not supported.
      */
-    public static ExtractionResult extractFile(final java.nio.file.Path path, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractFile(final java.nio.file.Path path, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(path, "path must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.extractFile(path, mimeType, config);
     }
 
-    public static ExtractionResult extractFile(final java.nio.file.Path path, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractFile(final java.nio.file.Path path, final ExtractionConfig config)
+            throws KreuzbergRsException {
         return KreuzbergRs.extractFile(path, null, config);
     }
 
     /**
      * Synchronous wrapper for {@code extract_file}.
      *
-     * This is a convenience function that blocks the current thread until extraction completes.
-     * For async code, use {@code extract_file} directly.
+     * This is a convenience function that blocks the current thread until extraction completes. For async code, use
+     * {@code extract_file} directly.
      *
-     * Uses the global Tokio runtime for 100x+ performance improvement over creating
-     * a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating a new runtime per call. Always uses
+     * the global runtime to avoid nested runtime issues.
      *
-     * This function is only available with the {@code tokio-runtime} feature. For WASM targets,
-     * use a truly synchronous extraction approach instead.
+     * This function is only available with the {@code tokio-runtime} feature. For WASM targets, use a truly synchronous
+     * extraction approach instead.
      */
-    public static ExtractionResult extractFileSync(final java.nio.file.Path path, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractFileSync(final java.nio.file.Path path, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(path, "path must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.extractFileSync(path, mimeType, config);
     }
 
-    public static ExtractionResult extractFileSync(final java.nio.file.Path path, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractFileSync(final java.nio.file.Path path, final ExtractionConfig config)
+            throws KreuzbergRsException {
         return KreuzbergRs.extractFileSync(path, null, config);
     }
 
     /**
      * Synchronous wrapper for {@code extract_bytes}.
      *
-     * Uses the global Tokio runtime for 100x+ performance improvement over creating
-     * a new runtime per call.
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating a new runtime per call.
      *
-     * With the {@code tokio-runtime} feature, this blocks the current thread using the global
-     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
+     * With the {@code tokio-runtime} feature, this blocks the current thread using the global Tokio runtime. Without it
+     * (WASM), this calls a truly synchronous implementation.
      */
-    public static ExtractionResult extractBytesSync(final byte[] content, final String mimeType, final ExtractionConfig config) throws KreuzbergRsException {
+    public static ExtractionResult extractBytesSync(final byte[] content, final String mimeType,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(content, "content must not be null");
         java.util.Objects.requireNonNull(mimeType, "mimeType must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
@@ -108,10 +106,11 @@ public final class Kreuzberg {
     /**
      * Synchronous wrapper for {@code batch_extract_files}.
      *
-     * Uses the global Tokio runtime for optimal performance.
-     * Only available with {@code tokio-runtime} (WASM has no filesystem).
+     * Uses the global Tokio runtime for optimal performance. Only available with {@code tokio-runtime} (WASM has no
+     * filesystem).
      */
-    public static List<ExtractionResult> batchExtractFilesSync(final List<BatchFileItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractFilesSync(final List<BatchFileItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(items, "items must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.batchExtractFilesSync(items, config);
@@ -120,12 +119,12 @@ public final class Kreuzberg {
     /**
      * Synchronous wrapper for {@code batch_extract_bytes}.
      *
-     * Uses the global Tokio runtime for optimal performance.
-     * With the {@code tokio-runtime} feature, this blocks the current thread using the global
-     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
+     * Uses the global Tokio runtime for optimal performance. With the {@code tokio-runtime} feature, this blocks the
+     * current thread using the global Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
      * that iterates through items and calls {@code extract_bytes_sync()}.
      */
-    public static List<ExtractionResult> batchExtractBytesSync(final List<BatchBytesItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractBytesSync(final List<BatchBytesItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(items, "items must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.batchExtractBytesSync(items, config);
@@ -134,16 +133,15 @@ public final class Kreuzberg {
     /**
      * Extract content from multiple files concurrently.
      *
-     * This function processes multiple files in parallel, automatically managing
-     * concurrency to prevent resource exhaustion. The concurrency limit can be
-     * configured via {@code ExtractionConfig::max_concurrent_extractions} or defaults
-     * to {@code (num_cpus * 1.5).ceil()}.
+     * This function processes multiple files in parallel, automatically managing concurrency to prevent resource
+     * exhaustion. The concurrency limit can be configured via {@code ExtractionConfig::max_concurrent_extractions} or
+     * defaults to {@code (num_cpus * 1.5).ceil()}.
      *
-     * Each file can optionally specify a FileExtractionConfig that overrides specific
-     * fields from the batch-level {@code config}. Pass {@code None} for a file to use the batch defaults.
-     * Batch-level settings like {@code max_concurrent_extractions} and {@code use_cache} are always
-     * taken from the batch-level {@code config}.
-     * {@literal @}param items Vector of BatchFileItem structs, each containing a path and optional per-file configuration overrides.
+     * Each file can optionally specify a FileExtractionConfig that overrides specific fields from the batch-level
+     * {@code config}. Pass {@code None} for a file to use the batch defaults. Batch-level settings like
+     * {@code max_concurrent_extractions} and {@code use_cache} are always taken from the batch-level {@code config}.
+     * {@literal @}param items Vector of BatchFileItem structs, each containing a path and optional per-file
+     * configuration overrides.
      *
      * {@literal @}param config Batch-level extraction configuration (provides defaults and batch settings)
      *
@@ -152,7 +150,8 @@ public final class Kreuzberg {
      * {@literal @}throws KreuzbergRsException Individual file errors are captured in the result metadata. System errors
      * (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
      */
-    public static List<ExtractionResult> batchExtractFiles(final List<BatchFileItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractFiles(final List<BatchFileItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(items, "items must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.batchExtractFiles(items, config);
@@ -161,21 +160,21 @@ public final class Kreuzberg {
     /**
      * Extract content from multiple byte arrays concurrently.
      *
-     * This function processes multiple byte arrays in parallel, automatically managing
-     * concurrency to prevent resource exhaustion. The concurrency limit can be
-     * configured via {@code ExtractionConfig::max_concurrent_extractions} or defaults
-     * to {@code (num_cpus * 1.5).ceil()}.
+     * This function processes multiple byte arrays in parallel, automatically managing concurrency to prevent resource
+     * exhaustion. The concurrency limit can be configured via {@code ExtractionConfig::max_concurrent_extractions} or
+     * defaults to {@code (num_cpus * 1.5).ceil()}.
      *
-     * Each item can optionally specify a FileExtractionConfig that overrides specific
-     * fields from the batch-level {@code config}. Pass {@code None} as the config to use
-     * the batch-level defaults for that item.
-     * {@literal @}param items Vector of BatchBytesItem structs, each containing content bytes, MIME type, and optional per-item configuration overrides.
+     * Each item can optionally specify a FileExtractionConfig that overrides specific fields from the batch-level
+     * {@code config}. Pass {@code None} as the config to use the batch-level defaults for that item. {@literal @}param
+     * items Vector of BatchBytesItem structs, each containing content bytes, MIME type, and optional per-item
+     * configuration overrides.
      *
      * {@literal @}param config Batch-level extraction configuration
      *
      * {@literal @}return A vector of {@code ExtractionResult} in the same order as the input items.
      */
-    public static List<ExtractionResult> batchExtractBytes(final List<BatchBytesItem> items, final ExtractionConfig config) throws KreuzbergRsException {
+    public static List<ExtractionResult> batchExtractBytes(final List<BatchBytesItem> items,
+            final ExtractionConfig config) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(items, "items must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.batchExtractBytes(items, config);
@@ -184,16 +183,16 @@ public final class Kreuzberg {
     /**
      * Detect MIME type from raw file bytes.
      *
-     * Uses magic byte signatures to detect file type from content.
-     * Falls back to {@code infer} crate for comprehensive detection.
+     * Uses magic byte signatures to detect file type from content. Falls back to {@code infer} crate for comprehensive
+     * detection.
      *
-     * For ZIP-based files, inspects contents to distinguish Office Open XML
-     * formats (DOCX, XLSX, PPTX) from plain ZIP archives.
-     * {@literal @}param content Raw file bytes
+     * For ZIP-based files, inspects contents to distinguish Office Open XML formats (DOCX, XLSX, PPTX) from plain ZIP
+     * archives. {@literal @}param content Raw file bytes
      *
      * {@literal @}return The detected MIME type string.
      *
-     * {@literal @}throws KreuzbergRsException Returns {@code KreuzbergError::UnsupportedFormat} if MIME type cannot be determined.
+     * {@literal @}throws KreuzbergRsException Returns {@code KreuzbergError::UnsupportedFormat} if MIME type cannot be
+     * determined.
      */
     public static String detectMimeTypeFromBytes(final byte[] content) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(content, "content must not be null");
@@ -203,8 +202,8 @@ public final class Kreuzberg {
     /**
      * Get file extensions for a given MIME type.
      *
-     * Returns all known file extensions that map to the specified MIME type.
-     * {@literal @}param mime_type The MIME type to look up
+     * Returns all known file extensions that map to the specified MIME type. {@literal @}param mime_type The MIME type
+     * to look up
      *
      * {@literal @}return A vector of file extensions (without leading dot) for the MIME type.
      */
@@ -223,8 +222,8 @@ public final class Kreuzberg {
     /**
      * List all registered OCR backends.
      *
-     * Returns the names of all OCR backends currently registered in the global registry.
-     * {@literal @}return A vector of OCR backend names.
+     * Returns the names of all OCR backends currently registered in the global registry. {@literal @}return A vector of
+     * OCR backend names.
      */
     public static List<String> listOcrBackends() throws KreuzbergRsException {
         return KreuzbergRs.listOcrBackends();
@@ -233,9 +232,8 @@ public final class Kreuzberg {
     /**
      * Clear all OCR backends from the global registry.
      *
-     * Removes all OCR backends and calls their {@code shutdown()} methods.
-     * {@literal @}return - {@code Ok(())} if all backends were cleared successfully
-     * - {@code Err(...)} if any shutdown method failed
+     * Removes all OCR backends and calls their {@code shutdown()} methods. {@literal @}return - {@code Ok(())} if all
+     * backends were cleared successfully - {@code Err(...)} if any shutdown method failed
      */
     public static void clearOcrBackends() throws KreuzbergRsException {
         KreuzbergRs.clearOcrBackends();
@@ -244,10 +242,9 @@ public final class Kreuzberg {
     /**
      * List all registered post-processor names.
      *
-     * Returns a vector of all post-processor names currently registered in the
-     * global registry.
-     * {@literal @}return - {@code Ok(Vec&lt;String&gt;)} - Vector of post-processor names
-     * - {@code Err(...)} if the registry lock is poisoned
+     * Returns a vector of all post-processor names currently registered in the global registry. {@literal @}return -
+     * {@code Ok(Vec&lt;String&gt;)} - Vector of post-processor names - {@code Err(...)} if the registry lock is
+     * poisoned
      */
     public static List<String> listPostProcessors() throws KreuzbergRsException {
         return KreuzbergRs.listPostProcessors();
@@ -277,20 +274,20 @@ public final class Kreuzberg {
     /**
      * Generate embeddings asynchronously for a list of text strings.
      *
-     * This is the async counterpart to embed_texts. It offloads the blocking
-     * ONNX inference work to a dedicated blocking thread pool via Tokio's
-     * {@code spawn_blocking}, keeping the async executor free.
+     * This is the async counterpart to embed_texts. It offloads the blocking ONNX inference work to a dedicated
+     * blocking thread pool via Tokio's {@code spawn_blocking}, keeping the async executor free.
      *
-     * Returns one embedding vector per input text in the same order.
-     * {@literal @}param texts Vec of strings to embed (owned, sent to blocking thread)
+     * Returns one embedding vector per input text in the same order. {@literal @}param texts Vec of strings to embed
+     * (owned, sent to blocking thread)
      *
      * {@literal @}param config Embedding configuration specifying model, batch size, and normalization
      *
-     * {@literal @}throws KreuzbergRsException - {@code KreuzbergError::MissingDependency} if ONNX Runtime is not installed
-     * - {@code KreuzbergError::Embedding} if the preset name is unknown, model download fails,
-     *   or the blocking inference task panics
+     * {@literal @}throws KreuzbergRsException - {@code KreuzbergError::MissingDependency} if ONNX Runtime is not
+     * installed - {@code KreuzbergError::Embedding} if the preset name is unknown, model download fails, or the
+     * blocking inference task panics
      */
-    public static List<List<Float>> embedTextsAsync(final List<String> texts, final EmbeddingConfig config) throws KreuzbergRsException {
+    public static List<List<Float>> embedTextsAsync(final List<String> texts, final EmbeddingConfig config)
+            throws KreuzbergRsException {
         java.util.Objects.requireNonNull(texts, "texts must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.embedTextsAsync(texts, config);
@@ -299,9 +296,8 @@ public final class Kreuzberg {
     /**
      * Render a single PDF page to PNG bytes.
      *
-     * Returns raw PNG-encoded bytes for the specified page at the given DPI.
-     * Uses pdf_oxide with tiny-skia for pure-Rust rendering.
-     * {@literal @}param pdf_bytes Raw PDF file bytes
+     * Returns raw PNG-encoded bytes for the specified page at the given DPI. Uses pdf_oxide with tiny-skia for
+     * pure-Rust rendering. {@literal @}param pdf_bytes Raw PDF file bytes
      *
      * {@literal @}param page_index Zero-based page index
      *
@@ -309,10 +305,11 @@ public final class Kreuzberg {
      *
      * {@literal @}param password Optional password for encrypted PDFs
      *
-     * {@literal @}throws KreuzbergRsException Returns {@code KreuzbergError::Parsing} if the PDF cannot be opened, authenticated,
-     * or rendered, or if {@code page_index} is out of range.
+     * {@literal @}throws KreuzbergRsException Returns {@code KreuzbergError::Parsing} if the PDF cannot be opened,
+     * authenticated, or rendered, or if {@code page_index} is out of range.
      */
-    public static byte[] renderPdfPageToPng(final byte[] pdfBytes, final long pageIndex, final Integer dpi, final String password) throws KreuzbergRsException {
+    public static byte[] renderPdfPageToPng(final byte[] pdfBytes, final long pageIndex, final Integer dpi,
+            final String password) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(pdfBytes, "pdfBytes must not be null");
         java.util.Objects.requireNonNull(pageIndex, "pageIndex must not be null");
         return KreuzbergRs.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password);
@@ -325,8 +322,8 @@ public final class Kreuzberg {
     /**
      * Detect the MIME type of a file at the given path.
      *
-     * Uses the file extension and optionally the file content to determine the MIME type.
-     * Set {@code check_exists} to {@code true} to verify the file exists before detection.
+     * Uses the file extension and optionally the file content to determine the MIME type. Set {@code check_exists} to
+     * {@code true} to verify the file exists before detection.
      */
     public static String detectMimeType(final String path, final boolean checkExists) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(path, "path must not be null");
@@ -339,7 +336,8 @@ public final class Kreuzberg {
      *
      * Returns a 2D vector where each inner vector is the embedding for the corresponding text.
      */
-    public static List<List<Float>> embedTexts(final List<String> texts, final EmbeddingConfig config) throws KreuzbergRsException {
+    public static List<List<Float>> embedTexts(final List<String> texts, final EmbeddingConfig config)
+            throws KreuzbergRsException {
         java.util.Objects.requireNonNull(texts, "texts must not be null");
         java.util.Objects.requireNonNull(config, "config must not be null");
         return KreuzbergRs.embedTexts(texts, config);
@@ -348,8 +346,8 @@ public final class Kreuzberg {
     /**
      * Get an embedding preset by name.
      *
-     * Returns {@code None} if no preset with the given name exists. Returns an owned
-     * clone so the value is safe to pass across FFI boundaries.
+     * Returns {@code None} if no preset with the given name exists. Returns an owned clone so the value is safe to pass
+     * across FFI boundaries.
      */
     public static EmbeddingPreset getEmbeddingPreset(final String name) throws KreuzbergRsException {
         java.util.Objects.requireNonNull(name, "name must not be null");

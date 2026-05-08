@@ -16,16 +16,9 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
  *
  * # Example (TOML)
  *
- * {@code }{@code toml}
- * [tree_sitter]
- * languages = ["python", "rust"]
- * groups = ["web"]
+ * {@code }{@code toml} [tree_sitter] languages = ["python", "rust"] groups = ["web"]
  *
- * [tree_sitter.process]
- * structure = true
- * comments = true
- * docstrings = true
- * {@code }{@code }
+ * [tree_sitter.process] structure = true comments = true docstrings = true {@code }{@code }
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class TreeSitterConfigBuilder {
@@ -68,12 +61,7 @@ public class TreeSitterConfigBuilder {
 
     /** Builds the TreeSitterConfig instance. */
     public TreeSitterConfig build() {
-        return new TreeSitterConfig(
-            enabled,
-            cacheDir.orElse(null),
-            languages.orElse(null),
-            groups.orElse(null),
-            process
-        );
+        return new TreeSitterConfig(enabled, cacheDir.orElse(null), languages.orElse(null), groups.orElse(null),
+                process);
     }
 }

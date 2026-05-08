@@ -12,8 +12,5 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Footnote in Djot.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record Footnote(
-    String label,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<FormattedBlock> content
-) {
+public record Footnote(String label, @JsonInclude(JsonInclude.Include.NON_NULL) List<FormattedBlock> content) {
 }

@@ -13,11 +13,6 @@ import org.jspecify.annotations.Nullable;
  * Header/heading element metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record HeaderMetadata(
-    byte level,
-    String text,
-    @Nullable String id,
-    long depth,
-    @JsonProperty("html_offset") long htmlOffset
-) {
+public record HeaderMetadata(byte level, String text, @Nullable String id, long depth,
+        @JsonProperty("html_offset") long htmlOffset) {
 }

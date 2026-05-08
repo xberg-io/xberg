@@ -11,9 +11,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * A URI extracted from a document.
  *
- * Represents any link, reference, or resource pointer found during extraction.
- * The {@code kind} field classifies the URI semantically, while {@code label} carries
- * optional human-readable display text.
+ * Represents any link, reference, or resource pointer found during extraction. The {@code kind} field classifies the
+ * URI semantically, while {@code label} carries optional human-readable display text.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 public record Uri(String url, @Nullable String label, @Nullable Integer page, UriKind kind) {

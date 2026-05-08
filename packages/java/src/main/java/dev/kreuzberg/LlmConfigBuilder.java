@@ -11,8 +11,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Configuration for an LLM provider/model via liter-llm.
  *
- * Each feature (VLM OCR, VLM embeddings, structured extraction) carries
- * its own {@code LlmConfig}, allowing different providers per feature.
+ * Each feature (VLM OCR, VLM embeddings, structured extraction) carries its own {@code LlmConfig}, allowing different
+ * providers per feature.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class LlmConfigBuilder {
@@ -69,14 +69,7 @@ public class LlmConfigBuilder {
 
     /** Builds the LlmConfig instance. */
     public LlmConfig build() {
-        return new LlmConfig(
-            model,
-            apiKey.orElse(null),
-            baseUrl.orElse(null),
-            timeoutSecs.orElse(null),
-            maxRetries.orElse(null),
-            temperature.orElse(null),
-            maxTokens.orElse(null)
-        );
+        return new LlmConfig(model, apiKey.orElse(null), baseUrl.orElse(null), timeoutSecs.orElse(null),
+                maxRetries.orElse(null), temperature.orElse(null), maxTokens.orElse(null));
     }
 }

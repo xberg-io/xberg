@@ -14,15 +14,13 @@ import org.jspecify.annotations.Nullable;
 /**
  * Excel/spreadsheet format metadata.
  *
- * Identifies the document as a spreadsheet source via the {@code FormatMetadata::Excel}
- * discriminant. Sheet count and sheet names are stored inside this struct.
+ * Identifies the document as a spreadsheet source via the {@code FormatMetadata::Excel} discriminant. Sheet count and
+ * sheet names are stored inside this struct.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ExcelMetadataBuilder.class)
-public record ExcelMetadata(
-    @Nullable @JsonProperty("sheet_count") Long sheetCount,
-    @Nullable @JsonProperty("sheet_names") List<String> sheetNames
-) {
+public record ExcelMetadata(@Nullable @JsonProperty("sheet_count") Long sheetCount,
+        @Nullable @JsonProperty("sheet_names") List<String> sheetNames) {
     public static ExcelMetadataBuilder builder() {
         return new ExcelMetadataBuilder();
     }

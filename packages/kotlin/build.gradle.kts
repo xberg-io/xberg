@@ -21,6 +21,8 @@ dependencies {
     api("com.fasterxml.jackson.core:jackson-annotations:2.18.2")
     api("com.fasterxml.jackson.core:jackson-databind:2.18.2")
     api("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.18.2")
+    // jspecify nullness annotations referenced by alef-emitted Java records.
+    api("org.jspecify:jspecify:1.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.3.21")
     testImplementation("junit:junit:4.13.2")

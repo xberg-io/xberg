@@ -11,8 +11,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Confidence scores for an OCR element.
  *
- * Separates detection confidence (how confident that text exists at this location)
- * from recognition confidence (how confident about the actual text content).
+ * Separates detection confidence (how confident that text exists at this location) from recognition confidence (how
+ * confident about the actual text content).
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class OcrConfidenceBuilder {
@@ -34,9 +34,6 @@ public class OcrConfidenceBuilder {
 
     /** Builds the OcrConfidence instance. */
     public OcrConfidence build() {
-        return new OcrConfidence(
-            detection.orElse(null),
-            recognition
-        );
+        return new OcrConfidence(detection.orElse(null), recognition);
     }
 }

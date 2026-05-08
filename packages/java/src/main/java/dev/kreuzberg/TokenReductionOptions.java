@@ -14,10 +14,8 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TokenReductionOptionsBuilder.class)
-public record TokenReductionOptions(
-    String mode,
-    @JsonProperty("preserve_important_words") boolean preserveImportantWords
-) {
+public record TokenReductionOptions(String mode,
+        @JsonProperty("preserve_important_words") boolean preserveImportantWords) {
     public static TokenReductionOptionsBuilder builder() {
         return new TokenReductionOptionsBuilder();
     }

@@ -12,25 +12,21 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 /**
  * Image preprocessing configuration for OCR.
  *
- * These settings control how images are preprocessed before OCR to improve
- * text recognition quality. Different preprocessing strategies work better
- * for different document types.
+ * These settings control how images are preprocessed before OCR to improve text recognition quality. Different
+ * preprocessing strategies work better for different document types.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ImagePreprocessingConfigBuilder.class)
-public record ImagePreprocessingConfig(
-    @JsonProperty("target_dpi") int targetDpi,
-    @JsonProperty("auto_rotate") boolean autoRotate,
-    boolean deskew,
-    boolean denoise,
-    @JsonProperty("contrast_enhance") boolean contrastEnhance,
-    @JsonProperty("binarization_method") String binarizationMethod,
-    @JsonProperty("invert_colors") boolean invertColors
-) {
+public record ImagePreprocessingConfig(@JsonProperty("target_dpi") int targetDpi,
+        @JsonProperty("auto_rotate") boolean autoRotate, boolean deskew, boolean denoise,
+        @JsonProperty("contrast_enhance") boolean contrastEnhance,
+        @JsonProperty("binarization_method") String binarizationMethod,
+        @JsonProperty("invert_colors") boolean invertColors) {
     public static ImagePreprocessingConfigBuilder builder() {
         return new ImagePreprocessingConfigBuilder();
     }
-    public ImagePreprocessingConfig{
-        if (targetDpi == 0) targetDpi = 300;
+    public ImagePreprocessingConfig {
+        if (targetDpi == 0)
+            targetDpi = 300;
     }
 }

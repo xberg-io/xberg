@@ -125,22 +125,9 @@ public class PptxAppPropertiesBuilder {
 
     /** Builds the PptxAppProperties instance. */
     public PptxAppProperties build() {
-        return new PptxAppProperties(
-            application.orElse(null),
-            appVersion.orElse(null),
-            totalTime.orElse(null),
-            company.orElse(null),
-            docSecurity.orElse(null),
-            scaleCrop.orElse(null),
-            linksUpToDate.orElse(null),
-            sharedDoc.orElse(null),
-            hyperlinksChanged.orElse(null),
-            slides.orElse(null),
-            notes.orElse(null),
-            hiddenSlides.orElse(null),
-            multimediaClips.orElse(null),
-            presentationFormat.orElse(null),
-            slideTitles
-        );
+        return new PptxAppProperties(application.orElse(null), appVersion.orElse(null), totalTime.orElse(null),
+                company.orElse(null), docSecurity.orElse(null), scaleCrop.orElse(null), linksUpToDate.orElse(null),
+                sharedDoc.orElse(null), hyperlinksChanged.orElse(null), slides.orElse(null), notes.orElse(null),
+                hiddenSlides.orElse(null), multimediaClips.orElse(null), presentationFormat.orElse(null), slideTitles);
     }
 }

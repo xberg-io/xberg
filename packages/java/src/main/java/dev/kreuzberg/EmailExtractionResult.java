@@ -14,22 +14,16 @@ import org.jspecify.annotations.Nullable;
 /**
  * Email extraction result.
  *
- * Complete representation of an extracted email message (.eml or .msg)
- * including headers, body content, and attachments.
+ * Complete representation of an extracted email message (.eml or .msg) including headers, body content, and
+ * attachments.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record EmailExtractionResult(
-    @Nullable String subject,
-    @Nullable @JsonProperty("from_email") String fromEmail,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("to_emails") List<String> toEmails,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("cc_emails") List<String> ccEmails,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("bcc_emails") List<String> bccEmails,
-    @Nullable String date,
-    @Nullable @JsonProperty("message_id") String messageId,
-    @Nullable @JsonProperty("plain_text") String plainText,
-    @Nullable @JsonProperty("html_content") String htmlContent,
-    String content,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<EmailAttachment> attachments,
-    Map<String, String> metadata
-) {
+public record EmailExtractionResult(@Nullable String subject, @Nullable @JsonProperty("from_email") String fromEmail,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("to_emails") List<String> toEmails,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("cc_emails") List<String> ccEmails,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("bcc_emails") List<String> bccEmails,
+        @Nullable String date, @Nullable @JsonProperty("message_id") String messageId,
+        @Nullable @JsonProperty("plain_text") String plainText,
+        @Nullable @JsonProperty("html_content") String htmlContent, String content,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<EmailAttachment> attachments, Map<String, String> metadata) {
 }

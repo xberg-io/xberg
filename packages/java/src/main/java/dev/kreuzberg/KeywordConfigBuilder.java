@@ -67,14 +67,7 @@ public class KeywordConfigBuilder {
 
     /** Builds the KeywordConfig instance. */
     public KeywordConfig build() {
-        return new KeywordConfig(
-            algorithm,
-            maxKeywords,
-            minScore,
-            ngramRange,
-            language.orElse(null),
-            yakeParams.orElse(null),
-            rakeParams.orElse(null)
-        );
+        return new KeywordConfig(algorithm, maxKeywords, minScore, ngramRange, language.orElse(null),
+                yakeParams.orElse(null), rakeParams.orElse(null));
     }
 }

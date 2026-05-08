@@ -12,27 +12,18 @@ import org.jspecify.annotations.Nullable;
 /**
  * Extracted image from a document.
  *
- * Contains raw image data, metadata, and optional nested OCR results.
- * Raw bytes allow cross-language compatibility - users can convert to
- * PIL.Image (Python), Sharp (Node.js), or other formats as needed.
+ * Contains raw image data, metadata, and optional nested OCR results. Raw bytes allow cross-language compatibility -
+ * users can convert to PIL.Image (Python), Sharp (Node.js), or other formats as needed.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ExtractedImage(
-    byte[] data,
-    String format,
-    @JsonProperty("image_index") long imageIndex,
-    @Nullable @JsonProperty("page_number") Long pageNumber,
-    @Nullable Integer width,
-    @Nullable Integer height,
-    @Nullable String colorspace,
-    @Nullable @JsonProperty("bits_per_component") Integer bitsPerComponent,
-    @JsonProperty("is_mask") boolean isMask,
-    @Nullable String description,
-    @Nullable @JsonProperty("ocr_result") ExtractionResult ocrResult,
-    @Nullable @JsonProperty("bounding_box") String boundingBox,
-    @Nullable @JsonProperty("source_path") String sourcePath,
-    @Nullable @JsonProperty("image_kind") ImageKind imageKind,
-    @Nullable @JsonProperty("kind_confidence") Float kindConfidence,
-    @Nullable @JsonProperty("cluster_id") Integer clusterId
-) {
+public record ExtractedImage(byte[] data, String format, @JsonProperty("image_index") long imageIndex,
+        @Nullable @JsonProperty("page_number") Long pageNumber, @Nullable Integer width, @Nullable Integer height,
+        @Nullable String colorspace, @Nullable @JsonProperty("bits_per_component") Integer bitsPerComponent,
+        @JsonProperty("is_mask") boolean isMask, @Nullable String description,
+        @Nullable @JsonProperty("ocr_result") ExtractionResult ocrResult,
+        @Nullable @JsonProperty("bounding_box") String boundingBox,
+        @Nullable @JsonProperty("source_path") String sourcePath,
+        @Nullable @JsonProperty("image_kind") ImageKind imageKind,
+        @Nullable @JsonProperty("kind_confidence") Float kindConfidence,
+        @Nullable @JsonProperty("cluster_id") Integer clusterId) {
 }

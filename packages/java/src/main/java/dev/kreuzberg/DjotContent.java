@@ -12,25 +12,19 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * Comprehensive Djot document structure with semantic preservation.
  *
- * This type captures the full richness of Djot markup, including:
- * - Block-level structures (headings, lists, blockquotes, code blocks, etc.)
- * - Inline formatting (emphasis, strong, highlight, subscript, superscript, etc.)
- * - Attributes (classes, IDs, key-value pairs)
- * - Links, images, footnotes
- * - Math expressions (inline and display)
- * - Tables with full structure
+ * This type captures the full richness of Djot markup, including: - Block-level structures (headings, lists,
+ * blockquotes, code blocks, etc.) - Inline formatting (emphasis, strong, highlight, subscript, superscript, etc.) -
+ * Attributes (classes, IDs, key-value pairs) - Links, images, footnotes - Math expressions (inline and display) -
+ * Tables with full structure
  *
  * Available when the {@code djot} feature is enabled.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record DjotContent(
-    @JsonProperty("plain_text") String plainText,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<FormattedBlock> blocks,
-    Metadata metadata,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<Table> tables,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<DjotImage> images,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<DjotLink> links,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<Footnote> footnotes,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes
-) {
+public record DjotContent(@JsonProperty("plain_text") String plainText,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<FormattedBlock> blocks, Metadata metadata,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<Table> tables,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<DjotImage> images,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<DjotLink> links,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<Footnote> footnotes,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes) {
 }

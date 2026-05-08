@@ -14,15 +14,15 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = RakeParamsBuilder.class)
-public record RakeParams(
-    @JsonProperty("min_word_length") long minWordLength,
-    @JsonProperty("max_words_per_phrase") long maxWordsPerPhrase
-) {
+public record RakeParams(@JsonProperty("min_word_length") long minWordLength,
+        @JsonProperty("max_words_per_phrase") long maxWordsPerPhrase) {
     public static RakeParamsBuilder builder() {
         return new RakeParamsBuilder();
     }
-    public RakeParams{
-        if (minWordLength == 0) minWordLength = 1;
-        if (maxWordsPerPhrase == 0) maxWordsPerPhrase = 3;
+    public RakeParams {
+        if (minWordLength == 0)
+            minWordLength = 1;
+        if (maxWordsPerPhrase == 0)
+            maxWordsPerPhrase = 3;
     }
 }

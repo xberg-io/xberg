@@ -13,35 +13,26 @@ import org.jspecify.annotations.Nullable;
 /**
  * Chunking configuration.
  *
- * Configures text chunking for document content, including chunk size,
- * overlap, trimming behavior, and optional embeddings.
+ * Configures text chunking for document content, including chunk size, overlap, trimming behavior, and optional
+ * embeddings.
  *
- * Use {@code ..Default::default()} when constructing to allow for future field additions:
- * {@code }{@code rust}
- * let config = ChunkingConfig {
- *     max_characters: 500,
- *     ..Default::default()
- * };
- * {@code }{@code }
+ * Use {@code ..Default::default()} when constructing to allow for future field additions: {@code }{@code rust} let
+ * config = ChunkingConfig { max_characters: 500, ..Default::default() }; {@code }{@code }
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ChunkingConfigBuilder.class)
-public record ChunkingConfig(
-    @JsonProperty("max_characters") long maxCharacters,
-    long overlap,
-    boolean trim,
-    @JsonProperty("chunker_type") ChunkerType chunkerType,
-    @Nullable EmbeddingConfig embedding,
-    @Nullable String preset,
-    ChunkSizing sizing,
-    @JsonProperty("prepend_heading_context") boolean prependHeadingContext,
-    @Nullable @JsonProperty("topic_threshold") Float topicThreshold
-) {
+public record ChunkingConfig(@JsonProperty("max_characters") long maxCharacters, long overlap, boolean trim,
+        @JsonProperty("chunker_type") ChunkerType chunkerType, @Nullable EmbeddingConfig embedding,
+        @Nullable String preset, ChunkSizing sizing,
+        @JsonProperty("prepend_heading_context") boolean prependHeadingContext,
+        @Nullable @JsonProperty("topic_threshold") Float topicThreshold) {
     public static ChunkingConfigBuilder builder() {
         return new ChunkingConfigBuilder();
     }
-    public ChunkingConfig{
-        if (maxCharacters == 0) maxCharacters = 1000;
-        if (overlap == 0) overlap = 200;
+    public ChunkingConfig {
+        if (maxCharacters == 0)
+            maxCharacters = 1000;
+        if (overlap == 0)
+            overlap = 200;
     }
 }

@@ -17,17 +17,10 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TreeSitterProcessConfigBuilder.class)
-public record TreeSitterProcessConfig(
-    boolean structure,
-    boolean imports,
-    boolean exports,
-    boolean comments,
-    boolean docstrings,
-    boolean symbols,
-    boolean diagnostics,
-    @Nullable @JsonProperty("chunk_max_size") Long chunkMaxSize,
-    @JsonProperty("content_mode") CodeContentMode contentMode
-) {
+public record TreeSitterProcessConfig(boolean structure, boolean imports, boolean exports, boolean comments,
+        boolean docstrings, boolean symbols, boolean diagnostics,
+        @Nullable @JsonProperty("chunk_max_size") Long chunkMaxSize,
+        @JsonProperty("content_mode") CodeContentMode contentMode) {
     public static TreeSitterProcessConfigBuilder builder() {
         return new TreeSitterProcessConfigBuilder();
     }

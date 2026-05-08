@@ -15,12 +15,7 @@ import org.jspecify.annotations.Nullable;
  * Contains metadata and optionally the content of an email attachment.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record EmailAttachment(
-    @Nullable String name,
-    @Nullable String filename,
-    @Nullable @JsonProperty("mime_type") String mimeType,
-    @Nullable Long size,
-    @JsonProperty("is_image") boolean isImage,
-    @Nullable byte[] data
-) {
+public record EmailAttachment(@Nullable String name, @Nullable String filename,
+        @Nullable @JsonProperty("mime_type") String mimeType, @Nullable Long size,
+        @JsonProperty("is_image") boolean isImage, @Nullable byte[] data) {
 }

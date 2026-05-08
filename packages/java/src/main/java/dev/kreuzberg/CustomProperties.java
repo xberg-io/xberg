@@ -10,8 +10,8 @@ import java.lang.foreign.MemorySegment;
 /**
  * Custom properties from docProps/custom.xml
  *
- * Maps property names to their values. Values are converted to JSON types
- * based on the VT (Variant Type) specified in the XML.
+ * Maps property names to their values. Values are converted to JSON types based on the VT (Variant Type) specified in
+ * the XML.
  */
 public class CustomProperties implements AutoCloseable {
     private final MemorySegment handle;

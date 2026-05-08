@@ -13,8 +13,5 @@ import org.jspecify.annotations.Nullable;
  * MIME type detection response.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record DetectResponse(
-    @JsonProperty("mime_type") String mimeType,
-    @Nullable String filename
-) {
+public record DetectResponse(@JsonProperty("mime_type") String mimeType, @Nullable String filename) {
 }

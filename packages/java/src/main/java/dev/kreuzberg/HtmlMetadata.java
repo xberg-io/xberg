@@ -15,28 +15,23 @@ import org.jspecify.annotations.Nullable;
 /**
  * HTML metadata extracted from HTML documents.
  *
- * Includes document-level metadata, Open Graph data, Twitter Card metadata,
- * and extracted structural elements (headers, links, images, structured data).
+ * Includes document-level metadata, Open Graph data, Twitter Card metadata, and extracted structural elements (headers,
+ * links, images, structured data).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HtmlMetadataBuilder.class)
-public record HtmlMetadata(
-    @Nullable String title,
-    @Nullable String description,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> keywords,
-    @Nullable String author,
-    @Nullable @JsonProperty("canonical_url") String canonicalUrl,
-    @Nullable @JsonProperty("base_href") String baseHref,
-    @Nullable String language,
-    @Nullable @JsonProperty("text_direction") TextDirection textDirection,
-    @JsonProperty("open_graph") Map<String, String> openGraph,
-    @JsonProperty("twitter_card") Map<String, String> twitterCard,
-    @JsonProperty("meta_tags") Map<String, String> metaTags,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<HeaderMetadata> headers,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<LinkMetadata> links,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<ImageMetadataType> images,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("structured_data") List<StructuredData> structuredData
-) {
+public record HtmlMetadata(@Nullable String title, @Nullable String description,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> keywords, @Nullable String author,
+        @Nullable @JsonProperty("canonical_url") String canonicalUrl,
+        @Nullable @JsonProperty("base_href") String baseHref, @Nullable String language,
+        @Nullable @JsonProperty("text_direction") TextDirection textDirection,
+        @JsonProperty("open_graph") Map<String, String> openGraph,
+        @JsonProperty("twitter_card") Map<String, String> twitterCard,
+        @JsonProperty("meta_tags") Map<String, String> metaTags,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<HeaderMetadata> headers,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<LinkMetadata> links,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<ImageMetadataType> images,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("structured_data") List<StructuredData> structuredData) {
     public static HtmlMetadataBuilder builder() {
         return new HtmlMetadataBuilder();
     }

@@ -14,46 +14,35 @@ import org.jspecify.annotations.Nullable;
 /**
  * Main extraction configuration.
  *
- * This struct contains all configuration options for the extraction process.
- * It can be loaded from TOML, YAML, or JSON files, or created programmatically.
+ * This struct contains all configuration options for the extraction process. It can be loaded from TOML, YAML, or JSON
+ * files, or created programmatically.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ExtractionConfigBuilder.class)
-public record ExtractionConfig(
-    @JsonProperty("use_cache") boolean useCache,
-    @JsonProperty("enable_quality_processing") boolean enableQualityProcessing,
-    @Nullable OcrConfig ocr,
-    @JsonProperty("force_ocr") boolean forceOcr,
-    @Nullable @JsonProperty("force_ocr_pages") List<Long> forceOcrPages,
-    @JsonProperty("disable_ocr") boolean disableOcr,
-    @Nullable ChunkingConfig chunking,
-    @Nullable @JsonProperty("content_filter") ContentFilterConfig contentFilter,
-    @Nullable ImageExtractionConfig images,
-    @Nullable @JsonProperty("pdf_options") PdfConfig pdfOptions,
-    @Nullable @JsonProperty("token_reduction") TokenReductionOptions tokenReduction,
-    @Nullable @JsonProperty("language_detection") LanguageDetectionConfig languageDetection,
-    @Nullable PageConfig pages,
-    @Nullable KeywordConfig keywords,
-    @Nullable PostProcessorConfig postprocessor,
-    @Nullable @JsonProperty("html_options") String htmlOptions,
-    @Nullable @JsonProperty("html_output") HtmlOutputConfig htmlOutput,
-    @Nullable @JsonProperty("extraction_timeout_secs") Long extractionTimeoutSecs,
-    @Nullable @JsonProperty("max_concurrent_extractions") Long maxConcurrentExtractions,
-    @JsonProperty("result_format") ResultFormat resultFormat,
-    @Nullable @JsonProperty("security_limits") SecurityLimits securityLimits,
-    @JsonProperty("output_format") Object outputFormat,
-    @Nullable LayoutDetectionConfig layout,
-    @JsonProperty("include_document_structure") boolean includeDocumentStructure,
-    @Nullable AccelerationConfig acceleration,
-    @Nullable @JsonProperty("cache_namespace") String cacheNamespace,
-    @Nullable @JsonProperty("cache_ttl_secs") Long cacheTtlSecs,
-    @Nullable EmailConfig email,
-    @Nullable String concurrency,
-    @JsonProperty("max_archive_depth") long maxArchiveDepth,
-    @Nullable @JsonProperty("tree_sitter") TreeSitterConfig treeSitter,
-    @Nullable @JsonProperty("structured_extraction") StructuredExtractionConfig structuredExtraction,
-    @Nullable @JsonProperty("cancel_token") String cancelToken
-) {
+public record ExtractionConfig(@JsonProperty("use_cache") boolean useCache,
+        @JsonProperty("enable_quality_processing") boolean enableQualityProcessing, @Nullable OcrConfig ocr,
+        @JsonProperty("force_ocr") boolean forceOcr,
+        @Nullable @JsonProperty("force_ocr_pages") List<Long> forceOcrPages,
+        @JsonProperty("disable_ocr") boolean disableOcr, @Nullable ChunkingConfig chunking,
+        @Nullable @JsonProperty("content_filter") ContentFilterConfig contentFilter,
+        @Nullable ImageExtractionConfig images, @Nullable @JsonProperty("pdf_options") PdfConfig pdfOptions,
+        @Nullable @JsonProperty("token_reduction") TokenReductionOptions tokenReduction,
+        @Nullable @JsonProperty("language_detection") LanguageDetectionConfig languageDetection,
+        @Nullable PageConfig pages, @Nullable KeywordConfig keywords, @Nullable PostProcessorConfig postprocessor,
+        @Nullable @JsonProperty("html_options") String htmlOptions,
+        @Nullable @JsonProperty("html_output") HtmlOutputConfig htmlOutput,
+        @Nullable @JsonProperty("extraction_timeout_secs") Long extractionTimeoutSecs,
+        @Nullable @JsonProperty("max_concurrent_extractions") Long maxConcurrentExtractions,
+        @JsonProperty("result_format") ResultFormat resultFormat,
+        @Nullable @JsonProperty("security_limits") SecurityLimits securityLimits,
+        @JsonProperty("output_format") Object outputFormat, @Nullable LayoutDetectionConfig layout,
+        @JsonProperty("include_document_structure") boolean includeDocumentStructure,
+        @Nullable AccelerationConfig acceleration, @Nullable @JsonProperty("cache_namespace") String cacheNamespace,
+        @Nullable @JsonProperty("cache_ttl_secs") Long cacheTtlSecs, @Nullable EmailConfig email,
+        @Nullable String concurrency, @JsonProperty("max_archive_depth") long maxArchiveDepth,
+        @Nullable @JsonProperty("tree_sitter") TreeSitterConfig treeSitter,
+        @Nullable @JsonProperty("structured_extraction") StructuredExtractionConfig structuredExtraction,
+        @Nullable @JsonProperty("cancel_token") String cancelToken) {
     public static ExtractionConfigBuilder builder() {
         return new ExtractionConfigBuilder();
     }

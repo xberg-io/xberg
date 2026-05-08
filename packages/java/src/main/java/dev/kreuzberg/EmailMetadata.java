@@ -18,15 +18,13 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = EmailMetadataBuilder.class)
-public record EmailMetadata(
-    @Nullable @JsonProperty("from_email") String fromEmail,
-    @Nullable @JsonProperty("from_name") String fromName,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("to_emails") List<String> toEmails,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("cc_emails") List<String> ccEmails,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("bcc_emails") List<String> bccEmails,
-    @Nullable @JsonProperty("message_id") String messageId,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attachments
-) {
+public record EmailMetadata(@Nullable @JsonProperty("from_email") String fromEmail,
+        @Nullable @JsonProperty("from_name") String fromName,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("to_emails") List<String> toEmails,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("cc_emails") List<String> ccEmails,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("bcc_emails") List<String> bccEmails,
+        @Nullable @JsonProperty("message_id") String messageId,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attachments) {
     public static EmailMetadataBuilder builder() {
         return new EmailMetadataBuilder();
     }

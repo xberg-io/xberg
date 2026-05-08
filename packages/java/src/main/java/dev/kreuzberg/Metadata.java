@@ -15,34 +15,24 @@ import org.jspecify.annotations.Nullable;
 /**
  * Extraction result metadata.
  *
- * Contains common fields applicable to all formats, format-specific metadata
- * via a discriminated union, and additional custom fields from postprocessors.
+ * Contains common fields applicable to all formats, format-specific metadata via a discriminated union, and additional
+ * custom fields from postprocessors.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = MetadataBuilder.class)
-public record Metadata(
-    @Nullable String title,
-    @Nullable String subject,
-    @Nullable List<String> authors,
-    @Nullable List<String> keywords,
-    @Nullable String language,
-    @Nullable @JsonProperty("created_at") String createdAt,
-    @Nullable @JsonProperty("modified_at") String modifiedAt,
-    @Nullable @JsonProperty("created_by") String createdBy,
-    @Nullable @JsonProperty("modified_by") String modifiedBy,
-    @Nullable PageStructure pages,
-    @Nullable FormatMetadata format,
-    @Nullable @JsonProperty("image_preprocessing") ImagePreprocessingMetadata imagePreprocessing,
-    @Nullable @JsonProperty("json_schema") Object jsonSchema,
-    @Nullable ErrorMetadata error,
-    @Nullable @JsonProperty("extraction_duration_ms") Long extractionDurationMs,
-    @Nullable String category,
-    @Nullable List<String> tags,
-    @Nullable @JsonProperty("document_version") String documentVersion,
-    @Nullable @JsonProperty("abstract_text") String abstractText,
-    @Nullable @JsonProperty("output_format") String outputFormat,
-    Map<String, Object> additional
-) {
+public record Metadata(@Nullable String title, @Nullable String subject, @Nullable List<String> authors,
+        @Nullable List<String> keywords, @Nullable String language,
+        @Nullable @JsonProperty("created_at") String createdAt,
+        @Nullable @JsonProperty("modified_at") String modifiedAt,
+        @Nullable @JsonProperty("created_by") String createdBy,
+        @Nullable @JsonProperty("modified_by") String modifiedBy, @Nullable PageStructure pages,
+        @Nullable FormatMetadata format,
+        @Nullable @JsonProperty("image_preprocessing") ImagePreprocessingMetadata imagePreprocessing,
+        @Nullable @JsonProperty("json_schema") Object jsonSchema, @Nullable ErrorMetadata error,
+        @Nullable @JsonProperty("extraction_duration_ms") Long extractionDurationMs, @Nullable String category,
+        @Nullable List<String> tags, @Nullable @JsonProperty("document_version") String documentVersion,
+        @Nullable @JsonProperty("abstract_text") String abstractText,
+        @Nullable @JsonProperty("output_format") String outputFormat, Map<String, Object> additional) {
     public static MetadataBuilder builder() {
         return new MetadataBuilder();
     }

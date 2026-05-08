@@ -16,10 +16,7 @@ import org.jspecify.annotations.Nullable;
  * Represents a table structure recognized during OCR processing.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record OcrTable(
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<List<String>> cells,
-    String markdown,
-    @JsonProperty("page_number") long pageNumber,
-    @Nullable @JsonProperty("bounding_box") OcrTableBoundingBox boundingBox
-) {
+public record OcrTable(@JsonInclude(JsonInclude.Include.NON_NULL) List<List<String>> cells, String markdown,
+        @JsonProperty("page_number") long pageNumber,
+        @Nullable @JsonProperty("bounding_box") OcrTableBoundingBox boundingBox) {
 }

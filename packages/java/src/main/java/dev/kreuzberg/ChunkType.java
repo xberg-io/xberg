@@ -11,9 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Semantic structural classification of a text chunk.
  *
- * Assigned by the heuristic classifier in {@code chunking::classifier}.
- * Defaults to {@code Unknown} when no rule matches.
- * Designed to be extended in future versions without breaking changes.
+ * Assigned by the heuristic classifier in {@code chunking::classifier}. Defaults to {@code Unknown} when no rule
+ * matches. Designed to be extended in future versions without breaking changes.
  */
 public enum ChunkType {
     /** Section heading or document title. */

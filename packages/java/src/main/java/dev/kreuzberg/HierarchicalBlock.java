@@ -13,14 +13,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * A text block with hierarchy level assignment.
  *
- * Represents a block of text with semantic heading information extracted from
- * font size clustering and hierarchical analysis.
+ * Represents a block of text with semantic heading information extracted from font size clustering and hierarchical
+ * analysis.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record HierarchicalBlock(
-    String text,
-    @JsonProperty("font_size") float fontSize,
-    String level,
-    @Nullable List<Float> bbox
-) {
+public record HierarchicalBlock(String text, @JsonProperty("font_size") float fontSize, String level,
+        @Nullable List<Float> bbox) {
 }

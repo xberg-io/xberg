@@ -14,12 +14,7 @@ import org.jspecify.annotations.Nullable;
  * Image element metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ImageMetadataType(
-    String src,
-    @Nullable String alt,
-    @Nullable String title,
-    @Nullable List<Integer> dimensions,
-    @JsonProperty("image_type") ImageType imageType,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes
-) {
+public record ImageMetadataType(String src, @Nullable String alt, @Nullable String title,
+        @Nullable List<Integer> dimensions, @JsonProperty("image_type") ImageType imageType,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes) {
 }

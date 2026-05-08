@@ -12,8 +12,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Text/Markdown metadata.
  *
- * Extracted from plain text and Markdown files. Includes word counts and,
- * for Markdown, structural elements like headers and links.
+ * Extracted from plain text and Markdown files. Includes word counts and, for Markdown, structural elements like
+ * headers and links.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class TextMetadataBuilder {
@@ -63,13 +63,7 @@ public class TextMetadataBuilder {
 
     /** Builds the TextMetadata instance. */
     public TextMetadata build() {
-        return new TextMetadata(
-            lineCount,
-            wordCount,
-            characterCount,
-            headers.orElse(null),
-            links.orElse(null),
-            codeBlocks.orElse(null)
-        );
+        return new TextMetadata(lineCount, wordCount, characterCount, headers.orElse(null), links.orElse(null),
+                codeBlocks.orElse(null));
     }
 }

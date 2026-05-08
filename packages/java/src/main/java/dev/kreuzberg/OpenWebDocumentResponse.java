@@ -14,8 +14,5 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Returned by {@code PUT /process} for the OpenWebUI external document loader.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record OpenWebDocumentResponse(
-    @JsonProperty("page_content") String pageContent,
-    String metadata
-) {
+public record OpenWebDocumentResponse(@JsonProperty("page_content") String pageContent, String metadata) {
 }

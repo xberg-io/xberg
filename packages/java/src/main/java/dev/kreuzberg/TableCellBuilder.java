@@ -46,11 +46,6 @@ public class TableCellBuilder {
 
     /** Builds the TableCell instance. */
     public TableCell build() {
-        return new TableCell(
-            content,
-            rowSpan,
-            colSpan,
-            isHeader
-        );
+        return new TableCell(content, rowSpan, colSpan, isHeader);
     }
 }

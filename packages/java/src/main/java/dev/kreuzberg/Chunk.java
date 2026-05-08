@@ -13,15 +13,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * A text chunk with optional embedding and metadata.
  *
- * Chunks are created when chunking is enabled in {@code ExtractionConfig}. Each chunk
- * contains the text content, optional embedding vector (if embedding generation
- * is configured), and metadata about its position in the document.
+ * Chunks are created when chunking is enabled in {@code ExtractionConfig}. Each chunk contains the text content,
+ * optional embedding vector (if embedding generation is configured), and metadata about its position in the document.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record Chunk(
-    String content,
-    @JsonProperty("chunk_type") ChunkType chunkType,
-    @Nullable List<Float> embedding,
-    ChunkMetadata metadata
-) {
+public record Chunk(String content, @JsonProperty("chunk_type") ChunkType chunkType, @Nullable List<Float> embedding,
+        ChunkMetadata metadata) {
 }

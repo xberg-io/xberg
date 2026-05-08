@@ -13,22 +13,19 @@ import org.jspecify.annotations.Nullable;
 /**
  * Image preprocessing metadata.
  *
- * Tracks the transformations applied to an image during OCR preprocessing,
- * including DPI normalization, resizing, and resampling.
+ * Tracks the transformations applied to an image during OCR preprocessing, including DPI normalization, resizing, and
+ * resampling.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 public record ImagePreprocessingMetadata(
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("original_dimensions") List<Long> originalDimensions,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("original_dpi") List<Double> originalDpi,
-    @JsonProperty("target_dpi") int targetDpi,
-    @JsonProperty("scale_factor") double scaleFactor,
-    @JsonProperty("auto_adjusted") boolean autoAdjusted,
-    @JsonProperty("final_dpi") int finalDpi,
-    @Nullable @JsonProperty("new_dimensions") List<Long> newDimensions,
-    @JsonProperty("resample_method") String resampleMethod,
-    @JsonProperty("dimension_clamped") boolean dimensionClamped,
-    @Nullable @JsonProperty("calculated_dpi") Integer calculatedDpi,
-    @JsonProperty("skipped_resize") boolean skippedResize,
-    @Nullable @JsonProperty("resize_error") String resizeError
-) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("original_dimensions") List<Long> originalDimensions,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("original_dpi") List<Double> originalDpi,
+        @JsonProperty("target_dpi") int targetDpi, @JsonProperty("scale_factor") double scaleFactor,
+        @JsonProperty("auto_adjusted") boolean autoAdjusted, @JsonProperty("final_dpi") int finalDpi,
+        @Nullable @JsonProperty("new_dimensions") List<Long> newDimensions,
+        @JsonProperty("resample_method") String resampleMethod,
+        @JsonProperty("dimension_clamped") boolean dimensionClamped,
+        @Nullable @JsonProperty("calculated_dpi") Integer calculatedDpi,
+        @JsonProperty("skipped_resize") boolean skippedResize,
+        @Nullable @JsonProperty("resize_error") String resizeError) {
 }

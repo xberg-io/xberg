@@ -18,32 +18,22 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ExtractionResultBuilder.class)
-public record ExtractionResult(
-    String content,
-    @JsonProperty("mime_type") String mimeType,
-    Metadata metadata,
-    @Nullable @JsonProperty("extraction_method") ExtractionMethod extractionMethod,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<Table> tables,
-    @Nullable @JsonProperty("detected_languages") List<String> detectedLanguages,
-    @Nullable List<Chunk> chunks,
-    @Nullable List<ExtractedImage> images,
-    @Nullable List<PageContent> pages,
-    @Nullable List<Element> elements,
-    @Nullable @JsonProperty("djot_content") DjotContent djotContent,
-    @Nullable @JsonProperty("ocr_elements") List<OcrElement> ocrElements,
-    @Nullable DocumentStructure document,
-    @Nullable @JsonProperty("extracted_keywords") List<Keyword> extractedKeywords,
-    @Nullable @JsonProperty("quality_score") Double qualityScore,
-    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("processing_warnings") List<ProcessingWarning> processingWarnings,
-    @Nullable List<PdfAnnotation> annotations,
-    @Nullable List<ArchiveEntry> children,
-    @Nullable List<Uri> uris,
-    @Nullable @JsonProperty("structured_output") Object structuredOutput,
-    @Nullable @JsonProperty("code_intelligence") String codeIntelligence,
-    @Nullable @JsonProperty("llm_usage") List<LlmUsage> llmUsage,
-    @Nullable @JsonProperty("formatted_content") String formattedContent,
-    @Nullable @JsonProperty("ocr_internal_document") String ocrInternalDocument
-) {
+public record ExtractionResult(String content, @JsonProperty("mime_type") String mimeType, Metadata metadata,
+        @Nullable @JsonProperty("extraction_method") ExtractionMethod extractionMethod,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<Table> tables,
+        @Nullable @JsonProperty("detected_languages") List<String> detectedLanguages, @Nullable List<Chunk> chunks,
+        @Nullable List<ExtractedImage> images, @Nullable List<PageContent> pages, @Nullable List<Element> elements,
+        @Nullable @JsonProperty("djot_content") DjotContent djotContent,
+        @Nullable @JsonProperty("ocr_elements") List<OcrElement> ocrElements, @Nullable DocumentStructure document,
+        @Nullable @JsonProperty("extracted_keywords") List<Keyword> extractedKeywords,
+        @Nullable @JsonProperty("quality_score") Double qualityScore,
+        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("processing_warnings") List<ProcessingWarning> processingWarnings,
+        @Nullable List<PdfAnnotation> annotations, @Nullable List<ArchiveEntry> children, @Nullable List<Uri> uris,
+        @Nullable @JsonProperty("structured_output") Object structuredOutput,
+        @Nullable @JsonProperty("code_intelligence") String codeIntelligence,
+        @Nullable @JsonProperty("llm_usage") List<LlmUsage> llmUsage,
+        @Nullable @JsonProperty("formatted_content") String formattedContent,
+        @Nullable @JsonProperty("ocr_internal_document") String ocrInternalDocument) {
     public static ExtractionResultBuilder builder() {
         return new ExtractionResultBuilder();
     }

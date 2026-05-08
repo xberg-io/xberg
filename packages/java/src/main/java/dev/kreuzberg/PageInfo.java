@@ -13,18 +13,11 @@ import org.jspecify.annotations.Nullable;
 /**
  * Metadata for individual page/slide/sheet.
  *
- * Captures per-page information including dimensions, content counts,
- * and visibility state (for presentations).
+ * Captures per-page information including dimensions, content counts, and visibility state (for presentations).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record PageInfo(
-    long number,
-    @Nullable String title,
-    @Nullable List<Double> dimensions,
-    @Nullable @JsonProperty("image_count") Long imageCount,
-    @Nullable @JsonProperty("table_count") Long tableCount,
-    @Nullable Boolean hidden,
-    @Nullable @JsonProperty("is_blank") Boolean isBlank,
-    @JsonProperty("has_vector_graphics") boolean hasVectorGraphics
-) {
+public record PageInfo(long number, @Nullable String title, @Nullable List<Double> dimensions,
+        @Nullable @JsonProperty("image_count") Long imageCount, @Nullable @JsonProperty("table_count") Long tableCount,
+        @Nullable Boolean hidden, @Nullable @JsonProperty("is_blank") Boolean isBlank,
+        @JsonProperty("has_vector_graphics") boolean hasVectorGraphics) {
 }

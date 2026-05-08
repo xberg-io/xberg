@@ -34,10 +34,6 @@ public class CharShapeBuilder {
 
     /** Builds the CharShape instance. */
     public CharShape build() {
-        return new CharShape(
-            bold,
-            italic,
-            underline
-        );
+        return new CharShape(bold, italic, underline);
     }
 }

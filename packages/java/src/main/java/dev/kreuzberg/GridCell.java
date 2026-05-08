@@ -13,13 +13,6 @@ import org.jspecify.annotations.Nullable;
  * Individual grid cell with position and span metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record GridCell(
-    String content,
-    int row,
-    int col,
-    @JsonProperty("row_span") int rowSpan,
-    @JsonProperty("col_span") int colSpan,
-    @JsonProperty("is_header") boolean isHeader,
-    @Nullable String bbox
-) {
+public record GridCell(String content, int row, int col, @JsonProperty("row_span") int rowSpan,
+        @JsonProperty("col_span") int colSpan, @JsonProperty("is_header") boolean isHeader, @Nullable String bbox) {
 }

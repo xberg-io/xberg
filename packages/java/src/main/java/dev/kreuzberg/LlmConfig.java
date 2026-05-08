@@ -13,20 +13,15 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for an LLM provider/model via liter-llm.
  *
- * Each feature (VLM OCR, VLM embeddings, structured extraction) carries
- * its own {@code LlmConfig}, allowing different providers per feature.
+ * Each feature (VLM OCR, VLM embeddings, structured extraction) carries its own {@code LlmConfig}, allowing different
+ * providers per feature.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = LlmConfigBuilder.class)
-public record LlmConfig(
-    String model,
-    @Nullable @JsonProperty("api_key") String apiKey,
-    @Nullable @JsonProperty("base_url") String baseUrl,
-    @Nullable @JsonProperty("timeout_secs") Long timeoutSecs,
-    @Nullable @JsonProperty("max_retries") Integer maxRetries,
-    @Nullable Double temperature,
-    @Nullable @JsonProperty("max_tokens") Long maxTokens
-) {
+public record LlmConfig(String model, @Nullable @JsonProperty("api_key") String apiKey,
+        @Nullable @JsonProperty("base_url") String baseUrl, @Nullable @JsonProperty("timeout_secs") Long timeoutSecs,
+        @Nullable @JsonProperty("max_retries") Integer maxRetries, @Nullable Double temperature,
+        @Nullable @JsonProperty("max_tokens") Long maxTokens) {
     public static LlmConfigBuilder builder() {
         return new LlmConfigBuilder();
     }

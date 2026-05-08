@@ -12,15 +12,8 @@ import org.jspecify.annotations.Nullable;
  * Page margins converted to points (1/72 inch).
  */
 @JsonDeserialize(builder = PageMarginsPointsBuilder.class)
-public record PageMarginsPoints(
-    @Nullable Double top,
-    @Nullable Double right,
-    @Nullable Double bottom,
-    @Nullable Double left,
-    @Nullable Double header,
-    @Nullable Double footer,
-    @Nullable Double gutter
-) {
+public record PageMarginsPoints(@Nullable Double top, @Nullable Double right, @Nullable Double bottom,
+        @Nullable Double left, @Nullable Double header, @Nullable Double footer, @Nullable Double gutter) {
     public static PageMarginsPointsBuilder builder() {
         return new PageMarginsPointsBuilder();
     }

@@ -27,9 +27,6 @@ public class HwpImageBuilder {
 
     /** Builds the HwpImage instance. */
     public HwpImage build() {
-        return new HwpImage(
-            name,
-            data
-        );
+        return new HwpImage(name, data);
     }
 }

@@ -13,9 +13,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Pre-computed table markdown for a table detection region.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record RecognizedTable(
-    @JsonProperty("detection_bbox") BBox detectionBbox,
-    @JsonInclude(JsonInclude.Include.NON_NULL) List<List<String>> cells,
-    String markdown
-) {
+public record RecognizedTable(@JsonProperty("detection_bbox") BBox detectionBbox,
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<List<String>> cells, String markdown) {
 }

@@ -11,16 +11,14 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * API server configuration.
  *
- * This struct holds all configuration options for the Kreuzberg API server,
- * including host/port settings, CORS configuration, and upload limits.
+ * This struct holds all configuration options for the Kreuzberg API server, including host/port settings, CORS
+ * configuration, and upload limits.
  *
  * # Defaults
  *
- * - {@code host}: "127.0.0.1" (localhost only)
- * - {@code port}: 8000
- * - {@code cors_origins}: empty vector (allows all origins)
- * - {@code max_request_body_bytes}: 104_857_600 (100 MB)
- * - {@code max_multipart_field_bytes}: 104_857_600 (100 MB)
+ * - {@code host}: "127.0.0.1" (localhost only) - {@code port}: 8000 - {@code cors_origins}: empty vector (allows all
+ * origins) - {@code max_request_body_bytes}: 104_857_600 (100 MB) - {@code max_multipart_field_bytes}: 104_857_600 (100
+ * MB)
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class ServerConfigBuilder {
@@ -63,12 +61,6 @@ public class ServerConfigBuilder {
 
     /** Builds the ServerConfig instance. */
     public ServerConfig build() {
-        return new ServerConfig(
-            host,
-            port,
-            corsOrigins,
-            maxRequestBodyBytes,
-            maxMultipartFieldBytes
-        );
+        return new ServerConfig(host, port, corsOrigins, maxRequestBodyBytes, maxMultipartFieldBytes);
     }
 }

@@ -11,9 +11,5 @@ import org.jspecify.annotations.Nullable;
 /**
  * Embedded file descriptor extracted from the PDF name tree.
  */
-public record EmbeddedFile(
-    String name,
-    byte[] data,
-    @Nullable @JsonProperty("mime_type") String mimeType
-) {
+public record EmbeddedFile(String name, byte[] data, @Nullable @JsonProperty("mime_type") String mimeType) {
 }

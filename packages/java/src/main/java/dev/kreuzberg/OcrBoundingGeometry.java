@@ -12,26 +12,21 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 /**
  * Bounding geometry for an OCR element.
  *
- * Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
- * (from PaddleOCR and rotated text detection).
+ * Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals (from PaddleOCR and rotated text
+ * detection).
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
-@JsonSubTypes({
-    @JsonSubTypes.Type(value = OcrBoundingGeometry.Rectangle.class, name = "rectangle"),
-    @JsonSubTypes.Type(value = OcrBoundingGeometry.Quadrilateral.class, name = "quadrilateral")
-})
+@JsonSubTypes({@JsonSubTypes.Type(value = OcrBoundingGeometry.Rectangle.class, name = "rectangle"),
+        @JsonSubTypes.Type(value = OcrBoundingGeometry.Quadrilateral.class, name = "quadrilateral")})
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface OcrBoundingGeometry {
 
     /** Axis-aligned bounding box (typical for Tesseract output). */
-    record Rectangle(
-        @JsonProperty("left") int left,
-        @JsonProperty("top") int top,
-        @JsonProperty("width") int width,
-        @JsonProperty("height") int height
-    ) implements OcrBoundingGeometry {
+    record Rectangle(@JsonProperty("left") int left, @JsonProperty("top") int top, @JsonProperty("width") int width,
+            @JsonProperty("height") int height) implements OcrBoundingGeometry {
     }
 
     /** 4-point quadrilateral for rotated/skewed text (PaddleOCR). */
-    record Quadrilateral(@JsonProperty("points") String points) implements OcrBoundingGeometry { }
+    record Quadrilateral(@JsonProperty("points") String points) implements OcrBoundingGeometry {
+    }
 }

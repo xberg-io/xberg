@@ -12,16 +12,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * Configuration for LLM-based structured data extraction.
  *
- * Sends extracted document content to a VLM with a JSON schema,
- * returning structured data that conforms to the schema.
+ * Sends extracted document content to a VLM with a JSON schema, returning structured data that conforms to the schema.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record StructuredExtractionConfig(
-    Object schema,
-    @JsonProperty("schema_name") String schemaName,
-    @Nullable @JsonProperty("schema_description") String schemaDescription,
-    boolean strict,
-    @Nullable String prompt,
-    LlmConfig llm
-) {
+public record StructuredExtractionConfig(Object schema, @JsonProperty("schema_name") String schemaName,
+        @Nullable @JsonProperty("schema_description") String schemaDescription, boolean strict, @Nullable String prompt,
+        LlmConfig llm) {
 }

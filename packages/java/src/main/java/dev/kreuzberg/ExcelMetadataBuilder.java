@@ -12,8 +12,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Excel/spreadsheet format metadata.
  *
- * Identifies the document as a spreadsheet source via the {@code FormatMetadata::Excel}
- * discriminant. Sheet count and sheet names are stored inside this struct.
+ * Identifies the document as a spreadsheet source via the {@code FormatMetadata::Excel} discriminant. Sheet count and
+ * sheet names are stored inside this struct.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class ExcelMetadataBuilder {
@@ -35,9 +35,6 @@ public class ExcelMetadataBuilder {
 
     /** Builds the ExcelMetadata instance. */
     public ExcelMetadata build() {
-        return new ExcelMetadata(
-            sheetCount.orElse(null),
-            sheetNames.orElse(null)
-        );
+        return new ExcelMetadata(sheetCount.orElse(null), sheetNames.orElse(null));
     }
 }

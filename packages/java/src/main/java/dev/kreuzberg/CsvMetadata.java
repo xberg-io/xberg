@@ -16,13 +16,9 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = CsvMetadataBuilder.class)
-public record CsvMetadata(
-    @JsonProperty("row_count") long rowCount,
-    @JsonProperty("column_count") long columnCount,
-    @Nullable String delimiter,
-    @JsonProperty("has_header") boolean hasHeader,
-    @Nullable @JsonProperty("column_types") List<String> columnTypes
-) {
+public record CsvMetadata(@JsonProperty("row_count") long rowCount, @JsonProperty("column_count") long columnCount,
+        @Nullable String delimiter, @JsonProperty("has_header") boolean hasHeader,
+        @Nullable @JsonProperty("column_types") List<String> columnTypes) {
     public static CsvMetadataBuilder builder() {
         return new CsvMetadataBuilder();
     }

@@ -9,11 +9,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 public enum ReductionLevel {
-    Off("off"),
-    Light("light"),
-    Moderate("moderate"),
-    Aggressive("aggressive"),
-    Maximum("maximum");
+    Off("off"), Light("light"), Moderate("moderate"), Aggressive("aggressive"), Maximum("maximum");
 
     /** The string value. */
     private final String value;

@@ -24,8 +24,6 @@ public class EmailConfigBuilder {
 
     /** Builds the EmailConfig instance. */
     public EmailConfig build() {
-        return new EmailConfig(
-            msgFallbackCodepage.orElse(null)
-        );
+        return new EmailConfig(msgFallbackCodepage.orElse(null));
     }
 }
