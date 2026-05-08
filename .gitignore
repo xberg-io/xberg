@@ -92,8 +92,6 @@ packages/r/src/rust/Cargo.lock
 
 # Elixir
 .nox/
-# Vestigial — kreuzberg_rustler is a workspace member, root Cargo.lock is authoritative.
-packages/elixir/native/kreuzberg_rustler/Cargo.lock
 
 # C FFI
 crates/kreuzberg-ffi/tests/c/test_*
