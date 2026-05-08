@@ -4,8 +4,8 @@
   "description": "render_pdf_page_to_png: missing file",
   "call": "render_pdf_page_to_png",
   "skip": {
-    "skip_languages": ["rust", "csharp"],
-    "reason": "bytes arg type loads file at test-run time; missing-file error path not expressible via fixture; C# FFI does not expose render_pdf_page_to_png (no kreuzberg_free_bytes)"
+    "skip_languages": ["rust"],
+    "reason": "bytes arg type loads file at test-run time; missing-file error path not expressible via Rust fixture path"
   },
   "input": {
     "pdf_path": "nonexistent/file.pdf",

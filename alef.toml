@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.14.35"
+alef_version = "0.15.0"
 languages = [
   "python",
   "node",
@@ -137,6 +137,8 @@ sources = [
   # Batch extraction functions (re-exported from lib.rs)
   "crates/kreuzberg/src/core/extractor/mod.rs",
   "crates/kreuzberg/src/core/extractor/sync.rs",
+  # PDF rendering (render_pdf_page_to_png — re-exported from lib.rs)
+  "crates/kreuzberg/src/pdf/render.rs",
   # Office metadata types (used in metadata.rs)
   "crates/kreuzberg/src/extraction/office_metadata/mod.rs",
   "crates/kreuzberg/src/extraction/office_metadata/core_properties.rs",
@@ -203,17 +205,6 @@ gem_name = "kreuzberg"
 
 [crates.php]
 extension_name = "kreuzberg"
-exclude_functions = [
-  # ext-php-rs 0.15 does not impl `FromZvalMut` for `Vec<T>` where `T: #[php_class]`,
-  # so batch_extract_* fns (which take `Vec<BatchBytesItem>` / `Vec<BatchFileItem>`)
-  # fail to compile in the PHP binding. The DTOs themselves are still emitted, but
-  # the batch entry-point fns are excluded until ext-php-rs adds Vec<custom-type>
-  # FromZval support. Callers iterate single extract_file / extract_bytes calls.
-  "batch_extract_files",
-  "batch_extract_files_sync",
-  "batch_extract_bytes",
-  "batch_extract_bytes_sync",
-]
 exclude_types = [
   # Enum types that don't have From<String> implementation for PHP
   "ChunkerType",
@@ -393,9 +384,6 @@ exclude_functions = [
   # not Send, causing tokio::task::spawn_blocking to reject it. Requires alef source fixes.
   "register_ocr_backend",
   "unregister_ocr_backend",
-  # Returns *mut u8 (raw byte buffer) — no kreuzberg_free_bytes FFI function exists to free
-  # the allocation, and kreuzberg_free_string(*char) is type-incompatible with *uint8_t.
-  "render_pdf_page_to_png",
 ]
 exclude_types = [
   # Multiple CacheStats structs exist in kreuzberg (cache, paddle_ocr/ModelManager, types/formats);
@@ -441,10 +429,6 @@ namespace = "Kreuzberg"
 # project_file directs `dotnet format` to the .csproj inside packages/csharp/Kreuzberg/
 # rather than the parent directory (which has no .sln or .csproj at its root).
 project_file = "packages/csharp/Kreuzberg/Kreuzberg.csproj"
-exclude_functions = [
-  # Returns *mut u8 (raw byte buffer); no kreuzberg_free_bytes function exists in the C FFI.
-  "render_pdf_page_to_png",
-]
 
 [crates.r]
 package_name = "kreuzberg"
@@ -1458,7 +1442,7 @@ module = "kreuzberg"
 async = true
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm", "php"]
+skip_languages = ["wasm"]
 args = [
   { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem", element_type = "BatchFileItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1491,7 +1475,7 @@ module = "kreuzberg"
 async = false
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm", "php"]
+skip_languages = ["wasm"]
 args = [
   { name = "paths", field = "input.paths", type = "json_object", owned = true, go_type = "BatchFileItem", element_type = "BatchFileItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1585,7 +1569,7 @@ module = "kreuzberg"
 async = true
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm", "php"]
+skip_languages = ["wasm"]
 args = [
   { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem", element_type = "BatchBytesItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1610,7 +1594,7 @@ module = "kreuzberg"
 async = false
 returns_result = true
 result_is_vec = true
-skip_languages = ["wasm", "php"]
+skip_languages = ["wasm"]
 args = [
   { name = "items", field = "input.items", type = "json_object", owned = true, go_type = "BatchBytesItem", element_type = "BatchBytesItem" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1810,7 +1794,7 @@ function = "render_pdf_page_to_png"
 module = "kreuzberg"
 async = false
 returns_result = true
-skip_languages = ["go", "wasm"]
+skip_languages = ["wasm"]
 args = [
   { name = "pdf_bytes", field = "input.pdf_bytes", type = "bytes" },
   { name = "page_index", field = "input.page_index", type = "int" },

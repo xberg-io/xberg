@@ -24,7 +24,7 @@ pub(crate) mod oxide;
 #[cfg(feature = "pdf")]
 pub(crate) mod oxide_text;
 #[cfg(feature = "pdf")]
-pub(crate) mod render;
+pub mod render;
 #[cfg(feature = "pdf")]
 pub mod structure;
 #[cfg(feature = "pdf")]
