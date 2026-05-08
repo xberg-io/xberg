@@ -3076,6 +3076,7 @@ jobs:
         with:
           packages-dir: dist
           skip-existing: true
+          verbose: true
 
   publish-rubygems:
     name: Publish Ruby gems
