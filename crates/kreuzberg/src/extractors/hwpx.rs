@@ -222,4 +222,30 @@ mod tests {
             "HwpExtractor must not claim application/haansofthwpx"
         );
     }
+
+    #[tokio::test]
+    async fn test_hwpx_extract_real_document() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../test_documents/hwpx/simple.hwpx");
+        let content = std::fs::read(path).expect("test_documents/hwpx/simple.hwpx must exist");
+        let extractor = HwpxExtractor::new();
+        let result = extractor
+            .extract_bytes(&content, "application/haansofthwpx", &ExtractionConfig::default())
+            .await
+            .expect("extraction of simple.hwpx must succeed");
+
+        let text = result.content();
+        assert!(
+            text.contains("Hello from HWPX document"),
+            "expected body text not found; got: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_hwpx_extract_corrupted_returns_err() {
+        let extractor = HwpxExtractor::new();
+        let result = extractor
+            .extract_bytes(b"not a zip", "application/haansofthwpx", &ExtractionConfig::default())
+            .await;
+        assert!(result.is_err(), "corrupted input must return Err, not panic");
+    }
 }

@@ -785,13 +785,14 @@ fn detect_office_format_from_zip(content: &[u8]) -> Option<&'static str> {
     const NUMBERS_MARKER: &[u8] = b"Index/CalculationEngine.iwa";
     const KEYNOTE_MARKER: &[u8] = b"Index/Presentation.iwa";
 
-    // HWPX: ZIP of OWPML XML, contains Contents/content.hpf manifest
+    // HWPX checked first: Contents/content.hpf is unambiguous and won't false-positive
+    // on iWork or Office archives.
     const HWPX_MARKER: &[u8] = b"Contents/content.hpf";
     if contains_subsequence(content, HWPX_MARKER) {
         return Some(HWPX_MIME_TYPE);
     }
 
-    // Check iWork first (before generic Office) since iWork ZIPs also contain XML
+    // iWork before generic Office since iWork ZIPs also contain XML
     if contains_subsequence(content, PAGES_MARKER) {
         return Some(IWORK_PAGES_MIME_TYPE);
     }
