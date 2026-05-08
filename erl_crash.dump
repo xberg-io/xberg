@@ -2,46 +2,46 @@
 Fri May  8 20:06:48 2026
 Slogan: Runtime terminating during boot ({badarg,[{io,format,["~s~n",[{error,bad_name}]],[{file,"io.erl"},{line,207},{error_info,#{cause=>{device,format},module=>erl_stdlib_errors}}]},{erl_eval,do_apply,7,[{file,"erl_eval.erl"},{line,920}]},{erl_eval,exprs,6,[{file,"erl_eval.erl"},{line,276}]},{init,start_it,1,[]},{init,start_em,1,[]},{init,do_boot,3,[]}]})
 System version: Erlang/OTP 28 [erts-16.4] [source] [64-bit] [smp:14:14] [ds:14:14:10] [async-threads:1] [jit] [dtrace]
-Taints: 
+Taints:
 Atoms: 10272
 Calling Thread: scheduler:4
 =scheduler:1
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:2
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:3
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:4
-Scheduler Sleep Info Flags: 
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Flags:
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 1
@@ -56,114 +56,114 @@ Current Process Limited Stack Trace:
 0x000000010ff5d558:SReturn addr 0x993A500 (<terminate process normally>)
 =scheduler:5
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:6
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:7
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:8
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:9
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:10
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:11
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:12
 Scheduler Sleep Info Flags: SLEEPING | POLL_SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:13
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =scheduler:14
 Scheduler Sleep Info Flags: SLEEPING | TSE_SLEEPING | WAITING
-Scheduler Sleep Info Aux Work: 
-Current Port: 
+Scheduler Sleep Info Aux Work:
+Current Port:
 Run Queue Max Length: 0
 Run Queue High Length: 0
 Run Queue Normal Length: 0
 Run Queue Low Length: 0
 Run Queue Port Length: 0
 Run Queue Flags: OUT_OF_WORK | HALFTIME_OUT_OF_WORK
-Current Process: 
+Current Process:
 =memory
 total: 50295707
 processes: 13526024

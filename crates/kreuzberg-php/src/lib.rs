@@ -8590,9 +8590,8 @@ impl KreuzbergApi {
         dpi: Option<i32>,
         password: Option<String>,
     ) -> PhpResult<Vec<u8>> {
-        let result =
-            kreuzberg::render_pdf_page_to_png(&pdfBytes, pageIndex as usize, dpi, password.as_deref())
-                .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
+        let result = kreuzberg::render_pdf_page_to_png(&pdfBytes, pageIndex as usize, dpi, password.as_deref())
+            .map_err(|e| ext_php_rs::exception::PhpException::default(e.to_string()))?;
         Ok(result.to_vec())
     }
 
