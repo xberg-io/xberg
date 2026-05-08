@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Gleam dependency manifest**: restored canonical hex version ranges in
+  `packages/gleam/gleam.toml` (`gleam_stdlib = ">= 0.34.0 and < 2.0.0"`,
+  `gleeunit = ">= 1.0.0 and < 2.0.0"`). An earlier `alef sync-versions` had
+  routed `gleam.toml` through the catch-all SEMVER replace path and
+  overwrote both ranges with `">= 5.0.0-rc.1 and < 5.0.0-rc.1"` (an empty
+  range gleam refuses to resolve), wedging `gleam test`. The
+  `restore_gleam_dep_ranges` helper in alef now keeps these stable on
+  future syncs.
 - **#853**: HWP structured extraction now returns an error instead of silently returning an empty document when no BodyText sections are found. Fixes a regression introduced in the structured extraction refactor.
 - **#619 follow-up**: `POST /extract-async` handler no longer panics on mutex poison — returns HTTP 500 and marks the job as Failed instead.
 - Fixed dead conditional-import warning on `KreuzbergError` in `plugins/registry/ocr.rs` under non-OCR feature sets.
