@@ -171,7 +171,7 @@ jobs:
     steps:
       - name: Check PyPI for existing version
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: pypi
           package: kreuzberg
@@ -187,7 +187,7 @@ jobs:
     steps:
       - name: Check npm for existing version
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: npm
           package: "@kreuzberg/node"
@@ -203,7 +203,7 @@ jobs:
     steps:
       - name: Check npm for existing WASM package
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: npm
           package: "@kreuzberg/wasm"
@@ -219,7 +219,7 @@ jobs:
     steps:
       - name: Check RubyGems for existing version
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: rubygems
           package: kreuzberg
@@ -235,7 +235,7 @@ jobs:
     steps:
       - name: Check Maven Central for existing version
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: maven
           package: "dev.kreuzberg:kreuzberg"
@@ -251,7 +251,7 @@ jobs:
     steps:
       - name: Check NuGet for existing version
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: nuget
           package: Kreuzberg
@@ -267,7 +267,7 @@ jobs:
     steps:
       - name: Check Packagist for existing version
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: packagist
           package: kreuzberg/kreuzberg
@@ -374,7 +374,7 @@ jobs:
     steps:
       - name: Check release for existing Elixir artifacts
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: github-release
           package: kreuzberg
@@ -396,7 +396,7 @@ jobs:
     steps:
       - name: Check crates.io for existing versions
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: cratesio
           package: kreuzberg
@@ -428,7 +428,7 @@ jobs:
     steps:
       - name: Check Hex.pm for existing version
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: hex
           package: kreuzberg
@@ -447,7 +447,7 @@ jobs:
     steps:
       - name: Check Homebrew tap for formula
         id: check
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: homebrew
           package: kreuzberg
@@ -3002,7 +3002,7 @@ jobs:
 
       - name: Re-check Hex.pm before publish
         id: recheck
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: hex
           package: kreuzberg
@@ -3063,7 +3063,7 @@ jobs:
 
       - name: Re-check PyPI before publish
         id: recheck
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: pypi
           package: kreuzberg
@@ -3159,7 +3159,7 @@ jobs:
 
       - name: Re-check RubyGems before publish
         id: recheck
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: rubygems
           package: kreuzberg
@@ -3248,7 +3248,7 @@ jobs:
 
       - name: Re-check npm before publish
         id: recheck
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: npm
           package: "@kreuzberg/node"
@@ -3423,7 +3423,7 @@ jobs:
       - name: Check Maven Central for existing release
         id: maven_check
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: maven
           package: "dev.kreuzberg:kreuzberg"
@@ -3569,7 +3569,7 @@ jobs:
 
       - name: Re-check NuGet before publish
         id: recheck
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: nuget
           package: Kreuzberg
@@ -3617,7 +3617,7 @@ jobs:
 
       - name: Re-check Packagist before publish
         id: recheck
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: packagist
           package: kreuzberg/kreuzberg
@@ -3705,7 +3705,7 @@ jobs:
 
       - name: Re-check Homebrew tap before publish
         id: recheck
-        uses: kreuzberg-dev/actions/check-registry@af59fc0
+        uses: kreuzberg-dev/actions/check-registry@af59fc0678157e0c3b6016914322d6c200cd5003
         with:
           registry: homebrew
           package: kreuzberg
