@@ -54,7 +54,9 @@ use initialization::{get_processors_from_cache, initialize_features, initialize_
         content.element_count = doc.elements.len(),
     )
 ))]
-pub async fn run_pipeline(mut doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractionResult> {
+pub async fn run_pipeline(doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractionResult> {
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+    let mut doc = doc;
     // Pre-render markdown for the chunker's heading context resolution when:
     // - Markdown chunking is configured
     // - Output format is not already Markdown (which would produce formatted_content anyway)
