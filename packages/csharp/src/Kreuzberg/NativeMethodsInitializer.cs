@@ -99,4 +99,8 @@ internal static partial class NativeMethods
             return "libkreuzberg_ffi.so";
         }
     }
+
+    // ===== Fixed FFI signatures for functions missing from alef-generated NativeMethods =====
+    // These overloads include the correct parameter lists for functions that work with byte arrays.
+
 }
