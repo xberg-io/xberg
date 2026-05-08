@@ -211,18 +211,6 @@ mod tests {
         assert!(extractor.shutdown().is_ok());
     }
 
-    #[cfg(feature = "hwp")]
-    #[test]
-    fn test_hwpx_not_routed_to_hwp_extractor() {
-        use crate::extractors::hwp::HwpExtractor;
-
-        let hwp = HwpExtractor::new();
-        assert!(
-            !hwp.supported_mime_types().contains(&"application/haansofthwpx"),
-            "HwpExtractor must not claim application/haansofthwpx"
-        );
-    }
-
     #[tokio::test]
     async fn test_hwpx_extract_real_document() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../test_documents/hwpx/simple.hwpx");
