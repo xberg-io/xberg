@@ -1,4 +1,5 @@
 //! Regression tests for #830: extraction_timeout_secs silently ignored in single-file paths.
+#![allow(unused_imports)]
 
 use kreuzberg::KreuzbergError;
 use kreuzberg::core::config::ExtractionConfig;
@@ -7,6 +8,7 @@ use std::time::Instant;
 
 /// A timeout of 0 seconds should fire immediately, before any real work is done.
 /// We use plain-text content so the test doesn't require external binaries (Tesseract, PDF extractor).
+#[cfg(feature = "tokio-runtime")]
 #[tokio::test]
 async fn test_extract_bytes_zero_timeout_returns_timeout_error() {
     let config = ExtractionConfig {
@@ -29,6 +31,7 @@ async fn test_extract_bytes_zero_timeout_returns_timeout_error() {
 }
 
 /// Same check for extract_file.
+#[cfg(feature = "tokio-runtime")]
 #[tokio::test]
 async fn test_extract_file_zero_timeout_returns_timeout_error() {
     // Write a small temp file
@@ -53,6 +56,7 @@ async fn test_extract_file_zero_timeout_returns_timeout_error() {
 }
 
 /// When no timeout is configured, extraction should succeed normally.
+#[cfg(feature = "tokio-runtime")]
 #[tokio::test]
 async fn test_extract_bytes_no_timeout_succeeds() {
     let config = ExtractionConfig::default();
@@ -62,6 +66,7 @@ async fn test_extract_bytes_no_timeout_succeeds() {
 }
 
 /// When no timeout is configured, file extraction should succeed normally.
+#[cfg(feature = "tokio-runtime")]
 #[tokio::test]
 async fn test_extract_file_no_timeout_succeeds() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -74,6 +79,7 @@ async fn test_extract_file_no_timeout_succeeds() {
 }
 
 /// Elapsed time reported in the error must be <= limit_ms for reasonable timeouts.
+#[cfg(feature = "tokio-runtime")]
 #[tokio::test]
 async fn test_extract_bytes_timeout_elapsed_is_plausible() {
     let config = ExtractionConfig {
@@ -89,4 +95,22 @@ async fn test_extract_bytes_timeout_elapsed_is_plausible() {
         wall_ms < 1000,
         "single-file extraction with 0s timeout took too long: {wall_ms}ms"
     );
+}
+
+/// When no tokio-runtime is available, setting a timeout should return a Validation error.
+#[cfg(not(feature = "tokio-runtime"))]
+#[tokio::test]
+async fn test_extract_bytes_timeout_without_tokio_returns_validation_error() {
+    let config = ExtractionConfig {
+        extraction_timeout_secs: Some(5),
+        ..Default::default()
+    };
+    let content = b"testing";
+    let result = extract_bytes(content, "text/plain", &config).await;
+    match result {
+        Err(KreuzbergError::Validation { message, .. }) => {
+            assert!(message.contains("requires the 'tokio-runtime' feature"));
+        }
+        other => panic!("Expected Validation error, got {other:?}"),
+    }
 }
