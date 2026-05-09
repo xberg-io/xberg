@@ -315,11 +315,10 @@ This type is used with `batch_extract_files` and
 `batch_extract_bytes` to allow heterogeneous
 extraction settings within a single batch.
 
-## Excluded Fields
+# Excluded Fields
 
 The following `ExtractionConfig` fields are batch-level only and
 cannot be overridden per file:
-
 - `max_concurrent_extractions` — controls batch parallelism
 - `use_cache` — global caching policy
 - `acceleration` — shared ONNX execution provider
@@ -352,7 +351,7 @@ cannot be overridden per file:
 
 ---
 
-### ImageExtractionConfig
+#### ImageExtractionConfig
 
 Image extraction configuration.
 
@@ -381,7 +380,7 @@ Token reduction configuration.
 
 ---
 
-##### LanguageDetectionConfig
+#### LanguageDetectionConfig
 
 Language detection configuration.
 
@@ -393,7 +392,7 @@ Language detection configuration.
 
 ---
 
-##### HtmlOutputConfig
+#### HtmlOutputConfig
 
 Configuration for styled HTML output.
 
@@ -412,7 +411,7 @@ the plain comrak-based renderer.
 
 ---
 
-##### LayoutDetectionConfig
+#### LayoutDetectionConfig
 
 Layout detection configuration.
 
@@ -429,7 +428,7 @@ is enabled for PDF extraction.
 
 ---
 
-##### LlmConfig
+#### LlmConfig
 
 Configuration for an LLM provider/model via liter-llm.
 
@@ -448,7 +447,7 @@ its own `LlmConfig`, allowing different providers per feature.
 
 ---
 
-##### StructuredExtractionConfig
+#### StructuredExtractionConfig
 
 Configuration for LLM-based structured data extraction.
 
@@ -466,7 +465,7 @@ returning structured data that conforms to the schema.
 
 ---
 
-##### OcrQualityThresholds
+#### OcrQualityThresholds
 
 Quality thresholds for OCR fallback decisions and pipeline quality gating.
 
@@ -494,7 +493,7 @@ so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 
 ---
 
-##### OcrPipelineConfig
+#### OcrPipelineConfig
 
 Multi-backend OCR pipeline with quality-based fallback.
 
@@ -509,7 +508,7 @@ the result is accepted. Otherwise the next backend is tried.
 
 ---
 
-##### OcrConfig
+#### OcrConfig
 
 OCR configuration.
 
@@ -531,7 +530,7 @@ OCR configuration.
 
 ---
 
-##### PageConfig
+#### PageConfig
 
 Page extraction and tracking configuration.
 
@@ -545,7 +544,7 @@ when page boundaries are available and chunking is configured.
 |-------|------|---------|-------------|
 | `extract_pages` | `bool` | `false` | Extract pages as separate array (ExtractionResult.pages) |
 | `insert_page_markers` | `bool` | `false` | Insert page markers in main content string |
-| `marker_format` | `String` | `" |  |
+| `marker_format` | `String` | `"
 
 <!-- PAGE {page_num} -->
 
@@ -553,7 +552,7 @@ when page boundaries are available and chunking is configured.
 
 ---
 
-##### PdfConfig
+#### PdfConfig
 
 PDF-specific configuration.
 
@@ -570,7 +569,7 @@ PDF-specific configuration.
 
 ---
 
-##### HierarchyConfig
+#### HierarchyConfig
 
 Hierarchy extraction configuration for PDF text structure analysis.
 
@@ -587,7 +586,7 @@ included in page content.
 
 ---
 
-##### PostProcessorConfig
+#### PostProcessorConfig
 
 Post-processor configuration.
 
@@ -601,7 +600,7 @@ Post-processor configuration.
 
 ---
 
-##### ChunkingConfig
+#### ChunkingConfig
 
 Chunking configuration.
 
@@ -624,7 +623,7 @@ Use `..the default constructor` when constructing to allow for future field addi
 
 ---
 
-##### EmbeddingConfig
+#### EmbeddingConfig
 
 Embedding configuration for text chunks.
 
@@ -643,13 +642,13 @@ Requires the `embeddings` feature to be enabled.
 
 ---
 
-##### TreeSitterConfig
+#### TreeSitterConfig
 
 Configuration for tree-sitter language pack integration.
 
 Controls grammar download behavior and code analysis options.
 
-## Example (TOML)
+# Example (TOML)
 
 ```toml
 [tree_sitter]
@@ -672,7 +671,7 @@ docstrings = true
 
 ---
 
-### TreeSitterProcessConfig
+#### TreeSitterProcessConfig
 
 Processing options for tree-sitter code analysis.
 
@@ -699,7 +698,7 @@ API server configuration.
 This struct holds all configuration options for the Kreuzberg API server,
 including host/port settings, CORS configuration, and upload limits.
 
-## Defaults
+# Defaults
 
 - `host`: "127.0.0.1" (localhost only)
 - `port`: 8000
@@ -711,13 +710,13 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `String` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `u16` | — | Server port number |
-| `cors_origins` | `Vec<String>` | `vec![]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"https://example.com"`), only those origins will be allowed. |
+| `cors_origins` | `Vec<String>` | `vec![]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `max_request_body_bytes` | `usize` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `max_multipart_field_bytes` | `usize` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
 ---
 
-### CharShape
+#### CharShape
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -736,7 +735,7 @@ including host/port settings, CORS configuration, and upload limits.
 
 ---
 
-##### Drawing
+#### Drawing
 
 A drawing object extracted from `<w:drawing>`.
 
@@ -749,7 +748,7 @@ A drawing object extracted from `<w:drawing>`.
 
 ---
 
-##### AnchorProperties
+#### AnchorProperties
 
 Properties for anchored drawings.
 
@@ -764,7 +763,7 @@ Properties for anchored drawings.
 
 ---
 
-##### PageMarginsPoints
+#### PageMarginsPoints
 
 Page margins converted to points (1/72 inch).
 
@@ -780,7 +779,7 @@ Page margins converted to points (1/72 inch).
 
 ---
 
-##### ResolvedStyle
+#### ResolvedStyle
 
 Fully resolved (flattened) style after walking the inheritance chain.
 
@@ -791,7 +790,7 @@ Fully resolved (flattened) style after walking the inheritance chain.
 
 ---
 
-##### TableProperties
+#### TableProperties
 
 Table-level properties from `<w:tblPr>`.
 
@@ -809,7 +808,7 @@ Table-level properties from `<w:tblPr>`.
 
 ---
 
-##### DocxAppProperties
+#### DocxAppProperties
 
 Application properties from docProps/app.xml for DOCX
 
@@ -836,7 +835,7 @@ Contains Word-specific document statistics and metadata.
 
 ---
 
-##### XlsxAppProperties
+#### XlsxAppProperties
 
 Application properties from docProps/app.xml for XLSX
 
@@ -856,7 +855,7 @@ Contains Excel-specific document metadata.
 
 ---
 
-##### PptxAppProperties
+#### PptxAppProperties
 
 Application properties from docProps/app.xml for PPTX
 
@@ -882,7 +881,7 @@ Contains PowerPoint-specific document metadata.
 
 ---
 
-##### CoreProperties
+#### CoreProperties
 
 Dublin Core metadata from docProps/core.xml
 
@@ -909,7 +908,7 @@ and Office-specific extensions.
 
 ---
 
-##### OdtProperties
+#### OdtProperties
 
 OpenDocument metadata from meta.xml
 
@@ -939,7 +938,7 @@ Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
 
 ---
 
-##### SecurityLimits
+#### SecurityLimits
 
 Configuration for security limits across extractors.
 
@@ -960,7 +959,7 @@ while still supporting legitimate documents.
 
 ---
 
-##### TokenReductionConfig
+#### TokenReductionConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -978,7 +977,7 @@ while still supporting legitimate documents.
 
 ---
 
-##### DocumentStructure
+#### DocumentStructure
 
 Top-level structured document representation.
 
@@ -986,7 +985,7 @@ A flat array of nodes with index-based parent/child references forming a tree.
 Root-level nodes have `parent: None`. Use `body_roots()` and `furniture_roots()`
 to iterate over top-level content by layer.
 
-## Validation
+# Validation
 
 Call `validate()` after construction to verify all node indices are in bounds
 and parent-child relationships are bidirectionally consistent.
@@ -1000,7 +999,7 @@ and parent-child relationships are bidirectionally consistent.
 
 ---
 
-### TableGrid
+#### TableGrid
 
 Structured table grid with cell-level metadata.
 
@@ -1034,7 +1033,7 @@ within one extraction (e.g. VLM OCR + structured extraction).
 
 ---
 
-##### ImagePreprocessingConfig
+#### ImagePreprocessingConfig
 
 Image preprocessing configuration for OCR.
 
@@ -1054,7 +1053,7 @@ for different document types.
 
 ---
 
-##### TesseractConfig
+#### TesseractConfig
 
 Tesseract OCR configuration.
 
@@ -1088,7 +1087,7 @@ for specific document types (invoices, handwriting, etc.).
 
 ---
 
-##### OcrConfidence
+#### OcrConfidence
 
 Confidence scores for an OCR element.
 
@@ -1102,7 +1101,7 @@ from recognition confidence (how confident about the actual text content).
 
 ---
 
-##### OcrElement
+#### OcrElement
 
 A unified OCR element representing detected text with full metadata.
 
@@ -1122,7 +1121,7 @@ from both Tesseract and PaddleOCR backends.
 
 ---
 
-##### OcrElementConfig
+#### OcrElementConfig
 
 Configuration for OCR element extraction.
 
@@ -1137,7 +1136,7 @@ Controls how OCR elements are extracted and filtered.
 
 ---
 
-##### LayoutRegion
+#### LayoutRegion
 
 A detected layout region on a page.
 
@@ -1154,7 +1153,7 @@ with confidence scores and spatial positions.
 
 ---
 
-##### Table
+#### Table
 
 Extracted table structure.
 
@@ -1170,7 +1169,7 @@ Tables are converted to both structured cell data and Markdown format.
 
 ---
 
-##### TableCell
+#### TableCell
 
 Individual table cell with content and optional styling.
 
@@ -1185,7 +1184,7 @@ Future extension point for rich table support with cell-level metadata.
 
 ---
 
-##### TracingLayer
+#### TracingLayer
 
 A `tower.Layer` that wraps each extraction in a semantic tracing span.
 
@@ -1193,7 +1192,7 @@ A `tower.Layer` that wraps each extraction in a semantic tracing span.
 
 ---
 
-##### YakeParams
+#### YakeParams
 
 YAKE-specific parameters.
 
@@ -1203,7 +1202,7 @@ YAKE-specific parameters.
 
 ---
 
-##### RakeParams
+#### RakeParams
 
 RAKE-specific parameters.
 
@@ -1214,7 +1213,7 @@ RAKE-specific parameters.
 
 ---
 
-##### KeywordConfig
+#### KeywordConfig
 
 Keyword extraction configuration.
 
@@ -1230,7 +1229,7 @@ Keyword extraction configuration.
 
 ---
 
-##### OcrCacheStats
+#### OcrCacheStats
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1239,7 +1238,7 @@ Keyword extraction configuration.
 
 ---
 
-##### PaddleOcrConfig
+#### PaddleOcrConfig
 
 Configuration for PaddleOCR backend.
 
@@ -1263,9 +1262,9 @@ Uses a builder pattern for convenient configuration.
 
 ---
 
-#### Metadata Types
+### Metadata Types
 
-##### ChunkMetadata
+#### ChunkMetadata
 
 Metadata about a chunk's position in the original document.
 
@@ -1282,7 +1281,7 @@ Metadata about a chunk's position in the original document.
 
 ---
 
-##### ElementMetadata
+#### ElementMetadata
 
 Metadata for a semantic element.
 
@@ -1296,7 +1295,7 @@ Metadata for a semantic element.
 
 ---
 
-##### ImagePreprocessingMetadata
+#### ImagePreprocessingMetadata
 
 Image preprocessing metadata.
 
@@ -1320,7 +1319,7 @@ including DPI normalization, resizing, and resampling.
 
 ---
 
-##### Metadata
+#### Metadata
 
 Extraction result metadata.
 
@@ -1353,7 +1352,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 
 ---
 
-##### ExcelMetadata
+#### ExcelMetadata
 
 Excel/spreadsheet format metadata.
 
@@ -1367,7 +1366,7 @@ discriminant. Sheet count and sheet names are stored inside this struct.
 
 ---
 
-##### EmailMetadata
+#### EmailMetadata
 
 Email metadata extracted from .eml and .msg files.
 
@@ -1385,7 +1384,7 @@ Includes sender/recipient information, message ID, and attachment list.
 
 ---
 
-##### ArchiveMetadata
+#### ArchiveMetadata
 
 Archive (ZIP/TAR/7Z) metadata.
 
@@ -1401,7 +1400,22 @@ Extracted from compressed archive files containing file lists and size informati
 
 ---
 
-##### XmlMetadata
+#### ImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `u32` | — | Image width in pixels |
+| `height` | `u32` | — | Image height in pixels |
+| `format` | `String` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `HashMap<String, String>` | `HashMap::new()` | EXIF metadata tags |
+
+---
+
+#### XmlMetadata
 
 XML metadata extracted during XML parsing.
 
@@ -1414,7 +1428,7 @@ Provides statistics about XML document structure.
 
 ---
 
-##### TextMetadata
+#### TextMetadata
 
 Text/Markdown metadata.
 
@@ -1432,7 +1446,7 @@ for Markdown, structural elements like headers and links.
 
 ---
 
-##### HeaderMetadata
+#### HeaderMetadata
 
 Header/heading element metadata.
 
@@ -1446,7 +1460,7 @@ Header/heading element metadata.
 
 ---
 
-##### LinkMetadata
+#### LinkMetadata
 
 Link element metadata.
 
@@ -1461,7 +1475,7 @@ Link element metadata.
 
 ---
 
-##### ImageMetadataType
+#### ImageMetadataType
 
 Image element metadata.
 
@@ -1476,7 +1490,7 @@ Image element metadata.
 
 ---
 
-##### HtmlMetadata
+#### HtmlMetadata
 
 HTML metadata extracted from HTML documents.
 
@@ -1503,7 +1517,7 @@ and extracted structural elements (headers, links, images, structured data).
 
 ---
 
-##### OcrMetadata
+#### OcrMetadata
 
 OCR processing metadata.
 
@@ -1520,7 +1534,7 @@ Captures information about OCR processing configuration and results.
 
 ---
 
-##### ErrorMetadata
+#### ErrorMetadata
 
 Error metadata (for batch operations).
 
@@ -1531,7 +1545,7 @@ Error metadata (for batch operations).
 
 ---
 
-##### PptxMetadata
+#### PptxMetadata
 
 PowerPoint presentation metadata.
 
@@ -1546,7 +1560,7 @@ Extracted from PPTX files containing slide counts and presentation details.
 
 ---
 
-##### DocxMetadata
+#### DocxMetadata
 
 Word document metadata.
 
@@ -1561,7 +1575,7 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 ---
 
-##### CsvMetadata
+#### CsvMetadata
 
 CSV/TSV file metadata.
 
@@ -1575,7 +1589,7 @@ CSV/TSV file metadata.
 
 ---
 
-##### BibtexMetadata
+#### BibtexMetadata
 
 BibTeX bibliography metadata.
 
@@ -1589,7 +1603,7 @@ BibTeX bibliography metadata.
 
 ---
 
-##### CitationMetadata
+#### CitationMetadata
 
 Citation file metadata (RIS, PubMed, EndNote).
 
@@ -1604,7 +1618,7 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-##### FictionBookMetadata
+#### FictionBookMetadata
 
 FictionBook (FB2) metadata.
 
@@ -1616,7 +1630,7 @@ FictionBook (FB2) metadata.
 
 ---
 
-##### DbfMetadata
+#### DbfMetadata
 
 dBASE (DBF) file metadata.
 
@@ -1628,7 +1642,7 @@ dBASE (DBF) file metadata.
 
 ---
 
-##### JatsMetadata
+#### JatsMetadata
 
 JATS (Journal Article Tag Suite) metadata.
 
@@ -1641,7 +1655,7 @@ JATS (Journal Article Tag Suite) metadata.
 
 ---
 
-##### EpubMetadata
+#### EpubMetadata
 
 EPUB metadata (Dublin Core extensions).
 
@@ -1656,7 +1670,7 @@ EPUB metadata (Dublin Core extensions).
 
 ---
 
-##### PstMetadata
+#### PstMetadata
 
 Outlook PST archive metadata.
 
@@ -1666,33 +1680,51 @@ Outlook PST archive metadata.
 
 ---
 
-#### Document Structure
+#### PdfMetadata
 
-##### DocumentExtractor
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `pdf_version` | `Option<String>` | `Default::default()` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `Option<String>` | `Default::default()` | PDF producer (application that created the PDF) |
+| `is_encrypted` | `Option<bool>` | `Default::default()` | Whether the PDF is encrypted/password-protected |
+| `width` | `Option<i64>` | `Default::default()` | First page width in points (1/72 inch) |
+| `height` | `Option<i64>` | `Default::default()` | First page height in points (1/72 inch) |
+| `page_count` | `Option<usize>` | `Default::default()` | Total number of pages in the PDF document |
+
+---
+
+### Document Structure
+
+#### DocumentExtractor
 
 Trait for document extractor plugins.
 
 Implement this trait to add support for new document formats or to override
 built-in extraction behavior with custom logic.
 
-## Return Type
+# Return Type
 
 Extractors return `InternalDocument`, a flat intermediate representation.
 The pipeline converts this into the public `ExtractionResult` via the
 derivation step.
 
-## Priority System
+# Priority System
 
 When multiple extractors support the same MIME type, the registry selects
 the extractor with the highest priority value. Use this to:
-
 - Override built-in extractors (priority > 50)
 - Provide fallback extractors (priority < 50)
 - Implement specialized extractors for specific use cases
 
 Default priority is 50.
 
-## Thread Safety
+# Thread Safety
 
 Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
 
@@ -1700,7 +1732,7 @@ Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
 
 ---
 
-### DocumentRelationship
+#### DocumentRelationship
 
 A resolved relationship between two nodes in the document tree.
 
@@ -1734,7 +1766,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 
 ---
 
-##### GridCell
+#### GridCell
 
 Individual grid cell with position and span metadata.
 
@@ -1750,7 +1782,7 @@ Individual grid cell with position and span metadata.
 
 ---
 
-##### OcrTable
+#### OcrTable
 
 Table detected via OCR.
 
@@ -1765,7 +1797,7 @@ Represents a table structure recognized during OCR processing.
 
 ---
 
-##### OcrTableBoundingBox
+#### OcrTableBoundingBox
 
 Bounding box for an OCR-detected table in pixel coordinates.
 
@@ -1778,7 +1810,7 @@ Bounding box for an OCR-detected table in pixel coordinates.
 
 ---
 
-##### OpenWebDocumentResponse
+#### OpenWebDocumentResponse
 
 OpenWebUI "External" engine response format.
 
@@ -1791,7 +1823,7 @@ Returned by `PUT /process` for the OpenWebUI external document loader.
 
 ---
 
-##### RecognizedTable
+#### RecognizedTable
 
 Pre-computed table markdown for a table detection region.
 
@@ -1803,9 +1835,9 @@ Pre-computed table markdown for a table detection region.
 
 ---
 
-#### OCR Types
+### OCR Types
 
-##### OcrPipelineStage
+#### OcrPipelineStage
 
 A single backend stage in the OCR pipeline.
 
@@ -1820,17 +1852,16 @@ A single backend stage in the OCR pipeline.
 
 ---
 
-##### OcrBackend
+#### OcrBackend
 
 Trait for OCR backend plugins.
 
 Implement this trait to add custom OCR capabilities. OCR backends can be:
-
 - Native Rust implementations (like Tesseract)
 - FFI bridges to Python libraries (like EasyOCR, PaddleOCR)
 - Cloud-based OCR services (Google Vision, AWS Textract, etc.)
 
-## Thread Safety
+# Thread Safety
 
 OCR backends must be thread-safe (`Send + Sync`) to support concurrent processing.
 
@@ -1838,7 +1869,7 @@ OCR backends must be thread-safe (`Send + Sync`) to support concurrent processin
 
 ---
 
-### OcrRotation
+#### OcrRotation
 
 Rotation information for an OCR element.
 
@@ -1849,9 +1880,9 @@ Rotation information for an OCR element.
 
 ---
 
-#### Other Types
+### Other Types
 
-##### BatchBytesItem
+#### BatchBytesItem
 
 Batch item for byte array extraction.
 
@@ -1866,7 +1897,7 @@ to represent a single item in a batch extraction job.
 
 ---
 
-##### BatchFileItem
+#### BatchFileItem
 
 Batch item for file extraction.
 
@@ -1880,7 +1911,7 @@ to represent a single file in a batch extraction job.
 
 ---
 
-##### SupportedFormat
+#### SupportedFormat
 
 A supported document format entry.
 
@@ -1893,13 +1924,13 @@ Represents a file extension and its corresponding MIME type that Kreuzberg can p
 
 ---
 
-##### StreamReader
+#### StreamReader
 
 *Opaque type — fields are not directly accessible.*
 
 ---
 
-##### ExtractedInlineImage
+#### ExtractedInlineImage
 
 Extracted inline image with metadata.
 
@@ -1914,7 +1945,7 @@ Extracted inline image with metadata.
 
 ---
 
-##### StyleDefinition
+#### StyleDefinition
 
 A single style definition parsed from `<w:style>` in `word/styles.xml`.
 
@@ -1931,7 +1962,7 @@ A single style definition parsed from `<w:style>` in `word/styles.xml`.
 
 ---
 
-##### CustomProperties
+#### CustomProperties
 
 Custom properties from docProps/custom.xml
 
@@ -1942,20 +1973,20 @@ based on the VT (Variant Type) specified in the XML.
 
 ---
 
-##### SyncExtractor
+#### SyncExtractor
 
 Trait for extractors that can work synchronously (WASM-compatible).
 
 This trait defines the synchronous extraction interface for WASM targets and other
 environments where async/tokio runtimes are not available or desirable.
 
-## Implementation
+# Implementation
 
 Extractors that need to support WASM should implement this trait in addition to
 the async `DocumentExtractor` trait. This allows the same extractor to work in both
 environments by delegating to the sync implementation.
 
-## MIME Type Validation
+# MIME Type Validation
 
 The `mime_type` parameter is guaranteed to be already validated.
 
@@ -1963,7 +1994,7 @@ The `mime_type` parameter is guaranteed to be already validated.
 
 ---
 
-### ZipBombValidator
+#### ZipBombValidator
 
 Helper struct for validating ZIP archives for security issues.
 
@@ -1981,14 +2012,14 @@ Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 equivalent to satisfy the async signature.
 
-## Thread safety
+# Thread safety
 
 Backends must be `Send + Sync + 'static`. They are stored in
 `Arc<dyn EmbeddingBackend>` and called concurrently from kreuzberg's chunking
 pipeline. If the backend's underlying model isn't thread-safe, the backend
 itself must serialize access internally (e.g. via `Mutex<Inner>`).
 
-## Contract
+# Contract
 
 - `embed(texts)` MUST return exactly `texts.len()` vectors, each of length
   `self.dimensions()`. The dispatcher in `embed_texts`
@@ -2009,7 +2040,7 @@ itself must serialize access internally (e.g. via `Mutex<Inner>`).
   held via the `Arc<dyn EmbeddingBackend>` reference, and only releasing
   shared state that isn't needed by `embed`.
 
-## Runtime
+# Runtime
 
 The synchronous `embed_texts` entry uses
 `tokio.task.block_in_place` to await the trait's async `embed`, which
@@ -2023,35 +2054,33 @@ or `tokio.runtime.Builder.new_current_thread()`) must use
 
 ---
 
-### PostProcessor
+#### PostProcessor
 
 Trait for post-processor plugins.
 
 Post-processors transform or enrich extraction results after the initial
 extraction is complete. They can:
-
 - Clean and normalize text
 - Add metadata (language, keywords, entities)
 - Split content into chunks
 - Score quality
 - Apply custom transformations
 
-## Processing Order
+# Processing Order
 
 Post-processors are executed in stage order:
-
 1. **Early** - Language detection, entity extraction
 2. **Middle** - Keyword extraction, token reduction
 3. **Late** - Custom hooks, final validation
 
 Within each stage, processors are executed in registration order.
 
-## Error Handling
+# Error Handling
 
 Post-processor errors are non-fatal by default - they're captured in metadata
 and execution continues. To make errors fatal, return an error from `process()`.
 
-## Thread Safety
+# Thread Safety
 
 Post-processors must be thread-safe (`Send + Sync`).
 
@@ -2059,14 +2088,14 @@ Post-processors must be thread-safe (`Send + Sync`).
 
 ---
 
-### Plugin
+#### Plugin
 
 Base trait that all plugins must implement.
 
 This trait provides common functionality for plugin lifecycle management,
 identification, and metadata.
 
-## Thread Safety
+# Thread Safety
 
 All plugins must be `Send + Sync` to support concurrent usage across threads.
 
@@ -2074,7 +2103,7 @@ All plugins must be `Send + Sync` to support concurrent usage across threads.
 
 ---
 
-### Validator
+#### Validator
 
 Trait for validator plugins.
 
@@ -2082,7 +2111,7 @@ Validators check extraction results for quality, completeness, or correctness.
 Unlike post-processors, validator errors **fail fast** - if a validator returns
 an error, the extraction fails immediately.
 
-## Use Cases
+# Use Cases
 
 - **Quality Gates**: Ensure extracted content meets minimum quality standards
 - **Compliance**: Verify content meets regulatory requirements
@@ -2090,14 +2119,14 @@ an error, the extraction fails immediately.
 - **Format Validation**: Verify extracted content structure
 - **Security Checks**: Scan for malicious content
 
-## Error Handling
+# Error Handling
 
 Validator errors are **fatal** - they cause the extraction to fail and bubble up
 to the caller. Use validators for hard requirements that must be met.
 
 For non-fatal checks, use post-processors instead.
 
-## Thread Safety
+# Thread Safety
 
 Validators must be thread-safe (`Send + Sync`).
 
@@ -2105,7 +2134,7 @@ Validators must be thread-safe (`Send + Sync`).
 
 ---
 
-### PdfAnnotation
+#### PdfAnnotation
 
 A PDF annotation extracted from a document page.
 
@@ -2123,7 +2152,6 @@ A PDF annotation extracted from a document page.
 Comprehensive Djot document structure with semantic preservation.
 
 This type captures the full richness of Djot markup, including:
-
 - Block-level structures (headings, lists, blockquotes, code blocks, etc.)
 - Inline formatting (emphasis, strong, highlight, subscript, superscript, etc.)
 - Attributes (classes, IDs, key-value pairs)
@@ -2146,7 +2174,7 @@ Available when the `djot` feature is enabled.
 
 ---
 
-##### FormattedBlock
+#### FormattedBlock
 
 Block-level element in a Djot document.
 
@@ -2164,7 +2192,7 @@ Represents structural elements like headings, paragraphs, lists, code blocks, et
 
 ---
 
-##### InlineElement
+#### InlineElement
 
 Inline element within a block.
 
@@ -2179,7 +2207,7 @@ Represents text with formatting, links, images, etc.
 
 ---
 
-##### DjotImage
+#### DjotImage
 
 Image element in Djot.
 
@@ -2192,7 +2220,7 @@ Image element in Djot.
 
 ---
 
-##### DjotLink
+#### DjotLink
 
 Link element in Djot.
 
@@ -2205,7 +2233,7 @@ Link element in Djot.
 
 ---
 
-##### Footnote
+#### Footnote
 
 Footnote in Djot.
 
@@ -2216,7 +2244,7 @@ Footnote in Djot.
 
 ---
 
-##### TextAnnotation
+#### TextAnnotation
 
 Inline text annotation — byte-range based formatting and links.
 
@@ -2231,7 +2259,7 @@ enabling precise identification of formatted regions.
 
 ---
 
-##### ArchiveEntry
+#### ArchiveEntry
 
 A single file extracted from an archive.
 
@@ -2246,7 +2274,7 @@ enabled, each processable file produces its own full `ExtractionResult`.
 
 ---
 
-##### ProcessingWarning
+#### ProcessingWarning
 
 A non-fatal warning from a processing pipeline stage.
 
@@ -2260,7 +2288,7 @@ but may indicate degraded results.
 
 ---
 
-##### Chunk
+#### Chunk
 
 A text chunk with optional embedding and metadata.
 
@@ -2277,7 +2305,7 @@ is configured), and metadata about its position in the document.
 
 ---
 
-##### HeadingContext
+#### HeadingContext
 
 Heading context for a chunk within a Markdown document.
 
@@ -2289,7 +2317,7 @@ Contains the heading hierarchy from document root to this chunk's section.
 
 ---
 
-##### HeadingLevel
+#### HeadingLevel
 
 A single heading in the hierarchy.
 
@@ -2300,7 +2328,7 @@ A single heading in the hierarchy.
 
 ---
 
-##### ExtractedImage
+#### ExtractedImage
 
 Extracted image from a document.
 
@@ -2329,7 +2357,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 
 ---
 
-##### Element
+#### Element
 
 Semantic element extracted from document.
 
@@ -2345,7 +2373,7 @@ unique identifier, and metadata for tracking origin and position.
 
 ---
 
-##### ExcelWorkbook
+#### ExcelWorkbook
 
 Excel workbook representation.
 
@@ -2359,7 +2387,7 @@ extracted content and metadata.
 
 ---
 
-##### ExcelSheet
+#### ExcelSheet
 
 Single Excel worksheet.
 
@@ -2377,7 +2405,7 @@ converted to Markdown format and dimensional statistics.
 
 ---
 
-##### EmailAttachment
+#### EmailAttachment
 
 Email attachment representation.
 
@@ -2394,7 +2422,7 @@ Contains metadata and optionally the content of an email attachment.
 
 ---
 
-##### StructuredData
+#### StructuredData
 
 Structured data (Schema.org, microdata, RDFa) block.
 
@@ -2406,7 +2434,7 @@ Structured data (Schema.org, microdata, RDFa) block.
 
 ---
 
-##### YearRange
+#### YearRange
 
 Year range for bibliographic metadata.
 
@@ -2418,7 +2446,7 @@ Year range for bibliographic metadata.
 
 ---
 
-##### DbfFieldInfo
+#### DbfFieldInfo
 
 dBASE field information.
 
@@ -2429,7 +2457,7 @@ dBASE field information.
 
 ---
 
-##### ContributorRole
+#### ContributorRole
 
 JATS contributor with role.
 
@@ -2440,7 +2468,7 @@ JATS contributor with role.
 
 ---
 
-##### PageStructure
+#### PageStructure
 
 Unified page structure for documents.
 
@@ -2456,7 +2484,7 @@ with character offset boundaries for chunk-to-page mapping.
 
 ---
 
-##### PageBoundary
+#### PageBoundary
 
 Byte offset boundary for a page.
 
@@ -2472,7 +2500,7 @@ at valid UTF-8 character boundaries when using standard String methods (push_str
 
 ---
 
-##### PageInfo
+#### PageInfo
 
 Metadata for individual page/slide/sheet.
 
@@ -2492,17 +2520,16 @@ and visibility state (for presentations).
 
 ---
 
-##### PageContent
+#### PageContent
 
 Content for a single page/slide.
 
 When page extraction is enabled, documents are split into per-page content
 with associated tables and images mapped to each page.
 
-## Performance
+# Performance
 
 Uses Arc-wrapped tables and images for memory efficiency:
-
 - `Vec<Arc<Table>>` enables zero-copy sharing of table data
 - `Vec<Arc<ExtractedImage>>` enables zero-copy sharing of image data
 - Maintains exact JSON compatibility via custom Serialize/Deserialize
@@ -2522,7 +2549,7 @@ by avoiding redundant copies during serialization.
 
 ---
 
-### PageHierarchy
+#### PageHierarchy
 
 Page hierarchy structure containing heading levels and block information.
 
@@ -2552,7 +2579,7 @@ font size clustering and hierarchical analysis.
 
 ---
 
-##### Uri
+#### Uri
 
 A URI extracted from a document.
 
@@ -2569,7 +2596,7 @@ optional human-readable display text.
 
 ---
 
-##### Recyclable
+#### Recyclable
 
 Trait for types that can be pooled and reused.
 
@@ -2580,7 +2607,7 @@ The `reset()` method should clear the object's state for reuse.
 
 ---
 
-##### StringBufferPool
+#### StringBufferPool
 
 Convenience type alias for a pooled String.
 
@@ -2588,7 +2615,7 @@ Convenience type alias for a pooled String.
 
 ---
 
-##### ByteBufferPool
+#### ByteBufferPool
 
 Convenience type alias for a pooled Vec<u8>.
 
@@ -2596,7 +2623,7 @@ Convenience type alias for a pooled Vec<u8>.
 
 ---
 
-##### ApiDoc
+#### ApiDoc
 
 OpenAPI documentation structure.
 
@@ -2607,7 +2634,7 @@ for the Kreuzberg document extraction API.
 
 ---
 
-##### InfoResponse
+#### InfoResponse
 
 Server information response.
 
@@ -2618,7 +2645,7 @@ Server information response.
 
 ---
 
-##### ExtractResponse
+#### ExtractResponse
 
 Extraction response (list of results).
 
@@ -2626,7 +2653,7 @@ Extraction response (list of results).
 
 ---
 
-##### EmbedRequest
+#### EmbedRequest
 
 Embedding request for generating embeddings from text.
 
@@ -2637,7 +2664,7 @@ Embedding request for generating embeddings from text.
 
 ---
 
-##### EmbedResponse
+#### EmbedResponse
 
 Embedding response containing generated embeddings.
 
@@ -2650,7 +2677,7 @@ Embedding response containing generated embeddings.
 
 ---
 
-##### ChunkRequest
+#### ChunkRequest
 
 Chunk request with text and configuration.
 
@@ -2662,7 +2689,7 @@ Chunk request with text and configuration.
 
 ---
 
-##### ChunkResponse
+#### ChunkResponse
 
 Chunk response with chunks and metadata.
 
@@ -2676,7 +2703,7 @@ Chunk response with chunks and metadata.
 
 ---
 
-##### DetectResponse
+#### DetectResponse
 
 MIME type detection response.
 
@@ -2687,7 +2714,7 @@ MIME type detection response.
 
 ---
 
-##### ManifestEntryResponse
+#### ManifestEntryResponse
 
 Model manifest entry for cache management.
 
@@ -2700,7 +2727,7 @@ Model manifest entry for cache management.
 
 ---
 
-##### ManifestResponse
+#### ManifestResponse
 
 Model manifest response.
 
@@ -2713,7 +2740,7 @@ Model manifest response.
 
 ---
 
-##### WarmResponse
+#### WarmResponse
 
 Cache warm response.
 
@@ -2725,7 +2752,7 @@ Cache warm response.
 
 ---
 
-##### StructuredExtractionResponse
+#### StructuredExtractionResponse
 
 Response from structured extraction endpoint.
 
@@ -2737,7 +2764,7 @@ Response from structured extraction endpoint.
 
 ---
 
-##### DoclingCompatResponse
+#### DoclingCompatResponse
 
 OpenWebUI "Docling" engine response format.
 
@@ -2750,7 +2777,7 @@ Returned by `POST /v1/convert/file` for docling-serve compatibility.
 
 ---
 
-##### DetectMimeTypeParams
+#### DetectMimeTypeParams
 
 Request parameters for MIME type detection.
 
@@ -2761,7 +2788,7 @@ Request parameters for MIME type detection.
 
 ---
 
-##### CacheWarmParams
+#### CacheWarmParams
 
 Request parameters for cache warm (model download).
 
@@ -2772,7 +2799,7 @@ Request parameters for cache warm (model download).
 
 ---
 
-##### EmbedTextParams
+#### EmbedTextParams
 
 Request parameters for embedding generation.
 
@@ -2786,7 +2813,7 @@ Request parameters for embedding generation.
 
 ---
 
-##### ExtractStructuredParams
+#### ExtractStructuredParams
 
 Request parameters for LLM-based structured extraction.
 
@@ -2803,7 +2830,7 @@ Request parameters for LLM-based structured extraction.
 
 ---
 
-##### ChunkTextParams
+#### ChunkTextParams
 
 Request parameters for text chunking.
 
@@ -2817,7 +2844,7 @@ Request parameters for text chunking.
 
 ---
 
-##### DetectedBoundary
+#### DetectedBoundary
 
 A detected structural boundary in the text.
 
@@ -2828,7 +2855,7 @@ A detected structural boundary in the text.
 
 ---
 
-##### MergedChunk
+#### MergedChunk
 
 A merged chunk produced by `merge_segments`.
 
@@ -2840,7 +2867,7 @@ A merged chunk produced by `merge_segments`.
 
 ---
 
-##### EmbeddingPreset
+#### EmbeddingPreset
 
 Preset configurations for common RAG use cases.
 
@@ -2863,7 +2890,7 @@ are safe to clone and pass across language boundaries.
 
 ---
 
-##### Keyword
+#### Keyword
 
 Extracted keyword with metadata.
 
@@ -2876,7 +2903,7 @@ Extracted keyword with metadata.
 
 ---
 
-##### TessdataManager
+#### TessdataManager
 
 Manages tessdata file downloading, caching, and manifest generation.
 
@@ -2884,7 +2911,7 @@ Manages tessdata file downloading, caching, and manifest generation.
 
 ---
 
-##### ModelPaths
+#### ModelPaths
 
 Combined paths to all models needed for OCR (backward compatibility).
 
@@ -2897,7 +2924,7 @@ Combined paths to all models needed for OCR (backward compatibility).
 
 ---
 
-##### BBox
+#### BBox
 
 Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
 
@@ -2910,7 +2937,7 @@ Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-ri
 
 ---
 
-##### LayoutDetection
+#### LayoutDetection
 
 A single layout detection result.
 
@@ -2922,7 +2949,7 @@ A single layout detection result.
 
 ---
 
-##### EmbeddedFile
+#### EmbeddedFile
 
 Embedded file descriptor extracted from the PDF name tree.
 

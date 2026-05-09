@@ -79,7 +79,7 @@ pub struct ServerConfig {
     /// CORS allowed origins. Empty vector means allow all origins.
     ///
     /// If this is an empty vector, the server will accept requests from any origin.
-    /// If populated with specific origins (e.g., ["https://example.com"]), only
+    /// If populated with specific origins (e.g., `"https://example.com"`), only
     /// those origins will be allowed.
     #[serde(default)]
     pub cors_origins: Vec<String>,

@@ -2,15 +2,17 @@ name: kreuzberg
 description: High-performance document intelligence library
 version: 5.0.0-rc.1
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 dependencies:
   # FRB runtime is pure-Dart; works in both Flutter and server-Dart contexts.
   flutter_rust_bridge: '2.12.0'
-  freezed_annotation: ^3.1.0
+  # FRB codegen-2.x emits `@freezed` sealed classes annotated with these.
+  freezed_annotation: '^2.4.0'
   json_annotation: '^4.9.0'
 dev_dependencies:
   test: '^1.25.0'
-  lints: ^6.1.0
-  freezed: ^3.2.5
+  lints: '^5.0.0'
+  # Required by flutter_rust_bridge_codegen 2.x for sealed classes.
+  freezed: '^2.5.0'
   build_runner: '^2.4.0'
   json_serializable: '^6.8.0'

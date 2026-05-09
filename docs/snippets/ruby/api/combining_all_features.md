@@ -18,7 +18,6 @@ config = Kreuzberg::ExtractionConfig.new(
   chunking: Kreuzberg::ChunkingConfig.new(
     max_characters: 512,
     overlap: 50,
-    enabled: true,
     embedding: Kreuzberg::EmbeddingConfig.new(
       model: { type: 'preset', name: 'text-embedding-all-minilm-l6-v2' }
     )

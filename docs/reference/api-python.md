@@ -2400,6 +2400,22 @@ def default() -> ImageExtractionConfig
 
 ---
 
+#### ImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `int` | — | Image width in pixels |
+| `height` | `int` | — | Image height in pixels |
+| `format` | `str` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `dict[str, str]` | `{}` | EXIF metadata tags |
+
+
+---
+
 #### ImageMetadataType
 
 Image element metadata.
@@ -3590,6 +3606,26 @@ def default() -> PdfConfig
 
 ---
 
+#### PdfMetadata
+
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `pdf_version` | `str | None` | `None` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `str | None` | `None` | PDF producer (application that created the PDF) |
+| `is_encrypted` | `bool | None` | `None` | Whether the PDF is encrypted/password-protected |
+| `width` | `int | None` | `None` | First page width in points (1/72 inch) |
+| `height` | `int | None` | `None` | First page height in points (1/72 inch) |
+| `page_count` | `int | None` | `None` | Total number of pages in the PDF document |
+
+
+---
+
 #### Plugin
 
 Base trait that all plugins must implement.
@@ -4099,7 +4135,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `str` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `int` | — | Server port number |
-| `cors_origins` | `list[str]` | `[]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"https://example.com"`), only those origins will be allowed. |
+| `cors_origins` | `list[str]` | `[]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `max_request_body_bytes` | `int` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `max_multipart_field_bytes` | `int` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
@@ -5415,13 +5451,13 @@ type-safe, clean metadata without nested optionals.
 
 | Value | Description |
 |-------|-------------|
-| `PDF` | Pdf format — Fields: `0`: `str` |
+| `PDF` | Pdf format — Fields: `0`: `PdfMetadata` |
 | `DOCX` | Docx format — Fields: `0`: `DocxMetadata` |
 | `EXCEL` | Excel — Fields: `0`: `ExcelMetadata` |
 | `EMAIL` | Email — Fields: `0`: `EmailMetadata` |
 | `PPTX` | Pptx format — Fields: `0`: `PptxMetadata` |
 | `ARCHIVE` | Archive — Fields: `0`: `ArchiveMetadata` |
-| `IMAGE` | Image element — Fields: `0`: `str` |
+| `IMAGE` | Image element — Fields: `0`: `ImageMetadata` |
 | `XML` | Xml format — Fields: `0`: `XmlMetadata` |
 | `TEXT` | Text format — Fields: `0`: `TextMetadata` |
 | `HTML` | Preserve as HTML `<mark>` tags — Fields: `0`: `HtmlMetadata` |

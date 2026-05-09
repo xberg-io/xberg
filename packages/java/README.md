@@ -177,14 +177,46 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 #### Processing Multiple Files
 
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```java title="Java"
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.BatchFileItem;
+import dev.kreuzberg.ExtractionConfig;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Arrays;
+
+List<BatchFileItem> items = Arrays.asList(
+    new BatchFileItem(Paths.get("doc1.pdf"), null),
+    new BatchFileItem(Paths.get("doc2.docx"), null),
+    new BatchFileItem(Paths.get("doc3.pptx"), null)
+);
+
+ExtractionConfig config = ExtractionConfig.builder().build();
+List<ExtractionResult> results = Kreuzberg.batchExtractFilesSync(items, config);
+
+for (ExtractionResult result : results) {
+    System.out.println("Content length: " + result.content().length());
+}
+```
 
 
 #### Async Processing
 
 For non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```java title="Java"
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.ExtractionConfig;
+import java.nio.file.Paths;
+
+ExtractionConfig config = ExtractionConfig.builder().build();
+ExtractionResult result = Kreuzberg.extractFile(Paths.get("document.pdf"), config);
+
+System.out.println(result.content());
+System.out.println(result.mimeType());
+```
 
 
 ### Next Steps
@@ -339,7 +371,18 @@ public class Main {
 
 This binding provides full async/await support for non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```java title="Java"
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.ExtractionConfig;
+import java.nio.file.Paths;
+
+ExtractionConfig config = ExtractionConfig.builder().build();
+ExtractionResult result = Kreuzberg.extractFile(Paths.get("document.pdf"), config);
+
+System.out.println(result.content());
+System.out.println(result.mimeType());
+```
 
 
 ## Plugin System
@@ -360,7 +403,28 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```java title="Java"
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.BatchFileItem;
+import dev.kreuzberg.ExtractionConfig;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Arrays;
+
+List<BatchFileItem> items = Arrays.asList(
+    new BatchFileItem(Paths.get("doc1.pdf"), null),
+    new BatchFileItem(Paths.get("doc2.docx"), null),
+    new BatchFileItem(Paths.get("doc3.pptx"), null)
+);
+
+ExtractionConfig config = ExtractionConfig.builder().build();
+List<ExtractionResult> results = Kreuzberg.batchExtractFilesSync(items, config);
+
+for (ExtractionResult result : results) {
+    System.out.println("Content length: " + result.content().length());
+}
+```
 
 
 ## Configuration

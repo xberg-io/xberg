@@ -4348,7 +4348,7 @@ impl HwpImage {
     pub fn new(name: String, data: Vec<u8>) -> HwpImage {
         let mut __target: kreuzberg::extraction::hwp::model::HwpImage = ::std::default::Default::default();
         // alef: name — String fallback in non-serde struct, left at default
-        __target.data = data;
+        __target.data = data.into();
         HwpImage(__target)
     }
     pub fn name(&self) -> String {

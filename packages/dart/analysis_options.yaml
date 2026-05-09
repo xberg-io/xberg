@@ -1,23 +1,12 @@
 include: package:lints/recommended.yaml
 
-analyzer:
-  exclude:
-    # flutter_rust_bridge-generated bridge code is machine-generated and
-    # uses inline-class extension types that require the analyzer's language
-    # version to match the package SDK floor.
-    - lib/src/frb/**
-    - lib/src/kreuzberg_bridge_generated/**
-    - example/**
-    # traits.dart is alef-generated documentation of Rust trait surfaces;
-    # references to OcrBackendType/ProcessingStage await alef
-    # `#[frb(unignore)]` plumbing in the flutter_rust_bridge backend.
-    - lib/src/traits.dart
-
 linter:
   rules:
     - avoid_empty_else
     - avoid_print
     - avoid_relative_lib_imports
+    - avoid_returning_null
+    - avoid_returning_null_for_future
     - avoid_returning_this
     - avoid_slow_async_io
     - cancel_subscriptions
@@ -26,6 +15,9 @@ linter:
     - control_flow_in_finally
     - empty_statements
     - hash_and_equals
+    - invariant_booleans
+    - iterable_contains_unrelated_type
+    - list_remove_unrelated_type
     - literal_only_boolean_expressions
     - no_adjacent_strings_in_list
     - no_duplicate_case_values

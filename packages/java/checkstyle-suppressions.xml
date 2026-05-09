@@ -12,12 +12,4 @@
     <suppress checks="AvoidStarImport" files=".*Test\.java"/>
     <suppress checks="MagicNumber" files=".*Test\.java"/>
     <suppress checks="MethodLength" files=".*Test\.java"/>
-
-    <!-- Alef-generated bindings: long lines and javadoc-quirks are codegen artifacts -->
-    <suppress checks="LineLength" files=".*\.java"/>
-    <suppress checks="ParameterNumber" files=".*\.java"/>
-    <suppress checks="MethodLength" files=".*\.java"/>
-    <suppress checks="JavadocMethod" files=".*\.java"/>
-    <suppress checks="JavadocStyle" files=".*\.java"/>
-    <suppress checks="MissingJavadocMethod" files=".*\.java"/>
 </suppressions>

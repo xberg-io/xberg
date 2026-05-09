@@ -57,7 +57,7 @@
         <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
         <checkstyle.version>13.4.0</checkstyle.version>
-        <pmd.version>7.24.0</pmd.version>
+        <pmd.version>7.19.0</pmd.version>
         <gpg.skip>true</gpg.skip>
     </properties>
 
@@ -70,12 +70,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.21.3</version>
+            <version>2.21.2</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jdk8</artifactId>
-            <version>2.21.3</version>
+            <version>2.21.2</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

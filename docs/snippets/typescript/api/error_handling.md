@@ -1,5 +1,5 @@
 ```typescript title="TypeScript"
-import { extractFileSync } from "@kreuzberg/node";
+import { extractFileSync } from "kreuzberg";
 
 try {
   const result = extractFileSync("missing.pdf");

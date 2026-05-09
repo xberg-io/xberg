@@ -9,16 +9,18 @@ import (
 
 func main() {
 	trueVal := true
+	maxChars := uint(1000)
+	overlap := uint(200)
 	config := kreuzberg.ExtractionConfig{
 		UseCache:                &trueVal,
 		EnableQualityProcessing: &trueVal,
 		Ocr: &kreuzberg.OcrConfig{
 			Backend:   "tesseract",
-			Languages: []string{"eng", "fra"},
+			Language:  "eng",
 		},
 		Chunking: &kreuzberg.ChunkingConfig{
-			MaxCharacters: 1000,
-			Overlap:       200,
+			MaxCharacters: &maxChars,
+			Overlap:       &overlap,
 		},
 	}
 

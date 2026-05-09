@@ -5,11 +5,11 @@
 
 int main(void) {
     /* Items is a JSON array of BatchBytesItem objects.
-     * Each entry has "content" (base64), "mime_type", and an optional "config". */
+     * Each entry has "content" (array of byte integers), "mime_type", and an optional "config". */
     const char *items_json =
         "["
-        "  {\"content\": \"SGVsbG8h\", \"mime_type\": \"text/plain\"},"
-        "  {\"content\": \"V29ybGQh\", \"mime_type\": \"text/plain\"}"
+        "  {\"content\": [72,101,108,108,111,33], \"mime_type\": \"text/plain\"},"
+        "  {\"content\": [87,111,114,108,100,33], \"mime_type\": \"text/plain\"}"
         "]";
 
     KREUZBERGExtractionConfig *config = kreuzberg_extraction_config_default();

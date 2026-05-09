@@ -18,7 +18,7 @@ jobs:
         uses: erlef/setup-beam@v1
         with:
           otp-version: "27"
-          gleam-version: "1.14"
+          gleam-version: "1.4"
       - name: Build Gleam project
         run: gleam build
       - name: Run tests

@@ -2391,6 +2391,22 @@ KreuzbergImageExtractionConfig kreuzberg_default();
 
 ---
 
+#### KreuzbergImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `uint32_t` | — | Image width in pixels |
+| `height` | `uint32_t` | — | Image height in pixels |
+| `format` | `const char*` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `void*` | `NULL` | EXIF metadata tags |
+
+
+---
+
 #### KreuzbergImageMetadataType
 
 Image element metadata.
@@ -3572,6 +3588,26 @@ KreuzbergPdfConfig kreuzberg_default();
 
 ---
 
+#### KreuzbergPdfMetadata
+
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `pdf_version` | `const char**` | `NULL` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `const char**` | `NULL` | PDF producer (application that created the PDF) |
+| `is_encrypted` | `bool*` | `NULL` | Whether the PDF is encrypted/password-protected |
+| `width` | `int64_t*` | `NULL` | First page width in points (1/72 inch) |
+| `height` | `int64_t*` | `NULL` | First page height in points (1/72 inch) |
+| `page_count` | `uintptr_t*` | `NULL` | Total number of pages in the PDF document |
+
+
+---
+
 #### KreuzbergPlugin
 
 Base trait that all plugins must implement.
@@ -4078,7 +4114,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `const char*` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `uint16_t` | — | Server port number |
-| `cors_origins` | `const char**` | `NULL` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"https://example.com"`), only those origins will be allowed. |
+| `cors_origins` | `const char**` | `NULL` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `max_request_body_bytes` | `uintptr_t` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `max_multipart_field_bytes` | `uintptr_t` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
@@ -5387,13 +5423,13 @@ type-safe, clean metadata without nested optionals.
 
 | Value | Description |
 |-------|-------------|
-| `KREUZBERG_PDF` | Pdf format — Fields: `0`: `const char*` |
+| `KREUZBERG_PDF` | Pdf format — Fields: `0`: `KreuzbergPdfMetadata` |
 | `KREUZBERG_DOCX` | Docx format — Fields: `0`: `KreuzbergDocxMetadata` |
 | `KREUZBERG_EXCEL` | Excel — Fields: `0`: `KreuzbergExcelMetadata` |
 | `KREUZBERG_EMAIL` | Email — Fields: `0`: `KreuzbergEmailMetadata` |
 | `KREUZBERG_PPTX` | Pptx format — Fields: `0`: `KreuzbergPptxMetadata` |
 | `KREUZBERG_ARCHIVE` | Archive — Fields: `0`: `KreuzbergArchiveMetadata` |
-| `KREUZBERG_IMAGE` | Image element — Fields: `0`: `const char*` |
+| `KREUZBERG_IMAGE` | Image element — Fields: `0`: `KreuzbergImageMetadata` |
 | `KREUZBERG_XML` | Xml format — Fields: `0`: `KreuzbergXmlMetadata` |
 | `KREUZBERG_TEXT` | Text format — Fields: `0`: `KreuzbergTextMetadata` |
 | `KREUZBERG_HTML` | Preserve as HTML `<mark>` tags — Fields: `0`: `KreuzbergHtmlMetadata` |

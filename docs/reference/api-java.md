@@ -2391,6 +2391,22 @@ public static ImageExtractionConfig defaultOptions()
 
 ---
 
+#### ImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `int` | — | Image width in pixels |
+| `height` | `int` | — | Image height in pixels |
+| `format` | `String` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `Map<String, String>` | `Collections.emptyMap()` | EXIF metadata tags |
+
+
+---
+
 #### ImageMetadataType
 
 Image element metadata.
@@ -3572,6 +3588,26 @@ public static PdfConfig defaultOptions()
 
 ---
 
+#### PdfMetadata
+
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `pdfVersion` | `Optional<String>` | `null` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `Optional<String>` | `null` | PDF producer (application that created the PDF) |
+| `isEncrypted` | `Optional<Boolean>` | `null` | Whether the PDF is encrypted/password-protected |
+| `width` | `Optional<Long>` | `null` | First page width in points (1/72 inch) |
+| `height` | `Optional<Long>` | `null` | First page height in points (1/72 inch) |
+| `pageCount` | `Optional<Long>` | `null` | Total number of pages in the PDF document |
+
+
+---
+
 #### Plugin
 
 Base trait that all plugins must implement.
@@ -4078,7 +4114,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `String` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `short` | — | Server port number |
-| `corsOrigins` | `List<String>` | `Collections.emptyList()` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"https://example.com"`), only those origins will be allowed. |
+| `corsOrigins` | `List<String>` | `Collections.emptyList()` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `maxRequestBodyBytes` | `long` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `maxMultipartFieldBytes` | `long` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
@@ -5387,13 +5423,13 @@ type-safe, clean metadata without nested optionals.
 
 | Value | Description |
 |-------|-------------|
-| `PDF` | Pdf format — Fields: `0`: `String` |
+| `PDF` | Pdf format — Fields: `0`: `PdfMetadata` |
 | `DOCX` | Docx format — Fields: `0`: `DocxMetadata` |
 | `EXCEL` | Excel — Fields: `0`: `ExcelMetadata` |
 | `EMAIL` | Email — Fields: `0`: `EmailMetadata` |
 | `PPTX` | Pptx format — Fields: `0`: `PptxMetadata` |
 | `ARCHIVE` | Archive — Fields: `0`: `ArchiveMetadata` |
-| `IMAGE` | Image element — Fields: `0`: `String` |
+| `IMAGE` | Image element — Fields: `0`: `ImageMetadata` |
 | `XML` | Xml format — Fields: `0`: `XmlMetadata` |
 | `TEXT` | Text format — Fields: `0`: `TextMetadata` |
 | `HTML` | Preserve as HTML `<mark>` tags — Fields: `0`: `HtmlMetadata` |
