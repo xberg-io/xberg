@@ -134,15 +134,188 @@ public func embedding_backend_call_dimensions(_ this: EmbeddingBackendBoxRef) ->
 public func embedding_backend_call_embed<GenericIntoRustString: IntoRustString>(_ this: EmbeddingBackendBoxRef, _ texts: RustVec<GenericIntoRustString>) throws -> RustString {
     try { let val = __swift_bridge__$embedding_backend_call_embed(this.ptr, { let val = texts; val.isOwned = false; return val.ptr }()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
-public func extractionConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ExtractionConfig {
-    try { let val = __swift_bridge__$extraction_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ExtractionConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+public func registerOcrBackend(_ swift_box: SwiftOcrBackendBox) throws -> () {
+    try { let val = __swift_bridge__$register_ocr_backend(Unmanaged.passRetained(swift_box).toOpaque()); if val != nil { throw RustString(ptr: val!) } else { return } }()
 }
-public func batchBytesItemFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> BatchBytesItem {
-    try { let val = __swift_bridge__$batch_bytes_item_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return BatchBytesItem(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+public func registerPostProcessor(_ swift_box: SwiftPostProcessorBox) throws -> () {
+    try { let val = __swift_bridge__$register_post_processor(Unmanaged.passRetained(swift_box).toOpaque()); if val != nil { throw RustString(ptr: val!) } else { return } }()
 }
-public func batchFileItemFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> BatchFileItem {
-    try { let val = __swift_bridge__$batch_file_item_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return BatchFileItem(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+public func registerValidator(_ swift_box: SwiftValidatorBox) throws -> () {
+    try { let val = __swift_bridge__$register_validator(Unmanaged.passRetained(swift_box).toOpaque()); if val != nil { throw RustString(ptr: val!) } else { return } }()
 }
+public func registerEmbeddingBackend(_ swift_box: SwiftEmbeddingBackendBox) throws -> () {
+    try { let val = __swift_bridge__$register_embedding_backend(Unmanaged.passRetained(swift_box).toOpaque()); if val != nil { throw RustString(ptr: val!) } else { return } }()
+}
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_name")
+func __swift_bridge__SwiftOcrBackendBox_alef_name (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_name().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_version")
+func __swift_bridge__SwiftOcrBackendBox_alef_version (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_version().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_initialize")
+func __swift_bridge__SwiftOcrBackendBox_alef_initialize (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_initialize().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_shutdown")
+func __swift_bridge__SwiftOcrBackendBox_alef_shutdown (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_shutdown().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_process_image")
+func __swift_bridge__SwiftOcrBackendBox_alef_process_image (_ this: UnsafeMutableRawPointer, _ image_bytes: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_process_image(image_bytes: RustVec(ptr: image_bytes), config: RustString(ptr: config)).intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_process_image_file")
+func __swift_bridge__SwiftOcrBackendBox_alef_process_image_file (_ this: UnsafeMutableRawPointer, _ path: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_process_image_file(path: RustString(ptr: path), config: RustString(ptr: config)).intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_supports_language")
+func __swift_bridge__SwiftOcrBackendBox_alef_supports_language (_ this: UnsafeMutableRawPointer, _ lang: UnsafeMutableRawPointer) -> Bool {
+    Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_supports_language(lang: RustString(ptr: lang))
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_backend_type")
+func __swift_bridge__SwiftOcrBackendBox_alef_backend_type (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_backend_type().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_supported_languages")
+func __swift_bridge__SwiftOcrBackendBox_alef_supported_languages (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let val = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_supported_languages(); val.isOwned = false; return val.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_supports_table_detection")
+func __swift_bridge__SwiftOcrBackendBox_alef_supports_table_detection (_ this: UnsafeMutableRawPointer) -> Bool {
+    Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_supports_table_detection()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_supports_document_processing")
+func __swift_bridge__SwiftOcrBackendBox_alef_supports_document_processing (_ this: UnsafeMutableRawPointer) -> Bool {
+    Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_supports_document_processing()
+}
+
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_process_document")
+func __swift_bridge__SwiftOcrBackendBox_alef_process_document (_ this: UnsafeMutableRawPointer, _ path: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_process_document(path: RustString(ptr: path), config: RustString(ptr: config)).intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_name")
+func __swift_bridge__SwiftPostProcessorBox_alef_name (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_name().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_version")
+func __swift_bridge__SwiftPostProcessorBox_alef_version (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_version().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_initialize")
+func __swift_bridge__SwiftPostProcessorBox_alef_initialize (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_initialize().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_shutdown")
+func __swift_bridge__SwiftPostProcessorBox_alef_shutdown (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_shutdown().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_process")
+func __swift_bridge__SwiftPostProcessorBox_alef_process (_ this: UnsafeMutableRawPointer, _ result: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_process(result: RustString(ptr: result), config: RustString(ptr: config)).intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_processing_stage")
+func __swift_bridge__SwiftPostProcessorBox_alef_processing_stage (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_processing_stage().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_should_process")
+func __swift_bridge__SwiftPostProcessorBox_alef_should_process (_ this: UnsafeMutableRawPointer, _ result: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> Bool {
+    Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_should_process(result: RustString(ptr: result), config: RustString(ptr: config))
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_estimated_duration_ms")
+func __swift_bridge__SwiftPostProcessorBox_alef_estimated_duration_ms (_ this: UnsafeMutableRawPointer, _ result: UnsafeMutableRawPointer) -> UInt64 {
+    Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_estimated_duration_ms(result: RustString(ptr: result))
+}
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$alef_priority")
+func __swift_bridge__SwiftPostProcessorBox_alef_priority (_ this: UnsafeMutableRawPointer) -> Int32 {
+    Unmanaged<SwiftPostProcessorBox>.fromOpaque(this).takeUnretainedValue().alef_priority()
+}
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$alef_name")
+func __swift_bridge__SwiftValidatorBox_alef_name (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftValidatorBox>.fromOpaque(this).takeUnretainedValue().alef_name().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$alef_version")
+func __swift_bridge__SwiftValidatorBox_alef_version (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftValidatorBox>.fromOpaque(this).takeUnretainedValue().alef_version().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$alef_initialize")
+func __swift_bridge__SwiftValidatorBox_alef_initialize (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftValidatorBox>.fromOpaque(this).takeUnretainedValue().alef_initialize().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$alef_shutdown")
+func __swift_bridge__SwiftValidatorBox_alef_shutdown (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftValidatorBox>.fromOpaque(this).takeUnretainedValue().alef_shutdown().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$alef_validate")
+func __swift_bridge__SwiftValidatorBox_alef_validate (_ this: UnsafeMutableRawPointer, _ result: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftValidatorBox>.fromOpaque(this).takeUnretainedValue().alef_validate(result: RustString(ptr: result), config: RustString(ptr: config)).intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$alef_should_validate")
+func __swift_bridge__SwiftValidatorBox_alef_should_validate (_ this: UnsafeMutableRawPointer, _ result: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> Bool {
+    Unmanaged<SwiftValidatorBox>.fromOpaque(this).takeUnretainedValue().alef_should_validate(result: RustString(ptr: result), config: RustString(ptr: config))
+}
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$alef_priority")
+func __swift_bridge__SwiftValidatorBox_alef_priority (_ this: UnsafeMutableRawPointer) -> Int32 {
+    Unmanaged<SwiftValidatorBox>.fromOpaque(this).takeUnretainedValue().alef_priority()
+}
+
+@_cdecl("__swift_bridge__$SwiftEmbeddingBackendBox$alef_name")
+func __swift_bridge__SwiftEmbeddingBackendBox_alef_name (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftEmbeddingBackendBox>.fromOpaque(this).takeUnretainedValue().alef_name().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftEmbeddingBackendBox$alef_version")
+func __swift_bridge__SwiftEmbeddingBackendBox_alef_version (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftEmbeddingBackendBox>.fromOpaque(this).takeUnretainedValue().alef_version().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftEmbeddingBackendBox$alef_initialize")
+func __swift_bridge__SwiftEmbeddingBackendBox_alef_initialize (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftEmbeddingBackendBox>.fromOpaque(this).takeUnretainedValue().alef_initialize().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftEmbeddingBackendBox$alef_shutdown")
+func __swift_bridge__SwiftEmbeddingBackendBox_alef_shutdown (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftEmbeddingBackendBox>.fromOpaque(this).takeUnretainedValue().alef_shutdown().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
+@_cdecl("__swift_bridge__$SwiftEmbeddingBackendBox$alef_dimensions")
+func __swift_bridge__SwiftEmbeddingBackendBox_alef_dimensions (_ this: UnsafeMutableRawPointer) -> UInt {
+    Unmanaged<SwiftEmbeddingBackendBox>.fromOpaque(this).takeUnretainedValue().alef_dimensions()
+}
+
+@_cdecl("__swift_bridge__$SwiftEmbeddingBackendBox$alef_embed")
+func __swift_bridge__SwiftEmbeddingBackendBox_alef_embed (_ this: UnsafeMutableRawPointer, _ texts: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+    { let rustString = Unmanaged<SwiftEmbeddingBackendBox>.fromOpaque(this).takeUnretainedValue().alef_embed(texts: RustVec(ptr: texts)).intoRustString(); rustString.isOwned = false; return rustString.ptr }()
+}
+
 
 public class AccelerationConfig: AccelerationConfigRefMut {
     var isOwned: Bool = true
@@ -429,8 +602,8 @@ public class ExtractionConfig: ExtractionConfigRefMut {
     }
 }
 extension ExtractionConfig {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ use_cache: Bool, _ enable_quality_processing: Bool, _ ocr: Optional<OcrConfig>, _ force_ocr: Bool, _ force_ocr_pages: Optional<RustVec<UInt>>, _ disable_ocr: Bool, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ keywords: Optional<KeywordConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_options: Optional<GenericIntoRustString>, _ html_output: Optional<HtmlOutputConfig>, _ extraction_timeout_secs: Optional<UInt64>, _ max_concurrent_extractions: Optional<UInt>, _ result_format: ResultFormat, _ security_limits: Optional<SecurityLimits>, _ output_format: OutputFormat, _ layout: Optional<LayoutDetectionConfig>, _ include_document_structure: Bool, _ acceleration: Optional<AccelerationConfig>, _ cache_namespace: Optional<GenericIntoRustString>, _ cache_ttl_secs: Optional<UInt64>, _ email: Optional<EmailConfig>, _ concurrency: Optional<GenericIntoRustString>, _ max_archive_depth: UInt, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ cancel_token: Optional<GenericIntoRustString>) {
-        self.init(ptr: __swift_bridge__$ExtractionConfig$new(use_cache, enable_quality_processing, { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr, { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr, { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = keywords { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(html_options) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), extraction_timeout_secs.intoFfiRepr(), max_concurrent_extractions.intoFfiRepr(), {result_format.isOwned = false; return result_format.ptr;}(), { if let val = security_limits { val.isOwned = false; return val.ptr } else { return nil } }(), {output_format.isOwned = false; return output_format.ptr;}(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), include_document_structure, { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cache_namespace) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), cache_ttl_secs.intoFfiRepr(), { if let val = email { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(concurrency) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), max_archive_depth, { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cancel_token) { rustString.isOwned = false; return rustString.ptr } else { return nil } }()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ use_cache: Bool, _ enable_quality_processing: Bool, _ ocr: Optional<OcrConfig>, _ force_ocr: Bool, _ force_ocr_pages: Optional<RustVec<UInt>>, _ disable_ocr: Bool, _ chunking: Optional<ChunkingConfig>, _ content_filter: Optional<ContentFilterConfig>, _ images: Optional<ImageExtractionConfig>, _ pdf_options: Optional<PdfConfig>, _ token_reduction: Optional<TokenReductionOptions>, _ language_detection: Optional<LanguageDetectionConfig>, _ pages: Optional<PageConfig>, _ keywords: Optional<KeywordConfig>, _ postprocessor: Optional<PostProcessorConfig>, _ html_options: Optional<GenericIntoRustString>, _ html_output: Optional<HtmlOutputConfig>, _ extraction_timeout_secs: Optional<UInt64>, _ max_concurrent_extractions: Optional<UInt>, _ result_format: ResultFormat, _ security_limits: Optional<SecurityLimits>, _ output_format: OutputFormat, _ layout: Optional<LayoutDetectionConfig>, _ use_layout_for_markdown: Bool, _ include_document_structure: Bool, _ acceleration: Optional<AccelerationConfig>, _ cache_namespace: Optional<GenericIntoRustString>, _ cache_ttl_secs: Optional<UInt64>, _ email: Optional<EmailConfig>, _ concurrency: Optional<GenericIntoRustString>, _ max_archive_depth: UInt, _ tree_sitter: Optional<TreeSitterConfig>, _ structured_extraction: Optional<StructuredExtractionConfig>, _ cancel_token: Optional<GenericIntoRustString>) {
+        self.init(ptr: __swift_bridge__$ExtractionConfig$new(use_cache, enable_quality_processing, { if let val = ocr { val.isOwned = false; return val.ptr } else { return nil } }(), force_ocr, { if let val = force_ocr_pages { val.isOwned = false; return val.ptr } else { return nil } }(), disable_ocr, { if let val = chunking { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = content_filter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = images { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pdf_options { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = token_reduction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = language_detection { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = pages { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = keywords { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = postprocessor { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(html_options) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), { if let val = html_output { val.isOwned = false; return val.ptr } else { return nil } }(), extraction_timeout_secs.intoFfiRepr(), max_concurrent_extractions.intoFfiRepr(), {result_format.isOwned = false; return result_format.ptr;}(), { if let val = security_limits { val.isOwned = false; return val.ptr } else { return nil } }(), {output_format.isOwned = false; return output_format.ptr;}(), { if let val = layout { val.isOwned = false; return val.ptr } else { return nil } }(), use_layout_for_markdown, include_document_structure, { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cache_namespace) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), cache_ttl_secs.intoFfiRepr(), { if let val = email { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(concurrency) { rustString.isOwned = false; return rustString.ptr } else { return nil } }(), max_archive_depth, { if let val = tree_sitter { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = structured_extraction { val.isOwned = false; return val.ptr } else { return nil } }(), { if let rustString = optionalStringIntoRustString(cancel_token) { rustString.isOwned = false; return rustString.ptr } else { return nil } }()))
     }
 }
 public class ExtractionConfigRefMut: ExtractionConfigRef {
@@ -536,6 +709,10 @@ extension ExtractionConfigRef {
 
     public func layout() -> Optional<LayoutDetectionConfig> {
         { let val = __swift_bridge__$ExtractionConfig$layout(ptr); if val != nil { return LayoutDetectionConfig(ptr: val!) } else { return nil } }()
+    }
+
+    public func use_layout_for_markdown() -> Bool {
+        __swift_bridge__$ExtractionConfig$use_layout_for_markdown(ptr)
     }
 
     public func include_document_structure() -> Bool {
@@ -20130,4 +20307,25 @@ extension EmbeddingBackendBox: Vectorizable {
 }
 
 
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$_free")
+func __swift_bridge__SwiftOcrBackendBox__free (ptr: UnsafeMutableRawPointer) {
+    let _ = Unmanaged<SwiftOcrBackendBox>.fromOpaque(ptr).takeRetainedValue()
+}
 
+
+@_cdecl("__swift_bridge__$SwiftPostProcessorBox$_free")
+func __swift_bridge__SwiftPostProcessorBox__free (ptr: UnsafeMutableRawPointer) {
+    let _ = Unmanaged<SwiftPostProcessorBox>.fromOpaque(ptr).takeRetainedValue()
+}
+
+
+@_cdecl("__swift_bridge__$SwiftValidatorBox$_free")
+func __swift_bridge__SwiftValidatorBox__free (ptr: UnsafeMutableRawPointer) {
+    let _ = Unmanaged<SwiftValidatorBox>.fromOpaque(ptr).takeRetainedValue()
+}
+
+
+@_cdecl("__swift_bridge__$SwiftEmbeddingBackendBox$_free")
+func __swift_bridge__SwiftEmbeddingBackendBox__free (ptr: UnsafeMutableRawPointer) {
+    let _ = Unmanaged<SwiftEmbeddingBackendBox>.fromOpaque(ptr).takeRetainedValue()
+}

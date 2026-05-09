@@ -2575,6 +2575,76 @@ mod ffi {
         fn embedding_backend_call_dimensions(this: &EmbeddingBackendBox) -> usize;
         fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> Result<String, String>;
     }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerOcrBackend")]
+        fn register_ocr_backend(swift_box: SwiftOcrBackendBox) -> Result<(), String>;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerPostProcessor")]
+        fn register_post_processor(swift_box: SwiftPostProcessorBox) -> Result<(), String>;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerValidator")]
+        fn register_validator(swift_box: SwiftValidatorBox) -> Result<(), String>;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerEmbeddingBackend")]
+        fn register_embedding_backend(swift_box: SwiftEmbeddingBackendBox) -> Result<(), String>;
+    }
+
+    extern "Swift" {
+        type SwiftOcrBackendBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_process_image(&self, image_bytes: Vec<u8>, config: String) -> String;
+        fn alef_process_image_file(&self, path: String, config: String) -> String;
+        fn alef_supports_language(&self, lang: String) -> bool;
+        fn alef_backend_type(&self) -> String;
+        fn alef_supported_languages(&self) -> Vec<String>;
+        fn alef_supports_table_detection(&self) -> bool;
+        fn alef_supports_document_processing(&self) -> bool;
+        fn alef_process_document(&self, path: String, config: String) -> String;
+    }
+
+    extern "Swift" {
+        type SwiftPostProcessorBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_process(&self, result: String, config: String) -> String;
+        fn alef_processing_stage(&self) -> String;
+        fn alef_should_process(&self, result: String, config: String) -> bool;
+        fn alef_estimated_duration_ms(&self, result: String) -> u64;
+        fn alef_priority(&self) -> i32;
+    }
+
+    extern "Swift" {
+        type SwiftValidatorBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_validate(&self, result: String, config: String) -> String;
+        fn alef_should_validate(&self, result: String, config: String) -> bool;
+        fn alef_priority(&self) -> i32;
+    }
+
+    extern "Swift" {
+        type SwiftEmbeddingBackendBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_dimensions(&self) -> usize;
+        fn alef_embed(&self, texts: Vec<String>) -> String;
+    }
 }
 
 pub struct AccelerationConfig(pub kreuzberg::AccelerationConfig);
@@ -11004,4 +11074,389 @@ pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<Strin
                 .map(|v| serde_json::to_string(&v).expect("serializable return"))
                 .map_err(|e| e.to_string())
         })
+}
+
+/// Convert a stringified Swift error into the source crate's `KreuzbergError::Plugin`.
+#[allow(dead_code)]
+fn plugin_error_from_string(message: String) -> kreuzberg::KreuzbergError {
+    kreuzberg::KreuzbergError::Plugin {
+        message,
+        plugin_name: "swift".to_string(),
+    }
+}
+
+/// JSON envelope returned by every fallible Swift trait method. Carries `Ok(T)`
+/// as `{"ok": <serialised T>}` and `Err(String)` as `{"err": "<message>"}`.
+/// Avoids swift-bridge 0.1.59's broken `Result<RustString, RustString>` codegen.
+#[allow(dead_code)]
+#[derive(::serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum InboundEnvelope<T> {
+    Ok(T),
+    Err(String),
+}
+
+/// Deserialise a JSON envelope returned from a Swift FFI shim into a typed Result.
+#[allow(dead_code)]
+fn decode_inbound_envelope<T>(json: &str) -> kreuzberg::Result<T>
+where
+    T: ::serde::de::DeserializeOwned,
+{
+    match ::serde_json::from_str::<InboundEnvelope<T>>(json) {
+        Ok(InboundEnvelope::Ok(value)) => Ok(value),
+        Ok(InboundEnvelope::Err(message)) => Err(plugin_error_from_string(message)),
+        Err(e) => Err(plugin_error_from_string(format!(
+            "swift returned malformed envelope: {e}"
+        ))),
+    }
+}
+
+/// Rust-side wrapper around a Swift class implementing the `OcrBackend` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftOcrBackendWrapper {
+    inner: ffi::SwiftOcrBackendBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftOcrBackendWrapper {}
+unsafe impl Sync for SwiftOcrBackendWrapper {}
+
+impl SwiftOcrBackendWrapper {
+    /// Construct a new wrapper from a Swift `SwiftOcrBackendBox` handle.
+    pub fn new(inner: ffi::SwiftOcrBackendBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftOcrBackendWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
+    async fn process_image(
+        &self,
+        image_bytes: &[u8],
+        config: &kreuzberg::OcrConfig,
+    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
+        let image_bytes = image_bytes.to_vec();
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process_image(image_bytes, config);
+        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
+    }
+
+    async fn process_image_file(
+        &self,
+        path: &::std::path::Path,
+        config: &kreuzberg::OcrConfig,
+    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
+        let path = path.to_string_lossy().into_owned();
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process_image_file(path, config);
+        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
+    }
+
+    fn supports_language(&self, lang: &str) -> bool {
+        let lang = lang.to_string();
+        self.inner.alef_supports_language(lang)
+    }
+
+    fn backend_type(&self) -> kreuzberg::plugins::OcrBackendType {
+        let json = self.inner.alef_backend_type();
+        ::serde_json::from_str::<kreuzberg::plugins::OcrBackendType>(&json)
+            .expect("swift ocr_backend.backend_type returned invalid JSON")
+    }
+
+    fn supported_languages(&self) -> Vec<String> {
+        self.inner.alef_supported_languages()
+    }
+
+    fn supports_table_detection(&self) -> bool {
+        self.inner.alef_supports_table_detection()
+    }
+
+    fn supports_document_processing(&self) -> bool {
+        self.inner.alef_supports_document_processing()
+    }
+
+    async fn process_document(
+        &self,
+        path: &::std::path::Path,
+        config: &kreuzberg::OcrConfig,
+    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
+        let path = path.to_string_lossy().into_owned();
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process_document(path, config);
+        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
+    }
+}
+
+/// Register a Swift class implementation as a `OcrBackend` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_ocr_backend(swift_box: ffi::SwiftOcrBackendBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::OcrBackend> =
+        ::std::sync::Arc::new(SwiftOcrBackendWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
+}
+
+/// Rust-side wrapper around a Swift class implementing the `PostProcessor` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftPostProcessorWrapper {
+    inner: ffi::SwiftPostProcessorBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftPostProcessorWrapper {}
+unsafe impl Sync for SwiftPostProcessorWrapper {}
+
+impl SwiftPostProcessorWrapper {
+    /// Construct a new wrapper from a Swift `SwiftPostProcessorBox` handle.
+    pub fn new(inner: ffi::SwiftPostProcessorBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftPostProcessorWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
+    async fn process(
+        &self,
+        result: &mut kreuzberg::ExtractionResult,
+        config: &kreuzberg::ExtractionConfig,
+    ) -> kreuzberg::Result<()> {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process(result, config);
+        decode_inbound_envelope::<()>(&envelope).map(|_| ())
+    }
+
+    fn processing_stage(&self) -> kreuzberg::plugins::ProcessingStage {
+        let json = self.inner.alef_processing_stage();
+        ::serde_json::from_str::<kreuzberg::plugins::ProcessingStage>(&json)
+            .expect("swift post_processor.processing_stage returned invalid JSON")
+    }
+
+    fn should_process(&self, result: &kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> bool {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        self.inner.alef_should_process(result, config)
+    }
+
+    fn estimated_duration_ms(&self, result: &kreuzberg::ExtractionResult) -> u64 {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        self.inner.alef_estimated_duration_ms(result)
+    }
+
+    fn priority(&self) -> i32 {
+        self.inner.alef_priority()
+    }
+}
+
+/// Register a Swift class implementation as a `PostProcessor` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_post_processor(swift_box: ffi::SwiftPostProcessorBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::PostProcessor> =
+        ::std::sync::Arc::new(SwiftPostProcessorWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_post_processor_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
+}
+
+/// Rust-side wrapper around a Swift class implementing the `Validator` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftValidatorWrapper {
+    inner: ffi::SwiftValidatorBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftValidatorWrapper {}
+unsafe impl Sync for SwiftValidatorWrapper {}
+
+impl SwiftValidatorWrapper {
+    /// Construct a new wrapper from a Swift `SwiftValidatorBox` handle.
+    pub fn new(inner: ffi::SwiftValidatorBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftValidatorWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::Validator for SwiftValidatorWrapper {
+    async fn validate(
+        &self,
+        result: &kreuzberg::ExtractionResult,
+        config: &kreuzberg::ExtractionConfig,
+    ) -> kreuzberg::Result<()> {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_validate(result, config);
+        decode_inbound_envelope::<()>(&envelope).map(|_| ())
+    }
+
+    fn should_validate(&self, result: &kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> bool {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        self.inner.alef_should_validate(result, config)
+    }
+
+    fn priority(&self) -> i32 {
+        self.inner.alef_priority()
+    }
+}
+
+/// Register a Swift class implementation as a `Validator` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_validator(swift_box: ffi::SwiftValidatorBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::Validator> =
+        ::std::sync::Arc::new(SwiftValidatorWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_validator_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
+}
+
+/// Rust-side wrapper around a Swift class implementing the `EmbeddingBackend` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftEmbeddingBackendWrapper {
+    inner: ffi::SwiftEmbeddingBackendBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftEmbeddingBackendWrapper {}
+unsafe impl Sync for SwiftEmbeddingBackendWrapper {}
+
+impl SwiftEmbeddingBackendWrapper {
+    /// Construct a new wrapper from a Swift `SwiftEmbeddingBackendBox` handle.
+    pub fn new(inner: ffi::SwiftEmbeddingBackendBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftEmbeddingBackendWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
+    fn dimensions(&self) -> usize {
+        self.inner.alef_dimensions()
+    }
+
+    async fn embed(&self, texts: Vec<String>) -> kreuzberg::Result<Vec<Vec<f32>>> {
+        let envelope = self.inner.alef_embed(texts);
+        decode_inbound_envelope::<Vec<Vec<f32>>>(&envelope)
+    }
+}
+
+/// Register a Swift class implementation as a `EmbeddingBackend` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_embedding_backend(swift_box: ffi::SwiftEmbeddingBackendBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::EmbeddingBackend> =
+        ::std::sync::Arc::new(SwiftEmbeddingBackendWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_embedding_backend_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
 }
