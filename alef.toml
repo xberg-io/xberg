@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.15.14"
+alef_version = "0.15.15"
 languages = [
   "python",
   "node",
