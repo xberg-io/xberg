@@ -491,6 +491,12 @@ mod tests {
             assert!(extractor_names.contains(&"hwp-extractor".to_string()));
         }
 
+        #[cfg(feature = "hwpx")]
+        {
+            expected_count += 1;
+            assert!(extractor_names.contains(&"hwpx-extractor".to_string()));
+        }
+
         #[cfg(feature = "iwork")]
         {
             expected_count += 3;
