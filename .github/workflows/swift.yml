@@ -17,7 +17,7 @@ jobs:
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2
         with:
-          swift-version: "5.10"
+          swift-version: "6.0"
       - name: Build Swift package
         run: swift build
       - name: Run tests
