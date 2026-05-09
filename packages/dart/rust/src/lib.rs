@@ -5988,6 +5988,17 @@ pub fn create_ocr_backend_dart_impl(
     }
 }
 
+/// Register a Dart implementation as a `OcrBackend` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_ocr_backend_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+pub fn register_ocr_backend(impl_: OcrBackendDartImpl) -> Result<(), String> {
+    let arc: std::sync::Arc<dyn kreuzberg::plugins::OcrBackend> = std::sync::Arc::new(impl_);
+    let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
+    let mut registry = registry.write();
+    registry.register(arc).map_err(|e| e.to_string())
+}
+
 /// FRB opaque handle holding Dart callbacks for each trait method.
 /// Dart-side: register callbacks via `create_{snake}_dart_impl(...)` factory.
 #[frb(opaque)]
@@ -6085,6 +6096,17 @@ pub fn create_post_processor_dart_impl(
     }
 }
 
+/// Register a Dart implementation as a `PostProcessor` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_post_processor_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+pub fn register_post_processor(impl_: PostProcessorDartImpl) -> Result<(), String> {
+    let arc: std::sync::Arc<dyn kreuzberg::plugins::PostProcessor> = std::sync::Arc::new(impl_);
+    let registry = kreuzberg::plugins::registry::get_post_processor_registry();
+    let mut registry = registry.write();
+    registry.register(arc).map_err(|e| e.to_string())
+}
+
 /// FRB opaque handle holding Dart callbacks for each trait method.
 /// Dart-side: register callbacks via `create_{snake}_dart_impl(...)` factory.
 #[frb(opaque)]
@@ -6163,6 +6185,17 @@ pub fn create_validator_dart_impl(
     }
 }
 
+/// Register a Dart implementation as a `Validator` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_validator_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+pub fn register_validator(impl_: ValidatorDartImpl) -> Result<(), String> {
+    let arc: std::sync::Arc<dyn kreuzberg::plugins::Validator> = std::sync::Arc::new(impl_);
+    let registry = kreuzberg::plugins::registry::get_validator_registry();
+    let mut registry = registry.write();
+    registry.register(arc).map_err(|e| e.to_string())
+}
+
 /// FRB opaque handle holding Dart callbacks for each trait method.
 /// Dart-side: register callbacks via `create_{snake}_dart_impl(...)` factory.
 #[frb(opaque)]
@@ -6223,4 +6256,15 @@ pub fn create_embedding_backend_dart_impl(
         dimensions,
         embed,
     }
+}
+
+/// Register a Dart implementation as a `EmbeddingBackend` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_embedding_backend_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+pub fn register_embedding_backend(impl_: EmbeddingBackendDartImpl) -> Result<(), String> {
+    let arc: std::sync::Arc<dyn kreuzberg::plugins::EmbeddingBackend> = std::sync::Arc::new(impl_);
+    let registry = kreuzberg::plugins::registry::get_embedding_backend_registry();
+    let mut registry = registry.write();
+    registry.register(arc).map_err(|e| e.to_string())
 }
