@@ -13,7 +13,7 @@ end
 processor = PdfOnlyProcessor.new
 Kreuzberg.register_post_processor('pdf_only', processor)
 
-config = Kreuzberg::Config::Extraction.new(
+config = Kreuzberg::ExtractionConfig.new(
   postprocessor: { enabled: true }
 )
 

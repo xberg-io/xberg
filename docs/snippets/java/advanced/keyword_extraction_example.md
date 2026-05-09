@@ -1,9 +1,9 @@
 ```java title="Java"
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.KeywordConfig;
-import dev.kreuzberg.config.KeywordAlgorithm;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.KeywordConfig;
+import dev.kreuzberg.KeywordAlgorithm;
 import java.util.List;
 import java.util.Map;
 

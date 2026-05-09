@@ -1,12 +1,12 @@
 ```r title="R"
 library(kreuzberg)
 
-config <- extraction_config(force_ocr = TRUE)
+config <- list(force_ocr = TRUE)
 
-result <- extract_file_sync("multipage_document.pdf", "application/pdf", config)
+json <- extract_file_sync("multipage_document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-cat(sprintf("Total pages: %d\n", result$pages))
-cat(sprintf("Content extracted via OCR: %d characters\n",
-            nchar(result$content)))
+cat(sprintf("Total pages: %d\n", length(result$pages)))
+cat(sprintf("Content extracted via OCR: %d characters\n", nchar(result$content)))
 cat(sprintf("Detected language: %s\n", result$detected_language))
 ```

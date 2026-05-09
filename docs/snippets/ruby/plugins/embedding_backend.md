@@ -33,7 +33,7 @@ end
 # reference the backend from EmbeddingConfig.
 Kreuzberg.register_embedding_backend(MyEmbedder.new, 'my-embedder')
 
-config = Kreuzberg::Config::Embedding.new(
+config = Kreuzberg::EmbeddingConfig.new(
   model: { type: 'plugin', name: 'my-embedder' },
   # Optional: bound the wait on a hung backend (default 60s; nil disables).
   max_embed_duration_secs: 30

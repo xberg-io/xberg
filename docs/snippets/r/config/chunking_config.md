@@ -2,61 +2,49 @@
 library(kreuzberg)
 
 # Example 1: Basic character-based chunking
-chunking_cfg <- chunking_config(max_characters = 1000L, overlap = 200L)
-config <- extraction_config(chunking = chunking_cfg)
+config <- list(
+  chunking = list(max_characters = 1000L, overlap = 200L)
+)
 
-result <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+
 num_chunks <- length(result$chunks)
 cat(sprintf("Document split into %d chunks\n", num_chunks))
 for (i in seq_len(min(3L, num_chunks))) {
   cat(sprintf("Chunk %d: %d characters\n", i, nchar(result$chunks[[i]])))
 }
+```
 
-# Example 2: Markdown chunker with token-based sizing and heading context
-chunking_cfg2 <- chunking_config(
-  chunker_type = "markdown",
-  sizing = list(
-    type = "tokenizer",
-    model = "Xenova/gpt-4o"
+```r title="R - Markdown chunker with token-based sizing"
+library(kreuzberg)
+
+config <- list(
+  chunking = list(
+    chunker_type = "markdown",
+    sizing = list(
+      type = "tokenizer",
+      model = "Xenova/gpt-4o"
+    )
   )
 )
-config2 <- extraction_config(chunking = chunking_cfg2)
 
-result2 <- extract_file_sync("document.md", "text/markdown", config2)
-num_chunks2 <- length(result2$chunks)
-cat(sprintf("\nMarkdown document split into %d chunks\n", num_chunks2))
+json <- extract_file_sync("document.md", "text/markdown", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+cat(sprintf("Markdown document split into %d chunks\n", length(result$chunks)))
+```
 
-for (i in seq_len(min(3L, num_chunks2))) {
-  chunk <- result2$chunks[[i]]
-  cat(sprintf("\nChunk %d:\n", i))
-  cat(sprintf("  Preview: %s...\n", substr(chunk$text, 1, 60)))
+```r title="R - Prepend heading context"
+library(kreuzberg)
 
-  # Access heading context
-  if (!is.null(chunk$metadata$heading_context)) {
-    headings <- chunk$metadata$heading_context$headings
-    if (length(headings) > 0) {
-      cat("  Headings in context:\n")
-      for (h in headings) {
-        cat(sprintf("    - Level %d: %s\n", h$level, h$text))
-      }
-    }
-  }
-}
-
-# Example 3: Prepend heading context to chunk content
-chunking_cfg3 <- chunking_config(
-  chunker_type = "markdown",
-  prepend_heading_context = TRUE
+config <- list(
+  chunking = list(
+    chunker_type = "markdown",
+    prepend_heading_context = TRUE
+  )
 )
-config3 <- extraction_config(chunking = chunking_cfg3)
 
-result3 <- extract_file_sync("document.md", "text/markdown", config3)
-num_chunks3 <- length(result3$chunks)
-cat(sprintf("\nDocument split into %d chunks with prepended headings\n", num_chunks3))
-
-for (i in seq_len(min(3L, num_chunks3))) {
-  chunk <- result3$chunks[[i]]
-  # Each chunk's content is prefixed with its heading breadcrumb
-  cat(sprintf("Chunk %d: %s...\n", i, substr(chunk$content, 1, 80)))
-}
+json <- extract_file_sync("document.md", "text/markdown", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+cat(sprintf("Document split into %d chunks with prepended headings\n", length(result$chunks)))
 ```

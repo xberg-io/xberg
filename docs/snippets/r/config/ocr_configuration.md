@@ -2,15 +2,15 @@
 library(kreuzberg)
 
 # Configure OCR with Tesseract
-config <- extraction_config(
+config <- list(
   force_ocr = TRUE,
-  ocr = ocr_config(
+  ocr = list(
     backend = "tesseract",
-    language = "eng+deu",
-    dpi = 300L
+    language = "eng+deu"
   )
 )
 
-result <- extract_file_sync("scanned_document.pdf", config = config)
+json <- extract_file_sync("scanned_document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 cat(result$content)
 ```

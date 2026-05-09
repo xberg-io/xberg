@@ -16,7 +16,7 @@ my_embedder <- list(
 
 register_embedding_backend(my_embedder)
 
-config <- extraction_config(
+config <- list(
   embedding = list(
     model = list(type = "plugin", name = "my-embedder"),
     max_embed_duration_secs = 30L

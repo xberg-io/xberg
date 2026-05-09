@@ -21,8 +21,9 @@ logging_validator <- function(result) {
 register_post_processor("logging_processor", logging_processor)
 register_validator("logging_validator", logging_validator)
 
-config <- extraction_config(postprocessor = list(enabled = TRUE))
-result <- extract_file_sync("document.pdf", "application/pdf", config)
+config <- list(postprocessor = list(enabled = TRUE))
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Done: %d characters\n", nchar(result$content)))
 ```

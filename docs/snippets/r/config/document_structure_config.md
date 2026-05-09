@@ -1,13 +1,13 @@
 ```r title="R"
 library(kreuzberg)
 
-config <- extraction_config(
+config <- list(
   include_document_structure = TRUE,
   output_format = "markdown"
 )
 
-file_path <- "document.pdf"
-result <- extract_file_sync(file_path, config = config)
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Total pages: %d\n", length(result$pages)))
 cat(sprintf("MIME type: %s\n\n", result$mime_type))

@@ -1,14 +1,16 @@
 ```r title="R"
 library(kreuzberg)
 
-keywords_cfg <- keyword_config(
-  algorithm = "yake",
-  max_keywords = 10L,
-  min_score = 0.3
+config <- list(
+  keywords = list(
+    algorithm = "yake",
+    max_keywords = 10L,
+    min_score = 0.3
+  )
 )
 
-config <- extraction_config(keywords = keywords_cfg)
-result <- extract_file_sync("research_paper.pdf", "application/pdf", config)
+json <- extract_file_sync("research_paper.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Content length: %d characters\n", nchar(result$content)))
 if (!is.null(result$metadata$keywords)) {

@@ -1,16 +1,15 @@
 ```r title="R"
 library(kreuzberg)
 
-html_cfg <- html_output_config(
-  theme = "git_hub",
-  embed_css = TRUE
-)
-
-config <- extraction_config(
+config <- list(
   output_format = "html",
-  html_output = html_cfg
+  html_output = list(
+    theme = "git_hub",
+    embed_css = TRUE
+  )
 )
 
-result <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 cat(result$content) # HTML with kb-* classes
 ```

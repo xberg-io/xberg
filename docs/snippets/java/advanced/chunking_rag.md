@@ -1,10 +1,10 @@
 ```java title="Java"
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.ChunkingConfig;
-import dev.kreuzberg.config.EmbeddingConfig;
-import dev.kreuzberg.config.EmbeddingModelType;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.ChunkingConfig;
+import dev.kreuzberg.EmbeddingConfig;
+import dev.kreuzberg.EmbeddingModelType;
 import java.util.List;
 
 ExtractionConfig config = ExtractionConfig.builder()

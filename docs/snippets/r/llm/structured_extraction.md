@@ -1,7 +1,8 @@
+<!-- snippet:syntax-only --> Requires network access to the configured LLM provider and a valid API key in the host environment.
+
 ```r title="R"
 library(kreuzberg)
 
-llm <- llm_config(model = "openai/gpt-4o-mini")
 schema <- list(
   type = "object",
   properties = list(
@@ -13,16 +14,16 @@ schema <- list(
   additionalProperties = FALSE
 )
 
-structured <- structured_extraction_config(
-  schema = schema,
-  llm = llm,
-  strict = TRUE
+config <- list(
+  structured_extraction = list(
+    schema = schema,
+    llm = list(model = "openai/gpt-4o-mini"),
+    strict = TRUE
+  )
 )
 
-config <- extraction_config(structured_extraction = structured)
-result <- extract_file_sync("paper.pdf", "application/pdf", config)
+json <- extract_file_sync("paper.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(result$structured_output, "\n")
 ```
-
-<!-- snippet:syntax-only --> Requires network access to the configured LLM provider and a valid API key in the host environment.

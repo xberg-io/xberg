@@ -1,8 +1,8 @@
 ```ruby title="Ruby"
 require 'kreuzberg'
 
-config = Kreuzberg::Config::Extraction.new(
-  ocr: Kreuzberg::Config::OCR.new(backend: 'tesseract'),
+config = Kreuzberg::ExtractionConfig.new(
+  ocr: Kreuzberg::OcrConfig.new(backend: 'tesseract'),
   force_ocr: true
 )
 

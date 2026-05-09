@@ -9,19 +9,16 @@ import (
 )
 
 func main() {
-	backend := "tesseract"
-	language := "eng"
-
-	ocrConfig := &kreuzberg.OCRConfig{
-		Backend:  &backend,
-		Language: &language,
+	ocrConfig := &kreuzberg.OcrConfig{
+		Backend:  "tesseract",
+		Language: "eng",
 	}
 
-	config := &kreuzberg.ExtractionConfig{
-		OCR: ocrConfig,
+	config := kreuzberg.ExtractionConfig{
+		Ocr: ocrConfig,
 	}
 
-	result, err := kreuzberg.ExtractFileSync("scanned.pdf", config)
+	result, err := kreuzberg.ExtractFileSync("scanned.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

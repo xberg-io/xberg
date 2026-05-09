@@ -9,12 +9,11 @@ import (
 )
 
 func main() {
-	force := true
-	result, err := kreuzberg.ExtractFileSync("document.pdf", &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend: "tesseract",
 		},
-		ForceOCR: &force,
+		ForceOcr: true,
 	})
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)

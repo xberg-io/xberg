@@ -2,7 +2,7 @@
 require "kreuzberg"
 
 validator = lambda do |result|
-  raise Kreuzberg::ValidationError, "Content too short" if result.content.length < 50
+  raise StandardError, "Content too short" if result.content.length < 50
 end
 
 Kreuzberg.register_validator("min_length", validator, priority: 10)

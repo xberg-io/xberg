@@ -12,7 +12,7 @@ describe 'Plugin Testing' do
 
   it 'registers and validates' do
     validator = ->(result) do
-      raise Kreuzberg::Errors::ValidationError, 'Too short' if result['content'].length < 10
+      raise StandardError, 'Too short' if result['content'].length < 10
     end
     Kreuzberg.register_validator('test-val', validator)
     expect(Kreuzberg.list_validators).to include('test-val')

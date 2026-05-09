@@ -1,7 +1,7 @@
 ```r title="R"
 library(kreuzberg)
 
-config <- extraction_config(
+config <- list(
   keywords = list(
     algorithm = "yake",
     max_keywords = 10L,
@@ -11,7 +11,8 @@ config <- extraction_config(
   )
 )
 
-result <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Keywords extracted: %d\n", length(result$keywords)))
 ```

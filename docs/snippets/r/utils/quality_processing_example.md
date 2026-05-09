@@ -1,8 +1,9 @@
 ```r title="R"
 library(kreuzberg)
 
-config <- extraction_config(enable_quality_processing = TRUE)
-result <- extract_file_sync("scanned_document.pdf", "application/pdf", config)
+config <- list(enable_quality_processing = TRUE)
+json <- extract_file_sync("scanned_document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Content length: %d characters\n", nchar(result$content)))
 if (!is.null(result$quality_score)) {

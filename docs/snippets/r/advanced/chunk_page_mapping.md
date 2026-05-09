@@ -1,13 +1,15 @@
 ```r title="R"
 library(kreuzberg)
 
-chunking_cfg <- chunking_config(max_characters = 500L, overlap = 50L)
-pages_cfg <- page_config(extract_pages = TRUE)
-config <- extraction_config(chunking = chunking_cfg, pages = pages_cfg)
+config <- list(
+  chunking = list(max_characters = 500L, overlap = 50L),
+  pages = list(extract_pages = TRUE)
+)
 
-result <- extract_file_sync("document.pdf", "application/pdf", config)
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-for (i in seq_len(length(result$chunks))) {
+for (i in seq_along(result$chunks)) {
   chunk <- result$chunks[[i]]
   metadata <- result$chunk_metadata[[i]]
 

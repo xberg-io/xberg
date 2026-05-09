@@ -1,7 +1,7 @@
 ```java title="Java"
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
-import dev.kreuzberg.config.ExtractionConfig;
+import dev.kreuzberg.ExtractionConfig;
 import java.nio.file.Path;
 
 public final class ConfigFileExample {

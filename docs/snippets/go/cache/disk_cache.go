@@ -3,51 +3,36 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"log"
 
-	"kreuzberg"
+	"github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 )
 
 func main() {
-	cacheDir := filepath.Join(os.Getenv("HOME"), ".cache", "kreuzberg")
-	os.MkdirAll(cacheDir, 0755)
+	useCache := true
+	namespace := "documents"
+	ttl := uint64(7 * 86400)
 
-	config := &kreuzberg.ExtractionConfig{
-		UseCache: true,
-		CacheConfig: &kreuzberg.CacheConfig{
-			CachePath:         cacheDir,
-			MaxCacheSize:      500 * 1024 * 1024,
-			CacheTTLSeconds:   7 * 86400,
-			EnableCompression: true,
-		},
+	config := kreuzberg.ExtractionConfig{
+		UseCache:       &useCache,
+		CacheNamespace: &namespace,
+		CacheTTLSecs:   &ttl,
 	}
 
 	fmt.Println("First extraction (will be cached)...")
-	result1, err := kreuzberg.ExtractFileSync("document.pdf", config)
+	result1, err := kreuzberg.ExtractFileSync("document.pdf", nil, config)
 	if err != nil {
-		panic(err)
+		log.Fatalf("extract failed: %v", err)
 	}
 	fmt.Printf("  - Content length: %d\n", len(result1.Content))
-	fmt.Printf("  - Cached: %v\n", result1.Metadata["was_cached"])
 
 	fmt.Println("\nSecond extraction (from cache)...")
-	result2, err := kreuzberg.ExtractFileSync("document.pdf", config)
+	result2, err := kreuzberg.ExtractFileSync("document.pdf", nil, config)
 	if err != nil {
-		panic(err)
+		log.Fatalf("extract failed: %v", err)
 	}
 	fmt.Printf("  - Content length: %d\n", len(result2.Content))
-	fmt.Printf("  - Cached: %v\n", result2.Metadata["was_cached"])
 
 	fmt.Printf("\nResults are identical: %v\n", result1.Content == result2.Content)
-
-	stats, err := kreuzberg.GetCacheStats()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("\nCache Statistics:")
-	fmt.Printf("  - Total entries: %d\n", stats.TotalEntries)
-	fmt.Printf("  - Cache size: %.1f MB\n", float64(stats.CacheSizeBytes)/1024/1024)
-	fmt.Printf("  - Hit rate: %.1f%%\n", stats.HitRate*100)
 }
 ```

@@ -15,7 +15,7 @@ end
 class LoggingValidator
   def call(result)
     puts "Validating: #{result['content'].length} bytes"
-    raise Kreuzberg::Errors::ValidationError, 'Too short' if result['content'].length < 50
+    raise StandardError, 'Too short' if result['content'].length < 50
   end
 end
 

@@ -1,9 +1,9 @@
 ```java title="Java"
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.OcrConfig;
-import dev.kreuzberg.config.ImagePreprocessingConfig;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.OcrConfig;
+import dev.kreuzberg.ImagePreprocessingConfig;
 
 ExtractionConfig config = ExtractionConfig.builder()
     .ocr(OcrConfig.builder()

@@ -1,8 +1,8 @@
 ```r title="R"
 library(kreuzberg)
 
-config <- embedding_config(
-  model = list(preset = list(name = "balanced")),
+config <- list(
+  model = list(type = "preset", name = "balanced"),
   normalize = TRUE
 )
 

@@ -5,11 +5,11 @@ class VectorDatabaseIntegration
   VectorRecord = Struct.new(:id, :embedding, :content, :metadata, keyword_init: true)
 
   def extract_and_vectorize(document_path, document_id)
-    config = Kreuzberg::Config::Extraction.new(
-      chunking: Kreuzberg::Config::Chunking.new(
+    config = Kreuzberg::ExtractionConfig.new(
+      chunking: Kreuzberg::ChunkingConfig.new(
         max_characters: 512,
         overlap: 50,
-        embedding: Kreuzberg::Config::Embedding.new(
+        embedding: Kreuzberg::EmbeddingConfig.new(
           model: Kreuzberg::EmbeddingModelType.new(
             type: 'preset',
             name: 'balanced'

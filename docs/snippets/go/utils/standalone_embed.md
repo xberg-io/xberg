@@ -2,17 +2,20 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 )
 
 func main() {
+	preset := "balanced"
 	normalize := true
-	config := &kreuzberg.EmbeddingConfig{
-		Model:     &kreuzberg.EmbeddingModelType{Type_: "preset", Preset: kreuzberg.String("balanced")},
-		Normalize: normalize,
+	config := kreuzberg.EmbeddingConfig{
+		Model: kreuzberg.EmbeddingModelType{
+			Type: "preset",
+			Name: &preset,
+		},
+		Normalize: &normalize,
 	}
 
 	// Synchronous
@@ -23,8 +26,8 @@ func main() {
 	fmt.Println(len(embeddings))    // 2
 	fmt.Println(len(embeddings[0])) // 768
 
-	// Asynchronous (context-aware)
-	embeddings, err = kreuzberg.EmbedTextsAsync(context.Background(), []string{"Hello, world!"}, config)
+	// Asynchronous
+	embeddings, err = kreuzberg.EmbedTextsAsync([]string{"Hello, world!"}, config)
 	if err != nil {
 		panic(err)
 	}

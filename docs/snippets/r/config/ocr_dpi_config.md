@@ -1,17 +1,16 @@
 ```r title="R"
 library(kreuzberg)
 
-dpi_values <- c(150L, 300L, 600L)
-results <- list()
+# Tesseract OCR via the kreuzberg R bindings does not expose a DPI setting in
+# the high-level config; PDF rasterization DPI is determined by the pipeline.
+# This example demonstrates running Tesseract OCR end-to-end on a PDF.
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(backend = "tesseract", language = "eng")
+)
 
-for (dpi in dpi_values) {
-  ocr_cfg <- ocr_config(backend = "tesseract", language = "eng", dpi = dpi)
-  config <- extraction_config(force_ocr = TRUE, ocr = ocr_cfg)
-  results[[as.character(dpi)]] <- extract_file_sync("document.pdf", "application/pdf", config)
-}
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-for (dpi in dpi_values) {
-  content_len <- nchar(results[[as.character(dpi)]]$content)
-  cat(sprintf("DPI %d: %d characters extracted\n", dpi, content_len))
-}
+cat(sprintf("Characters extracted: %d\n", nchar(result$content)))
 ```

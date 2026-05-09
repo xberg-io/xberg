@@ -14,7 +14,7 @@ end
 processor = WordCountProcessor.new
 Kreuzberg.register_post_processor('word_count', processor, 10)
 
-config = Kreuzberg::Config::Extraction.new(
+config = Kreuzberg::ExtractionConfig.new(
   postprocessor: { enabled: true }
 )
 

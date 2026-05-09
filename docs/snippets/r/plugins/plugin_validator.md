@@ -15,8 +15,9 @@ min_content_validator <- function(result) {
 
 register_validator("min_content", min_content_validator)
 
-config <- extraction_config()
-result <- extract_file_sync("document.pdf", "application/pdf", config)
+config <- ExtractionConfig$default()
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Content length: %d characters\n", nchar(result$content)))
 ```

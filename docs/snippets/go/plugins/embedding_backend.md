@@ -44,11 +44,12 @@ func main() {
 	}()
 
 	maxDuration := uint64(30)
+	embedderName := "my-embedder"
 	config := kreuzberg.EmbeddingConfig{
 		Model: kreuzberg.EmbeddingModelType{
 			Variant: "plugin",
 			Type:    "plugin",
-			Name:    func() *string { s := "my-embedder"; return &s }(),
+			Name:    &embedderName,
 		},
 		// Optional: bound the wait on a hung backend (default 60s; nil disables).
 		MaxEmbedDurationSecs: &maxDuration,

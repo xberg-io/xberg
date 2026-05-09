@@ -9,15 +9,14 @@ import (
 )
 
 func main() {
-	lang := "en"
-	cfg := &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	cfg := kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend:  "paddle-ocr",
-			Language: &lang,
+			Language: "en",
 		},
 	}
 
-	result, err := kreuzberg.ExtractFileSync("scanned.pdf", cfg)
+	result, err := kreuzberg.ExtractFileSync("scanned.pdf", nil, cfg)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}
@@ -27,7 +26,7 @@ func main() {
 		fmt.Printf("Confidence: %.2f\n", element.Confidence.Recognition)
 		fmt.Printf("Geometry: %+v\n", element.Geometry)
 		if element.Rotation != nil {
-			fmt.Printf("Rotation: %.1f°\n", element.Rotation.Angle)
+			fmt.Printf("Rotation: %.1f°\n", element.Rotation.AngleDegrees)
 		}
 		fmt.Println()
 	}
