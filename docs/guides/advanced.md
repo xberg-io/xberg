@@ -2,13 +2,16 @@
 
 ## Text Chunking
 
-Split extracted text into chunks for RAG systems, vector databases, or LLM context windows. Four strategies: **Text** (splits on whitespace/punctuation boundaries), **Markdown** (structure-aware, preserves headings, lists, code blocks), **YAML** (section-aware, preserves YAML document structure), and **Semantic** (topic-aware, splits at natural document boundaries).
+Split extracted text into chunks for RAG, vector databases, or LLM context windows. Four strategies:
+
+- **Text** — splits on whitespace/punctuation boundaries
+- **Markdown** — structure-aware; preserves headings, lists, and code blocks
+- **YAML** — section-aware; preserves YAML document structure
+- **Semantic** — topic-aware; splits at natural document boundaries
 
 ### Semantic
 
-The semantic chunker produces topic-coherent chunks by splitting at natural document boundaries. It requires either an embedding model for topic detection or uses structural heuristics as fallback.
-
-Set `chunker_type` to `"semantic"`:
+Set `chunker_type` to `"semantic"`. Uses an embedding model for topic detection when one is configured; otherwise falls back to structural heuristics.
 
 ```python
 config = ExtractionConfig(
@@ -112,9 +115,7 @@ Chunks can be sized by token count instead of characters — enable the `chunkin
 
 ## Language Detection
 
-Detect languages in extracted text using [`whatlang`](https://crates.io/crates/whatlang). Supports 60+ languages with ISO 639-3 codes.
-
-By default, only the primary language is returned. Set `detect_multiple: true` to detect all languages in a document: the text is chunked into 200-character segments and language frequencies are aggregated, returning all detected languages sorted by prevalence.
+Detect languages in extracted text using [`whatlang`](https://crates.io/crates/whatlang) — 60+ languages with ISO 639-3 codes. Set `detect_multiple: true` to chunk the text into 200-char segments and return all detected languages sorted by prevalence.
 
 ### Configuration
 
@@ -186,7 +187,7 @@ By default, only the primary language is returned. Set `detect_multiple: true` t
 
 ## Embedding Generation
 
-Generate embeddings for semantic search and RAG using local ONNX models. Requires the `embeddings` feature. Embeddings are generated in-process with no external API calls.
+Local in-process embeddings via ONNX for semantic search and RAG — no external API calls. Requires the `embeddings` feature.
 
 | Preset         | Model                        | Dimensions | Max Tokens | Use Case                                                |
 | -------------- | ---------------------------- | ---------- | ---------- | ------------------------------------------------------- |
@@ -197,7 +198,7 @@ Generate embeddings for semantic search and RAG using local ONNX models. Require
 
 ### In-Process Embedding Backends (Plugin Variant)
 
-For callers that already manage their own embedding model in-process (e.g. `llama-cpp-python`, `sentence-transformers`, a tuned ONNX model), Kreuzberg accepts a caller-supplied embedder via the `Plugin` variant of `EmbeddingModelType`. Kreuzberg calls back into the registered backend instead of downloading and running its own ONNX model.
+Plug a caller-managed embedder (e.g. `llama-cpp-python`, `sentence-transformers`) into Kreuzberg via the `Plugin` variant of `EmbeddingModelType` — Kreuzberg calls back into the registered backend instead of running its own ONNX model.
 
 1. Register the backend once at startup via `kreuzberg::plugins::register_embedding_backend(Arc::new(MyEmbedder))`. The backend implements `EmbeddingBackend` (a `Plugin`-inheriting async trait with `dimensions()` and `embed(texts) -> Vec<Vec<f32>>`).
 2. Reference it by name in `EmbeddingConfig`: `{ "model": { "type": "plugin", "name": "my-embedder" } }`.

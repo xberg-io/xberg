@@ -4,9 +4,7 @@ description: "Install Kreuzberg — pick Python, TypeScript, Rust, Go, CLI/Docke
 
 # Installation
 
-Kreuzberg ships native bindings for 12 languages and a standalone CLI. Pick your stack, run one command, and start extracting.
-
-Every package includes **prebuilt binaries** for Linux (x86_64 / aarch64), macOS (Apple Silicon), and Windows — no compile step needed.
+Native bindings for 12 languages plus a standalone CLI. Every package ships **prebuilt binaries** for Linux (x86_64/aarch64), macOS (Apple Silicon), and Windows — no compile step needed.
 
 !!! Warning "Windows — ONNX Runtime required for Go, Elixir, and C/C++" Go, Elixir, and C/C++ bindings on Windows link against ONNX Runtime dynamically. You must have `onnxruntime.dll` on your `PATH` at runtime. Download it from the [ONNX Runtime releases](https://github.com/microsoft/onnxruntime/releases) (for example `onnxruntime-win-x64-1.24.1.zip`). Python, TypeScript, Java, C#, Ruby, PHP, and Wasm are unaffected.
 
@@ -16,7 +14,7 @@ Every package includes **prebuilt binaries** for Linux (x86_64 / aarch64), macOS
 
 ## :material-console: CLI / Docker { #cli--docker }
 
-The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
+No SDK, no code — just your terminal.
 
 === "Install script"
 
@@ -199,7 +197,7 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
 
 ## System requirements
 
-Most of the time you won't need anything beyond the install command above. The table below only matters if you're building from source or want OCR:
+Only relevant if building from source or enabling OCR:
 
 | Dependency                | When you need it                                                                       |
 | ------------------------- | -------------------------------------------------------------------------------------- |
@@ -229,7 +227,7 @@ See [AccelerationConfig](../reference/configuration.md#accelerationconfig) and [
 
 ## Language-specific notes
 
-For most languages the install command above is all you need. The sections below cover edge cases and alternative install methods where they come up.
+Edge cases and alternative install methods where they come up.
 
 ### TypeScript
 
@@ -385,7 +383,7 @@ my_app: my_app.c
 
 ## Development setup
 
-Working on the Kreuzberg repository itself:
+For working on the Kreuzberg repository itself:
 
 ```bash
 task setup      # installs all language toolchains

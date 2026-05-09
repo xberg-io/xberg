@@ -1,8 +1,6 @@
 # Features
 
-Kreuzberg is a document intelligence library built on a Rust core with bindings for 12 languages. It extracts text, tables, and metadata from 91+ file formats, runs OCR when needed, and feeds the results through a configurable post-processing pipeline -- chunking, embeddings, keyword extraction, and more.
-
-This page is a map of what Kreuzberg can do. Each section links to the guide or reference page where you will find configuration details and code examples.
+A map of what Kreuzberg can do. Each section links to the guide or reference page with configuration details and code examples.
 
 ![Kreuzberg features overview -- 91+ input formats flow through extraction, OCR, and processing to produce text, tables, chunks, and metadata](assets/feature-overview.png)
 
@@ -10,7 +8,7 @@ This page is a map of what Kreuzberg can do. Each section links to the guide or 
 
 ## Format Support
 
-Kreuzberg handles 91+ file formats through native Rust extractors. No external tools such as LibreOffice are required.
+91+ file formats handled by native Rust extractors — no LibreOffice or other external tools required.
 
 === "Documents"
 
@@ -109,7 +107,7 @@ For the full format matrix with MIME types, extraction methods, and special capa
 
 ## Extraction Pipeline
 
-Every file -- whether a single PDF or a batch of thousands -- flows through the same multi-stage pipeline:
+Every file flows through the same multi-stage pipeline:
 
 ```mermaid
 flowchart LR
@@ -138,7 +136,7 @@ Kreuzberg supports five output formats: **Plain text**, **Markdown**, **Djot**, 
 
 ## OCR Engines
 
-Kreuzberg supports three OCR backends. You can use one backend, or chain multiple backends into a fallback pipeline that automatically retries with the next engine when quality is low.
+Three OCR backends, usable individually or chained into a quality-driven fallback pipeline.
 
 ### Backend Comparison
 
@@ -182,7 +180,7 @@ For backend configuration, language selection, and PSM/OEM modes, see the [OCR G
 
 ## Processing Features
 
-After extraction, Kreuzberg can run a chain of processing steps. Each is optional and configured independently through `ExtractionConfig`.
+Optional post-extraction steps, each configured independently through `ExtractionConfig`.
 
 ### For RAG Pipelines
 
@@ -300,7 +298,7 @@ For configuration and usage, see the [Layout Detection Guide](guides/layout-dete
 
 ## Plugin System
 
-Kreuzberg's extraction pipeline is extensible through four plugin types, each hooking into a different stage:
+The extraction pipeline is extensible through four plugin types, each hooking into a different stage:
 
 ```mermaid
 flowchart LR
@@ -338,7 +336,7 @@ For the architecture overview, see [Plugin System](concepts/plugin-system.md). F
 
 ## Language Bindings
 
-Kreuzberg's Rust core is exposed through native bindings for 12 languages. All bindings share the same extraction engine and produce identical results.
+12 native bindings share the Rust core and produce identical results.
 
 ### Binding Tiers
 
@@ -357,7 +355,7 @@ Choose Native for server-side Node.js; choose WASM for browser or edge deploymen
 
 ### Rust Feature Flags
 
-Rust builds are modular through Cargo features. Nothing is enabled by default -- you opt into exactly what you need:
+Rust builds are modular through Cargo features. Nothing is enabled by default:
 
 | Category              | Features                                                                                                |
 | --------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -404,7 +402,7 @@ For API details per language, see the [API Reference](reference/api-python.md).
 
 ## Configuration
 
-Kreuzberg supports four configuration methods, checked in this order:
+Four configuration methods, checked in this order:
 
 1. **Programmatic** -- Construct `ExtractionConfig` objects in code (all bindings)
 2. **TOML** -- `kreuzberg.toml`
