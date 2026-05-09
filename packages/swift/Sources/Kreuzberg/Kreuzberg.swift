@@ -1689,3 +1689,135 @@ public func extractFile(
 ) throws -> ExtractionResult {
     return try extractFileSync(path, mimeType, config)
 }
+// MARK: - E2e Test Convenience Wrappers
+// JSON-config and file-loading wrappers used exclusively by the generated e2e tests.
+
+private func resolveFixturePath(_ name: String) -> URL {
+    if let dir = ProcessInfo.processInfo.environment["FIXTURES_DIR"] {
+        return URL(fileURLWithPath: dir).appendingPathComponent(name)
+    }
+    return URL(fileURLWithPath: name)
+}
+
+/// E2e wrapper: reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
+public func extractBytesSync(
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+}
+
+/// E2e wrapper (async): reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
+public func extractBytes(
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+}
+
+/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
+public func extractFileSync(
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
+}
+
+/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
+public func extractFileSync(
+    _ path: String,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
+}
+
+/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
+public func extractFile(
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
+}
+
+/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
+public func extractFile(
+    _ path: String,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
+}
+
+/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchBytesItem.
+public func batchExtractBytesSync(
+    _ jsonItems: [String]
+) throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchBytesItem.
+public func batchExtractBytes(
+    _ jsonItems: [String]
+) async throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchFileItem.
+public func batchExtractFilesSync(
+    _ jsonItems: [String]
+) throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchFileItem.
+public func batchExtractFiles(
+    _ jsonItems: [String]
+) async throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper: reads `filePath` into bytes and calls detectMimeTypeFromBytes.
+public func detectMimeTypeFromBytes(
+    _ filePath: String
+) throws -> String {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    return try detectMimeTypeFromBytes(makeByteVec(data.map { $0 })).toString()
+}
