@@ -113,3 +113,24 @@ async fn test_extract_bytes_timeout_without_tokio_returns_validation_error() {
         other => panic!("Expected Validation error, got {other:?}"),
     }
 }
+
+/// When no tokio-runtime is available, setting a timeout should return a Validation error.
+#[cfg(not(feature = "tokio-runtime"))]
+#[tokio::test]
+async fn test_extract_file_timeout_without_tokio_returns_validation_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file_path = dir.path().join("test.txt");
+    std::fs::write(&file_path, b"testing").unwrap();
+
+    let config = ExtractionConfig {
+        extraction_timeout_secs: Some(5),
+        ..Default::default()
+    };
+    let result = extract_file(&file_path, Some("text/plain"), &config).await;
+    match result {
+        Err(KreuzbergError::Validation { message, .. }) => {
+            assert!(message.contains("requires the 'tokio-runtime' feature"));
+        }
+        other => panic!("Expected Validation error, got {other:?}"),
+    }
+}
