@@ -230,11 +230,6 @@ exclude_types = [
 [crates.elixir]
 app_name = "kreuzberg"
 exclude_functions = [
-  # OcrBackend trait bridge: codegen captures *const ErlNifEnv which is neither Send nor Sync,
-  # and the generated impl pulls in async_trait which conflicts with Rustler's NIF ABI.
-  # Requires alef source fixes to resolve.
-  "register_ocr_backend",
-  "unregister_ocr_backend",
   # batch_extract_* take Vec<(PathBuf, Option<FileExtractionConfig>)> or
   # Vec<(Vec<u8>, String, Option<...>)> which codegen maps to Vec<String> —
   # type mismatch; no safe tuple-marshalling across NIF boundary
@@ -2265,28 +2260,27 @@ registry_getter = "kreuzberg::plugins::registry::get_ocr_backend_registry"
 register_fn = "register_ocr_backend"
 # extendr trait_bridge codegen produces String error literals where extendr_api::Error
 # is expected (E0308) and calls .map_err() on parking_lot RwLockWriteGuard (which is
-# infallible) — 85 build errors as of alef 0.15.0. Rustler trait_bridge codegen produces
-# 31 errors, including invalid associated trait method signatures. Re-enable once
-# alef-backend-{extendr,rustler}/src/trait_bridge.rs is fixed upstream.
-exclude_languages = ["elixir", "r"]
+# infallible) — 85 build errors as of alef 0.15.0. Rustler now uses LocalPid which is
+# Copy + Send + Sync; the issue is resolved. R backend still has trait method signature issues.
+exclude_languages = ["r"]
 
 [[crates.trait_bridges]]
 trait_name = "PostProcessor"
 super_trait = "kreuzberg::plugins::Plugin"
 registry_getter = "kreuzberg::plugins::registry::get_post_processor_registry"
 register_fn = "register_post_processor"
-exclude_languages = ["elixir", "r"]
+exclude_languages = ["r"]
 
 [[crates.trait_bridges]]
 trait_name = "Validator"
 super_trait = "kreuzberg::plugins::Plugin"
 registry_getter = "kreuzberg::plugins::registry::get_validator_registry"
 register_fn = "register_validator"
-exclude_languages = ["elixir", "r"]
+exclude_languages = ["r"]
 
 [[crates.trait_bridges]]
 trait_name = "EmbeddingBackend"
 super_trait = "kreuzberg::plugins::Plugin"
 registry_getter = "kreuzberg::plugins::registry::get_embedding_backend_registry"
 register_fn = "register_embedding_backend"
-exclude_languages = ["elixir", "r"]
+exclude_languages = ["r"]
