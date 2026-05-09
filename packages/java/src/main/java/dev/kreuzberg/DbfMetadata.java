@@ -15,8 +15,11 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DbfMetadataBuilder.class)
-public record DbfMetadata(@JsonProperty("record_count") long recordCount, @JsonProperty("field_count") long fieldCount,
-        @JsonInclude(JsonInclude.Include.NON_NULL) List<DbfFieldInfo> fields) {
+public record DbfMetadata(
+    @JsonProperty("record_count") long recordCount,
+    @JsonProperty("field_count") long fieldCount,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<DbfFieldInfo> fields
+) {
     public static DbfMetadataBuilder builder() {
         return new DbfMetadataBuilder();
     }

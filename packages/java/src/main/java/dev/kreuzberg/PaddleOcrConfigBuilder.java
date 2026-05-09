@@ -11,8 +11,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Configuration for PaddleOCR backend.
  *
- * Configures PaddleOCR text detection and recognition with multi-language support. Uses a builder pattern for
- * convenient configuration.
+ * Configures PaddleOCR text detection and recognition with multi-language support.
+ * Uses a builder pattern for convenient configuration.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class PaddleOcrConfigBuilder {
@@ -104,7 +104,19 @@ public class PaddleOcrConfigBuilder {
 
     /** Builds the PaddleOcrConfig instance. */
     public PaddleOcrConfig build() {
-        return new PaddleOcrConfig(language, cacheDir.orElse(null), useAngleCls, enableTableDetection, detDbThresh,
-                detDbBoxThresh, detDbUnclipRatio, detLimitSideLen, recBatchNum, padding, dropScore, modelTier);
+        return new PaddleOcrConfig(
+            language,
+            cacheDir.orElse(null),
+            useAngleCls,
+            enableTableDetection,
+            detDbThresh,
+            detDbBoxThresh,
+            detDbUnclipRatio,
+            detLimitSideLen,
+            recBatchNum,
+            padding,
+            dropScore,
+            modelTier
+        );
     }
 }

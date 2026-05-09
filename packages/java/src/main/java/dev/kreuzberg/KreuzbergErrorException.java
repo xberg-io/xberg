@@ -5,17 +5,23 @@ package dev.kreuzberg;
 /**
  * Main error type for all Kreuzberg operations.
  *
- * All errors in Kreuzberg use this enum, which preserves error chains and provides context for debugging.
+ * All errors in Kreuzberg use this enum, which preserves error chains
+ * and provides context for debugging.
  *
  * # Variants
  *
- * - `Io` - File system and I/O errors (always bubble up) - `Parsing` - Document parsing errors (corrupt files,
- * unsupported features) - `Ocr` - OCR processing errors - `Validation` - Input validation errors (invalid paths,
- * config, parameters) - `Cache` - Cache operation errors (non-fatal, can be ignored) - `ImageProcessing` - Image
- * manipulation errors - `Serialization` - JSON/MessagePack serialization errors - `MissingDependency` - Missing
- * optional dependencies (tesseract, etc.) - `Plugin` - Plugin-specific errors - `LockPoisoned` - Mutex/RwLock poisoning
- * (should not happen in normal operation) - `UnsupportedFormat` - Unsupported MIME type or file format - `Other` -
- * Catch-all for uncommon errors
+ * - `Io` - File system and I/O errors (always bubble up)
+ * - `Parsing` - Document parsing errors (corrupt files, unsupported features)
+ * - `Ocr` - OCR processing errors
+ * - `Validation` - Input validation errors (invalid paths, config, parameters)
+ * - `Cache` - Cache operation errors (non-fatal, can be ignored)
+ * - `ImageProcessing` - Image manipulation errors
+ * - `Serialization` - JSON/MessagePack serialization errors
+ * - `MissingDependency` - Missing optional dependencies (tesseract, etc.)
+ * - `Plugin` - Plugin-specific errors
+ * - `LockPoisoned` - Mutex/RwLock poisoning (should not happen in normal operation)
+ * - `UnsupportedFormat` - Unsupported MIME type or file format
+ * - `Other` - Catch-all for uncommon errors
  */
 public class KreuzbergErrorException extends Exception {
     /** Creates a new KreuzbergErrorException with the given message. */

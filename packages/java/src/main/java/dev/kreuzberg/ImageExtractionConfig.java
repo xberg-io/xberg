@@ -15,23 +15,24 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ImageExtractionConfigBuilder.class)
-public record ImageExtractionConfig(@JsonProperty("extract_images") boolean extractImages,
-        @JsonProperty("target_dpi") int targetDpi, @JsonProperty("max_image_dimension") int maxImageDimension,
-        @JsonProperty("inject_placeholders") boolean injectPlaceholders,
-        @JsonProperty("auto_adjust_dpi") boolean autoAdjustDpi, @JsonProperty("min_dpi") int minDpi,
-        @JsonProperty("max_dpi") int maxDpi, @Nullable @JsonProperty("max_images_per_page") Integer maxImagesPerPage,
-        boolean classify) {
+public record ImageExtractionConfig(
+    @JsonProperty("extract_images") boolean extractImages,
+    @JsonProperty("target_dpi") int targetDpi,
+    @JsonProperty("max_image_dimension") int maxImageDimension,
+    @JsonProperty("inject_placeholders") boolean injectPlaceholders,
+    @JsonProperty("auto_adjust_dpi") boolean autoAdjustDpi,
+    @JsonProperty("min_dpi") int minDpi,
+    @JsonProperty("max_dpi") int maxDpi,
+    @Nullable @JsonProperty("max_images_per_page") Integer maxImagesPerPage,
+    boolean classify
+) {
     public static ImageExtractionConfigBuilder builder() {
         return new ImageExtractionConfigBuilder();
     }
-    public ImageExtractionConfig {
-        if (targetDpi == 0)
-            targetDpi = 300;
-        if (maxImageDimension == 0)
-            maxImageDimension = 4096;
-        if (minDpi == 0)
-            minDpi = 72;
-        if (maxDpi == 0)
-            maxDpi = 600;
+    public ImageExtractionConfig{
+        if (targetDpi == 0) targetDpi = 300;
+        if (maxImageDimension == 0) maxImageDimension = 4096;
+        if (minDpi == 0) minDpi = 72;
+        if (maxDpi == 0) maxDpi = 600;
     }
 }

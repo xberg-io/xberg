@@ -13,16 +13,22 @@ import com.fasterxml.jackson.annotation.JsonValue;
  *
  * # Variants
  *
- * * {@code Text} - Generic text splitter, splits on whitespace and punctuation * {@code Markdown} - Markdown-aware
- * splitter, preserves formatting and structure * {@code Yaml} - YAML-aware splitter, creates one chunk per top-level
- * key * {@code Semantic} - Topic-aware chunker. With an {@code EmbeddingConfig}, splits at embedding-based topic shifts
- * tuned by {@code topic_threshold} (default 0.75, lower = more splits). Without an embedding, falls back to a
- * structural-boundary heuristic (ALL-CAPS headers, numbered sections, blank-line paragraphs) and merges groups into
- * chunks capped at {@code max_characters} (default 1000). {@code topic_threshold} has no effect in the fallback path.
- * For best results, pair with an embedding model.
+ * * {@code Text} - Generic text splitter, splits on whitespace and punctuation
+ * * {@code Markdown} - Markdown-aware splitter, preserves formatting and structure
+ * * {@code Yaml} - YAML-aware splitter, creates one chunk per top-level key
+ * * {@code Semantic} - Topic-aware chunker. With an {@code EmbeddingConfig}, splits at
+ *   embedding-based topic shifts tuned by {@code topic_threshold} (default 0.75,
+ *   lower = more splits). Without an embedding, falls back to a
+ *   structural-boundary heuristic (ALL-CAPS headers, numbered sections,
+ *   blank-line paragraphs) and merges groups into chunks capped at
+ *   {@code max_characters} (default 1000). {@code topic_threshold} has no effect in the
+ *   fallback path. For best results, pair with an embedding model.
  */
 public enum ChunkerType {
-    Text("text"), Markdown("markdown"), Yaml("yaml"), Semantic("semantic");
+    Text("text"),
+    Markdown("markdown"),
+    Yaml("yaml"),
+    Semantic("semantic");
 
     /** The string value. */
     private final String value;

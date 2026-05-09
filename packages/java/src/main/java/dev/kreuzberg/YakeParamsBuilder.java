@@ -23,6 +23,8 @@ public class YakeParamsBuilder {
 
     /** Builds the YakeParams instance. */
     public YakeParams build() {
-        return new YakeParams(windowSize);
+        return new YakeParams(
+            windowSize
+        );
     }
 }

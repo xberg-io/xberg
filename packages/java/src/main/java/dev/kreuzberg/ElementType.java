@@ -11,8 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Semantic element type classification.
  *
- * Categorizes text content into semantic units for downstream processing. Supports the element types commonly found in
- * Unstructured documents.
+ * Categorizes text content into semantic units for downstream processing.
+ * Supports the element types commonly found in Unstructured documents.
  */
 public enum ElementType {
     /** Document title */

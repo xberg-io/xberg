@@ -13,65 +13,70 @@ import java.util.Optional;
 /**
  * Tagged enum for node content. Each variant carries only type-specific data.
  *
- * Uses {@code #[serde(tag = "node_type")]} to avoid "type" keyword collision in Go/Java/TypeScript bindings.
+ * Uses {@code #[serde(tag = "node_type")]} to avoid "type" keyword collision in
+ * Go/Java/TypeScript bindings.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "node_type", visible = false)
-@JsonSubTypes({@JsonSubTypes.Type(value = NodeContent.Title.class, name = "title"),
-        @JsonSubTypes.Type(value = NodeContent.Heading.class, name = "heading"),
-        @JsonSubTypes.Type(value = NodeContent.Paragraph.class, name = "paragraph"),
-        @JsonSubTypes.Type(value = NodeContent.List.class, name = "list"),
-        @JsonSubTypes.Type(value = NodeContent.ListItem.class, name = "list_item"),
-        @JsonSubTypes.Type(value = NodeContent.Table.class, name = "table"),
-        @JsonSubTypes.Type(value = NodeContent.Image.class, name = "image"),
-        @JsonSubTypes.Type(value = NodeContent.Code.class, name = "code"),
-        @JsonSubTypes.Type(value = NodeContent.Quote.class, name = "quote"),
-        @JsonSubTypes.Type(value = NodeContent.Formula.class, name = "formula"),
-        @JsonSubTypes.Type(value = NodeContent.Footnote.class, name = "footnote"),
-        @JsonSubTypes.Type(value = NodeContent.Group.class, name = "group"),
-        @JsonSubTypes.Type(value = NodeContent.PageBreak.class, name = "page_break"),
-        @JsonSubTypes.Type(value = NodeContent.Slide.class, name = "slide"),
-        @JsonSubTypes.Type(value = NodeContent.DefinitionList.class, name = "definition_list"),
-        @JsonSubTypes.Type(value = NodeContent.DefinitionItem.class, name = "definition_item"),
-        @JsonSubTypes.Type(value = NodeContent.Citation.class, name = "citation"),
-        @JsonSubTypes.Type(value = NodeContent.Admonition.class, name = "admonition"),
-        @JsonSubTypes.Type(value = NodeContent.RawBlock.class, name = "raw_block"),
-        @JsonSubTypes.Type(value = NodeContent.MetadataBlock.class, name = "metadata_block")})
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = NodeContent.Title.class, name = "title"),
+    @JsonSubTypes.Type(value = NodeContent.Heading.class, name = "heading"),
+    @JsonSubTypes.Type(value = NodeContent.Paragraph.class, name = "paragraph"),
+    @JsonSubTypes.Type(value = NodeContent.List.class, name = "list"),
+    @JsonSubTypes.Type(value = NodeContent.ListItem.class, name = "list_item"),
+    @JsonSubTypes.Type(value = NodeContent.Table.class, name = "table"),
+    @JsonSubTypes.Type(value = NodeContent.Image.class, name = "image"),
+    @JsonSubTypes.Type(value = NodeContent.Code.class, name = "code"),
+    @JsonSubTypes.Type(value = NodeContent.Quote.class, name = "quote"),
+    @JsonSubTypes.Type(value = NodeContent.Formula.class, name = "formula"),
+    @JsonSubTypes.Type(value = NodeContent.Footnote.class, name = "footnote"),
+    @JsonSubTypes.Type(value = NodeContent.Group.class, name = "group"),
+    @JsonSubTypes.Type(value = NodeContent.PageBreak.class, name = "page_break"),
+    @JsonSubTypes.Type(value = NodeContent.Slide.class, name = "slide"),
+    @JsonSubTypes.Type(value = NodeContent.DefinitionList.class, name = "definition_list"),
+    @JsonSubTypes.Type(value = NodeContent.DefinitionItem.class, name = "definition_item"),
+    @JsonSubTypes.Type(value = NodeContent.Citation.class, name = "citation"),
+    @JsonSubTypes.Type(value = NodeContent.Admonition.class, name = "admonition"),
+    @JsonSubTypes.Type(value = NodeContent.RawBlock.class, name = "raw_block"),
+    @JsonSubTypes.Type(value = NodeContent.MetadataBlock.class, name = "metadata_block")
+})
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface NodeContent {
 
     /** Document title. */
-    record Title(@JsonProperty("text") String text) implements NodeContent {
-    }
+    record Title(@JsonProperty("text") String text) implements NodeContent { }
 
     /** Section heading with level (1-6). */
-    record Heading(@JsonProperty("level") byte level, @JsonProperty("text") String text) implements NodeContent {
+    record Heading(
+        @JsonProperty("level") byte level,
+        @JsonProperty("text") String text
+    ) implements NodeContent {
     }
 
     /** Body text paragraph. */
-    record Paragraph(@JsonProperty("text") String text) implements NodeContent {
-    }
+    record Paragraph(@JsonProperty("text") String text) implements NodeContent { }
 
     /** List container — children are {@code ListItem} nodes. */
-    record List(@JsonProperty("ordered") boolean ordered) implements NodeContent {
-    }
+    record List(@JsonProperty("ordered") boolean ordered) implements NodeContent { }
 
     /** Individual list item. */
-    record ListItem(@JsonProperty("text") String text) implements NodeContent {
-    }
+    record ListItem(@JsonProperty("text") String text) implements NodeContent { }
 
     /** Table with structured cell grid. */
-    record Table(@JsonProperty("grid") TableGrid grid) implements NodeContent {
-    }
+    record Table(@JsonProperty("grid") TableGrid grid) implements NodeContent { }
 
     /** Image reference. */
-    record Image(@JsonProperty("description") Optional<String> description,
-            @JsonProperty("image_index") Optional<Integer> imageIndex,
-            @JsonProperty("src") Optional<String> src) implements NodeContent {
+    record Image(
+        @JsonProperty("description") Optional<String> description,
+        @JsonProperty("image_index") Optional<Integer> imageIndex,
+        @JsonProperty("src") Optional<String> src
+    ) implements NodeContent {
     }
 
     /** Code block. */
-    record Code(@JsonProperty("text") String text,
-            @JsonProperty("language") Optional<String> language) implements NodeContent {
+    record Code(
+        @JsonProperty("text") String text,
+        @JsonProperty("language") Optional<String> language
+    ) implements NodeContent {
     }
 
     /** Block quote — container, children carry the quoted content. */
@@ -79,17 +84,17 @@ public sealed interface NodeContent {
     }
 
     /** Mathematical formula / equation. */
-    record Formula(@JsonProperty("text") String text) implements NodeContent {
-    }
+    record Formula(@JsonProperty("text") String text) implements NodeContent { }
 
     /** Footnote reference content. */
-    record Footnote(@JsonProperty("text") String text) implements NodeContent {
-    }
+    record Footnote(@JsonProperty("text") String text) implements NodeContent { }
 
     /** Logical grouping container (section, key-value area). */
-    record Group(@JsonProperty("label") Optional<String> label,
-            @JsonProperty("heading_level") Optional<Byte> headingLevel,
-            @JsonProperty("heading_text") Optional<String> headingText) implements NodeContent {
+    record Group(
+        @JsonProperty("label") Optional<String> label,
+        @JsonProperty("heading_level") Optional<Byte> headingLevel,
+        @JsonProperty("heading_text") Optional<String> headingText
+    ) implements NodeContent {
     }
 
     /** Page break marker. */
@@ -97,8 +102,10 @@ public sealed interface NodeContent {
     }
 
     /** Presentation slide container — children are the slide's content nodes. */
-    record Slide(@JsonProperty("number") int number,
-            @JsonProperty("title") Optional<String> title) implements NodeContent {
+    record Slide(
+        @JsonProperty("number") int number,
+        @JsonProperty("title") Optional<String> title
+    ) implements NodeContent {
     }
 
     /** Definition list container — children are {@code DefinitionItem} nodes. */
@@ -106,25 +113,33 @@ public sealed interface NodeContent {
     }
 
     /** Individual definition list entry with term and definition. */
-    record DefinitionItem(@JsonProperty("term") String term,
-            @JsonProperty("definition") String definition) implements NodeContent {
+    record DefinitionItem(
+        @JsonProperty("term") String term,
+        @JsonProperty("definition") String definition
+    ) implements NodeContent {
     }
 
     /** Citation or bibliographic reference. */
-    record Citation(@JsonProperty("key") String key, @JsonProperty("text") String text) implements NodeContent {
+    record Citation(
+        @JsonProperty("key") String key,
+        @JsonProperty("text") String text
+    ) implements NodeContent {
     }
 
     /** Admonition / callout container (note, warning, tip, etc.). */
-    record Admonition(@JsonProperty("kind") String kind,
-            @JsonProperty("title") Optional<String> title) implements NodeContent {
+    record Admonition(
+        @JsonProperty("kind") String kind,
+        @JsonProperty("title") Optional<String> title
+    ) implements NodeContent {
     }
 
     /** Raw block preserved verbatim from the source format. */
-    record RawBlock(@JsonProperty("format") String format,
-            @JsonProperty("content") String content) implements NodeContent {
+    record RawBlock(
+        @JsonProperty("format") String format,
+        @JsonProperty("content") String content
+    ) implements NodeContent {
     }
 
     /** Structured metadata block (email headers, YAML frontmatter, etc.). */
-    record MetadataBlock(@JsonProperty("entries") java.util.List<String> entries) implements NodeContent {
-    }
+    record MetadataBlock(@JsonProperty("entries") java.util.List<String> entries) implements NodeContent { }
 }

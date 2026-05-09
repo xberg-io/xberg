@@ -69,7 +69,14 @@ public class EmailMetadataBuilder {
 
     /** Builds the EmailMetadata instance. */
     public EmailMetadata build() {
-        return new EmailMetadata(fromEmail.orElse(null), fromName.orElse(null), toEmails, ccEmails, bccEmails,
-                messageId.orElse(null), attachments);
+        return new EmailMetadata(
+            fromEmail.orElse(null),
+            fromName.orElse(null),
+            toEmails,
+            ccEmails,
+            bccEmails,
+            messageId.orElse(null),
+            attachments
+        );
     }
 }

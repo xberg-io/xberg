@@ -11,8 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Processing stages for post-processors.
  *
- * Post-processors are executed in stage order (Early → Middle → Late). Use stages to control the order of
- * post-processing operations.
+ * Post-processors are executed in stage order (Early → Middle → Late).
+ * Use stages to control the order of post-processing operations.
  */
 public enum ProcessingStage {
     /** Early stage - foundational processing. */

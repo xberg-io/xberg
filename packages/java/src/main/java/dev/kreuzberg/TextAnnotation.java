@@ -10,8 +10,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * Inline text annotation — byte-range based formatting and links.
  *
- * Annotations reference byte offsets into the node's text content, enabling precise identification of formatted
- * regions.
+ * Annotations reference byte offsets into the node's text content,
+ * enabling precise identification of formatted regions.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 public record TextAnnotation(int start, int end, AnnotationKind kind) {

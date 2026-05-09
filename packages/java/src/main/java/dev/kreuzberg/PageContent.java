@@ -13,22 +13,27 @@ import org.jspecify.annotations.Nullable;
 /**
  * Content for a single page/slide.
  *
- * When page extraction is enabled, documents are split into per-page content with associated tables and images mapped
- * to each page.
+ * When page extraction is enabled, documents are split into per-page content
+ * with associated tables and images mapped to each page.
  *
  * # Performance
  *
- * Uses Arc-wrapped tables and images for memory efficiency: - {@code Vec&lt;Arc&lt;Table&gt;&gt;} enables zero-copy
- * sharing of table data - {@code Vec&lt;Arc&lt;ExtractedImage&gt;&gt;} enables zero-copy sharing of image data -
- * Maintains exact JSON compatibility via custom Serialize/Deserialize
+ * Uses Arc-wrapped tables and images for memory efficiency:
+ * - {@code Vec&lt;Arc&lt;Table&gt;&gt;} enables zero-copy sharing of table data
+ * - {@code Vec&lt;Arc&lt;ExtractedImage&gt;&gt;} enables zero-copy sharing of image data
+ * - Maintains exact JSON compatibility via custom Serialize/Deserialize
  *
- * This reduces memory overhead for documents with shared tables/images by avoiding redundant copies during
- * serialization.
+ * This reduces memory overhead for documents with shared tables/images
+ * by avoiding redundant copies during serialization.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record PageContent(@JsonProperty("page_number") long pageNumber, String content,
-        @JsonInclude(JsonInclude.Include.NON_NULL) List<Table> tables,
-        @JsonInclude(JsonInclude.Include.NON_NULL) List<ExtractedImage> images, @Nullable PageHierarchy hierarchy,
-        @Nullable @JsonProperty("is_blank") Boolean isBlank,
-        @Nullable @JsonProperty("layout_regions") List<LayoutRegion> layoutRegions) {
+public record PageContent(
+    @JsonProperty("page_number") long pageNumber,
+    String content,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<Table> tables,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<ExtractedImage> images,
+    @Nullable PageHierarchy hierarchy,
+    @Nullable @JsonProperty("is_blank") Boolean isBlank,
+    @Nullable @JsonProperty("layout_regions") List<LayoutRegion> layoutRegions
+) {
 }

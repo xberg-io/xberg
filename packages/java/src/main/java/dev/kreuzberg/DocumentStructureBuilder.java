@@ -12,14 +12,14 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Top-level structured document representation.
  *
- * A flat array of nodes with index-based parent/child references forming a tree. Root-level nodes have
- * {@code parent: None}. Use {@code body_roots()} and {@code furniture_roots()} to iterate over top-level content by
- * layer.
+ * A flat array of nodes with index-based parent/child references forming a tree.
+ * Root-level nodes have {@code parent: None}. Use {@code body_roots()} and {@code furniture_roots()}
+ * to iterate over top-level content by layer.
  *
  * # Validation
  *
- * Call {@code validate()} after construction to verify all node indices are in bounds and parent-child relationships
- * are bidirectionally consistent.
+ * Call {@code validate()} after construction to verify all node indices are in bounds
+ * and parent-child relationships are bidirectionally consistent.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class DocumentStructureBuilder {
@@ -55,6 +55,11 @@ public class DocumentStructureBuilder {
 
     /** Builds the DocumentStructure instance. */
     public DocumentStructure build() {
-        return new DocumentStructure(nodes, sourceFormat.orElse(null), relationships, nodeTypes);
+        return new DocumentStructure(
+            nodes,
+            sourceFormat.orElse(null),
+            relationships,
+            nodeTypes
+        );
     }
 }

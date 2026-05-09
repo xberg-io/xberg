@@ -15,9 +15,17 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TablePropertiesBuilder.class)
-public record TableProperties(@Nullable @JsonProperty("style_id") String styleId, @Nullable String width,
-        @Nullable String alignment, @Nullable String layout, @Nullable String look, @Nullable String borders,
-        @Nullable @JsonProperty("cell_margins") String cellMargins, @Nullable String indent, @Nullable String caption) {
+public record TableProperties(
+    @Nullable @JsonProperty("style_id") String styleId,
+    @Nullable String width,
+    @Nullable String alignment,
+    @Nullable String layout,
+    @Nullable String look,
+    @Nullable String borders,
+    @Nullable @JsonProperty("cell_margins") String cellMargins,
+    @Nullable String indent,
+    @Nullable String caption
+) {
     public static TablePropertiesBuilder builder() {
         return new TablePropertiesBuilder();
     }

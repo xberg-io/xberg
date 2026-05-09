@@ -14,7 +14,11 @@ import org.jspecify.annotations.Nullable;
  * Request parameters for embedding generation.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record EmbedTextParams(@JsonInclude(JsonInclude.Include.NON_NULL) List<String> texts, @Nullable String preset,
-        @Nullable String model, @Nullable @JsonProperty("api_key") String apiKey,
-        @Nullable @JsonProperty("embedding_plugin") String embeddingPlugin) {
+public record EmbedTextParams(
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> texts,
+    @Nullable String preset,
+    @Nullable String model,
+    @Nullable @JsonProperty("api_key") String apiKey,
+    @Nullable @JsonProperty("embedding_plugin") String embeddingPlugin
+) {
 }

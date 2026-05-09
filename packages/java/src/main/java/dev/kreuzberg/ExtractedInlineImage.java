@@ -14,7 +14,12 @@ import org.jspecify.annotations.Nullable;
  * Extracted inline image with metadata.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ExtractedInlineImage(@JsonSerialize(using = ByteArrayToIntArraySerializer.class) byte[] data,
-        String format, @Nullable String filename, @Nullable String description, @Nullable List<Integer> dimensions,
-        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes) {
+public record ExtractedInlineImage(
+    @JsonSerialize(using = ByteArrayToIntArraySerializer.class) byte[] data,
+    String format,
+    @Nullable String filename,
+    @Nullable String description,
+    @Nullable List<Integer> dimensions,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> attributes
+) {
 }

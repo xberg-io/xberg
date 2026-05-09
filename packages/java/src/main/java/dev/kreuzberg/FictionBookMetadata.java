@@ -15,8 +15,11 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = FictionBookMetadataBuilder.class)
-public record FictionBookMetadata(@JsonInclude(JsonInclude.Include.NON_NULL) List<String> genres,
-        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> sequences, @Nullable String annotation) {
+public record FictionBookMetadata(
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> genres,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> sequences,
+    @Nullable String annotation
+) {
     public static FictionBookMetadataBuilder builder() {
         return new FictionBookMetadataBuilder();
     }

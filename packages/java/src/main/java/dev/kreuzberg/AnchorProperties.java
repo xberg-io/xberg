@@ -15,11 +15,14 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = AnchorPropertiesBuilder.class)
-public record AnchorProperties(@JsonProperty("behind_doc") boolean behindDoc,
-        @JsonProperty("layout_in_cell") boolean layoutInCell,
-        @Nullable @JsonProperty("relative_height") Long relativeHeight,
-        @Nullable @JsonProperty("position_h") String positionH, @Nullable @JsonProperty("position_v") String positionV,
-        @JsonProperty("wrap_type") String wrapType) {
+public record AnchorProperties(
+    @JsonProperty("behind_doc") boolean behindDoc,
+    @JsonProperty("layout_in_cell") boolean layoutInCell,
+    @Nullable @JsonProperty("relative_height") Long relativeHeight,
+    @Nullable @JsonProperty("position_h") String positionH,
+    @Nullable @JsonProperty("position_v") String positionV,
+    @JsonProperty("wrap_type") String wrapType
+) {
     public static AnchorPropertiesBuilder builder() {
         return new AnchorPropertiesBuilder();
     }

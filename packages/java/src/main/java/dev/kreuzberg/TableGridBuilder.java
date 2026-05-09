@@ -40,6 +40,10 @@ public class TableGridBuilder {
 
     /** Builds the TableGrid instance. */
     public TableGrid build() {
-        return new TableGrid(rows, cols, cells);
+        return new TableGrid(
+            rows,
+            cols,
+            cells
+        );
     }
 }

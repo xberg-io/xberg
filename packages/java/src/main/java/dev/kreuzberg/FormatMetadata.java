@@ -15,72 +15,52 @@ import org.jspecify.annotations.Nullable;
 /**
  * Format-specific metadata (discriminated union).
  *
- * Only one format type can exist per extraction result. This provides type-safe, clean metadata without nested
- * optionals.
+ * Only one format type can exist per extraction result. This provides
+ * type-safe, clean metadata without nested optionals.
  */
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 @JsonDeserialize(using = FormatMetadataDeserializer.class)
 public sealed interface FormatMetadata {
 
-    record Pdf(PdfMetadata value) implements FormatMetadata {
-    }
+    record Pdf(PdfMetadata value) implements FormatMetadata { }
 
-    record Docx(DocxMetadata value) implements FormatMetadata {
-    }
+    record Docx(DocxMetadata value) implements FormatMetadata { }
 
-    record Excel(ExcelMetadata value) implements FormatMetadata {
-    }
+    record Excel(ExcelMetadata value) implements FormatMetadata { }
 
-    record Email(EmailMetadata value) implements FormatMetadata {
-    }
+    record Email(EmailMetadata value) implements FormatMetadata { }
 
-    record Pptx(PptxMetadata value) implements FormatMetadata {
-    }
+    record Pptx(PptxMetadata value) implements FormatMetadata { }
 
-    record Archive(ArchiveMetadata value) implements FormatMetadata {
-    }
+    record Archive(ArchiveMetadata value) implements FormatMetadata { }
 
-    record Image(ImageMetadata value) implements FormatMetadata {
-    }
+    record Image(ImageMetadata value) implements FormatMetadata { }
 
-    record Xml(XmlMetadata value) implements FormatMetadata {
-    }
+    record Xml(XmlMetadata value) implements FormatMetadata { }
 
-    record Text(TextMetadata value) implements FormatMetadata {
-    }
+    record Text(TextMetadata value) implements FormatMetadata { }
 
-    record Html(HtmlMetadata value) implements FormatMetadata {
-    }
+    record Html(HtmlMetadata value) implements FormatMetadata { }
 
-    record Ocr(OcrMetadata value) implements FormatMetadata {
-    }
+    record Ocr(OcrMetadata value) implements FormatMetadata { }
 
-    record Csv(CsvMetadata value) implements FormatMetadata {
-    }
+    record Csv(CsvMetadata value) implements FormatMetadata { }
 
-    record Bibtex(BibtexMetadata value) implements FormatMetadata {
-    }
+    record Bibtex(BibtexMetadata value) implements FormatMetadata { }
 
-    record Citation(CitationMetadata value) implements FormatMetadata {
-    }
+    record Citation(CitationMetadata value) implements FormatMetadata { }
 
-    record FictionBook(FictionBookMetadata value) implements FormatMetadata {
-    }
+    record FictionBook(FictionBookMetadata value) implements FormatMetadata { }
 
-    record Dbf(DbfMetadata value) implements FormatMetadata {
-    }
+    record Dbf(DbfMetadata value) implements FormatMetadata { }
 
-    record Jats(JatsMetadata value) implements FormatMetadata {
-    }
+    record Jats(JatsMetadata value) implements FormatMetadata { }
 
-    record Epub(EpubMetadata value) implements FormatMetadata {
-    }
+    record Epub(EpubMetadata value) implements FormatMetadata { }
 
-    record Pst(PstMetadata value) implements FormatMetadata {
-    }
+    record Pst(PstMetadata value) implements FormatMetadata { }
 
-    record Code(String value) implements FormatMetadata {
-    }
+    record Code(String value) implements FormatMetadata { }
 
     /** Returns the Pdf data if this is a Pdf variant, otherwise null. */
     default @Nullable PdfMetadata pdf() {
@@ -191,12 +171,13 @@ class FormatMetadataDeserializer extends StdDeserializer<FormatMetadata> {
     }
 
     @Override
-    public FormatMetadata deserialize(JsonParser parser, DeserializationContext ctx) throws java.io.IOException {
+    public FormatMetadata deserialize(JsonParser parser, DeserializationContext ctx)
+            throws java.io.IOException {
         ObjectNode node = parser.getCodec().readTree(parser);
         com.fasterxml.jackson.databind.JsonNode tagNode = node.get("format_type");
         if (tagNode == null || tagNode.isNull()) {
-            throw new com.fasterxml.jackson.databind.JsonMappingException(parser,
-                    "Missing discriminator field: format_type");
+            throw new com.fasterxml.jackson.databind.JsonMappingException(
+                parser, "Missing discriminator field: format_type");
         }
         String tagValue = tagNode.asText();
         node.remove("format_type");
@@ -222,8 +203,8 @@ class FormatMetadataDeserializer extends StdDeserializer<FormatMetadata> {
             case "epub" -> new FormatMetadata.Epub(ctx.readTreeAsValue(node, EpubMetadata.class));
             case "pst" -> new FormatMetadata.Pst(ctx.readTreeAsValue(node, PstMetadata.class));
             case "code" -> new FormatMetadata.Code(ctx.readTreeAsValue(node, String.class));
-            default -> throw new com.fasterxml.jackson.databind.JsonMappingException(parser,
-                    "Unknown FormatMetadata discriminator: " + tagValue);
+            default -> throw new com.fasterxml.jackson.databind.JsonMappingException(
+                parser, "Unknown FormatMetadata discriminator: " + tagValue);
         };
     }
 }

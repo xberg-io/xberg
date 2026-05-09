@@ -13,11 +13,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * Unified page structure for documents.
  *
- * Supports different page types (PDF pages, PPTX slides, Excel sheets) with character offset boundaries for
- * chunk-to-page mapping.
+ * Supports different page types (PDF pages, PPTX slides, Excel sheets)
+ * with character offset boundaries for chunk-to-page mapping.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record PageStructure(@JsonProperty("total_count") long totalCount,
-        @JsonProperty("unit_type") PageUnitType unitType, @Nullable List<PageBoundary> boundaries,
-        @Nullable List<PageInfo> pages) {
+public record PageStructure(
+    @JsonProperty("total_count") long totalCount,
+    @JsonProperty("unit_type") PageUnitType unitType,
+    @Nullable List<PageBoundary> boundaries,
+    @Nullable List<PageInfo> pages
+) {
 }

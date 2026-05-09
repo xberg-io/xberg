@@ -13,5 +13,9 @@ import org.jspecify.annotations.Nullable;
  * Chunk request with text and configuration.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ChunkRequest(String text, @Nullable String config, @JsonProperty("chunker_type") String chunkerType) {
+public record ChunkRequest(
+    String text,
+    @Nullable String config,
+    @JsonProperty("chunker_type") String chunkerType
+) {
 }

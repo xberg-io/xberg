@@ -13,8 +13,12 @@ import org.jspecify.annotations.Nullable;
  * A single backend stage in the OCR pipeline.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record OcrPipelineStage(String backend, int priority, @Nullable String language,
-        @Nullable @JsonProperty("tesseract_config") TesseractConfig tesseractConfig,
-        @Nullable @JsonProperty("paddle_ocr_config") Object paddleOcrConfig,
-        @Nullable @JsonProperty("vlm_config") LlmConfig vlmConfig) {
+public record OcrPipelineStage(
+    String backend,
+    int priority,
+    @Nullable String language,
+    @Nullable @JsonProperty("tesseract_config") TesseractConfig tesseractConfig,
+    @Nullable @JsonProperty("paddle_ocr_config") Object paddleOcrConfig,
+    @Nullable @JsonProperty("vlm_config") LlmConfig vlmConfig
+) {
 }

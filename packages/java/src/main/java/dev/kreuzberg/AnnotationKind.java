@@ -14,18 +14,20 @@ import java.util.Optional;
  * Types of inline text annotations.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "annotation_type", visible = false)
-@JsonSubTypes({@JsonSubTypes.Type(value = AnnotationKind.Bold.class, name = "bold"),
-        @JsonSubTypes.Type(value = AnnotationKind.Italic.class, name = "italic"),
-        @JsonSubTypes.Type(value = AnnotationKind.Underline.class, name = "underline"),
-        @JsonSubTypes.Type(value = AnnotationKind.Strikethrough.class, name = "strikethrough"),
-        @JsonSubTypes.Type(value = AnnotationKind.Code.class, name = "code"),
-        @JsonSubTypes.Type(value = AnnotationKind.Subscript.class, name = "subscript"),
-        @JsonSubTypes.Type(value = AnnotationKind.Superscript.class, name = "superscript"),
-        @JsonSubTypes.Type(value = AnnotationKind.Link.class, name = "link"),
-        @JsonSubTypes.Type(value = AnnotationKind.Highlight.class, name = "highlight"),
-        @JsonSubTypes.Type(value = AnnotationKind.Color.class, name = "color"),
-        @JsonSubTypes.Type(value = AnnotationKind.FontSize.class, name = "font_size"),
-        @JsonSubTypes.Type(value = AnnotationKind.Custom.class, name = "custom")})
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = AnnotationKind.Bold.class, name = "bold"),
+    @JsonSubTypes.Type(value = AnnotationKind.Italic.class, name = "italic"),
+    @JsonSubTypes.Type(value = AnnotationKind.Underline.class, name = "underline"),
+    @JsonSubTypes.Type(value = AnnotationKind.Strikethrough.class, name = "strikethrough"),
+    @JsonSubTypes.Type(value = AnnotationKind.Code.class, name = "code"),
+    @JsonSubTypes.Type(value = AnnotationKind.Subscript.class, name = "subscript"),
+    @JsonSubTypes.Type(value = AnnotationKind.Superscript.class, name = "superscript"),
+    @JsonSubTypes.Type(value = AnnotationKind.Link.class, name = "link"),
+    @JsonSubTypes.Type(value = AnnotationKind.Highlight.class, name = "highlight"),
+    @JsonSubTypes.Type(value = AnnotationKind.Color.class, name = "color"),
+    @JsonSubTypes.Type(value = AnnotationKind.FontSize.class, name = "font_size"),
+    @JsonSubTypes.Type(value = AnnotationKind.Custom.class, name = "custom")
+})
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface AnnotationKind {
 
@@ -50,8 +52,10 @@ public sealed interface AnnotationKind {
     record Superscript() implements AnnotationKind {
     }
 
-    record Link(@JsonProperty("url") String url,
-            @JsonProperty("title") Optional<String> title) implements AnnotationKind {
+    record Link(
+        @JsonProperty("url") String url,
+        @JsonProperty("title") Optional<String> title
+    ) implements AnnotationKind {
     }
 
     /** Highlighted text (PDF highlights, HTML {@code &lt;mark&gt;}). */
@@ -59,15 +63,15 @@ public sealed interface AnnotationKind {
     }
 
     /** Text color (CSS-compatible value, e.g. "#ff0000", "red"). */
-    record Color(@JsonProperty("value") String value) implements AnnotationKind {
-    }
+    record Color(@JsonProperty("value") String value) implements AnnotationKind { }
 
     /** Font size with units (e.g. "12pt", "1.2em", "16px"). */
-    record FontSize(@JsonProperty("value") String value) implements AnnotationKind {
-    }
+    record FontSize(@JsonProperty("value") String value) implements AnnotationKind { }
 
     /** Extensible annotation for format-specific styling. */
-    record Custom(@JsonProperty("name") String name,
-            @JsonProperty("value") Optional<String> value) implements AnnotationKind {
+    record Custom(
+        @JsonProperty("name") String name,
+        @JsonProperty("value") Optional<String> value
+    ) implements AnnotationKind {
     }
 }

@@ -59,7 +59,13 @@ public class EpubMetadataBuilder {
 
     /** Builds the EpubMetadata instance. */
     public EpubMetadata build() {
-        return new EpubMetadata(coverage.orElse(null), dcFormat.orElse(null), relation.orElse(null),
-                source.orElse(null), dcType.orElse(null), coverImage.orElse(null));
+        return new EpubMetadata(
+            coverage.orElse(null),
+            dcFormat.orElse(null),
+            relation.orElse(null),
+            source.orElse(null),
+            dcType.orElse(null),
+            coverImage.orElse(null)
+        );
     }
 }

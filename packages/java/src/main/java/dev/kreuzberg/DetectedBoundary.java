@@ -12,6 +12,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * A detected structural boundary in the text.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record DetectedBoundary(@JsonProperty("byte_offset") long byteOffset,
-        @JsonProperty("is_header") boolean isHeader) {
+public record DetectedBoundary(
+    @JsonProperty("byte_offset") long byteOffset,
+    @JsonProperty("is_header") boolean isHeader
+) {
 }

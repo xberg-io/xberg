@@ -14,21 +14,23 @@ import org.jspecify.annotations.Nullable;
 /**
  * Top-level structured document representation.
  *
- * A flat array of nodes with index-based parent/child references forming a tree. Root-level nodes have
- * {@code parent: None}. Use {@code body_roots()} and {@code furniture_roots()} to iterate over top-level content by
- * layer.
+ * A flat array of nodes with index-based parent/child references forming a tree.
+ * Root-level nodes have {@code parent: None}. Use {@code body_roots()} and {@code furniture_roots()}
+ * to iterate over top-level content by layer.
  *
  * # Validation
  *
- * Call {@code validate()} after construction to verify all node indices are in bounds and parent-child relationships
- * are bidirectionally consistent.
+ * Call {@code validate()} after construction to verify all node indices are in bounds
+ * and parent-child relationships are bidirectionally consistent.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DocumentStructureBuilder.class)
-public record DocumentStructure(@JsonInclude(JsonInclude.Include.NON_NULL) List<DocumentNode> nodes,
-        @Nullable @JsonProperty("source_format") String sourceFormat,
-        @JsonInclude(JsonInclude.Include.NON_NULL) List<DocumentRelationship> relationships,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("node_types") List<String> nodeTypes) {
+public record DocumentStructure(
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<DocumentNode> nodes,
+    @Nullable @JsonProperty("source_format") String sourceFormat,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<DocumentRelationship> relationships,
+    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("node_types") List<String> nodeTypes
+) {
     public static DocumentStructureBuilder builder() {
         return new DocumentStructureBuilder();
     }

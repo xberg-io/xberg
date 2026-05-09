@@ -131,10 +131,23 @@ public class DocxAppPropertiesBuilder {
 
     /** Builds the DocxAppProperties instance. */
     public DocxAppProperties build() {
-        return new DocxAppProperties(application.orElse(null), appVersion.orElse(null), template.orElse(null),
-                totalTime.orElse(null), pages.orElse(null), words.orElse(null), characters.orElse(null),
-                charactersWithSpaces.orElse(null), lines.orElse(null), paragraphs.orElse(null), company.orElse(null),
-                docSecurity.orElse(null), scaleCrop.orElse(null), linksUpToDate.orElse(null), sharedDoc.orElse(null),
-                hyperlinksChanged.orElse(null));
+        return new DocxAppProperties(
+            application.orElse(null),
+            appVersion.orElse(null),
+            template.orElse(null),
+            totalTime.orElse(null),
+            pages.orElse(null),
+            words.orElse(null),
+            characters.orElse(null),
+            charactersWithSpaces.orElse(null),
+            lines.orElse(null),
+            paragraphs.orElse(null),
+            company.orElse(null),
+            docSecurity.orElse(null),
+            scaleCrop.orElse(null),
+            linksUpToDate.orElse(null),
+            sharedDoc.orElse(null),
+            hyperlinksChanged.orElse(null)
+        );
     }
 }

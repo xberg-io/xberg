@@ -13,8 +13,14 @@ import org.jspecify.annotations.Nullable;
  * Request parameters for LLM-based structured extraction.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ExtractStructuredParams(String path, Object schema, String model,
-        @JsonProperty("schema_name") String schemaName,
-        @Nullable @JsonProperty("schema_description") String schemaDescription, @Nullable String prompt,
-        @Nullable @JsonProperty("api_key") String apiKey, boolean strict) {
+public record ExtractStructuredParams(
+    String path,
+    Object schema,
+    String model,
+    @JsonProperty("schema_name") String schemaName,
+    @Nullable @JsonProperty("schema_description") String schemaDescription,
+    @Nullable String prompt,
+    @Nullable @JsonProperty("api_key") String apiKey,
+    boolean strict
+) {
 }

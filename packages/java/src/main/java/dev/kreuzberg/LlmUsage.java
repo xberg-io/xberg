@@ -13,16 +13,21 @@ import org.jspecify.annotations.Nullable;
 /**
  * Token usage and cost data for a single LLM call made during extraction.
  *
- * Populated when VLM OCR, structured extraction, or LLM-based embeddings are used. Multiple entries may be present when
- * multiple LLM calls occur within one extraction (e.g. VLM OCR + structured extraction).
+ * Populated when VLM OCR, structured extraction, or LLM-based embeddings
+ * are used. Multiple entries may be present when multiple LLM calls occur
+ * within one extraction (e.g. VLM OCR + structured extraction).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = LlmUsageBuilder.class)
-public record LlmUsage(String model, String source, @Nullable @JsonProperty("input_tokens") Long inputTokens,
-        @Nullable @JsonProperty("output_tokens") Long outputTokens,
-        @Nullable @JsonProperty("total_tokens") Long totalTokens,
-        @Nullable @JsonProperty("estimated_cost") Double estimatedCost,
-        @Nullable @JsonProperty("finish_reason") String finishReason) {
+public record LlmUsage(
+    String model,
+    String source,
+    @Nullable @JsonProperty("input_tokens") Long inputTokens,
+    @Nullable @JsonProperty("output_tokens") Long outputTokens,
+    @Nullable @JsonProperty("total_tokens") Long totalTokens,
+    @Nullable @JsonProperty("estimated_cost") Double estimatedCost,
+    @Nullable @JsonProperty("finish_reason") String finishReason
+) {
     public static LlmUsageBuilder builder() {
         return new LlmUsageBuilder();
     }

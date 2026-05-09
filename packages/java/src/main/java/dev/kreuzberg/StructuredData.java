@@ -13,6 +13,9 @@ import org.jspecify.annotations.Nullable;
  * Structured data (Schema.org, microdata, RDFa) block.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record StructuredData(@JsonProperty("data_type") StructuredDataType dataType,
-        @JsonProperty("raw_json") String rawJson, @Nullable @JsonProperty("schema_type") String schemaType) {
+public record StructuredData(
+    @JsonProperty("data_type") StructuredDataType dataType,
+    @JsonProperty("raw_json") String rawJson,
+    @Nullable @JsonProperty("schema_type") String schemaType
+) {
 }

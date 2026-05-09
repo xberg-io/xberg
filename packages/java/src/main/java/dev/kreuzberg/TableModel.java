@@ -11,7 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Which table structure recognition model to use.
  *
- * Controls the model used for table cell detection within layout-detected table regions.
+ * Controls the model used for table cell detection within layout-detected
+ * table regions.
  */
 public enum TableModel {
     /**

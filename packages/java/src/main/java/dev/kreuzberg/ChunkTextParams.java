@@ -13,7 +13,11 @@ import org.jspecify.annotations.Nullable;
  * Request parameters for text chunking.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ChunkTextParams(String text, @Nullable @JsonProperty("max_characters") Long maxCharacters,
-        @Nullable Long overlap, @Nullable @JsonProperty("chunker_type") String chunkerType,
-        @Nullable @JsonProperty("topic_threshold") Float topicThreshold) {
+public record ChunkTextParams(
+    String text,
+    @Nullable @JsonProperty("max_characters") Long maxCharacters,
+    @Nullable Long overlap,
+    @Nullable @JsonProperty("chunker_type") String chunkerType,
+    @Nullable @JsonProperty("topic_threshold") Float topicThreshold
+) {
 }

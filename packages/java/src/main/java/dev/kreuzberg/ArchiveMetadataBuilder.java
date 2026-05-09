@@ -55,6 +55,12 @@ public class ArchiveMetadataBuilder {
 
     /** Builds the ArchiveMetadata instance. */
     public ArchiveMetadata build() {
-        return new ArchiveMetadata(format, fileCount, fileList, totalSize, compressedSize.orElse(null));
+        return new ArchiveMetadata(
+            format,
+            fileCount,
+            fileList,
+            totalSize,
+            compressedSize.orElse(null)
+        );
     }
 }

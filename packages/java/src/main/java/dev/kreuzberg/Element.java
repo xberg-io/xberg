@@ -11,10 +11,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * Semantic element extracted from document.
  *
- * Represents a logical unit of content with semantic classification, unique identifier, and metadata for tracking
- * origin and position.
+ * Represents a logical unit of content with semantic classification,
+ * unique identifier, and metadata for tracking origin and position.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record Element(@JsonProperty("element_id") String elementId,
-        @JsonProperty("element_type") ElementType elementType, String text, ElementMetadata metadata) {
+public record Element(
+    @JsonProperty("element_id") String elementId,
+    @JsonProperty("element_type") ElementType elementType,
+    String text,
+    ElementMetadata metadata
+) {
 }

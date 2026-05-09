@@ -16,9 +16,12 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrElementConfigBuilder.class)
-public record OcrElementConfig(@JsonProperty("include_elements") boolean includeElements,
-        @JsonProperty("min_level") OcrElementLevel minLevel, @JsonProperty("min_confidence") double minConfidence,
-        @JsonProperty("build_hierarchy") boolean buildHierarchy) {
+public record OcrElementConfig(
+    @JsonProperty("include_elements") boolean includeElements,
+    @JsonProperty("min_level") OcrElementLevel minLevel,
+    @JsonProperty("min_confidence") double minConfidence,
+    @JsonProperty("build_hierarchy") boolean buildHierarchy
+) {
     public static OcrElementConfigBuilder builder() {
         return new OcrElementConfigBuilder();
     }

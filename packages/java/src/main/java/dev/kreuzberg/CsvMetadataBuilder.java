@@ -53,6 +53,12 @@ public class CsvMetadataBuilder {
 
     /** Builds the CsvMetadata instance. */
     public CsvMetadata build() {
-        return new CsvMetadata(rowCount, columnCount, delimiter.orElse(null), hasHeader, columnTypes.orElse(null));
+        return new CsvMetadata(
+            rowCount,
+            columnCount,
+            delimiter.orElse(null),
+            hasHeader,
+            columnTypes.orElse(null)
+        );
     }
 }

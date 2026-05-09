@@ -13,19 +13,22 @@ import org.jspecify.annotations.Nullable;
 /**
  * Hierarchy extraction configuration for PDF text structure analysis.
  *
- * Enables extraction of document hierarchy levels (H1-H6) based on font size clustering and semantic analysis. When
- * enabled, hierarchical blocks are included in page content.
+ * Enables extraction of document hierarchy levels (H1-H6) based on font size
+ * clustering and semantic analysis. When enabled, hierarchical blocks are
+ * included in page content.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = HierarchyConfigBuilder.class)
-public record HierarchyConfig(boolean enabled, @JsonProperty("k_clusters") long kClusters,
-        @JsonProperty("include_bbox") boolean includeBbox,
-        @Nullable @JsonProperty("ocr_coverage_threshold") Float ocrCoverageThreshold) {
+public record HierarchyConfig(
+    boolean enabled,
+    @JsonProperty("k_clusters") long kClusters,
+    @JsonProperty("include_bbox") boolean includeBbox,
+    @Nullable @JsonProperty("ocr_coverage_threshold") Float ocrCoverageThreshold
+) {
     public static HierarchyConfigBuilder builder() {
         return new HierarchyConfigBuilder();
     }
-    public HierarchyConfig {
-        if (kClusters == 0)
-            kClusters = 3;
+    public HierarchyConfig{
+        if (kClusters == 0) kClusters = 3;
     }
 }

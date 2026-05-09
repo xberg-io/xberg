@@ -45,6 +45,11 @@ public class DrawingBuilder {
 
     /** Builds the Drawing instance. */
     public Drawing build() {
-        return new Drawing(drawingType, extent.orElse(null), docProperties.orElse(null), imageRef.orElse(null));
+        return new Drawing(
+            drawingType,
+            extent.orElse(null),
+            docProperties.orElse(null),
+            imageRef.orElse(null)
+        );
     }
 }

@@ -12,9 +12,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * XML extraction result.
  *
- * Contains extracted text content from XML files along with structural statistics about the XML document.
+ * Contains extracted text content from XML files along with
+ * structural statistics about the XML document.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record XmlExtractionResult(String content, @JsonProperty("element_count") long elementCount,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("unique_elements") List<String> uniqueElements) {
+public record XmlExtractionResult(
+    String content,
+    @JsonProperty("element_count") long elementCount,
+    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("unique_elements") List<String> uniqueElements
+) {
 }

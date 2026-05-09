@@ -13,20 +13,24 @@ import org.jspecify.annotations.Nullable;
 /**
  * Embedding configuration for text chunks.
  *
- * Configures embedding generation using ONNX models via the vendored embedding engine. Requires the {@code embeddings}
- * feature to be enabled.
+ * Configures embedding generation using ONNX models via the vendored embedding engine.
+ * Requires the {@code embeddings} feature to be enabled.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = EmbeddingConfigBuilder.class)
-public record EmbeddingConfig(EmbeddingModelType model, boolean normalize, @JsonProperty("batch_size") long batchSize,
-        @JsonProperty("show_download_progress") boolean showDownloadProgress,
-        @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir, @Nullable AccelerationConfig acceleration,
-        @Nullable @JsonProperty("max_embed_duration_secs") Long maxEmbedDurationSecs) {
+public record EmbeddingConfig(
+    EmbeddingModelType model,
+    boolean normalize,
+    @JsonProperty("batch_size") long batchSize,
+    @JsonProperty("show_download_progress") boolean showDownloadProgress,
+    @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir,
+    @Nullable AccelerationConfig acceleration,
+    @Nullable @JsonProperty("max_embed_duration_secs") Long maxEmbedDurationSecs
+) {
     public static EmbeddingConfigBuilder builder() {
         return new EmbeddingConfigBuilder();
     }
-    public EmbeddingConfig {
-        if (batchSize == 0)
-            batchSize = 32;
+    public EmbeddingConfig{
+        if (batchSize == 0) batchSize = 32;
     }
 }

@@ -13,7 +13,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Cache warm response.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record WarmResponse(@JsonProperty("cache_dir") String cacheDir,
-        @JsonInclude(JsonInclude.Include.NON_NULL) List<String> downloaded,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("already_cached") List<String> alreadyCached) {
+public record WarmResponse(
+    @JsonProperty("cache_dir") String cacheDir,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> downloaded,
+    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("already_cached") List<String> alreadyCached
+) {
 }

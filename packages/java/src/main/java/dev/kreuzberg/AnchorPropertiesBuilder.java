@@ -59,7 +59,13 @@ public class AnchorPropertiesBuilder {
 
     /** Builds the AnchorProperties instance. */
     public AnchorProperties build() {
-        return new AnchorProperties(behindDoc, layoutInCell, relativeHeight.orElse(null), positionH.orElse(null),
-                positionV.orElse(null), wrapType);
+        return new AnchorProperties(
+            behindDoc,
+            layoutInCell,
+            relativeHeight.orElse(null),
+            positionH.orElse(null),
+            positionV.orElse(null),
+            wrapType
+        );
     }
 }

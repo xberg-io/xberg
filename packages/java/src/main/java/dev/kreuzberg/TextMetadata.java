@@ -14,14 +14,19 @@ import org.jspecify.annotations.Nullable;
 /**
  * Text/Markdown metadata.
  *
- * Extracted from plain text and Markdown files. Includes word counts and, for Markdown, structural elements like
- * headers and links.
+ * Extracted from plain text and Markdown files. Includes word counts and,
+ * for Markdown, structural elements like headers and links.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TextMetadataBuilder.class)
-public record TextMetadata(@JsonProperty("line_count") long lineCount, @JsonProperty("word_count") long wordCount,
-        @JsonProperty("character_count") long characterCount, @Nullable List<String> headers,
-        @Nullable List<String> links, @Nullable @JsonProperty("code_blocks") List<String> codeBlocks) {
+public record TextMetadata(
+    @JsonProperty("line_count") long lineCount,
+    @JsonProperty("word_count") long wordCount,
+    @JsonProperty("character_count") long characterCount,
+    @Nullable List<String> headers,
+    @Nullable List<String> links,
+    @Nullable @JsonProperty("code_blocks") List<String> codeBlocks
+) {
     public static TextMetadataBuilder builder() {
         return new TextMetadataBuilder();
     }

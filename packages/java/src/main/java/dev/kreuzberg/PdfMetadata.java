@@ -13,14 +13,20 @@ import org.jspecify.annotations.Nullable;
 /**
  * PDF-specific metadata.
  *
- * Contains metadata fields specific to PDF documents that are not in the common {@code Metadata} structure. Common
- * fields like title, authors, keywords, and dates are at the {@code Metadata} level.
+ * Contains metadata fields specific to PDF documents that are not in the common
+ * {@code Metadata} structure. Common fields like title, authors, keywords, and dates
+ * are at the {@code Metadata} level.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PdfMetadataBuilder.class)
-public record PdfMetadata(@Nullable @JsonProperty("pdf_version") String pdfVersion, @Nullable String producer,
-        @Nullable @JsonProperty("is_encrypted") Boolean isEncrypted, @Nullable Long width, @Nullable Long height,
-        @Nullable @JsonProperty("page_count") Long pageCount) {
+public record PdfMetadata(
+    @Nullable @JsonProperty("pdf_version") String pdfVersion,
+    @Nullable String producer,
+    @Nullable @JsonProperty("is_encrypted") Boolean isEncrypted,
+    @Nullable Long width,
+    @Nullable Long height,
+    @Nullable @JsonProperty("page_count") Long pageCount
+) {
     public static PdfMetadataBuilder builder() {
         return new PdfMetadataBuilder();
     }

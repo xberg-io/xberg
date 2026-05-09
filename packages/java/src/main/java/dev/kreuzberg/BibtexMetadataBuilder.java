@@ -54,6 +54,12 @@ public class BibtexMetadataBuilder {
 
     /** Builds the BibtexMetadata instance. */
     public BibtexMetadata build() {
-        return new BibtexMetadata(entryCount, citationKeys, authors, yearRange.orElse(null), entryTypes.orElse(null));
+        return new BibtexMetadata(
+            entryCount,
+            citationKeys,
+            authors,
+            yearRange.orElse(null),
+            entryTypes.orElse(null)
+        );
     }
 }

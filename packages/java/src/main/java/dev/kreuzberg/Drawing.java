@@ -15,9 +15,12 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = DrawingBuilder.class)
-public record Drawing(@JsonProperty("drawing_type") String drawingType, @Nullable String extent,
-        @Nullable @JsonProperty("doc_properties") String docProperties,
-        @Nullable @JsonProperty("image_ref") String imageRef) {
+public record Drawing(
+    @JsonProperty("drawing_type") String drawingType,
+    @Nullable String extent,
+    @Nullable @JsonProperty("doc_properties") String docProperties,
+    @Nullable @JsonProperty("image_ref") String imageRef
+) {
     public static DrawingBuilder builder() {
         return new DrawingBuilder();
     }

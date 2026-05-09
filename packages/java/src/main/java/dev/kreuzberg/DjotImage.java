@@ -12,5 +12,10 @@ import org.jspecify.annotations.Nullable;
  * Image element in Djot.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record DjotImage(String src, String alt, @Nullable String title, @Nullable String attributes) {
+public record DjotImage(
+    String src,
+    String alt,
+    @Nullable String title,
+    @Nullable String attributes
+) {
 }

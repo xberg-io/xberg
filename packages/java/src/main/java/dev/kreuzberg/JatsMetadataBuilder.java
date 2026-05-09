@@ -47,6 +47,11 @@ public class JatsMetadataBuilder {
 
     /** Builds the JatsMetadata instance. */
     public JatsMetadata build() {
-        return new JatsMetadata(copyright.orElse(null), license.orElse(null), historyDates, contributorRoles);
+        return new JatsMetadata(
+            copyright.orElse(null),
+            license.orElse(null),
+            historyDates,
+            contributorRoles
+        );
     }
 }

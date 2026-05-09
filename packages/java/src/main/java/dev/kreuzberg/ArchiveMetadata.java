@@ -18,9 +18,13 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = ArchiveMetadataBuilder.class)
-public record ArchiveMetadata(String format, @JsonProperty("file_count") long fileCount,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("file_list") List<String> fileList,
-        @JsonProperty("total_size") long totalSize, @Nullable @JsonProperty("compressed_size") Long compressedSize) {
+public record ArchiveMetadata(
+    String format,
+    @JsonProperty("file_count") long fileCount,
+    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("file_list") List<String> fileList,
+    @JsonProperty("total_size") long totalSize,
+    @Nullable @JsonProperty("compressed_size") Long compressedSize
+) {
     public static ArchiveMetadataBuilder builder() {
         return new ArchiveMetadataBuilder();
     }

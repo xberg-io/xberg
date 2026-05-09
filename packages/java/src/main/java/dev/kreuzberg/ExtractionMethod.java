@@ -12,7 +12,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * How the extracted text was produced.
  */
 public enum ExtractionMethod {
-    Native("native"), Ocr("ocr"), Mixed("mixed");
+    Native("native"),
+    Ocr("ocr"),
+    Mixed("mixed");
 
     /** The string value. */
     private final String value;

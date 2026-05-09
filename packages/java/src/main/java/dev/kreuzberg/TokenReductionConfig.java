@@ -14,15 +14,19 @@ import org.jspecify.annotations.Nullable;
 
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TokenReductionConfigBuilder.class)
-public record TokenReductionConfig(ReductionLevel level, @Nullable @JsonProperty("language_hint") String languageHint,
-        @JsonProperty("preserve_markdown") boolean preserveMarkdown,
-        @JsonProperty("preserve_code") boolean preserveCode,
-        @JsonProperty("semantic_threshold") float semanticThreshold,
-        @JsonProperty("enable_parallel") boolean enableParallel, @JsonProperty("use_simd") boolean useSimd,
-        @Nullable @JsonProperty("custom_stopwords") Map<String, List<String>> customStopwords,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("preserve_patterns") List<String> preservePatterns,
-        @Nullable @JsonProperty("target_reduction") Float targetReduction,
-        @JsonProperty("enable_semantic_clustering") boolean enableSemanticClustering) {
+public record TokenReductionConfig(
+    ReductionLevel level,
+    @Nullable @JsonProperty("language_hint") String languageHint,
+    @JsonProperty("preserve_markdown") boolean preserveMarkdown,
+    @JsonProperty("preserve_code") boolean preserveCode,
+    @JsonProperty("semantic_threshold") float semanticThreshold,
+    @JsonProperty("enable_parallel") boolean enableParallel,
+    @JsonProperty("use_simd") boolean useSimd,
+    @Nullable @JsonProperty("custom_stopwords") Map<String, List<String>> customStopwords,
+    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("preserve_patterns") List<String> preservePatterns,
+    @Nullable @JsonProperty("target_reduction") Float targetReduction,
+    @JsonProperty("enable_semantic_clustering") boolean enableSemanticClustering
+) {
     public static TokenReductionConfigBuilder builder() {
         return new TokenReductionConfigBuilder();
     }

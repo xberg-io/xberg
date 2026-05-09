@@ -13,6 +13,8 @@ import org.jspecify.annotations.Nullable;
  * Embedding request for generating embeddings from text.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record EmbedRequest(@JsonInclude(JsonInclude.Include.NON_NULL) List<String> texts,
-        @Nullable EmbeddingConfig config) {
+public record EmbedRequest(
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<String> texts,
+    @Nullable EmbeddingConfig config
+) {
 }

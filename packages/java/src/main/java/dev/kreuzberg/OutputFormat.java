@@ -11,9 +11,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Output format for extraction results.
  *
- * Controls the format of the {@code content} field in {@code ExtractionResult}. When set to {@code Markdown},
- * {@code Djot}, or {@code Html}, the output will be formatted accordingly. {@code Plain} returns the raw extracted
- * text. {@code Structured} returns JSON with full OCR element data including bounding boxes and confidence scores.
+ * Controls the format of the {@code content} field in {@code ExtractionResult}.
+ * When set to {@code Markdown}, {@code Djot}, or {@code Html}, the output will be formatted
+ * accordingly. {@code Plain} returns the raw extracted text.
+ * {@code Structured} returns JSON with full OCR element data including bounding
+ * boxes and confidence scores.
  */
 public enum OutputFormat {
     /** Plain text content only (default) */

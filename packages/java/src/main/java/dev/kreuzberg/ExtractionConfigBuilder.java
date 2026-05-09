@@ -12,8 +12,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Main extraction configuration.
  *
- * This struct contains all configuration options for the extraction process. It can be loaded from TOML, YAML, or JSON
- * files, or created programmatically.
+ * This struct contains all configuration options for the extraction process.
+ * It can be loaded from TOML, YAML, or JSON files, or created programmatically.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class ExtractionConfigBuilder {
@@ -252,14 +252,40 @@ public class ExtractionConfigBuilder {
 
     /** Builds the ExtractionConfig instance. */
     public ExtractionConfig build() {
-        return new ExtractionConfig(useCache, enableQualityProcessing, ocr.orElse(null), forceOcr,
-                forceOcrPages.orElse(null), disableOcr, chunking.orElse(null), contentFilter.orElse(null),
-                images.orElse(null), pdfOptions.orElse(null), tokenReduction.orElse(null),
-                languageDetection.orElse(null), pages.orElse(null), keywords.orElse(null), postprocessor.orElse(null),
-                htmlOptions.orElse(null), htmlOutput.orElse(null), extractionTimeoutSecs.orElse(null),
-                maxConcurrentExtractions.orElse(null), resultFormat, securityLimits.orElse(null), outputFormat,
-                layout.orElse(null), includeDocumentStructure, acceleration.orElse(null), cacheNamespace.orElse(null),
-                cacheTtlSecs.orElse(null), email.orElse(null), concurrency.orElse(null), maxArchiveDepth,
-                treeSitter.orElse(null), structuredExtraction.orElse(null), cancelToken.orElse(null));
+        return new ExtractionConfig(
+            useCache,
+            enableQualityProcessing,
+            ocr.orElse(null),
+            forceOcr,
+            forceOcrPages.orElse(null),
+            disableOcr,
+            chunking.orElse(null),
+            contentFilter.orElse(null),
+            images.orElse(null),
+            pdfOptions.orElse(null),
+            tokenReduction.orElse(null),
+            languageDetection.orElse(null),
+            pages.orElse(null),
+            keywords.orElse(null),
+            postprocessor.orElse(null),
+            htmlOptions.orElse(null),
+            htmlOutput.orElse(null),
+            extractionTimeoutSecs.orElse(null),
+            maxConcurrentExtractions.orElse(null),
+            resultFormat,
+            securityLimits.orElse(null),
+            outputFormat,
+            layout.orElse(null),
+            includeDocumentStructure,
+            acceleration.orElse(null),
+            cacheNamespace.orElse(null),
+            cacheTtlSecs.orElse(null),
+            email.orElse(null),
+            concurrency.orElse(null),
+            maxArchiveDepth,
+            treeSitter.orElse(null),
+            structuredExtraction.orElse(null),
+            cancelToken.orElse(null)
+        );
     }
 }

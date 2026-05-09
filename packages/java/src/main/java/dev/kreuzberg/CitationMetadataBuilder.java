@@ -60,7 +60,13 @@ public class CitationMetadataBuilder {
 
     /** Builds the CitationMetadata instance. */
     public CitationMetadata build() {
-        return new CitationMetadata(citationCount, format.orElse(null), authors, yearRange.orElse(null), dois,
-                keywords);
+        return new CitationMetadata(
+            citationCount,
+            format.orElse(null),
+            authors,
+            yearRange.orElse(null),
+            dois,
+            keywords
+        );
     }
 }

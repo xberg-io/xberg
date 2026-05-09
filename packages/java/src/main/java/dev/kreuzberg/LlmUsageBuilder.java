@@ -11,8 +11,9 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Token usage and cost data for a single LLM call made during extraction.
  *
- * Populated when VLM OCR, structured extraction, or LLM-based embeddings are used. Multiple entries may be present when
- * multiple LLM calls occur within one extraction (e.g. VLM OCR + structured extraction).
+ * Populated when VLM OCR, structured extraction, or LLM-based embeddings
+ * are used. Multiple entries may be present when multiple LLM calls occur
+ * within one extraction (e.g. VLM OCR + structured extraction).
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class LlmUsageBuilder {
@@ -69,7 +70,14 @@ public class LlmUsageBuilder {
 
     /** Builds the LlmUsage instance. */
     public LlmUsage build() {
-        return new LlmUsage(model, source, inputTokens.orElse(null), outputTokens.orElse(null),
-                totalTokens.orElse(null), estimatedCost.orElse(null), finishReason.orElse(null));
+        return new LlmUsage(
+            model,
+            source,
+            inputTokens.orElse(null),
+            outputTokens.orElse(null),
+            totalTokens.orElse(null),
+            estimatedCost.orElse(null),
+            finishReason.orElse(null)
+        );
     }
 }

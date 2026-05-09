@@ -10,11 +10,13 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Cross-extractor content filtering configuration.
  *
- * Controls whether "furniture" content (headers, footers, page numbers, watermarks, repeating text) is included in or
- * stripped from extraction results. Applies across all extractors (PDF, DOCX, RTF, ODT, HTML, etc.) with
- * format-specific implementation.
+ * Controls whether "furniture" content (headers, footers, page numbers,
+ * watermarks, repeating text) is included in or stripped from extraction
+ * results. Applies across all extractors (PDF, DOCX, RTF, ODT, HTML, etc.)
+ * with format-specific implementation.
  *
- * When {@code None} on {@code ExtractionConfig}, each extractor uses its current default behavior unchanged.
+ * When {@code None} on {@code ExtractionConfig}, each extractor uses its current
+ * default behavior unchanged.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class ContentFilterConfigBuilder {
@@ -50,6 +52,11 @@ public class ContentFilterConfigBuilder {
 
     /** Builds the ContentFilterConfig instance. */
     public ContentFilterConfig build() {
-        return new ContentFilterConfig(includeHeaders, includeFooters, stripRepeatingText, includeWatermarks);
+        return new ContentFilterConfig(
+            includeHeaders,
+            includeFooters,
+            stripRepeatingText,
+            includeWatermarks
+        );
     }
 }

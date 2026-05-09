@@ -18,14 +18,26 @@ import org.jspecify.annotations.Nullable;
  *
  * # Example (TOML)
  *
- * {@code }{@code toml} [tree_sitter] languages = ["python", "rust"] groups = ["web"]
+ * {@code }{@code toml}
+ * [tree_sitter]
+ * languages = ["python", "rust"]
+ * groups = ["web"]
  *
- * [tree_sitter.process] structure = true comments = true docstrings = true {@code }{@code }
+ * [tree_sitter.process]
+ * structure = true
+ * comments = true
+ * docstrings = true
+ * {@code }{@code }
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = TreeSitterConfigBuilder.class)
-public record TreeSitterConfig(boolean enabled, @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir,
-        @Nullable List<String> languages, @Nullable List<String> groups, TreeSitterProcessConfig process) {
+public record TreeSitterConfig(
+    boolean enabled,
+    @JsonProperty("cache_dir") java.nio.file.@Nullable Path cacheDir,
+    @Nullable List<String> languages,
+    @Nullable List<String> groups,
+    TreeSitterProcessConfig process
+) {
     public static TreeSitterConfigBuilder builder() {
         return new TreeSitterConfigBuilder();
     }

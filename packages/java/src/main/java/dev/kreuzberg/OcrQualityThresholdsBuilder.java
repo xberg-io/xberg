@@ -10,8 +10,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Quality thresholds for OCR fallback decisions and pipeline quality gating.
  *
- * All fields default to the values that match the previous hardcoded behavior, so
- * {@code OcrQualityThresholds::default()} preserves existing semantics exactly.
+ * All fields default to the values that match the previous hardcoded behavior,
+ * so {@code OcrQualityThresholds::default()} preserves existing semantics exactly.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class OcrQualityThresholdsBuilder {
@@ -131,9 +131,23 @@ public class OcrQualityThresholdsBuilder {
 
     /** Builds the OcrQualityThresholds instance. */
     public OcrQualityThresholds build() {
-        return new OcrQualityThresholds(minTotalNonWhitespace, minNonWhitespacePerPage, minMeaningfulWordLen,
-                minMeaningfulWords, minAlnumRatio, minGarbageChars, maxFragmentedWordRatio, criticalFragmentedWordRatio,
-                minAvgWordLength, minWordsForAvgLengthCheck, minConsecutiveRepeatRatio, minWordsForRepeatCheck,
-                substantiveMinChars, nonTextMinChars, alnumWsRatioThreshold, pipelineMinQuality);
+        return new OcrQualityThresholds(
+            minTotalNonWhitespace,
+            minNonWhitespacePerPage,
+            minMeaningfulWordLen,
+            minMeaningfulWords,
+            minAlnumRatio,
+            minGarbageChars,
+            maxFragmentedWordRatio,
+            criticalFragmentedWordRatio,
+            minAvgWordLength,
+            minWordsForAvgLengthCheck,
+            minConsecutiveRepeatRatio,
+            minWordsForRepeatCheck,
+            substantiveMinChars,
+            nonTextMinChars,
+            alnumWsRatioThreshold,
+            pipelineMinQuality
+        );
     }
 }

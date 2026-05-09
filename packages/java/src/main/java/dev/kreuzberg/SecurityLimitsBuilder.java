@@ -10,7 +10,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Configuration for security limits across extractors.
  *
- * All limits are intentionally conservative to prevent DoS attacks while still supporting legitimate documents.
+ * All limits are intentionally conservative to prevent DoS attacks
+ * while still supporting legitimate documents.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class SecurityLimitsBuilder {
@@ -81,7 +82,16 @@ public class SecurityLimitsBuilder {
 
     /** Builds the SecurityLimits instance. */
     public SecurityLimits build() {
-        return new SecurityLimits(maxArchiveSize, maxCompressionRatio, maxFilesInArchive, maxNestingDepth,
-                maxEntityLength, maxContentSize, maxIterations, maxXmlDepth, maxTableCells);
+        return new SecurityLimits(
+            maxArchiveSize,
+            maxCompressionRatio,
+            maxFilesInArchive,
+            maxNestingDepth,
+            maxEntityLength,
+            maxContentSize,
+            maxIterations,
+            maxXmlDepth,
+            maxTableCells
+        );
     }
 }

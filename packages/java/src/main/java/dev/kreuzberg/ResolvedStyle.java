@@ -12,8 +12,10 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  * Fully resolved (flattened) style after walking the inheritance chain.
  */
 @JsonDeserialize(builder = ResolvedStyleBuilder.class)
-public record ResolvedStyle(@JsonProperty("paragraph_properties") String paragraphProperties,
-        @JsonProperty("run_properties") String runProperties) {
+public record ResolvedStyle(
+    @JsonProperty("paragraph_properties") String paragraphProperties,
+    @JsonProperty("run_properties") String runProperties
+) {
     public static ResolvedStyleBuilder builder() {
         return new ResolvedStyleBuilder();
     }

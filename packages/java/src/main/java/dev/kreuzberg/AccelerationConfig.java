@@ -12,12 +12,15 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 /**
  * Hardware acceleration configuration for ONNX Runtime models.
  *
- * Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used for inference in layout detection and
- * embedding generation.
+ * Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
+ * for inference in layout detection and embedding generation.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = AccelerationConfigBuilder.class)
-public record AccelerationConfig(ExecutionProviderType provider, @JsonProperty("device_id") int deviceId) {
+public record AccelerationConfig(
+    ExecutionProviderType provider,
+    @JsonProperty("device_id") int deviceId
+) {
     public static AccelerationConfigBuilder builder() {
         return new AccelerationConfigBuilder();
     }

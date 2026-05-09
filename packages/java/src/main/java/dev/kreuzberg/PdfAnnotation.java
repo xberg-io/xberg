@@ -13,6 +13,10 @@ import org.jspecify.annotations.Nullable;
  * A PDF annotation extracted from a document page.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record PdfAnnotation(@JsonProperty("annotation_type") PdfAnnotationType annotationType, @Nullable String content,
-        @JsonProperty("page_number") long pageNumber, @Nullable @JsonProperty("bounding_box") String boundingBox) {
+public record PdfAnnotation(
+    @JsonProperty("annotation_type") PdfAnnotationType annotationType,
+    @Nullable String content,
+    @JsonProperty("page_number") long pageNumber,
+    @Nullable @JsonProperty("bounding_box") String boundingBox
+) {
 }

@@ -11,7 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Content rendering mode for code extraction.
  *
- * Controls how extracted code content is represented in the {@code content} field of {@code ExtractionResult}.
+ * Controls how extracted code content is represented in the {@code content} field
+ * of {@code ExtractionResult}.
  */
 public enum CodeContentMode {
     /** Use TSLP semantic chunks as content (default). */

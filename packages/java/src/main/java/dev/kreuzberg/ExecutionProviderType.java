@@ -11,8 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * ONNX Runtime execution provider type.
  *
- * Determines which hardware backend is used for model inference. {@code Auto} (default) selects the best available
- * provider per platform.
+ * Determines which hardware backend is used for model inference.
+ * {@code Auto} (default) selects the best available provider per platform.
  */
 public enum ExecutionProviderType {
     /** Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere. */

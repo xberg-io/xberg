@@ -12,13 +12,18 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 /**
  * A detected layout region on a page.
  *
- * When layout detection is enabled, each page may have layout regions identifying different content types (text,
- * pictures, tables, etc.) with confidence scores and spatial positions.
+ * When layout detection is enabled, each page may have layout regions
+ * identifying different content types (text, pictures, tables, etc.)
+ * with confidence scores and spatial positions.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = LayoutRegionBuilder.class)
-public record LayoutRegion(@JsonProperty("class_name") String className, double confidence,
-        @JsonProperty("bounding_box") String boundingBox, @JsonProperty("area_fraction") double areaFraction) {
+public record LayoutRegion(
+    @JsonProperty("class_name") String className,
+    double confidence,
+    @JsonProperty("bounding_box") String boundingBox,
+    @JsonProperty("area_fraction") double areaFraction
+) {
     public static LayoutRegionBuilder builder() {
         return new LayoutRegionBuilder();
     }

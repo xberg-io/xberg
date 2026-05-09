@@ -12,9 +12,17 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * Page Segmentation Mode for Tesseract OCR
  */
 public enum PSMMode {
-    OsdOnly("osdonly"), AutoOsd("autoosd"), AutoOnly("autoonly"), Auto("auto"), SingleColumn(
-            "singlecolumn"), SingleBlockVertical("singleblockvertical"), SingleBlock("singleblock"), SingleLine(
-                    "singleline"), SingleWord("singleword"), CircleWord("circleword"), SingleChar("singlechar");
+    OsdOnly("osdonly"),
+    AutoOsd("autoosd"),
+    AutoOnly("autoonly"),
+    Auto("auto"),
+    SingleColumn("singlecolumn"),
+    SingleBlockVertical("singleblockvertical"),
+    SingleBlock("singleblock"),
+    SingleLine("singleline"),
+    SingleWord("singleword"),
+    CircleWord("circleword"),
+    SingleChar("singlechar");
 
     /** The string value. */
     private final String value;

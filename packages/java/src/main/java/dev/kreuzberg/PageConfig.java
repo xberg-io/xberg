@@ -12,17 +12,19 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 /**
  * Page extraction and tracking configuration.
  *
- * Controls how pages are extracted, tracked, and represented in the extraction results. When {@code None}, page
- * tracking is disabled.
+ * Controls how pages are extracted, tracked, and represented in the extraction results.
+ * When {@code None}, page tracking is disabled.
  *
- * Page range tracking in chunk metadata (first_page/last_page) is automatically enabled when page boundaries are
- * available and chunking is configured.
+ * Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
+ * when page boundaries are available and chunking is configured.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PageConfigBuilder.class)
-public record PageConfig(@JsonProperty("extract_pages") boolean extractPages,
-        @JsonProperty("insert_page_markers") boolean insertPageMarkers,
-        @JsonProperty("marker_format") String markerFormat) {
+public record PageConfig(
+    @JsonProperty("extract_pages") boolean extractPages,
+    @JsonProperty("insert_page_markers") boolean insertPageMarkers,
+    @JsonProperty("marker_format") String markerFormat
+) {
     public static PageConfigBuilder builder() {
         return new PageConfigBuilder();
     }

@@ -66,7 +66,14 @@ public class PageMarginsPointsBuilder {
 
     /** Builds the PageMarginsPoints instance. */
     public PageMarginsPoints build() {
-        return new PageMarginsPoints(top.orElse(null), right.orElse(null), bottom.orElse(null), left.orElse(null),
-                header.orElse(null), footer.orElse(null), gutter.orElse(null));
+        return new PageMarginsPoints(
+            top.orElse(null),
+            right.orElse(null),
+            bottom.orElse(null),
+            left.orElse(null),
+            header.orElse(null),
+            footer.orElse(null),
+            gutter.orElse(null)
+        );
     }
 }

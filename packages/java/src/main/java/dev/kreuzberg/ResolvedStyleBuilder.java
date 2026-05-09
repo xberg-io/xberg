@@ -30,6 +30,9 @@ public class ResolvedStyleBuilder {
 
     /** Builds the ResolvedStyle instance. */
     public ResolvedStyle build() {
-        return new ResolvedStyle(paragraphProperties, runProperties);
+        return new ResolvedStyle(
+            paragraphProperties,
+            runProperties
+        );
     }
 }

@@ -10,8 +10,9 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Image preprocessing configuration for OCR.
  *
- * These settings control how images are preprocessed before OCR to improve text recognition quality. Different
- * preprocessing strategies work better for different document types.
+ * These settings control how images are preprocessed before OCR to improve
+ * text recognition quality. Different preprocessing strategies work better
+ * for different document types.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class ImagePreprocessingConfigBuilder {
@@ -68,7 +69,14 @@ public class ImagePreprocessingConfigBuilder {
 
     /** Builds the ImagePreprocessingConfig instance. */
     public ImagePreprocessingConfig build() {
-        return new ImagePreprocessingConfig(targetDpi, autoRotate, deskew, denoise, contrastEnhance, binarizationMethod,
-                invertColors);
+        return new ImagePreprocessingConfig(
+            targetDpi,
+            autoRotate,
+            deskew,
+            denoise,
+            contrastEnhance,
+            binarizationMethod,
+            invertColors
+        );
     }
 }

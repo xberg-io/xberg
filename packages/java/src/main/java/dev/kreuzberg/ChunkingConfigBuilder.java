@@ -11,11 +11,16 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Chunking configuration.
  *
- * Configures text chunking for document content, including chunk size, overlap, trimming behavior, and optional
- * embeddings.
+ * Configures text chunking for document content, including chunk size,
+ * overlap, trimming behavior, and optional embeddings.
  *
- * Use {@code ..Default::default()} when constructing to allow for future field additions: {@code }{@code rust} let
- * config = ChunkingConfig { max_characters: 500, ..Default::default() }; {@code }{@code }
+ * Use {@code ..Default::default()} when constructing to allow for future field additions:
+ * {@code }{@code rust}
+ * let config = ChunkingConfig {
+ *     max_characters: 500,
+ *     ..Default::default()
+ * };
+ * {@code }{@code }
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class ChunkingConfigBuilder {
@@ -86,7 +91,16 @@ public class ChunkingConfigBuilder {
 
     /** Builds the ChunkingConfig instance. */
     public ChunkingConfig build() {
-        return new ChunkingConfig(maxCharacters, overlap, trim, chunkerType, embedding.orElse(null),
-                preset.orElse(null), sizing, prependHeadingContext, topicThreshold.orElse(null));
+        return new ChunkingConfig(
+            maxCharacters,
+            overlap,
+            trim,
+            chunkerType,
+            embedding.orElse(null),
+            preset.orElse(null),
+            sizing,
+            prependHeadingContext,
+            topicThreshold.orElse(null)
+        );
     }
 }

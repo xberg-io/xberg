@@ -14,7 +14,11 @@ import org.jspecify.annotations.Nullable;
  * Metadata for a semantic element.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ElementMetadata(@Nullable @JsonProperty("page_number") Long pageNumber, @Nullable String filename,
-        @Nullable String coordinates, @Nullable @JsonProperty("element_index") Long elementIndex,
-        Map<String, String> additional) {
+public record ElementMetadata(
+    @Nullable @JsonProperty("page_number") Long pageNumber,
+    @Nullable String filename,
+    @Nullable String coordinates,
+    @Nullable @JsonProperty("element_index") Long elementIndex,
+    Map<String, String> additional
+) {
 }

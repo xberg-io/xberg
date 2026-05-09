@@ -10,11 +10,11 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Page extraction and tracking configuration.
  *
- * Controls how pages are extracted, tracked, and represented in the extraction results. When {@code None}, page
- * tracking is disabled.
+ * Controls how pages are extracted, tracked, and represented in the extraction results.
+ * When {@code None}, page tracking is disabled.
  *
- * Page range tracking in chunk metadata (first_page/last_page) is automatically enabled when page boundaries are
- * available and chunking is configured.
+ * Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
+ * when page boundaries are available and chunking is configured.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class PageConfigBuilder {
@@ -43,6 +43,10 @@ public class PageConfigBuilder {
 
     /** Builds the PageConfig instance. */
     public PageConfig build() {
-        return new PageConfig(extractPages, insertPageMarkers, markerFormat);
+        return new PageConfig(
+            extractPages,
+            insertPageMarkers,
+            markerFormat
+        );
     }
 }

@@ -11,8 +11,9 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * PDF-specific metadata.
  *
- * Contains metadata fields specific to PDF documents that are not in the common {@code Metadata} structure. Common
- * fields like title, authors, keywords, and dates are at the {@code Metadata} level.
+ * Contains metadata fields specific to PDF documents that are not in the common
+ * {@code Metadata} structure. Common fields like title, authors, keywords, and dates
+ * are at the {@code Metadata} level.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class PdfMetadataBuilder {
@@ -62,7 +63,13 @@ public class PdfMetadataBuilder {
 
     /** Builds the PdfMetadata instance. */
     public PdfMetadata build() {
-        return new PdfMetadata(pdfVersion.orElse(null), producer.orElse(null), isEncrypted.orElse(null),
-                width.orElse(null), height.orElse(null), pageCount.orElse(null));
+        return new PdfMetadata(
+            pdfVersion.orElse(null),
+            producer.orElse(null),
+            isEncrypted.orElse(null),
+            width.orElse(null),
+            height.orElse(null),
+            pageCount.orElse(null)
+        );
     }
 }

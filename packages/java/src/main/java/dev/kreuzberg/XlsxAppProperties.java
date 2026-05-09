@@ -18,13 +18,17 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = XlsxAppPropertiesBuilder.class)
-public record XlsxAppProperties(@Nullable String application, @Nullable @JsonProperty("app_version") String appVersion,
-        @Nullable @JsonProperty("doc_security") Integer docSecurity,
-        @Nullable @JsonProperty("scale_crop") Boolean scaleCrop,
-        @Nullable @JsonProperty("links_up_to_date") Boolean linksUpToDate,
-        @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
-        @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged, @Nullable String company,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("worksheet_names") List<String> worksheetNames) {
+public record XlsxAppProperties(
+    @Nullable String application,
+    @Nullable @JsonProperty("app_version") String appVersion,
+    @Nullable @JsonProperty("doc_security") Integer docSecurity,
+    @Nullable @JsonProperty("scale_crop") Boolean scaleCrop,
+    @Nullable @JsonProperty("links_up_to_date") Boolean linksUpToDate,
+    @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
+    @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged,
+    @Nullable String company,
+    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("worksheet_names") List<String> worksheetNames
+) {
     public static XlsxAppPropertiesBuilder builder() {
         return new XlsxAppPropertiesBuilder();
     }

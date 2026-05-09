@@ -108,9 +108,20 @@ public class OcrConfigBuilder {
 
     /** Builds the OcrConfig instance. */
     public OcrConfig build() {
-        return new OcrConfig(enabled, backend, language, tesseractConfig.orElse(null), outputFormat.orElse(null),
-                paddleOcrConfig.orElse(null), elementConfig.orElse(null), qualityThresholds.orElse(null),
-                pipeline.orElse(null), autoRotate, vlmConfig.orElse(null), vlmPrompt.orElse(null),
-                acceleration.orElse(null));
+        return new OcrConfig(
+            enabled,
+            backend,
+            language,
+            tesseractConfig.orElse(null),
+            outputFormat.orElse(null),
+            paddleOcrConfig.orElse(null),
+            elementConfig.orElse(null),
+            qualityThresholds.orElse(null),
+            pipeline.orElse(null),
+            autoRotate,
+            vlmConfig.orElse(null),
+            vlmPrompt.orElse(null),
+            acceleration.orElse(null)
+        );
     }
 }

@@ -17,9 +17,14 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrMetadataBuilder.class)
-public record OcrMetadata(String language, int psm, @JsonProperty("output_format") String outputFormat,
-        @JsonProperty("table_count") long tableCount, @Nullable @JsonProperty("table_rows") Long tableRows,
-        @Nullable @JsonProperty("table_cols") Long tableCols) {
+public record OcrMetadata(
+    String language,
+    int psm,
+    @JsonProperty("output_format") String outputFormat,
+    @JsonProperty("table_count") long tableCount,
+    @Nullable @JsonProperty("table_rows") Long tableRows,
+    @Nullable @JsonProperty("table_cols") Long tableCols
+) {
     public static OcrMetadataBuilder builder() {
         return new OcrMetadataBuilder();
     }

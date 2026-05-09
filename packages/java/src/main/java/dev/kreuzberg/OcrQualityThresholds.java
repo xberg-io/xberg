@@ -12,45 +12,40 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 /**
  * Quality thresholds for OCR fallback decisions and pipeline quality gating.
  *
- * All fields default to the values that match the previous hardcoded behavior, so
- * {@code OcrQualityThresholds::default()} preserves existing semantics exactly.
+ * All fields default to the values that match the previous hardcoded behavior,
+ * so {@code OcrQualityThresholds::default()} preserves existing semantics exactly.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = OcrQualityThresholdsBuilder.class)
-public record OcrQualityThresholds(@JsonProperty("min_total_non_whitespace") long minTotalNonWhitespace,
-        @JsonProperty("min_non_whitespace_per_page") double minNonWhitespacePerPage,
-        @JsonProperty("min_meaningful_word_len") long minMeaningfulWordLen,
-        @JsonProperty("min_meaningful_words") long minMeaningfulWords,
-        @JsonProperty("min_alnum_ratio") double minAlnumRatio, @JsonProperty("min_garbage_chars") long minGarbageChars,
-        @JsonProperty("max_fragmented_word_ratio") double maxFragmentedWordRatio,
-        @JsonProperty("critical_fragmented_word_ratio") double criticalFragmentedWordRatio,
-        @JsonProperty("min_avg_word_length") double minAvgWordLength,
-        @JsonProperty("min_words_for_avg_length_check") long minWordsForAvgLengthCheck,
-        @JsonProperty("min_consecutive_repeat_ratio") double minConsecutiveRepeatRatio,
-        @JsonProperty("min_words_for_repeat_check") long minWordsForRepeatCheck,
-        @JsonProperty("substantive_min_chars") long substantiveMinChars,
-        @JsonProperty("non_text_min_chars") long nonTextMinChars,
-        @JsonProperty("alnum_ws_ratio_threshold") double alnumWsRatioThreshold,
-        @JsonProperty("pipeline_min_quality") double pipelineMinQuality) {
+public record OcrQualityThresholds(
+    @JsonProperty("min_total_non_whitespace") long minTotalNonWhitespace,
+    @JsonProperty("min_non_whitespace_per_page") double minNonWhitespacePerPage,
+    @JsonProperty("min_meaningful_word_len") long minMeaningfulWordLen,
+    @JsonProperty("min_meaningful_words") long minMeaningfulWords,
+    @JsonProperty("min_alnum_ratio") double minAlnumRatio,
+    @JsonProperty("min_garbage_chars") long minGarbageChars,
+    @JsonProperty("max_fragmented_word_ratio") double maxFragmentedWordRatio,
+    @JsonProperty("critical_fragmented_word_ratio") double criticalFragmentedWordRatio,
+    @JsonProperty("min_avg_word_length") double minAvgWordLength,
+    @JsonProperty("min_words_for_avg_length_check") long minWordsForAvgLengthCheck,
+    @JsonProperty("min_consecutive_repeat_ratio") double minConsecutiveRepeatRatio,
+    @JsonProperty("min_words_for_repeat_check") long minWordsForRepeatCheck,
+    @JsonProperty("substantive_min_chars") long substantiveMinChars,
+    @JsonProperty("non_text_min_chars") long nonTextMinChars,
+    @JsonProperty("alnum_ws_ratio_threshold") double alnumWsRatioThreshold,
+    @JsonProperty("pipeline_min_quality") double pipelineMinQuality
+) {
     public static OcrQualityThresholdsBuilder builder() {
         return new OcrQualityThresholdsBuilder();
     }
-    public OcrQualityThresholds {
-        if (minTotalNonWhitespace == 0)
-            minTotalNonWhitespace = 64;
-        if (minMeaningfulWordLen == 0)
-            minMeaningfulWordLen = 4;
-        if (minMeaningfulWords == 0)
-            minMeaningfulWords = 3;
-        if (minGarbageChars == 0)
-            minGarbageChars = 5;
-        if (minWordsForAvgLengthCheck == 0)
-            minWordsForAvgLengthCheck = 50;
-        if (minWordsForRepeatCheck == 0)
-            minWordsForRepeatCheck = 50;
-        if (substantiveMinChars == 0)
-            substantiveMinChars = 100;
-        if (nonTextMinChars == 0)
-            nonTextMinChars = 20;
+    public OcrQualityThresholds{
+        if (minTotalNonWhitespace == 0) minTotalNonWhitespace = 64;
+        if (minMeaningfulWordLen == 0) minMeaningfulWordLen = 4;
+        if (minMeaningfulWords == 0) minMeaningfulWords = 3;
+        if (minGarbageChars == 0) minGarbageChars = 5;
+        if (minWordsForAvgLengthCheck == 0) minWordsForAvgLengthCheck = 50;
+        if (minWordsForRepeatCheck == 0) minWordsForRepeatCheck = 50;
+        if (substantiveMinChars == 0) substantiveMinChars = 100;
+        if (nonTextMinChars == 0) nonTextMinChars = 20;
     }
 }

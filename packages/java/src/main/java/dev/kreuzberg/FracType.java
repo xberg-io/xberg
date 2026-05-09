@@ -9,7 +9,10 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 public enum FracType {
-    Bar("bar"), NoBar("nobar"), Linear("linear"), Skewed("skewed");
+    Bar("bar"),
+    NoBar("nobar"),
+    Linear("linear"),
+    Skewed("skewed");
 
     /** The string value. */
     private final String value;

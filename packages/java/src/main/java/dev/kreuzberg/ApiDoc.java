@@ -10,7 +10,8 @@ import java.lang.foreign.MemorySegment;
 /**
  * OpenAPI documentation structure.
  *
- * Defines all endpoints, request/response schemas, and examples for the Kreuzberg document extraction API.
+ * Defines all endpoints, request/response schemas, and examples
+ * for the Kreuzberg document extraction API.
  */
 public class ApiDoc implements AutoCloseable {
     private final MemorySegment handle;

@@ -11,8 +11,9 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Tesseract OCR configuration.
  *
- * Provides fine-grained control over Tesseract OCR engine parameters. Most users can use the defaults, but these
- * settings allow optimization for specific document types (invoices, handwriting, etc.).
+ * Provides fine-grained control over Tesseract OCR engine parameters.
+ * Most users can use the defaults, but these settings allow optimization
+ * for specific document types (invoices, handwriting, etc.).
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class TesseractConfigBuilder {
@@ -167,10 +168,28 @@ public class TesseractConfigBuilder {
 
     /** Builds the TesseractConfig instance. */
     public TesseractConfig build() {
-        return new TesseractConfig(language, psm, outputFormat, oem, minConfidence, preprocessing.orElse(null),
-                enableTableDetection, tableMinConfidence, tableColumnThreshold, tableRowThresholdRatio, useCache,
-                classifyUsePreAdaptedTemplates, languageModelNgramOn, tesseditDontBlkrejGoodWds,
-                tesseditDontRowrejGoodWds, tesseditEnableDictCorrection, tesseditCharWhitelist, tesseditCharBlacklist,
-                tesseditUsePrimaryParamsModel, textordSpaceSizeIsVariable, thresholdingMethod);
+        return new TesseractConfig(
+            language,
+            psm,
+            outputFormat,
+            oem,
+            minConfidence,
+            preprocessing.orElse(null),
+            enableTableDetection,
+            tableMinConfidence,
+            tableColumnThreshold,
+            tableRowThresholdRatio,
+            useCache,
+            classifyUsePreAdaptedTemplates,
+            languageModelNgramOn,
+            tesseditDontBlkrejGoodWds,
+            tesseditDontRowrejGoodWds,
+            tesseditEnableDictCorrection,
+            tesseditCharWhitelist,
+            tesseditCharBlacklist,
+            tesseditUsePrimaryParamsModel,
+            textordSpaceSizeIsVariable,
+            thresholdingMethod
+        );
     }
 }

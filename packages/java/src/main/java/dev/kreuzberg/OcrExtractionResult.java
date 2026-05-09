@@ -14,11 +14,16 @@ import org.jspecify.annotations.Nullable;
 /**
  * OCR extraction result.
  *
- * Result of performing OCR on an image or scanned document, including recognized text and detected tables.
+ * Result of performing OCR on an image or scanned document,
+ * including recognized text and detected tables.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record OcrExtractionResult(String content, @JsonProperty("mime_type") String mimeType,
-        Map<String, Object> metadata, @JsonInclude(JsonInclude.Include.NON_NULL) List<OcrTable> tables,
-        @Nullable @JsonProperty("ocr_elements") List<OcrElement> ocrElements,
-        @Nullable @JsonProperty("internal_document") String internalDocument) {
+public record OcrExtractionResult(
+    String content,
+    @JsonProperty("mime_type") String mimeType,
+    Map<String, Object> metadata,
+    @JsonInclude(JsonInclude.Include.NON_NULL) List<OcrTable> tables,
+    @Nullable @JsonProperty("ocr_elements") List<OcrElement> ocrElements,
+    @Nullable @JsonProperty("internal_document") String internalDocument
+) {
 }

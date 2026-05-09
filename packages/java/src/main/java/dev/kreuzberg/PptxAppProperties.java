@@ -18,17 +18,23 @@ import org.jspecify.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = PptxAppPropertiesBuilder.class)
-public record PptxAppProperties(@Nullable String application, @Nullable @JsonProperty("app_version") String appVersion,
-        @Nullable @JsonProperty("total_time") Integer totalTime, @Nullable String company,
-        @Nullable @JsonProperty("doc_security") Integer docSecurity,
-        @Nullable @JsonProperty("scale_crop") Boolean scaleCrop,
-        @Nullable @JsonProperty("links_up_to_date") Boolean linksUpToDate,
-        @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
-        @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged, @Nullable Integer slides,
-        @Nullable Integer notes, @Nullable @JsonProperty("hidden_slides") Integer hiddenSlides,
-        @Nullable @JsonProperty("multimedia_clips") Integer multimediaClips,
-        @Nullable @JsonProperty("presentation_format") String presentationFormat,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("slide_titles") List<String> slideTitles) {
+public record PptxAppProperties(
+    @Nullable String application,
+    @Nullable @JsonProperty("app_version") String appVersion,
+    @Nullable @JsonProperty("total_time") Integer totalTime,
+    @Nullable String company,
+    @Nullable @JsonProperty("doc_security") Integer docSecurity,
+    @Nullable @JsonProperty("scale_crop") Boolean scaleCrop,
+    @Nullable @JsonProperty("links_up_to_date") Boolean linksUpToDate,
+    @Nullable @JsonProperty("shared_doc") Boolean sharedDoc,
+    @Nullable @JsonProperty("hyperlinks_changed") Boolean hyperlinksChanged,
+    @Nullable Integer slides,
+    @Nullable Integer notes,
+    @Nullable @JsonProperty("hidden_slides") Integer hiddenSlides,
+    @Nullable @JsonProperty("multimedia_clips") Integer multimediaClips,
+    @Nullable @JsonProperty("presentation_format") String presentationFormat,
+    @JsonInclude(JsonInclude.Include.NON_NULL) @JsonProperty("slide_titles") List<String> slideTitles
+) {
     public static PptxAppPropertiesBuilder builder() {
         return new PptxAppPropertiesBuilder();
     }

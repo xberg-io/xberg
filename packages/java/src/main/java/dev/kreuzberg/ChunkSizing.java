@@ -13,15 +13,18 @@ import java.util.Optional;
 /**
  * How chunk size is measured.
  *
- * Defaults to {@code Characters} (Unicode character count). When using token-based sizing, chunks are sized by token
- * count according to the specified tokenizer.
+ * Defaults to {@code Characters} (Unicode character count). When using token-based sizing,
+ * chunks are sized by token count according to the specified tokenizer.
  *
- * Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer available on HuggingFace Hub can be
- * used, including OpenAI-compatible tokenizers (e.g., {@code Xenova/gpt-4o}, {@code Xenova/cl100k_base}).
+ * Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer
+ * available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
+ * (e.g., {@code Xenova/gpt-4o}, {@code Xenova/cl100k_base}).
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = false)
-@JsonSubTypes({@JsonSubTypes.Type(value = ChunkSizing.Characters.class, name = "characters"),
-        @JsonSubTypes.Type(value = ChunkSizing.Tokenizer.class, name = "tokenizer")})
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = ChunkSizing.Characters.class, name = "characters"),
+    @JsonSubTypes.Type(value = ChunkSizing.Tokenizer.class, name = "tokenizer")
+})
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface ChunkSizing {
 
@@ -30,7 +33,9 @@ public sealed interface ChunkSizing {
     }
 
     /** Size measured in tokens from a HuggingFace tokenizer. */
-    record Tokenizer(@JsonProperty("model") String model,
-            @JsonProperty("cache_dir") Optional<java.nio.file.Path> cacheDir) implements ChunkSizing {
+    record Tokenizer(
+        @JsonProperty("model") String model,
+        @JsonProperty("cache_dir") Optional<java.nio.file.Path> cacheDir
+    ) implements ChunkSizing {
     }
 }

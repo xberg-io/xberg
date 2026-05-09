@@ -93,8 +93,18 @@ public class TokenReductionConfigBuilder {
 
     /** Builds the TokenReductionConfig instance. */
     public TokenReductionConfig build() {
-        return new TokenReductionConfig(level, languageHint.orElse(null), preserveMarkdown, preserveCode,
-                semanticThreshold, enableParallel, useSimd, customStopwords.orElse(null), preservePatterns,
-                targetReduction.orElse(null), enableSemanticClustering);
+        return new TokenReductionConfig(
+            level,
+            languageHint.orElse(null),
+            preserveMarkdown,
+            preserveCode,
+            semanticThreshold,
+            enableParallel,
+            useSimd,
+            customStopwords.orElse(null),
+            preservePatterns,
+            targetReduction.orElse(null),
+            enableSemanticClustering
+        );
     }
 }

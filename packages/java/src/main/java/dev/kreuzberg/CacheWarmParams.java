@@ -13,6 +13,8 @@ import org.jspecify.annotations.Nullable;
  * Request parameters for cache warm (model download).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record CacheWarmParams(@JsonProperty("all_embeddings") boolean allEmbeddings,
-        @Nullable @JsonProperty("embedding_model") String embeddingModel) {
+public record CacheWarmParams(
+    @JsonProperty("all_embeddings") boolean allEmbeddings,
+    @Nullable @JsonProperty("embedding_model") String embeddingModel
+) {
 }

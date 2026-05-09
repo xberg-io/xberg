@@ -12,9 +12,9 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 /**
  * Serialises {@code byte[]} as a JSON array of integers.
  *
- * <p>
- * Jackson's default serialiser encodes {@code byte[]} as a base64 string, but Rust's {@code serde} for {@code Vec<u8>}
- * expects {@code [72, 101, 108, ...]}. Annotate any {@code byte[]} field sent to the FFI layer with
+ * <p>Jackson's default serialiser encodes {@code byte[]} as a base64 string, but
+ * Rust's {@code serde} for {@code Vec<u8>} expects {@code [72, 101, 108, ...]}.
+ * Annotate any {@code byte[]} field sent to the FFI layer with
  * {@code @JsonSerialize(using = ByteArrayToIntArraySerializer.class)}.
  */
 public class ByteArrayToIntArraySerializer extends StdSerializer<byte[]> {
@@ -24,8 +24,8 @@ public class ByteArrayToIntArraySerializer extends StdSerializer<byte[]> {
     }
 
     @Override
-    public void serialize(final byte[] value, final JsonGenerator gen, final SerializerProvider provider)
-            throws java.io.IOException {
+    public void serialize(final byte[] value, final JsonGenerator gen,
+            final SerializerProvider provider) throws java.io.IOException {
         gen.writeStartArray();
         for (byte b : value) {
             gen.writeNumber(b & 0xFF);

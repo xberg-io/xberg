@@ -12,7 +12,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * Combined paths to all models needed for OCR (backward compatibility).
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record ModelPaths(@JsonProperty("det_model") java.nio.file.Path detModel,
-        @JsonProperty("cls_model") java.nio.file.Path clsModel, @JsonProperty("rec_model") java.nio.file.Path recModel,
-        @JsonProperty("dict_file") java.nio.file.Path dictFile) {
+public record ModelPaths(
+    @JsonProperty("det_model") java.nio.file.Path detModel,
+    @JsonProperty("cls_model") java.nio.file.Path clsModel,
+    @JsonProperty("rec_model") java.nio.file.Path recModel,
+    @JsonProperty("dict_file") java.nio.file.Path dictFile
+) {
 }

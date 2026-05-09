@@ -33,6 +33,9 @@ public class XmlMetadataBuilder {
 
     /** Builds the XmlMetadata instance. */
     public XmlMetadata build() {
-        return new XmlMetadata(elementCount, uniqueElements);
+        return new XmlMetadata(
+            elementCount,
+            uniqueElements
+        );
     }
 }

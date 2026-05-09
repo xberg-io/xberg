@@ -13,5 +13,8 @@ import org.jspecify.annotations.Nullable;
  * Rotation information for an OCR element.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record OcrRotation(@JsonProperty("angle_degrees") double angleDegrees, @Nullable Double confidence) {
+public record OcrRotation(
+    @JsonProperty("angle_degrees") double angleDegrees,
+    @Nullable Double confidence
+) {
 }

@@ -12,38 +12,34 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 /**
  * Configuration for security limits across extractors.
  *
- * All limits are intentionally conservative to prevent DoS attacks while still supporting legitimate documents.
+ * All limits are intentionally conservative to prevent DoS attacks
+ * while still supporting legitimate documents.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = SecurityLimitsBuilder.class)
-public record SecurityLimits(@JsonProperty("max_archive_size") long maxArchiveSize,
-        @JsonProperty("max_compression_ratio") long maxCompressionRatio,
-        @JsonProperty("max_files_in_archive") long maxFilesInArchive,
-        @JsonProperty("max_nesting_depth") long maxNestingDepth,
-        @JsonProperty("max_entity_length") long maxEntityLength, @JsonProperty("max_content_size") long maxContentSize,
-        @JsonProperty("max_iterations") long maxIterations, @JsonProperty("max_xml_depth") long maxXmlDepth,
-        @JsonProperty("max_table_cells") long maxTableCells) {
+public record SecurityLimits(
+    @JsonProperty("max_archive_size") long maxArchiveSize,
+    @JsonProperty("max_compression_ratio") long maxCompressionRatio,
+    @JsonProperty("max_files_in_archive") long maxFilesInArchive,
+    @JsonProperty("max_nesting_depth") long maxNestingDepth,
+    @JsonProperty("max_entity_length") long maxEntityLength,
+    @JsonProperty("max_content_size") long maxContentSize,
+    @JsonProperty("max_iterations") long maxIterations,
+    @JsonProperty("max_xml_depth") long maxXmlDepth,
+    @JsonProperty("max_table_cells") long maxTableCells
+) {
     public static SecurityLimitsBuilder builder() {
         return new SecurityLimitsBuilder();
     }
-    public SecurityLimits {
-        if (maxArchiveSize == 0)
-            maxArchiveSize = 524288000;
-        if (maxCompressionRatio == 0)
-            maxCompressionRatio = 100;
-        if (maxFilesInArchive == 0)
-            maxFilesInArchive = 10000;
-        if (maxNestingDepth == 0)
-            maxNestingDepth = 1024;
-        if (maxEntityLength == 0)
-            maxEntityLength = 1048576;
-        if (maxContentSize == 0)
-            maxContentSize = 104857600;
-        if (maxIterations == 0)
-            maxIterations = 10000000;
-        if (maxXmlDepth == 0)
-            maxXmlDepth = 1024;
-        if (maxTableCells == 0)
-            maxTableCells = 100000;
+    public SecurityLimits{
+        if (maxArchiveSize == 0) maxArchiveSize = 524288000;
+        if (maxCompressionRatio == 0) maxCompressionRatio = 100;
+        if (maxFilesInArchive == 0) maxFilesInArchive = 10000;
+        if (maxNestingDepth == 0) maxNestingDepth = 1024;
+        if (maxEntityLength == 0) maxEntityLength = 1048576;
+        if (maxContentSize == 0) maxContentSize = 104857600;
+        if (maxIterations == 0) maxIterations = 10000000;
+        if (maxXmlDepth == 0) maxXmlDepth = 1024;
+        if (maxTableCells == 0) maxTableCells = 100000;
     }
 }

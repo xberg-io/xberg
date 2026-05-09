@@ -46,6 +46,11 @@ public class OcrElementConfigBuilder {
 
     /** Builds the OcrElementConfig instance. */
     public OcrElementConfig build() {
-        return new OcrElementConfig(includeElements, minLevel, minConfidence, buildHierarchy);
+        return new OcrElementConfig(
+            includeElements,
+            minLevel,
+            minConfidence,
+            buildHierarchy
+        );
     }
 }

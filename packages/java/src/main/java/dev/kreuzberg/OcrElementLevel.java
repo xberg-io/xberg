@@ -11,7 +11,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Hierarchical level of an OCR element.
  *
- * Maps to Tesseract's page segmentation hierarchy and provides equivalent semantics for PaddleOCR.
+ * Maps to Tesseract's page segmentation hierarchy and provides
+ * equivalent semantics for PaddleOCR.
  */
 public enum OcrElementLevel {
     /** Individual word */

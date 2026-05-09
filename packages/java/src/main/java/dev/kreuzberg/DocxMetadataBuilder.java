@@ -12,8 +12,8 @@ import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 /**
  * Word document metadata.
  *
- * Extracted from DOCX files using shared Office Open XML metadata extraction. Integrates with {@code office_metadata}
- * module for core/app/custom properties.
+ * Extracted from DOCX files using shared Office Open XML metadata extraction.
+ * Integrates with {@code office_metadata} module for core/app/custom properties.
  */
 @JsonPOJOBuilder(withPrefix = "with")
 public class DocxMetadataBuilder {
@@ -42,6 +42,10 @@ public class DocxMetadataBuilder {
 
     /** Builds the DocxMetadata instance. */
     public DocxMetadata build() {
-        return new DocxMetadata(coreProperties.orElse(null), appProperties.orElse(null), customProperties.orElse(null));
+        return new DocxMetadata(
+            coreProperties.orElse(null),
+            appProperties.orElse(null),
+            customProperties.orElse(null)
+        );
     }
 }

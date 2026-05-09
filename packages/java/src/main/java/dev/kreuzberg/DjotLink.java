@@ -12,5 +12,10 @@ import org.jspecify.annotations.Nullable;
  * Link element in Djot.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record DjotLink(String url, String text, @Nullable String title, @Nullable String attributes) {
+public record DjotLink(
+    String url,
+    String text,
+    @Nullable String title,
+    @Nullable String attributes
+) {
 }

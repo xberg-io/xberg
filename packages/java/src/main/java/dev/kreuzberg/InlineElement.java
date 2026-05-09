@@ -16,6 +16,10 @@ import org.jspecify.annotations.Nullable;
  * Represents text with formatting, links, images, etc.
  */
 @JsonInclude(JsonInclude.Include.NON_ABSENT)
-public record InlineElement(@JsonProperty("element_type") InlineType elementType, String content,
-        @Nullable String attributes, @Nullable Map<String, String> metadata) {
+public record InlineElement(
+    @JsonProperty("element_type") InlineType elementType,
+    String content,
+    @Nullable String attributes,
+    @Nullable Map<String, String> metadata
+) {
 }

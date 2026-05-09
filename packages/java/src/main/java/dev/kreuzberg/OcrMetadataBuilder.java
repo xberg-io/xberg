@@ -61,6 +61,13 @@ public class OcrMetadataBuilder {
 
     /** Builds the OcrMetadata instance. */
     public OcrMetadata build() {
-        return new OcrMetadata(language, psm, outputFormat, tableCount, tableRows.orElse(null), tableCols.orElse(null));
+        return new OcrMetadata(
+            language,
+            psm,
+            outputFormat,
+            tableCount,
+            tableRows.orElse(null),
+            tableCols.orElse(null)
+        );
     }
 }
