@@ -1,5 +1,4 @@
 //! Regression tests for #830: extraction_timeout_secs silently ignored in single-file paths.
-#![allow(unused_imports)]
 
 use kreuzberg::KreuzbergError;
 use kreuzberg::core::config::ExtractionConfig;
