@@ -243,9 +243,9 @@ Each region in `layout_regions` contains:
 | Field           | Type         | Description                               |
 | --------------- | ------------ | ----------------------------------------- |
 | `class`         | string       | Layout class (see table below)            |
-| `confidence`    | float        | Detection confidence [0.0–1.0]            |
+| `confidence`    | float        | Detection confidence 0.0–1.0            |
 | `bbox`          | object/array | Bounding box (format varies by binding)   |
-| `area_fraction` | float        | Region area as fraction of page [0.0–1.0] |
+| `area_fraction` | float        | Region area as fraction of page 0.0–1.0 |
 
 ### Available Classes
 
@@ -285,4 +285,4 @@ The available layout classes are:
 ## Related
 
 - [Configuration Reference](../reference/configuration.md#layoutdetectionconfig) — full field reference
-- [Element-Based Output](output-formats.md#element-based-output) — using layout-aware results
+- [Element-Based Output](output-formats.md#element-based-output-v410) — using layout-aware results

@@ -1,14 +1,13 @@
 ```typescript title="WASM"
-import { extractBytes, initWasm } from "@kreuzberg/wasm";
+import init, { extractBytes } from "kreuzberg-wasm";
 
-await initWasm();
+await init();
 
 const response = await fetch("document.pdf");
-const buffer = await response.arrayBuffer();
-const data = new Uint8Array(buffer);
+const data = new Uint8Array(await response.arrayBuffer());
 
 try {
-  const result = await extractBytes(data, "application/pdf");
+  const result = await extractBytes(data, "application/pdf", undefined);
   console.log(`Success: ${result.content.length} characters`);
 } catch (error) {
   if (error instanceof Error) {

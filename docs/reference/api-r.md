@@ -251,7 +251,7 @@ batch_extract_files(items, config)
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `list` | Yes | Vector of [`BatchFileItem`] structs, each containing a path and optional |
+| `items` | `list` | Yes | Vector of `BatchFileItem` structs, each containing a path and optional |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `list`
@@ -296,7 +296,7 @@ batch_extract_bytes(items, config)
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `list` | Yes | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `items` | `list` | Yes | Vector of `BatchBytesItem` structs, each containing content bytes, |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration |
 
 **Returns:** `list`
@@ -1945,7 +1945,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `bounding_box` | `character or NULL` | `NULL` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `source_path` | `character or NULL` | `NULL` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `image_kind` | `ImageKind or NULL` | `NULL` | Heuristic classification of what this image likely depicts. `NULL` if classification was disabled or inconclusive. |
-| `kind_confidence` | `numeric or NULL` | `NULL` | Confidence score for `image_kind`, in [0.0, 1.0]. |
+| `kind_confidence` | `numeric or NULL` | `NULL` | Confidence score for `image_kind`, in the range 0.0 to 1.0. |
 | `cluster_id` | `integer or NULL` | `NULL` | Identifier shared across images that form a single logical figure (e.g. all raster tiles of one technical drawing). `NULL` for singletons. |
 
 
@@ -4078,7 +4078,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `character` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `integer` | — | Server port number |
-| `cors_origins` | `list` | `list()` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., ["<https://example.com">]), only those origins will be allowed. |
+| `cors_origins` | `list` | `list()` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"https://example.com"`), only those origins will be allowed. |
 | `max_request_body_bytes` | `integer` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `max_multipart_field_bytes` | `integer` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 

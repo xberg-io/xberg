@@ -562,4 +562,4 @@ Validate file sizes before upload to provide better user experience:
 - [Configuration Guide](../guides/configuration.md) - Extraction configuration options
 - [API Server Guide](../guides/api-server.md) - Complete API server documentation
 - [Docker Deployment](../guides/docker.md) - Docker setup and configuration
-- [Performance Tuning](../guides/api-server.md#performance-tuning) - Advanced performance optimization
+- [Performance Tuning](../guides/api-server.md) - Advanced performance optimization

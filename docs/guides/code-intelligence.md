@@ -330,5 +330,5 @@ Common languages with full structural analysis:
 ## Related Documentation
 
 - [Configuration Reference](../reference/configuration.md#treesitterconfig) -- TreeSitterConfig and TreeSitterProcessConfig fields
-- [Types Reference](../reference/types.md#code-metadata-processresult) -- ProcessResult, StructureItem, CodeChunk, and related type definitions
+- [Types Reference](../reference/types.md) -- ProcessResult, StructureItem, CodeChunk, and related type definitions
 - [tree-sitter-language-pack documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev) -- Full language support reference

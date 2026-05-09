@@ -141,7 +141,7 @@ If you're migrating from Unstructured.io, element-based output follows a similar
 
 Represents a document as a flat list of nodes with explicit parent-child index references — a traversable tree with heading levels, content layers, inline annotations, and structured table grids.
 
-Use document structure when you need hierarchical relationships between sections. For a flat list of semantic elements, use [element-based output](#element-based-output). For plain text, use the default unified output.
+Use document structure when you need hierarchical relationships between sections. For a flat list of semantic elements, use [element-based output](#element-based-output-v410). For plain text, use the default unified output.
 
 ### Comparison
 

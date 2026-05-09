@@ -1,12 +1,12 @@
 ```typescript title="WASM"
-import { extractBytesSync, initWasm } from "@kreuzberg/wasm";
+// WASM exposes only async extractBytes; await it from any async context.
+import init, { extractBytes } from "kreuzberg-wasm";
 
-await initWasm();
+await init();
 
 const response = await fetch("document.pdf");
-const buffer = await response.arrayBuffer();
-const data = new Uint8Array(buffer);
+const data = new Uint8Array(await response.arrayBuffer());
 
-const result = extractBytesSync(data, "application/pdf");
+const result = await extractBytes(data, "application/pdf", undefined);
 console.log(result.content);
 ```

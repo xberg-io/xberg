@@ -290,7 +290,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
     - **Concurrency config** (single-threaded environment, `maxThreads` is ignored)
     - **Email codepage config** (EmailConfig not available)
 
-    All other features (text extraction, OCR via Tesseract WASM, chunking, embeddings, metadata, tables, language detection, image extraction) work fully in WASM. See the [WASM API Reference](../reference/api-wasm.md#platform-limitations) for details.
+    All other features (text extraction, OCR via Tesseract WASM, chunking, embeddings, metadata, tables, language detection, image extraction) work fully in WASM. See the [WASM API Reference](../reference/api-wasm.md) for details.
 
 ### Java
 

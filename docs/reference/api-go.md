@@ -251,7 +251,7 @@ func BatchExtractFiles(items []BatchFileItem, config ExtractionConfig) ([]Extrac
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Items` | `[]BatchFileItem` | Yes | Vector of [`BatchFileItem`] structs, each containing a path and optional |
+| `Items` | `[]BatchFileItem` | Yes | Vector of `BatchFileItem` structs, each containing a path and optional |
 | `Config` | `ExtractionConfig` | Yes | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `[]ExtractionResult`
@@ -296,7 +296,7 @@ func BatchExtractBytes(items []BatchBytesItem, config ExtractionConfig) ([]Extra
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `Items` | `[]BatchBytesItem` | Yes | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `Items` | `[]BatchBytesItem` | Yes | Vector of `BatchBytesItem` structs, each containing content bytes, |
 | `Config` | `ExtractionConfig` | Yes | Batch-level extraction configuration |
 
 **Returns:** `[]ExtractionResult`
@@ -1945,7 +1945,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `BoundingBox` | `*string` | `nil` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `SourcePath` | `*string` | `nil` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `ImageKind` | `*ImageKind` | `nil` | Heuristic classification of what this image likely depicts. `nil` if classification was disabled or inconclusive. |
-| `KindConfidence` | `*float32` | `nil` | Confidence score for `image_kind`, in [0.0, 1.0]. |
+| `KindConfidence` | `*float32` | `nil` | Confidence score for `image_kind`, in the range 0.0 to 1.0. |
 | `ClusterId` | `*uint32` | `nil` | Identifier shared across images that form a single logical figure (e.g. all raster tiles of one technical drawing). `nil` for singletons. |
 
 
@@ -4078,7 +4078,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `Host` | `string` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `Port` | `uint16` | — | Server port number |
-| `CorsOrigins` | `[]string` | `nil` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., ["<https://example.com">]), only those origins will be allowed. |
+| `CorsOrigins` | `[]string` | `nil` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"https://example.com"`), only those origins will be allowed. |
 | `MaxRequestBodyBytes` | `int` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `MaxMultipartFieldBytes` | `int` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 

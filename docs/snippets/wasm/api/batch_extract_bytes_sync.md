@@ -1,17 +1,18 @@
 ```typescript title="WASM"
-import { batchExtractBytesSync, initWasm } from "@kreuzberg/wasm";
+// WASM has no batch helper; await extractBytes for each input (in parallel via Promise.all).
+import init, { extractBytes } from "kreuzberg-wasm";
 
-await initWasm();
+await init();
 
 const urls = ["document1.pdf", "document2.pdf"];
-const requests = await Promise.all(
+
+const results = await Promise.all(
   urls.map(async (url) => {
     const resp = await fetch(url);
-    return { data: new Uint8Array(await resp.arrayBuffer()), mimeType: "application/pdf" };
-  })
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    return extractBytes(bytes, "application/pdf", undefined);
+  }),
 );
-
-const results = batchExtractBytesSync(requests);
 
 results.forEach((result, i) => {
   console.log(`Document ${i + 1}: ${result.content.length} characters`);
