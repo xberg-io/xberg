@@ -1,36 +1,44 @@
-Package main
+```go title="Go"
+package main
 
-Import (
-"fmt"
-"Kreuzberg"
+import (
+	"fmt"
+	"log"
+
+	"github.com/kreuzberg-dev/kreuzberg/v5"
 )
 
-Func main() {
-config := &kreuzberg.ExtractionConfig{
-Chunking: &kreuzberg.ChunkingConfig{
-ChunkSize: 500,
-Overlap: 50,
-},
-Pages: &kreuzberg.PageConfig{
-ExtractPages: true,
-},
+func main() {
+	maxChars := uint(500)
+	overlap := uint(50)
+	config := &kreuzberg.ExtractionConfig{
+		Chunking: &kreuzberg.ChunkingConfig{
+			MaxCharacters: &maxChars,
+			Overlap:       &overlap,
+		},
+	}
+
+	result, err := kreuzberg.ExtractFileSync("document.pdf", config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, chunk := range result.Chunks {
+		first := chunk.Metadata.FirstPage
+		last := chunk.Metadata.LastPage
+		if first == nil {
+			continue
+		}
+		pageRange := fmt.Sprintf("Page %d", *first)
+		if last != nil && *first != *last {
+			pageRange = fmt.Sprintf("Pages %d-%d", *first, *last)
+		}
+
+		preview := chunk.Content
+		if len(preview) > 50 {
+			preview = preview[:50]
+		}
+		fmt.Printf("Chunk: %s... (%s)\n", preview, pageRange)
+	}
 }
-
-    result, _ := kreuzberg.ExtractFileSync("document.pdf", config)
-
-    if result.Chunks != nil {
-        for _, chunk := range result.Chunks {
-            if chunk.Metadata.FirstPage != nil {
-                pageRange := fmt.Sprintf("Page %d", *chunk.Metadata.FirstPage)
-                if *chunk.Metadata.FirstPage != *chunk.Metadata.LastPage {
-                    pageRange = fmt.Sprintf("Pages %d-%d",
-                        *chunk.Metadata.FirstPage,
-                        *chunk.Metadata.LastPage)
-                }
-
-                fmt.Printf("Chunk: %s... (%s)\n", chunk.Text[:50], pageRange)
-            }
-        }
-    }
-
-}
+```

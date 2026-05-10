@@ -251,7 +251,7 @@ def self.batch_extract_files(items, config)
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `Array<BatchFileItem>` | Yes | Vector of [`BatchFileItem`] structs, each containing a path and optional |
+| `items` | `Array<BatchFileItem>` | Yes | Vector of `BatchFileItem` structs, each containing a path and optional |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `Array<ExtractionResult>`
@@ -296,7 +296,7 @@ def self.batch_extract_bytes(items, config)
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `Array<BatchBytesItem>` | Yes | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `items` | `Array<BatchBytesItem>` | Yes | Vector of `BatchBytesItem` structs, each containing content bytes, |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration |
 
 **Returns:** `Array<ExtractionResult>`
@@ -550,12 +550,15 @@ def self.embed_texts_async(texts, config)
 
 #### render_pdf_page_to_png()
 
-Render a single PDF page to a PNG-encoded byte buffer.
+Render a single PDF page to PNG bytes.
+
+Returns raw PNG-encoded bytes for the specified page at the given DPI.
+Uses pdf_oxide with tiny-skia for pure-Rust rendering.
 
 **Errors:**
 
-Returns an error if the PDF is invalid, the page index is out of bounds,
-or if the page fails to render.
+Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
+or rendered, or if `page_index` is out of range.
 
 **Signature:**
 
@@ -567,10 +570,10 @@ def self.render_pdf_page_to_png(pdf_bytes, page_index, dpi: nil, password: nil)
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `pdf_bytes` | `String` | Yes | The pdf bytes |
-| `page_index` | `Integer` | Yes | The page index |
-| `dpi` | `Integer?` | No | The dpi |
-| `password` | `String?` | No | The password |
+| `pdf_bytes` | `String` | Yes | Raw PDF file bytes |
+| `page_index` | `Integer` | Yes | Zero-based page index |
+| `dpi` | `Integer?` | No | Resolution in dots per inch (default: 150) |
+| `password` | `String?` | No | Optional password for encrypted PDFs |
 
 **Returns:** `String`
 
@@ -828,6 +831,17 @@ Request parameters for cache warm (model download).
 
 ---
 
+#### CharShape
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bold` | `Boolean` | — | Bold |
+| `italic` | `Boolean` | — | Italic |
+| `underline` | `Boolean` | — | Underline |
+
+
+---
+
 #### Chunk
 
 A text chunk with optional embedding and metadata.
@@ -971,23 +985,6 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### CommonPdfMetadata
-
-Common metadata fields extracted from a PDF.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `title` | `String?` | `nil` | Title |
-| `subject` | `String?` | `nil` | Subject |
-| `authors` | `Array<String>?` | `nil` | Authors |
-| `keywords` | `Array<String>?` | `nil` | Keywords |
-| `created_at` | `String?` | `nil` | Created at |
-| `modified_at` | `String?` | `nil` | Modified at |
-| `created_by` | `String?` | `nil` | Created by |
-
-
----
-
 #### ContentFilterConfig
 
 Cross-extractor content filtering configuration.
@@ -1028,6 +1025,34 @@ JATS contributor with role.
 |-------|------|---------|-------------|
 | `name` | `String` | — | The name |
 | `role` | `String?` | `nil` | Role |
+
+
+---
+
+#### CoreProperties
+
+Dublin Core metadata from docProps/core.xml
+
+Contains standard metadata fields defined by the Dublin Core standard
+and Office-specific extensions.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | `String?` | `nil` | Document title |
+| `subject` | `String?` | `nil` | Document subject/topic |
+| `creator` | `String?` | `nil` | Document creator/author |
+| `keywords` | `String?` | `nil` | Keywords or tags |
+| `description` | `String?` | `nil` | Document description/abstract |
+| `last_modified_by` | `String?` | `nil` | User who last modified the document |
+| `revision` | `String?` | `nil` | Revision number |
+| `created` | `String?` | `nil` | Creation timestamp (ISO 8601) |
+| `modified` | `String?` | `nil` | Last modification timestamp (ISO 8601) |
+| `category` | `String?` | `nil` | Document category |
+| `content_status` | `String?` | `nil` | Content status (Draft, Final, etc.) |
+| `language` | `String?` | `nil` | Document language |
+| `identifier` | `String?` | `nil` | Unique identifier |
+| `version` | `String?` | `nil` | Document version |
+| `last_printed` | `String?` | `nil` | Last print timestamp (ISO 8601) |
 
 
 ---
@@ -1422,6 +1447,16 @@ construction paths (builder, derivation) call this automatically.
 def finalize_node_types()
 ```
 
+###### is_empty()
+
+Check if the document structure is empty.
+
+**Signature:**
+
+```ruby
+def is_empty()
+```
+
 ###### default()
 
 **Signature:**
@@ -1429,6 +1464,34 @@ def finalize_node_types()
 ```ruby
 def self.default()
 ```
+
+
+---
+
+#### DocxAppProperties
+
+Application properties from docProps/app.xml for DOCX
+
+Contains Word-specific document statistics and metadata.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `application` | `String?` | `nil` | Application name (e.g., "Microsoft Office Word") |
+| `app_version` | `String?` | `nil` | Application version |
+| `template` | `String?` | `nil` | Template filename |
+| `total_time` | `Integer?` | `nil` | Total editing time in minutes |
+| `pages` | `Integer?` | `nil` | Number of pages |
+| `words` | `Integer?` | `nil` | Number of words |
+| `characters` | `Integer?` | `nil` | Number of characters (excluding spaces) |
+| `characters_with_spaces` | `Integer?` | `nil` | Number of characters (including spaces) |
+| `lines` | `Integer?` | `nil` | Number of lines |
+| `paragraphs` | `Integer?` | `nil` | Number of paragraphs |
+| `company` | `String?` | `nil` | Company name |
+| `doc_security` | `Integer?` | `nil` | Document security level |
+| `scale_crop` | `Boolean?` | `nil` | Scale crop flag |
+| `links_up_to_date` | `Boolean?` | `nil` | Links up to date flag |
+| `shared_doc` | `Boolean?` | `nil` | Shared document flag |
+| `hyperlinks_changed` | `Boolean?` | `nil` | Hyperlinks changed flag |
 
 
 ---
@@ -1442,8 +1505,8 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `core_properties` | `String?` | `nil` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
-| `app_properties` | `String?` | `nil` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
+| `core_properties` | `CoreProperties?` | `nil` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
+| `app_properties` | `DocxAppProperties?` | `nil` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
 | `custom_properties` | `Hash{String=>Object}?` | `{}` | Custom properties from docProps/custom.xml (user-defined properties) Contains key-value pairs defined by users or applications. Values can be strings, numbers, booleans, or dates. |
 
 
@@ -1879,10 +1942,10 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `is_mask` | `Boolean` | — | Whether this image is a mask image |
 | `description` | `String?` | `nil` | Optional description of the image |
 | `ocr_result` | `ExtractionResult?` | `nil` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
-| `bounding_box` | `String?` | `nil` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from pdf_oxide. |
+| `bounding_box` | `String?` | `nil` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `source_path` | `String?` | `nil` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `image_kind` | `ImageKind?` | `nil` | Heuristic classification of what this image likely depicts. `nil` if classification was disabled or inconclusive. |
-| `kind_confidence` | `Float?` | `nil` | Confidence score for `image_kind`, in [0.0, 1.0]. |
+| `kind_confidence` | `Float?` | `nil` | Confidence score for `image_kind`, in the range 0.0 to 1.0. |
 | `cluster_id` | `Integer?` | `nil` | Identifier shared across images that form a single logical figure (e.g. all raster tiles of one technical drawing). `nil` for singletons. |
 
 
@@ -2289,6 +2352,16 @@ def self.default()
 
 ---
 
+#### HwpImage
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `String` | — | The name |
+| `data` | `String` | — | Data |
+
+
+---
+
 #### ImageExtractionConfig
 
 Image extraction configuration.
@@ -2302,7 +2375,7 @@ Image extraction configuration.
 | `auto_adjust_dpi` | `Boolean` | `true` | Automatically adjust DPI based on image content |
 | `min_dpi` | `Integer` | `72` | Minimum DPI threshold |
 | `max_dpi` | `Integer` | `600` | Maximum DPI threshold |
-| `max_images_per_page` | `Integer?` | `nil` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdf_oxide. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `nil` (default) means no limit — all images are extracted. |
+| `max_images_per_page` | `Integer?` | `nil` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `nil` (default) means no limit — all images are extracted. |
 | `classify` | `Boolean` | `true` | When `true` (default), extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. |
 
 ##### Methods
@@ -2314,6 +2387,22 @@ Image extraction configuration.
 ```ruby
 def self.default()
 ```
+
+
+---
+
+#### ImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `Integer` | — | Image width in pixels |
+| `height` | `Integer` | — | Image height in pixels |
+| `format` | `String` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `Hash{String=>String}` | `{}` | EXIF metadata tags |
 
 
 ---
@@ -3423,22 +3512,6 @@ and visibility state (for presentations).
 
 ---
 
-#### PageLayoutResult
-
-Layout detection results for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `page_index` | `Integer` | — | Page index |
-| `regions` | `Array<String>` | — | Regions |
-| `page_width_pts` | `Float` | — | Page width pts |
-| `page_height_pts` | `Float` | — | Page height pts |
-| `render_width_px` | `Integer` | — | Width of the rendered image used for layout detection (pixels). |
-| `render_height_px` | `Integer` | — | Height of the rendered image used for layout detection (pixels). |
-
-
----
-
 #### PageMarginsPoints
 
 Page margins converted to points (1/72 inch).
@@ -3469,22 +3542,6 @@ with character offset boundaries for chunk-to-page mapping.
 | `unit_type` | `PageUnitType` | — | Type of paginated unit |
 | `boundaries` | `Array<PageBoundary>?` | `nil` | Character offset boundaries for each page Maps character ranges in the extracted content to page numbers. Used for chunk page range calculation. |
 | `pages` | `Array<PageInfo>?` | `nil` | Detailed per-page metadata (optional, only when needed) |
-
-
----
-
-#### PageTiming
-
-Timing breakdown for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `render_ms` | `Float` | — | Time to render the PDF page to a raster image (amortized from batch render). |
-| `preprocess_ms` | `Float` | — | Time spent in image preprocessing (resize, normalize, tensor construction). |
-| `onnx_ms` | `Float` | — | Time for the ONNX model session.run() call (actual neural network inference). |
-| `inference_ms` | `Float` | — | Total model inference time (preprocess + onnx), as measured by the engine. |
-| `postprocess_ms` | `Float` | — | Time spent in postprocessing (confidence filtering, overlap resolution). |
-| `mapping_ms` | `Float` | — | Time to map pixel-space bounding boxes to PDF coordinate space. |
 
 
 ---
@@ -3531,31 +3588,22 @@ def self.default()
 
 ---
 
-#### PdfImage
+#### PdfMetadata
+
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `page_number` | `Integer` | — | Page number |
-| `image_index` | `Integer` | — | Image index |
-| `width` | `Integer` | — | Width |
-| `height` | `Integer` | — | Height |
-| `color_space` | `String?` | `nil` | Color space |
-| `bits_per_component` | `Integer?` | `nil` | Bits per component |
-| `filters` | `Array<String>` | — | Original PDF stream filters (e.g. `["FlateDecode"]`, `["DCTDecode"]`). |
-| `data` | `String` | — | The decoded image bytes in a standard format (JPEG, PNG, etc.). |
-| `decoded_format` | `String` | — | The format of `data` after decoding: `"jpeg"`, `"png"`, `"jpeg2000"`, `"ccitt"`, or `"raw"`. |
-| `image_kind` | `ImageKind?` | `nil` | Heuristic classification of what this image likely depicts. |
-| `kind_confidence` | `Float?` | `nil` | Confidence score for `image_kind`, in [0.0, 1.0]. |
-| `cluster_id` | `Integer?` | `nil` | Identifier shared across images that form a single logical figure. |
-
-
----
-
-#### PdfUnifiedExtractionResult
-
-Result type for unified PDF text and metadata extraction.
-
-Contains text, optional page boundaries, optional per-page content, and metadata.
+| `pdf_version` | `String?` | `nil` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `String?` | `nil` | PDF producer (application that created the PDF) |
+| `is_encrypted` | `Boolean?` | `nil` | Whether the PDF is encrypted/password-protected |
+| `width` | `Integer?` | `nil` | First page width in points (1/72 inch) |
+| `height` | `Integer?` | `nil` | First page height in points (1/72 inch) |
+| `page_count` | `Integer?` | `nil` | Total number of pages in the PDF document |
 
 
 ---
@@ -4066,7 +4114,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `String` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `Integer` | — | Server port number |
-| `cors_origins` | `Array<String>` | `[]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., ["<https://example.com">]), only those origins will be allowed. |
+| `cors_origins` | `Array<String>` | `[]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `max_request_body_bytes` | `Integer` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `max_multipart_field_bytes` | `Integer` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
@@ -5375,13 +5423,13 @@ type-safe, clean metadata without nested optionals.
 
 | Value | Description |
 |-------|-------------|
-| `pdf` | Pdf format — Fields: `0`: `String` |
+| `pdf` | Pdf format — Fields: `0`: `PdfMetadata` |
 | `docx` | Docx format — Fields: `0`: `DocxMetadata` |
 | `excel` | Excel — Fields: `0`: `ExcelMetadata` |
 | `email` | Email — Fields: `0`: `EmailMetadata` |
 | `pptx` | Pptx format — Fields: `0`: `PptxMetadata` |
 | `archive` | Archive — Fields: `0`: `ArchiveMetadata` |
-| `image` | Image element — Fields: `0`: `String` |
+| `image` | Image element — Fields: `0`: `ImageMetadata` |
 | `xml` | Xml format — Fields: `0`: `XmlMetadata` |
 | `text` | Text format — Fields: `0`: `TextMetadata` |
 | `html` | Preserve as HTML `<mark>` tags — Fields: `0`: `HtmlMetadata` |

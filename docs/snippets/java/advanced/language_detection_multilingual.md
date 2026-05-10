@@ -1,8 +1,8 @@
 ```java title="Java"
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.LanguageDetectionConfig;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.LanguageDetectionConfig;
 import java.math.BigDecimal;
 import java.util.List;
 

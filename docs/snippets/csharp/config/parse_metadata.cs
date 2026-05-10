@@ -8,7 +8,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 
 if (result.Metadata?.Format.Pdf != null)
 {

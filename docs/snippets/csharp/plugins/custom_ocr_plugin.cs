@@ -63,7 +63,7 @@ class Program
     static void Main()
     {
         using var backend = new CloudOcrBackend(apiKey: "your-api-key-here");
-        KreuzbergClient.RegisterOcrBackend(backend);
+        KreuzbergLib.RegisterOcrBackend(backend);
 
         try
         {
@@ -75,7 +75,7 @@ class Program
                 }
             };
 
-            var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+            var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
             Console.WriteLine($"OCR text: {result.Content}");
         }
         catch (KreuzbergOcrException ex)

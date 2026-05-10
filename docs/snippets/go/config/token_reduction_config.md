@@ -8,10 +8,11 @@ import (
 )
 
 func main() {
-	config := &kreuzberg.ExtractionConfig{
-		TokenReduction: &kreuzberg.TokenReductionConfig{
+	preserveImportant := true
+	config := kreuzberg.ExtractionConfig{
+		TokenReduction: &kreuzberg.TokenReductionOptions{
 			Mode:                   "moderate",
-			PreserveImportantWords: kreuzberg.BoolPtr(true),
+			PreserveImportantWords: &preserveImportant,
 		},
 	}
 

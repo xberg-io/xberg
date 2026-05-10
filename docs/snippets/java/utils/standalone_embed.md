@@ -1,6 +1,6 @@
 ```java
 import dev.kreuzberg.Kreuzberg;
-import dev.kreuzberg.config.EmbeddingConfig;
+import dev.kreuzberg.EmbeddingConfig;
 
 // Embed with default config
 float[][] embeddings = Kreuzberg.embed(List.of("Hello world", "How are you?"), null);

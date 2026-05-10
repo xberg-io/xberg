@@ -7,4 +7,4 @@ var config = new ExtractionConfig
 };
 
 var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
-var result = await KreuzbergClient.ExtractFileAsync("document.pdf", config, cts.Token);
+var result = await KreuzbergLib.ExtractFileAsync("document.pdf", config, cts.Token);

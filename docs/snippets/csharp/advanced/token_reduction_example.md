@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await KreuzbergClient.ExtractFileAsync(
+var result = await KreuzbergLib.ExtractFileAsync(
     "verbose_document.pdf",
     config
 );

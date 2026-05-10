@@ -9,16 +9,28 @@ on:
 jobs:
   test:
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: packages/swift
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "5.10"
+      - name: Install tesseract (macOS)
+        run: brew install tesseract
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Show Swift version
+        run: swift --version
+      - name: Build kreuzberg-swift Rust crate
+        run: cargo build -p kreuzberg-swift
+      - name: Copy swift-bridge generated sources
+        run: |
+          OUT=$(find target/debug/build -maxdepth 2 -type d -name out -path '*kreuzberg-swift-*' -exec stat -f '%m %N' {} + | sort -rn | head -1 | cut -d' ' -f2-)
+          cat "$OUT/SwiftBridgeCore.h" "$OUT/kreuzberg-swift/kreuzberg-swift.h" \
+              > packages/swift/Sources/RustBridgeC/RustBridgeC.h
+          { echo "import RustBridgeC"; cat "$OUT/SwiftBridgeCore.swift"; } \
+              > packages/swift/Sources/RustBridge/SwiftBridgeCore.swift
+          { echo "import RustBridgeC"; cat "$OUT/kreuzberg-swift/kreuzberg-swift.swift"; } \
+              > packages/swift/Sources/RustBridge/kreuzberg-swift.swift
       - name: Build Swift package
+        working-directory: packages/swift
         run: swift build
       - name: Run tests
+        working-directory: packages/swift
         run: swift test

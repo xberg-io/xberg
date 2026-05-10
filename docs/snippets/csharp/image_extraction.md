@@ -13,6 +13,6 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await KreuzbergClient.ExtractFileAsync("document.pdf", config);
+var result = await KreuzbergLib.ExtractFileAsync("document.pdf", config);
 Console.WriteLine($"Extracted: {result.Content[..Math.Min(100, result.Content.Length)]}");
 ```

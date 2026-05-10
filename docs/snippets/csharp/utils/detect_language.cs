@@ -13,7 +13,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 
 Console.WriteLine("Detected Language:");
 foreach (var lang in result.DetectedLanguages)
@@ -31,7 +31,7 @@ var multiLangConfig = new ExtractionConfig
     }
 };
 
-var multiResult = KreuzbergClient.ExtractFileSync("multilingual_document.pdf", multiLangConfig);
+var multiResult = KreuzbergLib.ExtractFileSync("multilingual_document.pdf", multiLangConfig);
 
 Console.WriteLine("Detected Languages:");
 foreach (var lang in multiResult.DetectedLanguages)

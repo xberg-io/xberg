@@ -246,6 +246,8 @@ scratch/
 
 e2e/zig/.zig-cache/
 
+erl_crash.dump
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .agents/
 .cursor/

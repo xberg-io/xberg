@@ -55,7 +55,7 @@ dbase = "0.7"
 futures = "0.3"
 getrandom = { version = "0.4.2", features = ["wasm_js"] }
 hex = "0.4.3"
-html-to-markdown-rs = { version = "3.3.3", default-features = false }
+html-to-markdown-rs = { version = "3.4.0", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"
@@ -82,7 +82,7 @@ serde_json = { version = "1.0.149" }
 serde_toon_format = "0.1"
 tempfile = "3.27.0"
 thiserror = "2.0.18"
-tokio = { version = "1.52.2", features = [
+tokio = { version = "1.52.3", features = [
     "rt",
     "rt-multi-thread",
     "macros",
@@ -94,7 +94,7 @@ tokio = { version = "1.52.2", features = [
 ] }
 toml = "1.1.2"
 tracing = "0.1"
-tree-sitter-language-pack = { version = "1.7.0", default-features = false, features = ["serde"] }
+tree-sitter-language-pack = { version = "1.8.0", default-features = false, features = ["serde"] }
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [

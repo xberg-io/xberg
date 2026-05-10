@@ -6,16 +6,16 @@ class Program
     {
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync("document.pdf");
+            var result = await KreuzbergLib.ExtractFileAsync("document.pdf");
 
             Console.WriteLine($"Content length: {result.Content.Length}");
             Console.WriteLine($"MIME type: {result.MimeType}");
 
             var tasks = new[]
             {
-                KreuzbergClient.ExtractFileAsync("file1.pdf"),
-                KreuzbergClient.ExtractFileAsync("file2.pdf"),
-                KreuzbergClient.ExtractFileAsync("file3.pdf")
+                KreuzbergLib.ExtractFileAsync("file1.pdf"),
+                KreuzbergLib.ExtractFileAsync("file2.pdf"),
+                KreuzbergLib.ExtractFileAsync("file3.pdf")
             };
 
             var results = await Task.WhenAll(tasks);

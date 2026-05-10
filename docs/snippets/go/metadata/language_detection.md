@@ -8,13 +8,13 @@ import (
 )
 
 func main() {
+	enabled := true
 	minConfidence := 0.9
-	detectMultiple := true
-	result, err := kreuzberg.ExtractFileSync("document.pdf", &kreuzberg.ExtractionConfig{
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, kreuzberg.ExtractionConfig{
 		LanguageDetection: &kreuzberg.LanguageDetectionConfig{
-			Enabled:        kreuzberg.BoolPtr(true),
+			Enabled:        &enabled,
 			MinConfidence:  &minConfidence,
-			DetectMultiple: &detectMultiple,
+			DetectMultiple: true,
 		},
 	})
 	if err != nil {

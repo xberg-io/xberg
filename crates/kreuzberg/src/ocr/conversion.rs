@@ -146,6 +146,7 @@ pub struct TsvRow {
 /// # Returns
 ///
 /// An `OcrElement` with rectangle geometry and Tesseract metadata.
+#[cfg(feature = "ocr")]
 pub(crate) fn tsv_row_to_element(row: &TsvRow) -> OcrElement {
     let geometry = OcrBoundingGeometry::Rectangle {
         left: row.left,
@@ -344,7 +345,7 @@ impl OcrElementExt for OcrElement {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ocr"))]
 mod tests {
     use super::*;
 

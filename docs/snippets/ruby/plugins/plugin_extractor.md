@@ -11,7 +11,7 @@ end
 
 class CustomValidator
   def call(result)
-    raise Kreuzberg::Errors::ValidationError, 'Empty' if result['content'].empty?
+    raise StandardError, 'Empty' if result['content'].empty?
   end
 end
 

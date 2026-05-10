@@ -8,22 +8,25 @@ import (
 )
 
 func main() {
-	targetDPI := 300
-	config := &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
-			Tesseract: &kreuzberg.TesseractConfig{
+	targetDpi := int32(300)
+	deskew := true
+	binarization := "otsu"
+
+	config := kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
+			TesseractConfig: &kreuzberg.TesseractConfig{
 				Preprocessing: &kreuzberg.ImagePreprocessingConfig{
-					TargetDPI:         &targetDPI,
-					Denoise:           kreuzberg.BoolPtr(true),
-					Deskew:            kreuzberg.BoolPtr(true),
-					ContrastEnhance:   kreuzberg.BoolPtr(true),
-					BinarizationMode:  kreuzberg.StringPtr("otsu"),
+					TargetDpi:          &targetDpi,
+					Denoise:            true,
+					Deskew:             &deskew,
+					ContrastEnhance:    true,
+					BinarizationMethod: &binarization,
 				},
 			},
 		},
 	}
 
-	result, err := kreuzberg.ExtractFileSync("document.pdf", config)
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

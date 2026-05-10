@@ -193,6 +193,18 @@ pub struct ExtractionConfig {
     #[serde(default)]
     pub layout: Option<super::super::layout::LayoutDetectionConfig>,
 
+    /// Run layout detection on the non-OCR PDF markdown path.
+    ///
+    /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
+    /// table, list, and figure detection in the structure pipeline that would
+    /// otherwise rely on font-clustering heuristics alone. Substantially
+    /// improves SF1 (structural F1) at the cost of inference latency
+    /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
+    /// Requires the `layout-detection` feature.
+    #[cfg(feature = "layout-detection")]
+    #[serde(default)]
+    pub use_layout_for_markdown: bool,
+
     /// Enable structured document tree output.
     ///
     /// When true, populates the `document` field on `ExtractionResult` with a
@@ -305,6 +317,8 @@ impl Default for ExtractionConfig {
             security_limits: None,
             #[cfg(feature = "layout-detection")]
             layout: None,
+            #[cfg(feature = "layout-detection")]
+            use_layout_for_markdown: false,
             result_format: crate::types::ResultFormat::Unified,
             output_format: OutputFormat::Plain,
             include_document_structure: false,

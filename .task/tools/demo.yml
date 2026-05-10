@@ -62,7 +62,7 @@ tasks:
   dev:serve:docs:
     desc: "Serve docs on http://localhost:8001"
     cmds:
-      - uv run --group docs zensical serve -a localhost:8001
+      - uv run --no-sync --group docs zensical serve -a localhost:8001
 
   dev:serve:assets:
     desc: "Serve WASM assets on http://localhost:9000 (simulates CDN origin)"

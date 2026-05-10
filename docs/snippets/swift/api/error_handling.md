@@ -1,0 +1,31 @@
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+// The Swift binding throws `RustString` (not `KreuzbergError`) for every
+// failure surfaced from the Rust core. The string preserves the original
+// error variant name and message (e.g. "UnsupportedFormat: ...",
+// "MissingDependency: ...", "Parsing: ...") so callers can pattern-match
+// on the prefix or simply print the message.
+do {
+    let config = try extractionConfigFromJson("{}")
+    let result = try extractFileSync("document.pdf", nil, config)
+    print(result.content().toString())
+} catch let error as RustString {
+    let message = error.toString()
+    if message.contains("UnsupportedFormat") {
+        print("Unsupported format: \(message)")
+    } else if message.contains("MissingDependency") {
+        print("Install the required dependency: \(message)")
+    } else if message.contains("Parsing") {
+        print("Corrupt or invalid document: \(message)")
+    } else if message.contains("Io") {
+        print("File error: \(message)")
+    } else {
+        print("Extraction failed: \(message)")
+    }
+} catch {
+    print("Unexpected error: \(error)")
+}
+```

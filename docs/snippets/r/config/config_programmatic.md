@@ -1,25 +1,20 @@
 ```r title="R"
 library(kreuzberg)
 
-ocr <- ocr_config(
-  backend = "tesseract",
-  language = "eng",
-  dpi = 300L
-)
-
-chunking <- chunking_config(
-  max_characters = 2000L,
-  overlap = 300L
-)
-
-config <- extraction_config(
+config <- list(
   force_ocr = TRUE,
-  ocr = ocr,
-  chunking = chunking,
+  ocr = list(
+    backend = "tesseract",
+    language = "eng"
+  ),
+  chunking = list(
+    max_characters = 2000L,
+    overlap = 300L
+  ),
   output_format = "markdown"
 )
 
-file_path <- "document.pdf"
-result <- extract_file_sync(file_path, config = config)
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 cat(sprintf("MIME type: %s\n", result$mime_type))
 ```

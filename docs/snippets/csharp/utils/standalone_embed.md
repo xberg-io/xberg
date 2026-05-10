@@ -1,7 +1,7 @@
 ```csharp title="C#"
 using Kreuzberg;
 
-var client = new KreuzbergClient();
+var client = new KreuzbergLib();
 
 var config = new EmbeddingConfig { Model = EmbeddingModelType.Preset("balanced"), Normalize = true };
 var texts = new[] { "Hello, world!", "Kreuzberg is fast" };

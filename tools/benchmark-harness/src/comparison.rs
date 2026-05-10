@@ -217,6 +217,10 @@ pub fn build_extraction_config(pipeline: Pipeline) -> kreuzberg::ExtractionConfi
         Pipeline::Baseline => base,
         Pipeline::Layout => kreuzberg::ExtractionConfig {
             layout: Some(LayoutDetectionConfig::default()),
+            // Drive the new layout-for-markdown path: layout regions inform
+            // heading / table / list / figure detection in the structure
+            // pipeline, which dramatically improves SF1 on PDFs.
+            use_layout_for_markdown: true,
             // Enable OCR fallback for pages with no native text (image-only pages).
             // With force_ocr=false (default), kreuzberg auto-detects empty pages
             // and falls back to tesseract OCR only when needed.

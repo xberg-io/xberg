@@ -251,7 +251,7 @@ public static List<ExtractionResult> batchExtractFiles(List<BatchFileItem> items
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `List<BatchFileItem>` | Yes | Vector of [`BatchFileItem`] structs, each containing a path and optional |
+| `items` | `List<BatchFileItem>` | Yes | Vector of `BatchFileItem` structs, each containing a path and optional |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `List<ExtractionResult>`
@@ -296,7 +296,7 @@ public static List<ExtractionResult> batchExtractBytes(List<BatchBytesItem> item
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `List<BatchBytesItem>` | Yes | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `items` | `List<BatchBytesItem>` | Yes | Vector of `BatchBytesItem` structs, each containing content bytes, |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration |
 
 **Returns:** `List<ExtractionResult>`
@@ -550,12 +550,15 @@ public static List<List<Float>> embedTextsAsync(List<String> texts, EmbeddingCon
 
 #### renderPdfPageToPng()
 
-Render a single PDF page to a PNG-encoded byte buffer.
+Render a single PDF page to PNG bytes.
+
+Returns raw PNG-encoded bytes for the specified page at the given DPI.
+Uses pdf_oxide with tiny-skia for pure-Rust rendering.
 
 **Errors:**
 
-Returns an error if the PDF is invalid, the page index is out of bounds,
-or if the page fails to render.
+Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
+or rendered, or if `page_index` is out of range.
 
 **Signature:**
 
@@ -567,10 +570,10 @@ public static byte[] renderPdfPageToPng(byte[] pdfBytes, long pageIndex, int dpi
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `pdfBytes` | `byte[]` | Yes | The pdf bytes |
-| `pageIndex` | `long` | Yes | The page index |
-| `dpi` | `Optional<Integer>` | No | The dpi |
-| `password` | `Optional<String>` | No | The password |
+| `pdfBytes` | `byte[]` | Yes | Raw PDF file bytes |
+| `pageIndex` | `long` | Yes | Zero-based page index |
+| `dpi` | `Optional<Integer>` | No | Resolution in dots per inch (default: 150) |
+| `password` | `Optional<String>` | No | Optional password for encrypted PDFs |
 
 **Returns:** `byte[]`
 
@@ -828,6 +831,17 @@ Request parameters for cache warm (model download).
 
 ---
 
+#### CharShape
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bold` | `boolean` | — | Bold |
+| `italic` | `boolean` | — | Italic |
+| `underline` | `boolean` | — | Underline |
+
+
+---
+
 #### Chunk
 
 A text chunk with optional embedding and metadata.
@@ -971,23 +985,6 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### CommonPdfMetadata
-
-Common metadata fields extracted from a PDF.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `title` | `Optional<String>` | `null` | Title |
-| `subject` | `Optional<String>` | `null` | Subject |
-| `authors` | `Optional<List<String>>` | `null` | Authors |
-| `keywords` | `Optional<List<String>>` | `null` | Keywords |
-| `createdAt` | `Optional<String>` | `null` | Created at |
-| `modifiedAt` | `Optional<String>` | `null` | Modified at |
-| `createdBy` | `Optional<String>` | `null` | Created by |
-
-
----
-
 #### ContentFilterConfig
 
 Cross-extractor content filtering configuration.
@@ -1028,6 +1025,34 @@ JATS contributor with role.
 |-------|------|---------|-------------|
 | `name` | `String` | — | The name |
 | `role` | `Optional<String>` | `null` | Role |
+
+
+---
+
+#### CoreProperties
+
+Dublin Core metadata from docProps/core.xml
+
+Contains standard metadata fields defined by the Dublin Core standard
+and Office-specific extensions.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | `Optional<String>` | `null` | Document title |
+| `subject` | `Optional<String>` | `null` | Document subject/topic |
+| `creator` | `Optional<String>` | `null` | Document creator/author |
+| `keywords` | `Optional<String>` | `null` | Keywords or tags |
+| `description` | `Optional<String>` | `null` | Document description/abstract |
+| `lastModifiedBy` | `Optional<String>` | `null` | User who last modified the document |
+| `revision` | `Optional<String>` | `null` | Revision number |
+| `created` | `Optional<String>` | `null` | Creation timestamp (ISO 8601) |
+| `modified` | `Optional<String>` | `null` | Last modification timestamp (ISO 8601) |
+| `category` | `Optional<String>` | `null` | Document category |
+| `contentStatus` | `Optional<String>` | `null` | Content status (Draft, Final, etc.) |
+| `language` | `Optional<String>` | `null` | Document language |
+| `identifier` | `Optional<String>` | `null` | Unique identifier |
+| `version` | `Optional<String>` | `null` | Document version |
+| `lastPrinted` | `Optional<String>` | `null` | Last print timestamp (ISO 8601) |
 
 
 ---
@@ -1422,6 +1447,16 @@ construction paths (builder, derivation) call this automatically.
 public void finalizeNodeTypes()
 ```
 
+###### isEmpty()
+
+Check if the document structure is empty.
+
+**Signature:**
+
+```java
+public boolean isEmpty()
+```
+
 ###### defaultOptions()
 
 **Signature:**
@@ -1429,6 +1464,34 @@ public void finalizeNodeTypes()
 ```java
 public static DocumentStructure defaultOptions()
 ```
+
+
+---
+
+#### DocxAppProperties
+
+Application properties from docProps/app.xml for DOCX
+
+Contains Word-specific document statistics and metadata.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `application` | `Optional<String>` | `null` | Application name (e.g., "Microsoft Office Word") |
+| `appVersion` | `Optional<String>` | `null` | Application version |
+| `template` | `Optional<String>` | `null` | Template filename |
+| `totalTime` | `Optional<Integer>` | `null` | Total editing time in minutes |
+| `pages` | `Optional<Integer>` | `null` | Number of pages |
+| `words` | `Optional<Integer>` | `null` | Number of words |
+| `characters` | `Optional<Integer>` | `null` | Number of characters (excluding spaces) |
+| `charactersWithSpaces` | `Optional<Integer>` | `null` | Number of characters (including spaces) |
+| `lines` | `Optional<Integer>` | `null` | Number of lines |
+| `paragraphs` | `Optional<Integer>` | `null` | Number of paragraphs |
+| `company` | `Optional<String>` | `null` | Company name |
+| `docSecurity` | `Optional<Integer>` | `null` | Document security level |
+| `scaleCrop` | `Optional<Boolean>` | `null` | Scale crop flag |
+| `linksUpToDate` | `Optional<Boolean>` | `null` | Links up to date flag |
+| `sharedDoc` | `Optional<Boolean>` | `null` | Shared document flag |
+| `hyperlinksChanged` | `Optional<Boolean>` | `null` | Hyperlinks changed flag |
 
 
 ---
@@ -1442,8 +1505,8 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `coreProperties` | `Optional<String>` | `null` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
-| `appProperties` | `Optional<String>` | `null` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
+| `coreProperties` | `Optional<CoreProperties>` | `null` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
+| `appProperties` | `Optional<DocxAppProperties>` | `null` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
 | `customProperties` | `Optional<Map<String, Object>>` | `Collections.emptyMap()` | Custom properties from docProps/custom.xml (user-defined properties) Contains key-value pairs defined by users or applications. Values can be strings, numbers, booleans, or dates. |
 
 
@@ -1879,10 +1942,10 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `isMask` | `boolean` | — | Whether this image is a mask image |
 | `description` | `Optional<String>` | `null` | Optional description of the image |
 | `ocrResult` | `Optional<ExtractionResult>` | `null` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
-| `boundingBox` | `Optional<String>` | `null` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from pdf_oxide. |
+| `boundingBox` | `Optional<String>` | `null` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `sourcePath` | `Optional<String>` | `null` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `imageKind` | `Optional<ImageKind>` | `null` | Heuristic classification of what this image likely depicts. `null` if classification was disabled or inconclusive. |
-| `kindConfidence` | `Optional<Float>` | `null` | Confidence score for `image_kind`, in [0.0, 1.0]. |
+| `kindConfidence` | `Optional<Float>` | `null` | Confidence score for `image_kind`, in the range 0.0 to 1.0. |
 | `clusterId` | `Optional<Integer>` | `null` | Identifier shared across images that form a single logical figure (e.g. all raster tiles of one technical drawing). `null` for singletons. |
 
 
@@ -2289,6 +2352,16 @@ public static HtmlOutputConfig defaultOptions()
 
 ---
 
+#### HwpImage
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `String` | — | The name |
+| `data` | `byte[]` | — | Data |
+
+
+---
+
 #### ImageExtractionConfig
 
 Image extraction configuration.
@@ -2302,7 +2375,7 @@ Image extraction configuration.
 | `autoAdjustDpi` | `boolean` | `true` | Automatically adjust DPI based on image content |
 | `minDpi` | `int` | `72` | Minimum DPI threshold |
 | `maxDpi` | `int` | `600` | Maximum DPI threshold |
-| `maxImagesPerPage` | `Optional<Integer>` | `null` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdf_oxide. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `null` (default) means no limit — all images are extracted. |
+| `maxImagesPerPage` | `Optional<Integer>` | `null` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `null` (default) means no limit — all images are extracted. |
 | `classify` | `boolean` | `true` | When `true` (default), extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. |
 
 ##### Methods
@@ -2314,6 +2387,22 @@ Image extraction configuration.
 ```java
 public static ImageExtractionConfig defaultOptions()
 ```
+
+
+---
+
+#### ImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `int` | — | Image width in pixels |
+| `height` | `int` | — | Image height in pixels |
+| `format` | `String` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `Map<String, String>` | `Collections.emptyMap()` | EXIF metadata tags |
 
 
 ---
@@ -3423,22 +3512,6 @@ and visibility state (for presentations).
 
 ---
 
-#### PageLayoutResult
-
-Layout detection results for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `pageIndex` | `long` | — | Page index |
-| `regions` | `List<String>` | — | Regions |
-| `pageWidthPts` | `float` | — | Page width pts |
-| `pageHeightPts` | `float` | — | Page height pts |
-| `renderWidthPx` | `int` | — | Width of the rendered image used for layout detection (pixels). |
-| `renderHeightPx` | `int` | — | Height of the rendered image used for layout detection (pixels). |
-
-
----
-
 #### PageMarginsPoints
 
 Page margins converted to points (1/72 inch).
@@ -3469,22 +3542,6 @@ with character offset boundaries for chunk-to-page mapping.
 | `unitType` | `PageUnitType` | — | Type of paginated unit |
 | `boundaries` | `Optional<List<PageBoundary>>` | `null` | Character offset boundaries for each page Maps character ranges in the extracted content to page numbers. Used for chunk page range calculation. |
 | `pages` | `Optional<List<PageInfo>>` | `null` | Detailed per-page metadata (optional, only when needed) |
-
-
----
-
-#### PageTiming
-
-Timing breakdown for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `renderMs` | `double` | — | Time to render the PDF page to a raster image (amortized from batch render). |
-| `preprocessMs` | `double` | — | Time spent in image preprocessing (resize, normalize, tensor construction). |
-| `onnxMs` | `double` | — | Time for the ONNX model session.run() call (actual neural network inference). |
-| `inferenceMs` | `double` | — | Total model inference time (preprocess + onnx), as measured by the engine. |
-| `postprocessMs` | `double` | — | Time spent in postprocessing (confidence filtering, overlap resolution). |
-| `mappingMs` | `double` | — | Time to map pixel-space bounding boxes to PDF coordinate space. |
 
 
 ---
@@ -3531,31 +3588,22 @@ public static PdfConfig defaultOptions()
 
 ---
 
-#### PdfImage
+#### PdfMetadata
+
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `pageNumber` | `long` | — | Page number |
-| `imageIndex` | `long` | — | Image index |
-| `width` | `long` | — | Width |
-| `height` | `long` | — | Height |
-| `colorSpace` | `Optional<String>` | `null` | Color space |
-| `bitsPerComponent` | `Optional<Long>` | `null` | Bits per component |
-| `filters` | `List<String>` | — | Original PDF stream filters (e.g. `["FlateDecode"]`, `["DCTDecode"]`). |
-| `data` | `byte[]` | — | The decoded image bytes in a standard format (JPEG, PNG, etc.). |
-| `decodedFormat` | `String` | — | The format of `data` after decoding: `"jpeg"`, `"png"`, `"jpeg2000"`, `"ccitt"`, or `"raw"`. |
-| `imageKind` | `Optional<ImageKind>` | `null` | Heuristic classification of what this image likely depicts. |
-| `kindConfidence` | `Optional<Float>` | `null` | Confidence score for `image_kind`, in [0.0, 1.0]. |
-| `clusterId` | `Optional<Integer>` | `null` | Identifier shared across images that form a single logical figure. |
-
-
----
-
-#### PdfUnifiedExtractionResult
-
-Result type for unified PDF text and metadata extraction.
-
-Contains text, optional page boundaries, optional per-page content, and metadata.
+| `pdfVersion` | `Optional<String>` | `null` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `Optional<String>` | `null` | PDF producer (application that created the PDF) |
+| `isEncrypted` | `Optional<Boolean>` | `null` | Whether the PDF is encrypted/password-protected |
+| `width` | `Optional<Long>` | `null` | First page width in points (1/72 inch) |
+| `height` | `Optional<Long>` | `null` | First page height in points (1/72 inch) |
+| `pageCount` | `Optional<Long>` | `null` | Total number of pages in the PDF document |
 
 
 ---
@@ -4066,7 +4114,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `String` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `short` | — | Server port number |
-| `corsOrigins` | `List<String>` | `Collections.emptyList()` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., ["<https://example.com">]), only those origins will be allowed. |
+| `corsOrigins` | `List<String>` | `Collections.emptyList()` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `maxRequestBodyBytes` | `long` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `maxMultipartFieldBytes` | `long` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
@@ -5375,13 +5423,13 @@ type-safe, clean metadata without nested optionals.
 
 | Value | Description |
 |-------|-------------|
-| `PDF` | Pdf format — Fields: `0`: `String` |
+| `PDF` | Pdf format — Fields: `0`: `PdfMetadata` |
 | `DOCX` | Docx format — Fields: `0`: `DocxMetadata` |
 | `EXCEL` | Excel — Fields: `0`: `ExcelMetadata` |
 | `EMAIL` | Email — Fields: `0`: `EmailMetadata` |
 | `PPTX` | Pptx format — Fields: `0`: `PptxMetadata` |
 | `ARCHIVE` | Archive — Fields: `0`: `ArchiveMetadata` |
-| `IMAGE` | Image element — Fields: `0`: `String` |
+| `IMAGE` | Image element — Fields: `0`: `ImageMetadata` |
 | `XML` | Xml format — Fields: `0`: `XmlMetadata` |
 | `TEXT` | Text format — Fields: `0`: `TextMetadata` |
 | `HTML` | Preserve as HTML `<mark>` tags — Fields: `0`: `HtmlMetadata` |

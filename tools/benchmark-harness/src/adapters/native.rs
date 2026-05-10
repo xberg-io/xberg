@@ -5,7 +5,7 @@
 
 use crate::adapter::FrameworkAdapter;
 use crate::monitoring::ResourceMonitor;
-use crate::types::{BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, PerformanceMetrics};
+use crate::types::{BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, OutputFormat, PerformanceMetrics};
 use crate::{Error, Result};
 use async_trait::async_trait;
 use kreuzberg::{ExtractionConfig, ExtractionResult, FormatMetadata, batch_extract_files, extract_file};
@@ -125,7 +125,17 @@ impl FrameworkAdapter for NativeAdapter {
         )
     }
 
-    async fn extract(&self, file_path: &Path, timeout: Duration, force_ocr: bool) -> Result<BenchmarkResult> {
+    fn supported_output_formats(&self) -> Vec<OutputFormat> {
+        vec![OutputFormat::Markdown, OutputFormat::Plaintext]
+    }
+
+    async fn extract(
+        &self,
+        file_path: &Path,
+        timeout: Duration,
+        force_ocr: bool,
+        output_format: OutputFormat,
+    ) -> Result<BenchmarkResult> {
         let file_size = std::fs::metadata(file_path).map_err(Error::Io)?.len();
 
         // Apply force_ocr override when requested
@@ -182,6 +192,7 @@ impl FrameworkAdapter for NativeAdapter {
             };
             return Ok(BenchmarkResult {
                 framework: self.name().to_string(),
+                output_format,
                 file_path: file_path.to_path_buf(),
                 file_size,
                 success: false,
@@ -238,6 +249,7 @@ impl FrameworkAdapter for NativeAdapter {
 
         Ok(BenchmarkResult {
             framework: self.name().to_string(),
+            output_format,
             file_path: file_path.to_path_buf(),
             file_size,
             success,
@@ -268,6 +280,7 @@ impl FrameworkAdapter for NativeAdapter {
         file_paths: &[&Path],
         timeout: Duration,
         force_ocr: &[bool],
+        output_format: OutputFormat,
     ) -> Result<Vec<BenchmarkResult>> {
         // Early return if file_paths is empty
         if file_paths.is_empty() {
@@ -341,6 +354,7 @@ impl FrameworkAdapter for NativeAdapter {
 
                     BenchmarkResult {
                         framework: self.name().to_string(),
+                        output_format,
                         file_path: file_path.to_path_buf(),
                         file_size,
                         success: false,
@@ -431,6 +445,7 @@ impl FrameworkAdapter for NativeAdapter {
 
                 BenchmarkResult {
                     framework: self.name().to_string(),
+                    output_format,
                     file_path: file_path.to_path_buf(),
                     file_size,
                     success,
@@ -536,7 +551,7 @@ mod tests {
         std::fs::write(&file_path, "Hello, world!").unwrap();
 
         let result = adapter
-            .extract(&file_path, Duration::from_secs(10), false)
+            .extract(&file_path, Duration::from_secs(10), false, OutputFormat::Markdown)
             .await
             .unwrap();
 

@@ -12,8 +12,4 @@
     <suppress checks="AvoidStarImport" files=".*Test\.java"/>
     <suppress checks="MagicNumber" files=".*Test\.java"/>
     <suppress checks="MethodLength" files=".*Test\.java"/>
-
-    <!-- Suppress LineLength for alef-generated files (checkstyle ignores @SuppressWarnings annotations) -->
-    <suppress checks="LineLength" files=".*[/\\]dev[/\\]kreuzberg[/\\].*\.java"/>
-    <suppress checks="LineLength" files=".*[/\\]e2e[/\\]java[/\\].*\.java"/>
 </suppressions>

@@ -17,7 +17,7 @@ class CustomCacheBackend
             return cachedResult;
         }
 
-        var result = await KreuzbergClient.ExtractFileAsync(filePath, config);
+        var result = await KreuzbergLib.ExtractFileAsync(filePath, config);
 
         _cache[cacheKey] = result;
         Console.WriteLine("Result cached");

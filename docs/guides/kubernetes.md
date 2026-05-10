@@ -4,7 +4,7 @@ Deploy Kreuzberg to Kubernetes with proper OCR configuration, permissions, and h
 
 ## Helm Chart <span class="version-badge new">v4.8.4</span>
 
-The recommended way to deploy Kreuzberg on Kubernetes is via the official Helm chart, published as an OCI artifact to GitHub Container Registry.
+Deploy via the official Helm chart (OCI artifact on GHCR).
 
 ### Install
 
@@ -93,8 +93,6 @@ The chart creates the following resources:
 All values are documented in the chart's [`values.yaml`](https://github.com/kreuzberg-dev/kreuzberg/blob/main/charts/kreuzberg/values.yaml).
 
 ---
-
-If you need finer control over the manifests, see the raw YAML examples below.
 
 ## Quick Start
 
@@ -462,7 +460,7 @@ kubectl apply -f production-deployment.yaml
 
 ## High Availability
 
-For HA deployments, add pod anti-affinity, rolling update strategy, and a ConfigMap for extraction settings:
+Add pod anti-affinity and rolling update strategy:
 
 ```yaml title="ha-additions.yaml"
 spec:

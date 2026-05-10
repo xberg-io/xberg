@@ -67,30 +67,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-
-      - name: Install textlint and rules
-        run: |
-          npm install --no-save \
-            textlint \
-            textlint-rule-no-todo \
-            textlint-rule-no-start-duplicated-conjunction \
-            textlint-rule-no-empty-section \
-            textlint-rule-terminology \
-            textlint-rule-no-zero-width-spaces \
-            @textlint-rule/textlint-rule-no-invalid-control-character \
-            textlint-rule-no-surrogate-pair \
-            @textlint-rule/textlint-rule-no-unmatched-pair \
-            textlint-rule-alex \
-            textlint-rule-write-good \
-            textlint-rule-common-misspellings \
-            textlint-rule-stop-words \
-            textlint-rule-en-capitalization \
-            textlint-filter-rule-comments \
-            textlint-filter-rule-node-types
+      - name: Setup textlint
+        uses: kreuzberg-dev/actions/setup-textlint@v1
 
       - name: Run textlint
         run: scripts/ci/docs/textlint.sh

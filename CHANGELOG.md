@@ -12,10 +12,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **#619 follow-up**: `POST /extract-async` now returns HTTP 429 when more than 100 jobs are active simultaneously, preventing unbounded memory growth under load.
+- **WASM OCR backend**: `TesseractWasmBackend` registered for the
+  `ocr-wasm` feature set, exposing OCR on the WASM target via
+  `tesseract-wasm` while the native path continues to use leptess.
 
 ### Fixed
 
 - **#911**: `extraction_timeout_secs` now explicitly returns a `KreuzbergError::Validation` error when configured in non-tokio or WASM builds. Previously, timeouts in these environments were silently ignored, leading to unexpected hangs.
+- **swift e2e command**: `[crates.test.swift].e2e` now runs from
+  `packages/swift` (was `e2e/swift`). The generated XCTest cases live inside
+  `packages/swift/Tests/<Module>Tests/` because SwiftPM 6.0 forbids
+  inter-package `.package(path:)` references in a monorepo, so
+  `e2e/swift/Package.swift` is a documentation-only stub with no buildable
+  target. The previous setting failed with `error: The package does not
+  contain a buildable target.` on every `task swift:e2e` invocation.
+- **Java FFI compile error**: `readJsonList` now wraps the null-check and
+  `checkLastError()` call inside try-catch, resolving an unreported `Throwable`
+  exception that blocked Java e2e test compilation.
+- **alef.toml**: `TesseractWasmBackend` added to `[crates.exclude].types`
+  so non-WASM bindings (kreuzberg-py, kreuzberg-nif, etc.) no longer
+  reference the WASM-only OCR backend (which is
+  `#[cfg(feature = "ocr-wasm")]`-gated) and break the build under
+  default features.
+- **dart e2e**: `extract_file` overridden to `extract_bytes` in `alef.toml`
+  (dart cannot pass file paths through the FRB bridge); e2e generator
+  regenerated to forward actual `[BatchBytesItem]` / `Uint8List`
+  arguments rather than empty parameter lists.
+- **e2e/gleam**: regenerated against alef gleam codegen with
+  `contains_any` OR logic + `gleam/list` import; full FFI shim
+  (`packages/gleam/src/kreuzberg_gleam_ffi.erl`) wraps the
+  `Elixir.Kreuzberg.Native` `*_sync` NIFs and converts the Erlang map
+  results into Gleam-typed tagged tuples (`extraction_result`,
+  `metadata`, `document_structure`, `format_metadata`, `excel_metadata`).
+- **e2e/zig**: regenerated for Zig 0.16 API (allocator + IO surface) and
+  `FormatMetadata` internally-tagged enum path lookups now skip the
+  variant-name segment.
+- **Gleam dependency manifest**: restored canonical hex version ranges in
+  `packages/gleam/gleam.toml` (`gleam_stdlib = ">= 0.34.0 and < 2.0.0"`,
+  `gleeunit = ">= 1.0.0 and < 2.0.0"`). An earlier `alef sync-versions` had
+  routed `gleam.toml` through the catch-all SEMVER replace path and
+  overwrote both ranges with `">= 5.0.0-rc.1 and < 5.0.0-rc.1"` (an empty
+  range gleam refuses to resolve), wedging `gleam test`. The
+  `restore_gleam_dep_ranges` helper in alef now keeps these stable on
+  future syncs.
 - **#853**: HWP structured extraction now returns an error instead of silently returning an empty document when no BodyText sections are found. Fixes a regression introduced in the structured extraction refactor.
 - **#619 follow-up**: `POST /extract-async` handler no longer panics on mutex poison — returns HTTP 500 and marks the job as Failed instead.
 - Fixed dead conditional-import warning on `KreuzbergError` in `plugins/registry/ocr.rs` under non-OCR feature sets.

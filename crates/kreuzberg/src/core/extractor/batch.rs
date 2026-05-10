@@ -138,7 +138,7 @@ fn resolve_config(base: &ExtractionConfig, file_config: &Option<FileExtractionCo
 ///
 /// # Arguments
 ///
-/// * `items` - Vector of [`BatchFileItem`] structs, each containing a path and optional
+/// * `items` - Vector of `BatchFileItem` structs, each containing a path and optional
 ///   per-file configuration overrides.
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
@@ -239,7 +239,7 @@ pub async fn batch_extract_files(
 ///
 /// # Arguments
 ///
-/// * `items` - Vector of [`BatchBytesItem`] structs, each containing content bytes,
+/// * `items` - Vector of `BatchBytesItem` structs, each containing content bytes,
 ///   MIME type, and optional per-item configuration overrides.
 /// * `config` - Batch-level extraction configuration
 ///

@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = KreuzbergClient.ExtractFile(
+var result = KreuzbergLib.ExtractFile(
     "scanned_document.pdf",
     config
 );

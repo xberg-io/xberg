@@ -17,6 +17,6 @@ public class CustomExtractor : IDocumentExtractor
 }
 
 var extractor = new CustomExtractor();
-KreuzbergClient.RegisterDocumentExtractor(extractor);
+KreuzbergLib.RegisterDocumentExtractor(extractor);
 Console.WriteLine("Extractor registered");
 ```

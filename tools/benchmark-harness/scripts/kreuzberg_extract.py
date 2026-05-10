@@ -52,14 +52,21 @@ def _determine_ocr_used(metadata: dict[str, Any], ocr_enabled: bool) -> bool:
     return False
 
 
-def extract_sync(file_path: str, ocr_enabled: bool, *, force_ocr: bool = False) -> dict[str, Any]:
-    """Extract using synchronous API."""
-    # Use minimal config with cache disabled for benchmarking
-    config = ExtractionConfig(use_cache=False)
+def _build_config(ocr_enabled: bool, output_format: str, *, force_ocr: bool = False) -> ExtractionConfig:
+    """Build ExtractionConfig with cache off and the requested output format."""
+    config = ExtractionConfig(use_cache=False, output_format=output_format)
     if ocr_enabled:
         config.ocr = OcrConfig(backend="tesseract")
     if force_ocr:
         config.force_ocr = True
+    return config
+
+
+def extract_sync(
+    file_path: str, ocr_enabled: bool, output_format: str = "markdown", *, force_ocr: bool = False
+) -> dict[str, Any]:
+    """Extract using synchronous API."""
+    config = _build_config(ocr_enabled, output_format, force_ocr=force_ocr)
 
     start = time.perf_counter()
     result = extract_file_sync(file_path, config=config)
@@ -75,14 +82,11 @@ def extract_sync(file_path: str, ocr_enabled: bool, *, force_ocr: bool = False) 
     }
 
 
-async def extract_async(file_path: str, ocr_enabled: bool, *, force_ocr: bool = False) -> dict[str, Any]:
+async def extract_async(
+    file_path: str, ocr_enabled: bool, output_format: str = "markdown", *, force_ocr: bool = False
+) -> dict[str, Any]:
     """Extract using asynchronous API."""
-    # Use minimal config with cache disabled for benchmarking
-    config = ExtractionConfig(use_cache=False)
-    if ocr_enabled:
-        config.ocr = OcrConfig(backend="tesseract")
-    if force_ocr:
-        config.force_ocr = True
+    config = _build_config(ocr_enabled, output_format, force_ocr=force_ocr)
 
     start = time.perf_counter()
     result = await extract_file(file_path, config=config)
@@ -98,12 +102,9 @@ async def extract_async(file_path: str, ocr_enabled: bool, *, force_ocr: bool = 
     }
 
 
-def extract_batch_sync(file_paths: list[str], ocr_enabled: bool) -> list[dict[str, Any]]:
+def extract_batch_sync(file_paths: list[str], ocr_enabled: bool, output_format: str = "markdown") -> list[dict[str, Any]]:
     """Extract multiple files using batch API."""
-    # Use minimal config with cache disabled for benchmarking
-    config = ExtractionConfig(use_cache=False)
-    if ocr_enabled:
-        config.ocr = OcrConfig(backend="tesseract")
+    config = _build_config(ocr_enabled, output_format)
 
     start = time.perf_counter()
     results = batch_extract_files_sync(file_paths, config=config)  # type: ignore[arg-type]
@@ -136,7 +137,7 @@ def _parse_request(line: str) -> tuple[str, bool]:
     return stripped, False
 
 
-def run_server(ocr_enabled: bool) -> None:
+def run_server(ocr_enabled: bool, output_format: str) -> None:
     """Persistent server mode: read paths from stdin, write JSON to stdout."""
     # Signal readiness after Python + FFI initialization
     print("READY", flush=True)
@@ -146,7 +147,7 @@ def run_server(ocr_enabled: bool) -> None:
             continue
         start = time.perf_counter()
         try:
-            payload = extract_sync(file_path, ocr_enabled, force_ocr=force_ocr)
+            payload = extract_sync(file_path, ocr_enabled, output_format, force_ocr=force_ocr)
             print(json.dumps(payload), flush=True)
         except Exception as e:
             duration_ms = (time.perf_counter() - start) * 1000.0
@@ -155,17 +156,24 @@ def run_server(ocr_enabled: bool) -> None:
 
 def main() -> None:
     ocr_enabled = False
+    output_format = "markdown"
     args = []
     for arg in sys.argv[1:]:
         if arg == "--ocr":
             ocr_enabled = True
         elif arg == "--no-ocr":
             ocr_enabled = False
+        elif arg.startswith("--format="):
+            output_format = arg.split("=", 1)[1]
         else:
             args.append(arg)
 
+    if output_format not in ("markdown", "plaintext"):
+        print(f"Error: --format must be 'markdown' or 'plaintext'; got '{output_format}'", file=sys.stderr)
+        sys.exit(64)
+
     if len(args) < 1:
-        print("Usage: kreuzberg_extract.py [--ocr|--no-ocr] <mode> <file_path> [additional_files...]", file=sys.stderr)
+        print("Usage: kreuzberg_extract.py [--ocr|--no-ocr] [--format=markdown|plaintext] <mode> <file_path> [additional_files...]", file=sys.stderr)
         print("Modes: sync, async, batch, server", file=sys.stderr)
         sys.exit(1)
 
@@ -174,20 +182,20 @@ def main() -> None:
 
     try:
         if mode == "server":
-            run_server(ocr_enabled)
+            run_server(ocr_enabled, output_format)
 
         elif mode == "sync":
             if len(file_paths) != 1:
                 print("Error: sync mode requires exactly one file", file=sys.stderr)
                 sys.exit(1)
-            payload = extract_sync(file_paths[0], ocr_enabled)
+            payload = extract_sync(file_paths[0], ocr_enabled, output_format)
             print(json.dumps(payload), end="")
 
         elif mode == "async":
             if len(file_paths) != 1:
                 print("Error: async mode requires exactly one file", file=sys.stderr)
                 sys.exit(1)
-            payload = asyncio.run(extract_async(file_paths[0], ocr_enabled))
+            payload = asyncio.run(extract_async(file_paths[0], ocr_enabled, output_format))
             print(json.dumps(payload), end="")
 
         elif mode == "batch":
@@ -196,10 +204,10 @@ def main() -> None:
                 sys.exit(1)
 
             if len(file_paths) == 1:
-                results = extract_batch_sync(file_paths, ocr_enabled)
+                results = extract_batch_sync(file_paths, ocr_enabled, output_format)
                 print(json.dumps(results[0]), end="")
             else:
-                results = extract_batch_sync(file_paths, ocr_enabled)
+                results = extract_batch_sync(file_paths, ocr_enabled, output_format)
                 print(json.dumps(results), end="")
 
         else:

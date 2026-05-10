@@ -18,7 +18,7 @@ end
 extractor = PdfMetadataExtractor.new
 Kreuzberg.register_post_processor('pdf_metadata', extractor)
 
-config = Kreuzberg::Config::Extraction.new(
+config = Kreuzberg::ExtractionConfig.new(
   postprocessor: { enabled: true }
 )
 

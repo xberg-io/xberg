@@ -88,7 +88,7 @@ tasks:
   generate-gt:
     desc: "Generate markdown ground truth from PDFs using Gemini"
     cmds:
-      - uv run tools/benchmark-harness/scripts/generate_markdown_gt.py
+      - uv run --no-sync tools/benchmark-harness/scripts/generate_markdown_gt.py
 
   download:omnidocbench:
     desc: "Download OmniDocBench dataset from HuggingFace (~1.3 GB)"

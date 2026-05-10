@@ -1,9 +1,9 @@
-//! Aggregation module for benchmark results (v2.2.0 output schema).
+//! Aggregation module for benchmark results (v2.3.0 output schema).
 //!
-//! Groups [`BenchmarkResult`] records by framework-and-mode, file type, and
+//! Groups [`BenchmarkResult`] records by framework-and-mode, output format, file type, and
 //! OCR usage (yes/no), then computes percentile-based statistics for each
-//! group. The output schema (`schema_version: "2.2.0"`) is consumed by the
-//! consolidation dashboard.
+//! group. The output schema (`schema_version: "2.3.0"`) surfaces TF1 and SF1 separately
+//! with per-fixture rows preserved and split rankings by output format.
 //!
 //! # Percentile methodology
 //!
@@ -17,25 +17,67 @@
 //! Failed results (non-zero `error_kind`) are excluded from percentile
 //! calculations but still counted in `total_sample_count` to preserve the
 //! `success_rate_percent` metric.
+//!
+//! # Output format support
+//!
+//! Plaintext-only frameworks must NEVER appear in SF1 rankings or quality metrics
+//! that require layout information. Markdown frameworks appear in all rankings.
 
 use crate::stats::{percentile_r7, sanitize_f64};
-use crate::types::{BenchmarkResult, DiskSizeInfo, ErrorKind};
+use crate::types::{BenchmarkResult, DiskSizeInfo, ErrorKind, OutputFormat};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Consolidated results using new aggregation format
+/// Consolidated results using new aggregation format (v2.3.0)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewConsolidatedResults {
     /// Schema version for this output format
     pub schema_version: String,
-    /// Aggregated results grouped by framework:mode combination
+    /// Aggregated results grouped by framework:output_format:mode combination
     pub by_framework_mode: HashMap<String, FrameworkModeAggregation>,
     /// Disk sizes for each framework
     pub disk_sizes: HashMap<String, DiskSizeInfo>,
     /// Cross-framework comparison rankings
     pub comparison: ComparisonData,
+    /// Per-fixture results (one row per framework:output_format:execution_mode:fixture_id:ocr)
+    pub per_fixture_results: Vec<PerFixtureRow>,
     /// Metadata about the consolidation
     pub metadata: ConsolidationMetadata,
+}
+
+/// Per-fixture benchmark result row
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerFixtureRow {
+    /// Framework name
+    pub framework: String,
+    /// Output format (markdown or plaintext)
+    pub output_format: OutputFormat,
+    /// Execution mode (single, batch, etc.)
+    pub execution_mode: String,
+    /// Whether OCR was used
+    pub ocr: bool,
+    /// Fixture ID (e.g., from file path)
+    pub fixture_id: String,
+    /// File type/extension
+    pub file_type: String,
+    /// Total duration in milliseconds
+    pub duration_ms: f64,
+    /// Peak memory usage in MB
+    pub peak_memory_mb: f64,
+    /// Text F1 score (optional)
+    pub f1_text: Option<f64>,
+    /// Layout F1 score (optional, only for markdown mode)
+    pub f1_layout: Option<f64>,
+    /// Numeric F1 score (optional)
+    pub f1_numeric: Option<f64>,
+    /// Overall quality score (optional)
+    pub quality_score: Option<f64>,
+    /// Whether extraction was correct (optional)
+    pub correct: Option<bool>,
+    /// Whether extraction succeeded
+    pub success: bool,
+    /// Error kind if failed (optional)
+    pub error_kind: Option<String>,
 }
 
 /// Cross-framework comparison rankings and deltas
@@ -55,12 +97,15 @@ pub struct ComparisonData {
     /// PDF-only: frameworks ranked by overall quality score (highest first)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pdf_quality_ranking: Vec<RankedFramework>,
-    /// PDF-only: frameworks ranked by text F1 / TF1 (highest first)
+    /// PDF-only: frameworks ranked by text F1 / TF1 (highest first) — markdown only
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub pdf_tf1_ranking: Vec<RankedFramework>,
-    /// PDF-only: frameworks ranked by structural F1 / SF1 (highest first)
+    pub pdf_tf1_ranking_markdown: Vec<RankedFramework>,
+    /// PDF-only: frameworks ranked by text F1 / TF1 (highest first) — plaintext only
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub pdf_sf1_ranking: Vec<RankedFramework>,
+    pub pdf_tf1_ranking_plaintext: Vec<RankedFramework>,
+    /// PDF-only: frameworks ranked by structural F1 / SF1 (highest first) — markdown only
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pdf_sf1_ranking_markdown: Vec<RankedFramework>,
     /// Performance deltas relative to the fastest framework
     pub deltas_vs_baseline: HashMap<String, DeltaMetrics>,
 }
@@ -114,11 +159,13 @@ pub struct ConsolidationMetadata {
     pub timestamp: String,
 }
 
-/// Aggregated results for a specific framework and mode combination
+/// Aggregated results for a specific framework, output format, and mode combination
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FrameworkModeAggregation {
     /// Framework name (base name without mode suffix)
     pub framework: String,
+    /// Output format (markdown or plaintext)
+    pub output_format: OutputFormat,
     /// Mode: "single", "batch", "sync", "async"
     pub mode: String,
     /// Cold start duration statistics (if available)
@@ -175,17 +222,33 @@ pub struct PerformancePercentiles {
     pub quality: Option<QualityPercentiles>,
 }
 
-/// Quality percentile values
+/// Quality percentile values (p50, p95, p99) for all F1 metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityPercentiles {
-    /// Median F1 text score
+    /// Text F1 50th percentile (TF1 median)
     pub f1_text_p50: f64,
-    /// Median F1 numeric score
+    /// Text F1 95th percentile
+    pub f1_text_p95: f64,
+    /// Text F1 99th percentile
+    pub f1_text_p99: f64,
+    /// Numeric F1 50th percentile
     pub f1_numeric_p50: f64,
-    /// Median F1 layout/structural score (SF1)
-    pub f1_layout_p50: f64,
-    /// Median overall quality score
+    /// Numeric F1 95th percentile
+    pub f1_numeric_p95: f64,
+    /// Numeric F1 99th percentile
+    pub f1_numeric_p99: f64,
+    /// Layout/structural F1 50th percentile (SF1 median) — None for plaintext-only frameworks
+    pub f1_layout_p50: Option<f64>,
+    /// Layout/structural F1 95th percentile — None for plaintext-only frameworks
+    pub f1_layout_p95: Option<f64>,
+    /// Layout/structural F1 99th percentile — None for plaintext-only frameworks
+    pub f1_layout_p99: Option<f64>,
+    /// Overall quality score 50th percentile
     pub quality_score_p50: f64,
+    /// Overall quality score 95th percentile
+    pub quality_score_p95: f64,
+    /// Overall quality score 99th percentile
+    pub quality_score_p99: f64,
 }
 
 /// Percentile values for a metric
@@ -221,10 +284,10 @@ pub struct DurationPercentiles {
 ///
 /// Calculates p50/p95/p99 percentiles for each group.
 pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResults {
-    // Validate input - HIGH PRIORITY FIX
+    // Validate input
     if results.is_empty() {
         return NewConsolidatedResults {
-            schema_version: "2.2.0".to_string(),
+            schema_version: "2.3.0".to_string(),
             by_framework_mode: HashMap::new(),
             disk_sizes: HashMap::new(),
             comparison: ComparisonData {
@@ -234,10 +297,12 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
                 cpu_ranking: Vec::new(),
                 quality_ranking: Vec::new(),
                 pdf_quality_ranking: Vec::new(),
-                pdf_tf1_ranking: Vec::new(),
-                pdf_sf1_ranking: Vec::new(),
+                pdf_tf1_ranking_markdown: Vec::new(),
+                pdf_tf1_ranking_plaintext: Vec::new(),
+                pdf_sf1_ranking_markdown: Vec::new(),
                 deltas_vs_baseline: HashMap::new(),
             },
+            per_fixture_results: Vec::new(),
             metadata: ConsolidationMetadata {
                 total_results: 0,
                 framework_count: 0,
@@ -247,16 +312,17 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
         };
     }
 
-    let mut by_framework_mode: HashMap<String, HashMap<String, Vec<&BenchmarkResult>>> = HashMap::new();
+    // Group by framework:output_format:mode and file type
+    let mut by_framework_mode_format: HashMap<String, HashMap<String, Vec<&BenchmarkResult>>> = HashMap::new();
     let mut disk_sizes: HashMap<String, DiskSizeInfo> = HashMap::new();
     let mut file_types = std::collections::HashSet::new();
 
-    // Group results by framework:mode and file type
+    // Group results by framework:output_format:mode and file type
     for result in results {
         let (framework, mode) = extract_framework_and_mode(&result.framework);
-        let key = format!("{}:{}", framework, mode);
+        let key = format!("{}:{}:{}", framework, result.output_format, mode);
 
-        by_framework_mode
+        by_framework_mode_format
             .entry(key)
             .or_default()
             .entry(result.file_extension.clone())
@@ -271,15 +337,26 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
         }
     }
 
-    // Aggregate each framework:mode combination
+    // Aggregate each framework:output_format:mode combination
     let mut aggregated_by_framework_mode = HashMap::new();
 
-    for (framework_mode_key, file_type_results) in by_framework_mode {
-        let parts: Vec<&str> = framework_mode_key.split(':').collect();
+    for (framework_mode_format_key, file_type_results) in by_framework_mode_format {
+        let parts: Vec<&str> = framework_mode_format_key.split(':').collect();
+        if parts.len() < 3 {
+            continue;
+        }
         let framework = parts[0].to_string();
-        let mode = parts[1].to_string();
+        let output_format_str = parts[1];
+        let output_format = match output_format_str.parse::<OutputFormat>() {
+            Ok(fmt) => fmt,
+            Err(_) => {
+                eprintln!("Warning: invalid output_format '{}', skipping", output_format_str);
+                continue;
+            }
+        };
+        let mode = parts[2].to_string();
 
-        // Collect all results for this framework:mode for cold start calculation
+        // Collect all results for this framework:output_format:mode for cold start calculation
         let all_results: Vec<&BenchmarkResult> = file_type_results.values().flat_map(|v| v.iter().copied()).collect();
         let cold_start = aggregate_cold_starts(&all_results);
 
@@ -298,15 +375,19 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
         }
 
         aggregated_by_framework_mode.insert(
-            framework_mode_key.clone(),
+            framework_mode_format_key.clone(),
             FrameworkModeAggregation {
                 framework,
+                output_format,
                 mode,
                 cold_start,
                 by_file_type,
             },
         );
     }
+
+    // Build per-fixture results
+    let per_fixture_results = build_per_fixture_results(results);
 
     let metadata = ConsolidationMetadata {
         total_results: results.len(),
@@ -318,12 +399,70 @@ pub fn aggregate_new_format(results: &[BenchmarkResult]) -> NewConsolidatedResul
     let comparison = build_comparison(&aggregated_by_framework_mode);
 
     NewConsolidatedResults {
-        schema_version: "2.2.0".to_string(),
+        schema_version: "2.3.0".to_string(),
         by_framework_mode: aggregated_by_framework_mode,
         disk_sizes,
         comparison,
+        per_fixture_results,
         metadata,
     }
+}
+
+/// Build per-fixture result rows from raw benchmark results
+///
+/// Extracts one row per (framework, output_format, execution_mode, fixture_id, ocr) group.
+/// Fixture ID is derived from the file path (filename without extension).
+fn build_per_fixture_results(results: &[BenchmarkResult]) -> Vec<PerFixtureRow> {
+    let mut fixture_rows = Vec::new();
+
+    for result in results {
+        let (framework, mode) = extract_framework_and_mode(&result.framework);
+        let fixture_id = result
+            .file_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let ocr = matches!(result.ocr_status, crate::types::OcrStatus::Used);
+        let error_kind = if !result.success {
+            Some(format!("{:?}", result.error_kind))
+        } else {
+            None
+        };
+
+        let (f1_text, f1_layout, f1_numeric, quality_score, correct) = if let Some(q) = &result.quality {
+            (
+                Some(q.f1_score_text),
+                q.f1_score_layout,
+                Some(q.f1_score_numeric),
+                Some(q.quality_score),
+                Some(q.correct),
+            )
+        } else {
+            (None, None, None, None, None)
+        };
+
+        fixture_rows.push(PerFixtureRow {
+            framework: framework.to_string(),
+            output_format: result.output_format,
+            execution_mode: mode.to_string(),
+            ocr,
+            fixture_id,
+            file_type: result.file_extension.clone(),
+            duration_ms: result.duration.as_secs_f64() * 1000.0,
+            peak_memory_mb: result.metrics.peak_memory_bytes as f64 / 1_000_000.0,
+            f1_text,
+            f1_layout,
+            f1_numeric,
+            quality_score,
+            correct,
+            success: result.success,
+            error_kind,
+        });
+    }
+
+    fixture_rows
 }
 
 /// Aggregate results by OCR status
@@ -493,7 +632,7 @@ fn calculate_percentiles(results: &[&BenchmarkResult]) -> PerformancePercentiles
             .collect();
         let mut f1_layouts: Vec<f64> = successful
             .iter()
-            .filter_map(|r| r.quality.as_ref().map(|q| q.f1_score_layout))
+            .filter_map(|r| r.quality.as_ref().and_then(|q| q.f1_score_layout))
             .filter(|v| !v.is_nan() && v.is_finite())
             .collect();
         let mut quality_scores: Vec<f64> = successful
@@ -508,11 +647,36 @@ fn calculate_percentiles(results: &[&BenchmarkResult]) -> PerformancePercentiles
             f1_layouts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             quality_scores.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
+            // f1_layout is None if all results have f1_score_layout = None (plaintext mode)
+            let f1_layout_p50 = if !f1_layouts.is_empty() {
+                Some(sanitize_f64(percentile_r7(&f1_layouts, 0.50)))
+            } else {
+                None
+            };
+            let f1_layout_p95 = if !f1_layouts.is_empty() {
+                Some(sanitize_f64(percentile_r7(&f1_layouts, 0.95)))
+            } else {
+                None
+            };
+            let f1_layout_p99 = if !f1_layouts.is_empty() {
+                Some(sanitize_f64(percentile_r7(&f1_layouts, 0.99)))
+            } else {
+                None
+            };
+
             Some(QualityPercentiles {
                 f1_text_p50: sanitize_f64(percentile_r7(&f1_texts, 0.50)),
+                f1_text_p95: sanitize_f64(percentile_r7(&f1_texts, 0.95)),
+                f1_text_p99: sanitize_f64(percentile_r7(&f1_texts, 0.99)),
                 f1_numeric_p50: sanitize_f64(percentile_r7(&f1_numerics, 0.50)),
-                f1_layout_p50: sanitize_f64(percentile_r7(&f1_layouts, 0.50)),
+                f1_numeric_p95: sanitize_f64(percentile_r7(&f1_numerics, 0.95)),
+                f1_numeric_p99: sanitize_f64(percentile_r7(&f1_numerics, 0.99)),
+                f1_layout_p50,
+                f1_layout_p95,
+                f1_layout_p99,
                 quality_score_p50: sanitize_f64(percentile_r7(&quality_scores, 0.50)),
+                quality_score_p95: sanitize_f64(percentile_r7(&quality_scores, 0.95)),
+                quality_score_p99: sanitize_f64(percentile_r7(&quality_scores, 0.99)),
             })
         } else {
             None
@@ -780,8 +944,9 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
     }
 
     // PDF-specific quality rankings (quality, TF1, SF1)
-    // Collect PDF quality metrics per framework:mode
-    let mut pdf_metrics: Vec<(String, f64, f64, f64)> = Vec::new(); // (key, quality, tf1, sf1)
+    // Collect PDF quality metrics per framework:output_format:mode
+    // (key, quality, tf1, sf1, output_format)
+    let mut pdf_metrics: Vec<(String, f64, f64, f64, OutputFormat)> = Vec::new();
     for (key, agg) in by_framework_mode {
         if let Some(pdf_ft) = agg.by_file_type.get("pdf") {
             let mut qualities: Vec<(f64, usize)> = Vec::new();
@@ -795,7 +960,10 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
                     let w = perf.successful_sample_count;
                     qualities.push((q.quality_score_p50, w));
                     tf1s.push((q.f1_text_p50, w));
-                    sf1s.push((q.f1_layout_p50, w));
+                    // Only include f1_layout if present (markdown mode)
+                    if let Some(layout) = q.f1_layout_p50 {
+                        sf1s.push((layout, w));
+                    }
                 }
             }
             let weighted_avg = |items: &[(f64, usize)]| -> f64 {
@@ -811,7 +979,7 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
             let t = weighted_avg(&tf1s);
             let s = weighted_avg(&sf1s);
             if q.is_finite() {
-                pdf_metrics.push((key.clone(), q, t, s));
+                pdf_metrics.push((key.clone(), q, t, s, agg.output_format));
             }
         }
     }
@@ -832,13 +1000,27 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
             .collect()
     };
 
-    let mut pdf_qual_items: Vec<(String, f64)> = pdf_metrics.iter().map(|(k, q, _, _)| (k.clone(), *q)).collect();
-    let mut pdf_tf1_items: Vec<(String, f64)> = pdf_metrics.iter().map(|(k, _, t, _)| (k.clone(), *t)).collect();
-    let mut pdf_sf1_items: Vec<(String, f64)> = pdf_metrics.iter().map(|(k, _, _, s)| (k.clone(), *s)).collect();
+    let mut pdf_qual_items: Vec<(String, f64)> = pdf_metrics.iter().map(|(k, q, _, _, _)| (k.clone(), *q)).collect();
+    let mut pdf_tf1_markdown: Vec<(String, f64)> = pdf_metrics
+        .iter()
+        .filter(|(_, _, _, _, fmt)| *fmt == OutputFormat::Markdown)
+        .map(|(k, _, t, _, _)| (k.clone(), *t))
+        .collect();
+    let mut pdf_tf1_plaintext: Vec<(String, f64)> = pdf_metrics
+        .iter()
+        .filter(|(_, _, _, _, fmt)| *fmt == OutputFormat::Plaintext)
+        .map(|(k, _, t, _, _)| (k.clone(), *t))
+        .collect();
+    let mut pdf_sf1_markdown: Vec<(String, f64)> = pdf_metrics
+        .iter()
+        .filter(|(_, _, _, _, fmt)| *fmt == OutputFormat::Markdown)
+        .map(|(k, _, _, s, _)| (k.clone(), *s))
+        .collect();
 
     let pdf_quality_ranking = build_ranking(&mut pdf_qual_items);
-    let pdf_tf1_ranking = build_ranking(&mut pdf_tf1_items);
-    let pdf_sf1_ranking = build_ranking(&mut pdf_sf1_items);
+    let pdf_tf1_ranking_markdown = build_ranking(&mut pdf_tf1_markdown);
+    let pdf_tf1_ranking_plaintext = build_ranking(&mut pdf_tf1_plaintext);
+    let pdf_sf1_ranking_markdown = build_ranking(&mut pdf_sf1_markdown);
 
     ComparisonData {
         performance_ranking,
@@ -847,8 +1029,9 @@ fn build_comparison(by_framework_mode: &HashMap<String, FrameworkModeAggregation
         cpu_ranking,
         quality_ranking,
         pdf_quality_ranking,
-        pdf_tf1_ranking,
-        pdf_sf1_ranking,
+        pdf_tf1_ranking_markdown,
+        pdf_tf1_ranking_plaintext,
+        pdf_sf1_ranking_markdown,
         deltas_vs_baseline,
     }
 }
@@ -894,6 +1077,7 @@ mod tests {
             framework_capabilities: FrameworkCapabilities::default(),
             pdf_metadata: None,
             ocr_status,
+            output_format: OutputFormat::Markdown,
             extracted_text: None,
         }
     }
@@ -949,11 +1133,11 @@ mod tests {
         let aggregated = aggregate_new_format(&results);
 
         assert_eq!(aggregated.by_framework_mode.len(), 2);
-        // "kreuzberg-sync" is normalized to "kreuzberg:single"
-        assert!(aggregated.by_framework_mode.contains_key("kreuzberg:single"));
-        assert!(aggregated.by_framework_mode.contains_key("kreuzberg:batch"));
+        // "kreuzberg-sync" is normalized to "kreuzberg:markdown:single"
+        assert!(aggregated.by_framework_mode.contains_key("kreuzberg:markdown:single"));
+        assert!(aggregated.by_framework_mode.contains_key("kreuzberg:markdown:batch"));
 
-        let single_agg = &aggregated.by_framework_mode["kreuzberg:single"];
+        let single_agg = &aggregated.by_framework_mode["kreuzberg:markdown:single"];
         assert_eq!(single_agg.framework, "kreuzberg");
         assert_eq!(single_agg.mode, "single");
         assert!(single_agg.cold_start.is_some());
@@ -1031,12 +1215,16 @@ mod tests {
             pdf_metadata: None,
             ocr_status: OcrStatus::Unknown, // Unknown status
             extracted_text: None,
+            output_format: OutputFormat::Markdown,
         }];
 
         let aggregated = aggregate_new_format(&results);
 
         // Unknown should be in no_ocr group
-        let framework_mode = aggregated.by_framework_mode.get("test-framework:single").unwrap();
+        let framework_mode = aggregated
+            .by_framework_mode
+            .get("test-framework:markdown:single")
+            .unwrap();
         let file_type = framework_mode.by_file_type.get("pdf").unwrap();
         assert!(file_type.no_ocr.is_some());
         assert_eq!(file_type.no_ocr.as_ref().unwrap().successful_sample_count, 1);
@@ -1073,6 +1261,7 @@ mod tests {
                 pdf_metadata: None,
                 ocr_status: OcrStatus::NotUsed,
                 extracted_text: None,
+                output_format: OutputFormat::Markdown,
             },
             BenchmarkResult {
                 framework: "test-framework".to_string(),
@@ -1101,12 +1290,16 @@ mod tests {
                 pdf_metadata: None,
                 ocr_status: OcrStatus::NotUsed,
                 extracted_text: None,
+                output_format: OutputFormat::Markdown,
             },
         ];
 
         let aggregated = aggregate_new_format(&results);
 
-        let framework_mode = aggregated.by_framework_mode.get("test-framework:single").unwrap();
+        let framework_mode = aggregated
+            .by_framework_mode
+            .get("test-framework:markdown:single")
+            .unwrap();
         let file_type = framework_mode.by_file_type.get("pdf").unwrap();
         let no_ocr = file_type.no_ocr.as_ref().unwrap();
 
@@ -1304,7 +1497,7 @@ mod tests {
         let results = vec![result1, result2];
         let aggregated = aggregate_new_format(&results);
 
-        let framework_mode = aggregated.by_framework_mode.get("kreuzberg:single").unwrap();
+        let framework_mode = aggregated.by_framework_mode.get("kreuzberg:markdown:single").unwrap();
         let pdf_stats = framework_mode.by_file_type.get("pdf").unwrap();
         let no_ocr = pdf_stats.no_ocr.as_ref().unwrap();
 
@@ -1386,6 +1579,7 @@ mod tests {
             pdf_metadata: None,
             ocr_status: OcrStatus::NotUsed,
             extracted_text: None,
+            output_format: OutputFormat::Markdown,
         };
 
         let result2 = create_test_result("framework1", "pdf", OcrStatus::NotUsed, 100, 1_000_000.0, 10_000_000);
@@ -1492,12 +1686,12 @@ mod tests {
         // slow-framework has lower CPU, should be rank 1
         assert_eq!(
             aggregated.comparison.cpu_ranking[0].framework_mode,
-            "slow-framework:single"
+            "slow-framework:markdown:single"
         );
         assert_eq!(aggregated.comparison.cpu_ranking[0].rank, 1);
         assert_eq!(
             aggregated.comparison.cpu_ranking[1].framework_mode,
-            "fast-framework:single"
+            "fast-framework:markdown:single"
         );
         assert_eq!(aggregated.comparison.cpu_ranking[1].rank, 2);
     }
@@ -1515,7 +1709,11 @@ mod tests {
         let aggregated = aggregate_new_format(&results);
 
         // baseline-fw is fastest (50ms), so other-fw has deltas vs it
-        let delta = aggregated.comparison.deltas_vs_baseline.get("other-fw:single").unwrap();
+        let delta = aggregated
+            .comparison
+            .deltas_vs_baseline
+            .get("other-fw:markdown:single")
+            .unwrap();
         assert_eq!(delta.cpu_delta_pp, 30.0); // 60 - 30 = 30 percentage points
         assert!((delta.cpu_delta_percent - 100.0).abs() < 0.1); // (60-30)/30 * 100 = 100%
     }

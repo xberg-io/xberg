@@ -9,6 +9,7 @@ FIXTURES_DIR="${FIXTURES_DIR:-tools/benchmark-harness/fixtures}"
 HARNESS_PATH="${HARNESS_PATH:-./target/release/benchmark-harness}"
 MEASURE_QUALITY="${MEASURE_QUALITY:-false}"
 OCR_ENABLED="${OCR_ENABLED:-false}"
+OUTPUT_FORMAT="${OUTPUT_FORMAT:-markdown}"
 
 if [ -z "$FRAMEWORK" ] || [ -z "$MODE" ]; then
   echo "::error::FRAMEWORK and MODE environment variables are required" >&2
@@ -25,7 +26,7 @@ validate_repo_root "$REPO_ROOT" || exit 1
 setup_go_paths "$REPO_ROOT"
 setup_onnx_paths
 
-OUTPUT_DIR="benchmark-results/${FRAMEWORK}-${MODE}"
+OUTPUT_DIR="benchmark-results/${FRAMEWORK}-${OUTPUT_FORMAT}-${MODE}"
 rm -rf "${OUTPUT_DIR}"
 
 MAX_CONCURRENT=$([[ "$MODE" == "single-file" ]] && echo 1 || echo 4)
@@ -52,4 +53,5 @@ BENCHMARK_DEBUG=1 "${HARNESS_PATH}" \
   --timeout "${TIMEOUT}" \
   --mode "${MODE}" \
   --max-concurrent "${MAX_CONCURRENT}" \
+  --output-format "${OUTPUT_FORMAT}" \
   "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"

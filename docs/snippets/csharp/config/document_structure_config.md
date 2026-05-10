@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     IncludeDocumentStructure = true
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 
 if (result.Document is not null)
 {

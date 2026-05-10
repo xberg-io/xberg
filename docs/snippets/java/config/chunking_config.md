@@ -1,6 +1,6 @@
 ```java title="Java"
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.ChunkingConfig;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.ChunkingConfig;
 
 ExtractionConfig config = ExtractionConfig.builder()
     .chunking(ChunkingConfig.builder()
@@ -11,8 +11,8 @@ ExtractionConfig config = ExtractionConfig.builder()
 ```
 
 ```java title="Java - Markdown with Heading Context"
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.ChunkingConfig;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.ChunkingConfig;
 import dev.kreuzberg.HeadingContext;
 import dev.kreuzberg.HeadingLevel;
 
@@ -39,8 +39,8 @@ result.getChunks().forEach(chunk -> {
 ```
 
 ```java title="Java - Prepend Heading Context"
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.ChunkingConfig;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.ChunkingConfig;
 
 ExtractionConfig config = ExtractionConfig.builder()
     .chunking(ChunkingConfig.builder()

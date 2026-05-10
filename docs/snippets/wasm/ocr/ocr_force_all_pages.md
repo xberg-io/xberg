@@ -1,0 +1,19 @@
+```typescript title="WASM"
+import init, { extractBytes } from "kreuzberg-wasm";
+
+await init();
+
+const documentData = await fetch("document.pdf").then((res) =>
+  res.arrayBuffer()
+);
+
+const result = await extractBytes(documentData, "application/pdf", {
+  force_ocr: true,
+  ocr: {
+    backend: "tesseract",
+    language: "eng",
+  },
+});
+
+console.log(result.content);
+```

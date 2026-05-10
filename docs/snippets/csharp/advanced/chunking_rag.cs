@@ -23,7 +23,7 @@ class RagPipelineExample
 
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync(
+            var result = await KreuzbergLib.ExtractFileAsync(
                 "research_paper.pdf",
                 config
             ).ConfigureAwait(false);

@@ -251,7 +251,7 @@ KreuzbergExtractionResult* kreuzberg_batch_extract_files(KreuzbergBatchFileItem*
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `KreuzbergBatchFileItem*` | Yes | Vector of [`BatchFileItem`] structs, each containing a path and optional |
+| `items` | `KreuzbergBatchFileItem*` | Yes | Vector of `BatchFileItem` structs, each containing a path and optional |
 | `config` | `KreuzbergExtractionConfig` | Yes | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `KreuzbergExtractionResult*`
@@ -296,7 +296,7 @@ KreuzbergExtractionResult* kreuzberg_batch_extract_bytes(KreuzbergBatchBytesItem
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `KreuzbergBatchBytesItem*` | Yes | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `items` | `KreuzbergBatchBytesItem*` | Yes | Vector of `BatchBytesItem` structs, each containing content bytes, |
 | `config` | `KreuzbergExtractionConfig` | Yes | Batch-level extraction configuration |
 
 **Returns:** `KreuzbergExtractionResult*`
@@ -550,12 +550,15 @@ float** kreuzberg_embed_texts_async(const char** texts, KreuzbergEmbeddingConfig
 
 #### kreuzberg_render_pdf_page_to_png()
 
-Render a single PDF page to a PNG-encoded byte buffer.
+Render a single PDF page to PNG bytes.
+
+Returns raw PNG-encoded bytes for the specified page at the given DPI.
+Uses pdf_oxide with tiny-skia for pure-Rust rendering.
 
 **Errors:**
 
-Returns an error if the PDF is invalid, the page index is out of bounds,
-or if the page fails to render.
+Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
+or rendered, or if `page_index` is out of range.
 
 **Signature:**
 
@@ -567,10 +570,10 @@ const uint8_t* kreuzberg_render_pdf_page_to_png(const uint8_t* pdf_bytes, uintpt
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `pdf_bytes` | `const uint8_t*` | Yes | The pdf bytes |
-| `page_index` | `uintptr_t` | Yes | The page index |
-| `dpi` | `int32_t*` | No | The dpi |
-| `password` | `const char**` | No | The password |
+| `pdf_bytes` | `const uint8_t*` | Yes | Raw PDF file bytes |
+| `page_index` | `uintptr_t` | Yes | Zero-based page index |
+| `dpi` | `int32_t*` | No | Resolution in dots per inch (default: 150) |
+| `password` | `const char**` | No | Optional password for encrypted PDFs |
 
 **Returns:** `const uint8_t*`
 
@@ -828,6 +831,17 @@ Request parameters for cache warm (model download).
 
 ---
 
+#### KreuzbergCharShape
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bold` | `bool` | — | Bold |
+| `italic` | `bool` | — | Italic |
+| `underline` | `bool` | — | Underline |
+
+
+---
+
 #### KreuzbergChunk
 
 A text chunk with optional embedding and metadata.
@@ -971,23 +985,6 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### KreuzbergCommonPdfMetadata
-
-Common metadata fields extracted from a PDF.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `title` | `const char**` | `NULL` | Title |
-| `subject` | `const char**` | `NULL` | Subject |
-| `authors` | `const char***` | `NULL` | Authors |
-| `keywords` | `const char***` | `NULL` | Keywords |
-| `created_at` | `const char**` | `NULL` | Created at |
-| `modified_at` | `const char**` | `NULL` | Modified at |
-| `created_by` | `const char**` | `NULL` | Created by |
-
-
----
-
 #### KreuzbergContentFilterConfig
 
 Cross-extractor content filtering configuration.
@@ -1028,6 +1025,34 @@ JATS contributor with role.
 |-------|------|---------|-------------|
 | `name` | `const char*` | — | The name |
 | `role` | `const char**` | `NULL` | Role |
+
+
+---
+
+#### KreuzbergCoreProperties
+
+Dublin Core metadata from docProps/core.xml
+
+Contains standard metadata fields defined by the Dublin Core standard
+and Office-specific extensions.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | `const char**` | `NULL` | Document title |
+| `subject` | `const char**` | `NULL` | Document subject/topic |
+| `creator` | `const char**` | `NULL` | Document creator/author |
+| `keywords` | `const char**` | `NULL` | Keywords or tags |
+| `description` | `const char**` | `NULL` | Document description/abstract |
+| `last_modified_by` | `const char**` | `NULL` | User who last modified the document |
+| `revision` | `const char**` | `NULL` | Revision number |
+| `created` | `const char**` | `NULL` | Creation timestamp (ISO 8601) |
+| `modified` | `const char**` | `NULL` | Last modification timestamp (ISO 8601) |
+| `category` | `const char**` | `NULL` | Document category |
+| `content_status` | `const char**` | `NULL` | Content status (Draft, Final, etc.) |
+| `language` | `const char**` | `NULL` | Document language |
+| `identifier` | `const char**` | `NULL` | Unique identifier |
+| `version` | `const char**` | `NULL` | Document version |
+| `last_printed` | `const char**` | `NULL` | Last print timestamp (ISO 8601) |
 
 
 ---
@@ -1422,6 +1447,16 @@ construction paths (builder, derivation) call this automatically.
 void kreuzberg_finalize_node_types();
 ```
 
+###### kreuzberg_is_empty()
+
+Check if the document structure is empty.
+
+**Signature:**
+
+```c
+bool kreuzberg_is_empty();
+```
+
 ###### kreuzberg_default()
 
 **Signature:**
@@ -1429,6 +1464,34 @@ void kreuzberg_finalize_node_types();
 ```c
 KreuzbergDocumentStructure kreuzberg_default();
 ```
+
+
+---
+
+#### KreuzbergDocxAppProperties
+
+Application properties from docProps/app.xml for DOCX
+
+Contains Word-specific document statistics and metadata.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `application` | `const char**` | `NULL` | Application name (e.g., "Microsoft Office Word") |
+| `app_version` | `const char**` | `NULL` | Application version |
+| `template` | `const char**` | `NULL` | Template filename |
+| `total_time` | `int32_t*` | `NULL` | Total editing time in minutes |
+| `pages` | `int32_t*` | `NULL` | Number of pages |
+| `words` | `int32_t*` | `NULL` | Number of words |
+| `characters` | `int32_t*` | `NULL` | Number of characters (excluding spaces) |
+| `characters_with_spaces` | `int32_t*` | `NULL` | Number of characters (including spaces) |
+| `lines` | `int32_t*` | `NULL` | Number of lines |
+| `paragraphs` | `int32_t*` | `NULL` | Number of paragraphs |
+| `company` | `const char**` | `NULL` | Company name |
+| `doc_security` | `int32_t*` | `NULL` | Document security level |
+| `scale_crop` | `bool*` | `NULL` | Scale crop flag |
+| `links_up_to_date` | `bool*` | `NULL` | Links up to date flag |
+| `shared_doc` | `bool*` | `NULL` | Shared document flag |
+| `hyperlinks_changed` | `bool*` | `NULL` | Hyperlinks changed flag |
 
 
 ---
@@ -1442,8 +1505,8 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `core_properties` | `const char**` | `NULL` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
-| `app_properties` | `const char**` | `NULL` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
+| `core_properties` | `KreuzbergCoreProperties*` | `NULL` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
+| `app_properties` | `KreuzbergDocxAppProperties*` | `NULL` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
 | `custom_properties` | `void**` | `NULL` | Custom properties from docProps/custom.xml (user-defined properties) Contains key-value pairs defined by users or applications. Values can be strings, numbers, booleans, or dates. |
 
 
@@ -1879,10 +1942,10 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `is_mask` | `bool` | — | Whether this image is a mask image |
 | `description` | `const char**` | `NULL` | Optional description of the image |
 | `ocr_result` | `KreuzbergExtractionResult*` | `NULL` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
-| `bounding_box` | `const char**` | `NULL` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from pdf_oxide. |
+| `bounding_box` | `const char**` | `NULL` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `source_path` | `const char**` | `NULL` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `image_kind` | `KreuzbergImageKind*` | `NULL` | Heuristic classification of what this image likely depicts. `NULL` if classification was disabled or inconclusive. |
-| `kind_confidence` | `float*` | `NULL` | Confidence score for `image_kind`, in [0.0, 1.0]. |
+| `kind_confidence` | `float*` | `NULL` | Confidence score for `image_kind`, in the range 0.0 to 1.0. |
 | `cluster_id` | `uint32_t*` | `NULL` | Identifier shared across images that form a single logical figure (e.g. all raster tiles of one technical drawing). `NULL` for singletons. |
 
 
@@ -2289,6 +2352,16 @@ KreuzbergHtmlOutputConfig kreuzberg_default();
 
 ---
 
+#### KreuzbergHwpImage
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `const char*` | — | The name |
+| `data` | `const uint8_t*` | — | Data |
+
+
+---
+
 #### KreuzbergImageExtractionConfig
 
 Image extraction configuration.
@@ -2302,7 +2375,7 @@ Image extraction configuration.
 | `auto_adjust_dpi` | `bool` | `true` | Automatically adjust DPI based on image content |
 | `min_dpi` | `int32_t` | `72` | Minimum DPI threshold |
 | `max_dpi` | `int32_t` | `600` | Maximum DPI threshold |
-| `max_images_per_page` | `uint32_t*` | `NULL` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdf_oxide. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `NULL` (default) means no limit — all images are extracted. |
+| `max_images_per_page` | `uint32_t*` | `NULL` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `NULL` (default) means no limit — all images are extracted. |
 | `classify` | `bool` | `true` | When `true` (default), extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. |
 
 ##### Methods
@@ -2314,6 +2387,22 @@ Image extraction configuration.
 ```c
 KreuzbergImageExtractionConfig kreuzberg_default();
 ```
+
+
+---
+
+#### KreuzbergImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `uint32_t` | — | Image width in pixels |
+| `height` | `uint32_t` | — | Image height in pixels |
+| `format` | `const char*` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `void*` | `NULL` | EXIF metadata tags |
 
 
 ---
@@ -3423,22 +3512,6 @@ and visibility state (for presentations).
 
 ---
 
-#### KreuzbergPageLayoutResult
-
-Layout detection results for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `page_index` | `uintptr_t` | — | Page index |
-| `regions` | `const char**` | — | Regions |
-| `page_width_pts` | `float` | — | Page width pts |
-| `page_height_pts` | `float` | — | Page height pts |
-| `render_width_px` | `uint32_t` | — | Width of the rendered image used for layout detection (pixels). |
-| `render_height_px` | `uint32_t` | — | Height of the rendered image used for layout detection (pixels). |
-
-
----
-
 #### KreuzbergPageMarginsPoints
 
 Page margins converted to points (1/72 inch).
@@ -3469,22 +3542,6 @@ with character offset boundaries for chunk-to-page mapping.
 | `unit_type` | `KreuzbergPageUnitType` | — | Type of paginated unit |
 | `boundaries` | `KreuzbergPageBoundary**` | `NULL` | Character offset boundaries for each page Maps character ranges in the extracted content to page numbers. Used for chunk page range calculation. |
 | `pages` | `KreuzbergPageInfo**` | `NULL` | Detailed per-page metadata (optional, only when needed) |
-
-
----
-
-#### KreuzbergPageTiming
-
-Timing breakdown for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `render_ms` | `double` | — | Time to render the PDF page to a raster image (amortized from batch render). |
-| `preprocess_ms` | `double` | — | Time spent in image preprocessing (resize, normalize, tensor construction). |
-| `onnx_ms` | `double` | — | Time for the ONNX model session.run() call (actual neural network inference). |
-| `inference_ms` | `double` | — | Total model inference time (preprocess + onnx), as measured by the engine. |
-| `postprocess_ms` | `double` | — | Time spent in postprocessing (confidence filtering, overlap resolution). |
-| `mapping_ms` | `double` | — | Time to map pixel-space bounding boxes to PDF coordinate space. |
 
 
 ---
@@ -3531,31 +3588,22 @@ KreuzbergPdfConfig kreuzberg_default();
 
 ---
 
-#### KreuzbergPdfImage
+#### KreuzbergPdfMetadata
+
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `page_number` | `uintptr_t` | — | Page number |
-| `image_index` | `uintptr_t` | — | Image index |
-| `width` | `int64_t` | — | Width |
-| `height` | `int64_t` | — | Height |
-| `color_space` | `const char**` | `NULL` | Color space |
-| `bits_per_component` | `int64_t*` | `NULL` | Bits per component |
-| `filters` | `const char**` | — | Original PDF stream filters (e.g. `["FlateDecode"]`, `["DCTDecode"]`). |
-| `data` | `const uint8_t*` | — | The decoded image bytes in a standard format (JPEG, PNG, etc.). |
-| `decoded_format` | `const char*` | — | The format of `data` after decoding: `"jpeg"`, `"png"`, `"jpeg2000"`, `"ccitt"`, or `"raw"`. |
-| `image_kind` | `KreuzbergImageKind*` | `NULL` | Heuristic classification of what this image likely depicts. |
-| `kind_confidence` | `float*` | `NULL` | Confidence score for `image_kind`, in [0.0, 1.0]. |
-| `cluster_id` | `uint32_t*` | `NULL` | Identifier shared across images that form a single logical figure. |
-
-
----
-
-#### KreuzbergPdfUnifiedExtractionResult
-
-Result type for unified PDF text and metadata extraction.
-
-Contains text, optional page boundaries, optional per-page content, and metadata.
+| `pdf_version` | `const char**` | `NULL` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `const char**` | `NULL` | PDF producer (application that created the PDF) |
+| `is_encrypted` | `bool*` | `NULL` | Whether the PDF is encrypted/password-protected |
+| `width` | `int64_t*` | `NULL` | First page width in points (1/72 inch) |
+| `height` | `int64_t*` | `NULL` | First page height in points (1/72 inch) |
+| `page_count` | `uintptr_t*` | `NULL` | Total number of pages in the PDF document |
 
 
 ---
@@ -4066,7 +4114,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `const char*` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `uint16_t` | — | Server port number |
-| `cors_origins` | `const char**` | `NULL` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., ["<https://example.com">]), only those origins will be allowed. |
+| `cors_origins` | `const char**` | `NULL` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `max_request_body_bytes` | `uintptr_t` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `max_multipart_field_bytes` | `uintptr_t` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
@@ -5375,13 +5423,13 @@ type-safe, clean metadata without nested optionals.
 
 | Value | Description |
 |-------|-------------|
-| `KREUZBERG_PDF` | Pdf format — Fields: `0`: `const char*` |
+| `KREUZBERG_PDF` | Pdf format — Fields: `0`: `KreuzbergPdfMetadata` |
 | `KREUZBERG_DOCX` | Docx format — Fields: `0`: `KreuzbergDocxMetadata` |
 | `KREUZBERG_EXCEL` | Excel — Fields: `0`: `KreuzbergExcelMetadata` |
 | `KREUZBERG_EMAIL` | Email — Fields: `0`: `KreuzbergEmailMetadata` |
 | `KREUZBERG_PPTX` | Pptx format — Fields: `0`: `KreuzbergPptxMetadata` |
 | `KREUZBERG_ARCHIVE` | Archive — Fields: `0`: `KreuzbergArchiveMetadata` |
-| `KREUZBERG_IMAGE` | Image element — Fields: `0`: `const char*` |
+| `KREUZBERG_IMAGE` | Image element — Fields: `0`: `KreuzbergImageMetadata` |
 | `KREUZBERG_XML` | Xml format — Fields: `0`: `KreuzbergXmlMetadata` |
 | `KREUZBERG_TEXT` | Text format — Fields: `0`: `KreuzbergTextMetadata` |
 | `KREUZBERG_HTML` | Preserve as HTML `<mark>` tags — Fields: `0`: `KreuzbergHtmlMetadata` |

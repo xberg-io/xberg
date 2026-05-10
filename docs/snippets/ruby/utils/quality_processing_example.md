@@ -1,7 +1,7 @@
 ```ruby title="Ruby"
 require 'kreuzberg'
 
-config = Kreuzberg::Config::Extraction.new(
+config = Kreuzberg::ExtractionConfig.new(
   enable_quality_processing: true
 )
 result = Kreuzberg.extract_file_sync('scanned_document.pdf', config: config)

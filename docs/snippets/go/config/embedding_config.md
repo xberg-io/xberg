@@ -8,25 +8,27 @@ import (
 )
 
 func main() {
-	maxChars := 1000
-	batchSize := 16
+	maxChars := uint(1000)
+	batchSize := uint(16)
+	normalize := true
+	modelName := "all-mpnet-base-v2"
 
-	cfg := &kreuzberg.ExtractionConfig{
+	cfg := kreuzberg.ExtractionConfig{
 		Chunking: &kreuzberg.ChunkingConfig{
-			MaxChars: &maxChars,
+			MaxCharacters: &maxChars,
 			Embedding: &kreuzberg.EmbeddingConfig{
-				Model: &kreuzberg.EmbeddingModelType{
+				Model: kreuzberg.EmbeddingModelType{
 					Type: "preset",
-					Name: "all-mpnet-base-v2",
+					Name: &modelName,
 				},
 				BatchSize:            &batchSize,
-				Normalize:            kreuzberg.BoolPtr(true),
-				ShowDownloadProgress: kreuzberg.BoolPtr(true),
+				Normalize:            &normalize,
+				ShowDownloadProgress: true,
 			},
 		},
 	}
 
-	result, err := kreuzberg.ExtractFileSync("document.pdf", cfg)
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, cfg)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

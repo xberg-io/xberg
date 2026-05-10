@@ -22,7 +22,7 @@ extractFileCommand.SetHandler(async (path, format) =>
 {
     try
     {
-        var result = await KreuzbergClient.ExtractFileAsync(path);
+        var result = await KreuzbergLib.ExtractFileAsync(path);
 
         if (format == "json")
         {

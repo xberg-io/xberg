@@ -1,36 +1,28 @@
 # Output Formats <span class="version-badge">v4.1.0</span>
 
-Kreuzberg supports multiple output formats to suit different use cases — from plain text for LLM prompts to structured element arrays for RAG systems to hierarchical document trees for knowledge graphs.
+Choose the format that matches your downstream processing:
 
-Choose the format that best matches your downstream processing needs:
-
-- **Unified (default)** — Plain text/Markdown output, ideal for LLM prompts and full-text search
-- **Element-Based** — Flat array of typed elements with metadata, suitable for RAG chunking and semantic search
-- **Document Structure** — Hierarchical tree with explicit parent-child references, best for knowledge graphs and structured applications
-- **PDF Hierarchy** — Font size classification into heading levels (H1–H6) for PDFs
+- **Unified (default)** — Plain text/Markdown, for LLM prompts and full-text search
+- **Element-Based** — Flat array of typed elements with metadata, for RAG chunking and semantic search
+- **Document Structure** — Hierarchical tree with explicit parent-child references, for knowledge graphs and structured apps
+- **PDF Hierarchy** — Font-size classification into heading levels (H1–H6) for PDFs
 
 ## Unified Output (Default)
 
-By default, Kreuzberg extracts plain text and markdown-formatted content. No configuration is required. The result contains:
+No configuration required. The result contains:
 
 - `content` — Full document text with minimal formatting
 - `pages` — Per-page breakdown for PDFs, DOCX, and PPTX
 - `tables` — Extracted tables in structured format
 - `images` — Image metadata and paths
 
-This format is ideal for:
-
-- Feeding entire documents into LLMs without structured constraints
-- Full-text search and indexing
-- Simple text processing pipelines
-
 ---
 
 ## Element-Based Output <span class="version-badge">v4.1.0</span>
 
-Segments a document into a flat array of typed elements — titles, paragraphs, tables, list items, code blocks, images, and more. Each element carries a page number and, for text elements in PDFs when hierarchy extraction is enabled, bounding box coordinates.
+A flat array of typed elements (titles, paragraphs, tables, list items, code blocks, images, etc.). Each carries a page number; PDF text elements also carry bounding boxes when hierarchy extraction is enabled.
 
-Use element-based output for RAG chunking, semantic search, or Unstructured.io-compatible pipelines. For hierarchical tree structure, use [document structure](#document-structure). For plain text, use the default unified output.
+Use for RAG chunking, semantic search, or Unstructured.io-compatible pipelines.
 
 ### Enable
 
@@ -139,9 +131,9 @@ If you're migrating from Unstructured.io, element-based output follows a similar
 
 ## Document Structure
 
-Represents a document as a flat list of nodes with explicit parent-child index references — a traversable tree with heading levels, content layers, inline annotations, and structured table grids.
+A flat list of nodes with explicit parent-child index references — a traversable tree with heading levels, content layers, inline annotations, and structured table grids.
 
-Use document structure when you need hierarchical relationships between sections. For a flat list of semantic elements, use [element-based output](#element-based-output). For plain text, use the default unified output.
+Use when you need hierarchical relationships between sections.
 
 ### Comparison
 
@@ -309,7 +301,7 @@ for node in result.document["nodes"]:
 
 ## PDF Hierarchy Detection
 
-Classifies text blocks in a PDF into heading levels (H1–H6) and body text based on font size analysis. Uses K-means clustering to group font sizes, then assigns heading levels by rank — largest cluster becomes H1, second-largest becomes H2, and so on.
+Classifies PDF text blocks into heading levels (H1–H6) and body text via K-means clustering on font sizes — largest cluster is H1, second-largest H2, and so on.
 
 ### Quick Start
 

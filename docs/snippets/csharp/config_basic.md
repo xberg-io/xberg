@@ -7,6 +7,6 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = await KreuzbergClient.ExtractFileAsync("document.pdf", config);
+var result = await KreuzbergLib.ExtractFileAsync("document.pdf", config);
 Console.WriteLine(result.Content);
 ```

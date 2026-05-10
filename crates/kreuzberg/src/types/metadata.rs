@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 
 #[cfg(feature = "pdf")]
-use crate::pdf::metadata::PdfMetadata;
+pub use crate::pdf::metadata::PdfMetadata;
 
 use super::formats::ImagePreprocessingMetadata;
 use super::page::PageStructure;

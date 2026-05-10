@@ -17,7 +17,7 @@ class Program
 
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync("multilingual_document.pdf", config);
+            var result = await KreuzbergLib.ExtractFileAsync("multilingual_document.pdf", config);
 
             var languages = result.DetectedLanguages ?? new List<string>();
 

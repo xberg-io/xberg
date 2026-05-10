@@ -1,6 +1,6 @@
 ```ruby title="Ruby"
 require 'kreuzberg'
 
-config = Kreuzberg::Config::Extraction.discover
+config = Kreuzberg::ExtractionConfig.discover
 result = Kreuzberg.extract_file_sync('document.pdf', config: config)
 ```

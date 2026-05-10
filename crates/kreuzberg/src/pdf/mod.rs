@@ -18,7 +18,7 @@ pub mod error;
 #[cfg(feature = "pdf")]
 pub mod hierarchy;
 #[cfg(feature = "pdf")]
-pub(crate) mod metadata;
+pub mod metadata;
 #[cfg(feature = "pdf")]
 pub(crate) mod oxide;
 #[cfg(feature = "pdf")]

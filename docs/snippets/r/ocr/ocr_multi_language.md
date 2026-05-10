@@ -2,13 +2,16 @@
 library(kreuzberg)
 
 # Configure multi-language OCR (English, French, German)
-ocr <- ocr_config(backend = "tesseract", language = "eng+fra+deu")
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(backend = "tesseract", language = "eng+fra+deu")
+)
 
 # Extract from a multilingual document
-result <- extract_file_sync("multilingual.png", config = config)
+json <- extract_file_sync("multilingual.png", "image/png", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-cat(sprintf("Detected language: %s\n", detected_language(result)))
+cat(sprintf("Detected language: %s\n", result$detected_language))
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
 cat("Content preview:\n")
 cat(substr(result$content, 1, 200))

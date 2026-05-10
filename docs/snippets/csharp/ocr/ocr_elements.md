@@ -10,7 +10,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("scanned.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("scanned.pdf", config);
 
 if (result.OcrElements is not null)
 {

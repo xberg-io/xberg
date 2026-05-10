@@ -5,7 +5,7 @@ licences = ["MIT"]
 target = "erlang"
 
 [dependencies]
-gleam_stdlib = ">= 5.0.0-rc.1 and < 5.0.0-rc.1"
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
 
 [dev-dependencies]
-gleeunit = ">= 5.0.0-rc.1 and < 5.0.0-rc.1"
+gleeunit = ">= 1.0.0 and < 2.0.0"

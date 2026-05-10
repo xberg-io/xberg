@@ -21,5 +21,5 @@ public class QualityValidator : IValidator
 }
 
 var validator = new QualityValidator();
-KreuzbergClient.RegisterValidator(validator);
+KreuzbergLib.RegisterValidator(validator);
 ```

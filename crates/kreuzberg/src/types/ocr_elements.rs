@@ -62,7 +62,7 @@ impl OcrBoundingGeometry {
     /// # Returns
     ///
     /// Tuple of `(left, top, width, height)` in pixels.
-    #[cfg(feature = "ocr")]
+    #[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
     pub(crate) fn to_aabb(&self) -> (u32, u32, u32, u32) {
         match self {
             Self::Rectangle {

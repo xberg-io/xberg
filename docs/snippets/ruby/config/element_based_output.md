@@ -2,7 +2,7 @@
 require 'kreuzberg'
 
 # Configure element-based output
-config = Kreuzberg::Config::Extraction.new(output_format: 'element_based')
+config = Kreuzberg::ExtractionConfig.new(output_format: 'element_based')
 
 # Extract document
 result = Kreuzberg.extract_file_sync('document.pdf', config: config)

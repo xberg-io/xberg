@@ -1,12 +1,15 @@
 ```r title="R"
 library(kreuzberg)
 
-# Configure PaddleOCR backend (defaults to mobile tier; use model_tier = "server" for max accuracy)
-ocr <- ocr_config(backend = "paddle-ocr", language = "en")
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+# Configure PaddleOCR backend (defaults to mobile tier)
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(backend = "paddle-ocr", language = "en")
+)
 
 # Extract text from an image using PaddleOCR
-result <- extract_file_sync("document.jpg", config = config)
+json <- extract_file_sync("document.jpg", "image/jpeg", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
 cat(sprintf("MIME type: %s\n", result$mime_type))

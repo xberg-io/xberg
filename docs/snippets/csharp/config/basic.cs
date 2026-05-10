@@ -6,4 +6,4 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);

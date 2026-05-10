@@ -19,6 +19,6 @@ var config = new ExtractionConfig
     }
 };
 
-var result = await KreuzbergClient.ExtractFileAsync("scanned.pdf", config);
+var result = await KreuzbergLib.ExtractFileAsync("scanned.pdf", config);
 Console.WriteLine($"Content: {result.Content[..Math.Min(100, result.Content.Length)]}");
 ```

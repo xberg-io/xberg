@@ -11,7 +11,7 @@ class QualityScoreValidator
     quality_score = result.quality_score || 0.0
 
     if quality_score < @min_score
-      raise Kreuzberg::Errors::ValidationError,
+      raise StandardError,
             format("Quality score too low: %.2f < %.2f", quality_score, @min_score)
     end
   end
@@ -22,14 +22,14 @@ validator = QualityScoreValidator.new(min_score: 0.5)
 Kreuzberg.register_validator("quality_score_check", validator)
 
 # Usage with quality processing enabled
-config = Kreuzberg::Config::Extraction.new(
+config = Kreuzberg::ExtractionConfig.new(
   enable_quality_processing: true
 )
 
 begin
   result = Kreuzberg.extract_file_sync("document.pdf", config: config)
   puts "Document quality verified: #{result.quality_score}"
-rescue Kreuzberg::Errors::ValidationError => e
+rescue StandardError => e
   puts "Quality check failed: #{e.message}"
 end
 ```

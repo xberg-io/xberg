@@ -2,7 +2,7 @@
 using Kreuzberg;
 
 var files = new[] { "doc1.pdf", "doc2.docx", "doc3.pptx" };
-var results = KreuzbergClient.BatchExtractFilesSync(files, new ExtractionConfig());
+var results = KreuzbergLib.BatchExtractFilesSync(files, new ExtractionConfig());
 
 foreach (var result in results)
 {

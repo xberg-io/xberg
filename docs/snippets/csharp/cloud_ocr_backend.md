@@ -46,5 +46,5 @@ public class CloudOcrBackend : IOcrBackend
 }
 
 var backend = new CloudOcrBackend(apiKey: "your-api-key");
-KreuzbergClient.RegisterOcrBackend(backend);
+KreuzbergLib.RegisterOcrBackend(backend);
 ```

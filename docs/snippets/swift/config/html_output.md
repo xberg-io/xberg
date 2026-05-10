@@ -1,0 +1,19 @@
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+let configJson = """
+{
+    "output_format": "html",
+    "html_output": {
+        "theme": "github"
+    }
+}
+"""
+
+let config = try extractionConfigFromJson(configJson)
+let result = try extractFileSync("document.pdf", nil, config)
+
+print(result.content().toString()) // HTML with kb-* classes
+```

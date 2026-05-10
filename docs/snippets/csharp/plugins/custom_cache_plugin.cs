@@ -67,7 +67,7 @@ class CustomCacheWrapper
             return cached;
         }
 
-        var result = KreuzbergClient.ExtractFileSync(filePath, config);
+        var result = KreuzbergLib.ExtractFileSync(filePath, config);
         Set(cacheKey, result);
         Console.WriteLine("Extracted and cached");
 

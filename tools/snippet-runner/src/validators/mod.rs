@@ -1,16 +1,21 @@
 pub mod bash;
 pub mod c;
 pub mod csharp;
+pub mod dart;
 pub mod elixir;
+pub mod gleam;
 pub mod go;
 pub mod java;
+pub mod kotlin;
 pub mod php;
 pub mod python;
 pub mod r;
 pub mod ruby;
 pub mod rust;
+pub mod swift;
 pub mod toml_validator;
 pub mod typescript;
+pub mod zig;
 
 use crate::error::Result;
 use crate::types::{Language, Snippet, SnippetStatus, ValidationLevel};
@@ -60,6 +65,11 @@ impl ValidatorRegistry {
         reg.register(Box::new(c::CValidator));
         reg.register(Box::new(bash::BashValidator));
         reg.register(Box::new(toml_validator::TomlValidator));
+        reg.register(Box::new(gleam::GleamValidator));
+        reg.register(Box::new(dart::DartValidator));
+        reg.register(Box::new(kotlin::KotlinValidator));
+        reg.register(Box::new(swift::SwiftValidator));
+        reg.register(Box::new(zig::ZigValidator));
 
         reg
     }

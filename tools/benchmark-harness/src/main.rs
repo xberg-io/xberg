@@ -4,10 +4,11 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-use benchmark_harness::{BenchmarkConfig, BenchmarkMode, FixtureManager, Result};
+use benchmark_harness::{BenchmarkConfig, BenchmarkMode, FixtureManager, OutputFormat, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::str::FromStr as _;
 
 /// CLI enum for benchmark mode
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -18,9 +19,9 @@ enum CliMode {
     Batch,
 }
 
-/// CLI enum for output format
+/// CLI enum for output file format
 #[derive(Debug, Clone, Copy, ValueEnum)]
-enum OutputFormat {
+enum OutputFileFormat {
     /// JSON format (default)
     Json,
 }
@@ -99,6 +100,10 @@ enum Commands {
         /// Enable quality assessment
         #[arg(long, default_value = "false")]
         measure_quality: bool,
+
+        /// Output format for extraction: markdown, plaintext, or both (default: markdown)
+        #[arg(long, default_value = "markdown")]
+        output_format: String,
 
         /// Run only a subset of fixtures (format: INDEX/TOTAL, e.g. 1/3 for first of 3 shards)
         #[arg(long)]
@@ -331,6 +336,7 @@ async fn main() -> Result<()> {
             iterations,
             ocr,
             measure_quality,
+            output_format,
             shard,
         } => {
             use benchmark_harness::{AdapterRegistry, BenchmarkRunner, NativeAdapter};
@@ -584,7 +590,11 @@ async fn main() -> Result<()> {
                 );
             }
 
-            let mut runner = BenchmarkRunner::new(config, registry);
+            // Parse output format
+            let parsed_format =
+                OutputFormat::from_str(&output_format).map_err(|e| benchmark_harness::Error::Config(e))?;
+
+            let mut runner = BenchmarkRunner::with_output_format(config, registry, parsed_format);
             runner.load_fixtures(&fixtures)?;
 
             // Apply sharding if requested

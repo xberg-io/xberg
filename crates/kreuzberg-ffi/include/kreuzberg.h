@@ -106,6 +106,7 @@ typedef struct KREUZBERGHtmlTheme KREUZBERGHtmlTheme;
 typedef struct KREUZBERGHwpImage KREUZBERGHwpImage;
 typedef struct KREUZBERGImageExtractionConfig KREUZBERGImageExtractionConfig;
 typedef struct KREUZBERGImageKind KREUZBERGImageKind;
+typedef struct KREUZBERGImageMetadata KREUZBERGImageMetadata;
 typedef struct KREUZBERGImageMetadataType KREUZBERGImageMetadataType;
 typedef struct KREUZBERGImageOcrResult KREUZBERGImageOcrResult;
 typedef struct KREUZBERGImagePreprocessingConfig KREUZBERGImagePreprocessingConfig;
@@ -168,6 +169,7 @@ typedef struct KREUZBERGPageUnitType KREUZBERGPageUnitType;
 typedef struct KREUZBERGPdfAnnotation KREUZBERGPdfAnnotation;
 typedef struct KREUZBERGPdfAnnotationType KREUZBERGPdfAnnotationType;
 typedef struct KREUZBERGPdfConfig KREUZBERGPdfConfig;
+typedef struct KREUZBERGPdfMetadata KREUZBERGPdfMetadata;
 typedef struct KREUZBERGPlugin KREUZBERGPlugin;
 typedef struct KREUZBERGPoolError KREUZBERGPoolError;
 typedef struct KREUZBERGPostProcessor KREUZBERGPostProcessor;
@@ -7113,6 +7115,57 @@ uintptr_t kreuzberg_archive_metadata_total_size(const KREUZBERGArchiveMetadata *
 uintptr_t kreuzberg_archive_metadata_compressed_size(const KREUZBERGArchiveMetadata *ptr);
 
 /**
+ * Create a `ImageMetadata` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_image_metadata_free`.
+ */
+KREUZBERGImageMetadata *kreuzberg_image_metadata_from_json(const char *json);
+
+/**
+ * Serialize a `ImageMetadata` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_image_metadata_to_json(const KREUZBERGImageMetadata *ptr);
+
+/**
+ * Free a `ImageMetadata` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_image_metadata_free(KREUZBERGImageMetadata *ptr);
+
+/**
+ * Get the `width` field from a `ImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t kreuzberg_image_metadata_width(const KREUZBERGImageMetadata *ptr);
+
+/**
+ * Get the `height` field from a `ImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t kreuzberg_image_metadata_height(const KREUZBERGImageMetadata *ptr);
+
+/**
+ * Get the `format` field from a `ImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_image_metadata_format(const KREUZBERGImageMetadata *ptr);
+
+/**
+ * Get the `exif` field from a `ImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_image_metadata_exif(const KREUZBERGImageMetadata *ptr);
+
+/**
  * Create a `XmlMetadata` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -10807,6 +10860,71 @@ uint8_t *kreuzberg_embedded_file_data(const KREUZBERGEmbeddedFile *ptr,
 char *kreuzberg_embedded_file_mime_type(const KREUZBERGEmbeddedFile *ptr);
 
 /**
+ * Create a `PdfMetadata` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_pdf_metadata_free`.
+ */
+KREUZBERGPdfMetadata *kreuzberg_pdf_metadata_from_json(const char *json);
+
+/**
+ * Serialize a `PdfMetadata` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_pdf_metadata_to_json(const KREUZBERGPdfMetadata *ptr);
+
+/**
+ * Free a `PdfMetadata` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_pdf_metadata_free(KREUZBERGPdfMetadata *ptr);
+
+/**
+ * Get the `pdf_version` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_pdf_metadata_pdf_version(const KREUZBERGPdfMetadata *ptr);
+
+/**
+ * Get the `producer` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_pdf_metadata_producer(const KREUZBERGPdfMetadata *ptr);
+
+/**
+ * Get the `is_encrypted` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t kreuzberg_pdf_metadata_is_encrypted(const KREUZBERGPdfMetadata *ptr);
+
+/**
+ * Get the `width` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int64_t kreuzberg_pdf_metadata_width(const KREUZBERGPdfMetadata *ptr);
+
+/**
+ * Get the `height` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int64_t kreuzberg_pdf_metadata_height(const KREUZBERGPdfMetadata *ptr);
+
+/**
+ * Get the `page_count` field from a `PdfMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uintptr_t kreuzberg_pdf_metadata_page_count(const KREUZBERGPdfMetadata *ptr);
+
+/**
  * Convert an integer to a `ExecutionProviderType` variant. Returns -1 on invalid input.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
@@ -11600,7 +11718,7 @@ char *kreuzberg_batch_extract_bytes_sync(const char *items,
  *
  * # Arguments
  *
- * * `items` - Vector of [`BatchFileItem`] structs, each containing a path and optional
+ * * `items` - Vector of `BatchFileItem` structs, each containing a path and optional
  *   per-file configuration overrides.
  * * `config` - Batch-level extraction configuration (provides defaults and batch settings)
  *
@@ -11669,7 +11787,7 @@ char *kreuzberg_batch_extract_files(const char *items,
  *
  * # Arguments
  *
- * * `items` - Vector of [`BatchBytesItem`] structs, each containing content bytes,
+ * * `items` - Vector of `BatchBytesItem` structs, each containing content bytes,
  *   MIME type, and optional per-item configuration overrides.
  * * `config` - Batch-level extraction configuration
  *

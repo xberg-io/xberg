@@ -5,7 +5,6 @@ set -e
 # Called from the before hook in alef.toml for PHP e2e tests
 
 EXTENSION_DIR=$(php -r 'echo ini_get("extension_dir");')
-EXT_NAME="kreuzberg_php"
 
 # Find the built extension
 for path in target/release/libkreuzberg_php.dylib target/release/libkreuzberg_php.so target/release/kreuzberg_php.dll; do

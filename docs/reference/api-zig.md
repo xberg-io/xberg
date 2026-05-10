@@ -251,7 +251,7 @@ Per-file configuration overrides:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `[]const BatchFileItem` | Yes | Vector of [`BatchFileItem`] structs, each containing a path and optional |
+| `items` | `[]const BatchFileItem` | Yes | Vector of `BatchFileItem` structs, each containing a path and optional |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration (provides defaults and batch settings) |
 
 **Returns:** `[]const ExtractionResult`
@@ -296,7 +296,7 @@ Per-item configuration overrides:
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `items` | `[]const BatchBytesItem` | Yes | Vector of [`BatchBytesItem`] structs, each containing content bytes, |
+| `items` | `[]const BatchBytesItem` | Yes | Vector of `BatchBytesItem` structs, each containing content bytes, |
 | `config` | `ExtractionConfig` | Yes | Batch-level extraction configuration |
 
 **Returns:** `[]const ExtractionResult`
@@ -550,12 +550,15 @@ Returns one embedding vector per input text in the same order.
 
 #### renderPdfPageToPng()
 
-Render a single PDF page to a PNG-encoded byte buffer.
+Render a single PDF page to PNG bytes.
+
+Returns raw PNG-encoded bytes for the specified page at the given DPI.
+Uses pdf_oxide with tiny-skia for pure-Rust rendering.
 
 **Errors:**
 
-Returns an error if the PDF is invalid, the page index is out of bounds,
-or if the page fails to render.
+Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
+or rendered, or if `page_index` is out of range.
 
 **Signature:**
 
@@ -567,10 +570,10 @@ or if the page fails to render.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `pdfBytes` | `[]const u8` | Yes | The pdf bytes |
-| `pageIndex` | `u64` | Yes | The page index |
-| `dpi` | `i32?` | No | The dpi |
-| `password` | `[:0]const u8?` | No | The password |
+| `pdfBytes` | `[]const u8` | Yes | Raw PDF file bytes |
+| `pageIndex` | `u64` | Yes | Zero-based page index |
+| `dpi` | `i32?` | No | Resolution in dots per inch (default: 150) |
+| `password` | `[:0]const u8?` | No | Optional password for encrypted PDFs |
 
 **Returns:** `[]const u8`
 
@@ -828,6 +831,17 @@ Request parameters for cache warm (model download).
 
 ---
 
+#### CharShape
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bold` | `bool` | — | Bold |
+| `italic` | `bool` | — | Italic |
+| `underline` | `bool` | — | Underline |
+
+
+---
+
 #### Chunk
 
 A text chunk with optional embedding and metadata.
@@ -971,23 +985,6 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### CommonPdfMetadata
-
-Common metadata fields extracted from a PDF.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `title` | `[:0]const u8?` | `null` | Title |
-| `subject` | `[:0]const u8?` | `null` | Subject |
-| `authors` | `[]const [:0]const u8?` | `null` | Authors |
-| `keywords` | `[]const [:0]const u8?` | `null` | Keywords |
-| `createdAt` | `[:0]const u8?` | `null` | Created at |
-| `modifiedAt` | `[:0]const u8?` | `null` | Modified at |
-| `createdBy` | `[:0]const u8?` | `null` | Created by |
-
-
----
-
 #### ContentFilterConfig
 
 Cross-extractor content filtering configuration.
@@ -1028,6 +1025,34 @@ JATS contributor with role.
 |-------|------|---------|-------------|
 | `name` | `[:0]const u8` | — | The name |
 | `role` | `[:0]const u8?` | `null` | Role |
+
+
+---
+
+#### CoreProperties
+
+Dublin Core metadata from docProps/core.xml
+
+Contains standard metadata fields defined by the Dublin Core standard
+and Office-specific extensions.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `title` | `[:0]const u8?` | `null` | Document title |
+| `subject` | `[:0]const u8?` | `null` | Document subject/topic |
+| `creator` | `[:0]const u8?` | `null` | Document creator/author |
+| `keywords` | `[:0]const u8?` | `null` | Keywords or tags |
+| `description` | `[:0]const u8?` | `null` | Document description/abstract |
+| `lastModifiedBy` | `[:0]const u8?` | `null` | User who last modified the document |
+| `revision` | `[:0]const u8?` | `null` | Revision number |
+| `created` | `[:0]const u8?` | `null` | Creation timestamp (ISO 8601) |
+| `modified` | `[:0]const u8?` | `null` | Last modification timestamp (ISO 8601) |
+| `category` | `[:0]const u8?` | `null` | Document category |
+| `contentStatus` | `[:0]const u8?` | `null` | Content status (Draft, Final, etc.) |
+| `language` | `[:0]const u8?` | `null` | Document language |
+| `identifier` | `[:0]const u8?` | `null` | Unique identifier |
+| `version` | `[:0]const u8?` | `null` | Document version |
+| `lastPrinted` | `[:0]const u8?` | `null` | Last print timestamp (ISO 8601) |
 
 
 ---
@@ -1422,6 +1447,16 @@ construction paths (builder, derivation) call this automatically.
 // Phase 1: zig backend method signature generation
 ```
 
+###### isEmpty()
+
+Check if the document structure is empty.
+
+**Signature:**
+
+```zig
+// Phase 1: zig backend method signature generation
+```
+
 ###### default()
 
 **Signature:**
@@ -1429,6 +1464,34 @@ construction paths (builder, derivation) call this automatically.
 ```zig
 // Phase 1: zig backend method signature generation
 ```
+
+
+---
+
+#### DocxAppProperties
+
+Application properties from docProps/app.xml for DOCX
+
+Contains Word-specific document statistics and metadata.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `application` | `[:0]const u8?` | `null` | Application name (e.g., "Microsoft Office Word") |
+| `appVersion` | `[:0]const u8?` | `null` | Application version |
+| `template` | `[:0]const u8?` | `null` | Template filename |
+| `totalTime` | `i32?` | `null` | Total editing time in minutes |
+| `pages` | `i32?` | `null` | Number of pages |
+| `words` | `i32?` | `null` | Number of words |
+| `characters` | `i32?` | `null` | Number of characters (excluding spaces) |
+| `charactersWithSpaces` | `i32?` | `null` | Number of characters (including spaces) |
+| `lines` | `i32?` | `null` | Number of lines |
+| `paragraphs` | `i32?` | `null` | Number of paragraphs |
+| `company` | `[:0]const u8?` | `null` | Company name |
+| `docSecurity` | `i32?` | `null` | Document security level |
+| `scaleCrop` | `bool?` | `null` | Scale crop flag |
+| `linksUpToDate` | `bool?` | `null` | Links up to date flag |
+| `sharedDoc` | `bool?` | `null` | Shared document flag |
+| `hyperlinksChanged` | `bool?` | `null` | Hyperlinks changed flag |
 
 
 ---
@@ -1442,8 +1505,8 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `coreProperties` | `[:0]const u8?` | `null` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
-| `appProperties` | `[:0]const u8?` | `null` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
+| `coreProperties` | `CoreProperties?` | `null` | Core properties from docProps/core.xml (Dublin Core metadata) Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX documents. |
+| `appProperties` | `DocxAppProperties?` | `null` | Application properties from docProps/app.xml (Word-specific statistics) Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of Office application properties. |
 | `customProperties` | `std.StringHashMap([:0]const u8)?` | `{}` | Custom properties from docProps/custom.xml (user-defined properties) Contains key-value pairs defined by users or applications. Values can be strings, numbers, booleans, or dates. |
 
 
@@ -1879,10 +1942,10 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 | `isMask` | `bool` | — | Whether this image is a mask image |
 | `description` | `[:0]const u8?` | `null` | Optional description of the image |
 | `ocrResult` | `ExtractionResult?` | `null` | Nested OCR extraction result (if image was OCRed) When OCR is performed on this image, the result is embedded here rather than in a separate collection, making the relationship explicit. |
-| `boundingBox` | `[:0]const u8?` | `null` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from pdf_oxide. |
+| `boundingBox` | `[:0]const u8?` | `null` | Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted images when position data is available from the PDF extractor. |
 | `sourcePath` | `[:0]const u8?` | `null` | Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX). Used for rendering image references when the binary data is not extracted. |
 | `imageKind` | `ImageKind?` | `null` | Heuristic classification of what this image likely depicts. `null` if classification was disabled or inconclusive. |
-| `kindConfidence` | `f32?` | `null` | Confidence score for `image_kind`, in [0.0, 1.0]. |
+| `kindConfidence` | `f32?` | `null` | Confidence score for `image_kind`, in the range 0.0 to 1.0. |
 | `clusterId` | `u32?` | `null` | Identifier shared across images that form a single logical figure (e.g. all raster tiles of one technical drawing). `null` for singletons. |
 
 
@@ -2289,6 +2352,16 @@ the plain comrak-based renderer.
 
 ---
 
+#### HwpImage
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `[:0]const u8` | — | The name |
+| `data` | `[]const u8` | — | Data |
+
+
+---
+
 #### ImageExtractionConfig
 
 Image extraction configuration.
@@ -2302,7 +2375,7 @@ Image extraction configuration.
 | `autoAdjustDpi` | `bool` | `true` | Automatically adjust DPI based on image content |
 | `minDpi` | `i32` | `72` | Minimum DPI threshold |
 | `maxDpi` | `i32` | `600` | Maximum DPI threshold |
-| `maxImagesPerPage` | `u32?` | `null` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via pdf_oxide. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `null` (default) means no limit — all images are extracted. |
+| `maxImagesPerPage` | `u32?` | `null` | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `null` (default) means no limit — all images are extracted. |
 | `classify` | `bool` | `true` | When `true` (default), extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. |
 
 ##### Methods
@@ -2314,6 +2387,22 @@ Image extraction configuration.
 ```zig
 // Phase 1: zig backend method signature generation
 ```
+
+
+---
+
+#### ImageMetadata
+
+Image metadata extracted from image files.
+
+Includes dimensions, format, and EXIF data.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `width` | `u32` | — | Image width in pixels |
+| `height` | `u32` | — | Image height in pixels |
+| `format` | `[:0]const u8` | — | Image format (e.g., "PNG", "JPEG", "TIFF") |
+| `exif` | `std.StringHashMap([:0]const u8)` | `{}` | EXIF metadata tags |
 
 
 ---
@@ -3423,22 +3512,6 @@ and visibility state (for presentations).
 
 ---
 
-#### PageLayoutResult
-
-Layout detection results for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `pageIndex` | `u64` | — | Page index |
-| `regions` | `[]const [:0]const u8` | — | Regions |
-| `pageWidthPts` | `f32` | — | Page width pts |
-| `pageHeightPts` | `f32` | — | Page height pts |
-| `renderWidthPx` | `u32` | — | Width of the rendered image used for layout detection (pixels). |
-| `renderHeightPx` | `u32` | — | Height of the rendered image used for layout detection (pixels). |
-
-
----
-
 #### PageMarginsPoints
 
 Page margins converted to points (1/72 inch).
@@ -3469,22 +3542,6 @@ with character offset boundaries for chunk-to-page mapping.
 | `unitType` | `PageUnitType` | — | Type of paginated unit |
 | `boundaries` | `[]const PageBoundary?` | `null` | Character offset boundaries for each page Maps character ranges in the extracted content to page numbers. Used for chunk page range calculation. |
 | `pages` | `[]const PageInfo?` | `null` | Detailed per-page metadata (optional, only when needed) |
-
-
----
-
-#### PageTiming
-
-Timing breakdown for a single page.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `renderMs` | `f64` | — | Time to render the PDF page to a raster image (amortized from batch render). |
-| `preprocessMs` | `f64` | — | Time spent in image preprocessing (resize, normalize, tensor construction). |
-| `onnxMs` | `f64` | — | Time for the ONNX model session.run() call (actual neural network inference). |
-| `inferenceMs` | `f64` | — | Total model inference time (preprocess + onnx), as measured by the engine. |
-| `postprocessMs` | `f64` | — | Time spent in postprocessing (confidence filtering, overlap resolution). |
-| `mappingMs` | `f64` | — | Time to map pixel-space bounding boxes to PDF coordinate space. |
 
 
 ---
@@ -3531,31 +3588,22 @@ PDF-specific configuration.
 
 ---
 
-#### PdfImage
+#### PdfMetadata
+
+PDF-specific metadata.
+
+Contains metadata fields specific to PDF documents that are not in the common
+`Metadata` structure. Common fields like title, authors, keywords, and dates
+are at the `Metadata` level.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `pageNumber` | `u64` | — | Page number |
-| `imageIndex` | `u64` | — | Image index |
-| `width` | `i64` | — | Width |
-| `height` | `i64` | — | Height |
-| `colorSpace` | `[:0]const u8?` | `null` | Color space |
-| `bitsPerComponent` | `i64?` | `null` | Bits per component |
-| `filters` | `[]const [:0]const u8` | — | Original PDF stream filters (e.g. `["FlateDecode"]`, `["DCTDecode"]`). |
-| `data` | `[]const u8` | — | The decoded image bytes in a standard format (JPEG, PNG, etc.). |
-| `decodedFormat` | `[:0]const u8` | — | The format of `data` after decoding: `"jpeg"`, `"png"`, `"jpeg2000"`, `"ccitt"`, or `"raw"`. |
-| `imageKind` | `ImageKind?` | `null` | Heuristic classification of what this image likely depicts. |
-| `kindConfidence` | `f32?` | `null` | Confidence score for `image_kind`, in [0.0, 1.0]. |
-| `clusterId` | `u32?` | `null` | Identifier shared across images that form a single logical figure. |
-
-
----
-
-#### PdfUnifiedExtractionResult
-
-Result type for unified PDF text and metadata extraction.
-
-Contains text, optional page boundaries, optional per-page content, and metadata.
+| `pdfVersion` | `[:0]const u8?` | `null` | PDF version (e.g., "1.7", "2.0") |
+| `producer` | `[:0]const u8?` | `null` | PDF producer (application that created the PDF) |
+| `isEncrypted` | `bool?` | `null` | Whether the PDF is encrypted/password-protected |
+| `width` | `i64?` | `null` | First page width in points (1/72 inch) |
+| `height` | `i64?` | `null` | First page height in points (1/72 inch) |
+| `pageCount` | `u64?` | `null` | Total number of pages in the PDF document |
 
 
 ---
@@ -4066,7 +4114,7 @@ including host/port settings, CORS configuration, and upload limits.
 |-------|------|---------|-------------|
 | `host` | `[:0]const u8` | — | Server host address (e.g., "127.0.0.1", "0.0.0.0") |
 | `port` | `u16` | — | Server port number |
-| `corsOrigins` | `[]const [:0]const u8` | `[]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., ["<https://example.com">]), only those origins will be allowed. |
+| `corsOrigins` | `[]const [:0]const u8` | `[]` | CORS allowed origins. Empty vector means allow all origins. If this is an empty vector, the server will accept requests from any origin. If populated with specific origins (e.g., `"<https://example.com"`>), only those origins will be allowed. |
 | `maxRequestBodyBytes` | `u64` | — | Maximum size of request body in bytes (default: 100 MB) |
 | `maxMultipartFieldBytes` | `u64` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
@@ -5375,13 +5423,13 @@ type-safe, clean metadata without nested optionals.
 
 | Value | Description |
 |-------|-------------|
-| `Pdf` | Pdf format — Fields: `0`: `[:0]const u8` |
+| `Pdf` | Pdf format — Fields: `0`: `PdfMetadata` |
 | `Docx` | Docx format — Fields: `0`: `DocxMetadata` |
 | `Excel` | Excel — Fields: `0`: `ExcelMetadata` |
 | `Email` | Email — Fields: `0`: `EmailMetadata` |
 | `Pptx` | Pptx format — Fields: `0`: `PptxMetadata` |
 | `Archive` | Archive — Fields: `0`: `ArchiveMetadata` |
-| `Image` | Image element — Fields: `0`: `[:0]const u8` |
+| `Image` | Image element — Fields: `0`: `ImageMetadata` |
 | `Xml` | Xml format — Fields: `0`: `XmlMetadata` |
 | `Text` | Text format — Fields: `0`: `TextMetadata` |
 | `Html` | Preserve as HTML `<mark>` tags — Fields: `0`: `HtmlMetadata` |

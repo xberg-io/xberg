@@ -186,6 +186,11 @@ def main() -> None:
             pass  # Accepted but ignored - playa-pdf doesn't have OCR capability
         elif arg.startswith("--timeout="):
             timeout = int(arg.split("=", 1)[1])
+        elif arg.startswith("--format="):
+            _fmt = arg.split("=", 1)[1]
+            if _fmt != "plaintext":
+                print(f"{sys.argv[0]} only supports plaintext output; got --format {_fmt}", file=sys.stderr)
+                sys.exit(64)
         else:
             args.append(arg)
 

@@ -4,7 +4,7 @@
   "description": "batch_extract_bytes: archive size cap triggers error",
   "call": "batch_extract_bytes",
   "skip": {
-    "languages": ["rust", "node", "python", "php", "wasm", "go", "r", "ruby", "csharp", "elixir", "kotlin", "swift", "gleam", "zig"],
+    "languages": ["rust", "node", "python", "php", "wasm", "go", "r", "ruby", "csharp", "elixir", "kotlin", "swift", "gleam", "zig", "java", "dart"],
     "reason": "SecurityLimits.max_content_size is only enforced by archive/Excel extractors; test requires actual archive format to trigger error, which is not easily testable via byte fixtures"
   },
   "input": {

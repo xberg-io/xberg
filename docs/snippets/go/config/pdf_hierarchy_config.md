@@ -4,28 +4,34 @@ package main
 import "github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 
 func main() {
+	enabled := true
+	includeBbox := true
+	kClusters := uint(6)
+	kClustersAdvanced := uint(12)
+	threshold := float32(0.8)
+
 	// Basic hierarchy configuration
-	config := &kreuzberg.ExtractionConfig{
+	config := kreuzberg.ExtractionConfig{
 		PdfOptions: &kreuzberg.PdfConfig{
 			ExtractImages: true,
 			Hierarchy: &kreuzberg.HierarchyConfig{
-				Enabled:               kreuzberg.BoolPtr(true),
-				KClusters:             kreuzberg.IntPtr(6),
-				IncludeBbox:           kreuzberg.BoolPtr(true),
-				OcrCoverageThreshold:  kreuzberg.Float64Ptr(0.8),
+				Enabled:              &enabled,
+				KClusters:            &kClusters,
+				IncludeBbox:          &includeBbox,
+				OcrCoverageThreshold: &threshold,
 			},
 		},
 	}
 
 	// Advanced hierarchy configuration with more clusters
-	advancedConfig := &kreuzberg.ExtractionConfig{
+	advancedConfig := kreuzberg.ExtractionConfig{
 		PdfOptions: &kreuzberg.PdfConfig{
 			ExtractImages: true,
 			Hierarchy: &kreuzberg.HierarchyConfig{
-				Enabled:               kreuzberg.BoolPtr(true),
-				KClusters:             kreuzberg.IntPtr(12),
-				IncludeBbox:           kreuzberg.BoolPtr(true),
-				OcrCoverageThreshold:  kreuzberg.Float64Ptr(0.8),
+				Enabled:              &enabled,
+				KClusters:            &kClustersAdvanced,
+				IncludeBbox:          &includeBbox,
+				OcrCoverageThreshold: &threshold,
 			},
 		},
 	}

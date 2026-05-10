@@ -1,6 +1,0 @@
-<%= head_template(config, node.title) %>
-    <h1 id="content"><%= ExDoc.DocAST.to_html(node.title_doc) %></h1>
-    <%= render_doc(node.doc) %>
-    <%= config.before_closing_body_tag.(:epub) %>
-  </body>
-</html>

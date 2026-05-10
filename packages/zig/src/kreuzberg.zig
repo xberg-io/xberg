@@ -1446,6 +1446,16 @@ pub const ArchiveMetadata = struct {
     compressed_size: ?u64,
 };
 
+/// Image metadata extracted from image files.
+///
+/// Includes dimensions, format, and EXIF data.
+pub const ImageMetadata = struct {
+    width: u32,
+    height: u32,
+    format: [:0]const u8,
+    exif: std.StringHashMap([:0]const u8),
+};
+
 /// XML metadata extracted during XML parsing.
 ///
 /// Provides statistics about XML document structure.
@@ -2120,6 +2130,20 @@ pub const EmbeddedFile = struct {
     mime_type: ?[:0]const u8,
 };
 
+/// PDF-specific metadata.
+///
+/// Contains metadata fields specific to PDF documents that are not in the common
+/// `Metadata` structure. Common fields like title, authors, keywords, and dates
+/// are at the `Metadata` level.
+pub const PdfMetadata = struct {
+    pdf_version: ?[:0]const u8,
+    producer: ?[:0]const u8,
+    is_encrypted: ?bool,
+    width: ?i64,
+    height: ?i64,
+    page_count: ?u64,
+};
+
 /// ONNX Runtime execution provider type.
 ///
 /// Determines which hardware backend is used for model inference.
@@ -2488,13 +2512,13 @@ pub const ElementType = enum {
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
 pub const FormatMetadata = union(enum) {
-    pdf: [:0]const u8,
+    pdf: PdfMetadata,
     docx: DocxMetadata,
     excel: ExcelMetadata,
     email: EmailMetadata,
     pptx: PptxMetadata,
     archive: ArchiveMetadata,
-    image: [:0]const u8,
+    image: ImageMetadata,
     xml: XmlMetadata,
     text: TextMetadata,
     html: HtmlMetadata,
@@ -2669,7 +2693,7 @@ pub const LayoutClass = enum {
 ///
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
-pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})!ExtractionResult {
+pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
     const path_z = try std.fmt.allocPrintSentinel(
         std.heap.c_allocator, "{s}", .{path}, 0);
     const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(
@@ -2685,7 +2709,14 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []con
     if (mime_type_z) |z| std.heap.c_allocator.free(z);
     std.heap.c_allocator.free(config_z);
     if (config_handle) |h| c.kreuzberg_extraction_config_free(h);
-    return _result;
+    return blk: {
+        const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
+        defer _free_string(_json_ptr);
+        c.kreuzberg_extraction_result_free(_result.?);
+        const slice = std.mem.sliceTo(_json_ptr, 0);
+        const owned = try std.heap.c_allocator.dupe(u8, slice);
+        break :blk owned;
+    };
 }
 
 /// Synchronous wrapper for `extract_bytes`.
@@ -2695,7 +2726,7 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []con
 ///
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})!ExtractionResult {
+pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
     const mime_type_z = try std.fmt.allocPrintSentinel(
         std.heap.c_allocator, "{s}", .{mime_type}, 0);
     const config_z = try std.fmt.allocPrintSentinel(
@@ -2708,7 +2739,14 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []
     std.heap.c_allocator.free(mime_type_z);
     std.heap.c_allocator.free(config_z);
     if (config_handle) |h| c.kreuzberg_extraction_config_free(h);
-    return _result;
+    return blk: {
+        const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
+        defer _free_string(_json_ptr);
+        c.kreuzberg_extraction_result_free(_result.?);
+        const slice = std.mem.sliceTo(_json_ptr, 0);
+        const owned = try std.heap.c_allocator.dupe(u8, slice);
+        break :blk owned;
+    };
 }
 
 /// Synchronous wrapper for `batch_extract_files`.

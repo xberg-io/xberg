@@ -27,5 +27,5 @@ public class MinLengthValidator : IValidator
 }
 
 var validator = new MinLengthValidator(minLength: 100);
-KreuzbergClient.RegisterValidator(validator);
+KreuzbergLib.RegisterValidator(validator);
 ```

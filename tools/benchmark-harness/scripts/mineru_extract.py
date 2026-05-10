@@ -96,7 +96,35 @@ def _extract_via_api(file_path: str, ocr_enabled: bool) -> str:
         return md_content
 
 
-def extract_sync(file_path: str, ocr_enabled: bool) -> dict[str, Any]:
+_MD_STRIP_RE = None
+
+
+def _strip_markdown(text: str) -> str:
+    """Best-effort markdown→plaintext pass. Drops syntax tokens; preserves text."""
+    import re
+
+    global _MD_STRIP_RE
+    if _MD_STRIP_RE is None:
+        _MD_STRIP_RE = [
+            (re.compile(r"^#{1,6}\s+", re.MULTILINE), ""),         # ATX headings
+            (re.compile(r"^\s*[-*+]\s+", re.MULTILINE), ""),        # bullet markers
+            (re.compile(r"^\s*\d+\.\s+", re.MULTILINE), ""),        # ordered list markers
+            (re.compile(r"^>\s?", re.MULTILINE), ""),                # blockquotes
+            (re.compile(r"```[a-zA-Z0-9_-]*\n?"), ""),               # code fences
+            (re.compile(r"`([^`]+)`"), r"\1"),                       # inline code
+            (re.compile(r"\*\*([^*]+)\*\*"), r"\1"),                 # bold
+            (re.compile(r"\*([^*]+)\*"), r"\1"),                     # italic
+            (re.compile(r"!\[([^\]]*)\]\([^)]*\)"), r"\1"),          # images
+            (re.compile(r"\[([^\]]+)\]\([^)]*\)"), r"\1"),           # links
+            (re.compile(r"^\s*\|.*\|\s*$", re.MULTILINE), ""),       # table rows (drop)
+        ]
+    out = text
+    for pattern, repl in _MD_STRIP_RE:
+        out = pattern.sub(repl, out)
+    return out
+
+
+def extract_sync(file_path: str, ocr_enabled: bool, output_format: str = "markdown") -> dict[str, Any]:
     """Extract a single file using the best available method."""
     start = time.perf_counter()
 
@@ -109,24 +137,25 @@ def extract_sync(file_path: str, ocr_enabled: bool) -> dict[str, Any]:
     else:
         markdown = _extract_via_cli(file_path, ocr_enabled)
 
+    content = _strip_markdown(markdown) if output_format == "plaintext" else markdown
     duration_ms = (time.perf_counter() - start) * 1000.0
 
     return {
-        "content": markdown,
-        "metadata": {"framework": "mineru"},
+        "content": content,
+        "metadata": {"framework": "mineru", "output_format": output_format},
         "_extraction_time_ms": duration_ms,
         "_peak_memory_bytes": _get_peak_memory_bytes(),
     }
 
 
-def extract_batch(file_paths: list[str], ocr_enabled: bool) -> list[dict[str, Any]]:
+def extract_batch(file_paths: list[str], ocr_enabled: bool, output_format: str = "markdown") -> list[dict[str, Any]]:
     """Extract multiple files in sequence."""
     start = time.perf_counter()
 
     results = []
     for file_path in file_paths:
         try:
-            payload = extract_sync(file_path, ocr_enabled)
+            payload = extract_sync(file_path, ocr_enabled, output_format)
             # Remove per-file timing; we'll replace with batch timing below
             payload.pop("_extraction_time_ms", None)
             results.append(payload)
@@ -221,7 +250,7 @@ def _parse_path(line: str) -> str:
     return stripped
 
 
-def run_server(ocr_enabled: bool, timeout=None) -> None:
+def run_server(ocr_enabled: bool, output_format: str, timeout=None) -> None:
     """Persistent server mode: read paths from stdin, write JSON to stdout."""
     print("READY", flush=True)
     for line in sys.stdin:
@@ -229,10 +258,10 @@ def run_server(ocr_enabled: bool, timeout=None) -> None:
         if not file_path:
             continue
         if timeout is not None:
-            result = _run_with_timeout(extract_sync, (file_path, ocr_enabled), timeout)
+            result = _run_with_timeout(extract_sync, (file_path, ocr_enabled, output_format), timeout)
         else:
             try:
-                result = extract_sync(file_path, ocr_enabled)
+                result = extract_sync(file_path, ocr_enabled, output_format)
             except Exception as e:
                 result = {"error": str(e), "_extraction_time_ms": 0}
         print(json.dumps(result), flush=True)
@@ -241,6 +270,7 @@ def run_server(ocr_enabled: bool, timeout=None) -> None:
 def main() -> None:
     ocr_enabled = False
     timeout = None
+    output_format = "markdown"
     args = []
     for arg in sys.argv[1:]:
         if arg == "--ocr":
@@ -249,11 +279,17 @@ def main() -> None:
             ocr_enabled = False
         elif arg.startswith("--timeout="):
             timeout = int(arg.split("=", 1)[1])
+        elif arg.startswith("--format="):
+            output_format = arg.split("=", 1)[1]
         else:
             args.append(arg)
 
+    if output_format not in ("markdown", "plaintext"):
+        print(f"Error: --format must be 'markdown' or 'plaintext'; got '{output_format}'", file=sys.stderr)
+        sys.exit(64)
+
     if len(args) < 1:
-        print("Usage: mineru_extract.py [--ocr|--no-ocr] [--timeout=SECS] <mode> <file_path> [additional_files...]", file=sys.stderr)
+        print("Usage: mineru_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format=markdown|plaintext] <mode> <file_path> [additional_files...]", file=sys.stderr)
         print("Modes: sync, batch, server", file=sys.stderr)
         sys.exit(1)
 
@@ -262,13 +298,13 @@ def main() -> None:
 
     try:
         if mode == "server":
-            run_server(ocr_enabled, timeout=timeout)
+            run_server(ocr_enabled, output_format, timeout=timeout)
 
         elif mode == "sync":
             if len(file_paths) != 1:
                 print("Error: sync mode requires exactly one file", file=sys.stderr)
                 sys.exit(1)
-            payload = extract_sync(file_paths[0], ocr_enabled)
+            payload = extract_sync(file_paths[0], ocr_enabled, output_format)
             print(json.dumps(payload), end="")
 
         elif mode == "batch":
@@ -277,10 +313,10 @@ def main() -> None:
                 sys.exit(1)
 
             if len(file_paths) == 1:
-                results = extract_batch(file_paths, ocr_enabled)
+                results = extract_batch(file_paths, ocr_enabled, output_format)
                 print(json.dumps(results[0]), end="")
             else:
-                results = extract_batch(file_paths, ocr_enabled)
+                results = extract_batch(file_paths, ocr_enabled, output_format)
                 print(json.dumps(results), end="")
 
         else:

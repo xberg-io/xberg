@@ -1,11 +1,11 @@
 ```ruby title="Ruby"
 require 'kreuzberg'
 
-config = Kreuzberg::Config::Extraction.new(
-  chunking: Kreuzberg::Config::Chunking.new(
+config = Kreuzberg::ExtractionConfig.new(
+  chunking: Kreuzberg::ChunkingConfig.new(
     max_characters: 1000,
     overlap: 200,
-    embedding: Kreuzberg::Config::Embedding.new(
+    embedding: Kreuzberg::EmbeddingConfig.new(
       model: Kreuzberg::EmbeddingModelType.new(
         type: 'preset',
         name: 'all-minilm-l6-v2'
@@ -20,8 +20,8 @@ config = Kreuzberg::Config::Extraction.new(
 ```ruby title="Ruby - Prepend Heading Context"
 require 'kreuzberg'
 
-config = Kreuzberg::Config::Extraction.new(
-  chunking: Kreuzberg::Config::Chunking.new(
+config = Kreuzberg::ExtractionConfig.new(
+  chunking: Kreuzberg::ChunkingConfig.new(
     chunker_type: "markdown",
     max_characters: 500,
     overlap: 50,

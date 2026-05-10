@@ -1,0 +1,18 @@
+```elixir title="Elixir"
+config_json = Jason.encode!(%{
+  "keywords" => %{
+    "algorithm" => "Yake",
+    "max_keywords" => 10,
+    "min_score" => 0.3
+  }
+})
+
+{:ok, result} = Kreuzberg.extract_file_sync("research_paper.pdf", "application/pdf", config_json)
+
+if result.keywords do
+  result.keywords
+    |> Enum.each(fn %{"keyword" => kw, "score" => score} ->
+      IO.puts("#{kw}: #{Float.round(score, 4)}")
+    end)
+end
+```

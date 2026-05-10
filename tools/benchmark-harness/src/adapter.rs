@@ -4,7 +4,10 @@
 //! extraction frameworks (both Kreuzberg language bindings and open source alternatives).
 //! This allows benchmarking any extraction framework against the same test fixtures.
 
-use crate::{Result, types::BenchmarkResult};
+use crate::{
+    Result,
+    types::{BenchmarkResult, OutputFormat},
+};
 use async_trait::async_trait;
 use std::path::Path;
 use std::time::Duration;
@@ -35,17 +38,32 @@ pub trait FrameworkAdapter: Send + Sync {
         false
     }
 
+    /// Get the output formats supported by this adapter
+    ///
+    /// # Returns
+    /// * `Vec<OutputFormat>` - List of supported output formats
+    fn supported_output_formats(&self) -> Vec<OutputFormat> {
+        vec![OutputFormat::Plaintext]
+    }
+
     /// Extract content from a document
     ///
     /// # Arguments
     /// * `file_path` - Path to the document to extract
     /// * `timeout` - Maximum time to wait for extraction
     /// * `force_ocr` - When true, force OCR even if the document has a text layer
+    /// * `output_format` - Output format for extraction (markdown or plaintext)
     ///
     /// # Returns
     /// * `Ok(BenchmarkResult)` - Successful extraction with metrics
     /// * `Err(Error)` - Extraction failed
-    async fn extract(&self, file_path: &Path, timeout: Duration, force_ocr: bool) -> Result<BenchmarkResult>;
+    async fn extract(
+        &self,
+        file_path: &Path,
+        timeout: Duration,
+        force_ocr: bool,
+        output_format: OutputFormat,
+    ) -> Result<BenchmarkResult>;
 
     /// Extract content from multiple documents using framework's batch API
     ///
@@ -58,6 +76,7 @@ pub trait FrameworkAdapter: Send + Sync {
     /// * `file_paths` - Paths to documents to extract
     /// * `timeout` - Maximum time to wait for each extraction
     /// * `force_ocr` - Per-file force_ocr flags (must be same length as file_paths)
+    /// * `output_format` - Output format for extraction
     ///
     /// # Returns
     /// * `Ok(Vec<BenchmarkResult>)` - Results for all files
@@ -67,11 +86,12 @@ pub trait FrameworkAdapter: Send + Sync {
         file_paths: &[&Path],
         timeout: Duration,
         force_ocr: &[bool],
+        output_format: OutputFormat,
     ) -> Result<Vec<BenchmarkResult>> {
         let mut results = Vec::new();
         for (i, path) in file_paths.iter().enumerate() {
             let fo = force_ocr.get(i).copied().unwrap_or(false);
-            results.push(self.extract(path, timeout, fo).await?);
+            results.push(self.extract(path, timeout, fo, output_format).await?);
         }
         Ok(results)
     }
@@ -109,13 +129,14 @@ pub trait FrameworkAdapter: Send + Sync {
     /// # Arguments
     /// * `warmup_file` - Path to a small test file for warmup
     /// * `timeout` - Maximum time to wait for warmup
+    /// * `output_format` - Output format for warmup extraction
     ///
     /// # Returns
     /// * `Ok(Duration)` - Cold start duration (framework load + first extraction)
     /// * `Err(Error)` - Warmup failed
-    async fn warmup(&self, warmup_file: &Path, timeout: Duration) -> Result<Duration> {
+    async fn warmup(&self, warmup_file: &Path, timeout: Duration, output_format: OutputFormat) -> Result<Duration> {
         let start = std::time::Instant::now();
-        let _ = self.extract(warmup_file, timeout, false).await?;
+        let _ = self.extract(warmup_file, timeout, false, output_format).await?;
         Ok(start.elapsed())
     }
 }

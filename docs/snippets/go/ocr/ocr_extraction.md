@@ -8,15 +8,14 @@ import (
 )
 
 func main() {
-	lang := "eng"
-	cfg := &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	cfg := kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend:  "tesseract",
-			Language: &lang,
+			Language: "eng",
 		},
 	}
 
-	result, err := kreuzberg.ExtractFileSync("scanned.pdf", cfg)
+	result, err := kreuzberg.ExtractFileSync("scanned.pdf", nil, cfg)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

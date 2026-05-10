@@ -8,7 +8,9 @@ use crate::config::{BenchmarkConfig, BenchmarkMode};
 use crate::fixture::FixtureManager;
 use crate::registry::AdapterRegistry;
 use crate::stats::percentile_r7;
-use crate::types::{BenchmarkResult, DiskSizeInfo, DurationStatistics, ErrorKind, IterationResult, PerformanceMetrics};
+use crate::types::{
+    BenchmarkResult, DiskSizeInfo, DurationStatistics, ErrorKind, IterationResult, OutputFormat, PerformanceMetrics,
+};
 use crate::{Error, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -180,11 +182,17 @@ pub struct BenchmarkRunner {
     fixtures: FixtureManager,
     cold_start_durations: HashMap<String, Duration>,
     framework_sizes: HashMap<String, DiskSizeInfo>,
+    output_format: OutputFormat,
 }
 
 impl BenchmarkRunner {
     /// Create a new benchmark runner
     pub fn new(config: BenchmarkConfig, registry: AdapterRegistry) -> Self {
+        Self::with_output_format(config, registry, OutputFormat::Markdown)
+    }
+
+    /// Create a new benchmark runner with a specific output format
+    pub fn with_output_format(config: BenchmarkConfig, registry: AdapterRegistry, output_format: OutputFormat) -> Self {
         // Measure actual framework sizes instead of loading from static config
         // This ensures accurate disk size reporting in benchmark results
         let framework_sizes = match crate::sizes::measure_framework_sizes() {
@@ -223,6 +231,7 @@ impl BenchmarkRunner {
             fixtures: FixtureManager::new(),
             cold_start_durations: HashMap::new(),
             framework_sizes,
+            output_format,
         }
     }
 
@@ -271,6 +280,7 @@ impl BenchmarkRunner {
     /// * `config` - Benchmark configuration
     /// * `cold_start_duration` - Optional cold start duration for this framework
     /// * `force_ocr` - When true, force OCR even if the document has a text layer
+    /// * `output_format` - Output format for extraction
     ///
     /// # Returns
     /// Aggregated benchmark result with iterations and statistics
@@ -280,12 +290,15 @@ impl BenchmarkRunner {
         config: &BenchmarkConfig,
         cold_start_duration: Option<Duration>,
         force_ocr: bool,
+        output_format: OutputFormat,
     ) -> Result<BenchmarkResult> {
         let mut all_results = Vec::new();
 
         let estimated_task_duration_ms = if config.profiling.enabled {
             let warmup_start = std::time::Instant::now();
-            let warmup_result = adapter.extract(file_path, config.timeout, force_ocr).await?;
+            let warmup_result = adapter
+                .extract(file_path, config.timeout, force_ocr, output_format)
+                .await?;
             let _warmup_duration = warmup_start.elapsed();
             warmup_result.duration.as_millis() as u64
         } else {
@@ -318,7 +331,9 @@ impl BenchmarkRunner {
         let warmup_start = if config.profiling.enabled { 1 } else { 0 };
         let mut warmup_timed_out = false;
         for _iteration in warmup_start..config.warmup_iterations {
-            let result = adapter.extract(file_path, config.timeout, force_ocr).await?;
+            let result = adapter
+                .extract(file_path, config.timeout, force_ocr, output_format)
+                .await?;
             if result.error_kind == ErrorKind::Timeout {
                 warmup_timed_out = true;
                 break;
@@ -340,7 +355,9 @@ impl BenchmarkRunner {
         };
         'outer: for _iteration in 0..effective_iterations {
             for _amp in 0..amplification_factor {
-                let result = adapter.extract(file_path, config.timeout, force_ocr).await?;
+                let result = adapter
+                    .extract(file_path, config.timeout, force_ocr, output_format)
+                    .await?;
                 let timed_out = result.error_kind == ErrorKind::Timeout;
                 all_results.push(result);
                 if timed_out {
@@ -495,6 +512,7 @@ impl BenchmarkRunner {
 
         Ok(BenchmarkResult {
             framework: first_result.framework.clone(),
+            output_format: first_result.output_format,
             file_path: first_result.file_path.clone(),
             file_size: first_result.file_size,
             success: any_success,
@@ -523,6 +541,7 @@ impl BenchmarkRunner {
     /// * `adapter` - Framework adapter to use
     /// * `config` - Benchmark configuration
     /// * `cold_start_duration` - Optional cold start duration for this framework
+    /// * `output_format` - Output format for extraction
     ///
     /// # Returns
     /// Vector of aggregated benchmark results (one per file) with iterations and statistics
@@ -532,13 +551,16 @@ impl BenchmarkRunner {
         config: &BenchmarkConfig,
         cold_start_duration: Option<Duration>,
         force_ocr_flags: Vec<bool>,
+        output_format: OutputFormat,
     ) -> Result<Vec<BenchmarkResult>> {
         let total_iterations = config.warmup_iterations + config.benchmark_iterations;
         let mut all_batch_results = Vec::new();
 
         for iteration in 0..total_iterations {
             let refs: Vec<&std::path::Path> = file_paths.iter().map(|p| p.as_path()).collect();
-            let batch_results = adapter.extract_batch(&refs, config.timeout, &force_ocr_flags).await?;
+            let batch_results = adapter
+                .extract_batch(&refs, config.timeout, &force_ocr_flags, output_format)
+                .await?;
 
             let has_timeout = batch_results.iter().any(|r| r.error_kind == ErrorKind::Timeout);
 
@@ -632,6 +654,7 @@ impl BenchmarkRunner {
 
             aggregated_results.push(BenchmarkResult {
                 framework: first_result.framework.clone(),
+                output_format: first_result.output_format,
                 file_path: first_result.file_path.clone(),
                 file_size: first_result.file_size,
                 success: any_success,
@@ -728,7 +751,10 @@ impl BenchmarkRunner {
 
                 println!("Warming up {} with {}...", adapter.name(), warmup_file.display());
                 let warmup_clock = std::time::Instant::now();
-                match adapter.warmup(&warmup_file, self.config.timeout).await {
+                match adapter
+                    .warmup(&warmup_file, self.config.timeout, self.output_format)
+                    .await
+                {
                     Ok(cold_start) => {
                         println!("  Cold start: {:?}", cold_start);
                         self.cold_start_durations.insert(adapter.name().to_string(), cold_start);
@@ -810,6 +836,7 @@ impl BenchmarkRunner {
                             &config,
                             cold_start,
                             force_ocr_flags,
+                            self.output_format,
                         )
                         .await
                         {
@@ -841,7 +868,15 @@ impl BenchmarkRunner {
                             let config = config.clone();
                             let cold_start = self.cold_start_durations.get(adapter_name).copied();
 
-                            match Self::run_iterations_static(&file_path, adapter, &config, cold_start, force_ocr).await
+                            match Self::run_iterations_static(
+                                &file_path,
+                                adapter,
+                                &config,
+                                cold_start,
+                                force_ocr,
+                                self.output_format,
+                            )
+                            .await
                             {
                                 Ok(mut result) => {
                                     consecutive_failures = 0;
@@ -892,7 +927,16 @@ impl BenchmarkRunner {
 
             for (file_path, framework_name, adapter, force_ocr) in task_queue {
                 let cold_start = self.cold_start_durations.get(&framework_name).copied();
-                match Self::run_iterations_static(&file_path, adapter, &config, cold_start, force_ocr).await {
+                match Self::run_iterations_static(
+                    &file_path,
+                    adapter,
+                    &config,
+                    cold_start,
+                    force_ocr,
+                    self.output_format,
+                )
+                .await
+                {
                     Ok(mut result) => {
                         self.enrich_with_framework_size(&mut result);
                         results.push(result);
@@ -932,7 +976,10 @@ impl BenchmarkRunner {
                 {
                     let md_gt = markdown_gt_map.get(&result.file_path).map(|s| s.as_str());
                     result.quality = Some(crate::quality::compute_quality_with_structure(
-                        extracted, gt_text, md_gt,
+                        extracted,
+                        gt_text,
+                        md_gt,
+                        self.output_format,
                     ));
                 }
             }
@@ -1052,6 +1099,7 @@ mod tests {
         // Test with -sync suffix
         let mut result_sync = BenchmarkResult {
             framework: "kreuzberg-python-sync".to_string(),
+            output_format: OutputFormat::Markdown,
             file_path: PathBuf::from("/test/file.pdf"),
             file_size: 1024,
             success: true,
@@ -1075,6 +1123,7 @@ mod tests {
         // Test with -async suffix
         let mut result_async = BenchmarkResult {
             framework: "kreuzberg-python-async".to_string(),
+            output_format: OutputFormat::Markdown,
             file_path: PathBuf::from("/test/file.pdf"),
             file_size: 1024,
             success: true,
@@ -1098,6 +1147,7 @@ mod tests {
         // Test with -batch suffix
         let mut result_batch = BenchmarkResult {
             framework: "kreuzberg-python-batch".to_string(),
+            output_format: OutputFormat::Markdown,
             file_path: PathBuf::from("/test/file.pdf"),
             file_size: 1024,
             success: true,

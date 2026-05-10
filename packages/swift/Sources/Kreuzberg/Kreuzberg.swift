@@ -576,6 +576,11 @@ public typealias EmailMetadata = RustBridge.EmailMetadata
 /// Extracted from compressed archive files containing file lists and size information.
 public typealias ArchiveMetadata = RustBridge.ArchiveMetadata
 
+/// Image metadata extracted from image files.
+///
+/// Includes dimensions, format, and EXIF data.
+public typealias ImageMetadata = RustBridge.ImageMetadata
+
 /// XML metadata extracted during XML parsing.
 ///
 /// Provides statistics about XML document structure.
@@ -902,6 +907,13 @@ public typealias DetectionResult = RustBridge.DetectionResult
 
 /// Embedded file descriptor extracted from the PDF name tree.
 public typealias EmbeddedFile = RustBridge.EmbeddedFile
+
+/// PDF-specific metadata.
+///
+/// Contains metadata fields specific to PDF documents that are not in the common
+/// `Metadata` structure. Common fields like title, authors, keywords, and dates
+/// are at the `Metadata` level.
+public typealias PdfMetadata = RustBridge.PdfMetadata
 
 /// ONNX Runtime execution provider type.
 ///
@@ -1381,13 +1393,13 @@ public enum ElementType {
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
 public enum FormatMetadata {
-    case pdf(field0: String)
+    case pdf(field0: PdfMetadata)
     case docx(field0: DocxMetadata)
     case excel(field0: ExcelMetadata)
     case email(field0: EmailMetadata)
     case pptx(field0: PptxMetadata)
     case archive(field0: ArchiveMetadata)
-    case image(field0: String)
+    case image(field0: ImageMetadata)
     case xml(field0: XmlMetadata)
     case text(field0: TextMetadata)
     case html(field0: HtmlMetadata)
@@ -1669,40 +1681,6 @@ public func extractBytes(
     return try extractBytesSync(makeByteVec(content), mimeType, config)
 }
 
-/// Convenience overload: accepts a UTF-8 `String` and converts it to bytes.
-public func detectMimeTypeFromBytes(
-    content: String
-) throws -> String {
-    return try detectMimeTypeFromBytes(makeByteVec(Array(content.utf8))).toString()
-}
-
-/// Convenience overload: accepts a `[UInt8]` byte array.
-public func detectMimeTypeFromBytes(
-    content: [UInt8]
-) throws -> String {
-    return try detectMimeTypeFromBytes(makeByteVec(content)).toString()
-}
-
-/// Convenience overload: accepts a UTF-8 `String` and converts it to bytes.
-public func renderPdfPageToPng(
-    content: String,
-    pageIndex: UInt,
-    dpi: Int32?,
-    password: String?
-) throws -> [UInt8] {
-    return try renderPdfPageToPng(makeByteVec(Array(content.utf8)), pageIndex, dpi, password).map { $0 }
-}
-
-/// Convenience overload: accepts a `[UInt8]` byte array.
-public func renderPdfPageToPng(
-    content: [UInt8],
-    pageIndex: UInt,
-    dpi: Int32?,
-    password: String?
-) throws -> [UInt8] {
-    return try renderPdfPageToPng(makeByteVec(content), pageIndex, dpi, password).map { $0 }
-}
-
 /// Convenience overload: accepts a file path as a `String`.
 public func extractFile(
     path: String,
@@ -1710,4 +1688,136 @@ public func extractFile(
     config: ExtractionConfig
 ) throws -> ExtractionResult {
     return try extractFileSync(path, mimeType, config)
+}
+// MARK: - E2e Test Convenience Wrappers
+// JSON-config and file-loading wrappers used exclusively by the generated e2e tests.
+
+private func resolveFixturePath(_ name: String) -> URL {
+    if let dir = ProcessInfo.processInfo.environment["FIXTURES_DIR"] {
+        return URL(fileURLWithPath: dir).appendingPathComponent(name)
+    }
+    return URL(fileURLWithPath: name)
+}
+
+/// E2e wrapper: reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
+public func extractBytesSync(
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+}
+
+/// E2e wrapper (async): reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
+public func extractBytes(
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+}
+
+/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
+public func extractFileSync(
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
+}
+
+/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
+public func extractFileSync(
+    _ path: String,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
+}
+
+/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
+public func extractFile(
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
+}
+
+/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
+public func extractFile(
+    _ path: String,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
+}
+
+/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchBytesItem.
+public func batchExtractBytesSync(
+    _ jsonItems: [String]
+) throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchBytesItem.
+public func batchExtractBytes(
+    _ jsonItems: [String]
+) async throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchFileItem.
+public func batchExtractFilesSync(
+    _ jsonItems: [String]
+) throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchFileItem.
+public func batchExtractFiles(
+    _ jsonItems: [String]
+) async throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper: reads `filePath` into bytes and calls detectMimeTypeFromBytes.
+public func detectMimeTypeFromBytes(
+    _ filePath: String
+) throws -> String {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    return try detectMimeTypeFromBytes(makeByteVec(data.map { $0 })).toString()
 }

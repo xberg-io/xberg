@@ -6,7 +6,7 @@
 
 use crate::adapter::FrameworkAdapter;
 use crate::monitoring::ResourceMonitor;
-use crate::types::{BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, PerformanceMetrics};
+use crate::types::{BenchmarkResult, ErrorKind, FrameworkCapabilities, OcrStatus, OutputFormat, PerformanceMetrics};
 use crate::{Error, Result};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
@@ -553,6 +553,7 @@ impl SubprocessAdapter {
         duration: Duration,
         resource_stats: &crate::monitoring::ResourceStats,
         error: &Error,
+        output_format: OutputFormat,
     ) -> BenchmarkResult {
         let throughput = if duration.as_secs_f64() > 0.0 {
             file_size as f64 / duration.as_secs_f64()
@@ -570,6 +571,7 @@ impl SubprocessAdapter {
 
         BenchmarkResult {
             framework: self.name.clone(),
+            output_format,
             file_path: file_path.to_path_buf(),
             file_size,
             success: false,
@@ -696,7 +698,17 @@ impl FrameworkAdapter for SubprocessAdapter {
         self.skip_files.iter().any(|f| f == file_name)
     }
 
-    async fn extract(&self, file_path: &Path, timeout: Duration, force_ocr: bool) -> Result<BenchmarkResult> {
+    fn supported_output_formats(&self) -> Vec<OutputFormat> {
+        vec![OutputFormat::Plaintext, OutputFormat::Markdown]
+    }
+
+    async fn extract(
+        &self,
+        file_path: &Path,
+        timeout: Duration,
+        force_ocr: bool,
+        output_format: OutputFormat,
+    ) -> Result<BenchmarkResult> {
         let timeout = self.effective_timeout(timeout);
         let file_size = std::fs::metadata(file_path).map_err(Error::Io)?.len();
 
@@ -728,7 +740,14 @@ impl FrameworkAdapter for SubprocessAdapter {
                     let baseline = monitor.baseline_memory().await;
                     let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots, baseline);
                     let actual_duration = start_time.elapsed();
-                    return Ok(self.build_failure_result(file_path, file_size, actual_duration, &resource_stats, &e));
+                    return Ok(self.build_failure_result(
+                        file_path,
+                        file_size,
+                        actual_duration,
+                        &resource_stats,
+                        &e,
+                        output_format,
+                    ));
                 }
             }
         } else {
@@ -740,7 +759,14 @@ impl FrameworkAdapter for SubprocessAdapter {
                     let baseline = monitor.baseline_memory().await;
                     let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots, baseline);
                     let actual_duration = start_time.elapsed();
-                    return Ok(self.build_failure_result(file_path, file_size, actual_duration, &resource_stats, &e));
+                    return Ok(self.build_failure_result(
+                        file_path,
+                        file_size,
+                        actual_duration,
+                        &resource_stats,
+                        &e,
+                        output_format,
+                    ));
                 }
             }
         };
@@ -760,7 +786,14 @@ impl FrameworkAdapter for SubprocessAdapter {
         let parsed = match self.parse_output(&stdout) {
             Ok(value) => value,
             Err(e) => {
-                return Ok(self.build_failure_result(file_path, file_size, duration, &resource_stats, &e));
+                return Ok(self.build_failure_result(
+                    file_path,
+                    file_size,
+                    duration,
+                    &resource_stats,
+                    &e,
+                    output_format,
+                ));
             }
         };
 
@@ -847,6 +880,7 @@ impl FrameworkAdapter for SubprocessAdapter {
 
         Ok(BenchmarkResult {
             framework: self.name.clone(),
+            output_format,
             file_path: file_path.to_path_buf(),
             file_size,
             success: true,
@@ -885,6 +919,7 @@ impl FrameworkAdapter for SubprocessAdapter {
         file_paths: &[&Path],
         timeout: Duration,
         force_ocr: &[bool],
+        output_format: OutputFormat,
     ) -> Result<Vec<BenchmarkResult>> {
         let timeout = self.effective_timeout(timeout);
         // Early return if file_paths is empty
@@ -896,7 +931,7 @@ impl FrameworkAdapter for SubprocessAdapter {
             let mut results = Vec::new();
             for (i, path) in file_paths.iter().enumerate() {
                 let fo = force_ocr.get(i).copied().unwrap_or(false);
-                results.push(self.extract(path, timeout, fo).await?);
+                results.push(self.extract(path, timeout, fo, output_format).await?);
             }
             return Ok(results);
         }
@@ -952,6 +987,7 @@ impl FrameworkAdapter for SubprocessAdapter {
 
                         BenchmarkResult {
                             framework: self.name.clone(),
+                            output_format,
                             file_path: file_path.to_path_buf(),
                             file_size,
                             success: false,
@@ -1141,6 +1177,7 @@ impl FrameworkAdapter for SubprocessAdapter {
 
                 BenchmarkResult {
                     framework: self.name.clone(),
+                    output_format,
                     file_path: file_path.to_path_buf(),
                     file_size,
                     success: item_success,
@@ -1356,7 +1393,7 @@ for line in sys.stdin:
 
         // Warmup extraction (like CI does)
         let warmup_result = adapter
-            .extract(&small_file, Duration::from_secs(10), false)
+            .extract(&small_file, Duration::from_secs(10), false, OutputFormat::Markdown)
             .await
             .expect("warmup should succeed");
         eprintln!(
@@ -1368,7 +1405,7 @@ for line in sys.stdin:
         let files = [&small_file, &medium_file, &large_file];
         for (i, file) in files.iter().enumerate() {
             let result = adapter
-                .extract(file, Duration::from_secs(30), false)
+                .extract(file, Duration::from_secs(30), false, OutputFormat::Markdown)
                 .await
                 .expect("extract should succeed");
 
@@ -1405,11 +1442,11 @@ for line in sys.stdin:
 
         // Verify durations scale with file size
         let r_small = adapter
-            .extract(&small_file, Duration::from_secs(10), false)
+            .extract(&small_file, Duration::from_secs(10), false, OutputFormat::Markdown)
             .await
             .unwrap();
         let r_large = adapter
-            .extract(&large_file, Duration::from_secs(30), false)
+            .extract(&large_file, Duration::from_secs(30), false, OutputFormat::Markdown)
             .await
             .unwrap();
         eprintln!(
@@ -1622,14 +1659,18 @@ for line in sys.stdin:
         adapter.setup().await.expect("setup should succeed");
 
         // Run warmup + 3 iterations (like CI)
-        let warmup = adapter.extract(&test_file, Duration::from_secs(30), false).await;
+        let warmup = adapter
+            .extract(&test_file, Duration::from_secs(30), false, OutputFormat::Markdown)
+            .await;
         eprintln!(
             "Kreuzberg warmup: {:?}",
             warmup.as_ref().map(|r| (r.success, r.duration, r.extraction_duration))
         );
 
         for i in 0..3 {
-            let result = adapter.extract(&test_file, Duration::from_secs(30), false).await;
+            let result = adapter
+                .extract(&test_file, Duration::from_secs(30), false, OutputFormat::Markdown)
+                .await;
             match &result {
                 Ok(r) => {
                     eprintln!(
@@ -1696,7 +1737,7 @@ for line in sys.stdin:
 
         // 1. Fast file should work
         let r1 = adapter
-            .extract(&fast_file, Duration::from_secs(10), false)
+            .extract(&fast_file, Duration::from_secs(10), false, OutputFormat::Markdown)
             .await
             .unwrap();
         assert!(r1.success, "fast file should succeed");
@@ -1704,7 +1745,7 @@ for line in sys.stdin:
 
         // 2. Slow file should timeout (5s sleep > 2s timeout)
         let r2 = adapter
-            .extract(&slow_file, Duration::from_secs(10), false)
+            .extract(&slow_file, Duration::from_secs(10), false, OutputFormat::Markdown)
             .await
             .unwrap();
         assert!(!r2.success, "slow file should fail with timeout");
@@ -1714,7 +1755,7 @@ for line in sys.stdin:
         // 3. KEY TEST: fast file should STILL work after the timeout
         //    (proves the process was killed and restarted, not left in a desync state)
         let r3 = adapter
-            .extract(&fast_file, Duration::from_secs(10), false)
+            .extract(&fast_file, Duration::from_secs(10), false, OutputFormat::Markdown)
             .await
             .unwrap();
         assert!(
@@ -1783,7 +1824,7 @@ for line in sys.stdin:
 
         // 1. Fast file through forked child — should succeed
         let r1 = adapter
-            .extract(&fast_file, Duration::from_secs(30), false)
+            .extract(&fast_file, Duration::from_secs(30), false, OutputFormat::Markdown)
             .await
             .unwrap();
         assert!(r1.success, "fast file should succeed through fork");
@@ -1799,7 +1840,7 @@ for line in sys.stdin:
         // 2. Slow file should be timed out by the Python side (2s < 10s sleep)
         let start = std::time::Instant::now();
         let r2 = adapter
-            .extract(&slow_file, Duration::from_secs(30), false)
+            .extract(&slow_file, Duration::from_secs(30), false, OutputFormat::Markdown)
             .await
             .unwrap();
         let elapsed = start.elapsed();
@@ -1832,7 +1873,7 @@ for line in sys.stdin:
         //    This proves the parent Python process stayed alive — no kill+restart.
         let start = std::time::Instant::now();
         let r3 = adapter
-            .extract(&fast_file, Duration::from_secs(30), false)
+            .extract(&fast_file, Duration::from_secs(30), false, OutputFormat::Markdown)
             .await
             .unwrap();
         let elapsed = start.elapsed();
@@ -1851,7 +1892,7 @@ for line in sys.stdin:
 
         // 4. Another slow file to test repeated timeouts don't break anything
         let r4 = adapter
-            .extract(&slow_file, Duration::from_secs(30), false)
+            .extract(&slow_file, Duration::from_secs(30), false, OutputFormat::Markdown)
             .await
             .unwrap();
         assert!(!r4.success, "second slow file should also timeout");
@@ -1860,7 +1901,7 @@ for line in sys.stdin:
 
         // 5. Final fast file — parent still alive after two timeouts
         let r5 = adapter
-            .extract(&fast_file, Duration::from_secs(30), false)
+            .extract(&fast_file, Duration::from_secs(30), false, OutputFormat::Markdown)
             .await
             .unwrap();
         assert!(r5.success, "fast file after two timeouts should still succeed");

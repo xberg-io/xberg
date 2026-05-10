@@ -1,0 +1,18 @@
+```csharp title="C#"
+using Kreuzberg;
+
+var config = new ExtractionConfig { EnableQualityProcessing = true };
+var result = await KreuzbergLib.ExtractFile("scanned_document.pdf", null, config);
+
+var qualityScore = result.QualityScore ?? 0.0;
+
+if (qualityScore < 0.5)
+{
+    Console.WriteLine($"Warning: Low quality extraction ({qualityScore:F2})");
+    Console.WriteLine("Consider re-scanning with higher DPI or adjusting OCR settings");
+}
+else
+{
+    Console.WriteLine($"Quality score: {qualityScore:F2}");
+}
+```

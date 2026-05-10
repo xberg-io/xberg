@@ -24,13 +24,13 @@ class Program
 
             foreach (var filePath in filePaths)
             {
-                var result = await KreuzbergClient.ExtractFileAsync(filePath, config);
+                var result = await KreuzbergLib.ExtractFileAsync(filePath, config);
                 batchResults.Add(result);
                 Console.WriteLine($"Processed {filePath}: {result.Content.Length} chars");
             }
 
             var tasks = filePaths.Select(path =>
-                KreuzbergClient.ExtractFileAsync(path, config)
+                KreuzbergLib.ExtractFileAsync(path, config)
             ).ToArray();
 
             var results = await Task.WhenAll(tasks);

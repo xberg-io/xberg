@@ -20,7 +20,7 @@ end
 plugin = StatefulPlugin.new
 Kreuzberg.register_post_processor('counter', plugin)
 
-config = Kreuzberg::Config::Extraction.new(
+config = Kreuzberg::ExtractionConfig.new(
   postprocessor: { enabled: true }
 )
 

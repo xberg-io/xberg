@@ -6,7 +6,7 @@ class Program
     {
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync("document.pdf");
+            var result = await KreuzbergLib.ExtractFileAsync("document.pdf");
             Console.WriteLine($"Extracted {result.Content.Length} characters");
         }
         catch (KreuzbergParsingException ex)
@@ -31,7 +31,7 @@ class Program
             var config = new ExtractionConfig();
             var pdfBytes = new byte[] { 0x25, 0x50, 0x44, 0x46 }; 
 
-            var result = await KreuzbergClient.ExtractBytesAsync(
+            var result = await KreuzbergLib.ExtractBytesAsync(
                 pdfBytes,
                 "application/pdf",
                 config
@@ -58,7 +58,7 @@ class Program
 
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync("nonexistent.pdf");
+            var result = await KreuzbergLib.ExtractFileAsync("nonexistent.pdf");
         }
         catch (KreuzbergIOException)
         {
