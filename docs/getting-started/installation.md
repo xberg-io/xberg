@@ -189,7 +189,7 @@ No SDK, no code — just your terminal.
   ```
 
   [API Reference](../reference/api-c.md){ .install-btn .install-btn--ghost }
-  [:material-lightning-bolt: Quick Start](#c-c-v4.5.3){ .install-btn .install-btn--solid }
+  [:material-lightning-bolt: Quick Start](#c--c){ .install-btn .install-btn--solid }
 
 </div>
 
