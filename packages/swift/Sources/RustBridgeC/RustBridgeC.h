@@ -657,6 +657,18 @@ void* __swift_bridge__$Vec_TableProperties$get_mut(void* vec_ptr, uintptr_t inde
 uintptr_t __swift_bridge__$Vec_TableProperties$len(void* vec_ptr);
 void* __swift_bridge__$Vec_TableProperties$as_ptr(void* vec_ptr);
 
+typedef struct DocxAppProperties DocxAppProperties;
+void __swift_bridge__$DocxAppProperties$_free(void* self);
+
+void* __swift_bridge__$Vec_DocxAppProperties$new(void);
+void __swift_bridge__$Vec_DocxAppProperties$drop(void* vec_ptr);
+void __swift_bridge__$Vec_DocxAppProperties$push(void* vec_ptr, void* item_ptr);
+void* __swift_bridge__$Vec_DocxAppProperties$pop(void* vec_ptr);
+void* __swift_bridge__$Vec_DocxAppProperties$get(void* vec_ptr, uintptr_t index);
+void* __swift_bridge__$Vec_DocxAppProperties$get_mut(void* vec_ptr, uintptr_t index);
+uintptr_t __swift_bridge__$Vec_DocxAppProperties$len(void* vec_ptr);
+void* __swift_bridge__$Vec_DocxAppProperties$as_ptr(void* vec_ptr);
+
 typedef struct XlsxAppProperties XlsxAppProperties;
 void __swift_bridge__$XlsxAppProperties$_free(void* self);
 
@@ -680,6 +692,18 @@ void* __swift_bridge__$Vec_PptxAppProperties$get(void* vec_ptr, uintptr_t index)
 void* __swift_bridge__$Vec_PptxAppProperties$get_mut(void* vec_ptr, uintptr_t index);
 uintptr_t __swift_bridge__$Vec_PptxAppProperties$len(void* vec_ptr);
 void* __swift_bridge__$Vec_PptxAppProperties$as_ptr(void* vec_ptr);
+
+typedef struct CoreProperties CoreProperties;
+void __swift_bridge__$CoreProperties$_free(void* self);
+
+void* __swift_bridge__$Vec_CoreProperties$new(void);
+void __swift_bridge__$Vec_CoreProperties$drop(void* vec_ptr);
+void __swift_bridge__$Vec_CoreProperties$push(void* vec_ptr, void* item_ptr);
+void* __swift_bridge__$Vec_CoreProperties$pop(void* vec_ptr);
+void* __swift_bridge__$Vec_CoreProperties$get(void* vec_ptr, uintptr_t index);
+void* __swift_bridge__$Vec_CoreProperties$get_mut(void* vec_ptr, uintptr_t index);
+uintptr_t __swift_bridge__$Vec_CoreProperties$len(void* vec_ptr);
+void* __swift_bridge__$Vec_CoreProperties$as_ptr(void* vec_ptr);
 
 typedef struct CustomProperties CustomProperties;
 void __swift_bridge__$CustomProperties$_free(void* self);
@@ -1232,6 +1256,18 @@ void* __swift_bridge__$Vec_ArchiveMetadata$get(void* vec_ptr, uintptr_t index);
 void* __swift_bridge__$Vec_ArchiveMetadata$get_mut(void* vec_ptr, uintptr_t index);
 uintptr_t __swift_bridge__$Vec_ArchiveMetadata$len(void* vec_ptr);
 void* __swift_bridge__$Vec_ArchiveMetadata$as_ptr(void* vec_ptr);
+
+typedef struct ImageMetadata ImageMetadata;
+void __swift_bridge__$ImageMetadata$_free(void* self);
+
+void* __swift_bridge__$Vec_ImageMetadata$new(void);
+void __swift_bridge__$Vec_ImageMetadata$drop(void* vec_ptr);
+void __swift_bridge__$Vec_ImageMetadata$push(void* vec_ptr, void* item_ptr);
+void* __swift_bridge__$Vec_ImageMetadata$pop(void* vec_ptr);
+void* __swift_bridge__$Vec_ImageMetadata$get(void* vec_ptr, uintptr_t index);
+void* __swift_bridge__$Vec_ImageMetadata$get_mut(void* vec_ptr, uintptr_t index);
+uintptr_t __swift_bridge__$Vec_ImageMetadata$len(void* vec_ptr);
+void* __swift_bridge__$Vec_ImageMetadata$as_ptr(void* vec_ptr);
 
 typedef struct XmlMetadata XmlMetadata;
 void __swift_bridge__$XmlMetadata$_free(void* self);
@@ -2145,6 +2181,18 @@ void* __swift_bridge__$Vec_EmbeddedFile$get_mut(void* vec_ptr, uintptr_t index);
 uintptr_t __swift_bridge__$Vec_EmbeddedFile$len(void* vec_ptr);
 void* __swift_bridge__$Vec_EmbeddedFile$as_ptr(void* vec_ptr);
 
+typedef struct PdfMetadata PdfMetadata;
+void __swift_bridge__$PdfMetadata$_free(void* self);
+
+void* __swift_bridge__$Vec_PdfMetadata$new(void);
+void __swift_bridge__$Vec_PdfMetadata$drop(void* vec_ptr);
+void __swift_bridge__$Vec_PdfMetadata$push(void* vec_ptr, void* item_ptr);
+void* __swift_bridge__$Vec_PdfMetadata$pop(void* vec_ptr);
+void* __swift_bridge__$Vec_PdfMetadata$get(void* vec_ptr, uintptr_t index);
+void* __swift_bridge__$Vec_PdfMetadata$get_mut(void* vec_ptr, uintptr_t index);
+uintptr_t __swift_bridge__$Vec_PdfMetadata$len(void* vec_ptr);
+void* __swift_bridge__$Vec_PdfMetadata$as_ptr(void* vec_ptr);
+
 typedef struct ExecutionProviderType ExecutionProviderType;
 void __swift_bridge__$ExecutionProviderType$_free(void* self);
 
@@ -2659,7 +2707,7 @@ bool __swift_bridge__$ContentFilterConfig$strip_repeating_text(void* self);
 bool __swift_bridge__$ContentFilterConfig$include_watermarks(void* self);
 void* __swift_bridge__$EmailConfig$new(struct __private__OptionU32 msg_fallback_codepage);
 struct __private__OptionU32 __swift_bridge__$EmailConfig$msg_fallback_codepage(void* self);
-void* __swift_bridge__$ExtractionConfig$new(bool use_cache, bool enable_quality_processing, void* ocr, bool force_ocr, void* force_ocr_pages, bool disable_ocr, void* chunking, void* content_filter, void* images, void* pdf_options, void* token_reduction, void* language_detection, void* pages, void* keywords, void* postprocessor, void* html_options, void* html_output, struct __private__OptionU64 extraction_timeout_secs, struct __private__OptionUsize max_concurrent_extractions, void* result_format, void* security_limits, void* output_format, void* layout, bool include_document_structure, void* acceleration, void* cache_namespace, struct __private__OptionU64 cache_ttl_secs, void* email, void* concurrency, uintptr_t max_archive_depth, void* tree_sitter, void* structured_extraction, void* cancel_token);
+void* __swift_bridge__$ExtractionConfig$new(bool use_cache, bool enable_quality_processing, void* ocr, bool force_ocr, void* force_ocr_pages, bool disable_ocr, void* chunking, void* content_filter, void* images, void* pdf_options, void* token_reduction, void* language_detection, void* pages, void* keywords, void* postprocessor, void* html_options, void* html_output, struct __private__OptionU64 extraction_timeout_secs, struct __private__OptionUsize max_concurrent_extractions, void* result_format, void* security_limits, void* output_format, void* layout, bool use_layout_for_markdown, bool include_document_structure, void* acceleration, void* cache_namespace, struct __private__OptionU64 cache_ttl_secs, void* email, void* concurrency, uintptr_t max_archive_depth, void* tree_sitter, void* structured_extraction, void* cancel_token);
 bool __swift_bridge__$ExtractionConfig$use_cache(void* self);
 bool __swift_bridge__$ExtractionConfig$enable_quality_processing(void* self);
 void* __swift_bridge__$ExtractionConfig$ocr(void* self);
@@ -2683,6 +2731,7 @@ void* __swift_bridge__$ExtractionConfig$result_format(void* self);
 void* __swift_bridge__$ExtractionConfig$security_limits(void* self);
 void* __swift_bridge__$ExtractionConfig$output_format(void* self);
 void* __swift_bridge__$ExtractionConfig$layout(void* self);
+bool __swift_bridge__$ExtractionConfig$use_layout_for_markdown(void* self);
 bool __swift_bridge__$ExtractionConfig$include_document_structure(void* self);
 void* __swift_bridge__$ExtractionConfig$acceleration(void* self);
 void* __swift_bridge__$ExtractionConfig$cache_namespace(void* self);
@@ -2930,6 +2979,23 @@ void* __swift_bridge__$TableProperties$borders(void* self);
 void* __swift_bridge__$TableProperties$cell_margins(void* self);
 void* __swift_bridge__$TableProperties$indent(void* self);
 void* __swift_bridge__$TableProperties$caption(void* self);
+void* __swift_bridge__$DocxAppProperties$new(void* application, void* app_version, void* template, struct __private__OptionI32 total_time, struct __private__OptionI32 pages, struct __private__OptionI32 words, struct __private__OptionI32 characters, struct __private__OptionI32 characters_with_spaces, struct __private__OptionI32 lines, struct __private__OptionI32 paragraphs, void* company, struct __private__OptionI32 doc_security, struct __private__OptionBool scale_crop, struct __private__OptionBool links_up_to_date, struct __private__OptionBool shared_doc, struct __private__OptionBool hyperlinks_changed);
+void* __swift_bridge__$DocxAppProperties$application(void* self);
+void* __swift_bridge__$DocxAppProperties$app_version(void* self);
+void* __swift_bridge__$DocxAppProperties$template(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$total_time(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$pages(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$words(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$characters(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$characters_with_spaces(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$lines(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$paragraphs(void* self);
+void* __swift_bridge__$DocxAppProperties$company(void* self);
+struct __private__OptionI32 __swift_bridge__$DocxAppProperties$doc_security(void* self);
+struct __private__OptionBool __swift_bridge__$DocxAppProperties$scale_crop(void* self);
+struct __private__OptionBool __swift_bridge__$DocxAppProperties$links_up_to_date(void* self);
+struct __private__OptionBool __swift_bridge__$DocxAppProperties$shared_doc(void* self);
+struct __private__OptionBool __swift_bridge__$DocxAppProperties$hyperlinks_changed(void* self);
 void* __swift_bridge__$XlsxAppProperties$new(void* application, void* app_version, struct __private__OptionI32 doc_security, struct __private__OptionBool scale_crop, struct __private__OptionBool links_up_to_date, struct __private__OptionBool shared_doc, struct __private__OptionBool hyperlinks_changed, void* company, void* worksheet_names);
 void* __swift_bridge__$XlsxAppProperties$application(void* self);
 void* __swift_bridge__$XlsxAppProperties$app_version(void* self);
@@ -2956,6 +3022,22 @@ struct __private__OptionI32 __swift_bridge__$PptxAppProperties$hidden_slides(voi
 struct __private__OptionI32 __swift_bridge__$PptxAppProperties$multimedia_clips(void* self);
 void* __swift_bridge__$PptxAppProperties$presentation_format(void* self);
 void* __swift_bridge__$PptxAppProperties$slide_titles(void* self);
+void* __swift_bridge__$CoreProperties$new(void* title, void* subject, void* creator, void* keywords, void* description, void* last_modified_by, void* revision, void* created, void* modified, void* category, void* content_status, void* language, void* identifier, void* version, void* last_printed);
+void* __swift_bridge__$CoreProperties$title(void* self);
+void* __swift_bridge__$CoreProperties$subject(void* self);
+void* __swift_bridge__$CoreProperties$creator(void* self);
+void* __swift_bridge__$CoreProperties$keywords(void* self);
+void* __swift_bridge__$CoreProperties$description(void* self);
+void* __swift_bridge__$CoreProperties$last_modified_by(void* self);
+void* __swift_bridge__$CoreProperties$revision(void* self);
+void* __swift_bridge__$CoreProperties$created(void* self);
+void* __swift_bridge__$CoreProperties$modified(void* self);
+void* __swift_bridge__$CoreProperties$category(void* self);
+void* __swift_bridge__$CoreProperties$content_status(void* self);
+void* __swift_bridge__$CoreProperties$language(void* self);
+void* __swift_bridge__$CoreProperties$identifier(void* self);
+void* __swift_bridge__$CoreProperties$version(void* self);
+void* __swift_bridge__$CoreProperties$last_printed(void* self);
 void* __swift_bridge__$OdtProperties$new(void* title, void* subject, void* creator, void* initial_creator, void* keywords, void* description, void* date, void* creation_date, void* language, void* generator, void* editing_duration, void* editing_cycles, struct __private__OptionI32 page_count, struct __private__OptionI32 word_count, struct __private__OptionI32 character_count, struct __private__OptionI32 paragraph_count, struct __private__OptionI32 table_count, struct __private__OptionI32 image_count);
 void* __swift_bridge__$OdtProperties$title(void* self);
 void* __swift_bridge__$OdtProperties$subject(void* self);
@@ -3280,6 +3362,11 @@ uintptr_t __swift_bridge__$ArchiveMetadata$file_count(void* self);
 void* __swift_bridge__$ArchiveMetadata$file_list(void* self);
 uintptr_t __swift_bridge__$ArchiveMetadata$total_size(void* self);
 struct __private__OptionUsize __swift_bridge__$ArchiveMetadata$compressed_size(void* self);
+void* __swift_bridge__$ImageMetadata$new(uint32_t width, uint32_t height, void* format, void* exif);
+uint32_t __swift_bridge__$ImageMetadata$width(void* self);
+uint32_t __swift_bridge__$ImageMetadata$height(void* self);
+void* __swift_bridge__$ImageMetadata$format(void* self);
+void* __swift_bridge__$ImageMetadata$exif(void* self);
 void* __swift_bridge__$XmlMetadata$new(uintptr_t element_count, void* unique_elements);
 uintptr_t __swift_bridge__$XmlMetadata$element_count(void* self);
 void* __swift_bridge__$XmlMetadata$unique_elements(void* self);
@@ -3586,6 +3673,13 @@ void* __swift_bridge__$DetectionResult$detections(void* self);
 void* __swift_bridge__$EmbeddedFile$name(void* self);
 void* __swift_bridge__$EmbeddedFile$data(void* self);
 void* __swift_bridge__$EmbeddedFile$mime_type(void* self);
+void* __swift_bridge__$PdfMetadata$new(void* pdf_version, void* producer, struct __private__OptionBool is_encrypted, struct __private__OptionI64 width, struct __private__OptionI64 height, struct __private__OptionUsize page_count);
+void* __swift_bridge__$PdfMetadata$pdf_version(void* self);
+void* __swift_bridge__$PdfMetadata$producer(void* self);
+struct __private__OptionBool __swift_bridge__$PdfMetadata$is_encrypted(void* self);
+struct __private__OptionI64 __swift_bridge__$PdfMetadata$width(void* self);
+struct __private__OptionI64 __swift_bridge__$PdfMetadata$height(void* self);
+struct __private__OptionUsize __swift_bridge__$PdfMetadata$page_count(void* self);
 struct __private__ResultPtrAndPtr __swift_bridge__$extract_bytes(void* content, void* mime_type, void* config);
 struct __private__ResultPtrAndPtr __swift_bridge__$extract_file(void* path, void* mime_type, void* config);
 struct __private__ResultPtrAndPtr __swift_bridge__$extract_file_sync(void* path, void* mime_type, void* config);
@@ -3604,6 +3698,7 @@ void* __swift_bridge__$clear_post_processors(void);
 struct __private__ResultPtrAndPtr __swift_bridge__$list_validators(void);
 void* __swift_bridge__$clear_validators(void);
 struct __private__ResultPtrAndPtr __swift_bridge__$embed_texts_async(void* texts, void* config);
+struct __private__ResultPtrAndPtr __swift_bridge__$render_pdf_page_to_png(void* pdf_bytes, uintptr_t page_index, struct __private__OptionI32 dpi, void* password);
 struct __private__ResultPtrAndPtr __swift_bridge__$detect_mime_type(void* path, bool check_exists);
 struct __private__ResultPtrAndPtr __swift_bridge__$embed_texts(void* texts, void* config);
 void* __swift_bridge__$get_embedding_preset(void* name);
@@ -3630,5 +3725,9 @@ int32_t __swift_bridge__$validator_call_priority(void* this);
 void* __swift_bridge__$alef_phantom_vec_embedding_backend(void);
 uintptr_t __swift_bridge__$embedding_backend_call_dimensions(void* this);
 struct __private__ResultPtrAndPtr __swift_bridge__$embedding_backend_call_embed(void* this, void* texts);
+void* __swift_bridge__$register_ocr_backend(void* swift_box);
+void* __swift_bridge__$register_post_processor(void* swift_box);
+void* __swift_bridge__$register_validator(void* swift_box);
+void* __swift_bridge__$register_embedding_backend(void* swift_box);
 
 

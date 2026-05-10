@@ -14,7 +14,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("research_paper.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("research_paper.pdf", config);
 
 Console.WriteLine("Extracted Keywords:");
 if (result.Metadata.Keywords != null)
@@ -39,7 +39,7 @@ var tfidfConfig = new ExtractionConfig
     }
 };
 
-var tfidfResult = KreuzbergClient.ExtractFileSync("document.pdf", tfidfConfig);
+var tfidfResult = KreuzbergLib.ExtractFileSync("document.pdf", tfidfConfig);
 
 Console.WriteLine("\nTF-IDF Keywords:");
 if (tfidfResult.Metadata.Keywords != null)

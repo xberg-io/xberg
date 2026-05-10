@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.15.0"
+alef_version = "0.15.23"
 languages = [
   "python",
   "node",
@@ -12,6 +12,7 @@ languages = [
   "elixir",
   "wasm",
   "r",
+  "dart",
   "kotlin",
   "swift",
   "gleam",
@@ -139,6 +140,8 @@ sources = [
   "crates/kreuzberg/src/core/extractor/sync.rs",
   # PDF rendering (render_pdf_page_to_png — re-exported from lib.rs)
   "crates/kreuzberg/src/pdf/render.rs",
+  # PdfMetadata — referenced in types/metadata.rs as Pdf(PdfMetadata) variant
+  "crates/kreuzberg/src/pdf/metadata.rs",
   # Office metadata types (used in metadata.rs)
   "crates/kreuzberg/src/extraction/office_metadata/mod.rs",
   "crates/kreuzberg/src/extraction/office_metadata/core_properties.rs",
@@ -227,11 +230,6 @@ exclude_types = [
 [crates.elixir]
 app_name = "kreuzberg"
 exclude_functions = [
-  # OcrBackend trait bridge: codegen captures *const ErlNifEnv which is neither Send nor Sync,
-  # and the generated impl pulls in async_trait which conflicts with Rustler's NIF ABI.
-  # Requires alef source fixes to resolve.
-  "register_ocr_backend",
-  "unregister_ocr_backend",
   # batch_extract_* take Vec<(PathBuf, Option<FileExtractionConfig>)> or
   # Vec<(Vec<u8>, String, Option<...>)> which codegen maps to Vec<String> —
   # type mismatch; no safe tuple-marshalling across NIF boundary
@@ -394,7 +392,7 @@ exclude_types = [
 
 [crates.gleam]
 app_name = "kreuzberg"
-nif_module = "Elixir.Kreuzberg.Native"
+nif_module = "kreuzberg_gleam_ffi"
 
 [crates.go]
 module = "github.com/kreuzberg-dev/kreuzberg/v5"
@@ -628,7 +626,8 @@ types = [
   "CfbReader",
   "DocProperties",
   "PptMetadata",
-  "PdfMetadata",
+  "CommonPdfMetadata",
+  "PdfExtractionMetadata",
   "PdfRenderer",
   "PdfPageIterator",
   "PdfLayoutBBox",
@@ -645,6 +644,7 @@ types = [
   "KMeansResult",
   "HocrWord",
   "TesseractBackend",
+  "TesseractWasmBackend",
   "PanicContext",
   "Instant",
 
@@ -750,7 +750,7 @@ types = [
 
   # Duplicate types with internal-only versions — use public types instead
   "BoundingBox", # kreuzberg::pdf::hierarchy::bounding_box::BoundingBox (internal; use kreuzberg::types::BoundingBox)
-  "ImageMetadata", # kreuzberg::extraction::image::ImageMetadata (internal; use kreuzberg::types::ImageMetadata)
+  "kreuzberg::extraction::image::ImageMetadata", # internal; kreuzberg::types::ImageMetadata is the public API type
   "Attributes", # kreuzberg::extractors::djot_format::attributes::Attributes (internal type with lifetime issues)
 
   # Content format OutputFormat (from core::config::formats) — exclude by fully-qualified path so
@@ -1080,19 +1080,26 @@ before = [
   "bash scripts/setup-swift-bridge.sh",
 ]
 command = "cd packages/swift && swift test"
-e2e = "cd e2e/swift && swift test"
+# Generated e2e tests live inside packages/swift/Tests (SwiftPM 6.0 forbids
+# inter-package `.package(path:)` references within a monorepo, so the e2e
+# generator places them next to the library target — see
+# alef-e2e/src/codegen/swift.rs). The `e2e/swift/Package.swift` file is a
+# documentation-only stub; running `swift test` there fails with "no buildable
+# target". Point the e2e command at the same package as the regular test
+# command so the generated XCTest cases actually execute.
+e2e = "cd packages/swift && swift test"
 
 [crates.test.dart]
 precondition = "command -v dart >/dev/null 2>&1"
 before = "{ command -v flutter_rust_bridge_codegen >/dev/null 2>&1 || cargo install flutter_rust_bridge_codegen --version 2.12.0; } && cd packages/dart && dart pub get && cd rust && flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml && cd ../../.. && cargo build --release -p kreuzberg-dart"
-command = "cd packages/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release dart pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release dart test"
-e2e = "cd e2e/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release dart pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release dart test"
+command = "cd packages/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart test"
+e2e = "cd e2e/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart test"
 
 [crates.test.gleam]
 precondition = "command -v gleam >/dev/null 2>&1"
-before = "cd packages/elixir && mix deps.get && mix compile"
+before = "cd packages/elixir && KREUZBERG_BUILD=1 mix deps.get && KREUZBERG_BUILD=1 mix compile"
 command = "cd packages/gleam && gleam test"
-e2e = "cd e2e/gleam && gleam test"
+e2e = "export ELIXIR_LIB_DIR=$(dirname \"$(elixir -e 'IO.puts(:code.lib_dir(:elixir) |> to_string())' 2>/dev/null)\") && export ERL_LIBS=$ELIXIR_LIB_DIR:$PWD/packages/elixir/_build/dev/lib && cd e2e/gleam && gleam test"
 
 [crates.test.zig]
 precondition = "command -v zig >/dev/null 2>&1"
@@ -1229,7 +1236,7 @@ bigint_fields = ["cacheTtlSecs", "extractionTimeoutSecs"]
 
 [crates.e2e.call.overrides.php]
 class = "Kreuzberg\\Kreuzberg"
-function = "extractFile"
+function = "extractFileAsync"
 options_type = "ExtractionConfig"
 
 [crates.e2e.call.overrides.r]
@@ -1239,6 +1246,13 @@ options_type = "ExtractionConfig"
 [crates.e2e.call.overrides.zig]
 function = "extract_file_sync"
 async = false
+result_is_json_struct = true
+
+[crates.e2e.call.overrides.dart]
+# Dart reads files to bytes before passing to Rust; use extractBytes (bytes+mime)
+# instead of extractFile (path string). The file_path arg type generates readAsBytesSync().
+function = "extractBytes"
+arg_name_map = { path = "content" }
 
 [crates.e2e.calls.extract_file]
 function = "extract_file"
@@ -1251,13 +1265,22 @@ args = [
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
 
+[crates.e2e.calls.extract_file.overrides.dart]
+# Dart cannot pass file paths through the FFI bridge; use extractBytes instead.
+# Missing mime_type will be inferred from the file extension by the e2e generator.
+function = "extract_bytes"
+async = true
+
+[crates.e2e.calls.extract_file.overrides.php]
+function = "extractFileAsync"
+
 [crates.e2e.calls.extract_bytes]
 function = "extract_bytes"
 module = "kreuzberg"
 async = true
 returns_result = true
 args = [
-  { name = "data", field = "input.data", type = "bytes" },
+  { name = "content", field = "input.data", type = "bytes" },
   { name = "mime_type", field = "input.mime_type", type = "string" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
@@ -1273,9 +1296,13 @@ options_type = "ExtractionConfig"
 [crates.e2e.calls.extract_bytes.overrides.r]
 arg_name_map = { data = "content" }
 
+[crates.e2e.calls.extract_bytes.overrides.php]
+function = "extractBytesAsync"
+
 [crates.e2e.calls.extract_bytes.overrides.zig]
 function = "extract_bytes_sync"
 async = false
+result_is_json_struct = true
 
 [crates.e2e.calls.extract_file_sync]
 function = "extract_file_sync"
@@ -1300,6 +1327,13 @@ json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "
 [crates.e2e.calls.extract_file_sync.overrides.zig]
 function = "extract_file_sync"
 async = false
+result_is_json_struct = true
+
+[crates.e2e.calls.extract_file_sync.overrides.dart]
+# Dart cannot pass file paths through the FFI bridge; use extractBytesSync instead.
+# Missing mime_type will be inferred from the file extension by the e2e generator.
+function = "extract_bytes_sync"
+async = false
 
 [crates.e2e.calls.extract_bytes_sync]
 function = "extract_bytes_sync"
@@ -1308,7 +1342,7 @@ async = false
 returns_result = true
 skip_languages = ["wasm"]
 args = [
-  { name = "data", field = "input.data", type = "bytes" },
+  { name = "content", field = "input.data", type = "bytes" },
   { name = "mime_type", field = "input.mime_type", type = "string" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
@@ -1327,6 +1361,7 @@ arg_name_map = { data = "content" }
 [crates.e2e.calls.extract_bytes_sync.overrides.zig]
 function = "extract_bytes_sync"
 async = false
+result_is_json_struct = true
 
 [crates.e2e.calls.render_html.overrides.python]
 result_is_simple = true
@@ -1463,6 +1498,9 @@ options_type = "ExtractionConfig"
 [crates.e2e.calls.batch_extract_files.overrides.r]
 arg_name_map = { paths = "items" }
 
+[crates.e2e.calls.batch_extract_files.overrides.php]
+function = "batchExtractFilesAsync"
+
 [crates.e2e.calls.batch_extract_files.overrides.zig]
 function = "batch_extract_files_sync"
 async = false
@@ -1581,6 +1619,9 @@ options_type = "ExtractionConfig"
 result_is_vec = true
 options_type = "ExtractionConfig"
 enum_fields = { outputFormat = "OutputFormat" }
+
+[crates.e2e.calls.batch_extract_bytes.overrides.php]
+function = "batchExtractBytesAsync"
 
 [crates.e2e.calls.batch_extract_bytes.overrides.zig]
 function = "batch_extract_bytes_sync"
@@ -2219,28 +2260,27 @@ registry_getter = "kreuzberg::plugins::registry::get_ocr_backend_registry"
 register_fn = "register_ocr_backend"
 # extendr trait_bridge codegen produces String error literals where extendr_api::Error
 # is expected (E0308) and calls .map_err() on parking_lot RwLockWriteGuard (which is
-# infallible) — 85 build errors as of alef 0.15.0. Rustler trait_bridge codegen produces
-# 31 errors, including invalid associated trait method signatures. Re-enable once
-# alef-backend-{extendr,rustler}/src/trait_bridge.rs is fixed upstream.
-exclude_languages = ["elixir", "r"]
+# infallible) — 85 build errors as of alef 0.15.0. Rustler now uses LocalPid which is
+# Copy + Send + Sync; the issue is resolved. R backend still has trait method signature issues.
+exclude_languages = ["r"]
 
 [[crates.trait_bridges]]
 trait_name = "PostProcessor"
 super_trait = "kreuzberg::plugins::Plugin"
 registry_getter = "kreuzberg::plugins::registry::get_post_processor_registry"
 register_fn = "register_post_processor"
-exclude_languages = ["elixir", "r"]
+exclude_languages = ["r"]
 
 [[crates.trait_bridges]]
 trait_name = "Validator"
 super_trait = "kreuzberg::plugins::Plugin"
 registry_getter = "kreuzberg::plugins::registry::get_validator_registry"
 register_fn = "register_validator"
-exclude_languages = ["elixir", "r"]
+exclude_languages = ["r"]
 
 [[crates.trait_bridges]]
 trait_name = "EmbeddingBackend"
 super_trait = "kreuzberg::plugins::Plugin"
 registry_getter = "kreuzberg::plugins::registry::get_embedding_backend_registry"
 register_fn = "register_embedding_backend"
-exclude_languages = ["elixir", "r"]
+exclude_languages = ["r"]

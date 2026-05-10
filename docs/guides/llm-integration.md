@@ -6,7 +6,7 @@ Kreuzberg integrates with 146 LLM providers (including local inference engines) 
 
 ## VLM OCR
 
-Use vision-language models as an OCR backend. The document page is rendered as an image and sent to the VLM, which returns the extracted text.
+Use vision-language models as an OCR backend by rendering document pages as images and sending them to the VLM for text extraction.
 
 ### When to Use
 
@@ -105,7 +105,7 @@ Any liter-llm vision-capable provider works as a VLM OCR backend:
 
 ## Structured Extraction
 
-Extract structured JSON data from documents by providing a JSON schema. The document is first extracted as text, then sent to an LLM with the schema to produce conforming output.
+Extract structured JSON data from documents by providing a schema; the document text is sent to an LLM for conforming extraction.
 
 ### Basic Usage
 
@@ -193,7 +193,7 @@ When `strict=True`, the LLM is instructed to produce output that exactly matches
 
 ## VLM Embeddings
 
-Use provider-hosted embedding models instead of local ONNX models. Useful when you want to match the embedding model used by your vector database or when local ONNX models are not available.
+Use provider-hosted embedding models when you need to match your vector database model or local ONNX models are unavailable.
 
 ### Configuration
 
@@ -256,7 +256,7 @@ Use provider-hosted embedding models instead of local ONNX models. Useful when y
 
 <span class="version-badge">v4.8.0</span>
 
-Kreuzberg supports local LLM inference engines via [liter-llm](https://github.com/kreuzberg-dev/liter-llm)'s built-in provider routing. No API key required — just point to your local server.
+Run local LLM inference engines via [liter-llm](https://github.com/kreuzberg-dev/liter-llm)'s provider routing; point to your local server without needing an API key.
 
 ### Supported Local Engines
 

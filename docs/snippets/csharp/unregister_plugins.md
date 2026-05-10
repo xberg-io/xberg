@@ -9,8 +9,8 @@ var names = new List<string>
     "min_length_validator"
 };
 
-KreuzbergClient.UnregisterDocumentExtractor(names[0]);
-KreuzbergClient.UnregisterPostProcessor(names[1]);
-KreuzbergClient.UnregisterOcrBackend(names[2]);
-KreuzbergClient.UnregisterValidator(names[3]);
+KreuzbergLib.UnregisterDocumentExtractor(names[0]);
+KreuzbergLib.UnregisterPostProcessor(names[1]);
+KreuzbergLib.UnregisterOcrBackend(names[2]);
+KreuzbergLib.UnregisterValidator(names[3]);
 ```

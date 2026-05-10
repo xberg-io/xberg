@@ -1,0 +1,28 @@
+<!-- snippet:skip -->
+
+Plugin logging is not directly available in the Elixir binding. Logging must be implemented in the Rust plugin code itself using the `tracing` crate.
+
+To add logging to a Rust plugin:
+
+```rust
+use tracing::{debug, info, warn};
+
+#[async_trait]
+impl DocumentExtractor for MyExtractor {
+    async fn extract_bytes(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        _config: &ExtractionConfig,
+    ) -> Result<ExtractionResult> {
+        debug!("Starting extraction for {}", mime_type);
+        
+        // Extraction logic...
+        
+        info!("Extraction completed for {}", mime_type);
+        Ok(result)
+    }
+}
+```
+
+The logs will be captured by Kreuzberg's tracing infrastructure and can be monitored from Elixir through structured logging in the output.

@@ -308,6 +308,11 @@ public typealias ResolvedStyle = RustBridge.ResolvedStyle
 /// Table-level properties from `<w:tblPr>`.
 public typealias TableProperties = RustBridge.TableProperties
 
+/// Application properties from docProps/app.xml for DOCX
+///
+/// Contains Word-specific document statistics and metadata.
+public typealias DocxAppProperties = RustBridge.DocxAppProperties
+
 /// Application properties from docProps/app.xml for XLSX
 ///
 /// Contains Excel-specific document metadata.
@@ -317,6 +322,12 @@ public typealias XlsxAppProperties = RustBridge.XlsxAppProperties
 ///
 /// Contains PowerPoint-specific document metadata.
 public typealias PptxAppProperties = RustBridge.PptxAppProperties
+
+/// Dublin Core metadata from docProps/core.xml
+///
+/// Contains standard metadata fields defined by the Dublin Core standard
+/// and Office-specific extensions.
+public typealias CoreProperties = RustBridge.CoreProperties
 
 /// Custom properties from docProps/custom.xml
 ///
@@ -564,6 +575,11 @@ public typealias EmailMetadata = RustBridge.EmailMetadata
 ///
 /// Extracted from compressed archive files containing file lists and size information.
 public typealias ArchiveMetadata = RustBridge.ArchiveMetadata
+
+/// Image metadata extracted from image files.
+///
+/// Includes dimensions, format, and EXIF data.
+public typealias ImageMetadata = RustBridge.ImageMetadata
 
 /// XML metadata extracted during XML parsing.
 ///
@@ -892,6 +908,13 @@ public typealias DetectionResult = RustBridge.DetectionResult
 /// Embedded file descriptor extracted from the PDF name tree.
 public typealias EmbeddedFile = RustBridge.EmbeddedFile
 
+/// PDF-specific metadata.
+///
+/// Contains metadata fields specific to PDF documents that are not in the common
+/// `Metadata` structure. Common fields like title, authors, keywords, and dates
+/// are at the `Metadata` level.
+public typealias PdfMetadata = RustBridge.PdfMetadata
+
 /// ONNX Runtime execution provider type.
 ///
 /// Determines which hardware backend is used for model inference.
@@ -955,21 +978,7 @@ public enum HtmlTheme {
 ///
 /// Controls the model used for table cell detection within layout-detected
 /// table regions.
-public enum TableModel {
-    /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
-    case tatr
-    /// SLANeXT wired variant -- 365MB, optimized for bordered tables.
-    case slanetWired
-    /// SLANeXT wireless variant -- 365MB, optimized for borderless tables.
-    case slanetWireless
-    /// SLANet-plus -- 7.78MB, lightweight general-purpose.
-    case slanetPlus
-    /// Classifier-routed SLANeXT: auto-select wired/wireless per table.
-    /// Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
-    case slanetAuto
-    /// Disable table structure model inference entirely; use heuristic path only.
-    case disabled
-}
+public typealias TableModel = RustBridge.TableModel
 
 /// Type of text chunker to use.
 ///
@@ -1053,12 +1062,7 @@ public enum CodeContentMode {
     case structure
 }
 
-public enum FracType {
-    case bar
-    case noBar
-    case linear
-    case skewed
-}
+public typealias FracType = RustBridge.FracType
 
 /// OCR backend types.
 public enum OcrBackendType {
@@ -1389,13 +1393,13 @@ public enum ElementType {
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
 public enum FormatMetadata {
-    case pdf(field0: String)
+    case pdf(field0: PdfMetadata)
     case docx(field0: DocxMetadata)
     case excel(field0: ExcelMetadata)
     case email(field0: EmailMetadata)
     case pptx(field0: PptxMetadata)
     case archive(field0: ArchiveMetadata)
-    case image(field0: String)
+    case image(field0: ImageMetadata)
     case xml(field0: XmlMetadata)
     case text(field0: TextMetadata)
     case html(field0: HtmlMetadata)
@@ -1517,13 +1521,7 @@ public enum UriKind {
 }
 
 /// Error type for pool operations.
-public enum PoolError {
-    /// The pool's internal mutex was poisoned.
-    ///
-    /// This indicates a panic occurred while holding the lock.
-    /// The pool is in a locked state and cannot be recovered.
-    case lockPoisoned
-}
+public typealias PoolError = RustBridge.PoolError
 
 /// Keyword algorithm selection.
 public enum KeywordAlgorithm {
@@ -1644,33 +1642,28 @@ public enum KreuzbergError: Error {
     case unsupportedFormat(message: String, field0: String)
     case embedding(message: String, source: String)
     case timeout(message: String, elapsedMs: UInt64, limitMs: UInt64)
-    case cancelled(message: String)
+    case cancelled
     case security(message: String, source: String)
     case other(message: String, field0: String)
 }
 
-// MARK: - Extraction Wrapper Functions
+// MARK: - Convenience Wrapper Functions
 // These wrappers bridge String / [UInt8] inputs to RustBridge's
-// RustVec<UInt8> requirement. The `config` parameter must be a fully
-// constructed ExtractionConfig (built via the generated initializer);
-// JSON-config decoding is not available because ExtractionConfig is a
-// swift-bridge opaque proxy class, not a Codable Swift struct.
+// RustVec<UInt8> requirement. The config parameter must be a fully
+// constructed opaque type (built via the generated initializer);
+// JSON-config decoding is not available because swift-bridge opaque
+// proxy classes are not Codable Swift structs.
 
-/// Builds a `RustVec<UInt8>` from a Swift byte array by pushing each byte.
-/// `RustVec<T>` only exposes `init()` + `push(value:)` in swift-bridge's
-/// runtime; there is no array-init shorthand.
+/// Converts a Swift `[UInt8]` array to a `RustVec<UInt8>` by pushing each byte.
+/// swift-bridge's `RustVec<T>` runtime only exposes `init()` and `push(value:)`;
+/// no array-initializer shorthand exists.
 private func makeByteVec(_ bytes: [UInt8]) -> RustVec<UInt8> {
     let vec = RustVec<UInt8>()
     for b in bytes { vec.push(value: b) }
     return vec
 }
 
-/// Extract text from UTF-8 string content using the supplied configuration.
-/// - Parameters:
-///   - content: Document bytes as a UTF-8 encoded `String`
-///   - mimeType: MIME type (for example, `"application/pdf"`)
-///   - config: An `ExtractionConfig` constructed via the generated initializer
-/// - Returns: `ExtractionResult` with extracted text
+/// Convenience overload: accepts a UTF-8 `String` and converts it to bytes.
 public func extractBytes(
     content: String,
     mimeType: String,
@@ -1679,12 +1672,7 @@ public func extractBytes(
     return try extractBytesSync(makeByteVec(Array(content.utf8)), mimeType, config)
 }
 
-/// Extract text from raw byte content using the supplied configuration.
-/// - Parameters:
-///   - content: Document bytes as `[UInt8]`
-///   - mimeType: MIME type
-///   - config: An `ExtractionConfig` constructed via the generated initializer
-/// - Returns: `ExtractionResult` with extracted text
+/// Convenience overload: accepts a `[UInt8]` byte array.
 public func extractBytes(
     content: [UInt8],
     mimeType: String,
@@ -1693,16 +1681,143 @@ public func extractBytes(
     return try extractBytesSync(makeByteVec(content), mimeType, config)
 }
 
-/// Extract text from a file at the given path using the supplied configuration.
-/// - Parameters:
-///   - path: File path
-///   - mimeType: Optional MIME type; auto-detected when `nil`
-///   - config: An `ExtractionConfig` constructed via the generated initializer
-/// - Returns: `ExtractionResult` with extracted text
+/// Convenience overload: accepts a file path as a `String`.
 public func extractFile(
     path: String,
     mimeType: String? = nil,
     config: ExtractionConfig
 ) throws -> ExtractionResult {
     return try extractFileSync(path, mimeType, config)
+}
+// MARK: - E2e Test Convenience Wrappers
+// JSON-config and file-loading wrappers used exclusively by the generated e2e tests.
+
+private func resolveFixturePath(_ name: String) -> URL {
+    if let dir = ProcessInfo.processInfo.environment["FIXTURES_DIR"] {
+        return URL(fileURLWithPath: dir).appendingPathComponent(name)
+    }
+    return URL(fileURLWithPath: name)
+}
+
+/// E2e wrapper: reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
+public func extractBytesSync(
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+}
+
+/// E2e wrapper (async): reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
+public func extractBytes(
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+}
+
+/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
+public func extractFileSync(
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
+}
+
+/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
+public func extractFileSync(
+    _ path: String,
+    _ configJson: String
+) throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
+}
+
+/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
+public func extractFile(
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
+}
+
+/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
+public func extractFile(
+    _ path: String,
+    _ configJson: String
+) async throws -> ExtractionResult {
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
+}
+
+/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchBytesItem.
+public func batchExtractBytesSync(
+    _ jsonItems: [String]
+) throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchBytesItem.
+public func batchExtractBytes(
+    _ jsonItems: [String]
+) async throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchFileItem.
+public func batchExtractFilesSync(
+    _ jsonItems: [String]
+) throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchFileItem.
+public func batchExtractFiles(
+    _ jsonItems: [String]
+) async throws -> [ExtractionResultRef] {
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
+}
+
+/// E2e wrapper: reads `filePath` into bytes and calls detectMimeTypeFromBytes.
+public func detectMimeTypeFromBytes(
+    _ filePath: String
+) throws -> String {
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    return try detectMimeTypeFromBytes(makeByteVec(data.map { $0 })).toString()
 }

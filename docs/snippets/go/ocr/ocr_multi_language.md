@@ -8,11 +8,10 @@ import (
 )
 
 func main() {
-	lang := "eng+deu+fra"
-	result, err := kreuzberg.ExtractFileSync("multilingual.pdf", &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	result, err := kreuzberg.ExtractFileSync("multilingual.pdf", nil, kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend:  "tesseract",
-			Language: &lang,
+			Language: "eng+deu+fra",
 		},
 	})
 	if err != nil {

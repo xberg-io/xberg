@@ -68,7 +68,7 @@ pub fn load_run_results(dir: &Path) -> Result<Vec<BenchmarkResult>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ErrorKind, FrameworkCapabilities, PerformanceMetrics};
+    use crate::types::{ErrorKind, FrameworkCapabilities, OutputFormat, PerformanceMetrics};
     use std::time::Duration;
 
     /// Build a minimal valid `BenchmarkResult` for testing.
@@ -100,6 +100,7 @@ mod tests {
             pdf_metadata: None,
             ocr_status: Default::default(),
             extracted_text: None,
+            output_format: OutputFormat::Markdown,
         }
     }
 

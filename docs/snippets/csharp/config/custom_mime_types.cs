@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = KreuzbergClient.ExtractBytesSync(
+var result = KreuzbergLib.ExtractBytesSync(
     new BytesWithMime(fileBytes, "application/pdf"),
     config
 );

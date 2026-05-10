@@ -69,8 +69,8 @@ pub use adapter::FrameworkAdapter;
 pub use adapters::NativeAdapter;
 pub use aggregate::{
     ComparisonData, ConsolidationMetadata, DeltaMetrics, DurationPercentiles, FileTypeAggregation,
-    FrameworkModeAggregation, NewConsolidatedResults, Percentiles, PerformancePercentiles, QualityPercentiles,
-    RankedFramework, aggregate_new_format,
+    FrameworkModeAggregation, NewConsolidatedResults, PerFixtureRow, Percentiles, PerformancePercentiles,
+    QualityPercentiles, RankedFramework, aggregate_new_format,
 };
 pub use config::{BenchmarkConfig, BenchmarkMode, ProfilingConfig, load_framework_sizes};
 pub use consolidate::load_run_results;
@@ -83,7 +83,7 @@ pub use profile_report::{Hotspot, MemorySnapshot, ProfileReport};
 pub use quality::{compute_quality, compute_quality_with_structure};
 pub use registry::AdapterRegistry;
 pub use runner::BenchmarkRunner;
-pub use types::{BenchmarkResult, DiskSizeInfo, FrameworkCapabilities, PdfMetadata};
+pub use types::{BenchmarkResult, DiskSizeInfo, FrameworkCapabilities, OutputFormat, PdfMetadata};
 
 pub use sizes::{
     FrameworkSize, FrameworkSizes, load_framework_sizes as load_sizes_json, measure_framework_sizes,

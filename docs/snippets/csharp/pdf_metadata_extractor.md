@@ -31,5 +31,5 @@ public class PdfMetadataExtractor : IPostProcessor
 }
 
 var processor = new PdfMetadataExtractor();
-KreuzbergClient.RegisterPostProcessor(processor);
+KreuzbergLib.RegisterPostProcessor(processor);
 ```

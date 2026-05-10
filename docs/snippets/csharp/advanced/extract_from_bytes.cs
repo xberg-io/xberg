@@ -8,7 +8,7 @@ class Program
         {
             var pdfBytes = await File.ReadAllBytesAsync("document.pdf");
 
-            var result = await KreuzbergClient.ExtractBytesAsync(
+            var result = await KreuzbergLib.ExtractBytesAsync(
                 pdfBytes,
                 "application/pdf"
             );
@@ -22,7 +22,7 @@ class Program
                 EnableQualityProcessing = true
             };
 
-            var result2 = await KreuzbergClient.ExtractBytesAsync(
+            var result2 = await KreuzbergLib.ExtractBytesAsync(
                 pdfBytes,
                 "application/pdf",
                 config
@@ -32,7 +32,7 @@ class Program
 
             var imageBytes = new byte[] {  };
 
-            var imageResult = await KreuzbergClient.ExtractBytesAsync(
+            var imageResult = await KreuzbergLib.ExtractBytesAsync(
                 imageBytes,
                 "image/jpeg"
             );
@@ -47,7 +47,7 @@ class Program
 
             foreach (var (name, (bytes, mimeType)) in multipleFiles)
             {
-                var extractResult = await KreuzbergClient.ExtractBytesAsync(
+                var extractResult = await KreuzbergLib.ExtractBytesAsync(
                     bytes,
                     mimeType
                 );

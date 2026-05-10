@@ -32,6 +32,13 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			panic(err)
 		}
+		// Keep a writable pipe to the mock-server's stdin so the
+		// server does not see EOF and exit immediately. The mock-server
+		// blocks reading stdin until the parent closes the pipe.
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			panic(err)
+		}
 		if err := cmd.Start(); err != nil {
 			panic(err)
 		}
@@ -45,6 +52,7 @@ func TestMain(m *testing.M) {
 		}
 		go func() { _, _ = io.Copy(io.Discard, stdout) }()
 		code := m.Run()
+		_ = stdin.Close()
 		_ = cmd.Process.Signal(os.Interrupt)
 		_ = cmd.Wait()
 		os.Exit(code)

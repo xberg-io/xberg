@@ -8,12 +8,12 @@ import (
 )
 
 func main() {
-	pw := []string{"password1", "password2"}
-	result, err := kreuzberg.ExtractFileSync("document.pdf", &kreuzberg.ExtractionConfig{
+	extractMetadata := true
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, kreuzberg.ExtractionConfig{
 		PdfOptions: &kreuzberg.PdfConfig{
-			ExtractImages:   kreuzberg.BoolPtr(true),
-			ExtractMetadata: kreuzberg.BoolPtr(true),
-			Passwords:       pw,
+			ExtractImages:   true,
+			ExtractMetadata: &extractMetadata,
+			Passwords:       []string{"password1", "password2"},
 			Hierarchy:       &kreuzberg.HierarchyConfig{},
 		},
 	})

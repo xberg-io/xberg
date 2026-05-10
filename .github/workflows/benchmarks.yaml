@@ -131,7 +131,7 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
 
   bench-native:
-    name: kreuzberg-rust (${{ matrix.mode }})
+    name: kreuzberg-rust (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -141,6 +141,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -183,6 +184,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-rust
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -191,12 +193,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-rust-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-rust-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-native-paddle:
-    name: kreuzberg-rust-paddle (${{ matrix.mode }})
+    name: kreuzberg-rust-paddle (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -206,6 +208,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -251,6 +254,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-rust-paddle
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -259,12 +263,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-rust-paddle-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-rust-paddle-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-python:
-    name: kreuzberg-python (${{ matrix.mode }})
+    name: kreuzberg-python (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -276,6 +280,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -332,6 +337,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-python
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -340,12 +346,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-python-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-python-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-node:
-    name: kreuzberg-node (${{ matrix.mode }})
+    name: kreuzberg-node (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -355,6 +361,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -412,6 +419,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-node
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -420,12 +428,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-node-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-node-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-wasm:
-    name: kreuzberg-wasm (${{ matrix.mode }})
+    name: kreuzberg-wasm (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     # WASM runs on x86 — Node.js V8 WASM runtime has initialization issues on ARM64 Linux
     # that cause extractions to hang indefinitely. Works fine on x86 and macOS ARM.
@@ -437,6 +445,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -495,6 +504,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-wasm
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: "1"
           TIMEOUT: "300"
           READY_TIMEOUT: "120"
@@ -504,12 +514,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-wasm-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-wasm-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-ruby:
-    name: kreuzberg-ruby (${{ matrix.mode }})
+    name: kreuzberg-ruby (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -519,6 +529,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -592,6 +603,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-ruby
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -600,12 +612,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-ruby-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-ruby-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-r:
-    name: kreuzberg-r (${{ matrix.mode }})
+    name: kreuzberg-r (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -615,6 +627,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -678,6 +691,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-r
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -686,12 +700,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-r-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-r-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-go:
-    name: kreuzberg-go (${{ matrix.mode }})
+    name: kreuzberg-go (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -701,6 +715,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -779,6 +794,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-go
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           KREUZBERG_BENCHMARK_DEBUG: "true"
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -788,12 +804,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-go-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-go-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-java:
-    name: kreuzberg-java (${{ matrix.mode }})
+    name: kreuzberg-java (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -803,6 +819,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -877,6 +894,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-java
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           KREUZBERG_BENCHMARK_DEBUG: "true"
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -886,12 +904,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-java-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-java-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-csharp:
-    name: kreuzberg-csharp (${{ matrix.mode }})
+    name: kreuzberg-csharp (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -901,6 +919,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -970,6 +989,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-csharp
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -978,12 +998,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-csharp-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-csharp-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-elixir:
-    name: kreuzberg-elixir (${{ matrix.mode }})
+    name: kreuzberg-elixir (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -993,6 +1013,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1050,6 +1071,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-elixir
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           KREUZBERG_BUILD: "1"
@@ -1059,12 +1081,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-elixir-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-elixir-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-php:
-    name: kreuzberg-php (${{ matrix.mode }})
+    name: kreuzberg-php (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -1074,6 +1096,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1146,6 +1169,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-php
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -1154,12 +1178,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-php-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-php-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-c:
-    name: kreuzberg-c (${{ matrix.mode }})
+    name: kreuzberg-c (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -1169,6 +1193,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file, batch]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1211,6 +1236,7 @@ jobs:
         env:
           FRAMEWORK: kreuzberg-c
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
         run: scripts/benchmarks/run-benchmark.sh
@@ -1219,7 +1245,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-c-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-c-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
@@ -1247,7 +1273,7 @@ jobs:
       - run: echo "All kreuzberg binding benchmarks finished"
 
   bench-docling:
-    name: docling (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: docling (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1259,6 +1285,7 @@ jobs:
       matrix:
         mode: [single-file]
         shard: [1, 2, 3]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1297,6 +1324,7 @@ jobs:
         env:
           FRAMEWORK: docling
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           SHARD: ${{ matrix.shard }}/3
@@ -1307,12 +1335,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-docling-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-docling-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-markitdown:
-    name: markitdown (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: markitdown (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1324,6 +1352,9 @@ jobs:
       matrix:
         mode: [single-file]
         shard: [1, 2, 3]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: plaintext
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1357,6 +1388,7 @@ jobs:
         env:
           FRAMEWORK: markitdown
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
@@ -1368,12 +1400,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-markitdown-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-markitdown-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-pandoc:
-    name: pandoc (${{ matrix.mode }})
+    name: pandoc (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1384,6 +1416,7 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1423,6 +1456,7 @@ jobs:
         env:
           FRAMEWORK: pandoc
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
@@ -1433,12 +1467,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-pandoc-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-pandoc-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-unstructured:
-    name: unstructured (${{ matrix.mode }}, shard ${{ matrix.shard }}/4)
+    name: unstructured (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/4)
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1450,6 +1484,7 @@ jobs:
       matrix:
         mode: [single-file]
         shard: [1, 2, 3, 4]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1488,6 +1523,7 @@ jobs:
         env:
           FRAMEWORK: unstructured
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           SHARD: ${{ matrix.shard }}/4
@@ -1498,12 +1534,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-unstructured-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-unstructured-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-tika:
-    name: tika (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: tika (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1515,6 +1551,9 @@ jobs:
       matrix:
         mode: [single-file]
         shard: [1, 2, 3]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1554,6 +1593,7 @@ jobs:
         env:
           FRAMEWORK: tika
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           SHARD: ${{ matrix.shard }}/3
@@ -1563,12 +1603,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-tika-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-tika-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-pymupdf4llm:
-    name: pymupdf4llm (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: pymupdf4llm (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1580,6 +1620,9 @@ jobs:
       matrix:
         mode: [single-file]
         shard: [1, 2, 3]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: plaintext
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1618,6 +1661,7 @@ jobs:
         env:
           FRAMEWORK: pymupdf4llm
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
@@ -1629,12 +1673,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-pymupdf4llm-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-pymupdf4llm-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-pdfplumber:
-    name: pdfplumber (${{ matrix.mode }})
+    name: pdfplumber (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1645,6 +1689,9 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1678,6 +1725,7 @@ jobs:
         env:
           FRAMEWORK: pdfplumber
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
@@ -1688,12 +1736,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-pdfplumber-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-pdfplumber-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-mineru:
-    name: mineru (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
+    name: mineru (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1705,6 +1753,7 @@ jobs:
       matrix:
         mode: [single-file]
         shard: [1, 2, 3]
+        output_format: [markdown, plaintext]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1743,6 +1792,7 @@ jobs:
         env:
           FRAMEWORK: mineru
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           SHARD: ${{ matrix.shard }}/3
@@ -1753,12 +1803,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-mineru-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          name: benchmarks-mineru-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-pypdf:
-    name: pypdf (${{ matrix.mode }})
+    name: pypdf (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1769,6 +1819,9 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1802,6 +1855,7 @@ jobs:
         env:
           FRAMEWORK: pypdf
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
@@ -1812,12 +1866,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-pypdf-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-pypdf-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-pdfminer:
-    name: pdfminer (${{ matrix.mode }})
+    name: pdfminer (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1828,6 +1882,9 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1861,6 +1918,7 @@ jobs:
         env:
           FRAMEWORK: pdfminer
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
@@ -1871,12 +1929,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-pdfminer-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-pdfminer-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-pdftotext:
-    name: pdftotext (${{ matrix.mode }})
+    name: pdftotext (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1887,6 +1945,9 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1925,6 +1986,7 @@ jobs:
         env:
           FRAMEWORK: pdftotext
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
@@ -1935,12 +1997,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-pdftotext-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-pdftotext-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-playa-pdf:
-    name: playa-pdf (${{ matrix.mode }})
+    name: playa-pdf (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: kreuzberg-gate
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
@@ -1951,6 +2013,9 @@ jobs:
       fail-fast: true
       matrix:
         mode: [single-file]
+        output_format: [markdown, plaintext]
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1984,6 +2049,7 @@ jobs:
         env:
           FRAMEWORK: playa-pdf
           MODE: ${{ matrix.mode }}
+          OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
           OCR_ENABLED: "false"
@@ -1994,7 +2060,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-playa-pdf-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-playa-pdf-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 

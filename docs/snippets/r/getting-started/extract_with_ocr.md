@@ -1,15 +1,19 @@
 ```r title="R"
 library(kreuzberg)
 
-# Configure OCR settings
-ocr <- ocr_config(backend = "tesseract", language = "eng", dpi = 300L)
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+# Configure OCR settings via a plain list mirroring the config JSON.
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(
+    backend = "tesseract",
+    language = "eng"
+  )
+)
 
 # Extract an image file with OCR enabled
-result <- extract_file_sync("image.png", config = config)
+json <- extract_file_sync("image.png", "image/png", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-# Print OCR results
-cat(sprintf("Extracted text from image:\n"))
-cat(content(result))
-cat(sprintf("\n\nDetected language: %s\n", detected_language(result)))
+cat("Extracted text from image:\n")
+cat(result$content)
 ```

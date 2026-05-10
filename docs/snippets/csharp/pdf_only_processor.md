@@ -13,5 +13,5 @@ public class PdfOnlyProcessor : IPostProcessor
 }
 
 var processor = new PdfOnlyProcessor();
-KreuzbergClient.RegisterPostProcessor(processor);
+KreuzbergLib.RegisterPostProcessor(processor);
 ```

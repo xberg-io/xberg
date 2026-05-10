@@ -11,6 +11,6 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("scanned.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("scanned.pdf", config);
 Console.WriteLine(result.Content);
 ```

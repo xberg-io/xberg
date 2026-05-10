@@ -48,23 +48,12 @@ jobs:
             gpu-build-${{ runner.os }}-
 
       - name: Build GPU test binary
-        run: |
-          set -o pipefail
-          cargo test -p kreuzberg \
-            --features "paddle-ocr,layout-detection,embeddings,pdf,ocr,ort-dynamic" \
-            --test gpu_acceleration \
-            --no-run --message-format=json 2> /tmp/cargo-stderr.log \
-            | jq -r 'select(.executable != null) | .executable' \
-            | head -1 > /tmp/test-binary-path.txt
-          if [ ! -s /tmp/test-binary-path.txt ]; then
-            echo "::error::cargo test produced no executable; stderr below:"
-            cat /tmp/cargo-stderr.log
-            exit 1
-          fi
-          TEST_BIN=$(cat /tmp/test-binary-path.txt)
-          echo "Test binary: $TEST_BIN"
-          cp "$TEST_BIN" gpu-acceleration-test
-          chmod +x gpu-acceleration-test
+        uses: kreuzberg-dev/actions/build-gpu-test-binary@v1
+        with:
+          package: kreuzberg
+          test-name: gpu_acceleration
+          features: "paddle-ocr,layout-detection,embeddings,pdf,ocr,ort-dynamic"
+          output-name: gpu-acceleration-test
 
       - name: Upload test binary
         uses: actions/upload-artifact@v4
@@ -98,26 +87,9 @@ jobs:
           name: gpu-test-binary
 
       - name: Download ONNX Runtime (GPU/CUDA)
-        run: |
-          ORT_DIR="$RUNNER_TEMP/onnxruntime"
-          ORT_NAME="onnxruntime-linux-x64-gpu-${ORT_VERSION}"
-          ARCHIVE="${ORT_NAME}.tgz"
-
-          if [ ! -d "$ORT_DIR/$ORT_NAME" ]; then
-            echo "Downloading ONNX Runtime ${ORT_VERSION} (GPU)"
-            curl -fsSL --retry 3 --retry-delay 5 \
-              -o "$RUNNER_TEMP/$ARCHIVE" \
-              "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/$ARCHIVE"
-            mkdir -p "$ORT_DIR"
-            tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$ORT_DIR"
-            rm -f "$RUNNER_TEMP/$ARCHIVE"
-          fi
-
-          ORT_LIB="$ORT_DIR/$ORT_NAME/lib"
-          echo "ORT_DYLIB_PATH=${ORT_LIB}/libonnxruntime.so" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${ORT_LIB}:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
-          echo "ONNX Runtime GPU libraries staged at ${ORT_LIB}"
-          ls -la "${ORT_LIB}"/libonnxruntime*.so*
+        uses: kreuzberg-dev/actions/setup-onnx-runtime-gpu@v1
+        with:
+          version: ${{ env.ORT_VERSION }}
 
       - name: Setup PaddleOCR models
         uses: ./.github/actions/setup-paddle-ocr-models

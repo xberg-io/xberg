@@ -5,6 +5,7 @@ const std = @import("std");
 pub const c = @cImport(@cInclude("kreuzberg.h"));
 
 /// Free a string allocated by the FFI layer.
+/// Free a string allocated by the FFI layer.
 /// The pointer must have been returned by a `kreuzberg_*` C function.
 /// Do NOT call this twice on the same pointer.
 pub fn _free_string(ptr: [*c]u8) void {
@@ -586,6 +587,28 @@ pub const TableProperties = struct {
     caption: ?[:0]const u8,
 };
 
+/// Application properties from docProps/app.xml for DOCX
+///
+/// Contains Word-specific document statistics and metadata.
+pub const DocxAppProperties = struct {
+    application: ?[:0]const u8,
+    app_version: ?[:0]const u8,
+    template: ?[:0]const u8,
+    total_time: ?i32,
+    pages: ?i32,
+    words: ?i32,
+    characters: ?i32,
+    characters_with_spaces: ?i32,
+    lines: ?i32,
+    paragraphs: ?i32,
+    company: ?[:0]const u8,
+    doc_security: ?i32,
+    scale_crop: ?bool,
+    links_up_to_date: ?bool,
+    shared_doc: ?bool,
+    hyperlinks_changed: ?bool,
+};
+
 /// Application properties from docProps/app.xml for XLSX
 ///
 /// Contains Excel-specific document metadata.
@@ -620,6 +643,28 @@ pub const PptxAppProperties = struct {
     multimedia_clips: ?i32,
     presentation_format: ?[:0]const u8,
     slide_titles: []const [:0]const u8,
+};
+
+/// Dublin Core metadata from docProps/core.xml
+///
+/// Contains standard metadata fields defined by the Dublin Core standard
+/// and Office-specific extensions.
+pub const CoreProperties = struct {
+    title: ?[:0]const u8,
+    subject: ?[:0]const u8,
+    creator: ?[:0]const u8,
+    keywords: ?[:0]const u8,
+    description: ?[:0]const u8,
+    last_modified_by: ?[:0]const u8,
+    revision: ?[:0]const u8,
+    created: ?[:0]const u8,
+    modified: ?[:0]const u8,
+    category: ?[:0]const u8,
+    content_status: ?[:0]const u8,
+    language: ?[:0]const u8,
+    identifier: ?[:0]const u8,
+    version: ?[:0]const u8,
+    last_printed: ?[:0]const u8,
 };
 
 /// Custom properties from docProps/custom.xml
@@ -1401,6 +1446,16 @@ pub const ArchiveMetadata = struct {
     compressed_size: ?u64,
 };
 
+/// Image metadata extracted from image files.
+///
+/// Includes dimensions, format, and EXIF data.
+pub const ImageMetadata = struct {
+    width: u32,
+    height: u32,
+    format: [:0]const u8,
+    exif: std.StringHashMap([:0]const u8),
+};
+
 /// XML metadata extracted during XML parsing.
 ///
 /// Provides statistics about XML document structure.
@@ -1513,8 +1568,8 @@ pub const PptxMetadata = struct {
 /// Extracted from DOCX files using shared Office Open XML metadata extraction.
 /// Integrates with `office_metadata` module for core/app/custom properties.
 pub const DocxMetadata = struct {
-    core_properties: ?[:0]const u8,
-    app_properties: ?[:0]const u8,
+    core_properties: ?CoreProperties,
+    app_properties: ?DocxAppProperties,
     custom_properties: ?std.StringHashMap([:0]const u8),
 };
 
@@ -2075,6 +2130,20 @@ pub const EmbeddedFile = struct {
     mime_type: ?[:0]const u8,
 };
 
+/// PDF-specific metadata.
+///
+/// Contains metadata fields specific to PDF documents that are not in the common
+/// `Metadata` structure. Common fields like title, authors, keywords, and dates
+/// are at the `Metadata` level.
+pub const PdfMetadata = struct {
+    pdf_version: ?[:0]const u8,
+    producer: ?[:0]const u8,
+    is_encrypted: ?bool,
+    width: ?i64,
+    height: ?i64,
+    page_count: ?u64,
+};
+
 /// ONNX Runtime execution provider type.
 ///
 /// Determines which hardware backend is used for model inference.
@@ -2443,13 +2512,13 @@ pub const ElementType = enum {
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
 pub const FormatMetadata = union(enum) {
-    pdf: [:0]const u8,
+    pdf: PdfMetadata,
     docx: DocxMetadata,
     excel: ExcelMetadata,
     email: EmailMetadata,
     pptx: PptxMetadata,
     archive: ArchiveMetadata,
-    image: [:0]const u8,
+    image: ImageMetadata,
     xml: XmlMetadata,
     text: TextMetadata,
     html: HtmlMetadata,
@@ -2624,20 +2693,30 @@ pub const LayoutClass = enum {
 ///
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
-pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: ExtractionConfig) (KreuzbergError||error{OutOfMemory})!ExtractionResult {
-    const path_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{path}, 0,
-    );
-    const mime_type_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{mime_type}, 0,
-    );
-    const _result = c.kreuzberg_extract_file_sync(path_z, mime_type_z, config);
+pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
+    const path_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{path}, 0);
+    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
+    const _result = c.kreuzberg_extract_file_sync(path_z, if (mime_type_z) |z| z.ptr else null, config_handle);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
     }
     std.heap.c_allocator.free(path_z);
-    std.heap.c_allocator.free(mime_type_z);
-    return _result;
+    if (mime_type_z) |z| std.heap.c_allocator.free(z);
+    std.heap.c_allocator.free(config_z);
+    if (config_handle) |h| c.kreuzberg_extraction_config_free(h);
+    return blk: {
+        const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
+        defer _free_string(_json_ptr);
+        c.kreuzberg_extraction_result_free(_result.?);
+        const slice = std.mem.sliceTo(_json_ptr, 0);
+        const owned = try std.heap.c_allocator.dupe(u8, slice);
+        break :blk owned;
+    };
 }
 
 /// Synchronous wrapper for `extract_bytes`.
@@ -2647,32 +2726,47 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: Extra
 ///
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: ExtractionConfig) (KreuzbergError||error{OutOfMemory})!ExtractionResult {
-    const mime_type_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{mime_type}, 0,
-    );
-    const _result = c.kreuzberg_extract_bytes_sync(content.ptr, content.len, mime_type_z, config);
+pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
+    const mime_type_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{mime_type}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
+    const _result = c.kreuzberg_extract_bytes_sync(content.ptr, content.len, mime_type_z, config_handle);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
     }
     std.heap.c_allocator.free(mime_type_z);
-    return _result;
+    std.heap.c_allocator.free(config_z);
+    if (config_handle) |h| c.kreuzberg_extraction_config_free(h);
+    return blk: {
+        const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
+        defer _free_string(_json_ptr);
+        c.kreuzberg_extraction_result_free(_result.?);
+        const slice = std.mem.sliceTo(_json_ptr, 0);
+        const owned = try std.heap.c_allocator.dupe(u8, slice);
+        break :blk owned;
+    };
 }
 
 /// Synchronous wrapper for `batch_extract_files`.
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-pub fn batch_extract_files_sync(items: []const u8, config: ExtractionConfig) (KreuzbergError||error{OutOfMemory})![]u8 {
+pub fn batch_extract_files_sync(items: []const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{items}, 0,
-    );
-    const _result = c.kreuzberg_batch_extract_files_sync(items_z, config);
+    const items_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{items}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
+    const _result = c.kreuzberg_batch_extract_files_sync(items_z, config_handle);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
     }
     std.heap.c_allocator.free(items_z);
+    std.heap.c_allocator.free(config_z);
+    if (config_handle) |h| c.kreuzberg_extraction_config_free(h);
     return blk: {
         const slice = std.mem.sliceTo(_result, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
@@ -2687,16 +2781,20 @@ pub fn batch_extract_files_sync(items: []const u8, config: ExtractionConfig) (Kr
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
 /// that iterates through items and calls `extract_bytes_sync()`.
-pub fn batch_extract_bytes_sync(items: []const u8, config: ExtractionConfig) (KreuzbergError||error{OutOfMemory})![]u8 {
+pub fn batch_extract_bytes_sync(items: []const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{items}, 0,
-    );
-    const _result = c.kreuzberg_batch_extract_bytes_sync(items_z, config);
+    const items_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{items}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
+    const _result = c.kreuzberg_batch_extract_bytes_sync(items_z, config_handle);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
     }
     std.heap.c_allocator.free(items_z);
+    std.heap.c_allocator.free(config_z);
+    if (config_handle) |h| c.kreuzberg_extraction_config_free(h);
     return blk: {
         const slice = std.mem.sliceTo(_result, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
@@ -2741,9 +2839,8 @@ pub fn detect_mime_type_from_bytes(content: []const u8) (KreuzbergError||error{O
 ///
 /// A vector of file extensions (without leading dot) for the MIME type.
 pub fn get_extensions_for_mime(mime_type: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
-    const mime_type_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{mime_type}, 0,
-    );
+    const mime_type_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{mime_type}, 0);
     const _result = c.kreuzberg_get_extensions_for_mime(mime_type_z);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
@@ -2861,14 +2958,33 @@ pub fn clear_validators() (KreuzbergError||error{OutOfMemory})!void {
     return;
 }
 
+/// Render a single PDF page to PNG bytes.
+///
+/// Returns raw PNG-encoded bytes for the specified page at the given DPI.
+/// Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+///
+/// **Errors:**
+///
+/// Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
+/// or rendered, or if `page_index` is out of range.
+pub fn render_pdf_page_to_png(pdf_bytes: []const u8, page_index: u64, dpi: ?i32, password: ?[]const u8) (KreuzbergError||error{OutOfMemory})![]const u8 {
+    const password_z: ?[:0]u8 = if (password) |v| try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const _result = c.kreuzberg_render_pdf_page_to_png(pdf_bytes.ptr, pdf_bytes.len, page_index, dpi, if (password_z) |z| z.ptr else null);
+    if (c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
+    if (password_z) |z| std.heap.c_allocator.free(z);
+    return _result;
+}
+
 /// Detect the MIME type of a file at the given path.
 ///
 /// Uses the file extension and optionally the file content to determine the MIME type.
 /// Set `check_exists` to `true` to verify the file exists before detection.
 pub fn detect_mime_type(path: []const u8, check_exists: bool) (KreuzbergError||error{OutOfMemory})![]u8 {
-    const path_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{path}, 0,
-    );
+    const path_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{path}, 0);
     const _result = c.kreuzberg_detect_mime_type(path_z, check_exists);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
@@ -2885,16 +3001,20 @@ pub fn detect_mime_type(path: []const u8, check_exists: bool) (KreuzbergError||e
 /// Embed a list of texts using the configured embedding model.
 ///
 /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
-pub fn embed_texts(texts: []const u8, config: EmbeddingConfig) (KreuzbergError||error{OutOfMemory})![]u8 {
+pub fn embed_texts(texts: []const u8, config: []const u8) (KreuzbergError||error{OutOfMemory})![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const texts_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{texts}, 0,
-    );
-    const _result = c.kreuzberg_embed_texts(texts_z, config);
+    const texts_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{texts}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_handle = c.kreuzberg_embedding_config_from_json(config_z);
+    const _result = c.kreuzberg_embed_texts(texts_z, config_handle);
     if (c.kreuzberg_last_error_code() != 0) {
         return _first_error(KreuzbergError);
     }
     std.heap.c_allocator.free(texts_z);
+    std.heap.c_allocator.free(config_z);
+    if (config_handle) |h| c.kreuzberg_embedding_config_free(h);
     return blk: {
         const slice = std.mem.sliceTo(_result, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
@@ -2908,9 +3028,8 @@ pub fn embed_texts(texts: []const u8, config: EmbeddingConfig) (KreuzbergError||
 /// Returns `null` if no preset with the given name exists. Returns an owned
 /// clone so the value is safe to pass across FFI boundaries.
 pub fn get_embedding_preset(name: []const u8) ?EmbeddingPreset {
-    const name_z: [:0]u8 = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{name}, 0,
-    );
+    const name_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{name}, 0);
     std.heap.c_allocator.free(name_z);
     const _result = c.kreuzberg_get_embedding_preset(name_z);
     return _result;
@@ -2985,7 +3104,6 @@ pub const IOcrBackend = extern struct {
     /// }
     /// ```
     process_image: ?*const fn (user_data: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Process a file and extract text via OCR.
     ///
     /// Default implementation reads the file and calls `process_image`.
@@ -3000,7 +3118,6 @@ pub const IOcrBackend = extern struct {
     ///
     /// Same as `process_image`, plus file I/O errors.
     process_image_file: ?*const fn (user_data: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Check if this backend supports a given language code.
     ///
     /// # Arguments
@@ -3019,7 +3136,6 @@ pub const IOcrBackend = extern struct {
     /// }
     /// ```
     supports_language: ?*const fn (user_data: ?*anyopaque, lang: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Get the backend type identifier.
     ///
     /// # Returns
@@ -3034,22 +3150,18 @@ pub const IOcrBackend = extern struct {
     /// }
     /// ```
     backend_type: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
-
     /// Optional: Get a list of all supported languages.
     ///
     /// Defaults to empty list. Override to provide comprehensive language support info.
     supported_languages: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
-
     /// Optional: Check if the backend supports table detection.
     ///
     /// Defaults to `false`. Override if your backend can detect and extract tables.
     supports_table_detection: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Check if the backend supports direct document-level processing (e.g. for PDFs).
     ///
     /// Defaults to `false`. Override if the backend has optimized document processing.
     supports_document_processing: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Process a document file directly via OCR.
     ///
     /// Only called if `supports_document_processing` returns `true`.
@@ -3059,7 +3171,6 @@ pub const IOcrBackend = extern struct {
     /// * `path` - Path to the document file (e.g. .pdf)
     /// * `config` - OCR configuration
     process_document: ?*const fn (user_data: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
     free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
@@ -3068,7 +3179,7 @@ pub const IOcrBackend = extern struct {
 /// Register a `OcrBackend` implementation with the Rust runtime.
 ///
 /// `name`     — null-terminated plugin name.
-/// `vtable`   — filled `I{trait_name}` struct with all required function pointers.
+/// `vtable`   — filled `IOcrBackend` struct with all required function pointers.
 /// `user_data`— opaque pointer passed back as the first argument of every vtable call.
 ///
 /// Returns 0 on success; non-zero on failure (error text written to `out_error`).
@@ -3104,7 +3215,6 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
-
         .version_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
                 _ = user_data;
@@ -3112,7 +3222,6 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
-
         .initialize_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3120,7 +3229,6 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
                 return 0;
             }
         }.thunk,
-
         .shutdown_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3128,7 +3236,6 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
                 return 0;
             }
         }.thunk,
-
         .process_image = struct {
             fn thunk(ud: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
@@ -3291,7 +3398,6 @@ pub const IPostProcessor = extern struct {
     /// }
     /// ```
     process: ?*const fn (user_data: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Get the processing stage for this post-processor.
     ///
     /// Determines when this processor runs in the pipeline.
@@ -3308,7 +3414,6 @@ pub const IPostProcessor = extern struct {
     /// }
     /// ```
     processing_stage: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
-
     /// Optional: Check if this processor should run for a given result.
     ///
     /// Allows conditional processing based on MIME type, metadata, or content.
@@ -3332,7 +3437,6 @@ pub const IPostProcessor = extern struct {
     /// }
     /// ```
     should_process: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Optional: Estimate processing time in milliseconds.
     ///
     /// Used for logging and debugging. Defaults to 0 (unknown).
@@ -3345,14 +3449,12 @@ pub const IPostProcessor = extern struct {
     ///
     /// Estimated processing time in milliseconds.
     estimated_duration_ms: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) u64 = null,
-
     /// Execution priority within the processing stage.
     ///
     /// Higher values run first within the same `ProcessingStage`. Defaults to 50.
     /// Use 0-49 for fallback processors, 50 for normal processors, and 51-255
     /// for high-priority processors that should run early in their stage.
     priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
     free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
@@ -3361,7 +3463,7 @@ pub const IPostProcessor = extern struct {
 /// Register a `PostProcessor` implementation with the Rust runtime.
 ///
 /// `name`     — null-terminated plugin name.
-/// `vtable`   — filled `I{trait_name}` struct with all required function pointers.
+/// `vtable`   — filled `IPostProcessor` struct with all required function pointers.
 /// `user_data`— opaque pointer passed back as the first argument of every vtable call.
 ///
 /// Returns 0 on success; non-zero on failure (error text written to `out_error`).
@@ -3397,7 +3499,6 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
-
         .version_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
                 _ = user_data;
@@ -3405,7 +3506,6 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
-
         .initialize_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3413,7 +3513,6 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
                 return 0;
             }
         }.thunk,
-
         .shutdown_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3421,7 +3520,6 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
                 return 0;
             }
         }.thunk,
-
         .process = struct {
             fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
@@ -3579,7 +3677,6 @@ pub const IValidator = extern struct {
     /// }
     /// ```
     validate: ?*const fn (user_data: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Optional: Check if this validator should run for a given result.
     ///
     /// Allows conditional validation based on MIME type, metadata, or content.
@@ -3603,7 +3700,6 @@ pub const IValidator = extern struct {
     /// }
     /// ```
     should_validate: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Optional: Get the validation priority.
     ///
     /// Higher priority validators run first. Useful for ordering validation checks
@@ -3624,7 +3720,6 @@ pub const IValidator = extern struct {
     /// }
     /// ```
     priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
     free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
@@ -3633,7 +3728,7 @@ pub const IValidator = extern struct {
 /// Register a `Validator` implementation with the Rust runtime.
 ///
 /// `name`     — null-terminated plugin name.
-/// `vtable`   — filled `I{trait_name}` struct with all required function pointers.
+/// `vtable`   — filled `IValidator` struct with all required function pointers.
 /// `user_data`— opaque pointer passed back as the first argument of every vtable call.
 ///
 /// Returns 0 on success; non-zero on failure (error text written to `out_error`).
@@ -3669,7 +3764,6 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
-
         .version_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
                 _ = user_data;
@@ -3677,7 +3771,6 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
-
         .initialize_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3685,7 +3778,6 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
                 return 0;
             }
         }.thunk,
-
         .shutdown_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3693,7 +3785,6 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
                 return 0;
             }
         }.thunk,
-
         .validate = struct {
             fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
@@ -3751,7 +3842,6 @@ pub const IEmbeddingBackend = extern struct {
     /// Embedding vector dimension. Must be `> 0` and must match the length of
     /// every vector returned by `embed`.
     dimensions: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) usize = null,
-
     /// Embed a batch of texts, returning one vector per input in order.
     ///
     /// # Errors
@@ -3760,7 +3850,6 @@ pub const IEmbeddingBackend = extern struct {
     /// backend-specific failures. The dispatcher layers its own validation
     /// (length, per-vector dimension) on top.
     embed: ?*const fn (user_data: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
-
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
     free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
@@ -3769,7 +3858,7 @@ pub const IEmbeddingBackend = extern struct {
 /// Register a `EmbeddingBackend` implementation with the Rust runtime.
 ///
 /// `name`     — null-terminated plugin name.
-/// `vtable`   — filled `I{trait_name}` struct with all required function pointers.
+/// `vtable`   — filled `IEmbeddingBackend` struct with all required function pointers.
 /// `user_data`— opaque pointer passed back as the first argument of every vtable call.
 ///
 /// Returns 0 on success; non-zero on failure (error text written to `out_error`).
@@ -3805,7 +3894,6 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
-
         .version_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
                 _ = user_data;
@@ -3813,7 +3901,6 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
-
         .initialize_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3821,7 +3908,6 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
                 return 0;
             }
         }.thunk,
-
         .shutdown_fn = struct {
             fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 _ = user_data;
@@ -3829,7 +3915,6 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
                 return 0;
             }
         }.thunk,
-
         .dimensions = struct {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) usize {
                 const self: *T = @ptrCast(@alignCast(ud));

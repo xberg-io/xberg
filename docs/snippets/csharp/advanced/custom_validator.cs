@@ -55,8 +55,8 @@ class Program
         var minLengthValidator = new MinLengthValidator(minLength: 50);
         var qualityValidator = new QualityScoreValidator(minScore: 0.7);
 
-        KreuzbergClient.RegisterValidator(minLengthValidator);
-        KreuzbergClient.RegisterValidator(qualityValidator);
+        KreuzbergLib.RegisterValidator(minLengthValidator);
+        KreuzbergLib.RegisterValidator(qualityValidator);
 
         try
         {
@@ -65,7 +65,7 @@ class Program
                 EnableQualityProcessing = true
             };
 
-            var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+            var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 
             Console.WriteLine("Validation passed");
             Console.WriteLine($"Content length: {result.Content.Length}");

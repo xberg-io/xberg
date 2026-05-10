@@ -21,7 +21,7 @@ class Program
 
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync(
+            var result = await KreuzbergLib.ExtractFileAsync(
                 "document.pdf",
                 config
             ).ConfigureAwait(false);
@@ -56,7 +56,7 @@ class Program
 
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync(
+            var result = await KreuzbergLib.ExtractFileAsync(
                 "document.md",
                 config
             ).ConfigureAwait(false);

@@ -399,7 +399,18 @@ fn parse_paragraph(
     };
 
     let ocr_confidence = if conf_count > 0 {
-        Some(OcrConfidence::from_tesseract(conf_sum / conf_count as f64))
+        #[cfg(feature = "ocr")]
+        {
+            Some(OcrConfidence::from_tesseract(conf_sum / conf_count as f64))
+        }
+        #[cfg(not(feature = "ocr"))]
+        {
+            // WASM fallback: use normalized confidence directly
+            Some(OcrConfidence {
+                recognition: (conf_sum / conf_count as f64) / 100.0,
+                detection: None,
+            })
+        }
     } else {
         None
     };

@@ -8,26 +8,26 @@ import (
 )
 
 func main() {
-	psm := 6
-	maxChars := 1000
-	maxOverlap := 200
+	psm := int32(6)
+	maxChars := uint(1000)
+	overlap := uint(200)
 	useCache := true
 
-	config := &kreuzberg.ExtractionConfig{
+	config := kreuzberg.ExtractionConfig{
 		UseCache: &useCache,
-		OCR: &kreuzberg.OCRConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend: "tesseract",
-			Tesseract: &kreuzberg.TesseractConfig{
-				PSM: &psm,
+			TesseractConfig: &kreuzberg.TesseractConfig{
+				Psm: &psm,
 			},
 		},
 		Chunking: &kreuzberg.ChunkingConfig{
-			MaxChars:   &maxChars,
-			MaxOverlap: &maxOverlap,
+			MaxCharacters: &maxChars,
+			Overlap:       &overlap,
 		},
 	}
 
-	result, err := kreuzberg.ExtractFileSync("document.pdf", config)
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

@@ -33,7 +33,7 @@
 //! format "3,14"). This preserves punctuation that is semantically meaningful
 //! while ignoring decorative punctuation.
 
-use crate::types::QualityMetrics;
+use crate::types::{OutputFormat, QualityMetrics};
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -54,29 +54,42 @@ fn strip_markdown_links(text: &str) -> String {
 /// Compute quality metrics comparing extracted text against ground truth,
 /// optionally including structural quality scoring when markdown GT is available.
 ///
-/// When `ground_truth_markdown` is `Some`, computes structural F1 from markdown
-/// block comparison and adjusts the quality_score formula to include it:
+/// When `output_format` is `Markdown` and `ground_truth_markdown` is `Some`, computes
+/// structural F1 from markdown block comparison and adjusts the quality_score formula:
 ///   quality_score = 0.5 * f1_text + 0.2 * f1_numeric + 0.3 * f1_layout
 ///
-/// When `ground_truth_markdown` is `None`, falls back to text-only scoring:
+/// When `output_format` is `Plaintext`, returns text-only scoring regardless of
+/// markdown ground truth availability:
+///   quality_score = 0.6 * f1_text + 0.4 * f1_numeric
+///   f1_score_layout = None
+///
+/// When `output_format` is `Markdown` but `ground_truth_markdown` is `None`, falls back
+/// to text-only scoring:
 ///   quality_score = 0.6 * f1_text + 0.4 * f1_numeric
 pub fn compute_quality_with_structure(
     extracted: &str,
     ground_truth: &str,
     ground_truth_markdown: Option<&str>,
+    output_format: OutputFormat,
 ) -> QualityMetrics {
+    // For plaintext mode, always use text-only scoring
+    if output_format == OutputFormat::Plaintext {
+        return compute_quality(extracted, ground_truth);
+    }
+
+    // For markdown mode, include structural scoring if available
     let mut metrics = compute_quality(extracted, ground_truth);
 
     if let Some(md_gt) = ground_truth_markdown {
         let structural = crate::markdown_quality::score_structural_quality(extracted, md_gt);
-        metrics.f1_score_layout = structural.structural_f1;
+        metrics.f1_score_layout = Some(structural.structural_f1);
         // Adjust quality_score to include structural component.
         // When neither side has numeric tokens, drop the numeric weight and redistribute.
         metrics.quality_score = if has_any_numeric_tokens(extracted, ground_truth) {
-            0.5 * metrics.f1_score_text + 0.2 * metrics.f1_score_numeric + 0.3 * metrics.f1_score_layout
+            0.5 * metrics.f1_score_text + 0.2 * metrics.f1_score_numeric + 0.3 * structural.structural_f1
         } else {
             // No numeric tokens: use 0.625 text + 0.375 layout (same 5:3 ratio, no numeric)
-            0.625 * metrics.f1_score_text + 0.375 * metrics.f1_score_layout
+            0.625 * metrics.f1_score_text + 0.375 * structural.structural_f1
         };
     }
 
@@ -107,9 +120,6 @@ pub fn compute_quality(extracted: &str, ground_truth: &str) -> QualityMetrics {
     let truth_numeric = filter_numeric(&truth_tokens);
     let f1_score_numeric = compute_f1(&extracted_numeric, &truth_numeric);
 
-    // f1_score_layout is not implemented (skip per plan)
-    let f1_score_layout = 0.0;
-
     // When neither side has numeric tokens, both-empty compute_f1 returns 1.0
     // which would give a free 0.4 boost. Use text-only scoring in that case.
     let quality_score = if extracted_numeric.is_empty() && truth_numeric.is_empty() {
@@ -125,7 +135,7 @@ pub fn compute_quality(extracted: &str, ground_truth: &str) -> QualityMetrics {
     QualityMetrics {
         f1_score_text,
         f1_score_numeric,
-        f1_score_layout,
+        f1_score_layout: None,
         quality_score,
         missing_tokens,
         extra_tokens,

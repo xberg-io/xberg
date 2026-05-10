@@ -16,7 +16,7 @@ class Program
 
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync("document.pdf", config);
+            var result = await KreuzbergLib.ExtractFileAsync("document.pdf", config);
 
             if (result.DetectedLanguages?.Count > 0)
             {

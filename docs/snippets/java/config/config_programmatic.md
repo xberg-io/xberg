@@ -1,10 +1,10 @@
 ```java title="Java"
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
-import dev.kreuzberg.config.ChunkingConfig;
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.OcrConfig;
-import dev.kreuzberg.config.TesseractConfig;
+import dev.kreuzberg.ChunkingConfig;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.OcrConfig;
+import dev.kreuzberg.TesseractConfig;
 
 public final class ProgrammaticConfigExample {
     public static void main(String[] args) throws Exception {

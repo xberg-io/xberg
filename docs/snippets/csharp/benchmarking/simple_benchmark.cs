@@ -27,14 +27,14 @@ public class KreuzbergBenchmark
     [Benchmark]
     public void ExtractFileSync()
     {
-        var result = KreuzbergClient.ExtractFileSync(_testFilePath, _config);
+        var result = KreuzbergLib.ExtractFileSync(_testFilePath, _config);
         _ = result.Content.Length;
     }
 
     [Benchmark]
     public async Task ExtractFileAsync()
     {
-        var result = await KreuzbergClient.ExtractFileAsync(_testFilePath, _config);
+        var result = await KreuzbergLib.ExtractFileAsync(_testFilePath, _config);
         _ = result.Content.Length;
     }
 
@@ -51,7 +51,7 @@ public class KreuzbergBenchmark
             }
         };
 
-        var result = await KreuzbergClient.ExtractFileAsync(_testFilePath, ocrConfig);
+        var result = await KreuzbergLib.ExtractFileAsync(_testFilePath, ocrConfig);
         _ = result.Content.Length;
     }
 
@@ -64,7 +64,7 @@ public class KreuzbergBenchmark
             EnableQualityProcessing = true,
         };
 
-        var result = await KreuzbergClient.ExtractFileAsync(_testFilePath, cacheConfig);
+        var result = await KreuzbergLib.ExtractFileAsync(_testFilePath, cacheConfig);
         _ = result.Content.Length;
     }
 }
@@ -76,12 +76,12 @@ public class ManualBenchmark
         var filePath = "document.pdf";
         var config = new ExtractionConfig();
 
-        await KreuzbergClient.ExtractFileAsync(filePath, config);
+        await KreuzbergLib.ExtractFileAsync(filePath, config);
 
         var sw = Stopwatch.StartNew();
         for (int i = 0; i < 10; i++)
         {
-            KreuzbergClient.ExtractFileSync(filePath, config);
+            KreuzbergLib.ExtractFileSync(filePath, config);
         }
         sw.Stop();
         Console.WriteLine($"Sync extraction (10 runs): {sw.ElapsedMilliseconds}ms avg {sw.ElapsedMilliseconds / 10f}ms");
@@ -90,7 +90,7 @@ public class ManualBenchmark
         var tasks = new System.Collections.Generic.List<Task>();
         for (int i = 0; i < 10; i++)
         {
-            tasks.Add(KreuzbergClient.ExtractFileAsync(filePath, config));
+            tasks.Add(KreuzbergLib.ExtractFileAsync(filePath, config));
         }
         await Task.WhenAll(tasks);
         sw.Stop();

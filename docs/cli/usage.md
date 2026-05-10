@@ -1,6 +1,6 @@
 # CLI Usage
 
-The Kreuzberg CLI provides command-line access to all extraction features. This guide covers installation, basic usage, and advanced features.
+Command-line access to all Kreuzberg extraction features.
 
 ## Installation
 
@@ -42,7 +42,7 @@ The Kreuzberg CLI provides command-line access to all extraction features. This 
 
 ### Log Level <span class="version-badge">v4.5.2</span>
 
-Control the verbosity of log output with the `--log-level` flag. This overrides the `RUST_LOG` environment variable.
+`--log-level` controls log verbosity and overrides `RUST_LOG`.
 
 ```bash title="Terminal"
 # Set log level to debug for troubleshooting
@@ -59,7 +59,7 @@ Valid levels: `trace`, `debug`, `info` (default), `warn`, `error`.
 
 ### Colored Output
 
-Text output is colored by default. To disable colors, set the `NO_COLOR` environment variable:
+Output is colored by default. Disable with `NO_COLOR`:
 
 ```bash title="Terminal"
 # Disable colored output
@@ -80,8 +80,6 @@ kreuzberg extract document.pdf --mime-type application/pdf
 
 ### Batch Extract Multiple Files
 
-Use the `batch` command to extract from multiple files:
-
 ```bash title="Terminal"
 # Extract from multiple files
 kreuzberg batch doc1.pdf doc2.docx doc3.txt
@@ -95,7 +93,7 @@ kreuzberg batch documents/**/*.pdf
 
 ### Extract Structured Data <span class="version-badge">v4.8.0</span>
 
-Use the `extract-structured` subcommand to pull typed JSON out of a document via an LLM. The CLI extracts the document's text, hands it to the configured model with a JSON schema constraint, and prints the structured output.
+`extract-structured` pulls typed JSON out of a document via an LLM, using a JSON schema as constraint.
 
 ```bash title="Terminal"
 # Extract invoice fields into JSON matching invoice_schema.json
@@ -117,7 +115,7 @@ kreuzberg extract-structured invoice.pdf \
 | `-c, --config <PATH>`   | Path to a TOML/YAML/JSON extraction config file applied to the document extraction step.             |
 | `-f, --format <FORMAT>` | Wire format for the printed output: `json` (default), `text`, or `toon`.                             |
 
-The structured output is whatever the LLM produced for the schema; the underlying document text is not printed. Set `RUST_LOG=kreuzberg=debug` to inspect the prompt that was sent.
+Only the structured output is printed; the underlying document text is not. Set `RUST_LOG=kreuzberg=debug` to inspect the prompt sent.
 
 ### Output Formats
 
@@ -137,7 +135,7 @@ kreuzberg extract document.pdf --format toon
 
 ### Content Output Format
 
-Control the formatting of extracted text content with `--content-format` (the deprecated alias `--output-format` is still accepted):
+`--content-format` (alias: `--output-format`) sets the format of extracted text content:
 
 ```bash title="Terminal"
 # Extract as plain text (default)
@@ -156,7 +154,7 @@ kreuzberg extract document.pdf --content-format html
 kreuzberg extract document.pdf --content-format markdown --format toon
 ```
 
-The `--content-format` flag controls how the extracted text is formatted (what goes inside `result.content`). This is different from `--format` which controls the wire format used to serialize the entire result (`text`, `json`, or `toon`).
+`--content-format` formats `result.content`; `--format` controls the wire format of the entire response (`text`, `json`, or `toon`).
 
 ## OCR Extraction
 
@@ -181,17 +179,13 @@ kreuzberg extract document.pdf --force-ocr true
 
 ### OCR Language Selection
 
-Set the OCR language using the `--ocr-language` flag. This flag is backend-agnostic and works with all supported OCR backends (Tesseract, PaddleOCR, EasyOCR).
+`--ocr-language` is backend-agnostic and overrides config-file or default settings.
 
-**Language Code Formats:**
-
-- **Tesseract**: Uses ISO 639-3 codes (three-letter codes)
-  - Examples: `eng` (English), `fra` (French), `deu` (German), `spa` (Spanish), `jpn` (Japanese)
-- **PaddleOCR**: Accepts flexible language codes and full language names
-  - Examples: `en`, `ch`, `french`, `korean`, `thai`, `greek`, `cyrillic`, and so on.
-- **EasyOCR**: Similar flexible format to PaddleOCR
-
-When used with `--ocr true`, the language flag overrides the default language. When used without `--ocr`, it overrides the language specified in your config file.
+| Backend | Code format | Examples |
+| --- | --- | --- |
+| Tesseract | ISO 639-3 (three-letter) | `eng`, `fra`, `deu`, `spa`, `jpn` |
+| PaddleOCR | short codes / language names | `en`, `ch`, `french`, `korean`, `thai`, `cyrillic` |
+| EasyOCR | similar to PaddleOCR | — |
 
 ```bash title="Terminal"
 # French OCR with Tesseract (default backend)
@@ -212,29 +206,27 @@ kreuzberg extract document.pdf --config kreuzberg.toml --ocr-language spa
 
 ### OCR Configuration
 
-OCR options are configured via config file. CLI flags override config settings:
+OCR options live in the config file; CLI flags override:
 
 ```bash title="Terminal"
-# Extract with OCR enabled via config file
 kreuzberg extract scanned.pdf --config kreuzberg.toml --ocr true
 ```
 
-Configure OCR backend, language, and Tesseract options in your config file (see Configuration Files section).
+See [Configuration Files](#configuration-files) for backend, language, and Tesseract options.
 
 ## Configuration Files
 
 ### Using Config Files
 
-Kreuzberg automatically discovers a configuration file by searching the current directory and parent directories for **`kreuzberg.toml`** only. If you use YAML or JSON, specify the file explicitly with `--config`.
+Kreuzberg auto-discovers `kreuzberg.toml` by walking up from the current directory. For YAML or JSON, pass `--config` explicitly.
 
 ```bash title="Terminal"
-# Extract using discovered configuration (finds kreuzberg.toml)
-kreuzberg extract document.pdf
+kreuzberg extract document.pdf  # auto-discovers kreuzberg.toml
 ```
 
 ### Specify Config File
 
-You can load TOML, YAML (`.yaml` or `.yml`), or JSON via `--config`:
+Load TOML, YAML (`.yaml`/`.yml`), or JSON via `--config`:
 
 ```bash title="Terminal"
 kreuzberg extract document.pdf --config my-config.toml
@@ -244,7 +236,7 @@ kreuzberg extract document.pdf --config my-config.json
 
 ### Inline JSON Config
 
-Override or supply config without a file using inline JSON (merged after config file, before individual flags):
+Inline JSON is merged after config file, before individual flags:
 
 ```bash title="Terminal"
 # Inline JSON (applied after config file)
@@ -315,7 +307,7 @@ chunking:
 
 ## Batch Processing
 
-Use the `batch` command to process multiple files:
+Process multiple files with `batch`:
 
 ```bash title="Terminal"
 # Extract all PDFs in directory
@@ -420,7 +412,7 @@ kreuzberg cache stats
 
 ## Extraction Override Flags <span class="version-badge">v4.5.2</span>
 
-The `extract` and `batch` commands support a comprehensive set of flags to override extraction configuration. These flags take precedence over config file settings.
+`extract` and `batch` accept the flags below; they take precedence over config-file settings.
 
 ### OCR Flags
 
@@ -601,8 +593,6 @@ kreuzberg batch documents/*.pdf --format json
 
 **JSON Output Structure:**
 
-The JSON output includes extracted content and related metadata:
-
 ```json title="JSON Response"
 {
   "content": "Extracted text content...",
@@ -614,7 +604,7 @@ The JSON output includes extracted content and related metadata:
 
 ## Error Handling
 
-The CLI returns appropriate exit codes on error. Basic error handling can be done with standard shell commands:
+The CLI returns non-zero exit codes on error. Use shell idioms:
 
 ```bash title="Terminal"
 # Check for extraction errors
@@ -678,7 +668,7 @@ kreuzberg detect document.pdf
 
 ## Docker Usage
 
-Use the CLI image `ghcr.io/kreuzberg-dev/kreuzberg-cli:latest` for command-line usage. The full image `ghcr.io/kreuzberg-dev/kreuzberg:latest` also includes the CLI.
+Use `ghcr.io/kreuzberg-dev/kreuzberg-cli:latest` for the CLI image, or `ghcr.io/kreuzberg-dev/kreuzberg:latest` for the full image (also includes the CLI).
 
 ### Basic Docker
 
@@ -785,7 +775,7 @@ kreuzberg extract /absolute/path/to/document.pdf
 
 ### Start API Server
 
-The `serve` command starts a RESTful HTTP API server:
+`serve` starts the HTTP REST API:
 
 ```bash title="Terminal"
 # Start server on default host (127.0.0.1) and port (8000)
@@ -815,7 +805,7 @@ See [API Server Guide](../guides/api-server.md) for full API details.
 
 ### Start MCP Server
 
-The `mcp` command starts a Model Context Protocol server for AI integration:
+`mcp` starts a Model Context Protocol server for AI agents:
 
 ```bash title="Terminal"
 # Start MCP server with stdio transport (default for Claude Desktop)
@@ -841,7 +831,7 @@ See [API Server Guide](../guides/api-server.md) for MCP integration details.
 
 ## Embeddings <span class="version-badge">v4.5.2</span>
 
-Generate vector embeddings for text using pre-trained models. Reads from `--text` flags or stdin.
+Generate vector embeddings using pre-trained models. Input via `--text` or stdin.
 
 ```bash title="Terminal"
 # Generate embeddings for a single text
@@ -866,7 +856,7 @@ Available presets: `fast`, `balanced` (default), `quality`, `multilingual`.
 
 ## Chunking Command <span class="version-badge">v4.5.2</span>
 
-Split text into chunks using configurable size and overlap. Reads from `--text` flag or stdin.
+Split text with configurable size and overlap. Input via `--text` or stdin.
 
 ```bash title="Terminal"
 # Chunk text with default settings
@@ -893,7 +883,7 @@ kreuzberg chunk --text "long text..." --config kreuzberg.toml
 
 ## Shell Completions <span class="version-badge">v4.5.2</span>
 
-Generate shell completion scripts for tab-completion support.
+Tab-completion scripts for bash, zsh, and fish:
 
 ```bash title="Terminal"
 # Generate bash completions
@@ -916,7 +906,7 @@ eval "$(kreuzberg completions zsh)"
 
 ### Dump OpenAPI Schema <span class="version-badge">v4.5.2</span>
 
-Output the full OpenAPI 3.1 specification for the Kreuzberg REST API. Useful for code generation, documentation, and API client tooling.
+Output the OpenAPI 3.1 specification — useful for code generation and API client tooling.
 
 ```bash title="Terminal"
 # Print OpenAPI schema as JSON
@@ -930,7 +920,7 @@ kreuzberg api schema > openapi.json
 
 ## List Supported Formats <span class="version-badge">v4.5.2</span>
 
-List all document formats supported by Kreuzberg, including file extensions and MIME types.
+List supported formats with extensions and MIME types:
 
 ```bash title="Terminal"
 # List formats as a table
@@ -970,10 +960,9 @@ kreuzberg cache clear --format json
 
 ### Warm Model Cache <span class="version-badge">v4.5.0</span>
 
-Pre-download all ML models (PaddleOCR and layout detection) so they are ready
-for offline use. This is especially useful for containerized deployments.
+Pre-download ML models (PaddleOCR, layout detection) for offline use — useful for containerized deployments.
 
-By default, models are stored in the platform-specific global cache directory:
+Default cache directories:
 
 - **Linux**: `~/.cache/kreuzberg/{module}` (or `$XDG_CACHE_HOME/kreuzberg/{module}`)
 - **macOS**: `~/Library/Caches/kreuzberg/{module}`
@@ -1000,8 +989,7 @@ kreuzberg cache warm --format json
 
 ### Model Manifest <span class="version-badge">v4.5.0</span>
 
-Output a manifest of all expected model files with their SHA256 checksums and sizes.
-Useful for verifying cache integrity or scripting model pre-population.
+Manifest of expected model files with SHA256 checksums and sizes — for cache integrity checks or scripted pre-population.
 
 ```bash title="Terminal"
 # Output manifest as JSON (default)
@@ -1047,8 +1035,6 @@ kreuzberg --version
 # Show version with JSON output
 kreuzberg version --format json
 ```
-
-The `version` command displays the Kreuzberg version. Use `--format json` for machine-readable output.
 
 ## Next Steps
 

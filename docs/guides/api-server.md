@@ -142,9 +142,7 @@ curl -X POST http://localhost:8000/chunk \
 
 #### POST /extract-structured <span class="version-badge">v4.8.0</span>
 
-Extract typed JSON from a document by running an LLM against the extracted text with a JSON schema. Requires the server to be built with the `liter-llm` feature; otherwise the endpoint returns `501 Not Implemented`.
-
-The request is `multipart/form-data`.
+Extract typed JSON from a document by running an LLM against the extracted text with a JSON schema (requires `liter-llm` feature; `multipart/form-data` request).
 
 | Field               | Required | Description                                                                                        |
 | ------------------- | -------- | -------------------------------------------------------------------------------------------------- |
@@ -177,7 +175,7 @@ curl -X POST http://localhost:8000/extract-structured \
 }
 ```
 
-Errors follow the same shape as `/extract`. A `501` body indicates the server was built without the `liter-llm` feature; rebuild with `--features liter-llm` to enable structured extraction.
+Errors follow the same shape as `/extract`. A `501` response indicates the server was built without `liter-llm`.
 
 #### Other Endpoints
 

@@ -8,27 +8,26 @@ import (
 )
 
 func main() {
-	psm := 6
-	oem := 1
-	minConf := 0.8
-	lang := "eng+fra+deu"
+	psm := int32(6)
+	oem := int32(1)
+	enableTableDetection := true
 	whitelist := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,!?"
 
-	config := &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	config := kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend:  "tesseract",
-			Language: &lang,
-			Tesseract: &kreuzberg.TesseractConfig{
-				PSM:              &psm,
-				OEM:              &oem,
-				MinConfidence:    &minConf,
-				EnableTableDetection: kreuzberg.BoolPtr(true),
+			Language: "eng+fra+deu",
+			TesseractConfig: &kreuzberg.TesseractConfig{
+				Psm:                   &psm,
+				Oem:                   &oem,
+				MinConfidence:         0.8,
+				EnableTableDetection:  &enableTableDetection,
 				TesseditCharWhitelist: whitelist,
 			},
 		},
 	}
 
-	result, err := kreuzberg.ExtractFileSync("document.pdf", config)
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

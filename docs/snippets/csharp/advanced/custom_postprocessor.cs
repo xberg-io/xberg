@@ -53,12 +53,12 @@ class Program
         var wordCountProcessor = new WordCountPostProcessor();
         var sentimentProcessor = new SentimentPostProcessor();
 
-        KreuzbergClient.RegisterPostProcessor(wordCountProcessor);
-        KreuzbergClient.RegisterPostProcessor(sentimentProcessor);
+        KreuzbergLib.RegisterPostProcessor(wordCountProcessor);
+        KreuzbergLib.RegisterPostProcessor(sentimentProcessor);
 
         try
         {
-            var result = KreuzbergClient.ExtractFileSync("document.pdf");
+            var result = KreuzbergLib.ExtractFileSync("document.pdf");
 
             if (result.Metadata.Additional != null)
             {

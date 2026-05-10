@@ -2,7 +2,7 @@
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
 import dev.kreuzberg.KreuzbergException;
-import dev.kreuzberg.config.*;
+import dev.kreuzberg.*;
 import java.io.IOException;
 
 public class Main {

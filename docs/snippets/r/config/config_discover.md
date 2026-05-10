@@ -1,21 +1,11 @@
 ```r title="R"
 library(kreuzberg)
 
-# Discover kreuzberg.toml from current or parent directories
-config <- discover()
+# Load configuration from a JSON file and pass it to extract_file_sync.
+config_json <- paste(readLines("kreuzberg.json"), collapse = "\n")
+config <- ExtractionConfig$from_json(config_json)
 
-if (!is.null(config)) {
-  cat("Found kreuzberg.toml configuration\n")
-  result <- extract_file_sync("document.pdf", config = config)
-  cat(sprintf("Extracted %d characters\n", nchar(result$content)))
-}
-
-# Or load config from a specific file
-config <- from_file("config.yaml")
-
-if (!is.null(config)) {
-  cat("Loaded configuration from config.yaml\n")
-  result <- extract_file_sync("document.pdf", config = config)
-  cat(sprintf("Extracted %d characters\n", nchar(result$content)))
-}
+json <- extract_file_sync("document.pdf", "application/pdf", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+cat(sprintf("Extracted %d characters\n", nchar(result$content)))
 ```

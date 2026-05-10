@@ -17,24 +17,24 @@ var config = new ExtractionConfig
 };
 
 Console.WriteLine("First extraction (will be cached)...");
-var result1 = await KreuzbergClient.ExtractFileAsync("document.pdf", config);
+var result1 = await KreuzbergLib.ExtractFileAsync("document.pdf", config);
 Console.WriteLine($"  - Content length: {result1.Content.Length}");
 Console.WriteLine($"  - Cached: {result1.Metadata.WasCached}");
 
 Console.WriteLine("\nSecond extraction (from cache)...");
-var result2 = await KreuzbergClient.ExtractFileAsync("document.pdf", config);
+var result2 = await KreuzbergLib.ExtractFileAsync("document.pdf", config);
 Console.WriteLine($"  - Content length: {result2.Content.Length}");
 Console.WriteLine($"  - Cached: {result2.Metadata.WasCached}");
 
 Console.WriteLine($"\nResults are identical: {result1.Content == result2.Content}");
 
-await KreuzbergClient.ClearCacheAsync("document.pdf");
+await KreuzbergLib.ClearCacheAsync("document.pdf");
 Console.WriteLine("\nCache cleared for document.pdf");
 
-await KreuzbergClient.ClearAllCacheAsync();
+await KreuzbergLib.ClearAllCacheAsync();
 Console.WriteLine("All cache cleared");
 
-var cacheStats = await KreuzbergClient.GetCacheStatsAsync();
+var cacheStats = await KreuzbergLib.GetCacheStatsAsync();
 Console.WriteLine($"\nCache Statistics:");
 Console.WriteLine($"  - Total entries: {cacheStats.TotalEntries}");
 Console.WriteLine($"  - Cache size: {cacheStats.CacheSizeBytes / 1024 / 1024} MB");

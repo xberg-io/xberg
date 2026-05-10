@@ -2,10 +2,10 @@
 require 'kreuzberg'
 
 # Using keyword arguments with defaults
-config = Kreuzberg::Config::Extraction.new(
-  pdf_options: Kreuzberg::Config::PDF.new(
+config = Kreuzberg::ExtractionConfig.new(
+  pdf_options: Kreuzberg::PdfConfig.new(
     extract_images: true,
-    hierarchy: Kreuzberg::Config::Hierarchy.new(
+    hierarchy: Kreuzberg::HierarchyConfig.new(
       enabled: true,
       k_clusters: 6,
       include_bbox: true,
@@ -15,8 +15,8 @@ config = Kreuzberg::Config::Extraction.new(
 )
 
 # Using hash syntax alternative
-config = Kreuzberg::Config::Extraction.new(
-  pdf_options: Kreuzberg::Config::PDF.new(
+config = Kreuzberg::ExtractionConfig.new(
+  pdf_options: Kreuzberg::PdfConfig.new(
     extract_images: true,
     hierarchy: {
       enabled: true,

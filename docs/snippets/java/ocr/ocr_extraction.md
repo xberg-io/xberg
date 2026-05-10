@@ -2,8 +2,8 @@
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
 import dev.kreuzberg.KreuzbergException;
-import dev.kreuzberg.config.ExtractionConfig;
-import dev.kreuzberg.config.OcrConfig;
+import dev.kreuzberg.ExtractionConfig;
+import dev.kreuzberg.OcrConfig;
 import java.io.IOException;
 
 public class Main {

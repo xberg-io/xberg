@@ -41,22 +41,28 @@ def create_converter(ocr_enabled: bool) -> DocumentConverter:
     return DocumentConverter()
 
 
-def extract_sync(file_path: str, converter: DocumentConverter) -> dict[str, Any]:
+def _render(document: Any, output_format: str) -> str:
+    if output_format == "plaintext":
+        return document.export_to_text()
+    return document.export_to_markdown()
+
+
+def extract_sync(file_path: str, converter: DocumentConverter, output_format: str = "markdown") -> dict[str, Any]:
     """Extract using synchronous single-file API."""
     start = time.perf_counter()
     result = converter.convert(file_path)
-    markdown = result.document.export_to_markdown()
+    content = _render(result.document, output_format)
     duration_ms = (time.perf_counter() - start) * 1000.0
 
     return {
-        "content": markdown,
-        "metadata": {"framework": "docling"},
+        "content": content,
+        "metadata": {"framework": "docling", "output_format": output_format},
         "_extraction_time_ms": duration_ms,
         "_peak_memory_bytes": _get_peak_memory_bytes(),
     }
 
 
-def extract_batch(file_paths: list[str], converter: DocumentConverter) -> list[dict[str, Any]]:
+def extract_batch(file_paths: list[str], converter: DocumentConverter, output_format: str = "markdown") -> list[dict[str, Any]]:
     """Extract multiple files using batch API."""
     start = time.perf_counter()
     results = converter.convert_all(file_paths, raises_on_error=False)
@@ -67,11 +73,11 @@ def extract_batch(file_paths: list[str], converter: DocumentConverter) -> list[d
     outputs = []
     for result in results:
         if result.status.name == "SUCCESS":
-            markdown = result.document.export_to_markdown()
+            content = _render(result.document, output_format)
             outputs.append(
                 {
-                    "content": markdown,
-                    "metadata": {"framework": "docling"},
+                    "content": content,
+                    "metadata": {"framework": "docling", "output_format": output_format},
                     "_extraction_time_ms": per_file_duration_ms,
                     "_batch_total_ms": total_duration_ms,
                     "_peak_memory_bytes": _get_peak_memory_bytes(),
@@ -165,7 +171,7 @@ def _parse_path(line: str) -> str:
     return stripped
 
 
-def run_server(converter: DocumentConverter, timeout=None) -> None:
+def run_server(converter: DocumentConverter, output_format: str, timeout=None) -> None:
     """Persistent server mode: read paths from stdin, write JSON to stdout."""
     print("READY", flush=True)
     for line in sys.stdin:
@@ -173,10 +179,10 @@ def run_server(converter: DocumentConverter, timeout=None) -> None:
         if not file_path:
             continue
         if timeout is not None:
-            result = _run_with_timeout(extract_sync, (file_path, converter), timeout)
+            result = _run_with_timeout(extract_sync, (file_path, converter, output_format), timeout)
         else:
             try:
-                result = extract_sync(file_path, converter)
+                result = extract_sync(file_path, converter, output_format)
             except Exception as e:
                 result = {"error": str(e), "_extraction_time_ms": 0}
         print(json.dumps(result), flush=True)
@@ -185,6 +191,7 @@ def run_server(converter: DocumentConverter, timeout=None) -> None:
 def main() -> None:
     ocr_enabled = False
     timeout = None
+    output_format = "markdown"
     args = []
     for arg in sys.argv[1:]:
         if arg == "--ocr":
@@ -193,11 +200,32 @@ def main() -> None:
             ocr_enabled = False
         elif arg.startswith("--timeout="):
             timeout = int(arg.split("=", 1)[1])
+        elif arg.startswith("--format="):
+            output_format = arg.split("=", 1)[1]
+        elif arg == "--format":
+            # Next-arg style handled below by appending
+            args.append(arg)
         else:
             args.append(arg)
 
+    # Support `--format <value>` (space-separated)
+    cleaned: list[str] = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--format" and i + 1 < len(args):
+            output_format = args[i + 1]
+            i += 2
+            continue
+        cleaned.append(args[i])
+        i += 1
+    args = cleaned
+
+    if output_format not in ("markdown", "plaintext"):
+        print(f"Error: --format must be 'markdown' or 'plaintext'; got '{output_format}'", file=sys.stderr)
+        sys.exit(64)
+
     if len(args) < 1:
-        print("Usage: docling_extract.py [--ocr|--no-ocr] [--timeout=SECS] <mode> <file_path> [additional_files...]", file=sys.stderr)
+        print("Usage: docling_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format markdown|plaintext] <mode> <file_path> [additional_files...]", file=sys.stderr)
         print("Modes: sync, batch, server", file=sys.stderr)
         sys.exit(1)
 
@@ -209,13 +237,13 @@ def main() -> None:
 
     try:
         if mode == "server":
-            run_server(converter, timeout=timeout)
+            run_server(converter, output_format, timeout=timeout)
 
         elif mode == "sync":
             if len(file_paths) != 1:
                 print("Error: sync mode requires exactly one file", file=sys.stderr)
                 sys.exit(1)
-            payload = extract_sync(file_paths[0], converter)
+            payload = extract_sync(file_paths[0], converter, output_format)
             print(json.dumps(payload), end="")
 
         elif mode == "batch":
@@ -224,10 +252,10 @@ def main() -> None:
                 sys.exit(1)
 
             if len(file_paths) == 1:
-                results = extract_batch(file_paths, converter)
+                results = extract_batch(file_paths, converter, output_format)
                 print(json.dumps(results[0]), end="")
             else:
-                results = extract_batch(file_paths, converter)
+                results = extract_batch(file_paths, converter, output_format)
                 print(json.dumps(results), end="")
 
         else:

@@ -9,31 +9,30 @@ import (
 )
 
 func main() {
-	lang := "eng+deu" // Multiple languages
-	chunkSize := 1000
-	chunkOverlap := 100
+	maxChars := uint(1000)
+	maxOverlap := uint(100)
 	useCache := true
 	enableQuality := true
-	detectMultiple := true
+	languageDetectionEnabled := true
 
-	config := &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	config := kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend:  "tesseract",
-			Language: &lang,
+			Language: "eng+deu",
 		},
 		Chunking: &kreuzberg.ChunkingConfig{
-			ChunkSize:    &chunkSize,
-			ChunkOverlap: &chunkOverlap,
+			MaxCharacters: &maxChars,
+			Overlap:       &maxOverlap,
 		},
 		LanguageDetection: &kreuzberg.LanguageDetectionConfig{
-			Enabled:        &useCache,
-			DetectMultiple: &detectMultiple,
+			Enabled:        &languageDetectionEnabled,
+			DetectMultiple: true,
 		},
 		UseCache:                &useCache,
 		EnableQualityProcessing: &enableQuality,
 	}
 
-	result, err := kreuzberg.ExtractFileSync("document.pdf", config)
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, config)
 	if err != nil {
 		log.Fatalf("extract failed: %v", err)
 	}

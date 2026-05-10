@@ -19,6 +19,11 @@ pub enum Language {
     Bash,
     Toml,
     Docker,
+    Gleam,
+    Dart,
+    Kotlin,
+    Swift,
+    Zig,
     Unknown,
 }
 
@@ -39,6 +44,11 @@ impl Language {
             "bash" | "sh" | "shell" | "zsh" => Self::Bash,
             "toml" => Self::Toml,
             "dockerfile" | "docker" => Self::Docker,
+            "gleam" => Self::Gleam,
+            "dart" => Self::Dart,
+            "kotlin" | "kt" | "kts" => Self::Kotlin,
+            "swift" => Self::Swift,
+            "zig" => Self::Zig,
             _ => Self::Unknown,
         }
     }
@@ -58,6 +68,11 @@ impl Language {
             "c" | "h" => Self::C,
             "sh" | "bash" => Self::Bash,
             "toml" => Self::Toml,
+            "gleam" => Self::Gleam,
+            "dart" => Self::Dart,
+            "kt" | "kts" => Self::Kotlin,
+            "swift" => Self::Swift,
+            "zig" => Self::Zig,
             _ => Self::Unknown,
         }
     }
@@ -76,6 +91,11 @@ impl Language {
             "r" => Self::R,
             "c" => Self::C,
             "docker" => Self::Docker,
+            "gleam" => Self::Gleam,
+            "dart" => Self::Dart,
+            "kotlin" => Self::Kotlin,
+            "swift" => Self::Swift,
+            "zig" => Self::Zig,
             _ => Self::Unknown,
         }
     }
@@ -98,6 +118,11 @@ impl fmt::Display for Language {
             Self::Bash => write!(f, "bash"),
             Self::Toml => write!(f, "toml"),
             Self::Docker => write!(f, "docker"),
+            Self::Gleam => write!(f, "gleam"),
+            Self::Dart => write!(f, "dart"),
+            Self::Kotlin => write!(f, "kotlin"),
+            Self::Swift => write!(f, "swift"),
+            Self::Zig => write!(f, "zig"),
             Self::Unknown => write!(f, "unknown"),
         }
     }

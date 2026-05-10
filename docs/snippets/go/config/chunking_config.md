@@ -8,16 +8,17 @@ import (
 )
 
 func main() {
-	maxChars := 1000
-	maxOverlap := 200
-	config := &kreuzberg.ExtractionConfig{
+	maxChars := uint(1000)
+	overlap := uint(200)
+	config := kreuzberg.ExtractionConfig{
 		Chunking: &kreuzberg.ChunkingConfig{
-			MaxChars:   &maxChars,
-			MaxOverlap: &maxOverlap,
+			MaxCharacters: &maxChars,
+			Overlap:       &overlap,
 		},
 	}
 
-	fmt.Printf("Config: MaxChars=%d, MaxOverlap=%d\n", *config.Chunking.MaxChars, *config.Chunking.MaxOverlap)
+	fmt.Printf("Config: MaxCharacters=%d, Overlap=%d\n",
+		*config.Chunking.MaxCharacters, *config.Chunking.Overlap)
 }
 ```
 
@@ -26,32 +27,36 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 )
 
 func main() {
-	maxChars := 500
-	maxOverlap := 50
+	maxChars := uint(500)
+	overlap := uint(50)
+	model := "Xenova/gpt-4o"
+	chunkerType := kreuzberg.ChunkerTypeMarkdown
 
-	config := &kreuzberg.ExtractionConfig{
+	config := kreuzberg.ExtractionConfig{
 		Chunking: &kreuzberg.ChunkingConfig{
-			MaxChars:   &maxChars,
-			MaxOverlap: &maxOverlap,
-			Sizing: &kreuzberg.ChunkSizingConfig{
+			MaxCharacters: &maxChars,
+			Overlap:       &overlap,
+			ChunkerType:   &chunkerType,
+			Sizing: kreuzberg.ChunkSizing{
 				Type:  "tokenizer",
-				Model: "Xenova/gpt-4o",
+				Model: &model,
 			},
 		},
 	}
 
 	result, err := kreuzberg.ExtractFile("document.md", nil, config)
 	if err != nil {
-		panic(err)
+		log.Fatalf("extract failed: %v", err)
 	}
 
 	for _, chunk := range result.Chunks {
-		if chunk.Metadata != nil && chunk.Metadata.HeadingContext != nil {
+		if chunk.Metadata.HeadingContext != nil {
 			for _, heading := range chunk.Metadata.HeadingContext.Headings {
 				fmt.Printf("Heading L%d: %s\n", heading.Level, heading.Text)
 			}
@@ -66,27 +71,28 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 )
 
-func boolPtr(b bool) *bool { return &b }
-
 func main() {
-	maxChars := 500
-	maxOverlap := 50
+	maxChars := uint(500)
+	overlap := uint(50)
+	chunkerType := kreuzberg.ChunkerTypeMarkdown
 
-	config := &kreuzberg.ExtractionConfig{
+	config := kreuzberg.ExtractionConfig{
 		Chunking: &kreuzberg.ChunkingConfig{
-			MaxChars:              &maxChars,
-			MaxOverlap:            &maxOverlap,
-			PrependHeadingContext: boolPtr(true),
+			MaxCharacters:         &maxChars,
+			Overlap:               &overlap,
+			ChunkerType:           &chunkerType,
+			PrependHeadingContext: true,
 		},
 	}
 
 	result, err := kreuzberg.ExtractFile("document.md", nil, config)
 	if err != nil {
-		panic(err)
+		log.Fatalf("extract failed: %v", err)
 	}
 
 	for _, chunk := range result.Chunks {

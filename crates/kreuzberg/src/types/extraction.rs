@@ -544,7 +544,7 @@ pub struct ExtractedImage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_kind: Option<ImageKind>,
 
-    /// Confidence score for `image_kind`, in [0.0, 1.0].
+    /// Confidence score for `image_kind`, in the range 0.0 to 1.0.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind_confidence: Option<f32>,
 

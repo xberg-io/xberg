@@ -603,6 +603,30 @@ pub type TableProperties {
   )
 }
 
+/// Application properties from docProps/app.xml for DOCX
+///
+/// Contains Word-specific document statistics and metadata.
+pub type DocxAppProperties {
+  DocxAppProperties(
+    application: Option(String),
+    app_version: Option(String),
+    template: Option(String),
+    total_time: Option(Int),
+    pages: Option(Int),
+    words: Option(Int),
+    characters: Option(Int),
+    characters_with_spaces: Option(Int),
+    lines: Option(Int),
+    paragraphs: Option(Int),
+    company: Option(String),
+    doc_security: Option(Int),
+    scale_crop: Option(Bool),
+    links_up_to_date: Option(Bool),
+    shared_doc: Option(Bool),
+    hyperlinks_changed: Option(Bool)
+  )
+}
+
 /// Application properties from docProps/app.xml for XLSX
 ///
 /// Contains Excel-specific document metadata.
@@ -640,6 +664,30 @@ pub type PptxAppProperties {
     multimedia_clips: Option(Int),
     presentation_format: Option(String),
     slide_titles: List(String)
+  )
+}
+
+/// Dublin Core metadata from docProps/core.xml
+///
+/// Contains standard metadata fields defined by the Dublin Core standard
+/// and Office-specific extensions.
+pub type CoreProperties {
+  CoreProperties(
+    title: Option(String),
+    subject: Option(String),
+    creator: Option(String),
+    keywords: Option(String),
+    description: Option(String),
+    last_modified_by: Option(String),
+    revision: Option(String),
+    created: Option(String),
+    modified: Option(String),
+    category: Option(String),
+    content_status: Option(String),
+    language: Option(String),
+    identifier: Option(String),
+    version: Option(String),
+    last_printed: Option(String)
   )
 }
 
@@ -1519,6 +1567,18 @@ pub type ArchiveMetadata {
   )
 }
 
+/// Image metadata extracted from image files.
+///
+/// Includes dimensions, format, and EXIF data.
+pub type ImageMetadata {
+  ImageMetadata(
+    width: Int,
+    height: Int,
+    format: String,
+    exif: Dict(String, String)
+  )
+}
+
 /// XML metadata extracted during XML parsing.
 ///
 /// Provides statistics about XML document structure.
@@ -1652,8 +1712,8 @@ pub type PptxMetadata {
 /// Integrates with `office_metadata` module for core/app/custom properties.
 pub type DocxMetadata {
   DocxMetadata(
-    core_properties: Option(String),
-    app_properties: Option(String),
+    core_properties: Option(CoreProperties),
+    app_properties: Option(DocxAppProperties),
     custom_properties: Option(Dict(String, String))
   )
 }
@@ -2340,6 +2400,22 @@ pub type EmbeddedFile {
   )
 }
 
+/// PDF-specific metadata.
+///
+/// Contains metadata fields specific to PDF documents that are not in the common
+/// `Metadata` structure. Common fields like title, authors, keywords, and dates
+/// are at the `Metadata` level.
+pub type PdfMetadata {
+  PdfMetadata(
+    pdf_version: Option(String),
+    producer: Option(String),
+    is_encrypted: Option(Bool),
+    width: Option(Int),
+    height: Option(Int),
+    page_count: Option(Int)
+  )
+}
+
 /// ONNX Runtime execution provider type.
 ///
 /// Determines which hardware backend is used for model inference.
@@ -2737,7 +2813,7 @@ pub type ElementType {
 /// type-safe, clean metadata without nested optionals.
 pub type FormatMetadata {
   Pdf(
-    String
+    PdfMetadata
   )
   Docx(
     DocxMetadata
@@ -2755,7 +2831,7 @@ pub type FormatMetadata {
     ArchiveMetadata
   )
   FormatMetadataImage(
-    String
+    ImageMetadata
   )
   Xml(
     XmlMetadata
@@ -3044,7 +3120,7 @@ pub type KreuzbergError {
 ///
 /// Returns `KreuzbergError.Validation` if MIME type is invalid.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
-@external(erlang, "Elixir.Kreuzberg.Native", "extract_bytes")
+@external(erlang, "kreuzberg_gleam_ffi", "extract_bytes")
 pub fn extract_bytes(content: BitArray, mime_type: String, config: ExtractionConfig) -> Result(ExtractionResult, KreuzbergError)
 
 /// Extract content from a file.
@@ -3065,7 +3141,7 @@ pub fn extract_bytes(content: BitArray, mime_type: String, config: ExtractionCon
 ///
 /// Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
-@external(erlang, "Elixir.Kreuzberg.Native", "extract_file")
+@external(erlang, "kreuzberg_gleam_ffi", "extract_file")
 pub fn extract_file(path: String, mime_type: Option(String), config: ExtractionConfig) -> Result(ExtractionResult, KreuzbergError)
 
 /// Synchronous wrapper for `extract_file`.
@@ -3078,7 +3154,7 @@ pub fn extract_file(path: String, mime_type: Option(String), config: ExtractionC
 ///
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
-@external(erlang, "Elixir.Kreuzberg.Native", "extract_file_sync")
+@external(erlang, "kreuzberg_gleam_ffi", "extract_file_sync")
 pub fn extract_file_sync(path: String, mime_type: Option(String), config: ExtractionConfig) -> Result(ExtractionResult, KreuzbergError)
 
 /// Synchronous wrapper for `extract_bytes`.
@@ -3088,14 +3164,14 @@ pub fn extract_file_sync(path: String, mime_type: Option(String), config: Extrac
 ///
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-@external(erlang, "Elixir.Kreuzberg.Native", "extract_bytes_sync")
+@external(erlang, "kreuzberg_gleam_ffi", "extract_bytes_sync")
 pub fn extract_bytes_sync(content: BitArray, mime_type: String, config: ExtractionConfig) -> Result(ExtractionResult, KreuzbergError)
 
 /// Synchronous wrapper for `batch_extract_files`.
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_files_sync")
+@external(erlang, "kreuzberg_gleam_ffi", "batch_extract_files_sync")
 pub fn batch_extract_files_sync(items: List(BatchFileItem), config: ExtractionConfig) -> Result(List(ExtractionResult), KreuzbergError)
 
 /// Synchronous wrapper for `batch_extract_bytes`.
@@ -3104,7 +3180,7 @@ pub fn batch_extract_files_sync(items: List(BatchFileItem), config: ExtractionCo
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
 /// that iterates through items and calls `extract_bytes_sync()`.
-@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_bytes_sync")
+@external(erlang, "kreuzberg_gleam_ffi", "batch_extract_bytes_sync")
 pub fn batch_extract_bytes_sync(items: List(BatchBytesItem), config: ExtractionConfig) -> Result(List(ExtractionResult), KreuzbergError)
 
 /// Extract content from multiple files concurrently.
@@ -3135,7 +3211,7 @@ pub fn batch_extract_bytes_sync(items: List(BatchBytesItem), config: ExtractionC
 ///
 ///
 /// Per-file configuration overrides:
-@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_files")
+@external(erlang, "kreuzberg_gleam_ffi", "batch_extract_files")
 pub fn batch_extract_files(items: List(BatchFileItem), config: ExtractionConfig) -> Result(List(ExtractionResult), KreuzbergError)
 
 /// Extract content from multiple byte arrays concurrently.
@@ -3160,7 +3236,7 @@ pub fn batch_extract_files(items: List(BatchFileItem), config: ExtractionConfig)
 ///
 ///
 /// Per-item configuration overrides:
-@external(erlang, "Elixir.Kreuzberg.Native", "batch_extract_bytes")
+@external(erlang, "kreuzberg_gleam_ffi", "batch_extract_bytes")
 pub fn batch_extract_bytes(items: List(BatchBytesItem), config: ExtractionConfig) -> Result(List(ExtractionResult), KreuzbergError)
 
 /// Detect MIME type from raw file bytes.
@@ -3178,7 +3254,7 @@ pub fn batch_extract_bytes(items: List(BatchBytesItem), config: ExtractionConfig
 /// **Errors:**
 ///
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type cannot be determined.
-@external(erlang, "Elixir.Kreuzberg.Native", "detect_mime_type_from_bytes")
+@external(erlang, "kreuzberg_gleam_ffi", "detect_mime_type_from_bytes")
 pub fn detect_mime_type_from_bytes(content: BitArray) -> Result(String, KreuzbergError)
 
 /// Get file extensions for a given MIME type.
@@ -3188,11 +3264,11 @@ pub fn detect_mime_type_from_bytes(content: BitArray) -> Result(String, Kreuzber
 /// **Returns:**
 ///
 /// A vector of file extensions (without leading dot) for the MIME type.
-@external(erlang, "Elixir.Kreuzberg.Native", "get_extensions_for_mime")
+@external(erlang, "kreuzberg_gleam_ffi", "get_extensions_for_mime")
 pub fn get_extensions_for_mime(mime_type: String) -> Result(List(String), KreuzbergError)
 
 /// List names of all registered document extractors.
-@external(erlang, "Elixir.Kreuzberg.Native", "list_document_extractors")
+@external(erlang, "kreuzberg_gleam_ffi", "list_document_extractors")
 pub fn list_document_extractors() -> Result(List(String), KreuzbergError)
 
 /// List all registered OCR backends.
@@ -3202,7 +3278,7 @@ pub fn list_document_extractors() -> Result(List(String), KreuzbergError)
 /// **Returns:**
 ///
 /// A vector of OCR backend names.
-@external(erlang, "Elixir.Kreuzberg.Native", "list_ocr_backends")
+@external(erlang, "kreuzberg_gleam_ffi", "list_ocr_backends")
 pub fn list_ocr_backends() -> Result(List(String), KreuzbergError)
 
 /// Clear all OCR backends from the global registry.
@@ -3213,7 +3289,7 @@ pub fn list_ocr_backends() -> Result(List(String), KreuzbergError)
 ///
 /// - `Ok(())` if all backends were cleared successfully
 /// - `Err(...)` if any shutdown method failed
-@external(erlang, "Elixir.Kreuzberg.Native", "clear_ocr_backends")
+@external(erlang, "kreuzberg_gleam_ffi", "clear_ocr_backends")
 pub fn clear_ocr_backends() -> Result(Nil, KreuzbergError)
 
 /// List all registered post-processor names.
@@ -3225,19 +3301,19 @@ pub fn clear_ocr_backends() -> Result(Nil, KreuzbergError)
 ///
 /// - `Ok(Vec<String>)` - Vector of post-processor names
 /// - `Err(...)` if the registry lock is poisoned
-@external(erlang, "Elixir.Kreuzberg.Native", "list_post_processors")
+@external(erlang, "kreuzberg_gleam_ffi", "list_post_processors")
 pub fn list_post_processors() -> Result(List(String), KreuzbergError)
 
 /// Remove all registered post-processors.
-@external(erlang, "Elixir.Kreuzberg.Native", "clear_post_processors")
+@external(erlang, "kreuzberg_gleam_ffi", "clear_post_processors")
 pub fn clear_post_processors() -> Result(Nil, KreuzbergError)
 
 /// List names of all registered validators.
-@external(erlang, "Elixir.Kreuzberg.Native", "list_validators")
+@external(erlang, "kreuzberg_gleam_ffi", "list_validators")
 pub fn list_validators() -> Result(List(String), KreuzbergError)
 
 /// Remove all registered validators.
-@external(erlang, "Elixir.Kreuzberg.Native", "clear_validators")
+@external(erlang, "kreuzberg_gleam_ffi", "clear_validators")
 pub fn clear_validators() -> Result(Nil, KreuzbergError)
 
 /// Generate embeddings asynchronously for a list of text strings.
@@ -3253,33 +3329,45 @@ pub fn clear_validators() -> Result(Nil, KreuzbergError)
 /// - `KreuzbergError.MissingDependency` if ONNX Runtime is not installed
 /// - `KreuzbergError.Embedding` if the preset name is unknown, model download fails,
 ///   or the blocking inference task panics
-@external(erlang, "Elixir.Kreuzberg.Native", "embed_texts_async")
+@external(erlang, "kreuzberg_gleam_ffi", "embed_texts_async")
 pub fn embed_texts_async(texts: List(String), config: EmbeddingConfig) -> Result(List(List(Float)), KreuzbergError)
+
+/// Render a single PDF page to PNG bytes.
+///
+/// Returns raw PNG-encoded bytes for the specified page at the given DPI.
+/// Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+///
+/// **Errors:**
+///
+/// Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
+/// or rendered, or if `page_index` is out of range.
+@external(erlang, "kreuzberg_gleam_ffi", "render_pdf_page_to_png")
+pub fn render_pdf_page_to_png(pdf_bytes: BitArray, page_index: Int, dpi: Option(Int), password: Option(String)) -> Result(BitArray, KreuzbergError)
 
 /// Detect the MIME type of a file at the given path.
 ///
 /// Uses the file extension and optionally the file content to determine the MIME type.
 /// Set `check_exists` to `true` to verify the file exists before detection.
-@external(erlang, "Elixir.Kreuzberg.Native", "detect_mime_type")
+@external(erlang, "kreuzberg_gleam_ffi", "detect_mime_type")
 pub fn detect_mime_type(path: String, check_exists: Bool) -> Result(String, KreuzbergError)
 
 /// Embed a list of texts using the configured embedding model.
 ///
 /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
-@external(erlang, "Elixir.Kreuzberg.Native", "embed_texts")
+@external(erlang, "kreuzberg_gleam_ffi", "embed_texts")
 pub fn embed_texts(texts: List(String), config: EmbeddingConfig) -> Result(List(List(Float)), KreuzbergError)
 
 /// Get an embedding preset by name.
 ///
 /// Returns `null` if no preset with the given name exists. Returns an owned
 /// clone so the value is safe to pass across FFI boundaries.
-@external(erlang, "Elixir.Kreuzberg.Native", "get_embedding_preset")
+@external(erlang, "kreuzberg_gleam_ffi", "get_embedding_preset")
 pub fn get_embedding_preset(name: String) -> Option(EmbeddingPreset)
 
 /// List the names of all available embedding presets.
 ///
 /// Returns owned `String`s so the values are safe to pass across FFI boundaries.
-@external(erlang, "Elixir.Kreuzberg.Native", "list_embedding_presets")
+@external(erlang, "kreuzberg_gleam_ffi", "list_embedding_presets")
 pub fn list_embedding_presets() -> List(String)
 
 /// Trait bridge shims for `OcrBackend`.
@@ -3348,8 +3436,9 @@ pub fn list_embedding_presets() -> List(String)
 /// `complete_trait_call` or `fail_trait_call` with the reply.
 /// Gleam emits the registration and reply shims here; wiring the callback
 /// module is done via the Elixir/Rustler side (existing GenServer pattern).
-@external(erlang, "Elixir.Kreuzberg.Native", "register_ocr_backend")
+@external(erlang, "kreuzberg_gleam_ffi", "register_ocr_backend")
 pub fn register_ocr_backend(pid: Dynamic, plugin_name: String) -> Nil
+
 /// Send the `process_image` response back to the Rustler reply-registry.
 ///
 /// Call this from your `handle_info/2` after processing a
@@ -3366,7 +3455,8 @@ pub fn register_ocr_backend(pid: Dynamic, plugin_name: String) -> Nil
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_process_image_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_process_image_response")
 pub fn ocr_backend_process_image_response(call_id: Dynamic, result: Result(ExtractionResult, KreuzbergError)) -> Nil
 
 /// Send the `process_image_file` response back to the Rustler reply-registry.
@@ -3385,7 +3475,8 @@ pub fn ocr_backend_process_image_response(call_id: Dynamic, result: Result(Extra
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_process_image_file_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_process_image_file_response")
 pub fn ocr_backend_process_image_file_response(call_id: Dynamic, result: Result(ExtractionResult, KreuzbergError)) -> Nil
 
 /// Send the `supports_language` response back to the Rustler reply-registry.
@@ -3404,7 +3495,8 @@ pub fn ocr_backend_process_image_file_response(call_id: Dynamic, result: Result(
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supports_language_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_supports_language_response")
 pub fn ocr_backend_supports_language_response(call_id: Dynamic, result: Result(Bool, String)) -> Nil
 
 /// Send the `backend_type` response back to the Rustler reply-registry.
@@ -3423,7 +3515,8 @@ pub fn ocr_backend_supports_language_response(call_id: Dynamic, result: Result(B
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_backend_type_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_backend_type_response")
 pub fn ocr_backend_backend_type_response(call_id: Dynamic, result: Result(OcrBackendType, String)) -> Nil
 
 /// Send the `supported_languages` response back to the Rustler reply-registry.
@@ -3442,7 +3535,8 @@ pub fn ocr_backend_backend_type_response(call_id: Dynamic, result: Result(OcrBac
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supported_languages_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_supported_languages_response")
 pub fn ocr_backend_supported_languages_response(call_id: Dynamic, result: Result(List(String), String)) -> Nil
 
 /// Send the `supports_table_detection` response back to the Rustler reply-registry.
@@ -3461,7 +3555,8 @@ pub fn ocr_backend_supported_languages_response(call_id: Dynamic, result: Result
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supports_table_detection_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_supports_table_detection_response")
 pub fn ocr_backend_supports_table_detection_response(call_id: Dynamic, result: Result(Bool, String)) -> Nil
 
 /// Send the `supports_document_processing` response back to the Rustler reply-registry.
@@ -3480,7 +3575,8 @@ pub fn ocr_backend_supports_table_detection_response(call_id: Dynamic, result: R
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_supports_document_processing_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_supports_document_processing_response")
 pub fn ocr_backend_supports_document_processing_response(call_id: Dynamic, result: Result(Bool, String)) -> Nil
 
 /// Send the `process_document` response back to the Rustler reply-registry.
@@ -3499,18 +3595,21 @@ pub fn ocr_backend_supports_document_processing_response(call_id: Dynamic, resul
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "ocr_backend_process_document_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "ocr_backend_process_document_response")
 pub fn ocr_backend_process_document_response(call_id: Dynamic, result: Result(ExtractionResult, KreuzbergError)) -> Nil
 
 
 /// Complete a pending trait call with a successful JSON result.
 /// Call this from your GenServer after processing a trait_call message.
-@external(erlang, "Elixir.Kreuzberg.Native", "complete_trait_call")
+
+@external(erlang, "kreuzberg_gleam_ffi", "complete_trait_call")
 pub fn complete_trait_call(reply_id: Int, result_json: String) -> Nil
+
 
 /// Fail a pending trait call with an error message.
 /// Call this from your GenServer when processing a trait_call message fails.
-@external(erlang, "Elixir.Kreuzberg.Native", "fail_trait_call")
+@external(erlang, "kreuzberg_gleam_ffi", "fail_trait_call")
 pub fn fail_trait_call(reply_id: Int, error_message: String) -> Nil
 
 /// Trait bridge shims for `PostProcessor`.
@@ -3587,8 +3686,9 @@ pub fn fail_trait_call(reply_id: Int, error_message: String) -> Nil
 /// `complete_trait_call` or `fail_trait_call` with the reply.
 /// Gleam emits the registration and reply shims here; wiring the callback
 /// module is done via the Elixir/Rustler side (existing GenServer pattern).
-@external(erlang, "Elixir.Kreuzberg.Native", "register_post_processor")
+@external(erlang, "kreuzberg_gleam_ffi", "register_post_processor")
 pub fn register_post_processor(pid: Dynamic, plugin_name: String) -> Nil
+
 /// Send the `process` response back to the Rustler reply-registry.
 ///
 /// Call this from your `handle_info/2` after processing a
@@ -3605,7 +3705,8 @@ pub fn register_post_processor(pid: Dynamic, plugin_name: String) -> Nil
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_process_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "post_processor_process_response")
 pub fn post_processor_process_response(call_id: Dynamic, result: Result(Nil, KreuzbergError)) -> Nil
 
 /// Send the `processing_stage` response back to the Rustler reply-registry.
@@ -3624,7 +3725,8 @@ pub fn post_processor_process_response(call_id: Dynamic, result: Result(Nil, Kre
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_processing_stage_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "post_processor_processing_stage_response")
 pub fn post_processor_processing_stage_response(call_id: Dynamic, result: Result(ProcessingStage, String)) -> Nil
 
 /// Send the `should_process` response back to the Rustler reply-registry.
@@ -3643,7 +3745,8 @@ pub fn post_processor_processing_stage_response(call_id: Dynamic, result: Result
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_should_process_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "post_processor_should_process_response")
 pub fn post_processor_should_process_response(call_id: Dynamic, result: Result(Bool, String)) -> Nil
 
 /// Send the `estimated_duration_ms` response back to the Rustler reply-registry.
@@ -3662,7 +3765,8 @@ pub fn post_processor_should_process_response(call_id: Dynamic, result: Result(B
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_estimated_duration_ms_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "post_processor_estimated_duration_ms_response")
 pub fn post_processor_estimated_duration_ms_response(call_id: Dynamic, result: Result(Int, String)) -> Nil
 
 /// Send the `priority` response back to the Rustler reply-registry.
@@ -3681,7 +3785,8 @@ pub fn post_processor_estimated_duration_ms_response(call_id: Dynamic, result: R
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "post_processor_priority_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "post_processor_priority_response")
 pub fn post_processor_priority_response(call_id: Dynamic, result: Result(Int, String)) -> Nil
 
 
@@ -3755,8 +3860,9 @@ pub fn post_processor_priority_response(call_id: Dynamic, result: Result(Int, St
 /// `complete_trait_call` or `fail_trait_call` with the reply.
 /// Gleam emits the registration and reply shims here; wiring the callback
 /// module is done via the Elixir/Rustler side (existing GenServer pattern).
-@external(erlang, "Elixir.Kreuzberg.Native", "register_validator")
+@external(erlang, "kreuzberg_gleam_ffi", "register_validator")
 pub fn register_validator(pid: Dynamic, plugin_name: String) -> Nil
+
 /// Send the `validate` response back to the Rustler reply-registry.
 ///
 /// Call this from your `handle_info/2` after processing a
@@ -3773,7 +3879,8 @@ pub fn register_validator(pid: Dynamic, plugin_name: String) -> Nil
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "validator_validate_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "validator_validate_response")
 pub fn validator_validate_response(call_id: Dynamic, result: Result(Nil, KreuzbergError)) -> Nil
 
 /// Send the `should_validate` response back to the Rustler reply-registry.
@@ -3792,7 +3899,8 @@ pub fn validator_validate_response(call_id: Dynamic, result: Result(Nil, Kreuzbe
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "validator_should_validate_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "validator_should_validate_response")
 pub fn validator_should_validate_response(call_id: Dynamic, result: Result(Bool, String)) -> Nil
 
 /// Send the `priority` response back to the Rustler reply-registry.
@@ -3811,7 +3919,8 @@ pub fn validator_should_validate_response(call_id: Dynamic, result: Result(Bool,
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "validator_priority_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "validator_priority_response")
 pub fn validator_priority_response(call_id: Dynamic, result: Result(Int, String)) -> Nil
 
 
@@ -3871,8 +3980,9 @@ pub fn validator_priority_response(call_id: Dynamic, result: Result(Int, String)
 /// `complete_trait_call` or `fail_trait_call` with the reply.
 /// Gleam emits the registration and reply shims here; wiring the callback
 /// module is done via the Elixir/Rustler side (existing GenServer pattern).
-@external(erlang, "Elixir.Kreuzberg.Native", "register_embedding_backend")
+@external(erlang, "kreuzberg_gleam_ffi", "register_embedding_backend")
 pub fn register_embedding_backend(pid: Dynamic, plugin_name: String) -> Nil
+
 /// Send the `dimensions` response back to the Rustler reply-registry.
 ///
 /// Call this from your `handle_info/2` after processing a
@@ -3889,7 +3999,8 @@ pub fn register_embedding_backend(pid: Dynamic, plugin_name: String) -> Nil
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "embedding_backend_dimensions_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "embedding_backend_dimensions_response")
 pub fn embedding_backend_dimensions_response(call_id: Dynamic, result: Result(Int, String)) -> Nil
 
 /// Send the `embed` response back to the Rustler reply-registry.
@@ -3908,5 +4019,6 @@ pub fn embedding_backend_dimensions_response(call_id: Dynamic, result: Result(In
 /// //   }
 /// // }
 /// ```
-@external(erlang, "Elixir.Kreuzberg.Native", "embedding_backend_embed_response")
+///
+@external(erlang, "kreuzberg_gleam_ffi", "embedding_backend_embed_response")
 pub fn embedding_backend_embed_response(call_id: Dynamic, result: Result(List(List(Float)), KreuzbergError)) -> Nil

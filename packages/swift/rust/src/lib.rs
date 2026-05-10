@@ -73,6 +73,7 @@ mod ffi {
             security_limits: Option<SecurityLimits>,
             output_format: OutputFormat,
             layout: Option<LayoutDetectionConfig>,
+            use_layout_for_markdown: bool,
             include_document_structure: bool,
             acceleration: Option<AccelerationConfig>,
             cache_namespace: Option<String>,
@@ -107,6 +108,7 @@ mod ffi {
         fn security_limits(&self) -> Option<SecurityLimits>;
         fn output_format(&self) -> OutputFormat;
         fn layout(&self) -> Option<LayoutDetectionConfig>;
+        fn use_layout_for_markdown(&self) -> bool;
         fn include_document_structure(&self) -> bool;
         fn acceleration(&self) -> Option<AccelerationConfig>;
         fn cache_namespace(&self) -> Option<String>;
@@ -703,6 +705,45 @@ mod ffi {
     }
 
     extern "Rust" {
+        type DocxAppProperties;
+        #[swift_bridge(init)]
+        fn new(
+            application: Option<String>,
+            app_version: Option<String>,
+            template: Option<String>,
+            total_time: Option<i32>,
+            pages: Option<i32>,
+            words: Option<i32>,
+            characters: Option<i32>,
+            characters_with_spaces: Option<i32>,
+            lines: Option<i32>,
+            paragraphs: Option<i32>,
+            company: Option<String>,
+            doc_security: Option<i32>,
+            scale_crop: Option<bool>,
+            links_up_to_date: Option<bool>,
+            shared_doc: Option<bool>,
+            hyperlinks_changed: Option<bool>,
+        ) -> DocxAppProperties;
+        fn application(&self) -> Option<String>;
+        fn app_version(&self) -> Option<String>;
+        fn template(&self) -> Option<String>;
+        fn total_time(&self) -> Option<i32>;
+        fn pages(&self) -> Option<i32>;
+        fn words(&self) -> Option<i32>;
+        fn characters(&self) -> Option<i32>;
+        fn characters_with_spaces(&self) -> Option<i32>;
+        fn lines(&self) -> Option<i32>;
+        fn paragraphs(&self) -> Option<i32>;
+        fn company(&self) -> Option<String>;
+        fn doc_security(&self) -> Option<i32>;
+        fn scale_crop(&self) -> Option<bool>;
+        fn links_up_to_date(&self) -> Option<bool>;
+        fn shared_doc(&self) -> Option<bool>;
+        fn hyperlinks_changed(&self) -> Option<bool>;
+    }
+
+    extern "Rust" {
         type XlsxAppProperties;
         #[swift_bridge(init)]
         fn new(
@@ -762,6 +803,43 @@ mod ffi {
         fn multimedia_clips(&self) -> Option<i32>;
         fn presentation_format(&self) -> Option<String>;
         fn slide_titles(&self) -> Vec<String>;
+    }
+
+    extern "Rust" {
+        type CoreProperties;
+        #[swift_bridge(init)]
+        fn new(
+            title: Option<String>,
+            subject: Option<String>,
+            creator: Option<String>,
+            keywords: Option<String>,
+            description: Option<String>,
+            last_modified_by: Option<String>,
+            revision: Option<String>,
+            created: Option<String>,
+            modified: Option<String>,
+            category: Option<String>,
+            content_status: Option<String>,
+            language: Option<String>,
+            identifier: Option<String>,
+            version: Option<String>,
+            last_printed: Option<String>,
+        ) -> CoreProperties;
+        fn title(&self) -> Option<String>;
+        fn subject(&self) -> Option<String>;
+        fn creator(&self) -> Option<String>;
+        fn keywords(&self) -> Option<String>;
+        fn description(&self) -> Option<String>;
+        fn last_modified_by(&self) -> Option<String>;
+        fn revision(&self) -> Option<String>;
+        fn created(&self) -> Option<String>;
+        fn modified(&self) -> Option<String>;
+        fn category(&self) -> Option<String>;
+        fn content_status(&self) -> Option<String>;
+        fn language(&self) -> Option<String>;
+        fn identifier(&self) -> Option<String>;
+        fn version(&self) -> Option<String>;
+        fn last_printed(&self) -> Option<String>;
     }
 
     extern "Rust" {
@@ -1430,6 +1508,16 @@ mod ffi {
     }
 
     extern "Rust" {
+        type ImageMetadata;
+        #[swift_bridge(init)]
+        fn new(width: u32, height: u32, format: String, exif: String) -> ImageMetadata;
+        fn width(&self) -> u32;
+        fn height(&self) -> u32;
+        fn format(&self) -> String;
+        fn exif(&self) -> String;
+    }
+
+    extern "Rust" {
         type XmlMetadata;
         #[swift_bridge(init)]
         fn new(element_count: usize, unique_elements: Vec<String>) -> XmlMetadata;
@@ -1573,12 +1661,12 @@ mod ffi {
         type DocxMetadata;
         #[swift_bridge(init)]
         fn new(
-            core_properties: Option<String>,
-            app_properties: Option<String>,
+            core_properties: Option<CoreProperties>,
+            app_properties: Option<DocxAppProperties>,
             custom_properties: String,
         ) -> DocxMetadata;
-        fn core_properties(&self) -> Option<String>;
-        fn app_properties(&self) -> Option<String>;
+        fn core_properties(&self) -> Option<CoreProperties>;
+        fn app_properties(&self) -> Option<DocxAppProperties>;
         fn custom_properties(&self) -> String;
     }
 
@@ -2170,6 +2258,25 @@ mod ffi {
     }
 
     extern "Rust" {
+        type PdfMetadata;
+        #[swift_bridge(init)]
+        fn new(
+            pdf_version: Option<String>,
+            producer: Option<String>,
+            is_encrypted: Option<bool>,
+            width: Option<i64>,
+            height: Option<i64>,
+            page_count: Option<usize>,
+        ) -> PdfMetadata;
+        fn pdf_version(&self) -> Option<String>;
+        fn producer(&self) -> Option<String>;
+        fn is_encrypted(&self) -> Option<bool>;
+        fn width(&self) -> Option<i64>;
+        fn height(&self) -> Option<i64>;
+        fn page_count(&self) -> Option<usize>;
+    }
+
+    extern "Rust" {
         type ExecutionProviderType;
     }
 
@@ -2386,6 +2493,13 @@ mod ffi {
         fn clear_validators() -> Result<(), String>;
         #[swift_bridge(swift_name = "embedTextsAsync")]
         fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<String, String>;
+        #[swift_bridge(swift_name = "renderPdfPageToPng")]
+        fn render_pdf_page_to_png(
+            pdf_bytes: Vec<u8>,
+            page_index: usize,
+            dpi: Option<i32>,
+            password: Option<String>,
+        ) -> Result<Vec<u8>, String>;
         #[swift_bridge(swift_name = "detectMimeType")]
         fn detect_mime_type(path: String, check_exists: bool) -> Result<String, String>;
         #[swift_bridge(swift_name = "embedTexts")]
@@ -2461,10 +2575,89 @@ mod ffi {
         fn embedding_backend_call_dimensions(this: &EmbeddingBackendBox) -> usize;
         fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> Result<String, String>;
     }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerOcrBackend")]
+        fn register_ocr_backend(swift_box: SwiftOcrBackendBox) -> Result<(), String>;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerPostProcessor")]
+        fn register_post_processor(swift_box: SwiftPostProcessorBox) -> Result<(), String>;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerValidator")]
+        fn register_validator(swift_box: SwiftValidatorBox) -> Result<(), String>;
+    }
+
+    extern "Rust" {
+        #[swift_bridge(swift_name = "registerEmbeddingBackend")]
+        fn register_embedding_backend(swift_box: SwiftEmbeddingBackendBox) -> Result<(), String>;
+    }
+
+    extern "Swift" {
+        type SwiftOcrBackendBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_process_image(&self, image_bytes: Vec<u8>, config: String) -> String;
+        fn alef_process_image_file(&self, path: String, config: String) -> String;
+        fn alef_supports_language(&self, lang: String) -> bool;
+        fn alef_backend_type(&self) -> String;
+        fn alef_supported_languages(&self) -> Vec<String>;
+        fn alef_supports_table_detection(&self) -> bool;
+        fn alef_supports_document_processing(&self) -> bool;
+        fn alef_process_document(&self, path: String, config: String) -> String;
+    }
+
+    extern "Swift" {
+        type SwiftPostProcessorBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_process(&self, result: String, config: String) -> String;
+        fn alef_processing_stage(&self) -> String;
+        fn alef_should_process(&self, result: String, config: String) -> bool;
+        fn alef_estimated_duration_ms(&self, result: String) -> u64;
+        fn alef_priority(&self) -> i32;
+    }
+
+    extern "Swift" {
+        type SwiftValidatorBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_validate(&self, result: String, config: String) -> String;
+        fn alef_should_validate(&self, result: String, config: String) -> bool;
+        fn alef_priority(&self) -> i32;
+    }
+
+    extern "Swift" {
+        type SwiftEmbeddingBackendBox;
+        fn alef_name(&self) -> String;
+        fn alef_version(&self) -> String;
+        fn alef_initialize(&self) -> String;
+        fn alef_shutdown(&self) -> String;
+        fn alef_dimensions(&self) -> usize;
+        fn alef_embed(&self, texts: Vec<String>) -> String;
+    }
+
+    extern "Rust" {
+
+        #[swift_bridge(swift_name = "extractionConfigFromJson")]
+        fn extraction_config_from_json(json: String) -> Result<ExtractionConfig, String>;
+        #[swift_bridge(swift_name = "batchBytesItemFromJson")]
+        fn batch_bytes_item_from_json(json: String) -> Result<BatchBytesItem, String>;
+        #[swift_bridge(swift_name = "batchFileItemFromJson")]
+        fn batch_file_item_from_json(json: String) -> Result<BatchFileItem, String>;
+    }
 }
 
 pub struct AccelerationConfig(pub kreuzberg::AccelerationConfig);
-
 impl AccelerationConfig {
     pub fn new(provider: ExecutionProviderType, device_id: u32) -> AccelerationConfig {
         let mut __target: kreuzberg::AccelerationConfig = ::std::default::Default::default();
@@ -2484,7 +2677,6 @@ impl AccelerationConfig {
 }
 
 pub struct ContentFilterConfig(pub kreuzberg::ContentFilterConfig);
-
 impl ContentFilterConfig {
     pub fn new(
         include_headers: bool,
@@ -2526,7 +2718,6 @@ impl ContentFilterConfig {
 }
 
 pub struct EmailConfig(pub kreuzberg::EmailConfig);
-
 impl EmailConfig {
     pub fn new(msg_fallback_codepage: Option<u32>) -> EmailConfig {
         let mut __target: kreuzberg::EmailConfig = ::std::default::Default::default();
@@ -2543,7 +2734,6 @@ impl EmailConfig {
 }
 
 pub struct ExtractionConfig(pub kreuzberg::ExtractionConfig);
-
 impl ExtractionConfig {
     pub fn new(
         use_cache: bool,
@@ -2569,6 +2759,7 @@ impl ExtractionConfig {
         security_limits: Option<SecurityLimits>,
         output_format: OutputFormat,
         layout: Option<LayoutDetectionConfig>,
+        use_layout_for_markdown: bool,
         include_document_structure: bool,
         acceleration: Option<AccelerationConfig>,
         cache_namespace: Option<String>,
@@ -2640,6 +2831,7 @@ impl ExtractionConfig {
         if let Some(w) = layout {
             __target.layout = Some(w.0);
         }
+        __target.use_layout_for_markdown = use_layout_for_markdown;
         __target.include_document_structure = include_document_structure;
         if let Some(w) = acceleration {
             __target.acceleration = Some(w.0);
@@ -2771,6 +2963,12 @@ impl ExtractionConfig {
     pub fn layout(&self) -> Option<LayoutDetectionConfig> {
         self.0.layout.clone().map(LayoutDetectionConfig)
     }
+    pub fn use_layout_for_markdown(&self) -> bool {
+        ::serde_json::to_value(&self.0.use_layout_for_markdown)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
     pub fn include_document_structure(&self) -> bool {
         ::serde_json::to_value(&self.0.include_document_structure)
             .ok()
@@ -2781,10 +2979,7 @@ impl ExtractionConfig {
         self.0.acceleration.clone().map(AccelerationConfig)
     }
     pub fn cache_namespace(&self) -> Option<String> {
-        self.0
-            .cache_namespace
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.cache_namespace.clone()
     }
     pub fn cache_ttl_secs(&self) -> Option<u64> {
         self.0.cache_ttl_secs.as_ref().and_then(|v| {
@@ -2817,7 +3012,6 @@ impl ExtractionConfig {
 }
 
 pub struct FileExtractionConfig(pub kreuzberg::FileExtractionConfig);
-
 impl FileExtractionConfig {
     pub fn new(
         enable_quality_processing: Option<bool>,
@@ -2997,13 +3191,12 @@ impl FileExtractionConfig {
 }
 
 pub struct BatchBytesItem(pub kreuzberg::BatchBytesItem);
-
 impl BatchBytesItem {
     pub fn content(&self) -> Vec<u8> {
         self.0.content.to_vec()
     }
     pub fn mime_type(&self) -> String {
-        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+        self.0.mime_type.clone()
     }
     pub fn config(&self) -> Option<FileExtractionConfig> {
         self.0.config.clone().map(FileExtractionConfig)
@@ -3011,7 +3204,6 @@ impl BatchBytesItem {
 }
 
 pub struct BatchFileItem(pub kreuzberg::BatchFileItem);
-
 impl BatchFileItem {
     pub fn path(&self) -> String {
         serde_json::to_string(&self.0.path).unwrap_or_default()
@@ -3022,7 +3214,6 @@ impl BatchFileItem {
 }
 
 pub struct ImageExtractionConfig(pub kreuzberg::ImageExtractionConfig);
-
 impl ImageExtractionConfig {
     pub fn new(
         extract_images: bool,
@@ -3105,7 +3296,6 @@ impl ImageExtractionConfig {
 }
 
 pub struct TokenReductionOptions(pub kreuzberg::TokenReductionOptions);
-
 impl TokenReductionOptions {
     pub fn new(mode: String, preserve_important_words: bool) -> TokenReductionOptions {
         let mut __target: kreuzberg::TokenReductionOptions = ::std::default::Default::default();
@@ -3118,7 +3308,7 @@ impl TokenReductionOptions {
         TokenReductionOptions(__target)
     }
     pub fn mode(&self) -> String {
-        serde_json::to_string(&self.0.mode).unwrap_or_default()
+        self.0.mode.clone()
     }
     pub fn preserve_important_words(&self) -> bool {
         ::serde_json::to_value(&self.0.preserve_important_words)
@@ -3129,7 +3319,6 @@ impl TokenReductionOptions {
 }
 
 pub struct LanguageDetectionConfig(pub kreuzberg::LanguageDetectionConfig);
-
 impl LanguageDetectionConfig {
     pub fn new(enabled: bool, min_confidence: f64, detect_multiple: bool) -> LanguageDetectionConfig {
         let mut __target: kreuzberg::LanguageDetectionConfig = ::std::default::Default::default();
@@ -3159,7 +3348,6 @@ impl LanguageDetectionConfig {
 }
 
 pub struct HtmlOutputConfig(pub kreuzberg::HtmlOutputConfig);
-
 impl HtmlOutputConfig {
     pub fn new(
         css: Option<String>,
@@ -3193,7 +3381,7 @@ impl HtmlOutputConfig {
         HtmlOutputConfig(__target)
     }
     pub fn css(&self) -> Option<String> {
-        self.0.css.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.css.clone()
     }
     pub fn css_file(&self) -> Option<String> {
         self.0.css_file.as_ref().and_then(|v| serde_json::to_string(v).ok())
@@ -3202,7 +3390,7 @@ impl HtmlOutputConfig {
         HtmlTheme::from(self.0.theme.clone())
     }
     pub fn class_prefix(&self) -> String {
-        serde_json::to_string(&self.0.class_prefix).unwrap_or_default()
+        self.0.class_prefix.clone()
     }
     pub fn embed_css(&self) -> bool {
         ::serde_json::to_value(&self.0.embed_css)
@@ -3213,7 +3401,6 @@ impl HtmlOutputConfig {
 }
 
 pub struct LayoutDetectionConfig(pub kreuzberg::LayoutDetectionConfig);
-
 impl LayoutDetectionConfig {
     pub fn new(
         confidence_threshold: Option<f32>,
@@ -3252,7 +3439,6 @@ impl LayoutDetectionConfig {
 }
 
 pub struct LlmConfig(pub kreuzberg::LlmConfig);
-
 impl LlmConfig {
     pub fn new(
         model: String,
@@ -3290,13 +3476,13 @@ impl LlmConfig {
         LlmConfig(__target)
     }
     pub fn model(&self) -> String {
-        serde_json::to_string(&self.0.model).unwrap_or_default()
+        self.0.model.clone()
     }
     pub fn api_key(&self) -> Option<String> {
-        self.0.api_key.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.api_key.clone()
     }
     pub fn base_url(&self) -> Option<String> {
-        self.0.base_url.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.base_url.clone()
     }
     pub fn timeout_secs(&self) -> Option<u64> {
         self.0.timeout_secs.as_ref().and_then(|v| {
@@ -3329,19 +3515,15 @@ impl LlmConfig {
 }
 
 pub struct StructuredExtractionConfig(pub kreuzberg::StructuredExtractionConfig);
-
 impl StructuredExtractionConfig {
     pub fn schema(&self) -> String {
         serde_json::to_string(&self.0.schema).unwrap_or_default()
     }
     pub fn schema_name(&self) -> String {
-        serde_json::to_string(&self.0.schema_name).unwrap_or_default()
+        self.0.schema_name.clone()
     }
     pub fn schema_description(&self) -> Option<String> {
-        self.0
-            .schema_description
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.schema_description.clone()
     }
     pub fn strict(&self) -> bool {
         ::serde_json::to_value(&self.0.strict)
@@ -3350,7 +3532,7 @@ impl StructuredExtractionConfig {
             .unwrap_or_default()
     }
     pub fn prompt(&self) -> Option<String> {
-        self.0.prompt.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.prompt.clone()
     }
     pub fn llm(&self) -> LlmConfig {
         LlmConfig(self.0.llm.clone())
@@ -3358,7 +3540,6 @@ impl StructuredExtractionConfig {
 }
 
 pub struct OcrQualityThresholds(pub kreuzberg::OcrQualityThresholds);
-
 impl OcrQualityThresholds {
     pub fn new(
         min_total_non_whitespace: usize,
@@ -3496,10 +3677,9 @@ impl OcrQualityThresholds {
 }
 
 pub struct OcrPipelineStage(pub kreuzberg::OcrPipelineStage);
-
 impl OcrPipelineStage {
     pub fn backend(&self) -> String {
-        serde_json::to_string(&self.0.backend).unwrap_or_default()
+        self.0.backend.clone()
     }
     pub fn priority(&self) -> u32 {
         ::serde_json::to_value(&self.0.priority)
@@ -3508,7 +3688,7 @@ impl OcrPipelineStage {
             .unwrap_or_default()
     }
     pub fn language(&self) -> Option<String> {
-        self.0.language.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.language.clone()
     }
     pub fn tesseract_config(&self) -> Option<TesseractConfig> {
         self.0.tesseract_config.clone().map(TesseractConfig)
@@ -3525,7 +3705,6 @@ impl OcrPipelineStage {
 }
 
 pub struct OcrPipelineConfig(pub kreuzberg::OcrPipelineConfig);
-
 impl OcrPipelineConfig {
     pub fn stages(&self) -> Vec<OcrPipelineStage> {
         self.0
@@ -3540,7 +3719,6 @@ impl OcrPipelineConfig {
 }
 
 pub struct OcrConfig(pub kreuzberg::OcrConfig);
-
 impl OcrConfig {
     pub fn new(
         enabled: bool,
@@ -3612,10 +3790,10 @@ impl OcrConfig {
             .unwrap_or_default()
     }
     pub fn backend(&self) -> String {
-        serde_json::to_string(&self.0.backend).unwrap_or_default()
+        self.0.backend.clone()
     }
     pub fn language(&self) -> String {
-        serde_json::to_string(&self.0.language).unwrap_or_default()
+        self.0.language.clone()
     }
     pub fn tesseract_config(&self) -> Option<TesseractConfig> {
         self.0.tesseract_config.clone().map(TesseractConfig)
@@ -3648,7 +3826,7 @@ impl OcrConfig {
         self.0.vlm_config.clone().map(LlmConfig)
     }
     pub fn vlm_prompt(&self) -> Option<String> {
-        self.0.vlm_prompt.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.vlm_prompt.clone()
     }
     pub fn acceleration(&self) -> Option<AccelerationConfig> {
         self.0.acceleration.clone().map(AccelerationConfig)
@@ -3656,7 +3834,6 @@ impl OcrConfig {
 }
 
 pub struct PageConfig(pub kreuzberg::PageConfig);
-
 impl PageConfig {
     pub fn new(extract_pages: bool, insert_page_markers: bool, marker_format: String) -> PageConfig {
         let mut __target: kreuzberg::PageConfig = ::std::default::Default::default();
@@ -3682,12 +3859,11 @@ impl PageConfig {
             .unwrap_or_default()
     }
     pub fn marker_format(&self) -> String {
-        serde_json::to_string(&self.0.marker_format).unwrap_or_default()
+        self.0.marker_format.clone()
     }
 }
 
 pub struct PdfConfig(pub kreuzberg::PdfConfig);
-
 impl PdfConfig {
     pub fn new(
         extract_images: bool,
@@ -3767,7 +3943,6 @@ impl PdfConfig {
 }
 
 pub struct HierarchyConfig(pub kreuzberg::HierarchyConfig);
-
 impl HierarchyConfig {
     pub fn new(
         enabled: bool,
@@ -3810,7 +3985,6 @@ impl HierarchyConfig {
 }
 
 pub struct PostProcessorConfig(pub kreuzberg::PostProcessorConfig);
-
 impl PostProcessorConfig {
     pub fn new(
         enabled: bool,
@@ -3876,7 +4050,6 @@ impl PostProcessorConfig {
 }
 
 pub struct ChunkingConfig(pub kreuzberg::ChunkingConfig);
-
 impl ChunkingConfig {
     pub fn new(
         max_characters: usize,
@@ -3934,7 +4107,7 @@ impl ChunkingConfig {
         self.0.embedding.clone().map(EmbeddingConfig)
     }
     pub fn preset(&self) -> Option<String> {
-        self.0.preset.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.preset.clone()
     }
     pub fn sizing(&self) -> ChunkSizing {
         ChunkSizing::from(self.0.sizing.clone())
@@ -3955,7 +4128,6 @@ impl ChunkingConfig {
 }
 
 pub struct EmbeddingConfig(pub kreuzberg::EmbeddingConfig);
-
 impl EmbeddingConfig {
     pub fn new(
         model: EmbeddingModelType,
@@ -4021,7 +4193,6 @@ impl EmbeddingConfig {
 }
 
 pub struct TreeSitterConfig(pub kreuzberg::TreeSitterConfig);
-
 impl TreeSitterConfig {
     pub fn new(
         enabled: bool,
@@ -4081,7 +4252,6 @@ impl TreeSitterConfig {
 }
 
 pub struct TreeSitterProcessConfig(pub kreuzberg::TreeSitterProcessConfig);
-
 impl TreeSitterProcessConfig {
     pub fn new(
         structure: bool,
@@ -4161,18 +4331,16 @@ impl TreeSitterProcessConfig {
 }
 
 pub struct SupportedFormat(pub kreuzberg::SupportedFormat);
-
 impl SupportedFormat {
     pub fn extension_(&self) -> String {
-        serde_json::to_string(&self.0.extension).unwrap_or_default()
+        self.0.extension.clone()
     }
     pub fn mime_type(&self) -> String {
-        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+        self.0.mime_type.clone()
     }
 }
 
 pub struct ServerConfig(pub kreuzberg::ServerConfig);
-
 impl ServerConfig {
     pub fn new(
         host: String,
@@ -4198,7 +4366,7 @@ impl ServerConfig {
         ServerConfig(__target)
     }
     pub fn host(&self) -> String {
-        serde_json::to_string(&self.0.host).unwrap_or_default()
+        self.0.host.clone()
     }
     pub fn port(&self) -> u16 {
         ::serde_json::to_value(&self.0.port)
@@ -4227,13 +4395,12 @@ impl ServerConfig {
 }
 
 pub struct StructuredDataResult(pub kreuzberg::extraction::structured::StructuredDataResult);
-
 impl StructuredDataResult {
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn format(&self) -> String {
-        serde_json::to_string(&self.0.format).unwrap_or_default()
+        self.0.format.to_string()
     }
     pub fn metadata(&self) -> String {
         serde_json::to_string(&self.0.metadata).expect("serializable metadata")
@@ -4247,7 +4414,6 @@ impl StructuredDataResult {
 }
 
 pub struct CharShape(pub kreuzberg::extraction::hwp::model::CharShape);
-
 impl CharShape {
     pub fn new(bold: bool, italic: bool, underline: bool) -> CharShape {
         CharShape(kreuzberg::extraction::hwp::model::CharShape {
@@ -4268,12 +4434,11 @@ impl CharShape {
 }
 
 pub struct HwpImage(pub kreuzberg::extraction::hwp::model::HwpImage);
-
 impl HwpImage {
     pub fn new(name: String, data: Vec<u8>) -> HwpImage {
         let mut __target: kreuzberg::extraction::hwp::model::HwpImage = ::std::default::Default::default();
         // alef: name — String fallback in non-serde struct, left at default
-        __target.data = data;
+        __target.data = data.into();
         HwpImage(__target)
     }
     pub fn name(&self) -> String {
@@ -4287,7 +4452,6 @@ impl HwpImage {
 pub struct StreamReader(pub kreuzberg::extraction::hwp::reader::StreamReader);
 
 pub struct ImageOcrResult(pub kreuzberg::extraction::image::ImageOcrResult);
-
 impl ImageOcrResult {
     pub fn content(&self) -> String {
         format!("{:?}", &self.0.content)
@@ -4297,10 +4461,9 @@ impl ImageOcrResult {
 }
 
 pub struct HtmlExtractionResult(pub kreuzberg::extraction::html::HtmlExtractionResult);
-
 impl HtmlExtractionResult {
     pub fn markdown(&self) -> String {
-        serde_json::to_string(&self.0.markdown).unwrap_or_default()
+        self.0.markdown.clone()
     }
     pub fn images(&self) -> Vec<ExtractedInlineImage> {
         self.0
@@ -4318,19 +4481,18 @@ impl HtmlExtractionResult {
 }
 
 pub struct ExtractedInlineImage(pub kreuzberg::extraction::html::ExtractedInlineImage);
-
 impl ExtractedInlineImage {
     pub fn data(&self) -> Vec<u8> {
         self.0.data.to_vec()
     }
     pub fn format(&self) -> String {
-        serde_json::to_string(&self.0.format).unwrap_or_default()
+        self.0.format.clone()
     }
     pub fn filename(&self) -> Option<String> {
-        self.0.filename.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.filename.clone()
     }
     pub fn description(&self) -> Option<String> {
-        self.0.description.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.description.clone()
     }
     pub fn dimensions(&self) -> Option<Vec<u32>> {
         self.0.dimensions.as_ref().and_then(|v| {
@@ -4348,7 +4510,6 @@ impl ExtractedInlineImage {
 }
 
 pub struct Drawing(pub kreuzberg::extraction::docx::drawing::Drawing);
-
 impl Drawing {
     pub fn new(
         drawing_type: String,
@@ -4398,12 +4559,11 @@ impl Drawing {
             .and_then(|v| serde_json::to_string(v).ok())
     }
     pub fn image_ref(&self) -> Option<String> {
-        self.0.image_ref.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.image_ref.clone()
     }
 }
 
 pub struct AnchorProperties(pub kreuzberg::extraction::docx::drawing::AnchorProperties);
-
 impl AnchorProperties {
     pub fn new(
         behind_doc: bool,
@@ -4469,7 +4629,6 @@ impl AnchorProperties {
 }
 
 pub struct PageMarginsPoints(pub kreuzberg::extraction::docx::section::PageMarginsPoints);
-
 impl PageMarginsPoints {
     pub fn new(
         top: Option<f64>,
@@ -4514,7 +4673,6 @@ impl PageMarginsPoints {
 }
 
 pub struct StyleDefinition(pub kreuzberg::extraction::docx::styles::StyleDefinition);
-
 impl StyleDefinition {
     pub fn id(&self) -> String {
         format!("{:?}", &self.0.id)
@@ -4543,7 +4701,6 @@ impl StyleDefinition {
 }
 
 pub struct ResolvedStyle(pub kreuzberg::extraction::docx::styles::ResolvedStyle);
-
 impl ResolvedStyle {
     pub fn new(paragraph_properties: String, run_properties: String) -> ResolvedStyle {
         let mut __target: kreuzberg::extraction::docx::styles::ResolvedStyle = ::std::default::Default::default();
@@ -4560,7 +4717,6 @@ impl ResolvedStyle {
 }
 
 pub struct TableProperties(pub kreuzberg::extraction::docx::table::TableProperties);
-
 impl TableProperties {
     pub fn new(
         style_id: Option<String>,
@@ -4640,16 +4796,16 @@ impl TableProperties {
         TableProperties(__target)
     }
     pub fn style_id(&self) -> Option<String> {
-        self.0.style_id.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.style_id.clone()
     }
     pub fn width(&self) -> Option<String> {
         self.0.width.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
     pub fn alignment(&self) -> Option<String> {
-        self.0.alignment.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.alignment.clone()
     }
     pub fn layout(&self) -> Option<String> {
-        self.0.layout.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.layout.clone()
     }
     pub fn look(&self) -> Option<String> {
         self.0.look.as_ref().and_then(|v| serde_json::to_string(v).ok())
@@ -4664,12 +4820,173 @@ impl TableProperties {
         self.0.indent.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
     pub fn caption(&self) -> Option<String> {
-        self.0.caption.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.caption.clone()
+    }
+}
+
+pub struct DocxAppProperties(pub kreuzberg::extraction::office_metadata::DocxAppProperties);
+impl DocxAppProperties {
+    pub fn new(
+        application: Option<String>,
+        app_version: Option<String>,
+        template: Option<String>,
+        total_time: Option<i32>,
+        pages: Option<i32>,
+        words: Option<i32>,
+        characters: Option<i32>,
+        characters_with_spaces: Option<i32>,
+        lines: Option<i32>,
+        paragraphs: Option<i32>,
+        company: Option<String>,
+        doc_security: Option<i32>,
+        scale_crop: Option<bool>,
+        links_up_to_date: Option<bool>,
+        shared_doc: Option<bool>,
+        hyperlinks_changed: Option<bool>,
+    ) -> DocxAppProperties {
+        let mut __target: kreuzberg::extraction::office_metadata::DocxAppProperties =
+            ::std::default::Default::default();
+        if let Some(s) = application {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.application = Some(t);
+                }
+            }
+        }
+        if let Some(s) = app_version {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.app_version = Some(t);
+                }
+            }
+        }
+        if let Some(s) = template {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.template = Some(t);
+                }
+            }
+        }
+        __target.total_time = total_time;
+        __target.pages = pages;
+        __target.words = words;
+        __target.characters = characters;
+        __target.characters_with_spaces = characters_with_spaces;
+        __target.lines = lines;
+        __target.paragraphs = paragraphs;
+        if let Some(s) = company {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.company = Some(t);
+                }
+            }
+        }
+        __target.doc_security = doc_security;
+        __target.scale_crop = scale_crop;
+        __target.links_up_to_date = links_up_to_date;
+        __target.shared_doc = shared_doc;
+        __target.hyperlinks_changed = hyperlinks_changed;
+        DocxAppProperties(__target)
+    }
+    pub fn application(&self) -> Option<String> {
+        self.0.application.clone()
+    }
+    pub fn app_version(&self) -> Option<String> {
+        self.0.app_version.clone()
+    }
+    pub fn template(&self) -> Option<String> {
+        self.0.template.clone()
+    }
+    pub fn total_time(&self) -> Option<i32> {
+        self.0.total_time.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn pages(&self) -> Option<i32> {
+        self.0.pages.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn words(&self) -> Option<i32> {
+        self.0.words.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn characters(&self) -> Option<i32> {
+        self.0.characters.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn characters_with_spaces(&self) -> Option<i32> {
+        self.0.characters_with_spaces.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn lines(&self) -> Option<i32> {
+        self.0.lines.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn paragraphs(&self) -> Option<i32> {
+        self.0.paragraphs.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn company(&self) -> Option<String> {
+        self.0.company.clone()
+    }
+    pub fn doc_security(&self) -> Option<i32> {
+        self.0.doc_security.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn scale_crop(&self) -> Option<bool> {
+        self.0.scale_crop.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn links_up_to_date(&self) -> Option<bool> {
+        self.0.links_up_to_date.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn shared_doc(&self) -> Option<bool> {
+        self.0.shared_doc.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn hyperlinks_changed(&self) -> Option<bool> {
+        self.0.hyperlinks_changed.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
     }
 }
 
 pub struct XlsxAppProperties(pub kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties);
-
 impl XlsxAppProperties {
     pub fn new(
         application: Option<String>,
@@ -4718,10 +5035,10 @@ impl XlsxAppProperties {
         XlsxAppProperties(__target)
     }
     pub fn application(&self) -> Option<String> {
-        self.0.application.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.application.clone()
     }
     pub fn app_version(&self) -> Option<String> {
-        self.0.app_version.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.app_version.clone()
     }
     pub fn doc_security(&self) -> Option<i32> {
         self.0.doc_security.as_ref().and_then(|v| {
@@ -4759,7 +5076,7 @@ impl XlsxAppProperties {
         })
     }
     pub fn company(&self) -> Option<String> {
-        self.0.company.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.company.clone()
     }
     pub fn worksheet_names(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.worksheet_names)
@@ -4770,7 +5087,6 @@ impl XlsxAppProperties {
 }
 
 pub struct PptxAppProperties(pub kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties);
-
 impl PptxAppProperties {
     pub fn new(
         application: Option<String>,
@@ -4837,10 +5153,10 @@ impl PptxAppProperties {
         PptxAppProperties(__target)
     }
     pub fn application(&self) -> Option<String> {
-        self.0.application.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.application.clone()
     }
     pub fn app_version(&self) -> Option<String> {
-        self.0.app_version.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.app_version.clone()
     }
     pub fn total_time(&self) -> Option<i32> {
         self.0.total_time.as_ref().and_then(|v| {
@@ -4850,7 +5166,7 @@ impl PptxAppProperties {
         })
     }
     pub fn company(&self) -> Option<String> {
-        self.0.company.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.company.clone()
     }
     pub fn doc_security(&self) -> Option<i32> {
         self.0.doc_security.as_ref().and_then(|v| {
@@ -4916,10 +5232,7 @@ impl PptxAppProperties {
         })
     }
     pub fn presentation_format(&self) -> Option<String> {
-        self.0
-            .presentation_format
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.presentation_format.clone()
     }
     pub fn slide_titles(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.slide_titles)
@@ -4929,10 +5242,183 @@ impl PptxAppProperties {
     }
 }
 
+pub struct CoreProperties(pub kreuzberg::extraction::office_metadata::CoreProperties);
+impl CoreProperties {
+    pub fn new(
+        title: Option<String>,
+        subject: Option<String>,
+        creator: Option<String>,
+        keywords: Option<String>,
+        description: Option<String>,
+        last_modified_by: Option<String>,
+        revision: Option<String>,
+        created: Option<String>,
+        modified: Option<String>,
+        category: Option<String>,
+        content_status: Option<String>,
+        language: Option<String>,
+        identifier: Option<String>,
+        version: Option<String>,
+        last_printed: Option<String>,
+    ) -> CoreProperties {
+        let mut __target: kreuzberg::extraction::office_metadata::CoreProperties = ::std::default::Default::default();
+        if let Some(s) = title {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.title = Some(t);
+                }
+            }
+        }
+        if let Some(s) = subject {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.subject = Some(t);
+                }
+            }
+        }
+        if let Some(s) = creator {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.creator = Some(t);
+                }
+            }
+        }
+        if let Some(s) = keywords {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.keywords = Some(t);
+                }
+            }
+        }
+        if let Some(s) = description {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.description = Some(t);
+                }
+            }
+        }
+        if let Some(s) = last_modified_by {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.last_modified_by = Some(t);
+                }
+            }
+        }
+        if let Some(s) = revision {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.revision = Some(t);
+                }
+            }
+        }
+        if let Some(s) = created {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.created = Some(t);
+                }
+            }
+        }
+        if let Some(s) = modified {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.modified = Some(t);
+                }
+            }
+        }
+        if let Some(s) = category {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.category = Some(t);
+                }
+            }
+        }
+        if let Some(s) = content_status {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.content_status = Some(t);
+                }
+            }
+        }
+        if let Some(s) = language {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.language = Some(t);
+                }
+            }
+        }
+        if let Some(s) = identifier {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.identifier = Some(t);
+                }
+            }
+        }
+        if let Some(s) = version {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.version = Some(t);
+                }
+            }
+        }
+        if let Some(s) = last_printed {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.last_printed = Some(t);
+                }
+            }
+        }
+        CoreProperties(__target)
+    }
+    pub fn title(&self) -> Option<String> {
+        self.0.title.clone()
+    }
+    pub fn subject(&self) -> Option<String> {
+        self.0.subject.clone()
+    }
+    pub fn creator(&self) -> Option<String> {
+        self.0.creator.clone()
+    }
+    pub fn keywords(&self) -> Option<String> {
+        self.0.keywords.clone()
+    }
+    pub fn description(&self) -> Option<String> {
+        self.0.description.clone()
+    }
+    pub fn last_modified_by(&self) -> Option<String> {
+        self.0.last_modified_by.clone()
+    }
+    pub fn revision(&self) -> Option<String> {
+        self.0.revision.clone()
+    }
+    pub fn created(&self) -> Option<String> {
+        self.0.created.clone()
+    }
+    pub fn modified(&self) -> Option<String> {
+        self.0.modified.clone()
+    }
+    pub fn category(&self) -> Option<String> {
+        self.0.category.clone()
+    }
+    pub fn content_status(&self) -> Option<String> {
+        self.0.content_status.clone()
+    }
+    pub fn language(&self) -> Option<String> {
+        self.0.language.clone()
+    }
+    pub fn identifier(&self) -> Option<String> {
+        self.0.identifier.clone()
+    }
+    pub fn version(&self) -> Option<String> {
+        self.0.version.clone()
+    }
+    pub fn last_printed(&self) -> Option<String> {
+        self.0.last_printed.clone()
+    }
+}
+
 pub struct CustomProperties(pub kreuzberg::extraction::office_metadata::CustomProperties);
 
 pub struct OdtProperties(pub kreuzberg::extraction::office_metadata::OdtProperties);
-
 impl OdtProperties {
     pub fn new(
         title: Option<String>,
@@ -5032,7 +5518,6 @@ impl OdtProperties {
 }
 
 pub struct SecurityLimits(pub kreuzberg::SecurityLimits);
-
 impl SecurityLimits {
     pub fn new(
         max_archive_size: usize,
@@ -5116,7 +5601,6 @@ impl SecurityLimits {
 pub struct ZipBombValidator(pub kreuzberg::extractors::security::ZipBombValidator);
 
 pub struct TokenReductionConfig(pub kreuzberg::TokenReductionConfig);
-
 impl TokenReductionConfig {
     pub fn new(
         level: ReductionLevel,
@@ -5163,10 +5647,7 @@ impl TokenReductionConfig {
         ReductionLevel::from(self.0.level.clone())
     }
     pub fn language_hint(&self) -> Option<String> {
-        self.0
-            .language_hint
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.language_hint.clone()
     }
     pub fn preserve_markdown(&self) -> bool {
         ::serde_json::to_value(&self.0.preserve_markdown)
@@ -5223,13 +5704,12 @@ impl TokenReductionConfig {
 }
 
 pub struct PdfAnnotation(pub kreuzberg::PdfAnnotation);
-
 impl PdfAnnotation {
     pub fn annotation_type(&self) -> PdfAnnotationType {
         PdfAnnotationType::from(self.0.annotation_type.clone())
     }
     pub fn content(&self) -> Option<String> {
-        self.0.content.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.content.clone()
     }
     pub fn page_number(&self) -> usize {
         ::serde_json::to_value(&self.0.page_number)
@@ -5243,10 +5723,9 @@ impl PdfAnnotation {
 }
 
 pub struct DjotContent(pub kreuzberg::DjotContent);
-
 impl DjotContent {
     pub fn plain_text(&self) -> String {
-        serde_json::to_string(&self.0.plain_text).unwrap_or_default()
+        self.0.plain_text.clone()
     }
     pub fn blocks(&self) -> Vec<FormattedBlock> {
         self.0.blocks.iter().map(|elem| FormattedBlock(elem.clone())).collect()
@@ -5275,7 +5754,6 @@ impl DjotContent {
 }
 
 pub struct FormattedBlock(pub kreuzberg::FormattedBlock);
-
 impl FormattedBlock {
     pub fn block_type(&self) -> BlockType {
         BlockType::from(self.0.block_type.clone())
@@ -5298,10 +5776,10 @@ impl FormattedBlock {
         self.0.attributes.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
     pub fn language(&self) -> Option<String> {
-        self.0.language.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.language.clone()
     }
     pub fn code(&self) -> Option<String> {
-        self.0.code.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.code.clone()
     }
     pub fn children(&self) -> Vec<FormattedBlock> {
         self.0
@@ -5313,13 +5791,12 @@ impl FormattedBlock {
 }
 
 pub struct InlineElement(pub kreuzberg::InlineElement);
-
 impl InlineElement {
     pub fn element_type(&self) -> InlineType {
         InlineType::from(self.0.element_type.clone())
     }
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn attributes(&self) -> Option<String> {
         self.0.attributes.as_ref().and_then(|v| serde_json::to_string(v).ok())
@@ -5330,16 +5807,15 @@ impl InlineElement {
 }
 
 pub struct DjotImage(pub kreuzberg::DjotImage);
-
 impl DjotImage {
     pub fn src(&self) -> String {
-        serde_json::to_string(&self.0.src).unwrap_or_default()
+        self.0.src.clone()
     }
     pub fn alt(&self) -> String {
-        serde_json::to_string(&self.0.alt).unwrap_or_default()
+        self.0.alt.clone()
     }
     pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.title.clone()
     }
     pub fn attributes(&self) -> Option<String> {
         self.0.attributes.as_ref().and_then(|v| serde_json::to_string(v).ok())
@@ -5347,16 +5823,15 @@ impl DjotImage {
 }
 
 pub struct DjotLink(pub kreuzberg::DjotLink);
-
 impl DjotLink {
     pub fn url(&self) -> String {
-        serde_json::to_string(&self.0.url).unwrap_or_default()
+        self.0.url.clone()
     }
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.title.clone()
     }
     pub fn attributes(&self) -> Option<String> {
         self.0.attributes.as_ref().and_then(|v| serde_json::to_string(v).ok())
@@ -5364,10 +5839,9 @@ impl DjotLink {
 }
 
 pub struct Footnote(pub kreuzberg::Footnote);
-
 impl Footnote {
     pub fn label(&self) -> String {
-        serde_json::to_string(&self.0.label).unwrap_or_default()
+        self.0.label.clone()
     }
     pub fn content(&self) -> Vec<FormattedBlock> {
         self.0.content.iter().map(|elem| FormattedBlock(elem.clone())).collect()
@@ -5375,7 +5849,6 @@ impl Footnote {
 }
 
 pub struct DocumentStructure(pub kreuzberg::DocumentStructure);
-
 impl DocumentStructure {
     pub fn new(
         nodes: Vec<DocumentNode>,
@@ -5404,10 +5877,7 @@ impl DocumentStructure {
         self.0.nodes.iter().map(|elem| DocumentNode(elem.clone())).collect()
     }
     pub fn source_format(&self) -> Option<String> {
-        self.0
-            .source_format
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.source_format.clone()
     }
     pub fn relationships(&self) -> Vec<DocumentRelationship> {
         self.0
@@ -5425,7 +5895,6 @@ impl DocumentStructure {
 }
 
 pub struct DocumentRelationship(pub kreuzberg::DocumentRelationship);
-
 impl DocumentRelationship {
     pub fn source(&self) -> u32 {
         ::serde_json::to_value(&self.0.source)
@@ -5445,7 +5914,6 @@ impl DocumentRelationship {
 }
 
 pub struct DocumentNode(pub kreuzberg::DocumentNode);
-
 impl DocumentNode {
     pub fn id(&self) -> String {
         serde_json::to_string(&self.0.id).unwrap_or_default()
@@ -5499,7 +5967,6 @@ impl DocumentNode {
 }
 
 pub struct TableGrid(pub kreuzberg::TableGrid);
-
 impl TableGrid {
     pub fn new(rows: u32, cols: u32, cells: Vec<GridCell>) -> TableGrid {
         let mut __target: kreuzberg::TableGrid = ::std::default::Default::default();
@@ -5526,10 +5993,9 @@ impl TableGrid {
 }
 
 pub struct GridCell(pub kreuzberg::GridCell);
-
 impl GridCell {
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn row(&self) -> u32 {
         ::serde_json::to_value(&self.0.row)
@@ -5567,7 +6033,6 @@ impl GridCell {
 }
 
 pub struct TextAnnotation(pub kreuzberg::TextAnnotation);
-
 impl TextAnnotation {
     pub fn start(&self) -> u32 {
         ::serde_json::to_value(&self.0.start)
@@ -5587,7 +6052,6 @@ impl TextAnnotation {
 }
 
 pub struct ExtractionResult(pub kreuzberg::ExtractionResult);
-
 impl ExtractionResult {
     pub fn new(
         content: String,
@@ -5696,10 +6160,10 @@ impl ExtractionResult {
         ExtractionResult(__target)
     }
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn mime_type(&self) -> String {
-        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+        self.0.mime_type.to_string()
     }
     pub fn metadata(&self) -> Metadata {
         Metadata(self.0.metadata.clone())
@@ -5810,22 +6274,18 @@ impl ExtractionResult {
             .map(|v| v.iter().map(|elem| LlmUsage(elem.clone())).collect())
     }
     pub fn formatted_content(&self) -> Option<String> {
-        self.0
-            .formatted_content
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.formatted_content.clone()
     }
     // alef: skipped getter `ocr_internal_document` — type cannot be bridged through swift-bridge
 }
 
 pub struct ArchiveEntry(pub kreuzberg::ArchiveEntry);
-
 impl ArchiveEntry {
     pub fn path(&self) -> String {
-        serde_json::to_string(&self.0.path).unwrap_or_default()
+        self.0.path.clone()
     }
     pub fn mime_type(&self) -> String {
-        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+        self.0.mime_type.clone()
     }
     pub fn result(&self) -> ExtractionResult {
         ExtractionResult(*self.0.result.clone())
@@ -5833,18 +6293,16 @@ impl ArchiveEntry {
 }
 
 pub struct ProcessingWarning(pub kreuzberg::ProcessingWarning);
-
 impl ProcessingWarning {
     pub fn source(&self) -> String {
-        serde_json::to_string(&self.0.source).unwrap_or_default()
+        self.0.source.to_string()
     }
     pub fn message(&self) -> String {
-        serde_json::to_string(&self.0.message).unwrap_or_default()
+        self.0.message.to_string()
     }
 }
 
 pub struct LlmUsage(pub kreuzberg::LlmUsage);
-
 impl LlmUsage {
     pub fn new(
         model: String,
@@ -5880,10 +6338,10 @@ impl LlmUsage {
         LlmUsage(__target)
     }
     pub fn model(&self) -> String {
-        serde_json::to_string(&self.0.model).unwrap_or_default()
+        self.0.model.clone()
     }
     pub fn source(&self) -> String {
-        serde_json::to_string(&self.0.source).unwrap_or_default()
+        self.0.source.clone()
     }
     pub fn input_tokens(&self) -> Option<u64> {
         self.0.input_tokens.as_ref().and_then(|v| {
@@ -5914,18 +6372,14 @@ impl LlmUsage {
         })
     }
     pub fn finish_reason(&self) -> Option<String> {
-        self.0
-            .finish_reason
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.finish_reason.clone()
     }
 }
 
 pub struct Chunk(pub kreuzberg::Chunk);
-
 impl Chunk {
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn chunk_type(&self) -> ChunkType {
         ChunkType::from(self.0.chunk_type.clone())
@@ -5943,7 +6397,6 @@ impl Chunk {
 }
 
 pub struct HeadingContext(pub kreuzberg::HeadingContext);
-
 impl HeadingContext {
     pub fn headings(&self) -> Vec<HeadingLevel> {
         self.0.headings.iter().map(|elem| HeadingLevel(elem.clone())).collect()
@@ -5951,7 +6404,6 @@ impl HeadingContext {
 }
 
 pub struct HeadingLevel(pub kreuzberg::HeadingLevel);
-
 impl HeadingLevel {
     pub fn level(&self) -> u8 {
         ::serde_json::to_value(&self.0.level)
@@ -5960,12 +6412,11 @@ impl HeadingLevel {
             .unwrap_or_default()
     }
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
 }
 
 pub struct ChunkMetadata(pub kreuzberg::ChunkMetadata);
-
 impl ChunkMetadata {
     pub fn byte_start(&self) -> usize {
         ::serde_json::to_value(&self.0.byte_start)
@@ -6018,13 +6469,12 @@ impl ChunkMetadata {
 }
 
 pub struct ExtractedImage(pub kreuzberg::ExtractedImage);
-
 impl ExtractedImage {
     pub fn data(&self) -> Vec<u8> {
         self.0.data.to_vec()
     }
     pub fn format(&self) -> String {
-        serde_json::to_string(&self.0.format).unwrap_or_default()
+        self.0.format.to_string()
     }
     pub fn image_index(&self) -> usize {
         ::serde_json::to_value(&self.0.image_index)
@@ -6054,7 +6504,7 @@ impl ExtractedImage {
         })
     }
     pub fn colorspace(&self) -> Option<String> {
-        self.0.colorspace.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.colorspace.clone()
     }
     pub fn bits_per_component(&self) -> Option<u32> {
         self.0.bits_per_component.as_ref().and_then(|v| {
@@ -6070,7 +6520,7 @@ impl ExtractedImage {
             .unwrap_or_default()
     }
     pub fn description(&self) -> Option<String> {
-        self.0.description.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.description.clone()
     }
     pub fn ocr_result(&self) -> Option<ExtractionResult> {
         self.0.ocr_result.clone().map(|w| ExtractionResult(*w))
@@ -6079,7 +6529,7 @@ impl ExtractedImage {
         self.0.bounding_box.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
     pub fn source_path(&self) -> Option<String> {
-        self.0.source_path.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.source_path.clone()
     }
     pub fn image_kind(&self) -> Option<ImageKind> {
         self.0.image_kind.clone().map(ImageKind::from)
@@ -6101,7 +6551,6 @@ impl ExtractedImage {
 }
 
 pub struct ElementMetadata(pub kreuzberg::ElementMetadata);
-
 impl ElementMetadata {
     pub fn page_number(&self) -> Option<usize> {
         self.0.page_number.as_ref().and_then(|v| {
@@ -6111,7 +6560,7 @@ impl ElementMetadata {
         })
     }
     pub fn filename(&self) -> Option<String> {
-        self.0.filename.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.filename.clone()
     }
     pub fn coordinates(&self) -> Option<String> {
         self.0.coordinates.as_ref().and_then(|v| serde_json::to_string(v).ok())
@@ -6129,7 +6578,6 @@ impl ElementMetadata {
 }
 
 pub struct Element(pub kreuzberg::Element);
-
 impl Element {
     pub fn element_id(&self) -> String {
         serde_json::to_string(&self.0.element_id).unwrap_or_default()
@@ -6138,7 +6586,7 @@ impl Element {
         ElementType::from(self.0.element_type.clone())
     }
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn metadata(&self) -> ElementMetadata {
         ElementMetadata(self.0.metadata.clone())
@@ -6146,7 +6594,6 @@ impl Element {
 }
 
 pub struct ExcelWorkbook(pub kreuzberg::ExcelWorkbook);
-
 impl ExcelWorkbook {
     pub fn sheets(&self) -> Vec<ExcelSheet> {
         self.0.sheets.iter().map(|elem| ExcelSheet(elem.clone())).collect()
@@ -6157,13 +6604,12 @@ impl ExcelWorkbook {
 }
 
 pub struct ExcelSheet(pub kreuzberg::ExcelSheet);
-
 impl ExcelSheet {
     pub fn name(&self) -> String {
-        serde_json::to_string(&self.0.name).unwrap_or_default()
+        self.0.name.clone()
     }
     pub fn markdown(&self) -> String {
-        serde_json::to_string(&self.0.markdown).unwrap_or_default()
+        self.0.markdown.clone()
     }
     pub fn row_count(&self) -> usize {
         ::serde_json::to_value(&self.0.row_count)
@@ -6189,10 +6635,9 @@ impl ExcelSheet {
 }
 
 pub struct XmlExtractionResult(pub kreuzberg::XmlExtractionResult);
-
 impl XmlExtractionResult {
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn element_count(&self) -> usize {
         ::serde_json::to_value(&self.0.element_count)
@@ -6209,10 +6654,9 @@ impl XmlExtractionResult {
 }
 
 pub struct TextExtractionResult(pub kreuzberg::TextExtractionResult);
-
 impl TextExtractionResult {
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn line_count(&self) -> usize {
         ::serde_json::to_value(&self.0.line_count)
@@ -6256,10 +6700,9 @@ impl TextExtractionResult {
 }
 
 pub struct PptxExtractionResult(pub kreuzberg::PptxExtractionResult);
-
 impl PptxExtractionResult {
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn metadata(&self) -> PptxMetadata {
         PptxMetadata(self.0.metadata.clone())
@@ -6309,13 +6752,12 @@ impl PptxExtractionResult {
 }
 
 pub struct EmailExtractionResult(pub kreuzberg::EmailExtractionResult);
-
 impl EmailExtractionResult {
     pub fn subject(&self) -> Option<String> {
-        self.0.subject.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.subject.clone()
     }
     pub fn from_email(&self) -> Option<String> {
-        self.0.from_email.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.from_email.clone()
     }
     pub fn to_emails(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.to_emails)
@@ -6336,19 +6778,19 @@ impl EmailExtractionResult {
             .unwrap_or_default()
     }
     pub fn date(&self) -> Option<String> {
-        self.0.date.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.date.clone()
     }
     pub fn message_id(&self) -> Option<String> {
-        self.0.message_id.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.message_id.clone()
     }
     pub fn plain_text(&self) -> Option<String> {
-        self.0.plain_text.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.plain_text.clone()
     }
     pub fn html_content(&self) -> Option<String> {
-        self.0.html_content.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.html_content.clone()
     }
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn attachments(&self) -> Vec<EmailAttachment> {
         self.0
@@ -6363,16 +6805,15 @@ impl EmailExtractionResult {
 }
 
 pub struct EmailAttachment(pub kreuzberg::EmailAttachment);
-
 impl EmailAttachment {
     pub fn name(&self) -> Option<String> {
-        self.0.name.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.name.clone()
     }
     pub fn filename(&self) -> Option<String> {
-        self.0.filename.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.filename.clone()
     }
     pub fn mime_type(&self) -> Option<String> {
-        self.0.mime_type.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.mime_type.clone()
     }
     pub fn size(&self) -> Option<usize> {
         self.0.size.as_ref().and_then(|v| {
@@ -6393,13 +6834,12 @@ impl EmailAttachment {
 }
 
 pub struct OcrExtractionResult(pub kreuzberg::OcrExtractionResult);
-
 impl OcrExtractionResult {
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn mime_type(&self) -> String {
-        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+        self.0.mime_type.clone()
     }
     pub fn metadata(&self) -> String {
         serde_json::to_string(&self.0.metadata).expect("serializable metadata")
@@ -6417,13 +6857,12 @@ impl OcrExtractionResult {
 }
 
 pub struct OcrTable(pub kreuzberg::OcrTable);
-
 impl OcrTable {
     pub fn cells(&self) -> String {
         serde_json::to_string(&self.0.cells).expect("serializable cells")
     }
     pub fn markdown(&self) -> String {
-        serde_json::to_string(&self.0.markdown).unwrap_or_default()
+        self.0.markdown.clone()
     }
     pub fn page_number(&self) -> usize {
         ::serde_json::to_value(&self.0.page_number)
@@ -6437,7 +6876,6 @@ impl OcrTable {
 }
 
 pub struct OcrTableBoundingBox(pub kreuzberg::OcrTableBoundingBox);
-
 impl OcrTableBoundingBox {
     pub fn left(&self) -> u32 {
         ::serde_json::to_value(&self.0.left)
@@ -6466,7 +6904,6 @@ impl OcrTableBoundingBox {
 }
 
 pub struct ImagePreprocessingConfig(pub kreuzberg::ImagePreprocessingConfig);
-
 impl ImagePreprocessingConfig {
     pub fn new(
         target_dpi: i32,
@@ -6522,7 +6959,7 @@ impl ImagePreprocessingConfig {
             .unwrap_or_default()
     }
     pub fn binarization_method(&self) -> String {
-        serde_json::to_string(&self.0.binarization_method).unwrap_or_default()
+        self.0.binarization_method.clone()
     }
     pub fn invert_colors(&self) -> bool {
         ::serde_json::to_value(&self.0.invert_colors)
@@ -6533,7 +6970,6 @@ impl ImagePreprocessingConfig {
 }
 
 pub struct TesseractConfig(pub kreuzberg::TesseractConfig);
-
 impl TesseractConfig {
     pub fn new(
         language: String,
@@ -6601,7 +7037,7 @@ impl TesseractConfig {
         TesseractConfig(__target)
     }
     pub fn language(&self) -> String {
-        serde_json::to_string(&self.0.language).unwrap_or_default()
+        self.0.language.clone()
     }
     pub fn psm(&self) -> i32 {
         ::serde_json::to_value(&self.0.psm)
@@ -6610,7 +7046,7 @@ impl TesseractConfig {
             .unwrap_or_default()
     }
     pub fn output_format(&self) -> String {
-        serde_json::to_string(&self.0.output_format).unwrap_or_default()
+        self.0.output_format.clone()
     }
     pub fn oem(&self) -> i32 {
         ::serde_json::to_value(&self.0.oem)
@@ -6688,10 +7124,10 @@ impl TesseractConfig {
             .unwrap_or_default()
     }
     pub fn tessedit_char_whitelist(&self) -> String {
-        serde_json::to_string(&self.0.tessedit_char_whitelist).unwrap_or_default()
+        self.0.tessedit_char_whitelist.clone()
     }
     pub fn tessedit_char_blacklist(&self) -> String {
-        serde_json::to_string(&self.0.tessedit_char_blacklist).unwrap_or_default()
+        self.0.tessedit_char_blacklist.clone()
     }
     pub fn tessedit_use_primary_params_model(&self) -> bool {
         ::serde_json::to_value(&self.0.tessedit_use_primary_params_model)
@@ -6714,7 +7150,6 @@ impl TesseractConfig {
 }
 
 pub struct ImagePreprocessingMetadata(pub kreuzberg::ImagePreprocessingMetadata);
-
 impl ImagePreprocessingMetadata {
     pub fn original_dimensions(&self) -> Vec<usize> {
         ::serde_json::to_value(&self.0.original_dimensions)
@@ -6760,7 +7195,7 @@ impl ImagePreprocessingMetadata {
         })
     }
     pub fn resample_method(&self) -> String {
-        serde_json::to_string(&self.0.resample_method).unwrap_or_default()
+        self.0.resample_method.clone()
     }
     pub fn dimension_clamped(&self) -> bool {
         ::serde_json::to_value(&self.0.dimension_clamped)
@@ -6782,12 +7217,11 @@ impl ImagePreprocessingMetadata {
             .unwrap_or_default()
     }
     pub fn resize_error(&self) -> Option<String> {
-        self.0.resize_error.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.resize_error.clone()
     }
 }
 
 pub struct Metadata(pub kreuzberg::Metadata);
-
 impl Metadata {
     pub fn new(
         title: Option<String>,
@@ -6931,10 +7365,10 @@ impl Metadata {
         Metadata(__target)
     }
     pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.title.clone()
     }
     pub fn subject(&self) -> Option<String> {
-        self.0.subject.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.subject.clone()
     }
     pub fn authors(&self) -> Option<Vec<String>> {
         self.0.authors.as_ref().and_then(|v| {
@@ -6951,19 +7385,19 @@ impl Metadata {
         })
     }
     pub fn language(&self) -> Option<String> {
-        self.0.language.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.language.clone()
     }
     pub fn created_at(&self) -> Option<String> {
-        self.0.created_at.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.created_at.clone()
     }
     pub fn modified_at(&self) -> Option<String> {
-        self.0.modified_at.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.modified_at.clone()
     }
     pub fn created_by(&self) -> Option<String> {
-        self.0.created_by.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.created_by.clone()
     }
     pub fn modified_by(&self) -> Option<String> {
-        self.0.modified_by.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.modified_by.clone()
     }
     pub fn pages(&self) -> Option<PageStructure> {
         self.0.pages.clone().map(PageStructure)
@@ -6988,7 +7422,7 @@ impl Metadata {
         })
     }
     pub fn category(&self) -> Option<String> {
-        self.0.category.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.category.clone()
     }
     pub fn tags(&self) -> Option<Vec<String>> {
         self.0.tags.as_ref().and_then(|v| {
@@ -6998,22 +7432,13 @@ impl Metadata {
         })
     }
     pub fn document_version(&self) -> Option<String> {
-        self.0
-            .document_version
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.document_version.clone()
     }
     pub fn abstract_text(&self) -> Option<String> {
-        self.0
-            .abstract_text
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.abstract_text.clone()
     }
     pub fn output_format(&self) -> Option<String> {
-        self.0
-            .output_format
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.output_format.clone()
     }
     pub fn additional(&self) -> String {
         serde_json::to_string(&self.0.additional).expect("serializable additional")
@@ -7021,7 +7446,6 @@ impl Metadata {
 }
 
 pub struct ExcelMetadata(pub kreuzberg::ExcelMetadata);
-
 impl ExcelMetadata {
     pub fn new(sheet_count: Option<usize>, sheet_names: Option<Vec<String>>) -> ExcelMetadata {
         let mut __target: kreuzberg::ExcelMetadata = ::std::default::Default::default();
@@ -7050,7 +7474,6 @@ impl ExcelMetadata {
 }
 
 pub struct EmailMetadata(pub kreuzberg::EmailMetadata);
-
 impl EmailMetadata {
     pub fn new(
         from_email: Option<String>,
@@ -7106,10 +7529,10 @@ impl EmailMetadata {
         EmailMetadata(__target)
     }
     pub fn from_email(&self) -> Option<String> {
-        self.0.from_email.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.from_email.clone()
     }
     pub fn from_name(&self) -> Option<String> {
-        self.0.from_name.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.from_name.clone()
     }
     pub fn to_emails(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.to_emails)
@@ -7130,7 +7553,7 @@ impl EmailMetadata {
             .unwrap_or_default()
     }
     pub fn message_id(&self) -> Option<String> {
-        self.0.message_id.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.message_id.clone()
     }
     pub fn attachments(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.attachments)
@@ -7141,7 +7564,6 @@ impl EmailMetadata {
 }
 
 pub struct ArchiveMetadata(pub kreuzberg::ArchiveMetadata);
-
 impl ArchiveMetadata {
     pub fn new(
         format: String,
@@ -7167,7 +7589,7 @@ impl ArchiveMetadata {
         ArchiveMetadata(__target)
     }
     pub fn format(&self) -> String {
-        serde_json::to_string(&self.0.format).unwrap_or_default()
+        self.0.format.to_string()
     }
     pub fn file_count(&self) -> usize {
         ::serde_json::to_value(&self.0.file_count)
@@ -7196,8 +7618,45 @@ impl ArchiveMetadata {
     }
 }
 
-pub struct XmlMetadata(pub kreuzberg::XmlMetadata);
+pub struct ImageMetadata(pub kreuzberg::ImageMetadata);
+impl ImageMetadata {
+    pub fn new(width: u32, height: u32, format: String, exif: String) -> ImageMetadata {
+        let mut __target: kreuzberg::ImageMetadata = ::std::default::Default::default();
+        __target.width = width;
+        __target.height = height;
+        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&format) {
+            if let Ok(t) = ::serde_json::from_value(v) {
+                __target.format = t;
+            }
+        }
+        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&exif) {
+            if let Ok(t) = ::serde_json::from_value(v) {
+                __target.exif = t;
+            }
+        }
+        ImageMetadata(__target)
+    }
+    pub fn width(&self) -> u32 {
+        ::serde_json::to_value(&self.0.width)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn height(&self) -> u32 {
+        ::serde_json::to_value(&self.0.height)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn format(&self) -> String {
+        self.0.format.clone()
+    }
+    pub fn exif(&self) -> String {
+        serde_json::to_string(&self.0.exif).expect("serializable exif")
+    }
+}
 
+pub struct XmlMetadata(pub kreuzberg::XmlMetadata);
 impl XmlMetadata {
     pub fn new(element_count: usize, unique_elements: Vec<String>) -> XmlMetadata {
         let mut __target: kreuzberg::XmlMetadata = ::std::default::Default::default();
@@ -7224,7 +7683,6 @@ impl XmlMetadata {
 }
 
 pub struct TextMetadata(pub kreuzberg::TextMetadata);
-
 impl TextMetadata {
     pub fn new(
         line_count: usize,
@@ -7297,7 +7755,6 @@ impl TextMetadata {
 }
 
 pub struct HeaderMetadata(pub kreuzberg::HeaderMetadata);
-
 impl HeaderMetadata {
     pub fn level(&self) -> u8 {
         ::serde_json::to_value(&self.0.level)
@@ -7306,10 +7763,10 @@ impl HeaderMetadata {
             .unwrap_or_default()
     }
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn id(&self) -> Option<String> {
-        self.0.id.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.id.clone()
     }
     pub fn depth(&self) -> usize {
         ::serde_json::to_value(&self.0.depth)
@@ -7326,16 +7783,15 @@ impl HeaderMetadata {
 }
 
 pub struct LinkMetadata(pub kreuzberg::LinkMetadata);
-
 impl LinkMetadata {
     pub fn href(&self) -> String {
-        serde_json::to_string(&self.0.href).unwrap_or_default()
+        self.0.href.clone()
     }
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.title.clone()
     }
     pub fn link_type(&self) -> LinkType {
         LinkType::from(self.0.link_type.clone())
@@ -7355,16 +7811,15 @@ impl LinkMetadata {
 }
 
 pub struct ImageMetadataType(pub kreuzberg::ImageMetadataType);
-
 impl ImageMetadataType {
     pub fn src(&self) -> String {
-        serde_json::to_string(&self.0.src).unwrap_or_default()
+        self.0.src.clone()
     }
     pub fn alt(&self) -> Option<String> {
-        self.0.alt.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.alt.clone()
     }
     pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.title.clone()
     }
     pub fn dimensions(&self) -> Option<Vec<u32>> {
         self.0.dimensions.as_ref().and_then(|v| {
@@ -7385,21 +7840,19 @@ impl ImageMetadataType {
 }
 
 pub struct StructuredData(pub kreuzberg::StructuredData);
-
 impl StructuredData {
     pub fn data_type(&self) -> StructuredDataType {
         StructuredDataType::from(self.0.data_type.clone())
     }
     pub fn raw_json(&self) -> String {
-        serde_json::to_string(&self.0.raw_json).unwrap_or_default()
+        self.0.raw_json.clone()
     }
     pub fn schema_type(&self) -> Option<String> {
-        self.0.schema_type.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.schema_type.clone()
     }
 }
 
 pub struct HtmlMetadata(pub kreuzberg::HtmlMetadata);
-
 impl HtmlMetadata {
     pub fn new(
         title: Option<String>,
@@ -7489,10 +7942,10 @@ impl HtmlMetadata {
         HtmlMetadata(__target)
     }
     pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.title.clone()
     }
     pub fn description(&self) -> Option<String> {
-        self.0.description.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.description.clone()
     }
     pub fn keywords(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.keywords)
@@ -7501,19 +7954,16 @@ impl HtmlMetadata {
             .unwrap_or_default()
     }
     pub fn author(&self) -> Option<String> {
-        self.0.author.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.author.clone()
     }
     pub fn canonical_url(&self) -> Option<String> {
-        self.0
-            .canonical_url
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.canonical_url.clone()
     }
     pub fn base_href(&self) -> Option<String> {
-        self.0.base_href.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.base_href.clone()
     }
     pub fn language(&self) -> Option<String> {
-        self.0.language.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.language.clone()
     }
     pub fn text_direction(&self) -> Option<TextDirection> {
         self.0.text_direction.clone().map(TextDirection::from)
@@ -7550,7 +8000,6 @@ impl HtmlMetadata {
 }
 
 pub struct OcrMetadata(pub kreuzberg::OcrMetadata);
-
 impl OcrMetadata {
     pub fn new(
         language: String,
@@ -7578,7 +8027,7 @@ impl OcrMetadata {
         OcrMetadata(__target)
     }
     pub fn language(&self) -> String {
-        serde_json::to_string(&self.0.language).unwrap_or_default()
+        self.0.language.clone()
     }
     pub fn psm(&self) -> i32 {
         ::serde_json::to_value(&self.0.psm)
@@ -7587,7 +8036,7 @@ impl OcrMetadata {
             .unwrap_or_default()
     }
     pub fn output_format(&self) -> String {
-        serde_json::to_string(&self.0.output_format).unwrap_or_default()
+        self.0.output_format.clone()
     }
     pub fn table_count(&self) -> usize {
         ::serde_json::to_value(&self.0.table_count)
@@ -7612,18 +8061,16 @@ impl OcrMetadata {
 }
 
 pub struct ErrorMetadata(pub kreuzberg::ErrorMetadata);
-
 impl ErrorMetadata {
     pub fn error_type(&self) -> String {
-        serde_json::to_string(&self.0.error_type).unwrap_or_default()
+        self.0.error_type.clone()
     }
     pub fn message(&self) -> String {
-        serde_json::to_string(&self.0.message).unwrap_or_default()
+        self.0.message.clone()
     }
 }
 
 pub struct PptxMetadata(pub kreuzberg::PptxMetadata);
-
 impl PptxMetadata {
     pub fn new(
         slide_count: usize,
@@ -7671,27 +8118,18 @@ impl PptxMetadata {
 }
 
 pub struct DocxMetadata(pub kreuzberg::DocxMetadata);
-
 impl DocxMetadata {
     pub fn new(
-        core_properties: Option<String>,
-        app_properties: Option<String>,
+        core_properties: Option<CoreProperties>,
+        app_properties: Option<DocxAppProperties>,
         custom_properties: String,
     ) -> DocxMetadata {
         let mut __target: kreuzberg::DocxMetadata = ::std::default::Default::default();
-        if let Some(s) = core_properties {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.core_properties = Some(t);
-                }
-            }
+        if let Some(w) = core_properties {
+            __target.core_properties = Some(w.0);
         }
-        if let Some(s) = app_properties {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.app_properties = Some(t);
-                }
-            }
+        if let Some(w) = app_properties {
+            __target.app_properties = Some(w.0);
         }
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&custom_properties) {
             if let Ok(t) = ::serde_json::from_value(v) {
@@ -7700,17 +8138,11 @@ impl DocxMetadata {
         }
         DocxMetadata(__target)
     }
-    pub fn core_properties(&self) -> Option<String> {
-        self.0
-            .core_properties
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+    pub fn core_properties(&self) -> Option<CoreProperties> {
+        self.0.core_properties.clone().map(CoreProperties)
     }
-    pub fn app_properties(&self) -> Option<String> {
-        self.0
-            .app_properties
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+    pub fn app_properties(&self) -> Option<DocxAppProperties> {
+        self.0.app_properties.clone().map(DocxAppProperties)
     }
     pub fn custom_properties(&self) -> String {
         serde_json::to_string(&self.0.custom_properties).expect("serializable custom_properties")
@@ -7718,7 +8150,6 @@ impl DocxMetadata {
 }
 
 pub struct CsvMetadata(pub kreuzberg::CsvMetadata);
-
 impl CsvMetadata {
     pub fn new(
         row_count: usize,
@@ -7758,7 +8189,7 @@ impl CsvMetadata {
             .unwrap_or_default()
     }
     pub fn delimiter(&self) -> Option<String> {
-        self.0.delimiter.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.delimiter.clone()
     }
     pub fn has_header(&self) -> bool {
         ::serde_json::to_value(&self.0.has_header)
@@ -7776,7 +8207,6 @@ impl CsvMetadata {
 }
 
 pub struct BibtexMetadata(pub kreuzberg::BibtexMetadata);
-
 impl BibtexMetadata {
     pub fn new(
         entry_count: usize,
@@ -7834,7 +8264,6 @@ impl BibtexMetadata {
 }
 
 pub struct CitationMetadata(pub kreuzberg::CitationMetadata);
-
 impl CitationMetadata {
     pub fn new(
         citation_count: usize,
@@ -7880,7 +8309,7 @@ impl CitationMetadata {
             .unwrap_or_default()
     }
     pub fn format(&self) -> Option<String> {
-        self.0.format.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.format.clone()
     }
     pub fn authors(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.authors)
@@ -7906,7 +8335,6 @@ impl CitationMetadata {
 }
 
 pub struct YearRange(pub kreuzberg::YearRange);
-
 impl YearRange {
     pub fn min(&self) -> Option<u32> {
         self.0.min.as_ref().and_then(|v| {
@@ -7931,7 +8359,6 @@ impl YearRange {
 }
 
 pub struct FictionBookMetadata(pub kreuzberg::FictionBookMetadata);
-
 impl FictionBookMetadata {
     pub fn new(genres: Vec<String>, sequences: Vec<String>, annotation: Option<String>) -> FictionBookMetadata {
         let mut __target: kreuzberg::FictionBookMetadata = ::std::default::Default::default();
@@ -7967,12 +8394,11 @@ impl FictionBookMetadata {
             .unwrap_or_default()
     }
     pub fn annotation(&self) -> Option<String> {
-        self.0.annotation.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.annotation.clone()
     }
 }
 
 pub struct DbfMetadata(pub kreuzberg::DbfMetadata);
-
 impl DbfMetadata {
     pub fn new(record_count: usize, field_count: usize, fields: Vec<DbfFieldInfo>) -> DbfMetadata {
         let mut __target: kreuzberg::DbfMetadata = ::std::default::Default::default();
@@ -7999,18 +8425,16 @@ impl DbfMetadata {
 }
 
 pub struct DbfFieldInfo(pub kreuzberg::DbfFieldInfo);
-
 impl DbfFieldInfo {
     pub fn name(&self) -> String {
-        serde_json::to_string(&self.0.name).unwrap_or_default()
+        self.0.name.clone()
     }
     pub fn field_type(&self) -> String {
-        serde_json::to_string(&self.0.field_type).unwrap_or_default()
+        self.0.field_type.clone()
     }
 }
 
 pub struct JatsMetadata(pub kreuzberg::JatsMetadata);
-
 impl JatsMetadata {
     pub fn new(
         copyright: Option<String>,
@@ -8042,10 +8466,10 @@ impl JatsMetadata {
         JatsMetadata(__target)
     }
     pub fn copyright(&self) -> Option<String> {
-        self.0.copyright.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.copyright.clone()
     }
     pub fn license(&self) -> Option<String> {
-        self.0.license.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.license.clone()
     }
     pub fn history_dates(&self) -> String {
         serde_json::to_string(&self.0.history_dates).expect("serializable history_dates")
@@ -8060,18 +8484,16 @@ impl JatsMetadata {
 }
 
 pub struct ContributorRole(pub kreuzberg::ContributorRole);
-
 impl ContributorRole {
     pub fn name(&self) -> String {
-        serde_json::to_string(&self.0.name).unwrap_or_default()
+        self.0.name.clone()
     }
     pub fn role(&self) -> Option<String> {
-        self.0.role.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.role.clone()
     }
 }
 
 pub struct EpubMetadata(pub kreuzberg::EpubMetadata);
-
 impl EpubMetadata {
     pub fn new(
         coverage: Option<String>,
@@ -8127,27 +8549,26 @@ impl EpubMetadata {
         EpubMetadata(__target)
     }
     pub fn coverage(&self) -> Option<String> {
-        self.0.coverage.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.coverage.clone()
     }
     pub fn dc_format(&self) -> Option<String> {
-        self.0.dc_format.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.dc_format.clone()
     }
     pub fn relation(&self) -> Option<String> {
-        self.0.relation.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.relation.clone()
     }
     pub fn source(&self) -> Option<String> {
-        self.0.source.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.source.clone()
     }
     pub fn dc_type(&self) -> Option<String> {
-        self.0.dc_type.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.dc_type.clone()
     }
     pub fn cover_image(&self) -> Option<String> {
-        self.0.cover_image.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.cover_image.clone()
     }
 }
 
 pub struct PstMetadata(pub kreuzberg::PstMetadata);
-
 impl PstMetadata {
     pub fn new(message_count: usize) -> PstMetadata {
         let mut __target: kreuzberg::PstMetadata = ::std::default::Default::default();
@@ -8163,7 +8584,6 @@ impl PstMetadata {
 }
 
 pub struct OcrConfidence(pub kreuzberg::OcrConfidence);
-
 impl OcrConfidence {
     pub fn new(detection: Option<f64>, recognition: f64) -> OcrConfidence {
         let mut __target: kreuzberg::OcrConfidence = ::std::default::Default::default();
@@ -8187,7 +8607,6 @@ impl OcrConfidence {
 }
 
 pub struct OcrRotation(pub kreuzberg::OcrRotation);
-
 impl OcrRotation {
     pub fn angle_degrees(&self) -> f64 {
         ::serde_json::to_value(&self.0.angle_degrees)
@@ -8205,7 +8624,6 @@ impl OcrRotation {
 }
 
 pub struct OcrElement(pub kreuzberg::OcrElement);
-
 impl OcrElement {
     pub fn new(
         text: String,
@@ -8245,7 +8663,7 @@ impl OcrElement {
         OcrElement(__target)
     }
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn geometry(&self) -> OcrBoundingGeometry {
         OcrBoundingGeometry::from(self.0.geometry.clone())
@@ -8266,7 +8684,7 @@ impl OcrElement {
             .unwrap_or_default()
     }
     pub fn parent_id(&self) -> Option<String> {
-        self.0.parent_id.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.parent_id.clone()
     }
     pub fn backend_metadata(&self) -> String {
         serde_json::to_string(&self.0.backend_metadata).expect("serializable backend_metadata")
@@ -8274,7 +8692,6 @@ impl OcrElement {
 }
 
 pub struct OcrElementConfig(pub kreuzberg::OcrElementConfig);
-
 impl OcrElementConfig {
     pub fn new(
         include_elements: bool,
@@ -8313,7 +8730,6 @@ impl OcrElementConfig {
 }
 
 pub struct PageStructure(pub kreuzberg::PageStructure);
-
 impl PageStructure {
     pub fn total_count(&self) -> usize {
         ::serde_json::to_value(&self.0.total_count)
@@ -8339,7 +8755,6 @@ impl PageStructure {
 }
 
 pub struct PageBoundary(pub kreuzberg::PageBoundary);
-
 impl PageBoundary {
     pub fn byte_start(&self) -> usize {
         ::serde_json::to_value(&self.0.byte_start)
@@ -8362,7 +8777,6 @@ impl PageBoundary {
 }
 
 pub struct PageInfo(pub kreuzberg::PageInfo);
-
 impl PageInfo {
     pub fn number(&self) -> usize {
         ::serde_json::to_value(&self.0.number)
@@ -8371,7 +8785,7 @@ impl PageInfo {
             .unwrap_or_default()
     }
     pub fn title(&self) -> Option<String> {
-        self.0.title.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.title.clone()
     }
     pub fn dimensions(&self) -> Option<Vec<f64>> {
         self.0.dimensions.as_ref().and_then(|v| {
@@ -8417,7 +8831,6 @@ impl PageInfo {
 }
 
 pub struct PageContent(pub kreuzberg::PageContent);
-
 impl PageContent {
     pub fn page_number(&self) -> usize {
         ::serde_json::to_value(&self.0.page_number)
@@ -8426,7 +8839,7 @@ impl PageContent {
             .unwrap_or_default()
     }
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn tables(&self) -> Vec<Table> {
         self.0.tables.iter().map(|elem| Table((**elem).clone())).collect()
@@ -8457,7 +8870,6 @@ impl PageContent {
 }
 
 pub struct LayoutRegion(pub kreuzberg::LayoutRegion);
-
 impl LayoutRegion {
     pub fn new(class_name: String, confidence: f64, bounding_box: String, area_fraction: f64) -> LayoutRegion {
         let mut __target: kreuzberg::LayoutRegion = ::std::default::Default::default();
@@ -8476,7 +8888,7 @@ impl LayoutRegion {
         LayoutRegion(__target)
     }
     pub fn class_name(&self) -> String {
-        serde_json::to_string(&self.0.class_name).unwrap_or_default()
+        self.0.class_name.clone()
     }
     pub fn confidence(&self) -> f64 {
         ::serde_json::to_value(&self.0.confidence)
@@ -8496,7 +8908,6 @@ impl LayoutRegion {
 }
 
 pub struct PageHierarchy(pub kreuzberg::PageHierarchy);
-
 impl PageHierarchy {
     pub fn block_count(&self) -> usize {
         ::serde_json::to_value(&self.0.block_count)
@@ -8514,10 +8925,9 @@ impl PageHierarchy {
 }
 
 pub struct HierarchicalBlock(pub kreuzberg::HierarchicalBlock);
-
 impl HierarchicalBlock {
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn font_size(&self) -> f32 {
         ::serde_json::to_value(&self.0.font_size)
@@ -8526,7 +8936,7 @@ impl HierarchicalBlock {
             .unwrap_or_default()
     }
     pub fn level(&self) -> String {
-        serde_json::to_string(&self.0.level).unwrap_or_default()
+        self.0.level.clone()
     }
     pub fn bbox(&self) -> Option<Vec<f32>> {
         self.0.bbox.as_ref().and_then(|v| {
@@ -8538,7 +8948,6 @@ impl HierarchicalBlock {
 }
 
 pub struct Table(pub kreuzberg::Table);
-
 impl Table {
     pub fn new(cells: String, markdown: String, page_number: usize, bounding_box: Option<String>) -> Table {
         let mut __target: kreuzberg::Table = ::std::default::Default::default();
@@ -8566,7 +8975,7 @@ impl Table {
         serde_json::to_string(&self.0.cells).expect("serializable cells")
     }
     pub fn markdown(&self) -> String {
-        serde_json::to_string(&self.0.markdown).unwrap_or_default()
+        self.0.markdown.clone()
     }
     pub fn page_number(&self) -> usize {
         ::serde_json::to_value(&self.0.page_number)
@@ -8580,7 +8989,6 @@ impl Table {
 }
 
 pub struct TableCell(pub kreuzberg::TableCell);
-
 impl TableCell {
     pub fn new(content: String, row_span: usize, col_span: usize, is_header: bool) -> TableCell {
         let mut __target: kreuzberg::TableCell = ::std::default::Default::default();
@@ -8595,7 +9003,7 @@ impl TableCell {
         TableCell(__target)
     }
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn row_span(&self) -> usize {
         ::serde_json::to_value(&self.0.row_span)
@@ -8618,13 +9026,12 @@ impl TableCell {
 }
 
 pub struct Uri(pub kreuzberg::Uri);
-
 impl Uri {
     pub fn url(&self) -> String {
-        serde_json::to_string(&self.0.url).unwrap_or_default()
+        self.0.url.clone()
     }
     pub fn label(&self) -> Option<String> {
-        self.0.label.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.label.clone()
     }
     pub fn page(&self) -> Option<u32> {
         self.0.page.as_ref().and_then(|v| {
@@ -8647,10 +9054,9 @@ pub struct TracingLayer(pub kreuzberg::service::layers::tracing::TracingLayer);
 pub struct ApiDoc(pub kreuzberg::api::openapi::ApiDoc);
 
 pub struct InfoResponse(pub kreuzberg::api::InfoResponse);
-
 impl InfoResponse {
     pub fn version(&self) -> String {
-        serde_json::to_string(&self.0.version).unwrap_or_default()
+        self.0.version.clone()
     }
     pub fn rust_backend(&self) -> bool {
         ::serde_json::to_value(&self.0.rust_backend)
@@ -8663,7 +9069,6 @@ impl InfoResponse {
 pub struct ExtractResponse(pub kreuzberg::api::ExtractResponse);
 
 pub struct EmbedRequest(pub kreuzberg::api::EmbedRequest);
-
 impl EmbedRequest {
     pub fn texts(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.texts)
@@ -8677,13 +9082,12 @@ impl EmbedRequest {
 }
 
 pub struct EmbedResponse(pub kreuzberg::api::EmbedResponse);
-
 impl EmbedResponse {
     pub fn embeddings(&self) -> String {
         serde_json::to_string(&self.0.embeddings).expect("serializable embeddings")
     }
     pub fn model(&self) -> String {
-        serde_json::to_string(&self.0.model).unwrap_or_default()
+        self.0.model.clone()
     }
     pub fn dimensions(&self) -> usize {
         ::serde_json::to_value(&self.0.dimensions)
@@ -8700,21 +9104,19 @@ impl EmbedResponse {
 }
 
 pub struct ChunkRequest(pub kreuzberg::api::ChunkRequest);
-
 impl ChunkRequest {
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn config(&self) -> Option<String> {
         self.0.config.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
     pub fn chunker_type(&self) -> String {
-        serde_json::to_string(&self.0.chunker_type).unwrap_or_default()
+        self.0.chunker_type.clone()
     }
 }
 
 pub struct ChunkResponse(pub kreuzberg::api::ChunkResponse);
-
 impl ChunkResponse {
     pub fn chunks(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.chunks)
@@ -8738,29 +9140,27 @@ impl ChunkResponse {
             .unwrap_or_default()
     }
     pub fn chunker_type(&self) -> String {
-        serde_json::to_string(&self.0.chunker_type).unwrap_or_default()
+        self.0.chunker_type.clone()
     }
 }
 
 pub struct DetectResponse(pub kreuzberg::api::DetectResponse);
-
 impl DetectResponse {
     pub fn mime_type(&self) -> String {
-        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+        self.0.mime_type.clone()
     }
     pub fn filename(&self) -> Option<String> {
-        self.0.filename.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.filename.clone()
     }
 }
 
 pub struct ManifestEntryResponse(pub kreuzberg::api::ManifestEntryResponse);
-
 impl ManifestEntryResponse {
     pub fn relative_path(&self) -> String {
-        serde_json::to_string(&self.0.relative_path).unwrap_or_default()
+        self.0.relative_path.clone()
     }
     pub fn sha256(&self) -> String {
-        serde_json::to_string(&self.0.sha256).unwrap_or_default()
+        self.0.sha256.clone()
     }
     pub fn size_bytes(&self) -> u64 {
         ::serde_json::to_value(&self.0.size_bytes)
@@ -8769,15 +9169,14 @@ impl ManifestEntryResponse {
             .unwrap_or_default()
     }
     pub fn source_url(&self) -> String {
-        serde_json::to_string(&self.0.source_url).unwrap_or_default()
+        self.0.source_url.clone()
     }
 }
 
 pub struct ManifestResponse(pub kreuzberg::api::ManifestResponse);
-
 impl ManifestResponse {
     pub fn kreuzberg_version(&self) -> String {
-        serde_json::to_string(&self.0.kreuzberg_version).unwrap_or_default()
+        self.0.kreuzberg_version.clone()
     }
     pub fn total_size_bytes(&self) -> u64 {
         ::serde_json::to_value(&self.0.total_size_bytes)
@@ -8801,10 +9200,9 @@ impl ManifestResponse {
 }
 
 pub struct WarmResponse(pub kreuzberg::api::WarmResponse);
-
 impl WarmResponse {
     pub fn cache_dir(&self) -> String {
-        serde_json::to_string(&self.0.cache_dir).unwrap_or_default()
+        self.0.cache_dir.clone()
     }
     pub fn downloaded(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.downloaded)
@@ -8821,24 +9219,22 @@ impl WarmResponse {
 }
 
 pub struct StructuredExtractionResponse(pub kreuzberg::api::StructuredExtractionResponse);
-
 impl StructuredExtractionResponse {
     pub fn structured_output(&self) -> String {
         serde_json::to_string(&self.0.structured_output).unwrap_or_default()
     }
     pub fn content(&self) -> String {
-        serde_json::to_string(&self.0.content).unwrap_or_default()
+        self.0.content.clone()
     }
     pub fn mime_type(&self) -> String {
-        serde_json::to_string(&self.0.mime_type).unwrap_or_default()
+        self.0.mime_type.clone()
     }
 }
 
 pub struct OpenWebDocumentResponse(pub kreuzberg::api::OpenWebDocumentResponse);
-
 impl OpenWebDocumentResponse {
     pub fn page_content(&self) -> String {
-        serde_json::to_string(&self.0.page_content).unwrap_or_default()
+        self.0.page_content.clone()
     }
     pub fn metadata(&self) -> String {
         serde_json::to_string(&self.0.metadata).unwrap_or_default()
@@ -8846,21 +9242,19 @@ impl OpenWebDocumentResponse {
 }
 
 pub struct DoclingCompatResponse(pub kreuzberg::api::DoclingCompatResponse);
-
 impl DoclingCompatResponse {
     pub fn document(&self) -> String {
         serde_json::to_string(&self.0.document).unwrap_or_default()
     }
     pub fn status(&self) -> String {
-        serde_json::to_string(&self.0.status).unwrap_or_default()
+        self.0.status.clone()
     }
 }
 
 pub struct DetectMimeTypeParams(pub kreuzberg::mcp::DetectMimeTypeParams);
-
 impl DetectMimeTypeParams {
     pub fn path(&self) -> String {
-        serde_json::to_string(&self.0.path).unwrap_or_default()
+        self.0.path.clone()
     }
     pub fn use_content(&self) -> bool {
         ::serde_json::to_value(&self.0.use_content)
@@ -8871,7 +9265,6 @@ impl DetectMimeTypeParams {
 }
 
 pub struct CacheWarmParams(pub kreuzberg::mcp::CacheWarmParams);
-
 impl CacheWarmParams {
     pub fn all_embeddings(&self) -> bool {
         ::serde_json::to_value(&self.0.all_embeddings)
@@ -8880,15 +9273,11 @@ impl CacheWarmParams {
             .unwrap_or_default()
     }
     pub fn embedding_model(&self) -> Option<String> {
-        self.0
-            .embedding_model
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.embedding_model.clone()
     }
 }
 
 pub struct EmbedTextParams(pub kreuzberg::mcp::EmbedTextParams);
-
 impl EmbedTextParams {
     pub fn texts(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.texts)
@@ -8897,48 +9286,41 @@ impl EmbedTextParams {
             .unwrap_or_default()
     }
     pub fn preset(&self) -> Option<String> {
-        self.0.preset.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.preset.clone()
     }
     pub fn model(&self) -> Option<String> {
-        self.0.model.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.model.clone()
     }
     pub fn api_key(&self) -> Option<String> {
-        self.0.api_key.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.api_key.clone()
     }
     pub fn embedding_plugin(&self) -> Option<String> {
-        self.0
-            .embedding_plugin
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.embedding_plugin.clone()
     }
 }
 
 pub struct ExtractStructuredParams(pub kreuzberg::mcp::ExtractStructuredParams);
-
 impl ExtractStructuredParams {
     pub fn path(&self) -> String {
-        serde_json::to_string(&self.0.path).unwrap_or_default()
+        self.0.path.clone()
     }
     pub fn schema(&self) -> String {
         serde_json::to_string(&self.0.schema).unwrap_or_default()
     }
     pub fn model(&self) -> String {
-        serde_json::to_string(&self.0.model).unwrap_or_default()
+        self.0.model.clone()
     }
     pub fn schema_name(&self) -> String {
-        serde_json::to_string(&self.0.schema_name).unwrap_or_default()
+        self.0.schema_name.clone()
     }
     pub fn schema_description(&self) -> Option<String> {
-        self.0
-            .schema_description
-            .as_ref()
-            .and_then(|v| serde_json::to_string(v).ok())
+        self.0.schema_description.clone()
     }
     pub fn prompt(&self) -> Option<String> {
-        self.0.prompt.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.prompt.clone()
     }
     pub fn api_key(&self) -> Option<String> {
-        self.0.api_key.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.api_key.clone()
     }
     pub fn strict(&self) -> bool {
         ::serde_json::to_value(&self.0.strict)
@@ -8949,10 +9331,9 @@ impl ExtractStructuredParams {
 }
 
 pub struct ChunkTextParams(pub kreuzberg::mcp::ChunkTextParams);
-
 impl ChunkTextParams {
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn max_characters(&self) -> Option<usize> {
         self.0.max_characters.as_ref().and_then(|v| {
@@ -8969,7 +9350,7 @@ impl ChunkTextParams {
         })
     }
     pub fn chunker_type(&self) -> Option<String> {
-        self.0.chunker_type.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.chunker_type.clone()
     }
     pub fn topic_threshold(&self) -> Option<f32> {
         self.0.topic_threshold.as_ref().and_then(|v| {
@@ -8981,7 +9362,6 @@ impl ChunkTextParams {
 }
 
 pub struct DetectedBoundary(pub kreuzberg::chunking::boundary_detection::DetectedBoundary);
-
 impl DetectedBoundary {
     pub fn byte_offset(&self) -> usize {
         ::serde_json::to_value(&self.0.byte_offset)
@@ -8998,7 +9378,6 @@ impl DetectedBoundary {
 }
 
 pub struct ChunkingResult(pub kreuzberg::chunking::ChunkingResult);
-
 impl ChunkingResult {
     pub fn chunks(&self) -> Vec<Chunk> {
         self.0.chunks.iter().map(|elem| Chunk(elem.clone())).collect()
@@ -9012,7 +9391,6 @@ impl ChunkingResult {
 }
 
 pub struct MergedChunk(pub kreuzberg::chunking::semantic::merge::MergedChunk);
-
 impl MergedChunk {
     pub fn text(&self) -> String {
         format!("{:?}", &self.0.text)
@@ -9026,10 +9404,9 @@ impl MergedChunk {
 }
 
 pub struct EmbeddingPreset(pub kreuzberg::EmbeddingPreset);
-
 impl EmbeddingPreset {
     pub fn name(&self) -> String {
-        serde_json::to_string(&self.0.name).unwrap_or_default()
+        self.0.name.clone()
     }
     pub fn chunk_size(&self) -> usize {
         ::serde_json::to_value(&self.0.chunk_size)
@@ -9044,13 +9421,13 @@ impl EmbeddingPreset {
             .unwrap_or_default()
     }
     pub fn model_repo(&self) -> String {
-        serde_json::to_string(&self.0.model_repo).unwrap_or_default()
+        self.0.model_repo.clone()
     }
     pub fn pooling(&self) -> String {
-        serde_json::to_string(&self.0.pooling).unwrap_or_default()
+        self.0.pooling.clone()
     }
     pub fn model_file(&self) -> String {
-        serde_json::to_string(&self.0.model_file).unwrap_or_default()
+        self.0.model_file.clone()
     }
     pub fn dimensions(&self) -> usize {
         ::serde_json::to_value(&self.0.dimensions)
@@ -9059,12 +9436,11 @@ impl EmbeddingPreset {
             .unwrap_or_default()
     }
     pub fn description(&self) -> String {
-        serde_json::to_string(&self.0.description).unwrap_or_default()
+        self.0.description.clone()
     }
 }
 
 pub struct YakeParams(pub kreuzberg::YakeParams);
-
 impl YakeParams {
     pub fn new(window_size: usize) -> YakeParams {
         let mut __target: kreuzberg::YakeParams = ::std::default::Default::default();
@@ -9080,7 +9456,6 @@ impl YakeParams {
 }
 
 pub struct RakeParams(pub kreuzberg::RakeParams);
-
 impl RakeParams {
     pub fn new(min_word_length: usize, max_words_per_phrase: usize) -> RakeParams {
         let mut __target: kreuzberg::RakeParams = ::std::default::Default::default();
@@ -9103,7 +9478,6 @@ impl RakeParams {
 }
 
 pub struct KeywordConfig(pub kreuzberg::KeywordConfig);
-
 impl KeywordConfig {
     pub fn new(
         algorithm: KeywordAlgorithm,
@@ -9160,7 +9534,7 @@ impl KeywordConfig {
             .unwrap_or_default()
     }
     pub fn language(&self) -> Option<String> {
-        self.0.language.as_ref().and_then(|v| serde_json::to_string(v).ok())
+        self.0.language.clone()
     }
     pub fn yake_params(&self) -> Option<YakeParams> {
         self.0.yake_params.clone().map(YakeParams)
@@ -9171,10 +9545,9 @@ impl KeywordConfig {
 }
 
 pub struct Keyword(pub kreuzberg::Keyword);
-
 impl Keyword {
     pub fn text(&self) -> String {
-        serde_json::to_string(&self.0.text).unwrap_or_default()
+        self.0.text.clone()
     }
     pub fn score(&self) -> f32 {
         ::serde_json::to_value(&self.0.score)
@@ -9195,7 +9568,6 @@ impl Keyword {
 }
 
 pub struct OcrCacheStats(pub kreuzberg::ocr::OcrCacheStats);
-
 impl OcrCacheStats {
     pub fn new(total_files: usize, total_size_mb: f64) -> OcrCacheStats {
         OcrCacheStats(kreuzberg::ocr::OcrCacheStats {
@@ -9212,7 +9584,6 @@ impl OcrCacheStats {
 }
 
 pub struct RecognizedTable(pub kreuzberg::RecognizedTable);
-
 impl RecognizedTable {
     pub fn detection_bbox(&self) -> BBox {
         BBox(self.0.detection_bbox.clone())
@@ -9221,14 +9592,13 @@ impl RecognizedTable {
         serde_json::to_string(&self.0.cells).expect("serializable cells")
     }
     pub fn markdown(&self) -> String {
-        serde_json::to_string(&self.0.markdown).unwrap_or_default()
+        self.0.markdown.clone()
     }
 }
 
 pub struct TessdataManager(pub kreuzberg::ocr::TessdataManager);
 
 pub struct PaddleOcrConfig(pub kreuzberg::PaddleOcrConfig);
-
 impl PaddleOcrConfig {
     pub fn new(
         language: String,
@@ -9274,7 +9644,7 @@ impl PaddleOcrConfig {
         PaddleOcrConfig(__target)
     }
     pub fn language(&self) -> String {
-        serde_json::to_string(&self.0.language).unwrap_or_default()
+        self.0.language.clone()
     }
     pub fn cache_dir(&self) -> Option<String> {
         self.0.cache_dir.as_ref().and_then(|v| serde_json::to_string(v).ok())
@@ -9334,12 +9704,11 @@ impl PaddleOcrConfig {
             .unwrap_or_default()
     }
     pub fn model_tier(&self) -> String {
-        serde_json::to_string(&self.0.model_tier).unwrap_or_default()
+        self.0.model_tier.clone()
     }
 }
 
 pub struct ModelPaths(pub kreuzberg::ModelPaths);
-
 impl ModelPaths {
     pub fn det_model(&self) -> String {
         serde_json::to_string(&self.0.det_model).unwrap_or_default()
@@ -9356,7 +9725,6 @@ impl ModelPaths {
 }
 
 pub struct OrientationResult(pub kreuzberg::OrientationResult);
-
 impl OrientationResult {
     pub fn degrees(&self) -> u32 {
         ::serde_json::to_value(&self.0.degrees)
@@ -9373,7 +9741,6 @@ impl OrientationResult {
 }
 
 pub struct BBox(pub kreuzberg::BBox);
-
 impl BBox {
     pub fn x1(&self) -> f32 {
         ::serde_json::to_value(&self.0.x1)
@@ -9402,7 +9769,6 @@ impl BBox {
 }
 
 pub struct LayoutDetection(pub kreuzberg::LayoutDetection);
-
 impl LayoutDetection {
     pub fn class_name(&self) -> LayoutClass {
         LayoutClass::from(self.0.class_name.clone())
@@ -9419,7 +9785,6 @@ impl LayoutDetection {
 }
 
 pub struct DetectionResult(pub kreuzberg::DetectionResult);
-
 impl DetectionResult {
     pub fn page_width(&self) -> u32 {
         ::serde_json::to_value(&self.0.page_width)
@@ -9443,7 +9808,6 @@ impl DetectionResult {
 }
 
 pub struct EmbeddedFile(pub kreuzberg::pdf::embedded_files::EmbeddedFile);
-
 impl EmbeddedFile {
     pub fn name(&self) -> String {
         format!("{:?}", &self.0.name)
@@ -9453,6 +9817,73 @@ impl EmbeddedFile {
     }
     pub fn mime_type(&self) -> Option<String> {
         self.0.mime_type.as_ref().map(|v| format!("{v:?}"))
+    }
+}
+
+pub struct PdfMetadata(pub kreuzberg::pdf::metadata::PdfMetadata);
+impl PdfMetadata {
+    pub fn new(
+        pdf_version: Option<String>,
+        producer: Option<String>,
+        is_encrypted: Option<bool>,
+        width: Option<i64>,
+        height: Option<i64>,
+        page_count: Option<usize>,
+    ) -> PdfMetadata {
+        let mut __target: kreuzberg::pdf::metadata::PdfMetadata = ::std::default::Default::default();
+        if let Some(s) = pdf_version {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.pdf_version = Some(t);
+                }
+            }
+        }
+        if let Some(s) = producer {
+            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
+                if let Ok(t) = ::serde_json::from_value(v) {
+                    __target.producer = Some(t);
+                }
+            }
+        }
+        __target.is_encrypted = is_encrypted;
+        __target.width = width;
+        __target.height = height;
+        __target.page_count = page_count;
+        PdfMetadata(__target)
+    }
+    pub fn pdf_version(&self) -> Option<String> {
+        self.0.pdf_version.clone()
+    }
+    pub fn producer(&self) -> Option<String> {
+        self.0.producer.clone()
+    }
+    pub fn is_encrypted(&self) -> Option<bool> {
+        self.0.is_encrypted.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn width(&self) -> Option<i64> {
+        self.0.width.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn height(&self) -> Option<i64> {
+        self.0.height.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
+    }
+    pub fn page_count(&self) -> Option<usize> {
+        self.0.page_count.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
     }
 }
 
@@ -10468,6 +10899,15 @@ pub fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<
         })
 }
 
+pub fn render_pdf_page_to_png(
+    pdf_bytes: Vec<u8>,
+    page_index: usize,
+    dpi: Option<i32>,
+    password: Option<String>,
+) -> Result<Vec<u8>, String> {
+    kreuzberg::render_pdf_page_to_png(&pdf_bytes, page_index, dpi, password.as_deref()).map_err(|e| e.to_string())
+}
+
 pub fn detect_mime_type(path: String, check_exists: bool) -> Result<String, String> {
     kreuzberg::detect_mime_type(path, check_exists)
         .map_err(|e| e.to_string())
@@ -10492,12 +10932,10 @@ pub fn list_embedding_presets() -> Vec<String> {
 }
 
 pub struct OcrBackendBox(pub Box<dyn kreuzberg::plugins::OcrBackend + Send + Sync>);
-
 #[doc(hidden)]
 pub fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox> {
     Vec::new()
 }
-
 pub fn ocr_backend_call_process_image(
     this: &OcrBackendBox,
     image_bytes: Vec<u8>,
@@ -10515,7 +10953,6 @@ pub fn ocr_backend_call_process_image(
                 .map_err(|e| e.to_string())
         })
 }
-
 pub fn ocr_backend_call_process_image_file(
     this: &OcrBackendBox,
     path: String,
@@ -10533,27 +10970,21 @@ pub fn ocr_backend_call_process_image_file(
                 .map_err(|e| e.to_string())
         })
 }
-
 pub fn ocr_backend_call_supports_language(this: &OcrBackendBox, lang: String) -> bool {
     this.0.supports_language(&lang)
 }
-
 pub fn ocr_backend_call_backend_type(this: &OcrBackendBox) -> OcrBackendType {
     OcrBackendType::from(this.0.backend_type())
 }
-
 pub fn ocr_backend_call_supported_languages(this: &OcrBackendBox) -> Vec<String> {
     this.0.supported_languages()
 }
-
 pub fn ocr_backend_call_supports_table_detection(this: &OcrBackendBox) -> bool {
     this.0.supports_table_detection()
 }
-
 pub fn ocr_backend_call_supports_document_processing(this: &OcrBackendBox) -> bool {
     this.0.supports_document_processing()
 }
-
 pub fn ocr_backend_call_process_document(
     this: &OcrBackendBox,
     path: String,
@@ -10573,12 +11004,10 @@ pub fn ocr_backend_call_process_document(
 }
 
 pub struct PostProcessorBox(pub Box<dyn kreuzberg::plugins::PostProcessor + Send + Sync>);
-
 #[doc(hidden)]
 pub fn alef_phantom_vec_post_processor() -> Vec<PostProcessorBox> {
     Vec::new()
 }
-
 pub fn post_processor_call_process(
     this: &PostProcessorBox,
     mut result: ExtractionResult,
@@ -10595,11 +11024,9 @@ pub fn post_processor_call_process(
                 .map_err(|e| e.to_string())
         })
 }
-
 pub fn post_processor_call_processing_stage(this: &PostProcessorBox) -> ProcessingStage {
     ProcessingStage::from(this.0.processing_stage())
 }
-
 pub fn post_processor_call_should_process(
     this: &PostProcessorBox,
     result: ExtractionResult,
@@ -10607,22 +11034,18 @@ pub fn post_processor_call_should_process(
 ) -> bool {
     this.0.should_process(&result.0, &config.0)
 }
-
 pub fn post_processor_call_estimated_duration_ms(this: &PostProcessorBox, result: ExtractionResult) -> u64 {
     this.0.estimated_duration_ms(&result.0)
 }
-
 pub fn post_processor_call_priority(this: &PostProcessorBox) -> i32 {
     this.0.priority()
 }
 
 pub struct ValidatorBox(pub Box<dyn kreuzberg::plugins::Validator + Send + Sync>);
-
 #[doc(hidden)]
 pub fn alef_phantom_vec_validator() -> Vec<ValidatorBox> {
     Vec::new()
 }
-
 pub fn validator_call_validate(
     this: &ValidatorBox,
     result: ExtractionResult,
@@ -10634,26 +11057,21 @@ pub fn validator_call_validate(
         .expect("build tokio runtime")
         .block_on(async { this.0.validate(&result.0, &config.0).await.map_err(|e| e.to_string()) })
 }
-
 pub fn validator_call_should_validate(this: &ValidatorBox, result: ExtractionResult, config: ExtractionConfig) -> bool {
     this.0.should_validate(&result.0, &config.0)
 }
-
 pub fn validator_call_priority(this: &ValidatorBox) -> i32 {
     this.0.priority()
 }
 
 pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::plugins::EmbeddingBackend + Send + Sync>);
-
 #[doc(hidden)]
 pub fn alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox> {
     Vec::new()
 }
-
 pub fn embedding_backend_call_dimensions(this: &EmbeddingBackendBox) -> usize {
     this.0.dimensions()
 }
-
 pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> Result<String, String> {
     ::tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -10666,4 +11084,410 @@ pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<Strin
                 .map(|v| serde_json::to_string(&v).expect("serializable return"))
                 .map_err(|e| e.to_string())
         })
+}
+
+/// Convert a stringified Swift error into the source crate's `KreuzbergError::Plugin`.
+#[allow(dead_code)]
+fn plugin_error_from_string(message: String) -> kreuzberg::KreuzbergError {
+    kreuzberg::KreuzbergError::Plugin {
+        message,
+        plugin_name: "swift".to_string(),
+    }
+}
+
+/// JSON envelope returned by every fallible Swift trait method. Carries `Ok(T)`
+/// as `{"ok": <serialised T>}` and `Err(String)` as `{"err": "<message>"}`.
+/// Avoids swift-bridge 0.1.59's broken `Result<RustString, RustString>` codegen.
+#[allow(dead_code)]
+#[derive(::serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum InboundEnvelope<T> {
+    Ok(T),
+    Err(String),
+}
+
+/// Deserialise a JSON envelope returned from a Swift FFI shim into a typed Result.
+#[allow(dead_code)]
+fn decode_inbound_envelope<T>(json: &str) -> kreuzberg::Result<T>
+where
+    T: ::serde::de::DeserializeOwned,
+{
+    match ::serde_json::from_str::<InboundEnvelope<T>>(json) {
+        Ok(InboundEnvelope::Ok(value)) => Ok(value),
+        Ok(InboundEnvelope::Err(message)) => Err(plugin_error_from_string(message)),
+        Err(e) => Err(plugin_error_from_string(format!(
+            "swift returned malformed envelope: {e}"
+        ))),
+    }
+}
+
+/// Rust-side wrapper around a Swift class implementing the `OcrBackend` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftOcrBackendWrapper {
+    inner: ffi::SwiftOcrBackendBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftOcrBackendWrapper {}
+unsafe impl Sync for SwiftOcrBackendWrapper {}
+
+impl SwiftOcrBackendWrapper {
+    /// Construct a new wrapper from a Swift `SwiftOcrBackendBox` handle.
+    pub fn new(inner: ffi::SwiftOcrBackendBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftOcrBackendWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
+    async fn process_image(
+        &self,
+        image_bytes: &[u8],
+        config: &kreuzberg::OcrConfig,
+    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
+        let image_bytes = image_bytes.to_vec();
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process_image(image_bytes, config);
+        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
+    }
+
+    async fn process_image_file(
+        &self,
+        path: &::std::path::Path,
+        config: &kreuzberg::OcrConfig,
+    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
+        let path = path.to_string_lossy().into_owned();
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process_image_file(path, config);
+        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
+    }
+
+    fn supports_language(&self, lang: &str) -> bool {
+        let lang = lang.to_string();
+        self.inner.alef_supports_language(lang)
+    }
+
+    fn backend_type(&self) -> kreuzberg::plugins::OcrBackendType {
+        let json = self.inner.alef_backend_type();
+        ::serde_json::from_str::<kreuzberg::plugins::OcrBackendType>(&json)
+            .expect("swift ocr_backend.backend_type returned invalid JSON")
+    }
+
+    fn supported_languages(&self) -> Vec<String> {
+        self.inner.alef_supported_languages()
+    }
+
+    fn supports_table_detection(&self) -> bool {
+        self.inner.alef_supports_table_detection()
+    }
+
+    fn supports_document_processing(&self) -> bool {
+        self.inner.alef_supports_document_processing()
+    }
+
+    async fn process_document(
+        &self,
+        path: &::std::path::Path,
+        config: &kreuzberg::OcrConfig,
+    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
+        let path = path.to_string_lossy().into_owned();
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process_document(path, config);
+        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
+    }
+}
+
+/// Register a Swift class implementation as a `OcrBackend` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_ocr_backend(swift_box: ffi::SwiftOcrBackendBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::OcrBackend> =
+        ::std::sync::Arc::new(SwiftOcrBackendWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
+}
+
+/// Rust-side wrapper around a Swift class implementing the `PostProcessor` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftPostProcessorWrapper {
+    inner: ffi::SwiftPostProcessorBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftPostProcessorWrapper {}
+unsafe impl Sync for SwiftPostProcessorWrapper {}
+
+impl SwiftPostProcessorWrapper {
+    /// Construct a new wrapper from a Swift `SwiftPostProcessorBox` handle.
+    pub fn new(inner: ffi::SwiftPostProcessorBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftPostProcessorWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
+    async fn process(
+        &self,
+        result: &mut kreuzberg::ExtractionResult,
+        config: &kreuzberg::ExtractionConfig,
+    ) -> kreuzberg::Result<()> {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_process(result, config);
+        decode_inbound_envelope::<()>(&envelope).map(|_| ())
+    }
+
+    fn processing_stage(&self) -> kreuzberg::plugins::ProcessingStage {
+        let json = self.inner.alef_processing_stage();
+        ::serde_json::from_str::<kreuzberg::plugins::ProcessingStage>(&json)
+            .expect("swift post_processor.processing_stage returned invalid JSON")
+    }
+
+    fn should_process(&self, result: &kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> bool {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        self.inner.alef_should_process(result, config)
+    }
+
+    fn estimated_duration_ms(&self, result: &kreuzberg::ExtractionResult) -> u64 {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        self.inner.alef_estimated_duration_ms(result)
+    }
+
+    fn priority(&self) -> i32 {
+        self.inner.alef_priority()
+    }
+}
+
+/// Register a Swift class implementation as a `PostProcessor` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_post_processor(swift_box: ffi::SwiftPostProcessorBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::PostProcessor> =
+        ::std::sync::Arc::new(SwiftPostProcessorWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_post_processor_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
+}
+
+/// Rust-side wrapper around a Swift class implementing the `Validator` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftValidatorWrapper {
+    inner: ffi::SwiftValidatorBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftValidatorWrapper {}
+unsafe impl Sync for SwiftValidatorWrapper {}
+
+impl SwiftValidatorWrapper {
+    /// Construct a new wrapper from a Swift `SwiftValidatorBox` handle.
+    pub fn new(inner: ffi::SwiftValidatorBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftValidatorWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::Validator for SwiftValidatorWrapper {
+    async fn validate(
+        &self,
+        result: &kreuzberg::ExtractionResult,
+        config: &kreuzberg::ExtractionConfig,
+    ) -> kreuzberg::Result<()> {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        let envelope = self.inner.alef_validate(result, config);
+        decode_inbound_envelope::<()>(&envelope).map(|_| ())
+    }
+
+    fn should_validate(&self, result: &kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> bool {
+        let result = ::serde_json::to_string(&result).expect("serializable param result");
+        let config = ::serde_json::to_string(&config).expect("serializable param config");
+        self.inner.alef_should_validate(result, config)
+    }
+
+    fn priority(&self) -> i32 {
+        self.inner.alef_priority()
+    }
+}
+
+/// Register a Swift class implementation as a `Validator` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_validator(swift_box: ffi::SwiftValidatorBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::Validator> =
+        ::std::sync::Arc::new(SwiftValidatorWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_validator_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
+}
+
+/// Rust-side wrapper around a Swift class implementing the `EmbeddingBackend` plugin protocol.
+///
+/// The Swift instance is held via a `swift-bridge` opaque handle that retains
+/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
+/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
+/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
+pub struct SwiftEmbeddingBackendWrapper {
+    inner: ffi::SwiftEmbeddingBackendBox,
+    /// Cached `Plugin::name()` — required because the trait returns `&str` but
+    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
+    name_cache: ::std::sync::OnceLock<String>,
+}
+unsafe impl Send for SwiftEmbeddingBackendWrapper {}
+unsafe impl Sync for SwiftEmbeddingBackendWrapper {}
+
+impl SwiftEmbeddingBackendWrapper {
+    /// Construct a new wrapper from a Swift `SwiftEmbeddingBackendBox` handle.
+    pub fn new(inner: ffi::SwiftEmbeddingBackendBox) -> Self {
+        Self {
+            inner,
+            name_cache: ::std::sync::OnceLock::new(),
+        }
+    }
+}
+
+impl kreuzberg::plugins::Plugin for SwiftEmbeddingBackendWrapper {
+    fn name(&self) -> &str {
+        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
+    }
+
+    fn version(&self) -> String {
+        self.inner.alef_version()
+    }
+
+    fn initialize(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
+    }
+
+    fn shutdown(&self) -> kreuzberg::Result<()> {
+        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
+    }
+}
+
+#[async_trait::async_trait]
+impl kreuzberg::plugins::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
+    fn dimensions(&self) -> usize {
+        self.inner.alef_dimensions()
+    }
+
+    async fn embed(&self, texts: Vec<String>) -> kreuzberg::Result<Vec<Vec<f32>>> {
+        let envelope = self.inner.alef_embed(texts);
+        decode_inbound_envelope::<Vec<Vec<f32>>>(&envelope)
+    }
+}
+
+/// Register a Swift class implementation as a `EmbeddingBackend` plugin.
+///
+/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
+/// Errors from the registry are stringified for swift-bridge transport.
+pub fn register_embedding_backend(swift_box: ffi::SwiftEmbeddingBackendBox) -> Result<(), String> {
+    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::EmbeddingBackend> =
+        ::std::sync::Arc::new(SwiftEmbeddingBackendWrapper::new(swift_box));
+    let registry = kreuzberg::plugins::registry::get_embedding_backend_registry();
+    let mut guard = registry.write();
+    guard.register(arc).map_err(|e| e.to_string())
+}
+
+// JSON factory shims for e2e test layer.
+// These let generated tests deserialise fixture JSON into opaque swift-bridge types.
+
+pub fn extraction_config_from_json(json: String) -> Result<ExtractionConfig, String> {
+    serde_json::from_str::<kreuzberg::ExtractionConfig>(&json)
+        .map_err(|e| e.to_string())
+        .map(ExtractionConfig)
+}
+
+pub fn batch_bytes_item_from_json(json: String) -> Result<BatchBytesItem, String> {
+    serde_json::from_str::<kreuzberg::BatchBytesItem>(&json)
+        .map_err(|e| e.to_string())
+        .map(BatchBytesItem)
+}
+
+pub fn batch_file_item_from_json(json: String) -> Result<BatchFileItem, String> {
+    serde_json::from_str::<kreuzberg::BatchFileItem>(&json)
+        .map_err(|e| e.to_string())
+        .map(BatchFileItem)
 }

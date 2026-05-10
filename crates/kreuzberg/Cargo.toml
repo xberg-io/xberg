@@ -311,8 +311,8 @@ moka = { version = "0.12", features = ["sync"], optional = true }
 ndarray = { version = "0.17", optional = true }
 num_cpus = { workspace = true }
 once_cell = { workspace = true }
-opentelemetry = { version = "0.31", features = ["trace"], optional = true }
-opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
+opentelemetry = { version = "0.32", features = ["trace"], optional = true }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"], optional = true }
 org = { version = "0.3", optional = true }
 ort = { version = "2.0.0-rc.12", default-features = false, features = [
     "std",
@@ -324,7 +324,7 @@ parking_lot = { workspace = true }
 pastey = "0.2"
 pdf_oxide = { workspace = true, features = ["rendering"], optional = true }
 pulldown-cmark = { version = "0.13" }
-quick-xml = { version = "0.39.3", features = ["serialize"], optional = true }
+quick-xml = { version = "0.39.4", features = ["serialize"], optional = true }
 rake = { version = "0.3.6", optional = true }
 rayon = { workspace = true }
 regex = "1.12.3"
@@ -343,7 +343,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_toon_format = { workspace = true }
 serde_yaml_ng = "0.10.0"
-sevenz-rust2 = { version = "0.21.0", optional = true }
+sevenz-rust2 = { version = "0.20.2", optional = true }
 sha2 = { version = "0.11", optional = true }
 simdutf8 = { version = "0.1", optional = true }
 snap = { version = "1.1", optional = true }
@@ -410,9 +410,9 @@ features = ["dynamic-loading", "download", "serde"]
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# Override getrandom to enable js feature for WASM targets
-# This is needed because ring/rustls (via ureq) depend on getrandom without js feature
-getrandom = { workspace = true }
+# Override getrandom to enable wasm_js feature for WASM targets
+# This is needed because ring/rustls (via ureq) depend on getrandom without wasm_js feature
+getrandom = { version = "0.4", features = ["wasm_js"] }
 liter-llm = { workspace = true, optional = true, features = ["wasm-http"] }
 tree-sitter-language-pack = { workspace = true, default-features = false, features = [
     "serde",

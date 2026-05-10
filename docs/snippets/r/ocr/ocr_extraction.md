@@ -2,14 +2,16 @@
 library(kreuzberg)
 
 # Configure Tesseract OCR
-ocr <- ocr_config(backend = "tesseract", language = "eng", dpi = 300L)
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(backend = "tesseract", language = "eng")
+)
 
 # Extract text from a scanned image
-result <- extract_file_sync("scan.png", config = config)
+json <- extract_file_sync("scan.png", "image/png", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
-cat(sprintf("Quality score: %s\n", result$quality_score))
 cat("Content preview:\n")
 cat(substr(result$content, 1, 200))
 ```

@@ -21,7 +21,7 @@ tasks:
     dir: test_apps/python
     cmds:
       - uv sync
-      - uv run pytest smoke_test.py -v
+      - uv run --no-sync pytest smoke_test.py -v
 
   smoke:node:
     desc: Run Node.js test_app smoke test
@@ -103,7 +103,7 @@ tasks:
     dir: test_apps/python
     cmds:
       - uv sync
-      - uv run pytest comprehensive_test.py -v
+      - uv run --no-sync pytest comprehensive_test.py -v
 
   comprehensive:node:
     desc: Run Node.js test_app comprehensive tests

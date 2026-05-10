@@ -71,7 +71,7 @@ class Program
                 }
             };
 
-            var result = await KreuzbergClient.ExtractFileAsync(
+            var result = await KreuzbergLib.ExtractFileAsync(
                 "document.pdf",
                 config
             );

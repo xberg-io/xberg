@@ -53,13 +53,11 @@ jobs:
           ls -lh /tmp/kreuzberg-${{ matrix.variant }}.tar.gz
 
       - name: Check image size
-        shell: bash
-        run: |
-          size_mb=$(docker inspect kreuzberg:${{ matrix.variant }} --format='{{.Size}}' | awk '{print int($1/1024/1024)}')
-          echo "Image size: ${size_mb}MB"
-          if [ "${{ matrix.variant }}" = "cli" ] && [ "$size_mb" -gt 200 ]; then
-            echo "::warning::CLI image is larger than 200MB (${size_mb}MB)"
-          fi
+        uses: kreuzberg-dev/actions/check-docker-image-size@v1
+        with:
+          image: kreuzberg:${{ matrix.variant }}
+          warn-mb: ${{ matrix.variant == 'cli' && '200' || '' }}
+          label: "${{ matrix.variant }} image"
 
       - name: Run feature tests
         if: matrix.variant != 'cli'
@@ -71,17 +69,10 @@ jobs:
 
       - name: Run API contract tests with schemathesis
         if: matrix.variant != 'cli'
-        run: |
-          pip3 install schemathesis
-          container_id=$(docker run -d -p 8000:8000 kreuzberg:${{ matrix.variant }})
-          sleep 5
-          FAILED=0
-          schemathesis run http://localhost:8000/openapi.json \
-            --max-examples=10 \
-            --request-timeout=30000 \
-            --checks not_a_server_error,status_code_conformance,content_type_conformance,response_schema_conformance,negative_data_rejection || FAILED=1
-          docker stop "$container_id"
-          exit "$FAILED"
+        uses: kreuzberg-dev/actions/run-api-contract-tests@v1
+        with:
+          image: kreuzberg:${{ matrix.variant }}
+          port: "8000"
 
       - name: Run CLI tests
         if: matrix.variant == 'cli'

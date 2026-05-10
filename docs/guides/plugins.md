@@ -1,6 +1,6 @@
 # Creating Plugins <span class="version-badge">v4.0.0</span>
 
-Extend Kreuzberg with custom extractors, post-processors, OCR backends, and validators. Plugins can be written in Rust or Python, and are registered globally for use across all extraction calls.
+Extend Kreuzberg with custom extractors, post-processors, OCR backends, and validators registered globally for use across all extraction calls.
 
 !!! Note "Wasm" Custom plugins are not supported in Wasm environments. Use Python, Rust, or other native bindings.
 
@@ -16,8 +16,6 @@ Extend Kreuzberg with custom extractors, post-processors, OCR backends, and vali
 All plugins must be thread-safe (`Send + Sync` in Rust, thread-safe in Python) and implement `initialize()` / `shutdown()` lifecycle methods.
 
 ## Document Extractors
-
-Add support for new file formats or override built-in extractors.
 
 ### Implementation
 
@@ -77,7 +75,7 @@ When multiple extractors support the same MIME type, the highest priority wins:
 
 ## Post-Processors
 
-Transform and enrich results after extraction. Processors execute in three stages:
+Processors execute in three stages:
 
 - **Early** — Foundational: language detection, quality scoring, text normalization
 - **Middle** — Transformation: keyword extraction, token reduction, summarization
@@ -117,8 +115,6 @@ Transform and enrich results after extraction. Processors execute in three stage
 
 ## OCR Backends
 
-Integrate cloud OCR services or custom engines:
-
 ### Implementation
 
 === "Rust"
@@ -147,7 +143,7 @@ Integrate cloud OCR services or custom engines:
 
 ### Registration
 
-Once you've implemented a backend (see above), register it so the extraction pipeline can use it. Set the backend name in `OcrConfig` to route OCR through your custom engine:
+Register the backend and set its name in `OcrConfig`:
 
 === "Python"
 
@@ -167,15 +163,13 @@ Once you've implemented a backend (see above), register it so the extraction pip
 
 ### Using EasyOCR (Built-in)
 
-Kreuzberg ships with an EasyOCR backend that supports 80+ languages and optional GPU acceleration. You don't need to implement anything — just point `OcrConfig` at it:
+The built-in EasyOCR backend supports 80+ languages and GPU acceleration — just point `OcrConfig` at it:
 
 === "Python"
 
     --8<-- "snippets/python/ocr/ocr_easyocr.md"
 
 ## Validators
-
-Enforce quality requirements on extraction results.
 
 !!! Warning Validation errors cause extraction to fail. Use validators for critical quality checks only.
 

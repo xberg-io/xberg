@@ -1,3 +1,2 @@
 rust_root: .
-rust_input: crate
-dart_output: ../lib/src/frb
+dart_output: ../lib/src/kreuzberg_bridge_generated

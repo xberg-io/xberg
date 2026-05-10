@@ -2,6 +2,7 @@
 
 package dev.kreuzberg.kt
 
+
 import dev.kreuzberg.Kreuzberg as Bridge
 import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
@@ -48,8 +49,10 @@ typealias PageMarginsPoints = dev.kreuzberg.PageMarginsPoints
 typealias StyleDefinition = dev.kreuzberg.StyleDefinition
 typealias ResolvedStyle = dev.kreuzberg.ResolvedStyle
 typealias TableProperties = dev.kreuzberg.TableProperties
+typealias DocxAppProperties = dev.kreuzberg.DocxAppProperties
 typealias XlsxAppProperties = dev.kreuzberg.XlsxAppProperties
 typealias PptxAppProperties = dev.kreuzberg.PptxAppProperties
+typealias CoreProperties = dev.kreuzberg.CoreProperties
 typealias CustomProperties = dev.kreuzberg.CustomProperties
 typealias OdtProperties = dev.kreuzberg.OdtProperties
 typealias SecurityLimits = dev.kreuzberg.SecurityLimits
@@ -100,6 +103,7 @@ typealias Metadata = dev.kreuzberg.Metadata
 typealias ExcelMetadata = dev.kreuzberg.ExcelMetadata
 typealias EmailMetadata = dev.kreuzberg.EmailMetadata
 typealias ArchiveMetadata = dev.kreuzberg.ArchiveMetadata
+typealias ImageMetadata = dev.kreuzberg.ImageMetadata
 typealias XmlMetadata = dev.kreuzberg.XmlMetadata
 typealias TextMetadata = dev.kreuzberg.TextMetadata
 typealias HeaderMetadata = dev.kreuzberg.HeaderMetadata
@@ -176,6 +180,7 @@ typealias BBox = dev.kreuzberg.BBox
 typealias LayoutDetection = dev.kreuzberg.LayoutDetection
 typealias DetectionResult = dev.kreuzberg.DetectionResult
 typealias EmbeddedFile = dev.kreuzberg.EmbeddedFile
+typealias PdfMetadata = dev.kreuzberg.PdfMetadata
 
 typealias ExecutionProviderType = dev.kreuzberg.ExecutionProviderType
 typealias OutputFormat = dev.kreuzberg.OutputFormat
@@ -219,6 +224,7 @@ typealias LayoutClass = dev.kreuzberg.LayoutClass
 typealias KreuzbergErrorException = dev.kreuzberg.KreuzbergErrorException
 
 object Kreuzberg {
+
     /**
      * Extract content from a byte array.
      *
@@ -239,9 +245,11 @@ object Kreuzberg {
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
     suspend fun extractBytes(content: ByteArray, mimeType: String, config: ExtractionConfig): ExtractionResult {
+
         return withContext(Dispatchers.IO) {
             Bridge.extractBytes(content, mimeType, config)
         }
+
     }
 
     /**
@@ -265,9 +273,11 @@ object Kreuzberg {
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
     suspend fun extractFile(path: Path, mimeType: String?, config: ExtractionConfig): ExtractionResult {
+
         return withContext(Dispatchers.IO) {
             Bridge.extractFile(path, mimeType, config)
         }
+
     }
 
     /**
@@ -283,7 +293,9 @@ object Kreuzberg {
      * use a truly synchronous extraction approach instead.
      */
     fun extractFileSync(path: Path, mimeType: String?, config: ExtractionConfig): ExtractionResult {
+
         return Bridge.extractFileSync(path, mimeType, config)
+
     }
 
     /**
@@ -296,7 +308,9 @@ object Kreuzberg {
      * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
      */
     fun extractBytesSync(content: ByteArray, mimeType: String, config: ExtractionConfig): ExtractionResult {
+
         return Bridge.extractBytesSync(content, mimeType, config)
+
     }
 
     /**
@@ -306,7 +320,9 @@ object Kreuzberg {
      * Only available with `tokio-runtime` (WASM has no filesystem).
      */
     fun batchExtractFilesSync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> {
+
         return Bridge.batchExtractFilesSync(items, config)
+
     }
 
     /**
@@ -318,7 +334,9 @@ object Kreuzberg {
      * that iterates through items and calls `extract_bytes_sync()`.
      */
     fun batchExtractBytesSync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> {
+
         return Bridge.batchExtractBytesSync(items, config)
+
     }
 
     /**
@@ -352,9 +370,11 @@ object Kreuzberg {
      * Per-file configuration overrides:
      */
     suspend fun batchExtractFiles(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> {
+
         return withContext(Dispatchers.IO) {
             Bridge.batchExtractFiles(items, config)
         }
+
     }
 
     /**
@@ -382,9 +402,11 @@ object Kreuzberg {
      * Per-item configuration overrides:
      */
     suspend fun batchExtractBytes(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> {
+
         return withContext(Dispatchers.IO) {
             Bridge.batchExtractBytes(items, config)
         }
+
     }
 
     /**
@@ -405,7 +427,9 @@ object Kreuzberg {
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type cannot be determined.
      */
     fun detectMimeTypeFromBytes(content: ByteArray): String {
+
         return Bridge.detectMimeTypeFromBytes(content)
+
     }
 
     /**
@@ -418,14 +442,18 @@ object Kreuzberg {
      * A vector of file extensions (without leading dot) for the MIME type.
      */
     fun getExtensionsForMime(mimeType: String): List<String> {
+
         return Bridge.getExtensionsForMime(mimeType)
+
     }
 
     /**
      * List names of all registered document extractors.
      */
     fun listDocumentExtractors(): List<String> {
+
         return Bridge.listDocumentExtractors()
+
     }
 
     /**
@@ -438,7 +466,9 @@ object Kreuzberg {
      * A vector of OCR backend names.
      */
     fun listOcrBackends(): List<String> {
+
         return Bridge.listOcrBackends()
+
     }
 
     /**
@@ -452,7 +482,9 @@ object Kreuzberg {
      * - `Err(...)` if any shutdown method failed
      */
     fun clearOcrBackends(): Unit {
+
         Bridge.clearOcrBackends()
+
     }
 
     /**
@@ -467,28 +499,36 @@ object Kreuzberg {
      * - `Err(...)` if the registry lock is poisoned
      */
     fun listPostProcessors(): List<String> {
+
         return Bridge.listPostProcessors()
+
     }
 
     /**
      * Remove all registered post-processors.
      */
     fun clearPostProcessors(): Unit {
+
         Bridge.clearPostProcessors()
+
     }
 
     /**
      * List names of all registered validators.
      */
     fun listValidators(): List<String> {
+
         return Bridge.listValidators()
+
     }
 
     /**
      * Remove all registered validators.
      */
     fun clearValidators(): Unit {
+
         Bridge.clearValidators()
+
     }
 
     /**
@@ -507,9 +547,28 @@ object Kreuzberg {
      *   or the blocking inference task panics
      */
     suspend fun embedTextsAsync(texts: List<String>, config: EmbeddingConfig): List<List<Float>> {
+
         return withContext(Dispatchers.IO) {
             Bridge.embedTextsAsync(texts, config)
         }
+
+    }
+
+    /**
+     * Render a single PDF page to PNG bytes.
+     *
+     * Returns raw PNG-encoded bytes for the specified page at the given DPI.
+     * Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+     *
+     * **Errors:**
+     *
+     * Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
+     * or rendered, or if `page_index` is out of range.
+     */
+    fun renderPdfPageToPng(pdfBytes: ByteArray, pageIndex: Long, dpi: Int?, password: String?): ByteArray {
+
+        return Bridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password)
+
     }
 
     /**
@@ -519,7 +578,9 @@ object Kreuzberg {
      * Set `check_exists` to `true` to verify the file exists before detection.
      */
     fun detectMimeType(path: String, checkExists: Boolean): String {
+
         return Bridge.detectMimeType(path, checkExists)
+
     }
 
     /**
@@ -528,7 +589,9 @@ object Kreuzberg {
      * Returns a 2D vector where each inner vector is the embedding for the corresponding text.
      */
     fun embedTexts(texts: List<String>, config: EmbeddingConfig): List<List<Float>> {
+
         return Bridge.embedTexts(texts, config)
+
     }
 
     /**
@@ -538,7 +601,9 @@ object Kreuzberg {
      * clone so the value is safe to pass across FFI boundaries.
      */
     fun getEmbeddingPreset(name: String): EmbeddingPreset? {
+
         return Bridge.getEmbeddingPreset(name)
+
     }
 
     /**
@@ -547,7 +612,9 @@ object Kreuzberg {
      * Returns owned `String`s so the values are safe to pass across FFI boundaries.
      */
     fun listEmbeddingPresets(): List<String> {
+
         return Bridge.listEmbeddingPresets()
+
     }
 
 }

@@ -180,6 +180,13 @@ pub struct ExtractionOverrides {
     )]
     pub layout_table_model: Option<String>,
 
+    /// Feed layout detection regions into the non-OCR markdown pipeline to improve
+    /// heading/table/list/figure structure. Requires `--layout` to be enabled.
+    /// Default: false.
+    #[cfg(feature = "layout-detection")]
+    #[arg(long)]
+    pub use_layout_for_markdown: bool,
+
     // ── Acceleration & concurrency ───────────────────────────────────
     /// ONNX Runtime execution provider for model inference.
     #[arg(long, value_enum)]
@@ -591,8 +598,10 @@ impl ExtractionOverrides {
                 return;
             }
 
-            let has_layout_flag =
-                self.layout == Some(true) || self.layout_confidence.is_some() || self.layout_table_model.is_some();
+            let has_layout_flag = self.layout == Some(true)
+                || self.layout_confidence.is_some()
+                || self.layout_table_model.is_some()
+                || self.use_layout_for_markdown;
             if has_layout_flag {
                 let mut layout = config.layout.clone().unwrap_or_default();
                 if let Some(confidence) = self.layout_confidence {
@@ -602,6 +611,9 @@ impl ExtractionOverrides {
                     layout.table_model = table_model.parse().unwrap_or_default();
                 }
                 config.layout = Some(layout);
+            }
+            if self.use_layout_for_markdown {
+                config.use_layout_for_markdown = true;
             }
         }
     }

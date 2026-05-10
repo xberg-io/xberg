@@ -1,9 +1,9 @@
 ```ruby title="Ruby"
 require 'kreuzberg'
 
-config = Kreuzberg::Config::Extraction.new(
-  ocr: Kreuzberg::Config::OCR.new(backend: 'tesseract'),
-  pdf: Kreuzberg::Config::PDF.new(dpi: 300)
+config = Kreuzberg::ExtractionConfig.new(
+  ocr: Kreuzberg::OcrConfig.new(backend: 'tesseract'),
+  pdf: Kreuzberg::PdfConfig.new(dpi: 300)
 )
 
 result = Kreuzberg.extract_file_sync('scanned.pdf', config: config)

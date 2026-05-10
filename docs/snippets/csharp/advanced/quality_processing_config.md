@@ -6,7 +6,7 @@ var config = new ExtractionConfig
     EnableQualityProcessing = true
 };
 
-var result = await KreuzbergClient.ExtractFileAsync(
+var result = await KreuzbergLib.ExtractFileAsync(
     "document.pdf",
     config
 );

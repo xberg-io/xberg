@@ -8,7 +8,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 
 if (result.Metadata?.Format.Pdf != null)
 {
@@ -20,7 +20,7 @@ if (result.Metadata?.Format.Pdf != null)
     Console.WriteLine($"Created: {pdfMeta.CreatedDate:O}");
 }
 
-var htmlResult = KreuzbergClient.ExtractFileSync("page.html", config);
+var htmlResult = KreuzbergLib.ExtractFileSync("page.html", config);
 if (htmlResult.Metadata?.Format.Html != null)
 {
     var htmlMeta = htmlResult.Metadata.Format.Html;

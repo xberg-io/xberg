@@ -4,7 +4,7 @@ Extract text from images and scanned PDFs. Kreuzberg automatically determines wh
 
 ## Backend Comparison
 
-Kreuzberg supports four OCR backends. Pick based on your platform, accuracy needs, and language coverage.
+Four OCR backends — pick based on platform, accuracy needs, and language coverage.
 
 |                  | **Tesseract**        | **PaddleOCR**                       | **EasyOCR**         | **VLM**                  |
 | ---------------- | -------------------- | ----------------------------------- | ------------------- | ------------------------ |
@@ -224,7 +224,7 @@ Process PDFs with OCR even when they have a text layer:
 
 !!! Info "Added in v4.7.0"
 
-Skip OCR entirely, even for image files that would normally require it. When `disable_ocr` is set, image files return empty content instead of raising a `MissingDependencyError`:
+When `disable_ocr` is set, image files return empty content instead of raising `MissingDependencyError`:
 
 === "Python"
 
@@ -292,7 +292,7 @@ Skip OCR entirely, even for image files that would normally require it. When `di
 
 ### Using VLM OCR <span class="version-badge">v4.8.0</span>
 
-Use a vision-language model (for example, GPT-4o, Claude) as the OCR backend. Each page is rendered as an image and sent to the VLM for text extraction. Cloud providers require an API key; local engines like Ollama do not — just start the server and use the `ollama/` prefix (for example, `ollama/llama3.2-vision`). See [Local LLM Support](llm-integration.md#local-llm-support) for setup details.
+Use a vision-language model (e.g. GPT-4o, Claude) as the OCR backend — each page is rendered and sent to the VLM. Cloud providers need an API key; local engines (Ollama, etc.) use the `ollama/` prefix — see [Local LLM Support](llm-integration.md#local-llm-support).
 
 === "Python"
 
@@ -346,7 +346,7 @@ For more on VLM OCR, including custom prompts, supported providers, and API key 
 
 ## DPI Configuration
 
-Image resolution affects both accuracy and speed. Higher DPI improves accuracy but increases processing time and memory usage.
+Higher DPI improves accuracy but increases processing time and memory.
 
 | DPI               | Trade-off                                  |
 | ----------------- | ------------------------------------------ |
@@ -384,7 +384,7 @@ Image resolution affects both accuracy and speed. Higher DPI improves accuracy b
 
 ## PaddleOCR Script Families
 
-PaddleOCR supports 80+ languages across 11 script families (PP-OCRv5). Recognition models are downloaded on demand from HuggingFace:
+80+ languages across 11 script families (PP-OCRv5). Recognition models are downloaded on demand from HuggingFace:
 
 | Family         | Languages                                                                                    |
 | -------------- | -------------------------------------------------------------------------------------------- |

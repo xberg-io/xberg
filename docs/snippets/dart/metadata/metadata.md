@@ -1,0 +1,38 @@
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  final result = await KreuzbergBridge.extractFile('document.pdf', null);
+
+  final metadata = result.metadata;
+
+  if (metadata.title != null) {
+    print('Title: ${metadata.title}');
+  }
+  if (metadata.subject != null) {
+    print('Subject: ${metadata.subject}');
+  }
+  if (metadata.authors != null) {
+    print('Authors: ${metadata.authors!.join(', ')}');
+  }
+  if (metadata.keywords != null) {
+    print('Keywords: ${metadata.keywords!.join(', ')}');
+  }
+  if (metadata.language != null) {
+    print('Language: ${metadata.language}');
+  }
+  if (metadata.createdAt != null) {
+    print('Created: ${metadata.createdAt}');
+  }
+  if (metadata.modifiedAt != null) {
+    print('Modified: ${metadata.modifiedAt}');
+  }
+  if (metadata.extractionDurationMs != null) {
+    print('Extraction took: ${metadata.extractionDurationMs} ms');
+  }
+
+  for (final entry in metadata.additional.entries) {
+    print('Additional[${entry.key}]: ${entry.value}');
+  }
+}
+```

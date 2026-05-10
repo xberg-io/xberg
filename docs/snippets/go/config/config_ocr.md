@@ -4,15 +4,14 @@ package main
 import "github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 
 func main() {
-	language := "eng+fra"
-	psm := 3
+	psm := int32(3)
 
-	_ = &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	_ = kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend:  "tesseract",
-			Language: &language,
-			Tesseract: &kreuzberg.TesseractConfig{
-				PSM: &psm,
+			Language: "eng+fra",
+			TesseractConfig: &kreuzberg.TesseractConfig{
+				Psm: &psm,
 			},
 		},
 	}

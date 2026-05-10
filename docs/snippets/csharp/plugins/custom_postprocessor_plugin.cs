@@ -93,14 +93,14 @@ class Program
         var cleanupProcessor = new CleanupPostProcessor();
         var languageProcessor = new LanguageDetectionPostProcessor();
 
-        KreuzbergClient.RegisterPostProcessor(wordCountProcessor);
-        KreuzbergClient.RegisterPostProcessor(cleanupProcessor);
-        KreuzbergClient.RegisterPostProcessor(languageProcessor);
+        KreuzbergLib.RegisterPostProcessor(wordCountProcessor);
+        KreuzbergLib.RegisterPostProcessor(cleanupProcessor);
+        KreuzbergLib.RegisterPostProcessor(languageProcessor);
 
         try
         {
             var config = new ExtractionConfig();
-            var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+            var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 
             Console.WriteLine($"Original content length: {result.Content.Length}");
 

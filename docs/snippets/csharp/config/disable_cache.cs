@@ -5,4 +5,4 @@ var config = new ExtractionConfig
     UseCache = false
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);

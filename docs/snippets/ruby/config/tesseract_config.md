@@ -1,10 +1,10 @@
 ```ruby title="Ruby"
 require 'kreuzberg'
 
-config = Kreuzberg::Config::Extraction.new(
-  ocr: Kreuzberg::Config::OCR.new(
+config = Kreuzberg::ExtractionConfig.new(
+  ocr: Kreuzberg::OcrConfig.new(
     language: 'eng+fra+deu',
-    tesseract_config: Kreuzberg::Config::Tesseract.new(
+    tesseract_config: Kreuzberg::TesseractConfig.new(
       psm: 6,
       oem: 1,
       min_confidence: 0.8,

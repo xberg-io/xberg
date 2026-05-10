@@ -4,14 +4,7 @@ This guide walks you through Kreuzberg's core API — extracting text, handling 
 running OCR, and working with metadata. Install your binding first if you haven't:
 [Installation](installation.md).
 
-!!! Info "Node.js or Browser?"
-
-    Kreuzberg provides **two TypeScript packages** for different runtimes:
-
-    - **`@kreuzberg/node`** – Use for Node.js servers and CLI tools (native performance, 100% speed)
-    - **`@kreuzberg/wasm`** – Use for browsers, Cloudflare Workers, Deno, Bun, and serverless (60-80% speed, cross-platform)
-
-    The examples below show both. Pick the one matching your runtime. See [Platform Overview](../index.md#language-support) for detailed guidance.
+TypeScript users: `@kreuzberg/node` for Node.js, `@kreuzberg/wasm` for browsers and edge runtimes — see [Language Support](../index.md#language-support).
 
 ## Your First Extraction
 

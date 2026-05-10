@@ -18,7 +18,7 @@ pub(in crate::pdf::structure) enum RegionValidation {
 }
 
 /// Minimum connected components for a region to be considered text-bearing.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "ocr"))]
 const MIN_TEXT_CC_COUNT: i32 = 3;
 
 /// Validate whether a layout region contains text by analyzing the rendered
@@ -28,7 +28,10 @@ const MIN_TEXT_CC_COUNT: i32 = 3;
 /// count is below `MIN_TEXT_CC_COUNT`, the region is flagged as Empty.
 ///
 /// `region_x/y/w/h` are in pixel coordinates (image space, y=0 at top).
-#[cfg(feature = "layout-detection")]
+///
+/// Requires the `ocr` feature (leptonica via kreuzberg-tesseract). Returns
+/// `Skipped` unconditionally when `ocr` is not enabled.
+#[cfg(all(feature = "layout-detection", feature = "ocr"))]
 pub(in crate::pdf::structure) fn validate_region_has_text(
     page_rgb: &[u8],
     page_width: u32,
@@ -93,6 +96,21 @@ pub(in crate::pdf::structure) fn validate_region_has_text(
         );
         RegionValidation::Empty
     }
+}
+
+/// Fallback: when `ocr` feature is absent, leptonica is unavailable — every
+/// region is treated as having content (conservative; no false suppressions).
+#[cfg(all(feature = "layout-detection", not(feature = "ocr")))]
+pub(in crate::pdf::structure) fn validate_region_has_text(
+    _page_rgb: &[u8],
+    _page_width: u32,
+    _page_height: u32,
+    _region_x: u32,
+    _region_y: u32,
+    _region_w: u32,
+    _region_h: u32,
+) -> RegionValidation {
+    RegionValidation::HasContent
 }
 
 /// Validate all suppressible layout regions on a page.

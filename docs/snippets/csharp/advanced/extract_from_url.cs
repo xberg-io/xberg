@@ -12,7 +12,7 @@ class Program
             var url = "https://example.com/document.pdf";
             var documentBytes = await httpClient.GetByteArrayAsync(url);
 
-            var result = await KreuzbergClient.ExtractBytesAsync(
+            var result = await KreuzbergLib.ExtractBytesAsync(
                 documentBytes,
                 "application/pdf"
             );
@@ -24,7 +24,7 @@ class Program
                 EnableQualityProcessing = true
             };
 
-            var result2 = await KreuzbergClient.ExtractBytesAsync(
+            var result2 = await KreuzbergLib.ExtractBytesAsync(
                 documentBytes,
                 "application/pdf",
                 config
@@ -44,7 +44,7 @@ class Program
                 try
                 {
                     var bytes = await httpClient.GetByteArrayAsync(u);
-                    return await KreuzbergClient.ExtractBytesAsync(
+                    return await KreuzbergLib.ExtractBytesAsync(
                         bytes,
                         "application/pdf"
                     );

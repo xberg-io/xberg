@@ -1,4 +1,0 @@
-[workspace]
-resolver = "2"
-
-members = ["native/<%= library_name %>"]

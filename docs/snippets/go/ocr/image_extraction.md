@@ -2,27 +2,31 @@
 package main
 
 import (
-    "log"
+	"log"
 
-    "github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
+	"github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 )
 
 func main() {
-    targetDPI := 200
-    maxDim := 2048
-    result, err := kreuzberg.ExtractFileSync("document.pdf", &kreuzberg.ExtractionConfig{
-        ImageExtraction: &kreuzberg.ImageExtractionConfig{
-            ExtractImages:      kreuzberg.BoolPtr(true),
-            TargetDPI:          &targetDPI,
-            MaxImageDimension:  &maxDim,
-            InjectPlaceholders: kreuzberg.BoolPtr(true), // set to false to extract images without markdown references
-            AutoAdjustDPI:      kreuzberg.BoolPtr(true),
-        },
-    })
-    if err != nil {
-        log.Fatalf("extract failed: %v", err)
-    }
+	extractImages := true
+	injectPlaceholders := true
+	autoAdjustDpi := true
+	targetDpi := int32(200)
+	maxDim := int32(2048)
 
-    log.Println("content length:", len(result.Content))
+	result, err := kreuzberg.ExtractFileSync("document.pdf", nil, kreuzberg.ExtractionConfig{
+		Images: &kreuzberg.ImageExtractionConfig{
+			ExtractImages:      &extractImages,
+			TargetDpi:          &targetDpi,
+			MaxImageDimension:  &maxDim,
+			InjectPlaceholders: &injectPlaceholders, // set to false to extract images without markdown references
+			AutoAdjustDpi:      &autoAdjustDpi,
+		},
+	})
+	if err != nil {
+		log.Fatalf("extract failed: %v", err)
+	}
+
+	log.Println("content length:", len(result.Content))
 }
 ```

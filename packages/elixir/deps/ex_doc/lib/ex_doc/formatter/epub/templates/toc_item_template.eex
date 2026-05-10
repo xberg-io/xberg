@@ -1,8 +1,0 @@
-<%= for node <- nodes do %>
-  <navPoint id="<%=URI.encode node.id %>">
-    <navLabel>
-    <text><%=URI.encode node.id %></text>
-    </navLabel>
-    <content src="<%=URI.encode node.id %>.xhtml"/>
-  </navPoint>
-<% end %>

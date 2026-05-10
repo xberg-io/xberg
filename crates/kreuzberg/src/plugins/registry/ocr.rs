@@ -41,6 +41,7 @@ impl OcrBackendRegistry {
     pub fn new() -> Self {
         #[cfg(any(
             feature = "ocr",
+            feature = "ocr-wasm",
             feature = "paddle-ocr",
             all(feature = "liter-llm", not(target_os = "windows"), not(target_arch = "wasm32"))
         ))]
@@ -50,6 +51,7 @@ impl OcrBackendRegistry {
 
         #[cfg(not(any(
             feature = "ocr",
+            feature = "ocr-wasm",
             feature = "paddle-ocr",
             all(feature = "liter-llm", not(target_os = "windows"), not(target_arch = "wasm32"))
         )))]
@@ -73,6 +75,23 @@ impl OcrBackendRegistry {
                         "Tesseract OCR backend unavailable: {e}. \
                          Check TESSDATA_PREFIX and tessdata file permissions."
                     );
+                }
+            }
+        }
+
+        #[cfg(all(feature = "ocr-wasm", not(feature = "ocr")))]
+        {
+            use crate::ocr::tesseract_wasm_backend::TesseractWasmBackend;
+            tracing::info!("Initializing Tesseract WASM OCR backend");
+            match TesseractWasmBackend::new() {
+                Ok(backend) => {
+                    registry.register(Arc::new(backend)).unwrap_or_else(|e| {
+                        tracing::warn!("Failed to register Tesseract WASM backend: {e}");
+                    });
+                    tracing::info!("Tesseract WASM OCR backend registered successfully");
+                }
+                Err(e) => {
+                    tracing::warn!("Tesseract WASM OCR backend unavailable: {e}");
                 }
             }
         }

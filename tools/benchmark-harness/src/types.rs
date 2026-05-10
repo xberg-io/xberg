@@ -3,7 +3,48 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
+
+/// Output format for document extraction
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputFormat {
+    /// Markdown output format with structure preservation
+    #[default]
+    Markdown,
+    /// Plain text output format
+    Plaintext,
+}
+
+impl std::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OutputFormat::Markdown => write!(f, "markdown"),
+            OutputFormat::Plaintext => write!(f, "plaintext"),
+        }
+    }
+}
+
+impl FromStr for OutputFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "markdown" | "md" => Ok(OutputFormat::Markdown),
+            "plaintext" | "text" | "txt" => Ok(OutputFormat::Plaintext),
+            _ => Err(format!(
+                "unknown output format: {}. Valid: markdown, md, plaintext, text, txt",
+                s
+            )),
+        }
+    }
+}
+
+/// Default output format for backward compatibility with old results
+fn default_output_format() -> OutputFormat {
+    OutputFormat::Markdown
+}
 
 /// OCR usage status for a benchmark extraction
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -46,6 +87,10 @@ pub enum ErrorKind {
 pub struct BenchmarkResult {
     /// Framework that performed the extraction
     pub framework: String,
+
+    /// Output format used for extraction (markdown or plaintext)
+    #[serde(default = "default_output_format")]
+    pub output_format: OutputFormat,
 
     /// Path to the test document
     pub file_path: PathBuf,
@@ -116,6 +161,15 @@ pub struct BenchmarkResult {
     pub extracted_text: Option<String>,
 }
 
+impl BenchmarkResult {
+    /// Create a framework key combining framework name, output format, and execution mode
+    /// Format: "{framework}:{output_format}:{execution_mode}"
+    /// Example: "kreuzberg-rust:markdown:batch"
+    pub fn framework_key(&self, execution_mode: &str) -> String {
+        format!("{}:{}:{}", self.framework, self.output_format, execution_mode)
+    }
+}
+
 /// Performance metrics collected during extraction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceMetrics {
@@ -147,8 +201,9 @@ pub struct QualityMetrics {
     /// Numeric token F1 score (0.0-1.0)
     pub f1_score_numeric: f64,
 
-    /// Layout/structure F1 score (0.0-1.0)
-    pub f1_score_layout: f64,
+    /// Layout/structure F1 score (0.0-1.0), optional for plaintext mode
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub f1_score_layout: Option<f64>,
 
     /// Overall text quality score (0.0-1.0)
     pub quality_score: f64,
@@ -189,6 +244,10 @@ pub struct FrameworkCapabilities {
     /// Whether framework supports async extraction
     #[serde(default)]
     pub async_support: bool,
+
+    /// Output formats this framework supports
+    #[serde(default)]
+    pub supported_output_formats: Vec<OutputFormat>,
 
     /// Framework version
     #[serde(default)]

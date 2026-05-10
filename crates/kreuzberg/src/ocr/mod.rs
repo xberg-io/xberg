@@ -45,10 +45,14 @@ pub mod hocr_parser;
 pub mod language_registry;
 #[cfg(feature = "layout-detection")]
 pub mod layout_assembly;
+#[cfg(feature = "ocr")]
 pub mod processor;
 pub mod table;
 pub mod tessdata_manager;
+#[cfg(feature = "ocr")]
 pub mod tesseract_backend;
+#[cfg(feature = "ocr-wasm")]
+pub mod tesseract_wasm_backend;
 pub mod types;
 pub mod utils;
 pub mod validation;
@@ -56,8 +60,12 @@ pub mod validation;
 pub use cache::{OcrCache, OcrCacheStats};
 pub use error::OcrError;
 pub use language_registry::LanguageRegistry;
+#[cfg(feature = "ocr")]
 pub use processor::OcrProcessor;
 pub use tessdata_manager::TessdataManager;
+#[cfg(feature = "ocr")]
 pub use tesseract_backend::TesseractBackend;
+#[cfg(feature = "ocr-wasm")]
+pub use tesseract_wasm_backend::TesseractWasmBackend;
 pub use types::{BatchItemResult, ExtractionResult, PSMMode, Table, TesseractConfig};
 pub use utils::compute_hash;

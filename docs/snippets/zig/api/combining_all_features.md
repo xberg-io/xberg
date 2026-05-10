@@ -1,0 +1,37 @@
+```zig title="Zig"
+const std = @import("std");
+const kreuzberg = @import("kreuzberg");
+
+pub fn main() !void {
+    // Configuration is passed across the FFI as a JSON document.
+    // This combines OCR, chunking, image extraction, output format, and caching.
+    const config_json =
+        \\{
+        \\  "use_cache": true,
+        \\  "enable_quality_processing": true,
+        \\  "force_ocr": false,
+        \\  "ocr": {
+        \\    "backend": "tesseract",
+        \\    "language": "eng"
+        \\  },
+        \\  "chunking": {
+        \\    "max_characters": 800,
+        \\    "overlap": 100,
+        \\    "chunker_type": "markdown",
+        \\    "prepend_heading_context": true
+        \\  },
+        \\  "images": {
+        \\    "extract_images": true
+        \\  },
+        \\  "output_format": "markdown",
+        \\  "include_document_structure": true
+        \\}
+    ;
+
+    const result_json = try kreuzberg.extract_file_sync("report.pdf", null, config_json);
+    defer std.heap.c_allocator.free(result_json);
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Result ({d} bytes of JSON):\n{s}\n", .{ result_json.len, result_json });
+}
+```

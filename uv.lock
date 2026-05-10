@@ -26,18 +26,18 @@ members = [
 [manifest.dependency-groups]
 dev = [
     { name = "covdefaults", specifier = ">=2.3.0" },
-    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "maturin", specifier = ">=1.13.1" },
-    { name = "mypy", specifier = ">=1.19.0" },
+    { name = "mypy", specifier = ">=1.20.2" },
     { name = "prek", specifier = ">=0.3.9" },
-    { name = "pyproject-fmt", specifier = ">=2.11.1" },
+    { name = "pyproject-fmt", specifier = ">=2.21.2" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-mock", specifier = ">=3.15.1" },
     { name = "pytest-rerunfailures", specifier = ">=16.1" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
-    { name = "ruff", specifier = ">=0.14.8" },
+    { name = "ruff", specifier = ">=0.15.12" },
     { name = "types-pillow", specifier = ">=10.2" },
     { name = "types-psutil", specifier = ">=7.2.2.20260408" },
     { name = "validate-pyproject", specifier = ">=0.24.1" },
@@ -1172,11 +1172,11 @@ wheels = [
 
 [[package]]
 name = "types-psutil"
-version = "7.2.2.20260408"
+version = "7.2.2.20260508"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/44/14/279fd5defebbd560ede04aecd38f7651cccee7336f2264d0889d8c9a9d43/types_psutil-7.2.2.20260408.tar.gz", hash = "sha256:e8053450685965b8cd52afb62569073d00ea9967ae78bb45dff5f606847f97f2", size = 26556, upload-time = "2026-04-08T04:27:44.349Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/cc/5ac56357b08655ff93106d6391b72d50c47416a044041312550bcd806827/types_psutil-7.2.2.20260508.tar.gz", hash = "sha256:8cfd8339f5e898570f80486423e65d87558d89d0181bf723d20ac5e778fe218e", size = 26575, upload-time = "2026-05-08T04:46:48.388Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/af/40/2fd92a4a1ee088c4dbcc44c977908d9869838d9cd2a2fa2e001352f56694/types_psutil-7.2.2.20260408-py3-none-any.whl", hash = "sha256:0c334f6f6bc9e9c24fca5c7d1f0b6971c961a0a2e3956dc5ce704722c01f9762", size = 32861, upload-time = "2026-04-08T04:27:42.929Z" },
+    { url = "https://files.pythonhosted.org/packages/18/44/4467583df75313c28abaadfab12f102fba9db7285323e75601acf936d996/types_psutil-7.2.2.20260508-py3-none-any.whl", hash = "sha256:b142452e0953f2d07dbdbb98d81f3a629f5906cc2d94bb7e34da0fba55fbab4a", size = 32777, upload-time = "2026-05-08T04:46:46.972Z" },
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 ```csharp title="C#"
 using Kreuzberg;
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", new ExtractionConfig());
+var result = KreuzbergLib.ExtractFileSync("document.pdf", new ExtractionConfig());
 
 foreach (var table in result.Tables)
 {

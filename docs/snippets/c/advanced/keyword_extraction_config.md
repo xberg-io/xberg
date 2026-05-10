@@ -1,0 +1,44 @@
+```c title="C"
+#include "kreuzberg.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+    const char *config_json =
+        "{"
+        "\"keywords\": {"
+        "\"algorithm\": \"yake\","
+        "\"max_keywords\": 10,"
+        "\"min_score\": 0.3,"
+        "\"ngram_range\": [1, 3],"
+        "\"language\": \"en\""
+        "}"
+        "}";
+
+    KREUZBERGExtractionConfig *config = kreuzberg_extraction_config_from_json(config_json);
+    if (!config) {
+        fprintf(stderr, "config parse failed (code %d): %s\n",
+                kreuzberg_last_error_code(),
+                kreuzberg_last_error_context());
+        return 1;
+    }
+
+    KREUZBERGExtractionResult *result =
+        kreuzberg_extract_file_sync("document.pdf", NULL, config);
+    if (!result) {
+        fprintf(stderr, "extraction failed (code %d): %s\n",
+                kreuzberg_last_error_code(),
+                kreuzberg_last_error_context());
+        kreuzberg_extraction_config_free(config);
+        return 1;
+    }
+
+    char *keywords_json = kreuzberg_extraction_result_extracted_keywords(result);
+    printf("keywords (JSON): %s\n", keywords_json ? keywords_json : "[]");
+    kreuzberg_free_string(keywords_json);
+
+    kreuzberg_extraction_result_free(result);
+    kreuzberg_extraction_config_free(config);
+    return 0;
+}
+```

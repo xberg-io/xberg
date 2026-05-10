@@ -1,18 +1,18 @@
-From Kreuzberg import extract_file_sync, ExtractionConfig, ChunkingConfig, PageConfig
+```python title="Python"
+from kreuzberg import extract_file_sync, ExtractionConfig, ChunkingConfig
 
-Config = ExtractionConfig(
-chunking=ChunkingConfig(max_chars=500, max_overlap=50),
-pages=PageConfig(extract_pages=True)
+config = ExtractionConfig(
+    chunking=ChunkingConfig(max_characters=500, overlap=50),
 )
 
-Result = extract_file_sync("document.pdf", config=config)
+result = extract_file_sync("document.pdf", config=config)
 
-If result.chunks:
-for chunk in result.chunks:
-if chunk.metadata.first_page:
-page_range = (
-f"Page {chunk.metadata.first_page}"
-if chunk.metadata.first_page == chunk.metadata.last_page
-else f"Pages {chunk.metadata.first_page}-{chunk.metadata.last_page}"
-)
-print(f"Chunk: {chunk.content[:50]}... ({page_range})")
+if result.chunks:
+    for chunk in result.chunks:
+        first = chunk.metadata.first_page
+        last = chunk.metadata.last_page
+        if first is None:
+            continue
+        page_range = f"Page {first}" if first == last else f"Pages {first}-{last}"
+        print(f"Chunk: {chunk.content[:50]}... ({page_range})")
+```

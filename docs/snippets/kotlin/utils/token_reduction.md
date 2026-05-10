@@ -1,0 +1,19 @@
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import java.nio.file.Paths
+import java.util.Optional
+
+fun main() {
+    val tokenReduction = TokenReductionOptions.builder()
+        .withMode("moderate")
+        .withPreserveImportantWords(true)
+        .build()
+
+    val config = ExtractionConfig.builder()
+        .withTokenReduction(Optional.of(tokenReduction))
+        .build()
+
+    val result = Kreuzberg.extractFileSync(Paths.get("document.pdf"), null, config)
+    println(result.content())
+}
+```

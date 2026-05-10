@@ -3,7 +3,7 @@ using Kreuzberg;
 
 try
 {
-    var result = KreuzbergClient.ExtractFileSync("missing.pdf");
+    var result = KreuzbergLib.ExtractFileSync("missing.pdf");
     Console.WriteLine(result.Content);
 }
 catch (KreuzbergValidationException ex)

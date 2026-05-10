@@ -7,28 +7,28 @@ class Program
     {
         try
         {
-            var extractors = KreuzbergClient.ListDocumentExtractors();
+            var extractors = KreuzbergLib.ListDocumentExtractors();
             Console.WriteLine("Registered Document Extractors:");
             foreach (var extractor in extractors)
             {
                 Console.WriteLine($"  - {extractor}");
             }
 
-            var ocrBackends = KreuzbergClient.ListOcrBackends();
+            var ocrBackends = KreuzbergLib.ListOcrBackends();
             Console.WriteLine("\nRegistered OCR Backends:");
             foreach (var backend in ocrBackends)
             {
                 Console.WriteLine($"  - {backend}");
             }
 
-            var processors = KreuzbergClient.ListPostProcessors();
+            var processors = KreuzbergLib.ListPostProcessors();
             Console.WriteLine("\nRegistered Post-Processors:");
             foreach (var processor in processors)
             {
                 Console.WriteLine($"  - {processor}");
             }
 
-            var validators = KreuzbergClient.ListValidators();
+            var validators = KreuzbergLib.ListValidators();
             Console.WriteLine("\nRegistered Validators:");
             foreach (var validator in validators)
             {
@@ -36,13 +36,13 @@ class Program
             }
 
             var customProcessor = new CustomPostProcessor();
-            KreuzbergClient.RegisterPostProcessor(customProcessor);
+            KreuzbergLib.RegisterPostProcessor(customProcessor);
             Console.WriteLine($"\nRegistered custom post-processor: {customProcessor.Name}");
 
-            KreuzbergClient.UnregisterPostProcessor(customProcessor.Name);
+            KreuzbergLib.UnregisterPostProcessor(customProcessor.Name);
             Console.WriteLine($"Unregistered post-processor: {customProcessor.Name}");
 
-            KreuzbergClient.ClearValidators();
+            KreuzbergLib.ClearValidators();
             Console.WriteLine("All validators cleared");
         }
         catch (KreuzbergException ex)

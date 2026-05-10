@@ -9,9 +9,9 @@ tasks:
   build:
     desc: Build documentation
     cmds:
-      - uv run --group doc zensical build --clean
+      - uv run --no-sync --group docs zensical build --clean
 
   serve:
     desc: Serve documentation locally
     cmds:
-      - uv run --group doc zensical serve
+      - uv run --no-sync --group docs zensical serve

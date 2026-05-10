@@ -8,13 +8,13 @@ import (
 )
 
 func main() {
-	targetDPI := 300
-	result, err := kreuzberg.ExtractFileSync("scanned.pdf", &kreuzberg.ExtractionConfig{
-		OCR: &kreuzberg.OCRConfig{
+	targetDpi := int32(300)
+	result, err := kreuzberg.ExtractFileSync("scanned.pdf", nil, kreuzberg.ExtractionConfig{
+		Ocr: &kreuzberg.OcrConfig{
 			Backend: "tesseract",
-			Tesseract: &kreuzberg.TesseractConfig{
+			TesseractConfig: &kreuzberg.TesseractConfig{
 				Preprocessing: &kreuzberg.ImagePreprocessingConfig{
-					TargetDPI: &targetDPI,
+					TargetDpi: &targetDpi,
 				},
 			},
 		},

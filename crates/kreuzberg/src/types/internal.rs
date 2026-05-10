@@ -602,6 +602,13 @@ mod tests {
         assert_eq!(doc.elements[0].text, "Hello world");
     }
 
+    #[cfg(any(
+        feature = "ocr",
+        feature = "pdf",
+        feature = "paddle-ocr",
+        feature = "xml",
+        feature = "office"
+    ))]
     #[test]
     fn test_internal_element_builder_pattern() {
         let elem = InternalElement::text(ElementKind::Heading { level: 2 }, "Methods", 1)

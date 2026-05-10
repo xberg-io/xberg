@@ -30,10 +30,13 @@ OUT=$(ls -dt target/debug/build/kreuzberg-swift-*/out 2>/dev/null | head -1)
 cat "$OUT/SwiftBridgeCore.h" "$OUT/kreuzberg-swift/kreuzberg-swift.h" \
     > packages/swift/Sources/RustBridgeC/RustBridgeC.h
 
-# Copy Swift bridge files, prepending "import RustBridgeC" so they see the C types
-printf "import RustBridgeC\n$(cat "$OUT/SwiftBridgeCore.swift")" \
+# Copy Swift bridge files, prepending "import RustBridgeC" so they see the C types.
+# Use `{ echo ...; cat ...; }` rather than `printf "...$(cat)..."` because printf
+# interprets `%` and `\` sequences in its format string, which would corrupt the
+# generated Swift sources.
+{ echo "import RustBridgeC"; cat "$OUT/SwiftBridgeCore.swift"; } \
     > packages/swift/Sources/RustBridge/SwiftBridgeCore.swift
-printf "import RustBridgeC\n$(cat "$OUT/kreuzberg-swift/kreuzberg-swift.swift")" \
+{ echo "import RustBridgeC"; cat "$OUT/kreuzberg-swift/kreuzberg-swift.swift"; } \
     > packages/swift/Sources/RustBridge/kreuzberg-swift.swift
 ```
 
@@ -58,9 +61,9 @@ OUT=$(ls -dt target/release/build/kreuzberg-swift-*/out 2>/dev/null | head -1)
 
 cat "$OUT/SwiftBridgeCore.h" "$OUT/kreuzberg-swift/kreuzberg-swift.h" \
     > packages/swift/Sources/RustBridgeC/RustBridgeC.h
-printf "import RustBridgeC\n$(cat "$OUT/SwiftBridgeCore.swift")" \
+{ echo "import RustBridgeC"; cat "$OUT/SwiftBridgeCore.swift"; } \
     > packages/swift/Sources/RustBridge/SwiftBridgeCore.swift
-printf "import RustBridgeC\n$(cat "$OUT/kreuzberg-swift/kreuzberg-swift.swift")" \
+{ echo "import RustBridgeC"; cat "$OUT/kreuzberg-swift/kreuzberg-swift.swift"; } \
     > packages/swift/Sources/RustBridge/kreuzberg-swift.swift
 
 swift build --package-path packages/swift --configuration release

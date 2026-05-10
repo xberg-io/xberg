@@ -60,22 +60,15 @@ jobs:
       - name: Checkout code (default)
         uses: actions/checkout@v6
 
-      - name: Validate tag and compute version
+      - name: Resolve release metadata
         id: meta
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          INPUT_TAG: ${{ inputs.tag }}
-          INPUT_DRY_RUN: ${{ inputs.dry_run }}
-          INPUT_REF: ${{ inputs.ref }}
-          INPUT_TARGETS: "docker"
-          INPUT_FORCE_REPUBLISH: ${{ inputs.force_republish }}
-          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
-          EVENT_DISPATCH_TAG: ${{ github.event.client_payload.tag }}
-          EVENT_DISPATCH_DRY_RUN: ${{ github.event.client_payload.dry_run }}
-          EVENT_DISPATCH_REF: ${{ github.event.client_payload.ref }}
-          EVENT_DISPATCH_TARGETS: ${{ github.event.client_payload.targets }}
-        run: scripts/publish/prepare-release-metadata.sh
+        uses: kreuzberg-dev/actions/prepare-release-metadata@v1
+        with:
+          tag: ${{ inputs.tag }}
+          ref: ${{ inputs.ref }}
+          targets: docker
+          dry-run: ${{ inputs.dry_run }}
+          force-republish: ${{ inputs.force_republish }}
 
       - name: Re-checkout at target ref
         if: ${{ steps.meta.outputs.checkout_ref != '' }}

@@ -134,6 +134,11 @@ def main() -> None:
             ocr_enabled = False
         elif arg.startswith("--timeout="):
             timeout = int(arg.split("=", 1)[1])
+        elif arg.startswith("--format="):
+            _fmt = arg.split("=", 1)[1]
+            if _fmt != "markdown":
+                print(f"{sys.argv[0]} only supports markdown output; got --format {_fmt}", file=sys.stderr)
+                sys.exit(64)
         else:
             args.append(arg)
 

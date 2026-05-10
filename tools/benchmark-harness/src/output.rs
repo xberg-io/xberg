@@ -330,7 +330,7 @@ pub fn write_by_extension_analysis(results: &[BenchmarkResult], output_path: &Pa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{FrameworkCapabilities, OcrStatus, PerformanceMetrics};
+    use crate::types::{FrameworkCapabilities, OcrStatus, OutputFormat, PerformanceMetrics};
     use std::path::PathBuf;
     use std::time::Duration;
     use tempfile::TempDir;
@@ -374,6 +374,7 @@ mod tests {
             pdf_metadata: None,
             ocr_status: OcrStatus::Unknown,
             extracted_text: None,
+            output_format: OutputFormat::Markdown,
         }
     }
 
@@ -409,6 +410,7 @@ mod tests {
             pdf_metadata: None,
             ocr_status: OcrStatus::Unknown,
             extracted_text: None,
+            output_format: OutputFormat::Markdown,
         }];
 
         write_json(&results, &output_path).unwrap();
