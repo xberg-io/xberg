@@ -287,15 +287,23 @@ fn test_cli_result_format() {
         json_content
     );
 
-    // Verify JSON has expected structure
+    // Verify JSON has expected envelope+result structure
     if let Ok(value) = parsed {
         assert!(
-            value.get("content").is_some(),
-            "JSON output should have 'content' field"
+            value.get("result").is_some(),
+            "JSON envelope should have 'result' field"
         );
         assert!(
-            value.get("mime_type").is_some(),
-            "JSON output should have 'mime_type' field"
+            value.get("extraction_time_ms").is_some(),
+            "JSON envelope should have 'extraction_time_ms' field"
+        );
+        assert!(
+            value["result"].get("content").is_some(),
+            "result should have 'content' field"
+        );
+        assert!(
+            value["result"].get("mime_type").is_some(),
+            "result should have 'mime_type' field"
         );
     }
 }
@@ -494,10 +502,12 @@ fn test_cli_real_extraction() {
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
     assert!(parsed.is_ok(), "E2E output should be valid JSON, got: {}", stdout);
 
-    // Verify structure
+    // Verify envelope+result structure
     if let Ok(value) = parsed {
-        assert!(value.get("content").is_some(), "Missing content field");
-        assert!(value.get("mime_type").is_some(), "Missing mime_type field");
+        assert!(value.get("result").is_some(), "Missing 'result' envelope field");
+        assert!(value.get("extraction_time_ms").is_some(), "Missing 'extraction_time_ms' field");
+        assert!(value["result"].get("content").is_some(), "Missing content field in result");
+        assert!(value["result"].get("mime_type").is_some(), "Missing mime_type field in result");
     }
 }
 

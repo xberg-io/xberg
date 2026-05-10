@@ -231,6 +231,14 @@ pub struct ExtractionOverrides {
     #[arg(long)]
     pub pdf_extract_metadata: Option<bool>,
 
+    /// PDF extraction backend to use (currently only "pdf-oxide" is supported).
+    ///
+    /// This flag is accepted for forward-compatibility with future backends.
+    /// At present, any value other than "pdf-oxide" is rejected with an error.
+    // NOTE: no effect on ExtractionConfig today; reserved for future backend selection.
+    #[arg(long, value_name = "BACKEND")]
+    pub pdf_backend: Option<String>,
+
     // ── Token reduction ──────────────────────────────────────────────
     /// Token reduction level (off, light, moderate, aggressive, maximum).
     #[arg(long, value_enum)]
@@ -362,6 +370,16 @@ impl ExtractionOverrides {
         }
         if let Some(0) = self.max_threads {
             bail!("--max-threads must be at least 1");
+        }
+
+        // PDF backend validation (forward-compat flag; only pdf-oxide is supported today)
+        if let Some(ref backend) = self.pdf_backend
+            && backend.as_str() != "pdf-oxide"
+        {
+            bail!(
+                "Invalid PDF backend '{}'. Only 'pdf-oxide' is currently supported.",
+                backend
+            );
         }
 
         Ok(())

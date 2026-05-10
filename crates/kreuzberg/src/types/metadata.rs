@@ -209,6 +209,14 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_format: Option<String>,
 
+    /// Whether OCR was used during extraction.
+    ///
+    /// Set to `true` whenever the extraction pipeline ran an OCR backend
+    /// (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary
+    /// or fallback text. `false` means native text extraction was used exclusively.
+    #[serde(default)]
+    pub ocr_used: bool,
+
     /// Additional custom fields from postprocessors.
     ///
     /// Serialized as a nested `"additional"` object (not flattened at root level).
@@ -247,6 +255,7 @@ impl Metadata {
             && self.document_version.is_none()
             && self.abstract_text.is_none()
             && self.output_format.is_none()
+            && !self.ocr_used
             && self.additional.is_empty()
     }
 }

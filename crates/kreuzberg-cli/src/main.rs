@@ -55,6 +55,7 @@
 
 mod commands;
 mod logging;
+mod output;
 mod style;
 
 use anyhow::{Context, Result};

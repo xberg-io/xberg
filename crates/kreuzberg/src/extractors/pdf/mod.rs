@@ -413,6 +413,8 @@ impl PdfExtractor {
             created_by: pdf_metadata.created_by.clone(),
             pages: pdf_metadata.page_structure.clone(),
             format: Some(crate::types::FormatMetadata::Pdf(pdf_metadata.pdf_specific)),
+            // True when the OCR pipeline produced the returned text (fully or partially).
+            ocr_used: used_ocr,
             ..Default::default()
         };
         doc.metadata.additional.insert(

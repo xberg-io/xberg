@@ -89,8 +89,11 @@ fn test_extract_with_json_output() {
     assert!(json_result.is_ok(), "Output should be valid JSON, got: {}", stdout);
 
     let json = json_result.unwrap();
-    assert!(json.get("content").is_some(), "JSON should have 'content' field");
-    assert!(json.get("mime_type").is_some(), "JSON should have 'mime_type' field");
+    // JSON output is now wrapped in a timing envelope: { result: ExtractionResult, extraction_time_ms: f64 }
+    assert!(json.get("result").is_some(), "JSON envelope should have 'result' field");
+    assert!(json.get("extraction_time_ms").is_some(), "JSON envelope should have 'extraction_time_ms' field");
+    assert!(json["result"].get("content").is_some(), "result should have 'content' field");
+    assert!(json["result"].get("mime_type").is_some(), "result should have 'mime_type' field");
 }
 
 #[test]
@@ -128,8 +131,9 @@ fn test_extract_with_chunking() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: serde_json::Value = serde_json::from_str(&stdout).expect("Should be valid JSON");
 
-    assert!(json.get("chunks").is_some(), "JSON should have 'chunks' field");
-    assert!(json["chunks"].is_array(), "'chunks' should be an array");
+    // JSON output is wrapped in an envelope; chunks live under result
+    assert!(json["result"].get("chunks").is_some(), "result should have 'chunks' field");
+    assert!(json["result"]["chunks"].is_array(), "'chunks' should be an array");
 }
 
 #[test]
@@ -367,8 +371,10 @@ fn test_batch_multiple_files() {
     assert!(json_result.is_ok(), "Output should be valid JSON, got: {}", stdout);
 
     let json = json_result.unwrap();
-    assert!(json.is_array(), "Batch output should be a JSON array");
-    assert_eq!(json.as_array().unwrap().len(), 2, "Should have 2 results");
+    // Batch JSON output is now wrapped in a timing envelope: { results: [...], total_ms, per_file_ms }
+    assert!(json.get("results").is_some(), "Batch envelope should have 'results' field");
+    assert!(json["results"].is_array(), "'results' should be a JSON array");
+    assert_eq!(json["results"].as_array().unwrap().len(), 2, "Should have 2 results");
 }
 
 #[test]
