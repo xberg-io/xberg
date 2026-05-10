@@ -180,10 +180,10 @@ pub(crate) mod extractor;
 mod ocr;
 mod processor;
 pub mod registry;
-mod renderer;
+pub mod renderer;
 pub mod startup_validation;
 mod traits;
-mod validator;
+pub mod validator;
 
 pub use embedding::{
     EmbeddingBackend, clear_embedding_backends, list_embedding_backends, register_embedding_backend,
@@ -203,6 +203,29 @@ pub use processor::{
 pub use renderer::{Renderer, clear_renderers, list_renderers, register_renderer, unregister_renderer};
 pub use traits::Plugin;
 pub use validator::{Validator, clear_validators, list_validators, register_validator, unregister_validator};
+
+// Alef trait-bridge codegen derives `kreuzberg::plugins::{trait_snake}::{fn_name}`
+// from the `registry_getter = "...::get_{trait_snake}_registry"` config (see
+// `host_function_path` in alef-codegen). Our actual modules are named differently
+// (`ocr` not `ocr_backend`, `processor` not `post_processor`, `embedding` not
+// `embedding_backend`), and `validator` / `renderer` are private. These public
+// alias modules expose the lifecycle wrappers at the alef-derived path so the
+// generated code resolves without forcing a kreuzberg-side rename or alef-side
+// path-override field.
+pub mod ocr_backend {
+    pub use super::{OcrBackend, clear_ocr_backends, list_ocr_backends, register_ocr_backend, unregister_ocr_backend};
+}
+pub mod post_processor {
+    pub use super::{
+        PostProcessor, clear_post_processors, list_post_processors, register_post_processor, unregister_post_processor,
+    };
+}
+pub mod embedding_backend {
+    pub use super::{
+        EmbeddingBackend, clear_embedding_backends, list_embedding_backends, register_embedding_backend,
+        unregister_embedding_backend,
+    };
+}
 
 #[cfg(any(feature = "embeddings", feature = "api", feature = "mcp"))]
 pub(crate) use registry::get_embedding_backend_registry;

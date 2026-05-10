@@ -210,6 +210,11 @@ impl DocumentExtractorRegistry {
         }
         Ok(())
     }
+
+    /// Drain the registry. Alias for `shutdown_all` used by alef trait-bridge codegen.
+    pub fn clear(&mut self) -> Result<()> {
+        self.shutdown_all()
+    }
 }
 
 impl Default for DocumentExtractorRegistry {
