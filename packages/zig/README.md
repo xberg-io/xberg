@@ -84,7 +84,26 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 Extract text, metadata, and structure from any supported document format:
 
-<!-- snippet not found: api/extract_file_sync.md -->
+```zig title="Zig"
+const std = @import("std");
+const kreuzberg = @import("kreuzberg");
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const config_json = "{}";
+    const result_json = try kreuzberg.extract_file_sync("document.pdf", null, config_json);
+    defer std.heap.c_allocator.free(result_json);
+
+    const owned = try allocator.dupe(u8, result_json);
+    defer allocator.free(owned);
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("{s}\n", .{owned});
+}
+```
 
 ### Common Use Cases
 
@@ -95,7 +114,34 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```zig title="Zig"
+const std = @import("std");
+const kreuzberg = @import("kreuzberg");
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const config_json =
+        \\{
+        \\  "ocr": {
+        \\    "backend": "tesseract",
+        \\    "language": "eng"
+        \\  }
+        \\}
+    ;
+
+    const result_json = try kreuzberg.extract_file_sync("scanned.pdf", null, config_json);
+    defer std.heap.c_allocator.free(result_json);
+
+    const owned = try allocator.dupe(u8, result_json);
+    defer allocator.free(owned);
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("{s}\n", .{owned});
+}
+```
 
 
 #### Table Extraction
@@ -107,14 +153,50 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 #### Processing Multiple Files
 
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```zig title="Zig"
+const std = @import("std");
+const kreuzberg = @import("kreuzberg");
+
+pub fn main() !void {
+    // Batch items are passed as a JSON-encoded array across the FFI boundary.
+    const items_json =
+        \\[
+        \\  {"path": "doc1.pdf", "config": null},
+        \\  {"path": "doc2.docx", "config": null},
+        \\  {"path": "report.pdf", "config": null}
+        \\]
+    ;
+    const config_json = "{}";
+
+    const results_json = try kreuzberg.batch_extract_files_sync(items_json, config_json);
+    defer std.heap.c_allocator.free(results_json);
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("{s}\n", .{results_json});
+}
+```
 
 
 #### Async Processing
 
 For non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```zig title="Zig"
+const std = @import("std");
+const kreuzberg = @import("kreuzberg");
+
+// Note: the Zig binding is sync-only. There is no `extract_file` async variant —
+// the FFI surface exposes blocking entry points that internally drive the global
+// Tokio runtime. Use `extract_file_sync` from any thread.
+pub fn main() !void {
+    const config_json = "{}";
+    const result_json = try kreuzberg.extract_file_sync("document.pdf", null, config_json);
+    defer std.heap.c_allocator.free(result_json);
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("{s}\n", .{result_json});
+}
+```
 
 
 ### Next Steps
@@ -235,7 +317,34 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 ### OCR Configuration Example
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```zig title="Zig"
+const std = @import("std");
+const kreuzberg = @import("kreuzberg");
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const config_json =
+        \\{
+        \\  "ocr": {
+        \\    "backend": "tesseract",
+        \\    "language": "eng"
+        \\  }
+        \\}
+    ;
+
+    const result_json = try kreuzberg.extract_file_sync("scanned.pdf", null, config_json);
+    defer std.heap.c_allocator.free(result_json);
+
+    const owned = try allocator.dupe(u8, result_json);
+    defer allocator.free(owned);
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("{s}\n", .{owned});
+}
+```
 
 
 ## Plugin System
@@ -256,7 +365,28 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```zig title="Zig"
+const std = @import("std");
+const kreuzberg = @import("kreuzberg");
+
+pub fn main() !void {
+    // Batch items are passed as a JSON-encoded array across the FFI boundary.
+    const items_json =
+        \\[
+        \\  {"path": "doc1.pdf", "config": null},
+        \\  {"path": "doc2.docx", "config": null},
+        \\  {"path": "report.pdf", "config": null}
+        \\]
+    ;
+    const config_json = "{}";
+
+    const results_json = try kreuzberg.batch_extract_files_sync(items_json, config_json);
+    defer std.heap.c_allocator.free(results_json);
+
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("{s}\n", .{results_json});
+}
+```
 
 
 ## Configuration

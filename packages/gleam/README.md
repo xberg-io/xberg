@@ -87,7 +87,62 @@ Install via one of the supported package managers:
 
 Extract text, metadata, and structure from any supported document format:
 
-<!-- snippet not found: api/extract_file_sync.md -->
+```gleam title="Gleam"
+import gleam/int
+import gleam/io
+import gleam/list
+import gleam/option
+import kreuzberg
+
+fn default_config() -> kreuzberg.ExtractionConfig {
+  kreuzberg.ExtractionConfig(
+    use_cache: True,
+    enable_quality_processing: True,
+    ocr: option.None,
+    force_ocr: False,
+    force_ocr_pages: option.None,
+    disable_ocr: False,
+    chunking: option.None,
+    content_filter: option.None,
+    images: option.None,
+    pdf_options: option.None,
+    token_reduction: option.None,
+    language_detection: option.None,
+    pages: option.None,
+    keywords: option.None,
+    postprocessor: option.None,
+    html_options: option.None,
+    html_output: option.None,
+    extraction_timeout_secs: option.None,
+    max_concurrent_extractions: option.None,
+    result_format: kreuzberg.Unified,
+    security_limits: option.None,
+    output_format: kreuzberg.Plain,
+    layout: option.None,
+    include_document_structure: False,
+    acceleration: option.None,
+    cache_namespace: option.None,
+    cache_ttl_secs: option.None,
+    email: option.None,
+    concurrency: option.None,
+    max_archive_depth: 10,
+    tree_sitter: option.None,
+    structured_extraction: option.None,
+    cancel_token: option.None,
+  )
+}
+
+pub fn main() {
+  case kreuzberg.extract_file_sync("document.pdf", option.None, default_config()) {
+    Ok(result) -> {
+      io.println(result.content)
+      io.println("MIME type: " <> result.mime_type)
+      io.println("Tables: " <> int.to_string(list.length(result.tables)))
+    }
+    Error(_) -> io.println("extraction failed")
+  }
+}
+```
 
 ### Common Use Cases
 
@@ -98,7 +153,79 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```gleam title="Gleam"
+import gleam/int
+import gleam/io
+import gleam/option
+import gleam/string
+import kreuzberg
+
+fn ocr_config() -> kreuzberg.OcrConfig {
+  kreuzberg.OcrConfig(
+    enabled: True,
+    backend: "tesseract",
+    language: "eng",
+    tesseract_config: option.None,
+    output_format: option.None,
+    paddle_ocr_config: option.None,
+    element_config: option.None,
+    quality_thresholds: option.None,
+    pipeline: option.None,
+    auto_rotate: False,
+    vlm_config: option.None,
+    vlm_prompt: option.None,
+    acceleration: option.None,
+  )
+}
+
+fn config() -> kreuzberg.ExtractionConfig {
+  kreuzberg.ExtractionConfig(
+    use_cache: True,
+    enable_quality_processing: True,
+    ocr: option.Some(ocr_config()),
+    force_ocr: False,
+    force_ocr_pages: option.None,
+    disable_ocr: False,
+    chunking: option.None,
+    content_filter: option.None,
+    images: option.None,
+    pdf_options: option.None,
+    token_reduction: option.None,
+    language_detection: option.None,
+    pages: option.None,
+    keywords: option.None,
+    postprocessor: option.None,
+    html_options: option.None,
+    html_output: option.None,
+    extraction_timeout_secs: option.None,
+    max_concurrent_extractions: option.None,
+    result_format: kreuzberg.Unified,
+    security_limits: option.None,
+    output_format: kreuzberg.Plain,
+    layout: option.None,
+    include_document_structure: False,
+    acceleration: option.None,
+    cache_namespace: option.None,
+    cache_ttl_secs: option.None,
+    email: option.None,
+    concurrency: option.None,
+    max_archive_depth: 10,
+    tree_sitter: option.None,
+    structured_extraction: option.None,
+    cancel_token: option.None,
+  )
+}
+
+pub fn main() {
+  case kreuzberg.extract_file_sync("scanned.pdf", option.None, config()) {
+    Ok(result) ->
+      io.println(
+        "Content length: " <> int.to_string(string.length(result.content)),
+      )
+    Error(_) -> io.println_error("extraction failed")
+  }
+}
+```
 
 
 #### Table Extraction
@@ -110,14 +237,141 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 #### Processing Multiple Files
 
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```gleam title="Gleam"
+import gleam/int
+import gleam/io
+import gleam/list
+import gleam/option
+import gleam/string
+import kreuzberg
+
+fn default_config() -> kreuzberg.ExtractionConfig {
+  kreuzberg.ExtractionConfig(
+    use_cache: True,
+    enable_quality_processing: True,
+    ocr: option.None,
+    force_ocr: False,
+    force_ocr_pages: option.None,
+    disable_ocr: False,
+    chunking: option.None,
+    content_filter: option.None,
+    images: option.None,
+    pdf_options: option.None,
+    token_reduction: option.None,
+    language_detection: option.None,
+    pages: option.None,
+    keywords: option.None,
+    postprocessor: option.None,
+    html_options: option.None,
+    html_output: option.None,
+    extraction_timeout_secs: option.None,
+    max_concurrent_extractions: option.None,
+    result_format: kreuzberg.Unified,
+    security_limits: option.None,
+    output_format: kreuzberg.Plain,
+    layout: option.None,
+    include_document_structure: False,
+    acceleration: option.None,
+    cache_namespace: option.None,
+    cache_ttl_secs: option.None,
+    email: option.None,
+    concurrency: option.None,
+    max_archive_depth: 10,
+    tree_sitter: option.None,
+    structured_extraction: option.None,
+    cancel_token: option.None,
+  )
+}
+
+pub fn main() {
+  let items = [
+    kreuzberg.BatchFileItem(path: "doc1.pdf", config: option.None),
+    kreuzberg.BatchFileItem(path: "doc2.docx", config: option.None),
+    kreuzberg.BatchFileItem(path: "report.pdf", config: option.None),
+  ]
+  case kreuzberg.batch_extract_files_sync(items, default_config()) {
+    Ok(results) -> {
+      list.index_map(results, fn(result, index) {
+        io.println(
+          "File "
+          <> int.to_string(index)
+          <> ": "
+          <> int.to_string(string.length(result.content))
+          <> " chars",
+        )
+      })
+      Nil
+    }
+    Error(_) -> io.println("batch extraction failed")
+  }
+}
+```
 
 
 #### Async Processing
 
 For non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```gleam title="Gleam"
+import gleam/int
+import gleam/io
+import gleam/list
+import gleam/option
+import kreuzberg
+
+fn default_config() -> kreuzberg.ExtractionConfig {
+  kreuzberg.ExtractionConfig(
+    use_cache: True,
+    enable_quality_processing: True,
+    ocr: option.None,
+    force_ocr: False,
+    force_ocr_pages: option.None,
+    disable_ocr: False,
+    chunking: option.None,
+    content_filter: option.None,
+    images: option.None,
+    pdf_options: option.None,
+    token_reduction: option.None,
+    language_detection: option.None,
+    pages: option.None,
+    keywords: option.None,
+    postprocessor: option.None,
+    html_options: option.None,
+    html_output: option.None,
+    extraction_timeout_secs: option.None,
+    max_concurrent_extractions: option.None,
+    result_format: kreuzberg.Unified,
+    security_limits: option.None,
+    output_format: kreuzberg.Plain,
+    layout: option.None,
+    include_document_structure: False,
+    acceleration: option.None,
+    cache_namespace: option.None,
+    cache_ttl_secs: option.None,
+    email: option.None,
+    concurrency: option.None,
+    max_archive_depth: 10,
+    tree_sitter: option.None,
+    structured_extraction: option.None,
+    cancel_token: option.None,
+  )
+}
+
+// Gleam on the Erlang target uses the BEAM process model — there is no
+// separate async API. `kreuzberg.extract_file` is the BEAM-native variant
+// and runs on the calling process. To extract concurrently, spawn
+// processes with `gleam/erlang/process` or `gleam/otp/task`.
+pub fn main() {
+  case kreuzberg.extract_file("document.pdf", option.None, default_config()) {
+    Ok(result) -> {
+      io.println(result.content)
+      io.println("MIME type: " <> result.mime_type)
+      io.println("Tables: " <> int.to_string(list.length(result.tables)))
+    }
+    Error(_) -> io.println("extraction failed")
+  }
+}
+```
 
 
 ### Next Steps
@@ -238,7 +492,79 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 ### OCR Configuration Example
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```gleam title="Gleam"
+import gleam/int
+import gleam/io
+import gleam/option
+import gleam/string
+import kreuzberg
+
+fn ocr_config() -> kreuzberg.OcrConfig {
+  kreuzberg.OcrConfig(
+    enabled: True,
+    backend: "tesseract",
+    language: "eng",
+    tesseract_config: option.None,
+    output_format: option.None,
+    paddle_ocr_config: option.None,
+    element_config: option.None,
+    quality_thresholds: option.None,
+    pipeline: option.None,
+    auto_rotate: False,
+    vlm_config: option.None,
+    vlm_prompt: option.None,
+    acceleration: option.None,
+  )
+}
+
+fn config() -> kreuzberg.ExtractionConfig {
+  kreuzberg.ExtractionConfig(
+    use_cache: True,
+    enable_quality_processing: True,
+    ocr: option.Some(ocr_config()),
+    force_ocr: False,
+    force_ocr_pages: option.None,
+    disable_ocr: False,
+    chunking: option.None,
+    content_filter: option.None,
+    images: option.None,
+    pdf_options: option.None,
+    token_reduction: option.None,
+    language_detection: option.None,
+    pages: option.None,
+    keywords: option.None,
+    postprocessor: option.None,
+    html_options: option.None,
+    html_output: option.None,
+    extraction_timeout_secs: option.None,
+    max_concurrent_extractions: option.None,
+    result_format: kreuzberg.Unified,
+    security_limits: option.None,
+    output_format: kreuzberg.Plain,
+    layout: option.None,
+    include_document_structure: False,
+    acceleration: option.None,
+    cache_namespace: option.None,
+    cache_ttl_secs: option.None,
+    email: option.None,
+    concurrency: option.None,
+    max_archive_depth: 10,
+    tree_sitter: option.None,
+    structured_extraction: option.None,
+    cancel_token: option.None,
+  )
+}
+
+pub fn main() {
+  case kreuzberg.extract_file_sync("scanned.pdf", option.None, config()) {
+    Ok(result) ->
+      io.println(
+        "Content length: " <> int.to_string(string.length(result.content)),
+      )
+    Error(_) -> io.println_error("extraction failed")
+  }
+}
+```
 
 
 ## Plugin System
@@ -259,7 +585,75 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```gleam title="Gleam"
+import gleam/int
+import gleam/io
+import gleam/list
+import gleam/option
+import gleam/string
+import kreuzberg
+
+fn default_config() -> kreuzberg.ExtractionConfig {
+  kreuzberg.ExtractionConfig(
+    use_cache: True,
+    enable_quality_processing: True,
+    ocr: option.None,
+    force_ocr: False,
+    force_ocr_pages: option.None,
+    disable_ocr: False,
+    chunking: option.None,
+    content_filter: option.None,
+    images: option.None,
+    pdf_options: option.None,
+    token_reduction: option.None,
+    language_detection: option.None,
+    pages: option.None,
+    keywords: option.None,
+    postprocessor: option.None,
+    html_options: option.None,
+    html_output: option.None,
+    extraction_timeout_secs: option.None,
+    max_concurrent_extractions: option.None,
+    result_format: kreuzberg.Unified,
+    security_limits: option.None,
+    output_format: kreuzberg.Plain,
+    layout: option.None,
+    include_document_structure: False,
+    acceleration: option.None,
+    cache_namespace: option.None,
+    cache_ttl_secs: option.None,
+    email: option.None,
+    concurrency: option.None,
+    max_archive_depth: 10,
+    tree_sitter: option.None,
+    structured_extraction: option.None,
+    cancel_token: option.None,
+  )
+}
+
+pub fn main() {
+  let items = [
+    kreuzberg.BatchFileItem(path: "doc1.pdf", config: option.None),
+    kreuzberg.BatchFileItem(path: "doc2.docx", config: option.None),
+    kreuzberg.BatchFileItem(path: "report.pdf", config: option.None),
+  ]
+  case kreuzberg.batch_extract_files_sync(items, default_config()) {
+    Ok(results) -> {
+      list.index_map(results, fn(result, index) {
+        io.println(
+          "File "
+          <> int.to_string(index)
+          <> ": "
+          <> int.to_string(string.length(result.content))
+          <> " chars",
+        )
+      })
+      Nil
+    }
+    Error(_) -> io.println("batch extraction failed")
+  }
+}
+```
 
 
 ## Configuration

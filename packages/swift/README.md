@@ -84,7 +84,18 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 Extract text, metadata, and structure from any supported document format:
 
-<!-- snippet not found: api/extract_file_sync.md -->
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+let config = try extractionConfigFromJson("{}")
+let result = try extractFileSync("document.pdf", nil, config)
+
+print(result.content().toString())
+print("MIME type: \(result.mime_type().toString())")
+print("Tables: \(result.tables().count)")
+```
 
 ### Common Use Cases
 
@@ -95,7 +106,25 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+let configJson = """
+{
+    "ocr": {
+        "backend": "tesseract",
+        "language": "eng"
+    }
+}
+"""
+
+let config = try extractionConfigFromJson(configJson)
+let result = try extractFileSync("scanned.pdf", nil, config)
+
+print(result.content().toString())
+```
 
 
 #### Table Extraction
@@ -107,14 +136,52 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 #### Processing Multiple Files
 
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+// `BatchFileItem` is an opaque swift-bridge class with no public Swift
+// constructor — build items from JSON via `batchFileItemFromJson`.
+let items = RustVec<BatchFileItem>()
+for path in ["doc1.pdf", "doc2.docx", "report.pdf"] {
+    let json = "{\"path\": \"\(path)\"}"
+    items.push(value: try batchFileItemFromJson(json))
+}
+
+let config = try extractionConfigFromJson("{}")
+let results = try batchExtractFilesSync(items, config)
+
+for (index, result) in results.enumerated() {
+    print("File \(index): \(result.content().toString().count) chars")
+}
+```
 
 
 #### Async Processing
 
 For non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+@main
+struct App {
+    static func main() async throws {
+        let config = try extractionConfigFromJson("{}")
+        // The Swift binding exposes async-compatible entrypoints; even though
+        // the bridge calls are synchronous internally, callers may `await` them
+        // to integrate with Swift Concurrency.
+        let result = try await extractFile("document.pdf", nil, config)
+
+        print(result.content().toString())
+        print("MIME type: \(result.mime_type().toString())")
+        print("Tables: \(result.tables().count)")
+    }
+}
+```
 
 
 ### Next Steps
@@ -237,14 +304,51 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 ### OCR Configuration Example
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+let configJson = """
+{
+    "ocr": {
+        "backend": "tesseract",
+        "language": "eng"
+    }
+}
+"""
+
+let config = try extractionConfigFromJson(configJson)
+let result = try extractFileSync("scanned.pdf", nil, config)
+
+print(result.content().toString())
+```
 
 
 ## Async Support
 
 This binding provides full async/await support for non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+@main
+struct App {
+    static func main() async throws {
+        let config = try extractionConfigFromJson("{}")
+        // The Swift binding exposes async-compatible entrypoints; even though
+        // the bridge calls are synchronous internally, callers may `await` them
+        // to integrate with Swift Concurrency.
+        let result = try await extractFile("document.pdf", nil, config)
+
+        print(result.content().toString())
+        print("MIME type: \(result.mime_type().toString())")
+        print("Tables: \(result.tables().count)")
+    }
+}
+```
 
 
 ## Plugin System
@@ -265,7 +369,26 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```swift title="Swift"
+import Foundation
+import Kreuzberg
+import RustBridge
+
+// `BatchFileItem` is an opaque swift-bridge class with no public Swift
+// constructor — build items from JSON via `batchFileItemFromJson`.
+let items = RustVec<BatchFileItem>()
+for path in ["doc1.pdf", "doc2.docx", "report.pdf"] {
+    let json = "{\"path\": \"\(path)\"}"
+    items.push(value: try batchFileItemFromJson(json))
+}
+
+let config = try extractionConfigFromJson("{}")
+let results = try batchExtractFilesSync(items, config)
+
+for (index, result) in results.enumerated() {
+    print("File \(index): \(result.content().toString().count) chars")
+}
+```
 
 
 ## Configuration

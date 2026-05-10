@@ -127,6 +127,7 @@ pub const ExtractionConfig = struct {
     security_limits: ?SecurityLimits,
     output_format: OutputFormat,
     layout: ?LayoutDetectionConfig,
+    use_layout_for_markdown: bool,
     include_document_structure: bool,
     acceleration: ?AccelerationConfig,
     cache_namespace: ?[:0]const u8,

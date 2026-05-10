@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 /// Which table structure recognition model to use.
 ///
 /// Controls the model used for table cell detection within layout-detected
-/// table regions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+/// table regions. Wire format is snake_case in all serializers (JSON, TOML,
+/// YAML).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TableModel {
     /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
     #[default]
@@ -24,26 +26,6 @@ pub enum TableModel {
     SlanetAuto,
     /// Disable table structure model inference entirely; use heuristic path only.
     Disabled,
-}
-
-impl<'de> Deserialize<'de> for TableModel {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        match s.as_str() {
-            "tatr" => Ok(TableModel::Tatr),
-            "slanet_wired" => Ok(TableModel::SlanetWired),
-            "slanet_wireless" => Ok(TableModel::SlanetWireless),
-            "slanet_plus" => Ok(TableModel::SlanetPlus),
-            "slanet_auto" => Ok(TableModel::SlanetAuto),
-            "disabled" => Ok(TableModel::Disabled),
-            other => Err(serde::de::Error::custom(format!(
-                "unknown table model: '{other}'. Valid values: tatr, slanet_wired, slanet_wireless, slanet_plus, slanet_auto, disabled"
-            ))),
-        }
-    }
 }
 
 impl std::str::FromStr for TableModel {
@@ -152,7 +134,23 @@ mod tests {
     #[test]
     fn test_table_model_serialize() {
         let json = serde_json::to_string(&TableModel::SlanetWired).unwrap();
-        assert_eq!(json, r#""SlanetWired""#);
+        assert_eq!(json, r#""slanet_wired""#);
+    }
+
+    #[test]
+    fn test_table_model_round_trip() {
+        for model in [
+            TableModel::Tatr,
+            TableModel::SlanetWired,
+            TableModel::SlanetWireless,
+            TableModel::SlanetPlus,
+            TableModel::SlanetAuto,
+            TableModel::Disabled,
+        ] {
+            let serialized = serde_json::to_string(&model).unwrap();
+            let parsed: TableModel = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(parsed, model, "round-trip failed for {model:?}");
+        }
     }
 
     #[test]

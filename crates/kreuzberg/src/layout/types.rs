@@ -74,7 +74,10 @@ impl fmt::Display for BBox {
 /// All model backends (RT-DETR, YOLO, etc.) map their native class IDs
 /// to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
 /// map to the closest equivalent.
+///
+/// Wire format is snake_case in all serializers (JSON, TOML, YAML).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LayoutClass {
     Caption,
     Footnote,
@@ -161,7 +164,11 @@ impl LayoutClass {
         }
     }
 
-    pub(crate) fn name(&self) -> &'static str {
+    /// Snake_case wire-format name (matches serde output).
+    ///
+    /// Equivalent to `format!("{self}")` but returns a `&'static str` slice
+    /// for callers that need to avoid allocations.
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::Caption => "caption",
             Self::Footnote => "footnote",
@@ -186,7 +193,7 @@ impl LayoutClass {
 
 impl fmt::Display for LayoutClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.name())
+        f.write_str(self.as_str())
     }
 }
 

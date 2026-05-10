@@ -1146,6 +1146,13 @@ KREUZBERGOutputFormat *kreuzberg_extraction_config_output_format(const KREUZBERG
 KREUZBERGLayoutDetectionConfig *kreuzberg_extraction_config_layout(const KREUZBERGExtractionConfig *ptr);
 
 /**
+ * Get the `use_layout_for_markdown` field from a `ExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t kreuzberg_extraction_config_use_layout_for_markdown(const KREUZBERGExtractionConfig *ptr);
+
+/**
  * Get the `include_document_structure` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.

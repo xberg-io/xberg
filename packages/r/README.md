@@ -105,14 +105,16 @@ Most use cases benefit from configuration to control extraction behavior:
 library(kreuzberg)
 
 # Configure Tesseract OCR
-ocr <- ocr_config(backend = "tesseract", language = "eng", dpi = 300L)
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(backend = "tesseract", language = "eng")
+)
 
 # Extract text from a scanned image
-result <- extract_file_sync("scan.png", config = config)
+json <- extract_file_sync("scan.png", "image/png", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
-cat(sprintf("Quality score: %s\n", result$quality_score))
 cat("Content preview:\n")
 cat(substr(result$content, 1, 200))
 ```
@@ -130,17 +132,21 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 ```r title="R"
 library(kreuzberg)
 
-# Configure OCR settings
-ocr <- ocr_config(backend = "tesseract", language = "eng", dpi = 300L)
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+# Configure OCR settings via a plain list mirroring the config JSON.
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(
+    backend = "tesseract",
+    language = "eng"
+  )
+)
 
 # Extract an image file with OCR enabled
-result <- extract_file_sync("image.png", config = config)
+json <- extract_file_sync("image.png", "image/png", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-# Print OCR results
-cat(sprintf("Extracted text from image:\n"))
-cat(content(result))
-cat(sprintf("\n\nDetected language: %s\n", detected_language(result)))
+cat("Extracted text from image:\n")
+cat(result$content)
 ```
 
 
@@ -286,14 +292,16 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 library(kreuzberg)
 
 # Configure Tesseract OCR
-ocr <- ocr_config(backend = "tesseract", language = "eng", dpi = 300L)
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(backend = "tesseract", language = "eng")
+)
 
 # Extract text from a scanned image
-result <- extract_file_sync("scan.png", config = config)
+json <- extract_file_sync("scan.png", "image/png", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
 cat(sprintf("Extracted %d characters\n", nchar(result$content)))
-cat(sprintf("Quality score: %s\n", result$quality_score))
 cat("Content preview:\n")
 cat(substr(result$content, 1, 200))
 ```
@@ -320,17 +328,21 @@ Process multiple documents efficiently:
 ```r title="R"
 library(kreuzberg)
 
-# Configure OCR settings
-ocr <- ocr_config(backend = "tesseract", language = "eng", dpi = 300L)
-config <- extraction_config(force_ocr = TRUE, ocr = ocr)
+# Configure OCR settings via a plain list mirroring the config JSON.
+config <- list(
+  force_ocr = TRUE,
+  ocr = list(
+    backend = "tesseract",
+    language = "eng"
+  )
+)
 
 # Extract an image file with OCR enabled
-result <- extract_file_sync("image.png", config = config)
+json <- extract_file_sync("image.png", "image/png", config)
+result <- jsonlite::fromJSON(json, simplifyVector = FALSE)
 
-# Print OCR results
-cat(sprintf("Extracted text from image:\n"))
-cat(content(result))
-cat(sprintf("\n\nDetected language: %s\n", detected_language(result)))
+cat("Extracted text from image:\n")
+cat(result$content)
 ```
 
 

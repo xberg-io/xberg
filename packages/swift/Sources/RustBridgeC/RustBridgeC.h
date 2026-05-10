@@ -3729,5 +3729,8 @@ void* __swift_bridge__$register_ocr_backend(void* swift_box);
 void* __swift_bridge__$register_post_processor(void* swift_box);
 void* __swift_bridge__$register_validator(void* swift_box);
 void* __swift_bridge__$register_embedding_backend(void* swift_box);
+struct __private__ResultPtrAndPtr __swift_bridge__$extraction_config_from_json(void* json);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_bytes_item_from_json(void* json);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_file_item_from_json(void* json);
 
 

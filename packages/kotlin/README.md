@@ -103,7 +103,19 @@ implementation 'dev.kreuzberg:kreuzberg:4.0.0'
 
 Extract text, metadata, and structure from any supported document format:
 
-<!-- snippet not found: api/extract_file_sync.md -->
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import java.nio.file.Paths
+
+fun main() {
+    val config = ExtractionConfig.builder().build()
+    val result = Kreuzberg.extractFileSync(Paths.get("document.pdf"), null, config)
+
+    println(result.content())
+    println("MIME type: ${result.mimeType()}")
+    println("Tables: ${result.tables()?.size ?: 0}")
+}
+```
 
 ### Common Use Cases
 
@@ -114,7 +126,25 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import java.nio.file.Paths
+import java.util.Optional
+
+fun main() {
+    val ocr = OcrConfig.builder()
+        .withBackend("tesseract")
+        .withLanguage("eng")
+        .build()
+
+    val config = ExtractionConfig.builder()
+        .withOcr(Optional.of(ocr))
+        .build()
+
+    val result = Kreuzberg.extractFileSync(Paths.get("scanned.pdf"), null, config)
+    println(result.content())
+}
+```
 
 
 #### Table Extraction
@@ -126,14 +156,45 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 #### Processing Multiple Files
 
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import java.nio.file.Paths
+
+fun main() {
+    val config = ExtractionConfig.builder().build()
+    val items = listOf(
+        BatchFileItem(Paths.get("doc1.pdf"), null),
+        BatchFileItem(Paths.get("doc2.docx"), null),
+        BatchFileItem(Paths.get("report.pdf"), null),
+    )
+    val results = Kreuzberg.batchExtractFilesSync(items, config)
+
+    results.forEachIndexed { index, result ->
+        println("File $index: ${result.content().length} chars")
+    }
+}
+```
 
 
 #### Async Processing
 
 For non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import dev.kreuzberg.kt.Kreuzberg
+import kotlinx.coroutines.runBlocking
+import java.nio.file.Paths
+
+fun main() = runBlocking {
+    val config = ExtractionConfig.builder().build()
+    val result = Kreuzberg.extractFile(Paths.get("document.pdf"), null, config)
+
+    println(result.content())
+    println("MIME type: ${result.mimeType()}")
+    println("Tables: ${result.tables()?.size ?: 0}")
+}
+```
 
 
 ### Next Steps
@@ -256,14 +317,46 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 ### OCR Configuration Example
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import java.nio.file.Paths
+import java.util.Optional
+
+fun main() {
+    val ocr = OcrConfig.builder()
+        .withBackend("tesseract")
+        .withLanguage("eng")
+        .build()
+
+    val config = ExtractionConfig.builder()
+        .withOcr(Optional.of(ocr))
+        .build()
+
+    val result = Kreuzberg.extractFileSync(Paths.get("scanned.pdf"), null, config)
+    println(result.content())
+}
+```
 
 
 ## Async Support
 
 This binding provides full async/await support for non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import dev.kreuzberg.kt.Kreuzberg
+import kotlinx.coroutines.runBlocking
+import java.nio.file.Paths
+
+fun main() = runBlocking {
+    val config = ExtractionConfig.builder().build()
+    val result = Kreuzberg.extractFile(Paths.get("document.pdf"), null, config)
+
+    println(result.content())
+    println("MIME type: ${result.mimeType()}")
+    println("Tables: ${result.tables()?.size ?: 0}")
+}
+```
 
 
 ## Plugin System
@@ -284,7 +377,24 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```kotlin title="Kotlin"
+import dev.kreuzberg.*
+import java.nio.file.Paths
+
+fun main() {
+    val config = ExtractionConfig.builder().build()
+    val items = listOf(
+        BatchFileItem(Paths.get("doc1.pdf"), null),
+        BatchFileItem(Paths.get("doc2.docx"), null),
+        BatchFileItem(Paths.get("report.pdf"), null),
+    )
+    val results = Kreuzberg.batchExtractFilesSync(items, config)
+
+    results.forEachIndexed { index, result ->
+        println("File $index: ${result.content().length} chars")
+    }
+}
+```
 
 
 ## Configuration

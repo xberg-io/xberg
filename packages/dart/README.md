@@ -84,7 +84,19 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 Extract text, metadata, and structure from any supported document format:
 
-<!-- snippet not found: api/extract_file_sync.md -->
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  // Sync semantics — flutter_rust_bridge surfaces every call as a Future,
+  // so even the *Sync entrypoints must be awaited from Dart.
+  final result = await KreuzbergBridge.extractFileSync('document.pdf', null);
+
+  print(result.content);
+  print('MIME type: ${result.mimeType}');
+  print('Tables: ${result.tables.length}');
+}
+```
 
 ### Common Use Cases
 
@@ -95,7 +107,31 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  final config = ExtractionConfig(
+    useCache: true,
+    enableQualityProcessing: true,
+    forceOcr: false,
+    disableOcr: false,
+    ocr: const OcrConfig(
+      enabled: true,
+      backend: 'tesseract',
+      language: 'eng',
+      autoRotate: false,
+    ),
+    resultFormat: ResultFormat.unified,
+    outputFormat: OutputFormat.plain(),
+    includeDocumentStructure: false,
+    maxArchiveDepth: 3,
+  );
+
+  final result = await KreuzbergBridge.extractFile('scanned.pdf', null, config);
+  print(result.content);
+}
+```
 
 
 #### Table Extraction
@@ -107,14 +143,44 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 #### Processing Multiple Files
 
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  final items = <BatchFileItem>[
+    const BatchFileItem(path: 'doc1.pdf'),
+    BatchFileItem(
+      path: 'scan.pdf',
+      config: FileExtractionConfig(forceOcr: true),
+    ),
+  ];
+
+  // Sync semantics — flutter_rust_bridge still returns a Future from Dart.
+  final results = await KreuzbergBridge.batchExtractFilesSync(items);
+
+  print('Processed ${results.length} files');
+  for (final result in results) {
+    print('${result.mimeType}: ${result.content.length} chars');
+  }
+}
+```
 
 
 #### Async Processing
 
 For non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  final result = await KreuzbergBridge.extractFile('document.pdf', null);
+
+  print(result.content);
+  print('MIME type: ${result.mimeType}');
+  print('Tables: ${result.tables.length}');
+}
+```
 
 
 ### Next Steps
@@ -237,14 +303,48 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 ### OCR Configuration Example
 
-<!-- snippet not found: ocr/ocr_extraction.md -->
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  final config = ExtractionConfig(
+    useCache: true,
+    enableQualityProcessing: true,
+    forceOcr: false,
+    disableOcr: false,
+    ocr: const OcrConfig(
+      enabled: true,
+      backend: 'tesseract',
+      language: 'eng',
+      autoRotate: false,
+    ),
+    resultFormat: ResultFormat.unified,
+    outputFormat: OutputFormat.plain(),
+    includeDocumentStructure: false,
+    maxArchiveDepth: 3,
+  );
+
+  final result = await KreuzbergBridge.extractFile('scanned.pdf', null, config);
+  print(result.content);
+}
+```
 
 
 ## Async Support
 
 This binding provides full async/await support for non-blocking document processing:
 
-<!-- snippet not found: api/extract_file_async.md -->
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  final result = await KreuzbergBridge.extractFile('document.pdf', null);
+
+  print(result.content);
+  print('MIME type: ${result.mimeType}');
+  print('Tables: ${result.tables.length}');
+}
+```
 
 
 ## Plugin System
@@ -265,7 +365,27 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-<!-- snippet not found: api/batch_extract_files_sync.md -->
+```dart title="Dart"
+import 'package:kreuzberg/kreuzberg.dart';
+
+Future<void> main() async {
+  final items = <BatchFileItem>[
+    const BatchFileItem(path: 'doc1.pdf'),
+    BatchFileItem(
+      path: 'scan.pdf',
+      config: FileExtractionConfig(forceOcr: true),
+    ),
+  ];
+
+  // Sync semantics — flutter_rust_bridge still returns a Future from Dart.
+  final results = await KreuzbergBridge.batchExtractFilesSync(items);
+
+  print('Processed ${results.length} files');
+  for (final result in results) {
+    print('${result.mimeType}: ${result.content.length} chars');
+  }
+}
+```
 
 
 ## Configuration

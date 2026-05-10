@@ -99,20 +99,7 @@ Install-Package Kreuzberg
 
 Extract text, metadata, and structure from any supported document format:
 
-```cs
-using Kreuzberg;
-
-var config = new ExtractionConfig
-{
-    UseCache = true,
-    EnableQualityProcessing = true
-};
-
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
-
-Console.WriteLine(result.Content);
-Console.WriteLine($"MIME Type: {result.MimeType}");
-```
+<!-- snippet not found: getting-started/basic_usage.cs -->
 
 ### Common Use Cases
 
@@ -139,7 +126,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 Console.WriteLine(result.Content);
 ```
 
@@ -180,13 +167,13 @@ class Program
 
             foreach (var filePath in filePaths)
             {
-                var result = await KreuzbergClient.ExtractFileAsync(filePath, config);
+                var result = await KreuzbergLib.ExtractFileAsync(filePath, config);
                 batchResults.Add(result);
                 Console.WriteLine($"Processed {filePath}: {result.Content.Length} chars");
             }
 
             var tasks = filePaths.Select(path =>
-                KreuzbergClient.ExtractFileAsync(path, config)
+                KreuzbergLib.ExtractFileAsync(path, config)
             ).ToArray();
 
             var results = await Task.WhenAll(tasks);
@@ -216,16 +203,16 @@ class Program
     {
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync("document.pdf");
+            var result = await KreuzbergLib.ExtractFileAsync("document.pdf");
 
             Console.WriteLine($"Content length: {result.Content.Length}");
             Console.WriteLine($"MIME type: {result.MimeType}");
 
             var tasks = new[]
             {
-                KreuzbergClient.ExtractFileAsync("file1.pdf"),
-                KreuzbergClient.ExtractFileAsync("file2.pdf"),
-                KreuzbergClient.ExtractFileAsync("file3.pdf")
+                KreuzbergLib.ExtractFileAsync("file1.pdf"),
+                KreuzbergLib.ExtractFileAsync("file2.pdf"),
+                KreuzbergLib.ExtractFileAsync("file3.pdf")
             };
 
             var results = await Task.WhenAll(tasks);
@@ -380,7 +367,7 @@ var config = new ExtractionConfig
     }
 };
 
-var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+var result = KreuzbergLib.ExtractFileSync("document.pdf", config);
 Console.WriteLine(result.Content);
 ```
 
@@ -398,16 +385,16 @@ class Program
     {
         try
         {
-            var result = await KreuzbergClient.ExtractFileAsync("document.pdf");
+            var result = await KreuzbergLib.ExtractFileAsync("document.pdf");
 
             Console.WriteLine($"Content length: {result.Content.Length}");
             Console.WriteLine($"MIME type: {result.MimeType}");
 
             var tasks = new[]
             {
-                KreuzbergClient.ExtractFileAsync("file1.pdf"),
-                KreuzbergClient.ExtractFileAsync("file2.pdf"),
-                KreuzbergClient.ExtractFileAsync("file3.pdf")
+                KreuzbergLib.ExtractFileAsync("file1.pdf"),
+                KreuzbergLib.ExtractFileAsync("file2.pdf"),
+                KreuzbergLib.ExtractFileAsync("file3.pdf")
             };
 
             var results = await Task.WhenAll(tasks);
@@ -471,13 +458,13 @@ class Program
 
             foreach (var filePath in filePaths)
             {
-                var result = await KreuzbergClient.ExtractFileAsync(filePath, config);
+                var result = await KreuzbergLib.ExtractFileAsync(filePath, config);
                 batchResults.Add(result);
                 Console.WriteLine($"Processed {filePath}: {result.Content.Length} chars");
             }
 
             var tasks = filePaths.Select(path =>
-                KreuzbergClient.ExtractFileAsync(path, config)
+                KreuzbergLib.ExtractFileAsync(path, config)
             ).ToArray();
 
             var results = await Task.WhenAll(tasks);

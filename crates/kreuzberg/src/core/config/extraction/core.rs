@@ -605,4 +605,42 @@ mod tests {
         let config: ExtractionConfig = serde_json::from_str(json).unwrap();
         assert!(!config.effective_disable_ocr(), "OCR should be enabled by default");
     }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_use_layout_for_markdown_defaults_to_false() {
+        let config = ExtractionConfig::default();
+        assert!(!config.use_layout_for_markdown);
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_use_layout_for_markdown_can_be_set_true() {
+        let config = ExtractionConfig {
+            use_layout_for_markdown: true,
+            ..Default::default()
+        };
+        assert!(config.use_layout_for_markdown);
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_use_layout_for_markdown_serde_round_trip() {
+        let config = ExtractionConfig {
+            use_layout_for_markdown: true,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ExtractionConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.use_layout_for_markdown);
+    }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_use_layout_for_markdown_serde_default_false() {
+        // Field absent in JSON → should default to false.
+        let json = r#"{}"#;
+        let config: ExtractionConfig = serde_json::from_str(json).unwrap();
+        assert!(!config.use_layout_for_markdown);
+    }
 }

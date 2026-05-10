@@ -91,7 +91,11 @@ pub trait Plugin: Send + Sync {
     /// }
     /// # }
     /// ```
-    fn version(&self) -> String;
+    ///
+    /// Defaults to the kreuzberg crate version.
+    fn version(&self) -> String {
+        env!("CARGO_PKG_VERSION").to_string()
+    }
 
     /// Initialize the plugin.
     ///
@@ -134,7 +138,11 @@ pub trait Plugin: Send + Sync {
     /// }
     /// # }
     /// ```
-    fn initialize(&self) -> Result<()>;
+    ///
+    /// Defaults to a no-op for stateless plugins.
+    fn initialize(&self) -> Result<()> {
+        Ok(())
+    }
 
     /// Shutdown the plugin.
     ///
@@ -176,7 +184,11 @@ pub trait Plugin: Send + Sync {
     /// }
     /// # }
     /// ```
-    fn shutdown(&self) -> Result<()>;
+    ///
+    /// Defaults to a no-op for stateless plugins.
+    fn shutdown(&self) -> Result<()> {
+        Ok(())
+    }
 
     /// Optional plugin description for debugging and logging.
     ///

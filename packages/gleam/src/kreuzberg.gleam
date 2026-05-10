@@ -69,6 +69,7 @@ pub type ExtractionConfig {
     security_limits: Option(SecurityLimits),
     output_format: OutputFormat,
     layout: Option(LayoutDetectionConfig),
+    use_layout_for_markdown: Bool,
     include_document_structure: Bool,
     acceleration: Option(AccelerationConfig),
     cache_namespace: Option(String),
