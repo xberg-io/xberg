@@ -55,4 +55,3 @@ console.log("Content length: " + result.content.length);
 console.log("Format: " + result.format);
 const languages = result.languages ? result.languages.join(", ") : "";
 console.log("Languages: " + languages);
-```;
