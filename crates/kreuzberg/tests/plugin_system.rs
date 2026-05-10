@@ -53,7 +53,7 @@ impl DocumentExtractor for FailingExtractor {
             })
         } else {
             let mut doc = InternalDocument::new("text");
-            doc.mime_type = Cow::Borrowed("text/plain");
+            doc.mime_type = "text/plain".to_string();
             doc.push_element(InternalElement::text(ElementKind::Paragraph, "success", 0));
             Ok(doc)
         }
@@ -315,7 +315,7 @@ fn test_extractor_priority_ordering_complex() {
     impl DocumentExtractor for PriorityExtractor {
         async fn extract_bytes(&self, _: &[u8], _: &str, _: &ExtractionConfig) -> Result<InternalDocument> {
             let mut doc = InternalDocument::new("text");
-            doc.mime_type = Cow::Borrowed("text/plain");
+            doc.mime_type = "text/plain".to_string();
             doc.push_element(InternalElement::text(ElementKind::Paragraph, "test", 0));
             Ok(doc)
         }

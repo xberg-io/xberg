@@ -178,7 +178,7 @@ impl SyncExtractor for EmailExtractor {
 
         // Build internal document from email content
         let mut doc = Self::build_internal_document(&email_result);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         // Move fields out of email_result now that all borrows above are complete.
         let subject = email_result.subject;

@@ -10,7 +10,7 @@ use std::borrow::Cow;
 /// Build an `InternalDocument` with a single paragraph element for pipeline tests.
 fn make_doc(content: &str, mime: &str) -> InternalDocument {
     let mut doc = InternalDocument::new("plain");
-    doc.mime_type = Cow::Owned(mime.to_string());
+    doc.mime_type = mime.to_string();
     if !content.is_empty() {
         doc.push_element(InternalElement::text(ElementKind::Paragraph, content, 0));
     }
@@ -818,7 +818,7 @@ async fn test_nfc_normalization_idempotent_on_ascii() {
 async fn test_nfc_normalization_applies_to_page_content() {
     // Create a doc with a page-1 element containing decomposed characters
     let mut doc = InternalDocument::new("plain");
-    doc.mime_type = Cow::Borrowed("text/plain");
+    doc.mime_type = "text/plain".to_string();
     doc.push_element(InternalElement::text(ElementKind::Paragraph, "re\u{0301}sume\u{0301}", 0).with_page(1));
     let config = ExtractionConfig {
         postprocessor: Some(crate::core::config::PostProcessorConfig {

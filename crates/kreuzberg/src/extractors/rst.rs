@@ -1464,7 +1464,7 @@ impl DocumentExtractor for RstExtractor {
         let tables = Self::extract_tables(&text);
 
         let mut doc = Self::build_internal_document(&text, inject_placeholders);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         // Add tables to InternalDocument

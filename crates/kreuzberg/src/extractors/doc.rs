@@ -94,7 +94,7 @@ impl DocumentExtractor for DocExtractor {
         }?;
 
         let mut doc = InternalDocument::new("doc");
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         let mut metadata_map = AHashMap::new();
 

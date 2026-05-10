@@ -18,8 +18,6 @@
 //! assert_eq!(doc.elements.len(), 4);
 //! ```
 
-use std::borrow::Cow;
-
 use ahash::AHashMap;
 
 use super::document_structure::{ContentLayer, TextAnnotation};
@@ -47,7 +45,7 @@ pub struct InternalDocumentBuilder {
 
 impl InternalDocumentBuilder {
     /// Create a new builder for the given source format.
-    pub fn new(source_format: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new(source_format: impl Into<String>) -> Self {
         Self {
             doc: InternalDocument::new(source_format),
             depth: 0,
@@ -56,7 +54,7 @@ impl InternalDocumentBuilder {
     }
 
     /// Set the source format identifier (e.g. "docx", "html", "pptx").
-    pub fn source_format(&mut self, format: impl Into<Cow<'static, str>>) {
+    pub fn source_format(&mut self, format: impl Into<String>) {
         self.doc.source_format = format.into();
     }
 
@@ -66,7 +64,7 @@ impl InternalDocumentBuilder {
     }
 
     /// Set the MIME type of the source document.
-    pub fn set_mime_type(&mut self, mime_type: impl Into<Cow<'static, str>>) {
+    pub fn set_mime_type(&mut self, mime_type: impl Into<String>) {
         self.doc.mime_type = mime_type.into();
     }
 

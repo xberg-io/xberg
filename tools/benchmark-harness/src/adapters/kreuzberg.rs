@@ -81,9 +81,9 @@ pub fn create_kreuzberg_adapter(
         format!("kreuzberg-{}-{}", format_slug, pipeline.as_str())
     };
     let supported_formats = vec![
-        "pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt", "txt", "md", "html", "xml", "json",
-        "odt", "ods", "odp", "epub", "rtf", "csv", "json", "yaml", "png", "jpg", "jpeg", "gif",
-        "bmp", "tiff", "tif", "webp", "zip", "tar", "gz", "7z",
+        "pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt", "txt", "md", "html", "xml", "json", "odt", "ods", "odp",
+        "epub", "rtf", "csv", "json", "yaml", "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp", "zip", "tar",
+        "gz", "7z",
     ]
     .into_iter()
     .map(|s| s.to_string())

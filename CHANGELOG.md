@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **InternalDocument is serde-bridgeable**: `InternalDocument` and its four
+  previously-non-serde sub-types (`InternalElement`, `ElementKind`,
+  `Relationship`, `RelationshipTarget`) gained `Serialize` + `Deserialize`
+  derives. Combined with the `Cow<'static, str>` → `String` migration on
+  `source_format` and `mime_type`, foreign-language plugin authors can now
+  construct `InternalDocument` values that round-trip through JSON at the
+  FFI boundary — unblocking `DocumentExtractor` and `Renderer` trait bridges
+  in alef 0.15.25+.
 - **#619 follow-up**: `POST /extract-async` now returns HTTP 429 when more than 100 jobs are active simultaneously, preventing unbounded memory growth under load.
 - **WASM OCR backend**: `TesseractWasmBackend` registered for the
   `ocr-wasm` feature set, exposing OCR on the WASM target via

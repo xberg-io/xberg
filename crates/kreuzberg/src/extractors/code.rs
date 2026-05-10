@@ -92,7 +92,7 @@ impl CodeExtractor {
             format: Some(FormatMetadata::Code(result)),
             ..Default::default()
         };
-        doc.mime_type = Cow::Borrowed(SOURCE_CODE_MIME_TYPE);
+        doc.mime_type = SOURCE_CODE_MIME_TYPE.to_string();
 
         Ok(doc)
     }

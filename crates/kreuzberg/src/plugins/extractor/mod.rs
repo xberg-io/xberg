@@ -114,7 +114,7 @@ mod tests {
             _config: &ExtractionConfig,
         ) -> Result<crate::types::internal::InternalDocument> {
             let mut doc = crate::types::internal::InternalDocument::new("mock");
-            doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            doc.mime_type = mime_type.to_string();
             let text = String::from_utf8_lossy(content).to_string();
             if !text.is_empty() {
                 doc.push_element(crate::types::internal::InternalElement::text(

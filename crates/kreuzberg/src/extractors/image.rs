@@ -458,7 +458,7 @@ impl DocumentExtractor for ImageExtractor {
                 format: Some(crate::types::FormatMetadata::Image(image_metadata)),
                 ..Default::default()
             };
-            doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            doc.mime_type = mime_type.to_string();
             tracing::debug!(
                 format = "image",
                 "OCR disabled via disable_ocr, returning metadata only"
@@ -477,7 +477,7 @@ impl DocumentExtractor for ImageExtractor {
                 match self.extract_with_layout_ocr(content, config).await {
                     Ok(mut doc) => {
                         doc.metadata.format = Some(crate::types::FormatMetadata::Image(image_metadata));
-                        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+                        doc.mime_type = mime_type.to_string();
                         return Ok(doc);
                     }
                     Err(e) => {
@@ -491,7 +491,7 @@ impl DocumentExtractor for ImageExtractor {
             {
                 let mut doc = self.extract_with_ocr(content, mime_type, config).await?;
                 doc.metadata.format = Some(crate::types::FormatMetadata::Image(image_metadata));
-                doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+                doc.mime_type = mime_type.to_string();
                 return Ok(doc);
             }
         }
@@ -503,7 +503,7 @@ impl DocumentExtractor for ImageExtractor {
                 format: Some(crate::types::FormatMetadata::Image(image_metadata)),
                 ..Default::default()
             };
-            doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            doc.mime_type = mime_type.to_string();
 
             tracing::debug!(
                 element_count = doc.elements.len(),

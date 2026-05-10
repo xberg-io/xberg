@@ -1200,8 +1200,16 @@ mod tests {
         let aggregated = aggregate_new_format(&results);
 
         assert_eq!(aggregated.by_framework_mode.len(), 2);
-        assert!(aggregated.by_framework_mode.contains_key("kreuzberg-markdown-baseline:single"));
-        assert!(aggregated.by_framework_mode.contains_key("kreuzberg-markdown-baseline:batch"));
+        assert!(
+            aggregated
+                .by_framework_mode
+                .contains_key("kreuzberg-markdown-baseline:single")
+        );
+        assert!(
+            aggregated
+                .by_framework_mode
+                .contains_key("kreuzberg-markdown-baseline:batch")
+        );
 
         let single_agg = &aggregated.by_framework_mode["kreuzberg-markdown-baseline:single"];
         assert_eq!(single_agg.framework, "kreuzberg-markdown-baseline");

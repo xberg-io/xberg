@@ -18,7 +18,6 @@ use kreuzberg::internal::{ElementKind, InternalDocument, InternalElement};
 use kreuzberg::plugins::registry::{get_document_extractor_registry, get_post_processor_registry};
 use kreuzberg::plugins::{Plugin, PostProcessor, ProcessingStage};
 use kreuzberg::types::ExtractionResult;
-use std::borrow::Cow;
 use std::sync::Arc;
 
 #[cfg(feature = "ocr")]
@@ -380,7 +379,7 @@ async fn test_concurrent_pipeline_processing() {
 
         handles.push(tokio::spawn(async move {
             let mut doc = InternalDocument::new("text");
-            doc.mime_type = Cow::Borrowed("text/plain");
+            doc.mime_type = "text/plain".to_string();
             doc.elements.push(InternalElement::text(
                 ElementKind::Paragraph,
                 format!("Content {}", i),

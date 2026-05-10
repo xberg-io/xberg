@@ -64,7 +64,7 @@ fn build_archive_doc_inner(
 
     // Build InternalDocument with archive content as elements
     let mut doc = InternalDocument::new(format_name.to_lowercase());
-    doc.mime_type = Cow::Owned(mime_type.to_string());
+    doc.mime_type = mime_type.to_string();
     doc.metadata = metadata;
 
     // Add archive summary as a paragraph element

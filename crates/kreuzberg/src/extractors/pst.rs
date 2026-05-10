@@ -8,7 +8,6 @@ use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 use crate::types::metadata::PstMetadata;
 use crate::types::{FormatMetadata, Metadata};
 use async_trait::async_trait;
-use std::borrow::Cow;
 #[cfg(feature = "tokio-runtime")]
 use std::path::Path;
 
@@ -52,7 +51,7 @@ impl SyncExtractor for PstExtractor {
         let (messages, _processing_warnings) = crate::extraction::pst::extract_pst_messages(content)?;
 
         let mut doc = InternalDocument::new("pst");
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         for msg in &messages {
             let msg_text = crate::extraction::email::build_email_text_output(msg);
@@ -134,7 +133,7 @@ impl DocumentExtractor for PstExtractor {
         let (messages, _processing_warnings) = crate::extraction::pst::extract_pst_from_path(path)?;
 
         let mut doc = InternalDocument::new("pst");
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         for msg in &messages {
             let msg_text = crate::extraction::email::build_email_text_output(msg);

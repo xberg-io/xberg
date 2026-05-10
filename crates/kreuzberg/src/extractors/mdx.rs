@@ -18,7 +18,6 @@ use crate::types::{Metadata, Table};
 use async_trait::async_trait;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use regex::Regex;
-use std::borrow::Cow;
 use std::sync::LazyLock;
 
 /// Annotation tracking entry: (kind_tag, byte_start, optional link data).
@@ -709,7 +708,7 @@ impl DocumentExtractor for MdxExtractor {
 
         // Build InternalDocument from events, frontmatter, and JSX blocks
         let mut doc = Self::build_internal_document(&events, &yaml, &raw_jsx);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         // Tables are already pushed by `build_internal_document` via the builder,

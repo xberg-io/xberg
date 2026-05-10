@@ -1460,7 +1460,7 @@ impl DocumentExtractor for DocxExtractor {
 
         // Transfer images to InternalDocument
         internal_doc.images = extracted_images;
-        internal_doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        internal_doc.mime_type = mime_type.to_string();
 
         // Recursively extract embedded objects from word/embeddings/
         if config.max_archive_depth > 0 {

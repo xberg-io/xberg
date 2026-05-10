@@ -13,7 +13,6 @@ use kreuzberg::plugins::{DocumentExtractor, Plugin, Validator};
 use kreuzberg::types::ExtractionResult;
 use kreuzberg::types::internal::{ElementKind, InternalDocument, InternalElement};
 use kreuzberg::{KreuzbergError, Result};
-use std::borrow::Cow;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -120,7 +119,7 @@ impl DocumentExtractor for MockExtractor {
         _config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         let mut doc = InternalDocument::new("mock");
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.push_element(InternalElement::text(
             ElementKind::Paragraph,
             format!("Extracted by {}: {}", self.name, String::from_utf8_lossy(content)),

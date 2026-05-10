@@ -97,7 +97,7 @@ impl DocumentExtractor for OpmlExtractor {
             .and_then(|v| v.as_str().map(|s| s.to_string()));
 
         let mut doc = parser::build_internal_document(content, &mut budget)?;
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = Metadata {
             title: meta_title,
             created_by: meta_created_by,

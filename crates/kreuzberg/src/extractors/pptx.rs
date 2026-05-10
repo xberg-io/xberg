@@ -266,7 +266,7 @@ impl PptxExtractor {
         }
 
         let mut doc = Self::build_internal_document(&pptx_result.content, pptx_result.slide_count as u32, budget)?;
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         let mut metadata = Metadata {
             title,

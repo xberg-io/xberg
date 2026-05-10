@@ -1194,5 +1194,4 @@ mod tests {
             ErrorKind::HarnessError
         );
     }
-
 }

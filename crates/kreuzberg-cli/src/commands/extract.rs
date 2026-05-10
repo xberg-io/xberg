@@ -4,11 +4,18 @@
 //! or multiple documents with customizable extraction configurations.
 
 use anyhow::{Context, Result};
-use kreuzberg::{BatchFileItem, ExtractionConfig, ExtractionResult, FileExtractionConfig, batch_extract_files_sync, extract_file_sync};
+use kreuzberg::{
+    BatchFileItem, ExtractionConfig, ExtractionResult, FileExtractionConfig, batch_extract_files_sync,
+    extract_file_sync,
+};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::{WireFormat, output::{BatchEnvelope, ExtractEnvelope}, style};
+use crate::{
+    WireFormat,
+    output::{BatchEnvelope, ExtractEnvelope},
+    style,
+};
 
 /// Execute single document extraction command
 pub fn extract_command(
@@ -39,8 +46,7 @@ pub fn extract_command(
             };
             println!(
                 "{}",
-                serde_json::to_string_pretty(&envelope)
-                    .context("Failed to serialize extraction result to JSON")?
+                serde_json::to_string_pretty(&envelope).context("Failed to serialize extraction result to JSON")?
             );
         }
         WireFormat::Toon => {
@@ -73,10 +79,7 @@ pub fn batch_command(
 
             for path in &paths {
                 let path_str = path.to_string_lossy().to_string();
-                let has_file_config = file_configs_map
-                    .as_ref()
-                    .and_then(|m| m.get(&path_str))
-                    .is_some();
+                let has_file_config = file_configs_map.as_ref().and_then(|m| m.get(&path_str)).is_some();
 
                 let t0 = Instant::now();
                 let result = if has_file_config {
@@ -90,7 +93,10 @@ pub fn batch_command(
                         })
                         .transpose()?;
                     let mut batch_results = batch_extract_files_sync(
-                        vec![BatchFileItem { path: path.clone(), config: file_config }],
+                        vec![BatchFileItem {
+                            path: path.clone(),
+                            config: file_config,
+                        }],
                         &config,
                     )
                     .with_context(|| {

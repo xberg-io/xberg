@@ -2,7 +2,6 @@
 //!
 //! Reads records from dBASE files and formats them as a markdown table.
 
-use std::borrow::Cow;
 
 use crate::Result;
 use crate::core::config::ExtractionConfig;
@@ -179,7 +178,7 @@ impl DocumentExtractor for DbfExtractor {
         };
 
         let mut doc = build_dbf_internal_document(&parsed);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         doc.metadata = Metadata {
             format: Some(FormatMetadata::Dbf(dbf_metadata)),

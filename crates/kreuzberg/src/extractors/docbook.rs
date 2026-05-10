@@ -1204,7 +1204,7 @@ impl DocumentExtractor for DocbookExtractor {
             .unwrap_or(true);
         let mut budget2 = SecurityBudget::from_config(config);
         let mut doc = build_docbook_internal_document(&docbook_content, inject_placeholders, &mut budget2)?;
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         Ok(doc)

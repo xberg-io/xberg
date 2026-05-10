@@ -12,7 +12,6 @@ use crate::types::metadata::{CitationMetadata, FormatMetadata, Metadata, YearRan
 use crate::types::uri::Uri;
 use ahash::AHashSet;
 use async_trait::async_trait;
-use std::borrow::Cow;
 
 #[cfg(feature = "office")]
 use biblib::{CitationParser, EndNoteXmlParser, PubMedParser, RisParser};
@@ -274,7 +273,7 @@ impl DocumentExtractor for CitationExtractor {
         };
 
         let mut doc = builder.build();
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = Metadata {
             authors: meta_authors,
             keywords: meta_keywords,

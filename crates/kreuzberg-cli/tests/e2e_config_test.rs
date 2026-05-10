@@ -505,9 +505,18 @@ fn test_cli_real_extraction() {
     // Verify envelope+result structure
     if let Ok(value) = parsed {
         assert!(value.get("result").is_some(), "Missing 'result' envelope field");
-        assert!(value.get("extraction_time_ms").is_some(), "Missing 'extraction_time_ms' field");
-        assert!(value["result"].get("content").is_some(), "Missing content field in result");
-        assert!(value["result"].get("mime_type").is_some(), "Missing mime_type field in result");
+        assert!(
+            value.get("extraction_time_ms").is_some(),
+            "Missing 'extraction_time_ms' field"
+        );
+        assert!(
+            value["result"].get("content").is_some(),
+            "Missing content field in result"
+        );
+        assert!(
+            value["result"].get("mime_type").is_some(),
+            "Missing mime_type field in result"
+        );
     }
 }
 

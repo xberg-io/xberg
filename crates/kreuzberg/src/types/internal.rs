@@ -14,10 +14,10 @@
 //! - **OCR elements unified**: OCR text is just another element kind, not a parallel structure
 //! - **Blake3 IDs**: Deterministic, collision-resistant identifiers
 
-use std::borrow::Cow;
 use std::fmt;
 
 use ahash::AHashMap;
+use serde::{Deserialize, Serialize};
 
 use super::document_structure::{ContentLayer, TextAnnotation};
 use super::extraction::BoundingBox;
@@ -34,8 +34,31 @@ use crate::types::ExtractedImage;
 ///
 /// Format: `"ie-{12 hex chars}"` (48 bits from blake3, ~281 trillion address space).
 /// Same input always produces the same ID, enabling diffing and caching.
+///
+/// Serializes as a plain string (`"ie-aabbccddeeff"`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InternalElementId([u8; 15]);
+
+impl Serialize for InternalElementId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for InternalElementId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        if s.len() != 15 {
+            return Err(serde::de::Error::custom(format!(
+                "InternalElementId must be 15 bytes, got {}",
+                s.len()
+            )));
+        }
+        let mut buf = [0u8; 15];
+        buf.copy_from_slice(s.as_bytes());
+        Ok(Self(buf))
+    }
+}
 
 impl InternalElementId {
     /// Generate a deterministic ID from element content.
@@ -101,7 +124,11 @@ impl AsRef<str> for InternalElementId {
 /// All extractors output this structure. It is converted to the public
 /// [`ExtractionResult`](super::extraction::ExtractionResult) and
 /// [`DocumentStructure`](super::document_structure::DocumentStructure) in the pipeline.
-#[derive(Debug, Clone)]
+///
+/// Implements `Serialize`/`Deserialize` so that foreign-language plugin implementations
+/// (Python, TypeScript, Ruby, etc.) can construct and return this type via JSON at the
+/// FFI/trait-bridge boundary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InternalDocument {
     /// All elements in reading order. Append-only during extraction.
     pub elements: Vec<InternalElement>,
@@ -111,7 +138,7 @@ pub struct InternalDocument {
     pub relationships: Vec<Relationship>,
 
     /// Source format identifier (e.g., "pdf", "docx", "html", "markdown").
-    pub source_format: Cow<'static, str>,
+    pub source_format: String,
 
     /// Document-level metadata (title, author, dates, etc.).
     pub metadata: Metadata,
@@ -133,7 +160,7 @@ pub struct InternalDocument {
     pub children: Option<Vec<crate::types::ArchiveEntry>>,
 
     /// MIME type of the source document (e.g., "application/pdf", "text/html").
-    pub mime_type: Cow<'static, str>,
+    pub mime_type: String,
 
     /// Non-fatal warnings collected during extraction.
     pub processing_warnings: Vec<crate::types::ProcessingWarning>,
@@ -175,7 +202,7 @@ pub struct InternalDocument {
 
 impl InternalDocument {
     /// Create a new empty document with the given source format.
-    pub fn new(source_format: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new(source_format: impl Into<String>) -> Self {
         Self {
             elements: Vec::new(),
             relationships: Vec::new(),
@@ -185,7 +212,7 @@ impl InternalDocument {
             tables: Vec::new(),
             uris: Vec::new(),
             children: None,
-            mime_type: Cow::Borrowed("application/octet-stream"),
+            mime_type: "application/octet-stream".to_string(),
             processing_warnings: Vec::new(),
             annotations: None,
             prebuilt_pages: None,
@@ -257,7 +284,7 @@ impl InternalDocument {
 ///
 /// Elements are appended in reading order during extraction. The `depth` field
 /// and optional container markers enable tree reconstruction in the derivation step.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InternalElement {
     /// Deterministic identifier.
     pub id: InternalElementId,
@@ -388,7 +415,7 @@ impl InternalElement {
 ///
 /// Superset of [`NodeContent`](super::document_structure::NodeContent) variants
 /// plus OCR and container markers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ElementKind {
     // --- Text-carrying ---
     /// Document title.
@@ -511,7 +538,7 @@ impl ElementKind {
 ///
 /// During extraction, targets may be unresolved keys (`RelationshipTarget::Key`).
 /// The derivation step resolves these to indices using the element anchor index.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Relationship {
     /// Index of the source element in `InternalDocument::elements`.
     pub source: u32,
@@ -524,7 +551,7 @@ pub struct Relationship {
 }
 
 /// Target of a relationship — either a resolved element index or an unresolved key.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RelationshipTarget {
     /// Resolved: index into `InternalDocument::elements`.
     Index(u32),
@@ -629,5 +656,104 @@ mod tests {
 
         let parsed: RelationshipKind = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, kind);
+    }
+
+    /// Verify that `InternalDocument` round-trips through serde JSON without loss.
+    ///
+    /// This is the primary correctness gate for foreign-language plugin support:
+    /// Python/TypeScript/Ruby implementations of `DocumentExtractor` construct
+    /// an `InternalDocument` as JSON and pass it across the FFI boundary.
+    #[test]
+    fn should_round_trip_through_serde_json() {
+        let mut doc = InternalDocument::new("pdf");
+        doc.mime_type = "application/pdf".to_string();
+
+        // Title element
+        let title = InternalElement::text(ElementKind::Title, "Test Document", 0);
+        doc.push_element(title);
+
+        // Heading
+        let heading = InternalElement::text(ElementKind::Heading { level: 2 }, "Introduction", 1);
+        doc.push_element(heading);
+
+        // Paragraph
+        let para = InternalElement::text(ElementKind::Paragraph, "Body text here.", 1);
+        doc.push_element(para);
+
+        // ListStart + ListItem + ListEnd
+        let list_start = InternalElement::text(ElementKind::ListStart { ordered: true }, "", 1);
+        doc.push_element(list_start);
+        let item = InternalElement::text(ElementKind::ListItem { ordered: true }, "First item", 2);
+        doc.push_element(item);
+        let list_end = InternalElement::text(ElementKind::ListEnd, "", 1);
+        doc.push_element(list_end);
+
+        // Code block
+        let code = InternalElement::text(ElementKind::Code, "fn main() {}", 0);
+        doc.push_element(code);
+
+        // PageBreak
+        let pb = InternalElement::text(ElementKind::PageBreak, "", 0);
+        doc.push_element(pb);
+
+        // Image reference (index 0, no actual image data needed for serde test)
+        let img_elem = InternalElement::text(ElementKind::Image { image_index: 0 }, "", 0);
+        doc.push_element(img_elem);
+
+        // OcrText
+        let ocr = InternalElement::text(
+            ElementKind::OcrText {
+                level: OcrElementLevel::Word,
+            },
+            "scanned word",
+            0,
+        );
+        doc.push_element(ocr);
+
+        // Relationships
+        doc.push_relationship(Relationship {
+            source: 0,
+            target: RelationshipTarget::Index(2),
+            kind: RelationshipKind::FootnoteReference,
+        });
+        doc.push_relationship(Relationship {
+            source: 1,
+            target: RelationshipTarget::Key("introduction".to_string()),
+            kind: RelationshipKind::CrossReference,
+        });
+
+        // Round-trip
+        let json = serde_json::to_string(&doc).expect("serialize InternalDocument");
+        let restored: InternalDocument = serde_json::from_str(&json).expect("deserialize InternalDocument");
+
+        assert_eq!(restored.source_format, doc.source_format);
+        assert_eq!(restored.mime_type, doc.mime_type);
+        assert_eq!(restored.elements.len(), doc.elements.len());
+        assert_eq!(restored.relationships.len(), doc.relationships.len());
+
+        // Spot-check element kinds
+        assert_eq!(restored.elements[0].kind, ElementKind::Title);
+        assert_eq!(restored.elements[1].kind, ElementKind::Heading { level: 2 });
+        assert_eq!(restored.elements[4].kind, ElementKind::ListItem { ordered: true });
+        assert_eq!(restored.elements[8].kind, ElementKind::Image { image_index: 0 });
+        assert_eq!(
+            restored.elements[9].kind,
+            ElementKind::OcrText {
+                level: OcrElementLevel::Word
+            }
+        );
+
+        // Spot-check relationship targets
+        assert_eq!(restored.relationships[0].target, RelationshipTarget::Index(2));
+        assert_eq!(
+            restored.relationships[1].target,
+            RelationshipTarget::Key("introduction".to_string())
+        );
+
+        // Element IDs survive the round-trip
+        assert_eq!(restored.elements[0].id, doc.elements[0].id);
+
+        // ContentLayer default is preserved
+        assert_eq!(restored.elements[0].layer, ContentLayer::Body);
     }
 }

@@ -51,8 +51,7 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
                     }
 
                     // Format heading with attributes if present
-                    if let (true, Some(attrs)) = (matches!(elem.kind, ElementKind::Heading { .. }), &elem.attributes)
-                    {
+                    if let (true, Some(attrs)) = (matches!(elem.kind, ElementKind::Heading { .. }), &elem.attributes) {
                         out.push_str(&elem.text);
                         // Filter out xmlns attributes and format remaining ones, sorted for deterministic output
                         let mut filtered_attrs: Vec<_> = attrs

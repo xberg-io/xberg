@@ -682,7 +682,7 @@ impl DocumentExtractor for EpubExtractor {
             config,
         )
         .unwrap_or_else(|| InternalDocumentBuilder::new("epub").build());
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         // Preserve output_format if it was set by build_internal_document (for markdown/djot pre-rendering)
         let output_format = doc.metadata.output_format.take();

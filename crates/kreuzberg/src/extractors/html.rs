@@ -502,7 +502,7 @@ impl SyncExtractor for HtmlExtractor {
             format: format_metadata,
             ..Default::default()
         };
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.pre_rendered_content = pre_rendered;
 
         // Add tables to InternalDocument

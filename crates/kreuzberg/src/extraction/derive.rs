@@ -553,8 +553,8 @@ pub fn derive_extraction_result(
     let content = crate::rendering::render_plain(&doc);
 
     // Use the explicit mime_type from the doc if it was set, otherwise derive from source_format
-    let mime_type = if doc.mime_type != "application/octet-stream" {
-        std::mem::take(&mut doc.mime_type)
+    let mime_type: Cow<'static, str> = if doc.mime_type != "application/octet-stream" {
+        Cow::Owned(std::mem::take(&mut doc.mime_type))
     } else {
         Cow::Borrowed(source_format_to_mime_type(&doc.source_format))
     };

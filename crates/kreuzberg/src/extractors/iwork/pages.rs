@@ -172,7 +172,7 @@ impl DocumentExtractor for PagesExtractor {
         };
 
         let mut doc = build_pages_internal_document(&data);
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         Ok(doc)
     }
 

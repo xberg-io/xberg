@@ -3,7 +3,6 @@
 //! Parses CSV/TSV files into structured table data and clean text output.
 //! Handles RFC 4180 quoted fields with embedded commas and newlines.
 
-use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use crate::Result;
@@ -148,7 +147,7 @@ impl DocumentExtractor for CsvExtractor {
             page_number: table.page_number,
             bounding_box: table.bounding_box,
         });
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         doc.metadata = Metadata {
             format: Some(FormatMetadata::Csv(csv_metadata)),

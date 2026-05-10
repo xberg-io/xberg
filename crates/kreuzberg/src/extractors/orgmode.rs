@@ -1061,7 +1061,7 @@ impl DocumentExtractor for OrgModeExtractor {
         let tables = Self::extract_tables(&org);
 
         let mut doc = Self::build_internal_document(&org_text);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         // Add tables to InternalDocument

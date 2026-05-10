@@ -207,9 +207,7 @@ pub(crate) fn is_tatr_available() -> bool {
 /// rationale as [`is_tatr_available`]: without this, the check would always
 /// return `false` until some other call site tried to load.
 pub(crate) fn is_slanet_available() -> bool {
-    if SLANET_WIRED_TRIED.get().is_none()
-        && SLANET_WIRELESS_TRIED.get().is_none()
-        && SLANET_PLUS_TRIED.get().is_none()
+    if SLANET_WIRED_TRIED.get().is_none() && SLANET_WIRELESS_TRIED.get().is_none() && SLANET_PLUS_TRIED.get().is_none()
     {
         // Side effect: take_or_create_slanet populates SLANET_WIRED_TRIED.
         // We drop the model — the caller will reload from cache when needed.

@@ -46,7 +46,7 @@ use crate::types::ocr_elements::{OcrBoundingGeometry, OcrConfidence, OcrElementL
 /// Page numbers come from the `ppageno` title property (converted to 1-indexed).
 pub(crate) fn parse_hocr_to_internal_document(hocr_html: &str) -> InternalDocument {
     let mut doc = InternalDocument::new("ocr");
-    doc.mime_type = std::borrow::Cow::Borrowed("application/x-hocr");
+    doc.mime_type = "application/x-hocr".to_string();
 
     let mut element_index: u32 = 0;
     let mut last_page: Option<u32> = None;

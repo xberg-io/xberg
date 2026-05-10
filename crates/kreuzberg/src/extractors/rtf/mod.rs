@@ -364,7 +364,7 @@ impl DocumentExtractor for RtfExtractor {
             });
         }
 
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = Metadata {
             title,
             subject,

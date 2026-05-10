@@ -13,7 +13,6 @@ use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::uri::{Uri, classify_uri};
 use async_trait::async_trait;
 use jotdown::{Container, Event, Parser};
-use std::borrow::Cow;
 
 /// Djot markup extractor with metadata and table support.
 ///
@@ -548,7 +547,7 @@ impl DocumentExtractor for DjotExtractor {
 
         // Build InternalDocument from events
         let mut doc = Self::build_internal_document(&events);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         // Add tables to InternalDocument

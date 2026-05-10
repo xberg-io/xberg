@@ -358,10 +358,8 @@ pub fn create_tika_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     ];
 
     let supported_formats = get_supported_formats("tika");
-    Ok(
-        SubprocessAdapter::new("tika", command, args, vec![], supported_formats)
-            .with_max_timeout(Duration::from_secs(180)),
-    )
+    Ok(SubprocessAdapter::new("tika", command, args, vec![], supported_formats)
+        .with_max_timeout(Duration::from_secs(180)))
 }
 
 /// Creates a subprocess adapter for PyMuPDF4LLM

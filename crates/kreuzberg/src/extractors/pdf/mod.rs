@@ -173,8 +173,7 @@ impl PdfExtractor {
             layout_runner::maybe_run_layout_for_markdown(content, config);
 
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> =
-            markdown_layout_hints.as_deref();
+        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = markdown_layout_hints.as_deref();
         #[cfg(not(feature = "layout-detection"))]
         let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = None;
 
@@ -376,14 +375,14 @@ impl PdfExtractor {
 
         #[cfg(feature = "ocr")]
         let mut doc = if let Some(mut ocr_doc) = ocr_internal_doc.take() {
-            ocr_doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            ocr_doc.mime_type = mime_type.to_string();
             ocr_doc
         } else if let Some(mut pre_doc) = pre_rendered_doc {
-            pre_doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            pre_doc.mime_type = mime_type.to_string();
             pre_doc
         } else {
             let mut d = InternalDocument::new("pdf");
-            d.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            d.mime_type = mime_type.to_string();
             for paragraph in text.split("\n\n") {
                 let trimmed = paragraph.trim();
                 if !trimmed.is_empty() {
@@ -394,11 +393,11 @@ impl PdfExtractor {
         };
         #[cfg(not(feature = "ocr"))]
         let mut doc = if let Some(mut pre_doc) = pre_rendered_doc {
-            pre_doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            pre_doc.mime_type = mime_type.to_string();
             pre_doc
         } else {
             let mut d = InternalDocument::new("pdf");
-            d.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+            d.mime_type = mime_type.to_string();
             for paragraph in text.split("\n\n") {
                 let trimmed = paragraph.trim();
                 if !trimmed.is_empty() {

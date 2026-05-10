@@ -820,7 +820,7 @@ impl DocumentExtractor for JupyterExtractor {
         // Build InternalDocument from already-parsed notebook (no re-parse)
         let mut doc = Self::build_internal_document(&notebook_json)
             .unwrap_or_else(|| InternalDocumentBuilder::new("jupyter").build());
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         doc.metadata = Metadata {
             language: meta_language,

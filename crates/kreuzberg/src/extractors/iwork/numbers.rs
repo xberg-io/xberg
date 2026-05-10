@@ -190,7 +190,7 @@ impl DocumentExtractor for NumbersExtractor {
         };
 
         let mut doc = build_numbers_internal_document(&data);
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         Ok(doc)
     }
 

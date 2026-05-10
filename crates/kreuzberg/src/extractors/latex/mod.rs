@@ -1119,7 +1119,7 @@ impl DocumentExtractor for LatexExtractor {
         let latex_str = String::from_utf8_lossy(content).into_owned();
         let (_text, metadata, _tables) = Self::extract_from_latex(&latex_str);
         let mut doc = Self::build_internal_document(&latex_str, inject_placeholders);
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
         tracing::debug!(
             element_count = doc.elements.len(),

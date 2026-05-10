@@ -283,7 +283,7 @@ impl DocumentExtractor for BibtexExtractor {
         };
 
         let mut doc = builder.build();
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = Metadata {
             authors: meta_authors,
             format: Some(FormatMetadata::Bibtex(bibtex_metadata)),

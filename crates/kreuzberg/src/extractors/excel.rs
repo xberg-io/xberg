@@ -177,7 +177,7 @@ impl SyncExtractor for ExcelExtractor {
         let mut budget = SecurityBudget::from_config(config);
         validate_workbook_budget(&workbook, &mut budget)?;
         let mut doc = Self::workbook_to_internal_document(&workbook);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         Ok(doc)
     }
 }
@@ -244,7 +244,7 @@ impl DocumentExtractor for ExcelExtractor {
         let mut budget = SecurityBudget::from_config(config);
         validate_workbook_budget(&workbook, &mut budget)?;
         let mut doc = Self::workbook_to_internal_document(&workbook);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         Ok(doc)
     }
 
@@ -261,7 +261,7 @@ impl DocumentExtractor for ExcelExtractor {
 
         let workbook = crate::extraction::excel::read_excel_file(path_str)?;
         let mut doc = Self::workbook_to_internal_document(&workbook);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         Ok(doc)
     }
 

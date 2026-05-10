@@ -205,7 +205,7 @@ impl DocumentExtractor for PptExtractor {
         };
 
         let mut doc = Self::build_internal_document(&result.text, &result.speaker_notes);
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = Metadata {
             title: meta_title,
             subject: meta_subject,

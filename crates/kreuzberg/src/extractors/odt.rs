@@ -951,7 +951,7 @@ impl DocumentExtractor for OdtExtractor {
 
         let mut budget = SecurityBudget::from_config(config);
         let mut doc = build_internal_document(&mut archive, &mut budget)?;
-        doc.mime_type = Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         // Extract metadata from meta.xml
         let mut metadata_map = AHashMap::new();

@@ -598,7 +598,7 @@ impl DocumentExtractor for JatsExtractor {
 
         let mut budget = SecurityBudget::from_config(config);
         let mut doc = build_jats_internal_document(&jats_content, &mut budget)?;
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         // Add DOI as a citation URI

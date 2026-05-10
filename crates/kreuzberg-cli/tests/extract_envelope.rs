@@ -86,8 +86,7 @@ fn test_extract_json_has_result_and_timing() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("stdout is not valid JSON");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("stdout is not valid JSON");
 
     // Envelope shape
     assert!(json.get("result").is_some(), "missing 'result' key in envelope");
@@ -140,11 +139,13 @@ fn test_batch_json_has_results_and_timing() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("stdout is not valid JSON");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("stdout is not valid JSON");
 
     // Envelope shape
-    let results = json.get("results").and_then(|v| v.as_array()).expect("'results' must be an array");
+    let results = json
+        .get("results")
+        .and_then(|v| v.as_array())
+        .expect("'results' must be an array");
     assert_eq!(results.len(), 2, "expected 2 results for 2 input files");
 
     let total_ms = json
@@ -186,12 +187,7 @@ fn test_pdf_backend_invalid_value_exits_nonzero() {
     }
 
     let output = Command::new(kreuzberg_bin())
-        .args([
-            "extract",
-            &pdf.to_string_lossy(),
-            "--pdf-backend",
-            "xyz",
-        ])
+        .args(["extract", &pdf.to_string_lossy(), "--pdf-backend", "xyz"])
         .output()
         .expect("failed to run kreuzberg extract");
 
@@ -235,8 +231,7 @@ fn test_pdf_backend_valid_value_succeeds() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("stdout is not valid JSON");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("stdout is not valid JSON");
     assert!(json.get("result").is_some(), "missing 'result' key");
     assert!(json.get("extraction_time_ms").is_some(), "missing 'extraction_time_ms'");
 }

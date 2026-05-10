@@ -1047,7 +1047,7 @@ impl DocumentExtractor for FictionBookExtractor {
         let links = Self::extract_links(content, &mut budget)?;
 
         let mut doc = Self::build_internal_document(content, &mut budget)?;
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         // Add extracted tables

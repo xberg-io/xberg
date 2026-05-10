@@ -189,7 +189,7 @@ impl DocumentExtractor for HwpExtractor {
                 "no BodyText sections found in HWP document".to_string(),
             ));
         }
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         Ok(doc)
     }
 

@@ -538,7 +538,7 @@ impl DocumentExtractor for TypstExtractor {
         let (_text, metadata) = Self::extract_from_typst(&typst_str);
 
         let mut doc = Self::build_internal_document(&typst_str);
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
         doc.metadata = metadata;
 
         Ok(doc)

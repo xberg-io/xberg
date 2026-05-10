@@ -446,7 +446,11 @@ async fn main() -> Result<()> {
                 }
             }
 
-            let total_requested = if frameworks.is_empty() { 6 } else { frameworks.iter().filter(|f| f.contains("kreuzberg")).count() };
+            let total_requested = if frameworks.is_empty() {
+                6
+            } else {
+                frameworks.iter().filter(|f| f.contains("kreuzberg")).count()
+            };
             eprintln!(
                 "[adapter] Kreuzberg CLI: {}/{} available",
                 kreuzberg_count, total_requested

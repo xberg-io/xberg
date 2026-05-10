@@ -203,7 +203,7 @@ impl SyncExtractor for XmlExtractor {
 
         let mut budget = SecurityBudget::from_config(config);
         let mut doc = build_internal_document(content, mime_type, &mut budget)?;
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        doc.mime_type = mime_type.to_string();
 
         doc.metadata = Metadata {
             format: Some(crate::types::FormatMetadata::Xml(crate::types::XmlMetadata {

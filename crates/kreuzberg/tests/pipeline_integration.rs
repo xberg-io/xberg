@@ -20,7 +20,7 @@ use std::sync::Arc;
 /// Helper: build a minimal `InternalDocument` whose derived content equals `text`.
 fn mock_doc(text: &str) -> InternalDocument {
     let mut doc = InternalDocument::new("text");
-    doc.mime_type = Cow::Borrowed("text/plain");
+    doc.mime_type = "text/plain".to_string();
     if !text.is_empty() {
         doc.elements
             .push(InternalElement::text(ElementKind::Paragraph, text, 0));
