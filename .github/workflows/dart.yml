@@ -7,14 +7,52 @@ on:
     branches: [main]
 
 jobs:
+  build-native:
+    name: Build native lib (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-15-intel]
+    defaults:
+      run:
+        working-directory: packages/dart/rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/dart/rust
+      - name: Install Tesseract (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract leptonica
+      - name: Install Tesseract (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr libleptonica-dev
+      - name: Build native library
+        run: cargo build --release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libkreuzberg_dart-${{ matrix.os }}
+          path: packages/dart/rust/target/release/libkreuzberg_dart.*
+
   test:
+    needs: build-native
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: packages/dart
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Dart
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build native library (Linux)
+        run: cargo build --release
+        working-directory: packages/dart/rust
+      - name: Setup Dart
         uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
