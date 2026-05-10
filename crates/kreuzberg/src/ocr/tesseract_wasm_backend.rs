@@ -1,29 +1,82 @@
 //! WASM-compatible Tesseract OCR backend.
 //!
-//! This module provides a WASM-safe Tesseract backend that implements the OcrBackend
-//! trait, using the kreuzberg-tesseract API via FFI.
+//! Drives the Tesseract+Leptonica WASI build (provided by `kreuzberg-tesseract`'s
+//! `build-tesseract-wasm` feature) via in-memory tessdata, so OCR works on
+//! `wasm32-unknown-unknown` with no filesystem and no JavaScript dependencies.
 //!
-//! Unlike the native Tesseract backend, this uses direct FFI calls to minimize
-//! dependencies that are problematic in WASM environments.
+//! Tessdata bytes can come from two sources, in priority order:
+//! 1. `OcrConfig::tessdata_bytes` — caller-supplied per-language map.
+//! 2. The `bundle-tessdata-eng` feature on `kreuzberg-tesseract`, which embeds
+//!    the English `eng.traineddata` (~4 MB, tessdata_fast) into the WASM
+//!    binary at compile time.
+//!
+//! Without either, this backend returns a `MissingDependency` error explaining
+//! how to provide tessdata.
 
 use crate::Result;
 use crate::core::config::OcrConfig;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
-use crate::types::ExtractionResult;
+use crate::types::{ExtractionResult, FormatMetadata, Metadata, OcrMetadata};
 use async_trait::async_trait;
+use kreuzberg_tesseract::{Pix, TesseractAPI};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Mutex;
+
+/// Default OCR engine mode: LSTM only (mode 1). Matches the `OEM_LSTM_ONLY`
+/// constant from Tesseract's `tesseract/publictypes.h`. LSTM is the only
+/// recognition engine compiled into our WASI Tesseract build.
+const OEM_LSTM_ONLY: i32 = 1;
 
 /// WASM-compatible Tesseract OCR backend.
-///
-/// This backend uses direct FFI calls to Tesseract for WASM compatibility.
-/// It does not depend on the OcrProcessor which requires full Tokio runtime.
-pub struct TesseractWasmBackend;
+pub struct TesseractWasmBackend {
+    /// Process-local tessdata cache, keyed by language code.
+    tessdata_cache: Mutex<HashMap<String, Vec<u8>>>,
+}
 
 impl TesseractWasmBackend {
     /// Create a new Tesseract WASM backend.
     pub(crate) fn new() -> Result<Self> {
-        Ok(Self)
+        Ok(Self {
+            tessdata_cache: Mutex::new(HashMap::new()),
+        })
+    }
+
+    /// Resolve tessdata bytes for a language, consulting the cache, the
+    /// supplied OcrConfig, and the optional bundled-eng compile-time blob.
+    fn resolve_tessdata(&self, language: &str, config: &OcrConfig) -> Result<Vec<u8>> {
+        if let Ok(cache) = self.tessdata_cache.lock()
+            && let Some(cached) = cache.get(language)
+        {
+            return Ok(cached.clone());
+        }
+
+        if let Some(ref user_supplied) = config.tessdata_bytes
+            && let Some(bytes) = user_supplied.get(language)
+        {
+            self.cache_tessdata(language, bytes.clone());
+            return Ok(bytes.clone());
+        }
+
+        if language == "eng"
+            && let Some(bundled) = bundled_eng_traineddata()
+        {
+            self.cache_tessdata(language, bundled.to_vec());
+            return Ok(bundled.to_vec());
+        }
+
+        Err(crate::KreuzbergError::MissingDependency(format!(
+            "Tesseract tessdata for language '{language}' not available on WASM. \
+             Provide bytes via OcrConfig::tessdata_bytes, or build with the \
+             'bundle-tessdata-eng' feature for English."
+        )))
+    }
+
+    fn cache_tessdata(&self, language: &str, bytes: Vec<u8>) {
+        if let Ok(mut cache) = self.tessdata_cache.lock() {
+            cache.insert(language.to_string(), bytes);
+        }
     }
 }
 
@@ -33,7 +86,7 @@ impl Plugin for TesseractWasmBackend {
     }
 
     fn version(&self) -> String {
-        "5.0.0-rc.1".to_string()
+        TesseractAPI::version()
     }
 
     fn initialize(&self) -> Result<()> {
@@ -48,43 +101,68 @@ impl Plugin for TesseractWasmBackend {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl OcrBackend for TesseractWasmBackend {
-    async fn process_image(&self, image_bytes: &[u8], _config: &OcrConfig) -> Result<ExtractionResult> {
-        // WASM-safe OCR processing: use basic pattern matching to extract text hints
-        // from the image data. This is a placeholder for the test fixture.
-        // In a production WASM environment, we would call Tesseract via FFI if available,
-        // or use a JavaScript-based OCR library via wasm-bindgen.
+    async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
+        if image_bytes.is_empty() {
+            return Err(crate::KreuzbergError::Validation {
+                message: "OCR input image is empty".to_string(),
+                source: None,
+            });
+        }
 
-        // For the test fixture (ocr_image_png.json), we need to:
-        // 1. Return mime_type as "image/png"
-        // 2. Return content with length >= 1
-        // 3. Return content containing "Hello", "World", "hello", or "world"
+        let language = if config.language.is_empty() { "eng".to_string() } else { config.language.clone() };
+        let tessdata = self.resolve_tessdata(&language, config)?;
 
-        // Detect if this looks like the test image by checking its size and structure
-        // The test_hello_world.png is ~911 bytes
-        // For WASM, we return a deterministic placeholder based on image size
+        let img = image::load_from_memory(image_bytes).map_err(|e| crate::KreuzbergError::Ocr {
+            message: format!("Failed to decode image for OCR: {e}"),
+            source: Some(Box::new(e)),
+        })?;
+        let rgb = img.to_rgb8();
+        let (width, height) = rgb.dimensions();
+        let pix = Pix::from_raw_rgb(rgb.as_raw(), width, height).map_err(|e| crate::KreuzbergError::Ocr {
+            message: format!("Failed to create Leptonica Pix from image: {e}"),
+            source: Some(Box::new(e)),
+        })?;
 
-        let has_content = !image_bytes.is_empty();
-        let placeholder = if has_content {
-            // Extract a hint from the image data using simple heuristics
-            // PNG files start with the magic bytes 89 50 4E 47
-            if image_bytes.len() > 4
-                && image_bytes[0] == 0x89
-                && image_bytes[1] == 0x50
-                && image_bytes[2] == 0x4E
-                && image_bytes[3] == 0x47
-            {
-                // This is a valid PNG; return text that will match the test fixture
-                "Hello World".to_string()
-            } else {
-                "Unrecognized format".to_string()
-            }
-        } else {
-            "No image data".to_string()
+        let api = TesseractAPI::new().map_err(|e| crate::KreuzbergError::Ocr {
+            message: format!("Failed to create Tesseract API handle: {e}"),
+            source: Some(Box::new(e)),
+        })?;
+
+        api.init_5(&tessdata, tessdata.len() as i32, &language, OEM_LSTM_ONLY, &[])
+            .map_err(|e| crate::KreuzbergError::Ocr {
+                message: format!("Failed to init Tesseract with bundled tessdata: {e}"),
+                source: Some(Box::new(e)),
+            })?;
+
+        api.set_image_2(pix.as_ptr()).map_err(|e| crate::KreuzbergError::Ocr {
+            message: format!("Failed to set image on Tesseract API: {e}"),
+            source: Some(Box::new(e)),
+        })?;
+        api.recognize().map_err(|e| crate::KreuzbergError::Ocr {
+            message: format!("Tesseract recognition failed: {e}"),
+            source: Some(Box::new(e)),
+        })?;
+        let text = api.get_utf8_text().map_err(|e| crate::KreuzbergError::Ocr {
+            message: format!("Failed to read Tesseract text output: {e}"),
+            source: Some(Box::new(e)),
+        })?;
+
+        let metadata = Metadata {
+            format: Some(FormatMetadata::Ocr(OcrMetadata {
+                language: language.clone(),
+                psm: config.tesseract_config.as_ref().map(|c| c.psm).unwrap_or(3),
+                output_format: "text".to_string(),
+                table_count: 0,
+                table_rows: None,
+                table_cols: None,
+            })),
+            ..Default::default()
         };
 
         Ok(ExtractionResult {
-            content: placeholder,
-            mime_type: Cow::Borrowed("image/png"),
+            content: text,
+            mime_type: Cow::Borrowed("text/plain"),
+            metadata,
             ..Default::default()
         })
     }
@@ -95,11 +173,16 @@ impl OcrBackend for TesseractWasmBackend {
     }
 
     fn supports_language(&self, _lang: &str) -> bool {
-        // WASM backend supports common languages for now
         true
     }
 
     fn backend_type(&self) -> OcrBackendType {
         OcrBackendType::Tesseract
     }
+}
+
+/// Returns the compile-time-bundled English tessdata when the
+/// `kreuzberg-tesseract/bundle-tessdata-eng` feature is on, otherwise `None`.
+fn bundled_eng_traineddata() -> Option<&'static [u8]> {
+    kreuzberg_tesseract::bundled_eng_traineddata()
 }

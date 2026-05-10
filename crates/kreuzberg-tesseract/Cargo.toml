@@ -31,6 +31,9 @@ crate-type = ["lib"]
 default = ["static-linking"]
 build-tesseract = ["cc", "cmake", "reqwest", "zip"]
 build-tesseract-wasm = ["cmake", "reqwest", "zip"]
+# Bundle eng.traineddata into the compiled crate so WASM builds can run OCR
+# without runtime tessdata loading. Uses ~4 MB of binary size (tessdata_fast).
+bundle-tessdata-eng = []
 static-linking = ["build-tesseract"]
 dynamic-linking = []
 

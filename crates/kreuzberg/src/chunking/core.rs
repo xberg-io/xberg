@@ -5,9 +5,9 @@
 
 use std::fmt::Write;
 
-use crate::chunking::text_splitter::{ChunkConfig, ChunkSizer, MarkdownSplitter, TextSplitter};
 #[cfg(feature = "chunking-tokenizers")]
 use crate::chunking::text_splitter::ChunkCapacity;
+use crate::chunking::text_splitter::{ChunkConfig, ChunkSizer, MarkdownSplitter, TextSplitter};
 use crate::error::Result;
 use crate::types::PageBoundary;
 

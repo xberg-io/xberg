@@ -1555,6 +1555,26 @@ Installation instructions:
             eprintln!("compiler-rt builtins not found in WASI SDK, some symbols may be unresolved");
         }
 
+        // Bundle eng.traineddata for the optional `bundle-tessdata-eng` feature.
+        // Tesseract on WASM has no filesystem, so the kreuzberg-tesseract crate
+        // ships the language data as a `&'static [u8]` via include_bytes! when
+        // this feature is on. We always populate the path so include_bytes!
+        // resolves at compile time.
+        let bundled_tessdata_dir = project_dir.join("tessdata");
+        let eng_traineddata = bundled_tessdata_dir.join("eng.traineddata");
+        if !eng_traineddata.exists() {
+            fs::create_dir_all(&bundled_tessdata_dir).expect("Failed to create tessdata directory");
+            download_file_with_fallback(
+                &[
+                    "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata",
+                    "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata",
+                ],
+                &eng_traineddata,
+                "eng.traineddata",
+            );
+        }
+        println!("cargo:rustc-env=TESSDATA_PREFIX_BUNDLED={}", project_dir.display());
+
         eprintln!("WASM build completed successfully!");
         eprintln!("Leptonica install dir: {:?}", leptonica_install_dir);
         eprintln!("Tesseract install dir: {:?}", tesseract_install_dir);

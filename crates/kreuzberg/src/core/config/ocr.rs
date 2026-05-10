@@ -280,6 +280,19 @@ pub struct OcrConfig {
     /// `ExtractionConfig::acceleration` before each `process_image` call.
     #[serde(skip)]
     pub acceleration: Option<super::acceleration::AccelerationConfig>,
+
+    /// Caller-supplied Tesseract `traineddata` bytes per language code.
+    ///
+    /// Primary use case is the WASM build, which has no filesystem and cannot
+    /// download tessdata at runtime. Native builds typically rely on
+    /// `TessdataManager` and ignore this field. When present, the WASM
+    /// Tesseract backend prefers these bytes over its compile-time-bundled
+    /// English data.
+    ///
+    /// Skipped by serde to keep config files small — supply via the typed API
+    /// at runtime.
+    #[serde(skip)]
+    pub tessdata_bytes: Option<std::collections::HashMap<String, Vec<u8>>>,
 }
 
 impl Default for OcrConfig {
@@ -298,6 +311,7 @@ impl Default for OcrConfig {
             vlm_config: None,
             vlm_prompt: None,
             acceleration: None,
+            tessdata_bytes: None,
         }
     }
 }

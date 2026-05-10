@@ -187,6 +187,8 @@ wasm-target = [
     "quality",
     "keywords",
     "office",
+    "iwork",
+    "hwp",
     "mdx",
     "excel-wasm",
     "archives",
@@ -410,6 +412,13 @@ optional = true
 # Override getrandom to enable wasm_js feature for WASM targets
 # This is needed because ring/rustls (via ureq) depend on getrandom without wasm_js feature
 getrandom = { version = "0.4", features = ["wasm_js"] }
+# On wasm32, swap kreuzberg-tesseract from its native default ("static-linking" -> "build-tesseract")
+# to the WASI-SDK build path ("build-tesseract-wasm") and bundle eng.traineddata so OCR works
+# in-memory with no filesystem.
+kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "5.0.0-rc.1", default-features = false, features = [
+    "build-tesseract-wasm",
+    "bundle-tessdata-eng",
+], optional = true }
 liter-llm = { workspace = true, optional = true, features = ["wasm-http"] }
 tree-sitter-language-pack = { workspace = true, default-features = false, features = [
     "serde",
