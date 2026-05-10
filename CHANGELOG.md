@@ -15,6 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **WASM OCR backend**: `TesseractWasmBackend` registered for the
   `ocr-wasm` feature set, exposing OCR on the WASM target via
   `tesseract-wasm` while the native path continues to use leptess.
+- **Renderer plugin**: `Renderer` now extends `Plugin`, picking up the
+  shared `name/version/initialize/shutdown` lifecycle (with no-op defaults
+  on `Plugin` so stateless renderers stay boilerplate-free). Public
+  helpers `register_renderer`, `unregister_renderer`, `list_renderers`
+  match the convention of the other plugin registries. Cross-language
+  bridging is gated on alef >= 0.16; until then custom renderers remain
+  a Rust-only extension point.
+
+### Changed
+
+- **BREAKING (wire format)**: `LayoutClass` now serializes as snake_case
+  in JSON output (e.g. `"list_item"` instead of `"ListItem"`).
+  `LayoutDetection.class_name` returned by HTTP/MCP/Python APIs flips
+  PascalCase → snake_case, matching the documentation that already used
+  snake_case. The internal `LayoutClass::name()` accessor is renamed to
+  `as_str()` and remains available for callers that need a `&'static str`.
+- `TableModel` serialization is now symmetric snake_case: previously
+  `serde_json::to_string(&TableModel::SlanetWired)` returned
+  `"SlanetWired"` (PascalCase) but `from_str` only accepted
+  `"slanet_wired"` (snake_case), so JSON config round-trips were
+  impossible. Both directions now use snake_case via
+  `#[serde(rename_all = "snake_case")]`. The hand-rolled `Deserialize`
+  impl is removed.
+- **Plugin lifecycle defaults**: `Plugin::version()`, `initialize()`, and
+  `shutdown()` now have no-op default implementations (`name()` stays
+  abstract). Existing `impl Plugin` blocks that returned `Ok(())` /
+  `"1.0.0"` continue to work; new stateless plugins can omit the
+  boilerplate.
 
 ### Fixed
 

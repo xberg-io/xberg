@@ -478,6 +478,21 @@ def clear_post_processors() -> None
 
 ---
 
+#### list_renderers()
+
+List names of all registered renderers.
+
+**Signature:**
+
+```python
+def list_renderers() -> list[str]
+```
+
+**Returns:** `list[str]`
+
+
+---
+
 #### list_validators()
 
 List names of all registered validators.
@@ -1278,7 +1293,7 @@ The pipeline will convert this into the public `ExtractionResult`.
 **Signature:**
 
 ```python
-def extract_bytes(self, content: bytes, mime_type: str, config: ExtractionConfig) -> str
+def extract_bytes(self, content: bytes, mime_type: str, config: ExtractionConfig) -> InternalDocument
 ```
 
 ###### extract_file()
@@ -1299,7 +1314,7 @@ Same as `extract_bytes`, plus file I/O errors.
 **Signature:**
 
 ```python
-def extract_file(self, path: str, mime_type: str, config: ExtractionConfig) -> str
+def extract_file(self, path: str, mime_type: str, config: ExtractionConfig) -> InternalDocument
 ```
 
 ###### supported_mime_types()
@@ -2798,6 +2813,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `document_version` | `str | None` | `None` | Document version string (from frontmatter). |
 | `abstract_text` | `str | None` | `None` | Abstract or summary text (from frontmatter). |
 | `output_format` | `str | None` | `None` | Output format identifier (e.g., "markdown", "html", "text"). Set by the output format pipeline stage when format conversion is applied. Previously stored in `metadata.additional["output_format"]`. |
+| `ocr_used` | `bool` | — | Whether OCR was used during extraction. Set to `True` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary or fallback text. `False` means native text extraction was used exclusively. |
 | `additional` | `dict[str, dict[str, Any]]` | `{}` | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation. |
 
 ##### Methods
@@ -3661,6 +3677,8 @@ Returns the semantic version of this plugin.
 
 Should follow semver format: `MAJOR.MINOR.PATCH`
 
+Defaults to the kreuzberg crate version.
+
 **Signature:**
 
 ```python
@@ -3687,6 +3705,8 @@ patterns (Mutex, RwLock, OnceCell, etc.).
 Should return an error if initialization fails. The plugin will not be
 registered if this method returns an error.
 
+Defaults to a no-op for stateless plugins.
+
 **Signature:**
 
 ```python
@@ -3712,6 +3732,8 @@ patterns (Mutex, RwLock, etc.).
 **Errors:**
 
 Errors during shutdown are logged but don't prevent the shutdown process.
+
+Defaults to a no-op for stateless plugins.
 
 **Signature:**
 
@@ -4072,6 +4094,47 @@ def reset(self) -> None
 
 ---
 
+#### Renderer
+
+Trait for document renderers that convert `InternalDocument` to output strings.
+
+Renderers are typically stateless converters that transform the internal
+document representation into a specific output format (Markdown, HTML,
+Djot, plain text, etc.). They participate in the standard `Plugin`
+lifecycle so custom renderers can be registered from any supported binding
+language.
+
+The format name is exposed via `Plugin.name`. For stateless renderers
+the `Plugin` lifecycle methods (`version`, `initialize`, `shutdown`) all
+take no-op defaults and need not be overridden.
+
+# Thread Safety
+
+Renderers must be `Send + Sync` (inherited from `Plugin`).
+
+##### Methods
+
+###### render()
+
+Render an `InternalDocument` to the output format.
+
+**Returns:**
+
+The rendered output as a string.
+
+**Errors:**
+
+Returns an error if rendering fails.
+
+**Signature:**
+
+```python
+def render(self, doc: InternalDocument) -> str
+```
+
+
+---
+
 #### ResolvedStyle
 
 Fully resolved (flattened) style after walking the inheritance chain.
@@ -4345,7 +4408,7 @@ An `InternalDocument` containing the extracted elements, metadata, and tables.
 **Signature:**
 
 ```python
-def extract_sync(self, content: bytes, mime_type: str, config: ExtractionConfig) -> str
+def extract_sync(self, content: bytes, mime_type: str, config: ExtractionConfig) -> InternalDocument
 ```
 
 
@@ -5040,7 +5103,8 @@ Built-in HTML theme selection.
 Which table structure recognition model to use.
 
 Controls the model used for table cell detection within layout-detected
-table regions.
+table regions. Wire format is snake_case in all serializers (JSON, TOML,
+YAML).
 
 | Value | Description |
 |-------|-------------|
@@ -5674,6 +5738,8 @@ The 17 canonical document layout classes.
 All model backends (RT-DETR, YOLO, etc.) map their native class IDs
 to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
 map to the closest equivalent.
+
+Wire format is snake_case in all serializers (JSON, TOML, YAML).
 
 | Value | Description |
 |-------|-------------|

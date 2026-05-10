@@ -1349,6 +1349,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `document_version` | `Option<String>` | `Default::default()` | Document version string (from frontmatter). |
 | `abstract_text` | `Option<String>` | `Default::default()` | Abstract or summary text (from frontmatter). |
 | `output_format` | `Option<String>` | `Default::default()` | Output format identifier (e.g., "markdown", "html", "text"). Set by the output format pipeline stage when format conversion is applied. Previously stored in `metadata.additional["output_format"]`. |
+| `ocr_used` | `bool` | — | Whether OCR was used during extraction. Set to `true` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary or fallback text. `false` means native text extraction was used exclusively. |
 | `additional` | `HashMap<String, serde_json::Value>` | `HashMap::new()` | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation. |
 
 ---
@@ -2084,6 +2085,28 @@ and execution continues. To make errors fatal, return an error from `process()`.
 # Thread Safety
 
 Post-processors must be thread-safe (`Send + Sync`).
+
+*Opaque type — fields are not directly accessible.*
+
+---
+
+#### Renderer
+
+Trait for document renderers that convert `InternalDocument` to output strings.
+
+Renderers are typically stateless converters that transform the internal
+document representation into a specific output format (Markdown, HTML,
+Djot, plain text, etc.). They participate in the standard `Plugin`
+lifecycle so custom renderers can be registered from any supported binding
+language.
+
+The format name is exposed via `Plugin.name`. For stateless renderers
+the `Plugin` lifecycle methods (`version`, `initialize`, `shutdown`) all
+take no-op defaults and need not be overridden.
+
+# Thread Safety
+
+Renderers must be `Send + Sync` (inherited from `Plugin`).
 
 *Opaque type — fields are not directly accessible.*
 
@@ -3309,25 +3332,27 @@ All model backends (RT-DETR, YOLO, etc.) map their native class IDs
 to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
 map to the closest equivalent.
 
-| Variant | Description |
-|---------|-------------|
-| `Caption` | Caption element |
-| `Footnote` | Footnote element |
-| `Formula` | Formula |
-| `ListItem` | List item |
-| `PageFooter` | Page footer |
-| `PageHeader` | Page header |
-| `Picture` | Picture |
-| `SectionHeader` | Section header |
-| `Table` | Table element |
-| `Text` | Text format |
-| `Title` | Title element |
-| `DocumentIndex` | Document index |
-| `Code` | Code |
-| `CheckboxSelected` | Checkbox selected |
-| `CheckboxUnselected` | Checkbox unselected |
-| `Form` | Form |
-| `KeyValueRegion` | Key value region |
+Wire format is snake_case in all serializers (JSON, TOML, YAML).
+
+| Variant | Wire value | Description |
+|---------|------------|-------------|
+| `Caption` | `caption` | Caption element |
+| `Footnote` | `footnote` | Footnote element |
+| `Formula` | `formula` | Formula |
+| `ListItem` | `list_item` | List item |
+| `PageFooter` | `page_footer` | Page footer |
+| `PageHeader` | `page_header` | Page header |
+| `Picture` | `picture` | Picture |
+| `SectionHeader` | `section_header` | Section header |
+| `Table` | `table` | Table element |
+| `Text` | `text` | Text format |
+| `Title` | `title` | Title element |
+| `DocumentIndex` | `document_index` | Document index |
+| `Code` | `code` | Code |
+| `CheckboxSelected` | `checkbox_selected` | Checkbox selected |
+| `CheckboxUnselected` | `checkbox_unselected` | Checkbox unselected |
+| `Form` | `form` | Form |
+| `KeyValueRegion` | `key_value_region` | Key value region |
 
 ---
 
@@ -3605,16 +3630,17 @@ Structured data type classification.
 Which table structure recognition model to use.
 
 Controls the model used for table cell detection within layout-detected
-table regions.
+table regions. Wire format is snake_case in all serializers (JSON, TOML,
+YAML).
 
-| Variant | Description |
-|---------|-------------|
-| `Tatr` | TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection. |
-| `SlanetWired` | SLANeXT wired variant -- 365MB, optimized for bordered tables. |
-| `SlanetWireless` | SLANeXT wireless variant -- 365MB, optimized for borderless tables. |
-| `SlanetPlus` | SLANet-plus -- 7.78MB, lightweight general-purpose. |
-| `SlanetAuto` | Classifier-routed SLANeXT: auto-select wired/wireless per table. Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total). |
-| `Disabled` | Disable table structure model inference entirely; use heuristic path only. |
+| Variant | Wire value | Description |
+|---------|------------|-------------|
+| `Tatr` | `tatr` | TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection. |
+| `SlanetWired` | `slanet_wired` | SLANeXT wired variant -- 365MB, optimized for bordered tables. |
+| `SlanetWireless` | `slanet_wireless` | SLANeXT wireless variant -- 365MB, optimized for borderless tables. |
+| `SlanetPlus` | `slanet_plus` | SLANet-plus -- 7.78MB, lightweight general-purpose. |
+| `SlanetAuto` | `slanet_auto` | Classifier-routed SLANeXT: auto-select wired/wireless per table. Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total). |
+| `Disabled` | `disabled` | Disable table structure model inference entirely; use heuristic path only. |
 
 ---
 

@@ -478,6 +478,21 @@ public static void ClearPostProcessors()
 
 ---
 
+#### ListRenderers()
+
+List names of all registered renderers.
+
+**Signature:**
+
+```csharp
+public static List<string> ListRenderers()
+```
+
+**Returns:** `List<string>`
+
+
+---
+
 #### ListValidators()
 
 List names of all registered validators.
@@ -1276,7 +1291,7 @@ The pipeline will convert this into the public `ExtractionResult`.
 **Signature:**
 
 ```csharp
-public async Task<string> ExtractBytesAsync(byte[] content, string mimeType, ExtractionConfig config)
+public async Task<InternalDocument> ExtractBytesAsync(byte[] content, string mimeType, ExtractionConfig config)
 ```
 
 ###### ExtractFile()
@@ -1297,7 +1312,7 @@ Same as `extract_bytes`, plus file I/O errors.
 **Signature:**
 
 ```csharp
-public async Task<string> ExtractFileAsync(string path, string mimeType, ExtractionConfig config)
+public async Task<InternalDocument> ExtractFileAsync(string path, string mimeType, ExtractionConfig config)
 ```
 
 ###### SupportedMimeTypes()
@@ -2785,6 +2800,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `DocumentVersion` | `string?` | `null` | Document version string (from frontmatter). |
 | `AbstractText` | `string?` | `null` | Abstract or summary text (from frontmatter). |
 | `OutputFormat` | `string?` | `null` | Output format identifier (e.g., "markdown", "html", "text"). Set by the output format pipeline stage when format conversion is applied. Previously stored in `metadata.additional["output_format"]`. |
+| `OcrUsed` | `bool` | — | Whether OCR was used during extraction. Set to `true` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary or fallback text. `false` means native text extraction was used exclusively. |
 | `Additional` | `Dictionary<string, object>` | `new Dictionary<string, object>()` | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation. |
 
 ##### Methods
@@ -3643,6 +3659,8 @@ Returns the semantic version of this plugin.
 
 Should follow semver format: `MAJOR.MINOR.PATCH`
 
+Defaults to the kreuzberg crate version.
+
 **Signature:**
 
 ```csharp
@@ -3669,6 +3687,8 @@ patterns (Mutex, RwLock, OnceCell, etc.).
 Should return an error if initialization fails. The plugin will not be
 registered if this method returns an error.
 
+Defaults to a no-op for stateless plugins.
+
 **Signature:**
 
 ```csharp
@@ -3694,6 +3714,8 @@ patterns (Mutex, RwLock, etc.).
 **Errors:**
 
 Errors during shutdown are logged but don't prevent the shutdown process.
+
+Defaults to a no-op for stateless plugins.
 
 **Signature:**
 
@@ -4052,6 +4074,47 @@ public void Reset()
 
 ---
 
+#### Renderer
+
+Trait for document renderers that convert `InternalDocument` to output strings.
+
+Renderers are typically stateless converters that transform the internal
+document representation into a specific output format (Markdown, HTML,
+Djot, plain text, etc.). They participate in the standard `Plugin`
+lifecycle so custom renderers can be registered from any supported binding
+language.
+
+The format name is exposed via `Plugin.name`. For stateless renderers
+the `Plugin` lifecycle methods (`version`, `initialize`, `shutdown`) all
+take no-op defaults and need not be overridden.
+
+# Thread Safety
+
+Renderers must be `Send + Sync` (inherited from `Plugin`).
+
+##### Methods
+
+###### Render()
+
+Render an `InternalDocument` to the output format.
+
+**Returns:**
+
+The rendered output as a string.
+
+**Errors:**
+
+Returns an error if rendering fails.
+
+**Signature:**
+
+```csharp
+public string Render(InternalDocument doc)
+```
+
+
+---
+
 #### ResolvedStyle
 
 Fully resolved (flattened) style after walking the inheritance chain.
@@ -4323,7 +4386,7 @@ An `InternalDocument` containing the extracted elements, metadata, and tables.
 **Signature:**
 
 ```csharp
-public string ExtractSync(byte[] content, string mimeType, ExtractionConfig config)
+public InternalDocument ExtractSync(byte[] content, string mimeType, ExtractionConfig config)
 ```
 
 
@@ -5012,7 +5075,8 @@ Built-in HTML theme selection.
 Which table structure recognition model to use.
 
 Controls the model used for table cell detection within layout-detected
-table regions.
+table regions. Wire format is snake_case in all serializers (JSON, TOML,
+YAML).
 
 | Value | Description |
 |-------|-------------|
@@ -5646,6 +5710,8 @@ The 17 canonical document layout classes.
 All model backends (RT-DETR, YOLO, etc.) map their native class IDs
 to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
 map to the closest equivalent.
+
+Wire format is snake_case in all serializers (JSON, TOML, YAML).
 
 | Value | Description |
 |-------|-------------|

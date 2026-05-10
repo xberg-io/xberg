@@ -942,6 +942,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `document_version` | `str | None` | `None` | Document version string (from frontmatter). |
 | `abstract_text` | `str | None` | `None` | Abstract or summary text (from frontmatter). |
 | `output_format` | `str | None` | `None` | Output format identifier (e.g., "markdown", "html", "text"). Set by the output format pipeline stage when format conversion is applied. Previously stored in `metadata.additional["output_format"]`. |
+| `ocr_used` | `bool` | — | Whether OCR was used during extraction. Set to `True` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary or fallback text. `False` means native text extraction was used exclusively. |
 | `additional` | `dict[str, dict[str, Any]]` | `{}` | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation. |
 
 ---
@@ -1649,16 +1650,17 @@ blob vs. an element-based decomposition.
 Which table structure recognition model to use.
 
 Controls the model used for table cell detection within layout-detected
-table regions.
+table regions. Wire format is snake_case in all serializers (JSON, TOML,
+YAML).
 
-| Variant | Description |
-|---------|-------------|
-| `Tatr` | TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection. |
-| `SlanetWired` | SLANeXT wired variant -- 365MB, optimized for bordered tables. |
-| `SlanetWireless` | SLANeXT wireless variant -- 365MB, optimized for borderless tables. |
-| `SlanetPlus` | SLANet-plus -- 7.78MB, lightweight general-purpose. |
-| `SlanetAuto` | Classifier-routed SLANeXT: auto-select wired/wireless per table. Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total). |
-| `Disabled` | Disable table structure model inference entirely; use heuristic path only. |
+| Variant | Wire value | Description |
+|---------|------------|-------------|
+| `Tatr` | `tatr` | TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection. |
+| `SlanetWired` | `slanet_wired` | SLANeXT wired variant -- 365MB, optimized for bordered tables. |
+| `SlanetWireless` | `slanet_wireless` | SLANeXT wireless variant -- 365MB, optimized for borderless tables. |
+| `SlanetPlus` | `slanet_plus` | SLANet-plus -- 7.78MB, lightweight general-purpose. |
+| `SlanetAuto` | `slanet_auto` | Classifier-routed SLANeXT: auto-select wired/wireless per table. Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total). |
+| `Disabled` | `disabled` | Disable table structure model inference entirely; use heuristic path only. |
 
 ---
 

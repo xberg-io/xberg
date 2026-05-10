@@ -478,6 +478,21 @@ clear_post_processors()
 
 ---
 
+#### list_renderers()
+
+List names of all registered renderers.
+
+**Signature:**
+
+```r
+list_renderers()
+```
+
+**Returns:** `list`
+
+
+---
+
 #### list_validators()
 
 List names of all registered validators.
@@ -2785,6 +2800,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `document_version` | `character or NULL` | `NULL` | Document version string (from frontmatter). |
 | `abstract_text` | `character or NULL` | `NULL` | Abstract or summary text (from frontmatter). |
 | `output_format` | `character or NULL` | `NULL` | Output format identifier (e.g., "markdown", "html", "text"). Set by the output format pipeline stage when format conversion is applied. Previously stored in `metadata.additional["output_format"]`. |
+| `ocr_used` | `logical` | — | Whether OCR was used during extraction. Set to `true` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary or fallback text. `false` means native text extraction was used exclusively. |
 | `additional` | `list` | `list()` | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation. |
 
 ##### Methods
@@ -3643,6 +3659,8 @@ Returns the semantic version of this plugin.
 
 Should follow semver format: `MAJOR.MINOR.PATCH`
 
+Defaults to the kreuzberg crate version.
+
 **Signature:**
 
 ```r
@@ -3669,6 +3687,8 @@ patterns (Mutex, RwLock, OnceCell, etc.).
 Should return an error if initialization fails. The plugin will not be
 registered if this method returns an error.
 
+Defaults to a no-op for stateless plugins.
+
 **Signature:**
 
 ```r
@@ -3694,6 +3714,8 @@ patterns (Mutex, RwLock, etc.).
 **Errors:**
 
 Errors during shutdown are logged but don't prevent the shutdown process.
+
+Defaults to a no-op for stateless plugins.
 
 **Signature:**
 
@@ -4047,6 +4069,47 @@ Should clear any internal data while preserving capacity.
 
 ```r
 reset()
+```
+
+
+---
+
+#### Renderer
+
+Trait for document renderers that convert `InternalDocument` to output strings.
+
+Renderers are typically stateless converters that transform the internal
+document representation into a specific output format (Markdown, HTML,
+Djot, plain text, etc.). They participate in the standard `Plugin`
+lifecycle so custom renderers can be registered from any supported binding
+language.
+
+The format name is exposed via `Plugin.name`. For stateless renderers
+the `Plugin` lifecycle methods (`version`, `initialize`, `shutdown`) all
+take no-op defaults and need not be overridden.
+
+# Thread Safety
+
+Renderers must be `Send + Sync` (inherited from `Plugin`).
+
+##### Methods
+
+###### render()
+
+Render an `InternalDocument` to the output format.
+
+**Returns:**
+
+The rendered output as a string.
+
+**Errors:**
+
+Returns an error if rendering fails.
+
+**Signature:**
+
+```r
+render(doc)
 ```
 
 
@@ -5012,7 +5075,8 @@ Built-in HTML theme selection.
 Which table structure recognition model to use.
 
 Controls the model used for table cell detection within layout-detected
-table regions.
+table regions. Wire format is snake_case in all serializers (JSON, TOML,
+YAML).
 
 | Value | Description |
 |-------|-------------|
@@ -5646,6 +5710,8 @@ The 17 canonical document layout classes.
 All model backends (RT-DETR, YOLO, etc.) map their native class IDs
 to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
 map to the closest equivalent.
+
+Wire format is snake_case in all serializers (JSON, TOML, YAML).
 
 | Value | Description |
 |-------|-------------|
