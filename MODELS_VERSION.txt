@@ -1,0 +1,3 @@
+layout-models v2 — RT-DETR + TATR
+rtdetr/model.onnx sha256=3bf2fb0ee6df87435b7ae47f0f3930ec3dc97ec56fd824acc6d57bc7a6b89ef2
+tatr/model.onnx sha256=c11f4033da75e9c4d41c403ef356e89caa0a37a7d111b55461e7d5ba856bb6b6

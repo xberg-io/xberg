@@ -130,18 +130,19 @@ jobs:
       - name: Log disk space after artifact upload
         run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
 
-  bench-native:
-    name: kreuzberg-rust (${{ matrix.output_format }}, ${{ matrix.mode }})
+  bench-rust:
+    name: bench-rust (${{ matrix.pipeline }}, ${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        mode: [single-file, batch]
+        pipeline: [baseline, layout, paddle-ocr]
         output_format: [markdown, plaintext]
+        mode: [single-file, batch]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -159,7 +160,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: kreuzberg-dev/actions/setup-rust@v1
         with:
-          cache-key-prefix: benchmarks-native
+          cache-key-prefix: benchmarks-rust-${{ matrix.pipeline }}
           use-sccache: "true"
           report-stats: "true"
 
@@ -178,81 +179,16 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Setup Layout Models
-        uses: ./.github/actions/setup-layout-models
-
-      - name: Run benchmark
-        env:
-          FRAMEWORK: kreuzberg-rust
-          MODE: ${{ matrix.mode }}
-          OUTPUT_FORMAT: ${{ matrix.output_format }}
-          ITERATIONS: ${{ env.ITERATIONS }}
-          TIMEOUT: ${{ github.event.inputs.timeout }}
-        run: scripts/benchmarks/run-benchmark.sh
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: benchmarks-kreuzberg-rust-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
-          path: benchmark-results/
-          retention-days: 30
-
-  bench-native-paddle:
-    name: kreuzberg-rust-paddle (${{ matrix.output_format }}, ${{ matrix.mode }})
-    needs: setup
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 360
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: true
-      matrix:
-        mode: [single-file, batch]
-        output_format: [markdown, plaintext]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
-
-      - name: Free disk space
-        uses: kreuzberg-dev/actions/free-disk-space-linux@v1
-
-      - name: Install system dependencies
-        uses: ./.github/actions/install-system-deps
-
-      - name: Setup OpenSSL
-        uses: kreuzberg-dev/actions/setup-openssl@v1
-
-      - name: Setup Rust toolchain
-        uses: kreuzberg-dev/actions/setup-rust@v1
-        with:
-          cache-key-prefix: benchmarks-native-paddle
-          use-sccache: "true"
-          report-stats: "true"
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ needs.setup.outputs.artifact-name }}
-          path: target/release
-
-      - name: Restore benchmark binary permissions
-        run: scripts/benchmarks/restore-binary-permissions.sh
-
-      - name: Setup ONNX Runtime
-        uses: ./.github/actions/setup-onnx-runtime
-        with:
-          ort-version: ${{ env.ORT_VERSION }}
-
-      - name: Setup Layout Models
+        if: matrix.pipeline == 'layout'
         uses: ./.github/actions/setup-layout-models
 
       - name: Setup PaddleOCR models
+        if: matrix.pipeline == 'paddle-ocr'
         uses: ./.github/actions/setup-paddle-ocr-models
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-rust-paddle
+          FRAMEWORK: kreuzberg-${{ matrix.output_format }}-${{ matrix.pipeline }}
           MODE: ${{ matrix.mode }}
           OUTPUT_FORMAT: ${{ matrix.output_format }}
           ITERATIONS: ${{ env.ITERATIONS }}
@@ -263,13 +199,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-kreuzberg-rust-paddle-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-rust-${{ matrix.pipeline }}-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
   bench-docling:
     name: docling (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -336,7 +272,7 @@ jobs:
 
   bench-markitdown:
     name: markitdown (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -401,7 +337,7 @@ jobs:
 
   bench-pandoc:
     name: pandoc (${{ matrix.output_format }}, ${{ matrix.mode }})
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -468,7 +404,7 @@ jobs:
 
   bench-unstructured:
     name: unstructured (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/4)
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -535,7 +471,7 @@ jobs:
 
   bench-tika:
     name: tika (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -604,7 +540,7 @@ jobs:
 
   bench-pymupdf4llm:
     name: pymupdf4llm (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -674,7 +610,7 @@ jobs:
 
   bench-pdfplumber:
     name: pdfplumber (${{ matrix.output_format }}, ${{ matrix.mode }})
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -737,7 +673,7 @@ jobs:
 
   bench-mineru:
     name: mineru (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -804,7 +740,7 @@ jobs:
 
   bench-pypdf:
     name: pypdf (${{ matrix.output_format }}, ${{ matrix.mode }})
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -867,7 +803,7 @@ jobs:
 
   bench-pdfminer:
     name: pdfminer (${{ matrix.output_format }}, ${{ matrix.mode }})
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -930,7 +866,7 @@ jobs:
 
   bench-pdftotext:
     name: pdftotext (${{ matrix.output_format }}, ${{ matrix.mode }})
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -998,7 +934,7 @@ jobs:
 
   bench-playa-pdf:
     name: playa-pdf (${{ matrix.output_format }}, ${{ matrix.mode }})
-    needs: bench-native
+    needs: bench-rust
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
@@ -1063,7 +999,7 @@ jobs:
     name: Aggregate & Release Results
     needs:
       [
-        bench-native,
+        bench-rust,
         bench-docling,
         bench-markitdown,
         bench-pandoc,

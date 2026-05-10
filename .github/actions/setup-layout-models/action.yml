@@ -13,7 +13,7 @@ inputs:
   cache-key-suffix:
     description: Suffix for cache key to differentiate model sets
     required: false
-    default: "layout-models-v1-onnx"
+    default: "layout-models-v2"
 
 outputs:
   cache-hit:
@@ -41,7 +41,7 @@ runs:
       id: cache-models
       with:
         path: ~/.cache/kreuzberg/layout
-        key: ${{ inputs.cache-key-suffix }}-${{ runner.os }}-${{ runner.arch }}-v1
+        key: ${{ inputs.cache-key-suffix }}-${{ runner.os }}-${{ runner.arch }}-rtdetr_3bf2fb0e+tatr_c11f4033
         restore-keys: |
           ${{ inputs.cache-key-suffix }}-${{ runner.os }}-${{ runner.arch }}-
           ${{ inputs.cache-key-suffix }}-${{ runner.os }}-
