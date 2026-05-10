@@ -796,7 +796,7 @@ pub(crate) struct SegmentStructureConfig<'a> {
     pub allow_single_column: bool,
     pub cancel_token: Option<&'a crate::cancellation::CancellationToken>,
     #[cfg(feature = "layout-detection")]
-    pub layout_images: Option<&'a [image::DynamicImage]>,
+    pub layout_images: Option<&'a [image::RgbImage]>,
     #[cfg(feature = "layout-detection")]
     pub layout_results: Option<&'a [super::types::PageLayoutResult]>,
     #[cfg(feature = "layout-detection")]

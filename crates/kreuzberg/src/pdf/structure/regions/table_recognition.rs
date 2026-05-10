@@ -46,7 +46,7 @@ pub(in crate::pdf::structure) fn word_hint_iow(
 /// - **TATR crop pixels**: Cell bboxes relative to the cropped table region.
 #[cfg(feature = "layout-detection")]
 pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
-    page_image: &image::DynamicImage,
+    page_image: &image::RgbImage,
     hints: &[LayoutHint],
     words: &[crate::pdf::table_reconstruct::HocrWord],
     page_result: &crate::pdf::structure::types::PageLayoutResult,
@@ -54,7 +54,7 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
     page_index: usize,
     tatr_model: &mut crate::layout::models::tatr::TatrModel,
 ) -> Vec<Table> {
-    let rgb_image = page_image.to_rgb8();
+    let rgb_image = page_image;
     let img_w = rgb_image.width();
     let img_h = rgb_image.height();
 
@@ -110,7 +110,7 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
         }
 
         // Crop table region from rendered image
-        let cropped = image::imageops::crop_imm(&rgb_image, px_left, px_top, crop_w, crop_h).to_image();
+        let cropped = image::imageops::crop_imm(rgb_image, px_left, px_top, crop_w, crop_h).to_image();
 
         // Run TATR inference
         let tatr_result = match tatr_model.recognize(&cropped) {
@@ -423,7 +423,7 @@ fn render_grid_as_markdown(grid: &[Vec<String>]) -> String {
 #[cfg(feature = "layout-detection")]
 #[allow(clippy::too_many_arguments)]
 pub(in crate::pdf::structure) fn recognize_tables_slanet(
-    page_image: &image::DynamicImage,
+    page_image: &image::RgbImage,
     hints: &[LayoutHint],
     words: &[crate::pdf::table_reconstruct::HocrWord],
     page_result: &crate::pdf::structure::types::PageLayoutResult,
@@ -435,7 +435,7 @@ pub(in crate::pdf::structure) fn recognize_tables_slanet(
         &mut crate::layout::models::slanet::SlanetModel,
     )>,
 ) -> Vec<Table> {
-    let rgb_image = page_image.to_rgb8();
+    let rgb_image = page_image;
     let img_w = rgb_image.width();
     let img_h = rgb_image.height();
 
@@ -464,7 +464,7 @@ pub(in crate::pdf::structure) fn recognize_tables_slanet(
         let px_bottom = ((page_height - first_hint.bottom) * sy).round().min(img_h as f32) as u32;
         let crop_w = px_right.saturating_sub(px_left).max(10);
         let crop_h = px_bottom.saturating_sub(px_top).max(10);
-        let crop = image::imageops::crop_imm(&rgb_image, px_left, px_top, crop_w, crop_h).to_image();
+        let crop = image::imageops::crop_imm(rgb_image, px_left, px_top, crop_w, crop_h).to_image();
 
         match cls.classify(&crop) {
             Ok(crate::layout::models::table_classifier::TableType::Wireless) => {
@@ -500,7 +500,7 @@ pub(in crate::pdf::structure) fn recognize_tables_slanet(
 
     // Run SLANeXT on the FULL page image (not a crop).
     // SLANeXT expects complete table context to detect structure.
-    let slanet_result = match active_model.recognize(&rgb_image) {
+    let slanet_result = match active_model.recognize(rgb_image) {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("SLANeXT inference failed on page {}: {e}", page_index);

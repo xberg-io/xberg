@@ -38,7 +38,7 @@ pub(crate) fn extract_all_from_oxide_document(
     content: &[u8],
     config: &ExtractionConfig,
     layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
-    #[cfg(feature = "layout-detection")] layout_images: Option<&[image::DynamicImage]>,
+    #[cfg(feature = "layout-detection")] layout_images: Option<&[image::RgbImage]>,
     #[cfg(not(feature = "layout-detection"))] _layout_images: Option<()>,
     #[cfg(feature = "layout-detection")] layout_results: Option<&[crate::pdf::structure::types::PageLayoutResult]>,
     #[cfg(not(feature = "layout-detection"))] _layout_results: Option<()>,

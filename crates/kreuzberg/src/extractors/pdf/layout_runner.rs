@@ -4,14 +4,11 @@
 //! engine once across the whole batch, and converts pixel-space detections to
 //! PDF coordinate–space [`PageLayoutResult`] values.
 //!
-//! The resulting `(Vec<DynamicImage>, Vec<PageLayoutResult>)` pair is consumed
+//! The resulting `(Vec<RgbImage>, Vec<PageLayoutResult>)` pair is consumed
 //! by [`super::extraction::extract_all_from_oxide_document`] via
 //! `layout_images` / `layout_results`, which feeds the segment structure
 //! pipeline with layout hints for heading / table / list / figure
 //! classification (the "layout-for-markdown" path).
-
-#[cfg(all(feature = "pdf", feature = "layout-detection"))]
-use image::DynamicImage;
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 use crate::{
@@ -21,11 +18,11 @@ use crate::{
     pdf::structure::types::{LayoutHint, PageLayoutResult},
 };
 
-/// Render every page of `content` to `DynamicImage` at the pdf_oxide default
-/// DPI and run layout detection on the full batch.
+/// Render every page of `content` to RGB at the pdf_oxide default DPI and run
+/// layout detection on the full batch.
 ///
 /// Returns `(images, results)` where:
-/// - `images[i]` is the rendered image for page `i` (owned, used by table
+/// - `images[i]` is the rendered RGB image for page `i` (owned, used by table
 ///   recognition and region validation downstream).
 /// - `results[i]` holds per-region detections in PDF coordinate space (points).
 ///
@@ -37,7 +34,7 @@ use crate::{
 /// than propagating them — hence the engine is returned to the global cache
 /// before any error path exits.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-type LayoutForMarkdownOutput = (Vec<DynamicImage>, Vec<PageLayoutResult>, Vec<Vec<LayoutHint>>);
+type LayoutForMarkdownOutput = (Vec<image::RgbImage>, Vec<PageLayoutResult>, Vec<Vec<LayoutHint>>);
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 pub(super) fn run_layout_for_pdf_pages(
@@ -63,8 +60,12 @@ pub(super) fn run_layout_for_pdf_pages(
 
     let render_opts = RenderOptions::default();
 
-    // Collect (page_width_pts, page_height_pts, DynamicImage) for every page.
-    let mut page_data: Vec<(f32, f32, DynamicImage)> = Vec::with_capacity(page_count);
+    // Collect (page_width_pts, page_height_pts, RgbImage) for every page.
+    //
+    // We decode each page to DynamicImage only long enough to call `.to_rgb8()`,
+    // then drop the DynamicImage immediately. At 150 DPI an A4 RGB image is ~6 MB;
+    // keeping DynamicImage and RgbImage alive simultaneously would double peak RSS.
+    let mut page_data: Vec<(f32, f32, image::RgbImage)> = Vec::with_capacity(page_count);
     for page_idx in 0..page_count {
         // Get page dimensions in PDF points (0-based index).
         let (page_width_pts, page_height_pts) = doc
@@ -79,20 +80,23 @@ pub(super) fn run_layout_for_pdf_pages(
             }
         })?;
 
-        let img = image::load_from_memory(&rendered.data).map_err(|e| KreuzbergError::Parsing {
-            message: format!("layout runner: failed to decode page {} PNG: {e}", page_idx + 1),
-            source: None,
-        })?;
+        // Decode to DynamicImage, convert to RGB immediately, then drop DynamicImage
+        // so its pixel buffer is freed before processing the next page.
+        let rgb = image::load_from_memory(&rendered.data)
+            .map_err(|e| KreuzbergError::Parsing {
+                message: format!("layout runner: failed to decode page {} PNG: {e}", page_idx + 1),
+                source: None,
+            })?
+            .into_rgb8();
 
-        page_data.push((page_width_pts, page_height_pts, img));
+        page_data.push((page_width_pts, page_height_pts, rgb));
     }
 
     // --- 2. Run layout detection across all rendered images ---
     let mut engine = crate::layout::take_or_create_engine(layout_config)
         .map_err(|e| KreuzbergError::Other(format!("layout runner: engine init failed: {e}")))?;
 
-    let rgb_images: Vec<image::RgbImage> = page_data.iter().map(|(_, _, img)| img.to_rgb8()).collect();
-    let rgb_refs: Vec<&image::RgbImage> = rgb_images.iter().collect();
+    let rgb_refs: Vec<&image::RgbImage> = page_data.iter().map(|(_, _, img)| img).collect();
 
     let batch_results = match engine.detect_batch(&rgb_refs) {
         Ok(r) => {
@@ -108,7 +112,7 @@ pub(super) fn run_layout_for_pdf_pages(
     };
 
     // --- 3. Convert pixel detections → PDF coordinate space + build hints ---
-    let mut images: Vec<DynamicImage> = Vec::with_capacity(page_count);
+    let mut images: Vec<image::RgbImage> = Vec::with_capacity(page_count);
     let mut layout_results: Vec<PageLayoutResult> = Vec::with_capacity(page_count);
     let mut hints_per_page: Vec<Vec<LayoutHint>> = Vec::with_capacity(page_count);
 
@@ -154,7 +158,7 @@ pub(super) fn run_layout_for_pdf_pages(
 /// layout hints).
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 type LayoutForMarkdownOptional = (
-    Option<Vec<DynamicImage>>,
+    Option<Vec<image::RgbImage>>,
     Option<Vec<PageLayoutResult>>,
     Option<Vec<Vec<LayoutHint>>>,
 );
