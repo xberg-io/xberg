@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upstream issue (#484) hasn't been demonstrated to currently trigger
   these failures, and the calibrated `PDFIUM_GROUND_TRUTH` thresholds
   are the binding contract for layout-pipeline changes.
+- **#911**: `extraction_timeout_secs` now explicitly returns a `KreuzbergError::Validation` error when configured in non-tokio or WASM builds. Previously, timeouts in these environments were silently ignored, leading to unexpected hangs.
 - **swift e2e command**: `[crates.test.swift].e2e` now runs from
   `packages/swift` (was `e2e/swift`). The generated XCTest cases live inside
   `packages/swift/Tests/<Module>Tests/` because SwiftPM 6.0 forbids

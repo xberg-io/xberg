@@ -128,7 +128,12 @@ pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionC
 
     #[cfg(not(feature = "tokio-runtime"))]
     let result = {
-        let _ = config.extraction_timeout_secs;
+        if config.extraction_timeout_secs.is_some() {
+            return Err(crate::KreuzbergError::Validation {
+                message: "extraction_timeout_secs requires the 'tokio-runtime' feature to be enabled".to_string(),
+                source: None,
+            });
+        }
         extraction_future.await
     };
 
