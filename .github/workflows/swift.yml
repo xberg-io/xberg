@@ -11,6 +11,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install tesseract (macOS)
+        run: brew install tesseract
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Show Swift version
@@ -19,7 +21,7 @@ jobs:
         run: cargo build -p kreuzberg-swift
       - name: Copy swift-bridge generated sources
         run: |
-          OUT=$(ls -dt target/debug/build/kreuzberg-swift-*/out 2>/dev/null | head -1)
+          OUT=$(find target/debug/build -maxdepth 2 -type d -name out -path '*kreuzberg-swift-*' -exec stat -f '%m %N' {} + | sort -rn | head -1 | cut -d' ' -f2-)
           cat "$OUT/SwiftBridgeCore.h" "$OUT/kreuzberg-swift/kreuzberg-swift.h" \
               > packages/swift/Sources/RustBridgeC/RustBridgeC.h
           { echo "import RustBridgeC"; cat "$OUT/SwiftBridgeCore.swift"; } \
