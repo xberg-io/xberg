@@ -1353,8 +1353,8 @@ jobs:
         mode: [single-file]
         shard: [1, 2, 3]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: plaintext
+        exclude:
+          - output_format: plaintext
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1552,8 +1552,8 @@ jobs:
         mode: [single-file]
         shard: [1, 2, 3]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: markdown
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1621,8 +1621,8 @@ jobs:
         mode: [single-file]
         shard: [1, 2, 3]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: plaintext
+        exclude:
+          - output_format: plaintext
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1690,8 +1690,8 @@ jobs:
       matrix:
         mode: [single-file]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: markdown
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1820,8 +1820,8 @@ jobs:
       matrix:
         mode: [single-file]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: markdown
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1883,8 +1883,8 @@ jobs:
       matrix:
         mode: [single-file]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: markdown
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1946,8 +1946,8 @@ jobs:
       matrix:
         mode: [single-file]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: markdown
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
@@ -2014,8 +2014,8 @@ jobs:
       matrix:
         mode: [single-file]
         output_format: [markdown, plaintext]
-      exclude:
-        - output_format: markdown
+        exclude:
+          - output_format: markdown
     steps:
       - uses: actions/checkout@v6
         with:
