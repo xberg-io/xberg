@@ -293,6 +293,15 @@ pub struct OcrConfig {
     /// at runtime.
     #[serde(skip)]
     pub tessdata_bytes: Option<std::collections::HashMap<String, Vec<u8>>>,
+
+    /// Maximum number of cells allowed in a reconstructed table (default: 5000).
+    /// Prevents memory exhaustion from massive or degenerate tables.
+    #[serde(default = "default_max_table_cells")]
+    pub max_table_cells: Option<usize>,
+}
+
+fn default_max_table_cells() -> Option<usize> {
+    Some(5000)
 }
 
 impl Default for OcrConfig {
@@ -312,6 +321,7 @@ impl Default for OcrConfig {
             vlm_prompt: None,
             acceleration: None,
             tessdata_bytes: None,
+            max_table_cells: default_max_table_cells(),
         }
     }
 }

@@ -20,6 +20,7 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
     page_height: f32,
     min_confidence: f32,
     allow_single_column: bool,
+    max_table_cells: Option<usize>,
 ) -> Vec<Table> {
     use crate::pdf::table_reconstruct::HocrWord;
 
@@ -87,7 +88,7 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
         // Falls back to width-based scaling when not enough data.
         let table_width = hint.right - hint.left;
         let col_gap = compute_adaptive_column_gap(&table_words, table_width);
-        let table_cells = reconstruct_table(&table_words, col_gap, 0.5);
+        let table_cells = reconstruct_table(&table_words, col_gap, 0.5, max_table_cells);
 
         if table_cells.is_empty() || table_cells[0].is_empty() {
             continue;
@@ -221,6 +222,20 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
                 "table failed quality validation — skipping as prose"
             );
             continue;
+        }
+
+        // Check max_table_cells limit. If the table is too massive, skip it
+        // so it falls back to unassigned text segments (plain text).
+        if let Some(max_cells) = max_table_cells {
+            if total_cells > max_cells {
+                tracing::debug!(
+                    page = page_index,
+                    total_cells,
+                    max_cells,
+                    "table complexity threshold exceeded — skipping table hint to fallback to plain text"
+                );
+                continue;
+            }
         }
 
         // Repair broken word spacing per-cell before rendering to markdown
@@ -365,7 +380,7 @@ mod tests {
             right: 600.0,
             top: 800.0,
         }];
-        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false, None);
         assert!(tables.is_empty());
     }
 
@@ -379,7 +394,7 @@ mod tests {
         ];
         let hints = vec![make_table_hint(0.3, 0.0, 0.0, 200.0, 800.0)];
         // min_confidence = 0.5, hint has 0.3 → filtered
-        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false, None);
         assert!(tables.is_empty());
     }
 
@@ -388,14 +403,14 @@ mod tests {
         // Only 2 words in the region — below the 4-word minimum
         let words = vec![make_word("A", 10, 10, 50, 12), make_word("B", 100, 10, 50, 12)];
         let hints = vec![make_table_hint(0.9, 0.0, 0.0, 200.0, 800.0)];
-        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false, None);
         assert!(tables.is_empty());
     }
 
     #[test]
     fn test_empty_words_returns_empty() {
         let hints = vec![make_table_hint(0.9, 0.0, 0.0, 200.0, 800.0)];
-        let tables = extract_tables_from_layout_hints(&[], &hints, 0, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&[], &hints, 0, 800.0, 0.5, false, None);
         assert!(tables.is_empty());
     }
 
@@ -407,7 +422,7 @@ mod tests {
             make_word("C", 10, 30, 50, 12),
             make_word("D", 100, 30, 50, 12),
         ];
-        let tables = extract_tables_from_layout_hints(&words, &[], 0, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&words, &[], 0, 800.0, 0.5, false, None);
         assert!(tables.is_empty());
     }
 
@@ -422,7 +437,7 @@ mod tests {
         ];
         // Hint covers (0, 0) to (100, 100) in PDF coords → image y = 700..800
         let hints = vec![make_table_hint(0.9, 0.0, 700.0, 100.0, 800.0)];
-        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false, None);
         // Words at (500, 500) don't overlap the hint → too few words → empty
         assert!(tables.is_empty());
     }
@@ -437,7 +452,7 @@ mod tests {
         ];
         // Only 3 non-empty words → below 4-word minimum
         let hints = vec![make_table_hint(0.9, 0.0, 0.0, 200.0, 800.0)];
-        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false, None);
         assert!(tables.is_empty());
     }
 
@@ -455,10 +470,30 @@ mod tests {
         ];
         // Hint in PDF coords: bottom=700, top=800 → image top=0, image bottom=100
         let hints = vec![make_table_hint(0.9, 0.0, 700.0, 400.0, 800.0)];
-        let tables = extract_tables_from_layout_hints(&words, &hints, 2, 800.0, 0.5, false);
+        let tables = extract_tables_from_layout_hints(&words, &hints, 2, 800.0, 0.5, false, None);
         // If a valid table is produced, its page_number should be page_index + 1
         for table in &tables {
             assert_eq!(table.page_number, 3); // page_index=2 → page_number=3
         }
+    }
+
+    #[test]
+    fn test_max_table_cells_limit_skips_table() {
+        let words = vec![
+            make_word("Header1", 10, 10, 80, 15),
+            make_word("Header2", 200, 10, 80, 15),
+            make_word("Cell1", 10, 40, 80, 15),
+            make_word("Cell2", 200, 40, 80, 15),
+        ];
+        let hints = vec![make_table_hint(0.9, 0.0, 700.0, 400.0, 800.0)];
+
+        // This 2x2 table has 4 cells.
+        // limit = Some(4) -> allowed
+        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false, Some(4));
+        assert_eq!(tables.len(), 1);
+
+        // limit = Some(3) -> skipped
+        let tables = extract_tables_from_layout_hints(&words, &hints, 0, 800.0, 0.5, false, Some(3));
+        assert!(tables.is_empty());
     }
 }

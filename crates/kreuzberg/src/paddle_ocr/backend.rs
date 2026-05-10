@@ -527,7 +527,7 @@ impl OcrBackend for PaddleOcrBackend {
             let words = elements_to_hocr_words(&ocr_elements, 0.3);
 
             if !words.is_empty() {
-                let cells = reconstruct_table(&words, 20, 0.5);
+                let cells = reconstruct_table(&words, 20, 0.5, effective_config.max_table_cells);
 
                 if !cells.is_empty() {
                     table_count = 1;

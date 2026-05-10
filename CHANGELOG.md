@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Table extraction complexity guard**: Introduced `max_table_cells` configuration to `OcrConfig`, `TesseractConfig`, `PaddleOcrConfig`, and `LayoutDetectionConfig`. This allows setting a hard limit on the number of cells reconstructed during table extraction (default: 5000), preventing Out-Of-Memory (OOM) errors on extremely large or degenerate tables.
 - **InternalDocument is serde-bridgeable**: `InternalDocument` and its four
   previously-non-serde sub-types (`InternalElement`, `ElementKind`,
   `Relationship`, `RelationshipTarget`) gained `Serialize` + `Deserialize`

@@ -358,6 +358,10 @@ pub struct TesseractConfig {
 
     /// Use adaptive thresholding method
     pub thresholding_method: bool,
+
+    /// Maximum number of cells allowed in a reconstructed table (default: 5000).
+    /// Prevents memory exhaustion from massive or degenerate tables.
+    pub max_table_cells: Option<usize>,
 }
 
 impl Default for TesseractConfig {
@@ -388,6 +392,7 @@ impl Default for TesseractConfig {
             tessedit_use_primary_params_model: true,
             textord_space_size_is_variable: true,
             thresholding_method: false,
+            max_table_cells: Some(5000),
         }
     }
 }

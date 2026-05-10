@@ -40,9 +40,7 @@ pub(crate) fn apply_layout_overrides(
         // font-size classification is more reliable than proportional position matching.
         // Proportional matching can misalign paragraphs that reorder between
         // font-clustering and RT-DETR detection. Skip applying layout hints here.
-        tracing::debug!(
-            "Skipping proportional layout overrides: structure tree pages use font-size classification"
-        );
+        tracing::debug!("Skipping proportional layout overrides: structure tree pages use font-size classification");
     }
 
     tracing::debug!(
@@ -142,7 +140,7 @@ fn matches_hint_text(hint: &LayoutHint, para_text: &str) -> bool {
                 || trimmed.starts_with('*')
                 || trimmed.starts_with('·')
         }
-        _ => true,  // no text constraint
+        _ => true, // no text constraint
     }
 }
 

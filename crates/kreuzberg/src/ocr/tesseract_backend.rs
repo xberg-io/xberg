@@ -74,6 +74,7 @@ impl TesseractBackend {
                 .as_ref()
                 .map(|p| p.auto_rotate)
                 .unwrap_or(false),
+            max_table_cells: public_config.max_table_cells,
         }
     }
 
@@ -86,9 +87,11 @@ impl TesseractBackend {
             Some(tess_config) => Self::convert_config(tess_config),
             None => InternalTesseractConfig {
                 language: config.language.clone(),
+                max_table_cells: config.max_table_cells,
                 ..Default::default()
             },
         };
+        internal.max_table_cells = config.max_table_cells;
         // Propagate top-level OcrConfig.auto_rotate (OR with any preprocessing setting)
         if config.auto_rotate {
             internal.auto_rotate = true;
@@ -544,5 +547,17 @@ mod tests {
         assert_eq!(internal_config.psm, 6u8);
         assert_eq!(internal_config.oem, 3u8);
         assert_eq!(internal_config.table_column_threshold, 100u32);
+    }
+
+    #[test]
+    fn test_config_to_tesseract_max_table_cells_propagation() {
+        let backend = TesseractBackend::new().expect("Tesseract should be available for test");
+        let ocr_config = OcrConfig {
+            max_table_cells: Some(9999),
+            ..Default::default()
+        };
+
+        let internal = backend.config_to_tesseract(&ocr_config);
+        assert_eq!(internal.max_table_cells, Some(9999));
     }
 }

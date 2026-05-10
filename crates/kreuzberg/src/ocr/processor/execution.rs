@@ -1081,7 +1081,12 @@ pub(super) fn perform_ocr(
         let words = extract_words_from_tsv(tsv_data, config.table_min_confidence)?;
 
         if words.len() >= 6 {
-            let table = reconstruct_table(&words, config.table_column_threshold, config.table_row_threshold_ratio);
+            let table = reconstruct_table(
+                &words,
+                config.table_column_threshold,
+                config.table_row_threshold_ratio,
+                config.max_table_cells,
+            );
             if !table.is_empty() && !table[0].is_empty() {
                 // Apply full post-processing validation to reject false positives.
                 // post_process_table is only available with the pdf feature; without it, use table as-is.

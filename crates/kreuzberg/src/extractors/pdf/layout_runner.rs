@@ -164,10 +164,7 @@ type LayoutForMarkdownOptional = (
 );
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-pub(super) fn maybe_run_layout_for_markdown(
-    content: &[u8],
-    config: &ExtractionConfig,
-) -> LayoutForMarkdownOptional {
+pub(super) fn maybe_run_layout_for_markdown(content: &[u8], config: &ExtractionConfig) -> LayoutForMarkdownOptional {
     if !config.use_layout_for_markdown {
         return (None, None, None);
     }

@@ -114,11 +114,7 @@ fn build_heading_map(
                 // Compute median font size of all blocks.
                 let mut sizes: Vec<f32> = all_blocks.iter().map(|b| b.font_size).collect();
                 sizes.sort_by(|a, b| a.total_cmp(b));
-                let median = if sizes.is_empty() {
-                    0.0
-                } else {
-                    sizes[sizes.len() / 2]
-                };
+                let median = if sizes.is_empty() { 0.0 } else { sizes[sizes.len() / 2] };
 
                 if median > 0.0 && first_font >= median * 1.2 {
                     // Promote the largest-font entry to heading_level=1.
@@ -802,6 +798,8 @@ pub(crate) struct SegmentStructureConfig<'a> {
     #[cfg(feature = "layout-detection")]
     pub table_model: crate::core::config::layout::TableModel,
     #[cfg(feature = "layout-detection")]
+    pub max_table_cells: Option<usize>,
+    #[cfg(feature = "layout-detection")]
     pub acceleration: Option<&'a crate::core::config::acceleration::AccelerationConfig>,
 }
 
@@ -827,6 +825,8 @@ pub(crate) fn extract_document_structure_from_segments(
         layout_results,
         #[cfg(feature = "layout-detection")]
         table_model,
+        #[cfg(feature = "layout-detection")]
+        max_table_cells,
         #[cfg(feature = "layout-detection")]
         acceleration,
     } = config;
@@ -1082,6 +1082,7 @@ pub(crate) fn extract_document_structure_from_segments(
                                         tp.page_height,
                                         0.5,
                                         allow_single_column,
+                                        max_table_cells,
                                     )
                                 })
                             } else {
@@ -1122,6 +1123,7 @@ pub(crate) fn extract_document_structure_from_segments(
                                         tp.page_height,
                                         0.5,
                                         allow_single_column,
+                                        max_table_cells,
                                     )
                                 })
                             }
@@ -1162,6 +1164,7 @@ pub(crate) fn extract_document_structure_from_segments(
                                         tp.page_height,
                                         0.5,
                                         allow_single_column,
+                                        max_table_cells,
                                     )
                                 })
                             } else {
@@ -1185,6 +1188,7 @@ pub(crate) fn extract_document_structure_from_segments(
                             tp.page_height,
                             0.5,
                             allow_single_column,
+                            max_table_cells,
                         ));
                     }
                 }
@@ -1203,6 +1207,7 @@ pub(crate) fn extract_document_structure_from_segments(
                         tp.page_height,
                         0.5,
                         allow_single_column,
+                        max_table_cells,
                     ));
                 }
             }
@@ -1223,6 +1228,7 @@ pub(crate) fn extract_document_structure_from_segments(
                 tp.page_height,
                 0.5,
                 allow_single_column,
+                None,
             ));
         }
     }
@@ -2395,8 +2401,9 @@ mod tests {
     #[test]
     fn test_build_heading_map_fallback_title_when_k_equals_1() {
         let title_seg = seg_with_font("Document Title", 14.0);
-        let body_segs: Vec<SegmentData> =
-            (0..4).map(|i| seg_with_font(&format!("Body paragraph {i}."), 11.0)).collect();
+        let body_segs: Vec<SegmentData> = (0..4)
+            .map(|i| seg_with_font(&format!("Body paragraph {i}."), 11.0))
+            .collect();
 
         let mut segs = vec![title_seg];
         segs.extend(body_segs);

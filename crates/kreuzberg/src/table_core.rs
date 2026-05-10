@@ -220,6 +220,7 @@ pub(crate) fn reconstruct_table(
     words: &[HocrWord],
     column_threshold: u32,
     row_threshold_ratio: f64,
+    max_table_cells: Option<usize>,
 ) -> Vec<Vec<String>> {
     if words.is_empty() {
         return Vec::new();
@@ -231,6 +232,19 @@ pub(crate) fn reconstruct_table(
 
     if col_positions.is_empty() || row_positions.is_empty() {
         return Vec::new();
+    }
+
+    // Complexity check: prevent memory exhaustion from massive/degenerate tables
+    if let Some(limit) = max_table_cells {
+        if col_positions.len() * row_positions.len() > limit {
+            tracing::warn!(
+                cols = col_positions.len(),
+                rows = row_positions.len(),
+                limit,
+                "Table complexity exceeded max_table_cells limit, skipping reconstruction"
+            );
+            return Vec::new();
+        }
     }
 
     // Initialize table grid
@@ -442,13 +456,61 @@ mod tests {
             },
         ];
 
-        let table = reconstruct_table(&words, 20, 0.5);
+        let table = reconstruct_table(&words, 20, 0.5, None);
         assert_eq!(table.len(), 2);
         assert_eq!(table[0].len(), 2);
         assert_eq!(table[0][0], "Name");
         assert_eq!(table[0][1], "Value");
         assert_eq!(table[1][0], "Alice");
         assert_eq!(table[1][1], "42");
+    }
+
+    #[test]
+    fn test_reconstruct_table_complexity_limit() {
+        let words = vec![
+            HocrWord {
+                text: "A".to_string(),
+                left: 100,
+                top: 50,
+                width: 20,
+                height: 30,
+                confidence: 95.0,
+            },
+            HocrWord {
+                text: "B".to_string(),
+                left: 200,
+                top: 50,
+                width: 20,
+                height: 30,
+                confidence: 95.0,
+            },
+            HocrWord {
+                text: "C".to_string(),
+                left: 100,
+                top: 100,
+                width: 20,
+                height: 30,
+                confidence: 95.0,
+            },
+            HocrWord {
+                text: "D".to_string(),
+                left: 200,
+                top: 100,
+                width: 20,
+                height: 30,
+                confidence: 95.0,
+            },
+        ];
+
+        // This would create a 2x2 table (4 cells)
+        // Set limit to 3 -> should fail
+        let table = reconstruct_table(&words, 20, 0.5, Some(3));
+        assert!(table.is_empty());
+
+        // Set limit to 4 -> should succeed
+        let table = reconstruct_table(&words, 20, 0.5, Some(4));
+        assert_eq!(table.len(), 2);
+        assert_eq!(table[0].len(), 2);
     }
 
     #[test]

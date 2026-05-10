@@ -81,6 +81,10 @@ pub struct TesseractConfig {
     /// page orientation (0/90/180/270 degrees) before OCR. If the page is
     /// rotated with high confidence, the image is corrected before recognition.
     pub auto_rotate: bool,
+
+    /// Maximum number of cells allowed in a reconstructed table (default: 5000).
+    /// Prevents memory exhaustion from massive or degenerate tables.
+    pub max_table_cells: Option<usize>,
 }
 
 impl Default for TesseractConfig {
@@ -113,6 +117,7 @@ impl Default for TesseractConfig {
             textord_space_size_is_variable: true,
             thresholding_method: false,
             auto_rotate: false,
+            max_table_cells: Some(5000),
         }
     }
 }
@@ -160,6 +165,7 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
             textord_space_size_is_variable: config.textord_space_size_is_variable,
             thresholding_method: config.thresholding_method,
             auto_rotate: config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false),
+            max_table_cells: config.max_table_cells,
         }
     }
 }
@@ -388,6 +394,7 @@ mod tests {
             tessedit_use_primary_params_model: false,
             textord_space_size_is_variable: false,
             thresholding_method: true,
+            max_table_cells: Some(1000),
         };
 
         let internal_config: TesseractConfig = (&public_config).into();
@@ -413,5 +420,6 @@ mod tests {
         assert!(!internal_config.tessedit_use_primary_params_model);
         assert!(!internal_config.textord_space_size_is_variable);
         assert!(internal_config.thresholding_method);
+        assert_eq!(internal_config.max_table_cells, Some(1000));
     }
 }

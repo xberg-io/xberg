@@ -2,7 +2,6 @@
 //!
 //! Reads records from dBASE files and formats them as a markdown table.
 
-
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::plugins::{DocumentExtractor, Plugin};

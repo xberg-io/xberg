@@ -154,6 +154,8 @@ pub(crate) fn extract_all_from_oxide_document(
                     #[cfg(feature = "layout-detection")]
                     table_model: config.layout.as_ref().map(|l| l.table_model).unwrap_or_default(),
                     #[cfg(feature = "layout-detection")]
+                    max_table_cells: config.layout.as_ref().and_then(|l| l.max_table_cells),
+                    #[cfg(feature = "layout-detection")]
                     acceleration: config.acceleration.as_ref(),
                 },
             ) {

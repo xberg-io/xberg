@@ -45,7 +45,7 @@ pub struct SecurityLimits {
     /// Maximum XML depth (100 levels)
     pub max_xml_depth: usize,
 
-    /// Maximum cells per table (100,000)
+    /// Maximum cells per table (5,000)
     pub max_table_cells: usize,
 }
 
@@ -68,7 +68,7 @@ impl Default for SecurityLimits {
             max_content_size: 100 * 1024 * 1024,
             max_iterations: 10_000_000,
             max_xml_depth: 1024,
-            max_table_cells: 100_000,
+            max_table_cells: 5000,
         }
     }
 }

@@ -13,10 +13,7 @@ use super::comrak_bridge::build_comrak_ast;
 ///
 /// Returns [`Cow::Borrowed`] when no replacement occurs (zero allocation).
 /// Returns [`Cow::Owned`] with one pre-sized allocation when any hit is found.
-fn unescape_backslash_sequences<'a>(
-    input: &'a str,
-    targets: &[char],
-) -> Cow<'a, str> {
+fn unescape_backslash_sequences<'a>(input: &'a str, targets: &[char]) -> Cow<'a, str> {
     // Walk byte-by-byte looking for a backslash followed by a target char.
     let bytes = input.as_bytes();
     let len = bytes.len();

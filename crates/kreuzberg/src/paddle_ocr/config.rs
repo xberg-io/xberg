@@ -78,6 +78,10 @@ pub struct PaddleOcrConfig {
     /// - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference
     /// - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents
     pub model_tier: String,
+
+    /// Maximum number of cells allowed in a reconstructed table (default: 5000).
+    /// Prevents memory exhaustion from massive or degenerate tables.
+    pub max_table_cells: Option<usize>,
 }
 
 impl PaddleOcrConfig {
@@ -108,6 +112,7 @@ impl PaddleOcrConfig {
             padding: 10,
             drop_score: 0.5,
             model_tier: "mobile".to_string(), // mobile is the default: fast, ~13MB total download
+            max_table_cells: Some(5000),
         }
     }
 
@@ -266,6 +271,16 @@ impl PaddleOcrConfig {
     /// * `tier` - `"mobile"` (default, lightweight, faster) or `"server"` (high accuracy, GPU/complex documents)
     pub fn with_model_tier(mut self, tier: impl Into<String>) -> Self {
         self.model_tier = tier.into();
+        self
+    }
+
+    /// Sets the maximum number of cells allowed in a reconstructed table.
+    ///
+    /// # Arguments
+    ///
+    /// * `limit` - Maximum number of cells
+    pub fn with_max_table_cells(mut self, limit: Option<usize>) -> Self {
+        self.max_table_cells = limit;
         self
     }
 }
@@ -526,6 +541,15 @@ mod tests {
         assert_eq!(config.det_db_thresh, 0.25);
         assert_eq!(config.det_db_box_thresh, 0.6);
         assert_eq!(config.det_db_unclip_ratio, 1.8);
+    }
+
+    #[test]
+    fn test_max_table_cells_builder() {
+        let config = PaddleOcrConfig::new("en").with_max_table_cells(Some(2000));
+        assert_eq!(config.max_table_cells, Some(2000));
+
+        let config = PaddleOcrConfig::new("en").with_max_table_cells(None);
+        assert_eq!(config.max_table_cells, None);
     }
 
     #[test]

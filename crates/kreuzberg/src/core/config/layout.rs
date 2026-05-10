@@ -87,6 +87,15 @@ pub struct LayoutDetectionConfig {
     /// is used for inference. Defaults to `None` (auto-select per platform).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acceleration: Option<super::acceleration::AccelerationConfig>,
+
+    /// Maximum number of table cells allowed before a table is deemed too complex
+    /// and rendered as plain text. Default is 5000.
+    #[serde(default = "default_max_table_cells")]
+    pub max_table_cells: Option<usize>,
+}
+
+fn default_max_table_cells() -> Option<usize> {
+    Some(5000)
 }
 
 impl Default for LayoutDetectionConfig {
@@ -96,6 +105,7 @@ impl Default for LayoutDetectionConfig {
             apply_heuristics: true,
             table_model: TableModel::default(),
             acceleration: None,
+            max_table_cells: default_max_table_cells(),
         }
     }
 }
@@ -114,6 +124,7 @@ mod tests {
         assert_eq!(config.table_model, TableModel::Tatr);
         assert!(config.apply_heuristics);
         assert!(config.confidence_threshold.is_none());
+        assert_eq!(config.max_table_cells, Some(5000));
     }
 
     #[test]

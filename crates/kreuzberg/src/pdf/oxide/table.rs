@@ -309,7 +309,12 @@ mod tests {
     fn make_span(text: &str, x: f32, y: f32) -> pdf_oxide::layout::TextSpan {
         pdf_oxide::layout::TextSpan {
             text: text.to_string(),
-            bbox: pdf_oxide::geometry::Rect { x, y, width: 50.0, height: 10.0 },
+            bbox: pdf_oxide::geometry::Rect {
+                x,
+                y,
+                width: 50.0,
+                height: 10.0,
+            },
             font_name: "Helvetica".to_string(),
             font_size: 10.0,
             font_weight: pdf_oxide::layout::FontWeight::Normal,
@@ -367,10 +372,7 @@ mod tests {
             rowspan: 1,
             mcids: vec![],
             // Same Y — right column (x=200) delivered before left column (x=10).
-            spans: vec![
-                make_span("right", 200.0, 150.0),
-                make_span("left", 10.0, 150.0),
-            ],
+            spans: vec![make_span("right", 200.0, 150.0), make_span("left", 10.0, 150.0)],
             bbox: None,
             is_header: false,
         };
@@ -398,6 +400,9 @@ mod tests {
         };
 
         let text = cell_text_in_reading_order(&cell);
-        assert_eq!(text, "hello world", "fallback must trim and collapse newlines; got: {text:?}");
+        assert_eq!(
+            text, "hello world",
+            "fallback must trim and collapse newlines; got: {text:?}"
+        );
     }
 }

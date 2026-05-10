@@ -207,11 +207,7 @@ mod tests {
     /// this case but the function must return cleanly.
     #[test]
     fn pixel_to_pdf_zero_dim_does_not_panic() {
-        let det = DetectionResult::new(
-            0,
-            0,
-            vec![detection_at(LayoutClass::Text, 0.0, 0.0, 10.0, 10.0)],
-        );
+        let det = DetectionResult::new(0, 0, vec![detection_at(LayoutClass::Text, 0.0, 0.0, 10.0, 10.0)]);
         let _ = pixel_detection_to_layout_hints_pdf_space(&det, 0, 0, 595.0, 842.0);
     }
 }
