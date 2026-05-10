@@ -1,5 +1,5 @@
-// GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
@@ -9,45 +9,94 @@ part of 'lib.dart';
 // FreezedGenerator
 // **************************************************************************
 
-// dart format off
 T _$identity<T>(T value) => value;
+
+final _privateConstructorUsedError = UnsupportedError(
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
 /// @nodoc
 mixin _$AnnotationKind {
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is AnnotationKind);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
-
-  @override
-  String toString() {
-    return 'AnnotationKind()';
-  }
-}
-
-/// @nodoc
-class $AnnotationKindCopyWith<$Res> {
-  $AnnotationKindCopyWith(AnnotationKind _, $Res Function(AnnotationKind) __);
-}
-
-/// Adds pattern-matching-related methods to [AnnotationKind].
-extension AnnotationKindPatterns on AnnotationKind {
-  /// A variant of `map` that fallback to returning `orElse`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(AnnotationKind_Bold value)? bold,
@@ -63,165 +112,109 @@ extension AnnotationKindPatterns on AnnotationKind {
     TResult Function(AnnotationKind_FontSize value)? fontSize,
     TResult Function(AnnotationKind_Custom value)? custom,
     required TResult orElse(),
-  }) {
-    final _that = this;
-    switch (_that) {
-      case AnnotationKind_Bold() when bold != null:
-        return bold(_that);
-      case AnnotationKind_Italic() when italic != null:
-        return italic(_that);
-      case AnnotationKind_Underline() when underline != null:
-        return underline(_that);
-      case AnnotationKind_Strikethrough() when strikethrough != null:
-        return strikethrough(_that);
-      case AnnotationKind_Code() when code != null:
-        return code(_that);
-      case AnnotationKind_Subscript() when subscript != null:
-        return subscript(_that);
-      case AnnotationKind_Superscript() when superscript != null:
-        return superscript(_that);
-      case AnnotationKind_Link() when link != null:
-        return link(_that);
-      case AnnotationKind_Highlight() when highlight != null:
-        return highlight(_that);
-      case AnnotationKind_Color() when color != null:
-        return color(_that);
-      case AnnotationKind_FontSize() when fontSize != null:
-        return fontSize(_that);
-      case AnnotationKind_Custom() when custom != null:
-        return custom(_that);
-      case _:
-        return orElse();
-    }
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $AnnotationKindCopyWith<$Res> {
+  factory $AnnotationKindCopyWith(
+          AnnotationKind value, $Res Function(AnnotationKind) then) =
+      _$AnnotationKindCopyWithImpl<$Res, AnnotationKind>;
+}
+
+/// @nodoc
+class _$AnnotationKindCopyWithImpl<$Res, $Val extends AnnotationKind>
+    implements $AnnotationKindCopyWith<$Res> {
+  _$AnnotationKindCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_BoldImplCopyWith<$Res> {
+  factory _$$AnnotationKind_BoldImplCopyWith(_$AnnotationKind_BoldImpl value,
+          $Res Function(_$AnnotationKind_BoldImpl) then) =
+      __$$AnnotationKind_BoldImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_BoldImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_BoldImpl>
+    implements _$$AnnotationKind_BoldImplCopyWith<$Res> {
+  __$$AnnotationKind_BoldImplCopyWithImpl(_$AnnotationKind_BoldImpl _value,
+      $Res Function(_$AnnotationKind_BoldImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$AnnotationKind_BoldImpl extends AnnotationKind_Bold {
+  const _$AnnotationKind_BoldImpl() : super._();
+
+  @override
+  String toString() {
+    return 'AnnotationKind.bold()';
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// Callbacks receives the raw object, upcasted.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case final Subclass2 value:
-  ///     return ...;
-  /// }
-  /// ```
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$AnnotationKind_BoldImpl);
+  }
 
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
   @optionalTypeArgs
-  TResult map<TResult extends Object?>({
-    required TResult Function(AnnotationKind_Bold value) bold,
-    required TResult Function(AnnotationKind_Italic value) italic,
-    required TResult Function(AnnotationKind_Underline value) underline,
-    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
-    required TResult Function(AnnotationKind_Code value) code,
-    required TResult Function(AnnotationKind_Subscript value) subscript,
-    required TResult Function(AnnotationKind_Superscript value) superscript,
-    required TResult Function(AnnotationKind_Link value) link,
-    required TResult Function(AnnotationKind_Highlight value) highlight,
-    required TResult Function(AnnotationKind_Color value) color,
-    required TResult Function(AnnotationKind_FontSize value) fontSize,
-    required TResult Function(AnnotationKind_Custom value) custom,
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case AnnotationKind_Bold():
-        return bold(_that);
-      case AnnotationKind_Italic():
-        return italic(_that);
-      case AnnotationKind_Underline():
-        return underline(_that);
-      case AnnotationKind_Strikethrough():
-        return strikethrough(_that);
-      case AnnotationKind_Code():
-        return code(_that);
-      case AnnotationKind_Subscript():
-        return subscript(_that);
-      case AnnotationKind_Superscript():
-        return superscript(_that);
-      case AnnotationKind_Link():
-        return link(_that);
-      case AnnotationKind_Highlight():
-        return highlight(_that);
-      case AnnotationKind_Color():
-        return color(_that);
-      case AnnotationKind_FontSize():
-        return fontSize(_that);
-      case AnnotationKind_Custom():
-        return custom(_that);
-    }
+    return bold();
   }
 
-  /// A variant of `map` that fallback to returning `null`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult? mapOrNull<TResult extends Object?>({
-    TResult? Function(AnnotationKind_Bold value)? bold,
-    TResult? Function(AnnotationKind_Italic value)? italic,
-    TResult? Function(AnnotationKind_Underline value)? underline,
-    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
-    TResult? Function(AnnotationKind_Code value)? code,
-    TResult? Function(AnnotationKind_Subscript value)? subscript,
-    TResult? Function(AnnotationKind_Superscript value)? superscript,
-    TResult? Function(AnnotationKind_Link value)? link,
-    TResult? Function(AnnotationKind_Highlight value)? highlight,
-    TResult? Function(AnnotationKind_Color value)? color,
-    TResult? Function(AnnotationKind_FontSize value)? fontSize,
-    TResult? Function(AnnotationKind_Custom value)? custom,
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case AnnotationKind_Bold() when bold != null:
-        return bold(_that);
-      case AnnotationKind_Italic() when italic != null:
-        return italic(_that);
-      case AnnotationKind_Underline() when underline != null:
-        return underline(_that);
-      case AnnotationKind_Strikethrough() when strikethrough != null:
-        return strikethrough(_that);
-      case AnnotationKind_Code() when code != null:
-        return code(_that);
-      case AnnotationKind_Subscript() when subscript != null:
-        return subscript(_that);
-      case AnnotationKind_Superscript() when superscript != null:
-        return superscript(_that);
-      case AnnotationKind_Link() when link != null:
-        return link(_that);
-      case AnnotationKind_Highlight() when highlight != null:
-        return highlight(_that);
-      case AnnotationKind_Color() when color != null:
-        return color(_that);
-      case AnnotationKind_FontSize() when fontSize != null:
-        return fontSize(_that);
-      case AnnotationKind_Custom() when custom != null:
-        return custom(_that);
-      case _:
-        return null;
-    }
+    return bold?.call();
   }
 
-  /// A variant of `when` that fallback to an `orElse` callback.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? bold,
@@ -238,50 +231,120 @@ extension AnnotationKindPatterns on AnnotationKind {
     TResult Function(String name, String value)? custom,
     required TResult orElse(),
   }) {
-    final _that = this;
-    switch (_that) {
-      case AnnotationKind_Bold() when bold != null:
-        return bold();
-      case AnnotationKind_Italic() when italic != null:
-        return italic();
-      case AnnotationKind_Underline() when underline != null:
-        return underline();
-      case AnnotationKind_Strikethrough() when strikethrough != null:
-        return strikethrough();
-      case AnnotationKind_Code() when code != null:
-        return code();
-      case AnnotationKind_Subscript() when subscript != null:
-        return subscript();
-      case AnnotationKind_Superscript() when superscript != null:
-        return superscript();
-      case AnnotationKind_Link() when link != null:
-        return link(_that.url, _that.title);
-      case AnnotationKind_Highlight() when highlight != null:
-        return highlight();
-      case AnnotationKind_Color() when color != null:
-        return color(_that.value);
-      case AnnotationKind_FontSize() when fontSize != null:
-        return fontSize(_that.value);
-      case AnnotationKind_Custom() when custom != null:
-        return custom(_that.name, _that.value);
-      case _:
-        return orElse();
+    if (bold != null) {
+      return bold();
     }
+    return orElse();
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// As opposed to `map`, this offers destructuring.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case Subclass2(:final field2):
-  ///     return ...;
-  /// }
-  /// ```
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return bold(this);
+  }
 
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return bold?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (bold != null) {
+      return bold(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Bold extends AnnotationKind {
+  const factory AnnotationKind_Bold() = _$AnnotationKind_BoldImpl;
+  const AnnotationKind_Bold._() : super._();
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_ItalicImplCopyWith<$Res> {
+  factory _$$AnnotationKind_ItalicImplCopyWith(
+          _$AnnotationKind_ItalicImpl value,
+          $Res Function(_$AnnotationKind_ItalicImpl) then) =
+      __$$AnnotationKind_ItalicImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_ItalicImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_ItalicImpl>
+    implements _$$AnnotationKind_ItalicImplCopyWith<$Res> {
+  __$$AnnotationKind_ItalicImplCopyWithImpl(_$AnnotationKind_ItalicImpl _value,
+      $Res Function(_$AnnotationKind_ItalicImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$AnnotationKind_ItalicImpl extends AnnotationKind_Italic {
+  const _$AnnotationKind_ItalicImpl() : super._();
+
+  @override
+  String toString() {
+    return 'AnnotationKind.italic()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$AnnotationKind_ItalicImpl);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function() bold,
@@ -297,47 +360,10 @@ extension AnnotationKindPatterns on AnnotationKind {
     required TResult Function(String value) fontSize,
     required TResult Function(String name, String value) custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case AnnotationKind_Bold():
-        return bold();
-      case AnnotationKind_Italic():
-        return italic();
-      case AnnotationKind_Underline():
-        return underline();
-      case AnnotationKind_Strikethrough():
-        return strikethrough();
-      case AnnotationKind_Code():
-        return code();
-      case AnnotationKind_Subscript():
-        return subscript();
-      case AnnotationKind_Superscript():
-        return superscript();
-      case AnnotationKind_Link():
-        return link(_that.url, _that.title);
-      case AnnotationKind_Highlight():
-        return highlight();
-      case AnnotationKind_Color():
-        return color(_that.value);
-      case AnnotationKind_FontSize():
-        return fontSize(_that.value);
-      case AnnotationKind_Custom():
-        return custom(_that.name, _that.value);
-    }
+    return italic();
   }
 
-  /// A variant of `when` that fallback to returning `null`
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? bold,
@@ -353,246 +379,976 @@ extension AnnotationKindPatterns on AnnotationKind {
     TResult? Function(String value)? fontSize,
     TResult? Function(String name, String value)? custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case AnnotationKind_Bold() when bold != null:
-        return bold();
-      case AnnotationKind_Italic() when italic != null:
-        return italic();
-      case AnnotationKind_Underline() when underline != null:
-        return underline();
-      case AnnotationKind_Strikethrough() when strikethrough != null:
-        return strikethrough();
-      case AnnotationKind_Code() when code != null:
-        return code();
-      case AnnotationKind_Subscript() when subscript != null:
-        return subscript();
-      case AnnotationKind_Superscript() when superscript != null:
-        return superscript();
-      case AnnotationKind_Link() when link != null:
-        return link(_that.url, _that.title);
-      case AnnotationKind_Highlight() when highlight != null:
-        return highlight();
-      case AnnotationKind_Color() when color != null:
-        return color(_that.value);
-      case AnnotationKind_FontSize() when fontSize != null:
-        return fontSize(_that.value);
-      case AnnotationKind_Custom() when custom != null:
-        return custom(_that.name, _that.value);
-      case _:
-        return null;
+    return italic?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (italic != null) {
+      return italic();
     }
+    return orElse();
   }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return italic(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return italic?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (italic != null) {
+      return italic(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Italic extends AnnotationKind {
+  const factory AnnotationKind_Italic() = _$AnnotationKind_ItalicImpl;
+  const AnnotationKind_Italic._() : super._();
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_UnderlineImplCopyWith<$Res> {
+  factory _$$AnnotationKind_UnderlineImplCopyWith(
+          _$AnnotationKind_UnderlineImpl value,
+          $Res Function(_$AnnotationKind_UnderlineImpl) then) =
+      __$$AnnotationKind_UnderlineImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_UnderlineImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_UnderlineImpl>
+    implements _$$AnnotationKind_UnderlineImplCopyWith<$Res> {
+  __$$AnnotationKind_UnderlineImplCopyWithImpl(
+      _$AnnotationKind_UnderlineImpl _value,
+      $Res Function(_$AnnotationKind_UnderlineImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
 }
 
 /// @nodoc
 
-class AnnotationKind_Bold extends AnnotationKind {
-  const AnnotationKind_Bold() : super._();
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is AnnotationKind_Bold);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
-
-  @override
-  String toString() {
-    return 'AnnotationKind.bold()';
-  }
-}
-
-/// @nodoc
-
-class AnnotationKind_Italic extends AnnotationKind {
-  const AnnotationKind_Italic() : super._();
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is AnnotationKind_Italic);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
-
-  @override
-  String toString() {
-    return 'AnnotationKind.italic()';
-  }
-}
-
-/// @nodoc
-
-class AnnotationKind_Underline extends AnnotationKind {
-  const AnnotationKind_Underline() : super._();
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is AnnotationKind_Underline);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
+class _$AnnotationKind_UnderlineImpl extends AnnotationKind_Underline {
+  const _$AnnotationKind_UnderlineImpl() : super._();
 
   @override
   String toString() {
     return 'AnnotationKind.underline()';
   }
-}
-
-/// @nodoc
-
-class AnnotationKind_Strikethrough extends AnnotationKind {
-  const AnnotationKind_Strikethrough() : super._();
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is AnnotationKind_Strikethrough);
+            other is _$AnnotationKind_UnderlineImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return underline();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return underline?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (underline != null) {
+      return underline();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return underline(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return underline?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (underline != null) {
+      return underline(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Underline extends AnnotationKind {
+  const factory AnnotationKind_Underline() = _$AnnotationKind_UnderlineImpl;
+  const AnnotationKind_Underline._() : super._();
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_StrikethroughImplCopyWith<$Res> {
+  factory _$$AnnotationKind_StrikethroughImplCopyWith(
+          _$AnnotationKind_StrikethroughImpl value,
+          $Res Function(_$AnnotationKind_StrikethroughImpl) then) =
+      __$$AnnotationKind_StrikethroughImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_StrikethroughImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res,
+        _$AnnotationKind_StrikethroughImpl>
+    implements _$$AnnotationKind_StrikethroughImplCopyWith<$Res> {
+  __$$AnnotationKind_StrikethroughImplCopyWithImpl(
+      _$AnnotationKind_StrikethroughImpl _value,
+      $Res Function(_$AnnotationKind_StrikethroughImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$AnnotationKind_StrikethroughImpl extends AnnotationKind_Strikethrough {
+  const _$AnnotationKind_StrikethroughImpl() : super._();
 
   @override
   String toString() {
     return 'AnnotationKind.strikethrough()';
   }
-}
-
-/// @nodoc
-
-class AnnotationKind_Code extends AnnotationKind {
-  const AnnotationKind_Code() : super._();
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is AnnotationKind_Code);
+        (other.runtimeType == runtimeType &&
+            other is _$AnnotationKind_StrikethroughImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return strikethrough();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return strikethrough?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (strikethrough != null) {
+      return strikethrough();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return strikethrough(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return strikethrough?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (strikethrough != null) {
+      return strikethrough(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Strikethrough extends AnnotationKind {
+  const factory AnnotationKind_Strikethrough() =
+      _$AnnotationKind_StrikethroughImpl;
+  const AnnotationKind_Strikethrough._() : super._();
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_CodeImplCopyWith<$Res> {
+  factory _$$AnnotationKind_CodeImplCopyWith(_$AnnotationKind_CodeImpl value,
+          $Res Function(_$AnnotationKind_CodeImpl) then) =
+      __$$AnnotationKind_CodeImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_CodeImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_CodeImpl>
+    implements _$$AnnotationKind_CodeImplCopyWith<$Res> {
+  __$$AnnotationKind_CodeImplCopyWithImpl(_$AnnotationKind_CodeImpl _value,
+      $Res Function(_$AnnotationKind_CodeImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$AnnotationKind_CodeImpl extends AnnotationKind_Code {
+  const _$AnnotationKind_CodeImpl() : super._();
 
   @override
   String toString() {
     return 'AnnotationKind.code()';
   }
-}
-
-/// @nodoc
-
-class AnnotationKind_Subscript extends AnnotationKind {
-  const AnnotationKind_Subscript() : super._();
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is AnnotationKind_Subscript);
+        (other.runtimeType == runtimeType &&
+            other is _$AnnotationKind_CodeImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return code();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return code?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (code != null) {
+      return code();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return code(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return code?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (code != null) {
+      return code(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Code extends AnnotationKind {
+  const factory AnnotationKind_Code() = _$AnnotationKind_CodeImpl;
+  const AnnotationKind_Code._() : super._();
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_SubscriptImplCopyWith<$Res> {
+  factory _$$AnnotationKind_SubscriptImplCopyWith(
+          _$AnnotationKind_SubscriptImpl value,
+          $Res Function(_$AnnotationKind_SubscriptImpl) then) =
+      __$$AnnotationKind_SubscriptImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_SubscriptImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_SubscriptImpl>
+    implements _$$AnnotationKind_SubscriptImplCopyWith<$Res> {
+  __$$AnnotationKind_SubscriptImplCopyWithImpl(
+      _$AnnotationKind_SubscriptImpl _value,
+      $Res Function(_$AnnotationKind_SubscriptImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$AnnotationKind_SubscriptImpl extends AnnotationKind_Subscript {
+  const _$AnnotationKind_SubscriptImpl() : super._();
 
   @override
   String toString() {
     return 'AnnotationKind.subscript()';
   }
-}
-
-/// @nodoc
-
-class AnnotationKind_Superscript extends AnnotationKind {
-  const AnnotationKind_Superscript() : super._();
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is AnnotationKind_Superscript);
+            other is _$AnnotationKind_SubscriptImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'AnnotationKind.superscript()';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return subscript();
   }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return subscript?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (subscript != null) {
+      return subscript();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return subscript(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return subscript?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (subscript != null) {
+      return subscript(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Subscript extends AnnotationKind {
+  const factory AnnotationKind_Subscript() = _$AnnotationKind_SubscriptImpl;
+  const AnnotationKind_Subscript._() : super._();
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_SuperscriptImplCopyWith<$Res> {
+  factory _$$AnnotationKind_SuperscriptImplCopyWith(
+          _$AnnotationKind_SuperscriptImpl value,
+          $Res Function(_$AnnotationKind_SuperscriptImpl) then) =
+      __$$AnnotationKind_SuperscriptImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_SuperscriptImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_SuperscriptImpl>
+    implements _$$AnnotationKind_SuperscriptImplCopyWith<$Res> {
+  __$$AnnotationKind_SuperscriptImplCopyWithImpl(
+      _$AnnotationKind_SuperscriptImpl _value,
+      $Res Function(_$AnnotationKind_SuperscriptImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
 }
 
 /// @nodoc
 
-class AnnotationKind_Link extends AnnotationKind {
-  const AnnotationKind_Link({required this.url, required this.title})
-      : super._();
+class _$AnnotationKind_SuperscriptImpl extends AnnotationKind_Superscript {
+  const _$AnnotationKind_SuperscriptImpl() : super._();
 
-  final String url;
-  final String title;
-
-  /// Create a copy of AnnotationKind
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $AnnotationKind_LinkCopyWith<AnnotationKind_Link> get copyWith =>
-      _$AnnotationKind_LinkCopyWithImpl<AnnotationKind_Link>(this, _$identity);
+  @override
+  String toString() {
+    return 'AnnotationKind.superscript()';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is AnnotationKind_Link &&
-            (identical(other.url, url) || other.url == url) &&
-            (identical(other.title, title) || other.title == title));
+            other is _$AnnotationKind_SuperscriptImpl);
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, url, title);
+  int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'AnnotationKind.link(url: $url, title: $title)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return superscript();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return superscript?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (superscript != null) {
+      return superscript();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return superscript(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return superscript?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (superscript != null) {
+      return superscript(this);
+    }
+    return orElse();
   }
 }
 
+abstract class AnnotationKind_Superscript extends AnnotationKind {
+  const factory AnnotationKind_Superscript() = _$AnnotationKind_SuperscriptImpl;
+  const AnnotationKind_Superscript._() : super._();
+}
+
 /// @nodoc
-abstract mixin class $AnnotationKind_LinkCopyWith<$Res>
-    implements $AnnotationKindCopyWith<$Res> {
-  factory $AnnotationKind_LinkCopyWith(
-          AnnotationKind_Link value, $Res Function(AnnotationKind_Link) _then) =
-      _$AnnotationKind_LinkCopyWithImpl;
+abstract class _$$AnnotationKind_LinkImplCopyWith<$Res> {
+  factory _$$AnnotationKind_LinkImplCopyWith(_$AnnotationKind_LinkImpl value,
+          $Res Function(_$AnnotationKind_LinkImpl) then) =
+      __$$AnnotationKind_LinkImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String url, String title});
 }
 
 /// @nodoc
-class _$AnnotationKind_LinkCopyWithImpl<$Res>
-    implements $AnnotationKind_LinkCopyWith<$Res> {
-  _$AnnotationKind_LinkCopyWithImpl(this._self, this._then);
-
-  final AnnotationKind_Link _self;
-  final $Res Function(AnnotationKind_Link) _then;
+class __$$AnnotationKind_LinkImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_LinkImpl>
+    implements _$$AnnotationKind_LinkImplCopyWith<$Res> {
+  __$$AnnotationKind_LinkImplCopyWithImpl(_$AnnotationKind_LinkImpl _value,
+      $Res Function(_$AnnotationKind_LinkImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of AnnotationKind
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? url = null,
     Object? title = null,
   }) {
-    return _then(AnnotationKind_Link(
+    return _then(_$AnnotationKind_LinkImpl(
       url: null == url
-          ? _self.url
+          ? _value.url
           : url // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
-          ? _self.title
+          ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -601,148 +1357,582 @@ class _$AnnotationKind_LinkCopyWithImpl<$Res>
 
 /// @nodoc
 
-class AnnotationKind_Highlight extends AnnotationKind {
-  const AnnotationKind_Highlight() : super._();
+class _$AnnotationKind_LinkImpl extends AnnotationKind_Link {
+  const _$AnnotationKind_LinkImpl({required this.url, required this.title})
+      : super._();
+
+  @override
+  final String url;
+  @override
+  final String title;
+
+  @override
+  String toString() {
+    return 'AnnotationKind.link(url: $url, title: $title)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is AnnotationKind_Highlight);
+        (other.runtimeType == runtimeType &&
+            other is _$AnnotationKind_LinkImpl &&
+            (identical(other.url, url) || other.url == url) &&
+            (identical(other.title, title) || other.title == title));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, url, title);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$AnnotationKind_LinkImplCopyWith<_$AnnotationKind_LinkImpl> get copyWith =>
+      __$$AnnotationKind_LinkImplCopyWithImpl<_$AnnotationKind_LinkImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return link(url, title);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return link?.call(url, title);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (link != null) {
+      return link(url, title);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return link(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return link?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (link != null) {
+      return link(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Link extends AnnotationKind {
+  const factory AnnotationKind_Link(
+      {required final String url,
+      required final String title}) = _$AnnotationKind_LinkImpl;
+  const AnnotationKind_Link._() : super._();
+
+  String get url;
+  String get title;
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$AnnotationKind_LinkImplCopyWith<_$AnnotationKind_LinkImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_HighlightImplCopyWith<$Res> {
+  factory _$$AnnotationKind_HighlightImplCopyWith(
+          _$AnnotationKind_HighlightImpl value,
+          $Res Function(_$AnnotationKind_HighlightImpl) then) =
+      __$$AnnotationKind_HighlightImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$AnnotationKind_HighlightImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_HighlightImpl>
+    implements _$$AnnotationKind_HighlightImplCopyWith<$Res> {
+  __$$AnnotationKind_HighlightImplCopyWithImpl(
+      _$AnnotationKind_HighlightImpl _value,
+      $Res Function(_$AnnotationKind_HighlightImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$AnnotationKind_HighlightImpl extends AnnotationKind_Highlight {
+  const _$AnnotationKind_HighlightImpl() : super._();
+
+  @override
+  String toString() {
+    return 'AnnotationKind.highlight()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$AnnotationKind_HighlightImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'AnnotationKind.highlight()';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return highlight();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return highlight?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (highlight != null) {
+      return highlight();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return highlight(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return highlight?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (highlight != null) {
+      return highlight(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_Highlight extends AnnotationKind {
+  const factory AnnotationKind_Highlight() = _$AnnotationKind_HighlightImpl;
+  const AnnotationKind_Highlight._() : super._();
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_ColorImplCopyWith<$Res> {
+  factory _$$AnnotationKind_ColorImplCopyWith(_$AnnotationKind_ColorImpl value,
+          $Res Function(_$AnnotationKind_ColorImpl) then) =
+      __$$AnnotationKind_ColorImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String value});
+}
+
+/// @nodoc
+class __$$AnnotationKind_ColorImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_ColorImpl>
+    implements _$$AnnotationKind_ColorImplCopyWith<$Res> {
+  __$$AnnotationKind_ColorImplCopyWithImpl(_$AnnotationKind_ColorImpl _value,
+      $Res Function(_$AnnotationKind_ColorImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? value = null,
+  }) {
+    return _then(_$AnnotationKind_ColorImpl(
+      value: null == value
+          ? _value.value
+          : value // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
   }
 }
 
 /// @nodoc
 
-class AnnotationKind_Color extends AnnotationKind {
-  const AnnotationKind_Color({required this.value}) : super._();
+class _$AnnotationKind_ColorImpl extends AnnotationKind_Color {
+  const _$AnnotationKind_ColorImpl({required this.value}) : super._();
 
+  @override
   final String value;
-
-  /// Create a copy of AnnotationKind
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $AnnotationKind_ColorCopyWith<AnnotationKind_Color> get copyWith =>
-      _$AnnotationKind_ColorCopyWithImpl<AnnotationKind_Color>(
-          this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is AnnotationKind_Color &&
-            (identical(other.value, value) || other.value == value));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, value);
 
   @override
   String toString() {
     return 'AnnotationKind.color(value: $value)';
   }
-}
-
-/// @nodoc
-abstract mixin class $AnnotationKind_ColorCopyWith<$Res>
-    implements $AnnotationKindCopyWith<$Res> {
-  factory $AnnotationKind_ColorCopyWith(AnnotationKind_Color value,
-          $Res Function(AnnotationKind_Color) _then) =
-      _$AnnotationKind_ColorCopyWithImpl;
-  @useResult
-  $Res call({String value});
-}
-
-/// @nodoc
-class _$AnnotationKind_ColorCopyWithImpl<$Res>
-    implements $AnnotationKind_ColorCopyWith<$Res> {
-  _$AnnotationKind_ColorCopyWithImpl(this._self, this._then);
-
-  final AnnotationKind_Color _self;
-  final $Res Function(AnnotationKind_Color) _then;
-
-  /// Create a copy of AnnotationKind
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? value = null,
-  }) {
-    return _then(AnnotationKind_Color(
-      value: null == value
-          ? _self.value
-          : value // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
-  }
-}
-
-/// @nodoc
-
-class AnnotationKind_FontSize extends AnnotationKind {
-  const AnnotationKind_FontSize({required this.value}) : super._();
-
-  final String value;
-
-  /// Create a copy of AnnotationKind
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $AnnotationKind_FontSizeCopyWith<AnnotationKind_FontSize> get copyWith =>
-      _$AnnotationKind_FontSizeCopyWithImpl<AnnotationKind_FontSize>(
-          this, _$identity);
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is AnnotationKind_FontSize &&
+            other is _$AnnotationKind_ColorImpl &&
             (identical(other.value, value) || other.value == value));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, value);
 
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'AnnotationKind.fontSize(value: $value)';
+  @pragma('vm:prefer-inline')
+  _$$AnnotationKind_ColorImplCopyWith<_$AnnotationKind_ColorImpl>
+      get copyWith =>
+          __$$AnnotationKind_ColorImplCopyWithImpl<_$AnnotationKind_ColorImpl>(
+              this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return color(value);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return color?.call(value);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (color != null) {
+      return color(value);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return color(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return color?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (color != null) {
+      return color(this);
+    }
+    return orElse();
   }
 }
 
+abstract class AnnotationKind_Color extends AnnotationKind {
+  const factory AnnotationKind_Color({required final String value}) =
+      _$AnnotationKind_ColorImpl;
+  const AnnotationKind_Color._() : super._();
+
+  String get value;
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$AnnotationKind_ColorImplCopyWith<_$AnnotationKind_ColorImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $AnnotationKind_FontSizeCopyWith<$Res>
-    implements $AnnotationKindCopyWith<$Res> {
-  factory $AnnotationKind_FontSizeCopyWith(AnnotationKind_FontSize value,
-          $Res Function(AnnotationKind_FontSize) _then) =
-      _$AnnotationKind_FontSizeCopyWithImpl;
+abstract class _$$AnnotationKind_FontSizeImplCopyWith<$Res> {
+  factory _$$AnnotationKind_FontSizeImplCopyWith(
+          _$AnnotationKind_FontSizeImpl value,
+          $Res Function(_$AnnotationKind_FontSizeImpl) then) =
+      __$$AnnotationKind_FontSizeImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String value});
 }
 
 /// @nodoc
-class _$AnnotationKind_FontSizeCopyWithImpl<$Res>
-    implements $AnnotationKind_FontSizeCopyWith<$Res> {
-  _$AnnotationKind_FontSizeCopyWithImpl(this._self, this._then);
-
-  final AnnotationKind_FontSize _self;
-  final $Res Function(AnnotationKind_FontSize) _then;
+class __$$AnnotationKind_FontSizeImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_FontSizeImpl>
+    implements _$$AnnotationKind_FontSizeImplCopyWith<$Res> {
+  __$$AnnotationKind_FontSizeImplCopyWithImpl(
+      _$AnnotationKind_FontSizeImpl _value,
+      $Res Function(_$AnnotationKind_FontSizeImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of AnnotationKind
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? value = null,
   }) {
-    return _then(AnnotationKind_FontSize(
+    return _then(_$AnnotationKind_FontSizeImpl(
       value: null == value
-          ? _self.value
+          ? _value.value
           : value // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -751,26 +1941,234 @@ class _$AnnotationKind_FontSizeCopyWithImpl<$Res>
 
 /// @nodoc
 
-class AnnotationKind_Custom extends AnnotationKind {
-  const AnnotationKind_Custom({required this.name, required this.value})
-      : super._();
+class _$AnnotationKind_FontSizeImpl extends AnnotationKind_FontSize {
+  const _$AnnotationKind_FontSizeImpl({required this.value}) : super._();
 
-  final String name;
+  @override
   final String value;
 
-  /// Create a copy of AnnotationKind
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $AnnotationKind_CustomCopyWith<AnnotationKind_Custom> get copyWith =>
-      _$AnnotationKind_CustomCopyWithImpl<AnnotationKind_Custom>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'AnnotationKind.fontSize(value: $value)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is AnnotationKind_Custom &&
+            other is _$AnnotationKind_FontSizeImpl &&
+            (identical(other.value, value) || other.value == value));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, value);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$AnnotationKind_FontSizeImplCopyWith<_$AnnotationKind_FontSizeImpl>
+      get copyWith => __$$AnnotationKind_FontSizeImplCopyWithImpl<
+          _$AnnotationKind_FontSizeImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return fontSize(value);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return fontSize?.call(value);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (fontSize != null) {
+      return fontSize(value);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return fontSize(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return fontSize?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (fontSize != null) {
+      return fontSize(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class AnnotationKind_FontSize extends AnnotationKind {
+  const factory AnnotationKind_FontSize({required final String value}) =
+      _$AnnotationKind_FontSizeImpl;
+  const AnnotationKind_FontSize._() : super._();
+
+  String get value;
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$AnnotationKind_FontSizeImplCopyWith<_$AnnotationKind_FontSizeImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$AnnotationKind_CustomImplCopyWith<$Res> {
+  factory _$$AnnotationKind_CustomImplCopyWith(
+          _$AnnotationKind_CustomImpl value,
+          $Res Function(_$AnnotationKind_CustomImpl) then) =
+      __$$AnnotationKind_CustomImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String name, String value});
+}
+
+/// @nodoc
+class __$$AnnotationKind_CustomImplCopyWithImpl<$Res>
+    extends _$AnnotationKindCopyWithImpl<$Res, _$AnnotationKind_CustomImpl>
+    implements _$$AnnotationKind_CustomImplCopyWith<$Res> {
+  __$$AnnotationKind_CustomImplCopyWithImpl(_$AnnotationKind_CustomImpl _value,
+      $Res Function(_$AnnotationKind_CustomImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? name = null,
+    Object? value = null,
+  }) {
+    return _then(_$AnnotationKind_CustomImpl(
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      value: null == value
+          ? _value.value
+          : value // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$AnnotationKind_CustomImpl extends AnnotationKind_Custom {
+  const _$AnnotationKind_CustomImpl({required this.name, required this.value})
+      : super._();
+
+  @override
+  final String name;
+  @override
+  final String value;
+
+  @override
+  String toString() {
+    return 'AnnotationKind.custom(name: $name, value: $value)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$AnnotationKind_CustomImpl &&
             (identical(other.name, name) || other.name == name) &&
             (identical(other.value, value) || other.value == value));
   }
@@ -778,285 +2176,387 @@ class AnnotationKind_Custom extends AnnotationKind {
   @override
   int get hashCode => Object.hash(runtimeType, name, value);
 
+  /// Create a copy of AnnotationKind
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'AnnotationKind.custom(name: $name, value: $value)';
+  @pragma('vm:prefer-inline')
+  _$$AnnotationKind_CustomImplCopyWith<_$AnnotationKind_CustomImpl>
+      get copyWith => __$$AnnotationKind_CustomImplCopyWithImpl<
+          _$AnnotationKind_CustomImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() bold,
+    required TResult Function() italic,
+    required TResult Function() underline,
+    required TResult Function() strikethrough,
+    required TResult Function() code,
+    required TResult Function() subscript,
+    required TResult Function() superscript,
+    required TResult Function(String url, String title) link,
+    required TResult Function() highlight,
+    required TResult Function(String value) color,
+    required TResult Function(String value) fontSize,
+    required TResult Function(String name, String value) custom,
+  }) {
+    return custom(name, value);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? bold,
+    TResult? Function()? italic,
+    TResult? Function()? underline,
+    TResult? Function()? strikethrough,
+    TResult? Function()? code,
+    TResult? Function()? subscript,
+    TResult? Function()? superscript,
+    TResult? Function(String url, String title)? link,
+    TResult? Function()? highlight,
+    TResult? Function(String value)? color,
+    TResult? Function(String value)? fontSize,
+    TResult? Function(String name, String value)? custom,
+  }) {
+    return custom?.call(name, value);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? bold,
+    TResult Function()? italic,
+    TResult Function()? underline,
+    TResult Function()? strikethrough,
+    TResult Function()? code,
+    TResult Function()? subscript,
+    TResult Function()? superscript,
+    TResult Function(String url, String title)? link,
+    TResult Function()? highlight,
+    TResult Function(String value)? color,
+    TResult Function(String value)? fontSize,
+    TResult Function(String name, String value)? custom,
+    required TResult orElse(),
+  }) {
+    if (custom != null) {
+      return custom(name, value);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(AnnotationKind_Bold value) bold,
+    required TResult Function(AnnotationKind_Italic value) italic,
+    required TResult Function(AnnotationKind_Underline value) underline,
+    required TResult Function(AnnotationKind_Strikethrough value) strikethrough,
+    required TResult Function(AnnotationKind_Code value) code,
+    required TResult Function(AnnotationKind_Subscript value) subscript,
+    required TResult Function(AnnotationKind_Superscript value) superscript,
+    required TResult Function(AnnotationKind_Link value) link,
+    required TResult Function(AnnotationKind_Highlight value) highlight,
+    required TResult Function(AnnotationKind_Color value) color,
+    required TResult Function(AnnotationKind_FontSize value) fontSize,
+    required TResult Function(AnnotationKind_Custom value) custom,
+  }) {
+    return custom(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(AnnotationKind_Bold value)? bold,
+    TResult? Function(AnnotationKind_Italic value)? italic,
+    TResult? Function(AnnotationKind_Underline value)? underline,
+    TResult? Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult? Function(AnnotationKind_Code value)? code,
+    TResult? Function(AnnotationKind_Subscript value)? subscript,
+    TResult? Function(AnnotationKind_Superscript value)? superscript,
+    TResult? Function(AnnotationKind_Link value)? link,
+    TResult? Function(AnnotationKind_Highlight value)? highlight,
+    TResult? Function(AnnotationKind_Color value)? color,
+    TResult? Function(AnnotationKind_FontSize value)? fontSize,
+    TResult? Function(AnnotationKind_Custom value)? custom,
+  }) {
+    return custom?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(AnnotationKind_Bold value)? bold,
+    TResult Function(AnnotationKind_Italic value)? italic,
+    TResult Function(AnnotationKind_Underline value)? underline,
+    TResult Function(AnnotationKind_Strikethrough value)? strikethrough,
+    TResult Function(AnnotationKind_Code value)? code,
+    TResult Function(AnnotationKind_Subscript value)? subscript,
+    TResult Function(AnnotationKind_Superscript value)? superscript,
+    TResult Function(AnnotationKind_Link value)? link,
+    TResult Function(AnnotationKind_Highlight value)? highlight,
+    TResult Function(AnnotationKind_Color value)? color,
+    TResult Function(AnnotationKind_FontSize value)? fontSize,
+    TResult Function(AnnotationKind_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (custom != null) {
+      return custom(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
-abstract mixin class $AnnotationKind_CustomCopyWith<$Res>
-    implements $AnnotationKindCopyWith<$Res> {
-  factory $AnnotationKind_CustomCopyWith(AnnotationKind_Custom value,
-          $Res Function(AnnotationKind_Custom) _then) =
-      _$AnnotationKind_CustomCopyWithImpl;
-  @useResult
-  $Res call({String name, String value});
-}
+abstract class AnnotationKind_Custom extends AnnotationKind {
+  const factory AnnotationKind_Custom(
+      {required final String name,
+      required final String value}) = _$AnnotationKind_CustomImpl;
+  const AnnotationKind_Custom._() : super._();
 
-/// @nodoc
-class _$AnnotationKind_CustomCopyWithImpl<$Res>
-    implements $AnnotationKind_CustomCopyWith<$Res> {
-  _$AnnotationKind_CustomCopyWithImpl(this._self, this._then);
-
-  final AnnotationKind_Custom _self;
-  final $Res Function(AnnotationKind_Custom) _then;
+  String get name;
+  String get value;
 
   /// Create a copy of AnnotationKind
   /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? name = null,
-    Object? value = null,
-  }) {
-    return _then(AnnotationKind_Custom(
-      name: null == name
-          ? _self.name
-          : name // ignore: cast_nullable_to_non_nullable
-              as String,
-      value: null == value
-          ? _self.value
-          : value // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
-  }
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$AnnotationKind_CustomImplCopyWith<_$AnnotationKind_CustomImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
 mixin _$ChunkSizing {
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() characters,
+    required TResult Function(String model, String cacheDir) tokenizer,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? characters,
+    TResult? Function(String model, String cacheDir)? tokenizer,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? characters,
+    TResult Function(String model, String cacheDir)? tokenizer,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(ChunkSizing_Characters value) characters,
+    required TResult Function(ChunkSizing_Tokenizer value) tokenizer,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(ChunkSizing_Characters value)? characters,
+    TResult? Function(ChunkSizing_Tokenizer value)? tokenizer,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(ChunkSizing_Characters value)? characters,
+    TResult Function(ChunkSizing_Tokenizer value)? tokenizer,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ChunkSizingCopyWith<$Res> {
+  factory $ChunkSizingCopyWith(
+          ChunkSizing value, $Res Function(ChunkSizing) then) =
+      _$ChunkSizingCopyWithImpl<$Res, ChunkSizing>;
+}
+
+/// @nodoc
+class _$ChunkSizingCopyWithImpl<$Res, $Val extends ChunkSizing>
+    implements $ChunkSizingCopyWith<$Res> {
+  _$ChunkSizingCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ChunkSizing
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$ChunkSizing_CharactersImplCopyWith<$Res> {
+  factory _$$ChunkSizing_CharactersImplCopyWith(
+          _$ChunkSizing_CharactersImpl value,
+          $Res Function(_$ChunkSizing_CharactersImpl) then) =
+      __$$ChunkSizing_CharactersImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$ChunkSizing_CharactersImplCopyWithImpl<$Res>
+    extends _$ChunkSizingCopyWithImpl<$Res, _$ChunkSizing_CharactersImpl>
+    implements _$$ChunkSizing_CharactersImplCopyWith<$Res> {
+  __$$ChunkSizing_CharactersImplCopyWithImpl(
+      _$ChunkSizing_CharactersImpl _value,
+      $Res Function(_$ChunkSizing_CharactersImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of ChunkSizing
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$ChunkSizing_CharactersImpl extends ChunkSizing_Characters {
+  const _$ChunkSizing_CharactersImpl() : super._();
+
+  @override
+  String toString() {
+    return 'ChunkSizing.characters()';
+  }
+
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is ChunkSizing);
+        (other.runtimeType == runtimeType &&
+            other is _$ChunkSizing_CharactersImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'ChunkSizing()';
-  }
-}
-
-/// @nodoc
-class $ChunkSizingCopyWith<$Res> {
-  $ChunkSizingCopyWith(ChunkSizing _, $Res Function(ChunkSizing) __);
-}
-
-/// Adds pattern-matching-related methods to [ChunkSizing].
-extension ChunkSizingPatterns on ChunkSizing {
-  /// A variant of `map` that fallback to returning `orElse`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
   @optionalTypeArgs
-  TResult maybeMap<TResult extends Object?>({
-    TResult Function(ChunkSizing_Characters value)? characters,
-    TResult Function(ChunkSizing_Tokenizer value)? tokenizer,
-    required TResult orElse(),
+  TResult when<TResult extends Object?>({
+    required TResult Function() characters,
+    required TResult Function(String model, String cacheDir) tokenizer,
   }) {
-    final _that = this;
-    switch (_that) {
-      case ChunkSizing_Characters() when characters != null:
-        return characters(_that);
-      case ChunkSizing_Tokenizer() when tokenizer != null:
-        return tokenizer(_that);
-      case _:
-        return orElse();
-    }
+    return characters();
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// Callbacks receives the raw object, upcasted.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case final Subclass2 value:
-  ///     return ...;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult map<TResult extends Object?>({
-    required TResult Function(ChunkSizing_Characters value) characters,
-    required TResult Function(ChunkSizing_Tokenizer value) tokenizer,
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? characters,
+    TResult? Function(String model, String cacheDir)? tokenizer,
   }) {
-    final _that = this;
-    switch (_that) {
-      case ChunkSizing_Characters():
-        return characters(_that);
-      case ChunkSizing_Tokenizer():
-        return tokenizer(_that);
-    }
+    return characters?.call();
   }
 
-  /// A variant of `map` that fallback to returning `null`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult? mapOrNull<TResult extends Object?>({
-    TResult? Function(ChunkSizing_Characters value)? characters,
-    TResult? Function(ChunkSizing_Tokenizer value)? tokenizer,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case ChunkSizing_Characters() when characters != null:
-        return characters(_that);
-      case ChunkSizing_Tokenizer() when tokenizer != null:
-        return tokenizer(_that);
-      case _:
-        return null;
-    }
-  }
-
-  /// A variant of `when` that fallback to an `orElse` callback.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? characters,
     TResult Function(String model, String cacheDir)? tokenizer,
     required TResult orElse(),
   }) {
-    final _that = this;
-    switch (_that) {
-      case ChunkSizing_Characters() when characters != null:
-        return characters();
-      case ChunkSizing_Tokenizer() when tokenizer != null:
-        return tokenizer(_that.model, _that.cacheDir);
-      case _:
-        return orElse();
+    if (characters != null) {
+      return characters();
     }
+    return orElse();
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// As opposed to `map`, this offers destructuring.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case Subclass2(:final field2):
-  ///     return ...;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult when<TResult extends Object?>({
-    required TResult Function() characters,
-    required TResult Function(String model, String cacheDir) tokenizer,
+  TResult map<TResult extends Object?>({
+    required TResult Function(ChunkSizing_Characters value) characters,
+    required TResult Function(ChunkSizing_Tokenizer value) tokenizer,
   }) {
-    final _that = this;
-    switch (_that) {
-      case ChunkSizing_Characters():
-        return characters();
-      case ChunkSizing_Tokenizer():
-        return tokenizer(_that.model, _that.cacheDir);
-    }
+    return characters(this);
   }
 
-  /// A variant of `when` that fallback to returning `null`
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function()? characters,
-    TResult? Function(String model, String cacheDir)? tokenizer,
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(ChunkSizing_Characters value)? characters,
+    TResult? Function(ChunkSizing_Tokenizer value)? tokenizer,
   }) {
-    final _that = this;
-    switch (_that) {
-      case ChunkSizing_Characters() when characters != null:
-        return characters();
-      case ChunkSizing_Tokenizer() when tokenizer != null:
-        return tokenizer(_that.model, _that.cacheDir);
-      case _:
-        return null;
+    return characters?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(ChunkSizing_Characters value)? characters,
+    TResult Function(ChunkSizing_Tokenizer value)? tokenizer,
+    required TResult orElse(),
+  }) {
+    if (characters != null) {
+      return characters(this);
     }
+    return orElse();
   }
 }
 
-/// @nodoc
-
-class ChunkSizing_Characters extends ChunkSizing {
-  const ChunkSizing_Characters() : super._();
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is ChunkSizing_Characters);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
-
-  @override
-  String toString() {
-    return 'ChunkSizing.characters()';
-  }
+abstract class ChunkSizing_Characters extends ChunkSizing {
+  const factory ChunkSizing_Characters() = _$ChunkSizing_CharactersImpl;
+  const ChunkSizing_Characters._() : super._();
 }
 
 /// @nodoc
+abstract class _$$ChunkSizing_TokenizerImplCopyWith<$Res> {
+  factory _$$ChunkSizing_TokenizerImplCopyWith(
+          _$ChunkSizing_TokenizerImpl value,
+          $Res Function(_$ChunkSizing_TokenizerImpl) then) =
+      __$$ChunkSizing_TokenizerImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String model, String cacheDir});
+}
 
-class ChunkSizing_Tokenizer extends ChunkSizing {
-  const ChunkSizing_Tokenizer({required this.model, required this.cacheDir})
-      : super._();
-
-  final String model;
-  final String cacheDir;
+/// @nodoc
+class __$$ChunkSizing_TokenizerImplCopyWithImpl<$Res>
+    extends _$ChunkSizingCopyWithImpl<$Res, _$ChunkSizing_TokenizerImpl>
+    implements _$$ChunkSizing_TokenizerImplCopyWith<$Res> {
+  __$$ChunkSizing_TokenizerImplCopyWithImpl(_$ChunkSizing_TokenizerImpl _value,
+      $Res Function(_$ChunkSizing_TokenizerImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of ChunkSizing
   /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
   @pragma('vm:prefer-inline')
-  $ChunkSizing_TokenizerCopyWith<ChunkSizing_Tokenizer> get copyWith =>
-      _$ChunkSizing_TokenizerCopyWithImpl<ChunkSizing_Tokenizer>(
-          this, _$identity);
+  @override
+  $Res call({
+    Object? model = null,
+    Object? cacheDir = null,
+  }) {
+    return _then(_$ChunkSizing_TokenizerImpl(
+      model: null == model
+          ? _value.model
+          : model // ignore: cast_nullable_to_non_nullable
+              as String,
+      cacheDir: null == cacheDir
+          ? _value.cacheDir
+          : cacheDir // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$ChunkSizing_TokenizerImpl extends ChunkSizing_Tokenizer {
+  const _$ChunkSizing_TokenizerImpl(
+      {required this.model, required this.cacheDir})
+      : super._();
+
+  @override
+  final String model;
+  @override
+  final String cacheDir;
+
+  @override
+  String toString() {
+    return 'ChunkSizing.tokenizer(model: $model, cacheDir: $cacheDir)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is ChunkSizing_Tokenizer &&
+            other is _$ChunkSizing_TokenizerImpl &&
             (identical(other.model, model) || other.model == model) &&
             (identical(other.cacheDir, cacheDir) ||
                 other.cacheDir == cacheDir));
@@ -1065,87 +2565,298 @@ class ChunkSizing_Tokenizer extends ChunkSizing {
   @override
   int get hashCode => Object.hash(runtimeType, model, cacheDir);
 
+  /// Create a copy of ChunkSizing
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'ChunkSizing.tokenizer(model: $model, cacheDir: $cacheDir)';
+  @pragma('vm:prefer-inline')
+  _$$ChunkSizing_TokenizerImplCopyWith<_$ChunkSizing_TokenizerImpl>
+      get copyWith => __$$ChunkSizing_TokenizerImplCopyWithImpl<
+          _$ChunkSizing_TokenizerImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() characters,
+    required TResult Function(String model, String cacheDir) tokenizer,
+  }) {
+    return tokenizer(model, cacheDir);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? characters,
+    TResult? Function(String model, String cacheDir)? tokenizer,
+  }) {
+    return tokenizer?.call(model, cacheDir);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? characters,
+    TResult Function(String model, String cacheDir)? tokenizer,
+    required TResult orElse(),
+  }) {
+    if (tokenizer != null) {
+      return tokenizer(model, cacheDir);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(ChunkSizing_Characters value) characters,
+    required TResult Function(ChunkSizing_Tokenizer value) tokenizer,
+  }) {
+    return tokenizer(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(ChunkSizing_Characters value)? characters,
+    TResult? Function(ChunkSizing_Tokenizer value)? tokenizer,
+  }) {
+    return tokenizer?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(ChunkSizing_Characters value)? characters,
+    TResult Function(ChunkSizing_Tokenizer value)? tokenizer,
+    required TResult orElse(),
+  }) {
+    if (tokenizer != null) {
+      return tokenizer(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
-abstract mixin class $ChunkSizing_TokenizerCopyWith<$Res>
-    implements $ChunkSizingCopyWith<$Res> {
-  factory $ChunkSizing_TokenizerCopyWith(ChunkSizing_Tokenizer value,
-          $Res Function(ChunkSizing_Tokenizer) _then) =
-      _$ChunkSizing_TokenizerCopyWithImpl;
-  @useResult
-  $Res call({String model, String cacheDir});
-}
+abstract class ChunkSizing_Tokenizer extends ChunkSizing {
+  const factory ChunkSizing_Tokenizer(
+      {required final String model,
+      required final String cacheDir}) = _$ChunkSizing_TokenizerImpl;
+  const ChunkSizing_Tokenizer._() : super._();
 
-/// @nodoc
-class _$ChunkSizing_TokenizerCopyWithImpl<$Res>
-    implements $ChunkSizing_TokenizerCopyWith<$Res> {
-  _$ChunkSizing_TokenizerCopyWithImpl(this._self, this._then);
-
-  final ChunkSizing_Tokenizer _self;
-  final $Res Function(ChunkSizing_Tokenizer) _then;
+  String get model;
+  String get cacheDir;
 
   /// Create a copy of ChunkSizing
   /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ChunkSizing_TokenizerImplCopyWith<_$ChunkSizing_TokenizerImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$EmbeddingModelType {
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String name) preset,
+    required TResult Function(String modelId, int dimensions) custom,
+    required TResult Function(LlmConfig llm) llm,
+    required TResult Function(String name) plugin,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String name)? preset,
+    TResult? Function(String modelId, int dimensions)? custom,
+    TResult? Function(LlmConfig llm)? llm,
+    TResult? Function(String name)? plugin,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String name)? preset,
+    TResult Function(String modelId, int dimensions)? custom,
+    TResult Function(LlmConfig llm)? llm,
+    TResult Function(String name)? plugin,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(EmbeddingModelType_Preset value) preset,
+    required TResult Function(EmbeddingModelType_Custom value) custom,
+    required TResult Function(EmbeddingModelType_Llm value) llm,
+    required TResult Function(EmbeddingModelType_Plugin value) plugin,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(EmbeddingModelType_Preset value)? preset,
+    TResult? Function(EmbeddingModelType_Custom value)? custom,
+    TResult? Function(EmbeddingModelType_Llm value)? llm,
+    TResult? Function(EmbeddingModelType_Plugin value)? plugin,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(EmbeddingModelType_Preset value)? preset,
+    TResult Function(EmbeddingModelType_Custom value)? custom,
+    TResult Function(EmbeddingModelType_Llm value)? llm,
+    TResult Function(EmbeddingModelType_Plugin value)? plugin,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $EmbeddingModelTypeCopyWith<$Res> {
+  factory $EmbeddingModelTypeCopyWith(
+          EmbeddingModelType value, $Res Function(EmbeddingModelType) then) =
+      _$EmbeddingModelTypeCopyWithImpl<$Res, EmbeddingModelType>;
+}
+
+/// @nodoc
+class _$EmbeddingModelTypeCopyWithImpl<$Res, $Val extends EmbeddingModelType>
+    implements $EmbeddingModelTypeCopyWith<$Res> {
+  _$EmbeddingModelTypeCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of EmbeddingModelType
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$EmbeddingModelType_PresetImplCopyWith<$Res> {
+  factory _$$EmbeddingModelType_PresetImplCopyWith(
+          _$EmbeddingModelType_PresetImpl value,
+          $Res Function(_$EmbeddingModelType_PresetImpl) then) =
+      __$$EmbeddingModelType_PresetImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String name});
+}
+
+/// @nodoc
+class __$$EmbeddingModelType_PresetImplCopyWithImpl<$Res>
+    extends _$EmbeddingModelTypeCopyWithImpl<$Res,
+        _$EmbeddingModelType_PresetImpl>
+    implements _$$EmbeddingModelType_PresetImplCopyWith<$Res> {
+  __$$EmbeddingModelType_PresetImplCopyWithImpl(
+      _$EmbeddingModelType_PresetImpl _value,
+      $Res Function(_$EmbeddingModelType_PresetImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of EmbeddingModelType
+  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
-    Object? model = null,
-    Object? cacheDir = null,
+    Object? name = null,
   }) {
-    return _then(ChunkSizing_Tokenizer(
-      model: null == model
-          ? _self.model
-          : model // ignore: cast_nullable_to_non_nullable
-              as String,
-      cacheDir: null == cacheDir
-          ? _self.cacheDir
-          : cacheDir // ignore: cast_nullable_to_non_nullable
+    return _then(_$EmbeddingModelType_PresetImpl(
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
               as String,
     ));
   }
 }
 
 /// @nodoc
-mixin _$EmbeddingModelType {
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is EmbeddingModelType);
-  }
+
+class _$EmbeddingModelType_PresetImpl extends EmbeddingModelType_Preset {
+  const _$EmbeddingModelType_PresetImpl({required this.name}) : super._();
 
   @override
-  int get hashCode => runtimeType.hashCode;
+  final String name;
 
   @override
   String toString() {
-    return 'EmbeddingModelType()';
+    return 'EmbeddingModelType.preset(name: $name)';
   }
-}
 
-/// @nodoc
-class $EmbeddingModelTypeCopyWith<$Res> {
-  $EmbeddingModelTypeCopyWith(
-      EmbeddingModelType _, $Res Function(EmbeddingModelType) __);
-}
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$EmbeddingModelType_PresetImpl &&
+            (identical(other.name, name) || other.name == name));
+  }
 
-/// Adds pattern-matching-related methods to [EmbeddingModelType].
-extension EmbeddingModelTypePatterns on EmbeddingModelType {
-  /// A variant of `map` that fallback to returning `orElse`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
+  @override
+  int get hashCode => Object.hash(runtimeType, name);
 
+  /// Create a copy of EmbeddingModelType
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$EmbeddingModelType_PresetImplCopyWith<_$EmbeddingModelType_PresetImpl>
+      get copyWith => __$$EmbeddingModelType_PresetImplCopyWithImpl<
+          _$EmbeddingModelType_PresetImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String name) preset,
+    required TResult Function(String modelId, int dimensions) custom,
+    required TResult Function(LlmConfig llm) llm,
+    required TResult Function(String name) plugin,
+  }) {
+    return preset(name);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String name)? preset,
+    TResult? Function(String modelId, int dimensions)? custom,
+    TResult? Function(LlmConfig llm)? llm,
+    TResult? Function(String name)? plugin,
+  }) {
+    return preset?.call(name);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String name)? preset,
+    TResult Function(String modelId, int dimensions)? custom,
+    TResult Function(LlmConfig llm)? llm,
+    TResult Function(String name)? plugin,
+    required TResult orElse(),
+  }) {
+    if (preset != null) {
+      return preset(name);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(EmbeddingModelType_Preset value) preset,
+    required TResult Function(EmbeddingModelType_Custom value) custom,
+    required TResult Function(EmbeddingModelType_Llm value) llm,
+    required TResult Function(EmbeddingModelType_Plugin value) plugin,
+  }) {
+    return preset(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(EmbeddingModelType_Preset value)? preset,
+    TResult? Function(EmbeddingModelType_Custom value)? custom,
+    TResult? Function(EmbeddingModelType_Llm value)? llm,
+    TResult? Function(EmbeddingModelType_Plugin value)? plugin,
+  }) {
+    return preset?.call(this);
+  }
+
+  @override
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(EmbeddingModelType_Preset value)? preset,
@@ -1154,279 +2865,90 @@ extension EmbeddingModelTypePatterns on EmbeddingModelType {
     TResult Function(EmbeddingModelType_Plugin value)? plugin,
     required TResult orElse(),
   }) {
-    final _that = this;
-    switch (_that) {
-      case EmbeddingModelType_Preset() when preset != null:
-        return preset(_that);
-      case EmbeddingModelType_Custom() when custom != null:
-        return custom(_that);
-      case EmbeddingModelType_Llm() when llm != null:
-        return llm(_that);
-      case EmbeddingModelType_Plugin() when plugin != null:
-        return plugin(_that);
-      case _:
-        return orElse();
+    if (preset != null) {
+      return preset(this);
     }
-  }
-
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// Callbacks receives the raw object, upcasted.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case final Subclass2 value:
-  ///     return ...;
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult map<TResult extends Object?>({
-    required TResult Function(EmbeddingModelType_Preset value) preset,
-    required TResult Function(EmbeddingModelType_Custom value) custom,
-    required TResult Function(EmbeddingModelType_Llm value) llm,
-    required TResult Function(EmbeddingModelType_Plugin value) plugin,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case EmbeddingModelType_Preset():
-        return preset(_that);
-      case EmbeddingModelType_Custom():
-        return custom(_that);
-      case EmbeddingModelType_Llm():
-        return llm(_that);
-      case EmbeddingModelType_Plugin():
-        return plugin(_that);
-    }
-  }
-
-  /// A variant of `map` that fallback to returning `null`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult? mapOrNull<TResult extends Object?>({
-    TResult? Function(EmbeddingModelType_Preset value)? preset,
-    TResult? Function(EmbeddingModelType_Custom value)? custom,
-    TResult? Function(EmbeddingModelType_Llm value)? llm,
-    TResult? Function(EmbeddingModelType_Plugin value)? plugin,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case EmbeddingModelType_Preset() when preset != null:
-        return preset(_that);
-      case EmbeddingModelType_Custom() when custom != null:
-        return custom(_that);
-      case EmbeddingModelType_Llm() when llm != null:
-        return llm(_that);
-      case EmbeddingModelType_Plugin() when plugin != null:
-        return plugin(_that);
-      case _:
-        return null;
-    }
-  }
-
-  /// A variant of `when` that fallback to an `orElse` callback.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult maybeWhen<TResult extends Object?>({
-    TResult Function(String name)? preset,
-    TResult Function(String modelId, PlatformInt64 dimensions)? custom,
-    TResult Function(LlmConfig llm)? llm,
-    TResult Function(String name)? plugin,
-    required TResult orElse(),
-  }) {
-    final _that = this;
-    switch (_that) {
-      case EmbeddingModelType_Preset() when preset != null:
-        return preset(_that.name);
-      case EmbeddingModelType_Custom() when custom != null:
-        return custom(_that.modelId, _that.dimensions);
-      case EmbeddingModelType_Llm() when llm != null:
-        return llm(_that.llm);
-      case EmbeddingModelType_Plugin() when plugin != null:
-        return plugin(_that.name);
-      case _:
-        return orElse();
-    }
-  }
-
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// As opposed to `map`, this offers destructuring.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case Subclass2(:final field2):
-  ///     return ...;
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult when<TResult extends Object?>({
-    required TResult Function(String name) preset,
-    required TResult Function(String modelId, PlatformInt64 dimensions) custom,
-    required TResult Function(LlmConfig llm) llm,
-    required TResult Function(String name) plugin,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case EmbeddingModelType_Preset():
-        return preset(_that.name);
-      case EmbeddingModelType_Custom():
-        return custom(_that.modelId, _that.dimensions);
-      case EmbeddingModelType_Llm():
-        return llm(_that.llm);
-      case EmbeddingModelType_Plugin():
-        return plugin(_that.name);
-    }
-  }
-
-  /// A variant of `when` that fallback to returning `null`
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(String name)? preset,
-    TResult? Function(String modelId, PlatformInt64 dimensions)? custom,
-    TResult? Function(LlmConfig llm)? llm,
-    TResult? Function(String name)? plugin,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case EmbeddingModelType_Preset() when preset != null:
-        return preset(_that.name);
-      case EmbeddingModelType_Custom() when custom != null:
-        return custom(_that.modelId, _that.dimensions);
-      case EmbeddingModelType_Llm() when llm != null:
-        return llm(_that.llm);
-      case EmbeddingModelType_Plugin() when plugin != null:
-        return plugin(_that.name);
-      case _:
-        return null;
-    }
+    return orElse();
   }
 }
 
-/// @nodoc
+abstract class EmbeddingModelType_Preset extends EmbeddingModelType {
+  const factory EmbeddingModelType_Preset({required final String name}) =
+      _$EmbeddingModelType_PresetImpl;
+  const EmbeddingModelType_Preset._() : super._();
 
-class EmbeddingModelType_Preset extends EmbeddingModelType {
-  const EmbeddingModelType_Preset({required this.name}) : super._();
-
-  final String name;
+  String get name;
 
   /// Create a copy of EmbeddingModelType
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $EmbeddingModelType_PresetCopyWith<EmbeddingModelType_Preset> get copyWith =>
-      _$EmbeddingModelType_PresetCopyWithImpl<EmbeddingModelType_Preset>(
-          this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is EmbeddingModelType_Preset &&
-            (identical(other.name, name) || other.name == name));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, name);
-
-  @override
-  String toString() {
-    return 'EmbeddingModelType.preset(name: $name)';
-  }
+  _$$EmbeddingModelType_PresetImplCopyWith<_$EmbeddingModelType_PresetImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract mixin class $EmbeddingModelType_PresetCopyWith<$Res>
-    implements $EmbeddingModelTypeCopyWith<$Res> {
-  factory $EmbeddingModelType_PresetCopyWith(EmbeddingModelType_Preset value,
-          $Res Function(EmbeddingModelType_Preset) _then) =
-      _$EmbeddingModelType_PresetCopyWithImpl;
+abstract class _$$EmbeddingModelType_CustomImplCopyWith<$Res> {
+  factory _$$EmbeddingModelType_CustomImplCopyWith(
+          _$EmbeddingModelType_CustomImpl value,
+          $Res Function(_$EmbeddingModelType_CustomImpl) then) =
+      __$$EmbeddingModelType_CustomImplCopyWithImpl<$Res>;
   @useResult
-  $Res call({String name});
+  $Res call({String modelId, int dimensions});
 }
 
 /// @nodoc
-class _$EmbeddingModelType_PresetCopyWithImpl<$Res>
-    implements $EmbeddingModelType_PresetCopyWith<$Res> {
-  _$EmbeddingModelType_PresetCopyWithImpl(this._self, this._then);
-
-  final EmbeddingModelType_Preset _self;
-  final $Res Function(EmbeddingModelType_Preset) _then;
+class __$$EmbeddingModelType_CustomImplCopyWithImpl<$Res>
+    extends _$EmbeddingModelTypeCopyWithImpl<$Res,
+        _$EmbeddingModelType_CustomImpl>
+    implements _$$EmbeddingModelType_CustomImplCopyWith<$Res> {
+  __$$EmbeddingModelType_CustomImplCopyWithImpl(
+      _$EmbeddingModelType_CustomImpl _value,
+      $Res Function(_$EmbeddingModelType_CustomImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of EmbeddingModelType
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
-    Object? name = null,
+    Object? modelId = null,
+    Object? dimensions = null,
   }) {
-    return _then(EmbeddingModelType_Preset(
-      name: null == name
-          ? _self.name
-          : name // ignore: cast_nullable_to_non_nullable
+    return _then(_$EmbeddingModelType_CustomImpl(
+      modelId: null == modelId
+          ? _value.modelId
+          : modelId // ignore: cast_nullable_to_non_nullable
               as String,
+      dimensions: null == dimensions
+          ? _value.dimensions
+          : dimensions // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
 
 /// @nodoc
 
-class EmbeddingModelType_Custom extends EmbeddingModelType {
-  const EmbeddingModelType_Custom(
+class _$EmbeddingModelType_CustomImpl extends EmbeddingModelType_Custom {
+  const _$EmbeddingModelType_CustomImpl(
       {required this.modelId, required this.dimensions})
       : super._();
 
+  @override
   final String modelId;
-  final PlatformInt64 dimensions;
+  @override
+  final int dimensions;
 
-  /// Create a copy of EmbeddingModelType
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $EmbeddingModelType_CustomCopyWith<EmbeddingModelType_Custom> get copyWith =>
-      _$EmbeddingModelType_CustomCopyWithImpl<EmbeddingModelType_Custom>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'EmbeddingModelType.custom(modelId: $modelId, dimensions: $dimensions)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is EmbeddingModelType_Custom &&
+            other is _$EmbeddingModelType_CustomImpl &&
             (identical(other.modelId, modelId) || other.modelId == modelId) &&
             (identical(other.dimensions, dimensions) ||
                 other.dimensions == dimensions));
@@ -1435,109 +2957,135 @@ class EmbeddingModelType_Custom extends EmbeddingModelType {
   @override
   int get hashCode => Object.hash(runtimeType, modelId, dimensions);
 
-  @override
-  String toString() {
-    return 'EmbeddingModelType.custom(modelId: $modelId, dimensions: $dimensions)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $EmbeddingModelType_CustomCopyWith<$Res>
-    implements $EmbeddingModelTypeCopyWith<$Res> {
-  factory $EmbeddingModelType_CustomCopyWith(EmbeddingModelType_Custom value,
-          $Res Function(EmbeddingModelType_Custom) _then) =
-      _$EmbeddingModelType_CustomCopyWithImpl;
-  @useResult
-  $Res call({String modelId, PlatformInt64 dimensions});
-}
-
-/// @nodoc
-class _$EmbeddingModelType_CustomCopyWithImpl<$Res>
-    implements $EmbeddingModelType_CustomCopyWith<$Res> {
-  _$EmbeddingModelType_CustomCopyWithImpl(this._self, this._then);
-
-  final EmbeddingModelType_Custom _self;
-  final $Res Function(EmbeddingModelType_Custom) _then;
-
   /// Create a copy of EmbeddingModelType
   /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
   @pragma('vm:prefer-inline')
-  $Res call({
-    Object? modelId = null,
-    Object? dimensions = null,
+  _$$EmbeddingModelType_CustomImplCopyWith<_$EmbeddingModelType_CustomImpl>
+      get copyWith => __$$EmbeddingModelType_CustomImplCopyWithImpl<
+          _$EmbeddingModelType_CustomImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String name) preset,
+    required TResult Function(String modelId, int dimensions) custom,
+    required TResult Function(LlmConfig llm) llm,
+    required TResult Function(String name) plugin,
   }) {
-    return _then(EmbeddingModelType_Custom(
-      modelId: null == modelId
-          ? _self.modelId
-          : modelId // ignore: cast_nullable_to_non_nullable
-              as String,
-      dimensions: null == dimensions
-          ? _self.dimensions
-          : dimensions // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-    ));
+    return custom(modelId, dimensions);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String name)? preset,
+    TResult? Function(String modelId, int dimensions)? custom,
+    TResult? Function(LlmConfig llm)? llm,
+    TResult? Function(String name)? plugin,
+  }) {
+    return custom?.call(modelId, dimensions);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String name)? preset,
+    TResult Function(String modelId, int dimensions)? custom,
+    TResult Function(LlmConfig llm)? llm,
+    TResult Function(String name)? plugin,
+    required TResult orElse(),
+  }) {
+    if (custom != null) {
+      return custom(modelId, dimensions);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(EmbeddingModelType_Preset value) preset,
+    required TResult Function(EmbeddingModelType_Custom value) custom,
+    required TResult Function(EmbeddingModelType_Llm value) llm,
+    required TResult Function(EmbeddingModelType_Plugin value) plugin,
+  }) {
+    return custom(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(EmbeddingModelType_Preset value)? preset,
+    TResult? Function(EmbeddingModelType_Custom value)? custom,
+    TResult? Function(EmbeddingModelType_Llm value)? llm,
+    TResult? Function(EmbeddingModelType_Plugin value)? plugin,
+  }) {
+    return custom?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(EmbeddingModelType_Preset value)? preset,
+    TResult Function(EmbeddingModelType_Custom value)? custom,
+    TResult Function(EmbeddingModelType_Llm value)? llm,
+    TResult Function(EmbeddingModelType_Plugin value)? plugin,
+    required TResult orElse(),
+  }) {
+    if (custom != null) {
+      return custom(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
+abstract class EmbeddingModelType_Custom extends EmbeddingModelType {
+  const factory EmbeddingModelType_Custom(
+      {required final String modelId,
+      required final int dimensions}) = _$EmbeddingModelType_CustomImpl;
+  const EmbeddingModelType_Custom._() : super._();
 
-class EmbeddingModelType_Llm extends EmbeddingModelType {
-  const EmbeddingModelType_Llm({required this.llm}) : super._();
-
-  final LlmConfig llm;
+  String get modelId;
+  int get dimensions;
 
   /// Create a copy of EmbeddingModelType
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $EmbeddingModelType_LlmCopyWith<EmbeddingModelType_Llm> get copyWith =>
-      _$EmbeddingModelType_LlmCopyWithImpl<EmbeddingModelType_Llm>(
-          this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is EmbeddingModelType_Llm &&
-            (identical(other.llm, llm) || other.llm == llm));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, llm);
-
-  @override
-  String toString() {
-    return 'EmbeddingModelType.llm(llm: $llm)';
-  }
+  _$$EmbeddingModelType_CustomImplCopyWith<_$EmbeddingModelType_CustomImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract mixin class $EmbeddingModelType_LlmCopyWith<$Res>
-    implements $EmbeddingModelTypeCopyWith<$Res> {
-  factory $EmbeddingModelType_LlmCopyWith(EmbeddingModelType_Llm value,
-          $Res Function(EmbeddingModelType_Llm) _then) =
-      _$EmbeddingModelType_LlmCopyWithImpl;
+abstract class _$$EmbeddingModelType_LlmImplCopyWith<$Res> {
+  factory _$$EmbeddingModelType_LlmImplCopyWith(
+          _$EmbeddingModelType_LlmImpl value,
+          $Res Function(_$EmbeddingModelType_LlmImpl) then) =
+      __$$EmbeddingModelType_LlmImplCopyWithImpl<$Res>;
   @useResult
   $Res call({LlmConfig llm});
 }
 
 /// @nodoc
-class _$EmbeddingModelType_LlmCopyWithImpl<$Res>
-    implements $EmbeddingModelType_LlmCopyWith<$Res> {
-  _$EmbeddingModelType_LlmCopyWithImpl(this._self, this._then);
-
-  final EmbeddingModelType_Llm _self;
-  final $Res Function(EmbeddingModelType_Llm) _then;
+class __$$EmbeddingModelType_LlmImplCopyWithImpl<$Res>
+    extends _$EmbeddingModelTypeCopyWithImpl<$Res, _$EmbeddingModelType_LlmImpl>
+    implements _$$EmbeddingModelType_LlmImplCopyWith<$Res> {
+  __$$EmbeddingModelType_LlmImplCopyWithImpl(
+      _$EmbeddingModelType_LlmImpl _value,
+      $Res Function(_$EmbeddingModelType_LlmImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of EmbeddingModelType
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? llm = null,
   }) {
-    return _then(EmbeddingModelType_Llm(
+    return _then(_$EmbeddingModelType_LlmImpl(
       llm: null == llm
-          ? _self.llm
+          ? _value.llm
           : llm // ignore: cast_nullable_to_non_nullable
               as LlmConfig,
     ));
@@ -1546,63 +3094,156 @@ class _$EmbeddingModelType_LlmCopyWithImpl<$Res>
 
 /// @nodoc
 
-class EmbeddingModelType_Plugin extends EmbeddingModelType {
-  const EmbeddingModelType_Plugin({required this.name}) : super._();
+class _$EmbeddingModelType_LlmImpl extends EmbeddingModelType_Llm {
+  const _$EmbeddingModelType_LlmImpl({required this.llm}) : super._();
 
-  final String name;
+  @override
+  final LlmConfig llm;
 
-  /// Create a copy of EmbeddingModelType
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $EmbeddingModelType_PluginCopyWith<EmbeddingModelType_Plugin> get copyWith =>
-      _$EmbeddingModelType_PluginCopyWithImpl<EmbeddingModelType_Plugin>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'EmbeddingModelType.llm(llm: $llm)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is EmbeddingModelType_Plugin &&
-            (identical(other.name, name) || other.name == name));
+            other is _$EmbeddingModelType_LlmImpl &&
+            (identical(other.llm, llm) || other.llm == llm));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, name);
+  int get hashCode => Object.hash(runtimeType, llm);
+
+  /// Create a copy of EmbeddingModelType
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$EmbeddingModelType_LlmImplCopyWith<_$EmbeddingModelType_LlmImpl>
+      get copyWith => __$$EmbeddingModelType_LlmImplCopyWithImpl<
+          _$EmbeddingModelType_LlmImpl>(this, _$identity);
 
   @override
-  String toString() {
-    return 'EmbeddingModelType.plugin(name: $name)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String name) preset,
+    required TResult Function(String modelId, int dimensions) custom,
+    required TResult Function(LlmConfig llm) llm,
+    required TResult Function(String name) plugin,
+  }) {
+    return llm(this.llm);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String name)? preset,
+    TResult? Function(String modelId, int dimensions)? custom,
+    TResult? Function(LlmConfig llm)? llm,
+    TResult? Function(String name)? plugin,
+  }) {
+    return llm?.call(this.llm);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String name)? preset,
+    TResult Function(String modelId, int dimensions)? custom,
+    TResult Function(LlmConfig llm)? llm,
+    TResult Function(String name)? plugin,
+    required TResult orElse(),
+  }) {
+    if (llm != null) {
+      return llm(this.llm);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(EmbeddingModelType_Preset value) preset,
+    required TResult Function(EmbeddingModelType_Custom value) custom,
+    required TResult Function(EmbeddingModelType_Llm value) llm,
+    required TResult Function(EmbeddingModelType_Plugin value) plugin,
+  }) {
+    return llm(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(EmbeddingModelType_Preset value)? preset,
+    TResult? Function(EmbeddingModelType_Custom value)? custom,
+    TResult? Function(EmbeddingModelType_Llm value)? llm,
+    TResult? Function(EmbeddingModelType_Plugin value)? plugin,
+  }) {
+    return llm?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(EmbeddingModelType_Preset value)? preset,
+    TResult Function(EmbeddingModelType_Custom value)? custom,
+    TResult Function(EmbeddingModelType_Llm value)? llm,
+    TResult Function(EmbeddingModelType_Plugin value)? plugin,
+    required TResult orElse(),
+  }) {
+    if (llm != null) {
+      return llm(this);
+    }
+    return orElse();
   }
 }
 
+abstract class EmbeddingModelType_Llm extends EmbeddingModelType {
+  const factory EmbeddingModelType_Llm({required final LlmConfig llm}) =
+      _$EmbeddingModelType_LlmImpl;
+  const EmbeddingModelType_Llm._() : super._();
+
+  LlmConfig get llm;
+
+  /// Create a copy of EmbeddingModelType
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$EmbeddingModelType_LlmImplCopyWith<_$EmbeddingModelType_LlmImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $EmbeddingModelType_PluginCopyWith<$Res>
-    implements $EmbeddingModelTypeCopyWith<$Res> {
-  factory $EmbeddingModelType_PluginCopyWith(EmbeddingModelType_Plugin value,
-          $Res Function(EmbeddingModelType_Plugin) _then) =
-      _$EmbeddingModelType_PluginCopyWithImpl;
+abstract class _$$EmbeddingModelType_PluginImplCopyWith<$Res> {
+  factory _$$EmbeddingModelType_PluginImplCopyWith(
+          _$EmbeddingModelType_PluginImpl value,
+          $Res Function(_$EmbeddingModelType_PluginImpl) then) =
+      __$$EmbeddingModelType_PluginImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String name});
 }
 
 /// @nodoc
-class _$EmbeddingModelType_PluginCopyWithImpl<$Res>
-    implements $EmbeddingModelType_PluginCopyWith<$Res> {
-  _$EmbeddingModelType_PluginCopyWithImpl(this._self, this._then);
-
-  final EmbeddingModelType_Plugin _self;
-  final $Res Function(EmbeddingModelType_Plugin) _then;
+class __$$EmbeddingModelType_PluginImplCopyWithImpl<$Res>
+    extends _$EmbeddingModelTypeCopyWithImpl<$Res,
+        _$EmbeddingModelType_PluginImpl>
+    implements _$$EmbeddingModelType_PluginImplCopyWith<$Res> {
+  __$$EmbeddingModelType_PluginImplCopyWithImpl(
+      _$EmbeddingModelType_PluginImpl _value,
+      $Res Function(_$EmbeddingModelType_PluginImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of EmbeddingModelType
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? name = null,
   }) {
-    return _then(EmbeddingModelType_Plugin(
+    return _then(_$EmbeddingModelType_PluginImpl(
       name: null == name
-          ? _self.name
+          ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -1610,46 +3251,251 @@ class _$EmbeddingModelType_PluginCopyWithImpl<$Res>
 }
 
 /// @nodoc
-mixin _$FormatMetadata {
-  Object get field0;
+
+class _$EmbeddingModelType_PluginImpl extends EmbeddingModelType_Plugin {
+  const _$EmbeddingModelType_PluginImpl({required this.name}) : super._();
+
+  @override
+  final String name;
+
+  @override
+  String toString() {
+    return 'EmbeddingModelType.plugin(name: $name)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata &&
-            const DeepCollectionEquality().equals(other.field0, field0));
+            other is _$EmbeddingModelType_PluginImpl &&
+            (identical(other.name, name) || other.name == name));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, const DeepCollectionEquality().hash(field0));
+  int get hashCode => Object.hash(runtimeType, name);
+
+  /// Create a copy of EmbeddingModelType
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$EmbeddingModelType_PluginImplCopyWith<_$EmbeddingModelType_PluginImpl>
+      get copyWith => __$$EmbeddingModelType_PluginImplCopyWithImpl<
+          _$EmbeddingModelType_PluginImpl>(this, _$identity);
 
   @override
-  String toString() {
-    return 'FormatMetadata(field0: $field0)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String name) preset,
+    required TResult Function(String modelId, int dimensions) custom,
+    required TResult Function(LlmConfig llm) llm,
+    required TResult Function(String name) plugin,
+  }) {
+    return plugin(name);
   }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String name)? preset,
+    TResult? Function(String modelId, int dimensions)? custom,
+    TResult? Function(LlmConfig llm)? llm,
+    TResult? Function(String name)? plugin,
+  }) {
+    return plugin?.call(name);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String name)? preset,
+    TResult Function(String modelId, int dimensions)? custom,
+    TResult Function(LlmConfig llm)? llm,
+    TResult Function(String name)? plugin,
+    required TResult orElse(),
+  }) {
+    if (plugin != null) {
+      return plugin(name);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(EmbeddingModelType_Preset value) preset,
+    required TResult Function(EmbeddingModelType_Custom value) custom,
+    required TResult Function(EmbeddingModelType_Llm value) llm,
+    required TResult Function(EmbeddingModelType_Plugin value) plugin,
+  }) {
+    return plugin(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(EmbeddingModelType_Preset value)? preset,
+    TResult? Function(EmbeddingModelType_Custom value)? custom,
+    TResult? Function(EmbeddingModelType_Llm value)? llm,
+    TResult? Function(EmbeddingModelType_Plugin value)? plugin,
+  }) {
+    return plugin?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(EmbeddingModelType_Preset value)? preset,
+    TResult Function(EmbeddingModelType_Custom value)? custom,
+    TResult Function(EmbeddingModelType_Llm value)? llm,
+    TResult Function(EmbeddingModelType_Plugin value)? plugin,
+    required TResult orElse(),
+  }) {
+    if (plugin != null) {
+      return plugin(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class EmbeddingModelType_Plugin extends EmbeddingModelType {
+  const factory EmbeddingModelType_Plugin({required final String name}) =
+      _$EmbeddingModelType_PluginImpl;
+  const EmbeddingModelType_Plugin._() : super._();
+
+  String get name;
+
+  /// Create a copy of EmbeddingModelType
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$EmbeddingModelType_PluginImplCopyWith<_$EmbeddingModelType_PluginImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-class $FormatMetadataCopyWith<$Res> {
-  $FormatMetadataCopyWith(FormatMetadata _, $Res Function(FormatMetadata) __);
-}
-
-/// Adds pattern-matching-related methods to [FormatMetadata].
-extension FormatMetadataPatterns on FormatMetadata {
-  /// A variant of `map` that fallback to returning `orElse`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+mixin _$FormatMetadata {
+  Object get field0 => throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(FormatMetadata_Pdf value)? pdf,
@@ -1673,229 +3519,152 @@ extension FormatMetadataPatterns on FormatMetadata {
     TResult Function(FormatMetadata_Pst value)? pst,
     TResult Function(FormatMetadata_Code value)? code,
     required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $FormatMetadataCopyWith<$Res> {
+  factory $FormatMetadataCopyWith(
+          FormatMetadata value, $Res Function(FormatMetadata) then) =
+      _$FormatMetadataCopyWithImpl<$Res, FormatMetadata>;
+}
+
+/// @nodoc
+class _$FormatMetadataCopyWithImpl<$Res, $Val extends FormatMetadata>
+    implements $FormatMetadataCopyWith<$Res> {
+  _$FormatMetadataCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$FormatMetadata_PdfImplCopyWith<$Res> {
+  factory _$$FormatMetadata_PdfImplCopyWith(_$FormatMetadata_PdfImpl value,
+          $Res Function(_$FormatMetadata_PdfImpl) then) =
+      __$$FormatMetadata_PdfImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({PdfMetadata field0});
+}
+
+/// @nodoc
+class __$$FormatMetadata_PdfImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_PdfImpl>
+    implements _$$FormatMetadata_PdfImplCopyWith<$Res> {
+  __$$FormatMetadata_PdfImplCopyWithImpl(_$FormatMetadata_PdfImpl _value,
+      $Res Function(_$FormatMetadata_PdfImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? field0 = null,
   }) {
-    final _that = this;
-    switch (_that) {
-      case FormatMetadata_Pdf() when pdf != null:
-        return pdf(_that);
-      case FormatMetadata_Docx() when docx != null:
-        return docx(_that);
-      case FormatMetadata_Excel() when excel != null:
-        return excel(_that);
-      case FormatMetadata_Email() when email != null:
-        return email(_that);
-      case FormatMetadata_Pptx() when pptx != null:
-        return pptx(_that);
-      case FormatMetadata_Archive() when archive != null:
-        return archive(_that);
-      case FormatMetadata_Image() when image != null:
-        return image(_that);
-      case FormatMetadata_Xml() when xml != null:
-        return xml(_that);
-      case FormatMetadata_Text() when text != null:
-        return text(_that);
-      case FormatMetadata_Html() when html != null:
-        return html(_that);
-      case FormatMetadata_Ocr() when ocr != null:
-        return ocr(_that);
-      case FormatMetadata_Csv() when csv != null:
-        return csv(_that);
-      case FormatMetadata_Bibtex() when bibtex != null:
-        return bibtex(_that);
-      case FormatMetadata_Citation() when citation != null:
-        return citation(_that);
-      case FormatMetadata_FictionBook() when fictionBook != null:
-        return fictionBook(_that);
-      case FormatMetadata_Dbf() when dbf != null:
-        return dbf(_that);
-      case FormatMetadata_Jats() when jats != null:
-        return jats(_that);
-      case FormatMetadata_Epub() when epub != null:
-        return epub(_that);
-      case FormatMetadata_Pst() when pst != null:
-        return pst(_that);
-      case FormatMetadata_Code() when code != null:
-        return code(_that);
-      case _:
-        return orElse();
-    }
+    return _then(_$FormatMetadata_PdfImpl(
+      field0: null == field0
+          ? _value.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as PdfMetadata,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$FormatMetadata_PdfImpl extends FormatMetadata_Pdf {
+  const _$FormatMetadata_PdfImpl({required this.field0}) : super._();
+
+  @override
+  final PdfMetadata field0;
+
+  @override
+  String toString() {
+    return 'FormatMetadata.pdf(field0: $field0)';
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// Callbacks receives the raw object, upcasted.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case final Subclass2 value:
-  ///     return ...;
-  /// }
-  /// ```
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$FormatMetadata_PdfImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
 
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_PdfImplCopyWith<_$FormatMetadata_PdfImpl> get copyWith =>
+      __$$FormatMetadata_PdfImplCopyWithImpl<_$FormatMetadata_PdfImpl>(
+          this, _$identity);
+
+  @override
   @optionalTypeArgs
-  TResult map<TResult extends Object?>({
-    required TResult Function(FormatMetadata_Pdf value) pdf,
-    required TResult Function(FormatMetadata_Docx value) docx,
-    required TResult Function(FormatMetadata_Excel value) excel,
-    required TResult Function(FormatMetadata_Email value) email,
-    required TResult Function(FormatMetadata_Pptx value) pptx,
-    required TResult Function(FormatMetadata_Archive value) archive,
-    required TResult Function(FormatMetadata_Image value) image,
-    required TResult Function(FormatMetadata_Xml value) xml,
-    required TResult Function(FormatMetadata_Text value) text,
-    required TResult Function(FormatMetadata_Html value) html,
-    required TResult Function(FormatMetadata_Ocr value) ocr,
-    required TResult Function(FormatMetadata_Csv value) csv,
-    required TResult Function(FormatMetadata_Bibtex value) bibtex,
-    required TResult Function(FormatMetadata_Citation value) citation,
-    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
-    required TResult Function(FormatMetadata_Dbf value) dbf,
-    required TResult Function(FormatMetadata_Jats value) jats,
-    required TResult Function(FormatMetadata_Epub value) epub,
-    required TResult Function(FormatMetadata_Pst value) pst,
-    required TResult Function(FormatMetadata_Code value) code,
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
   }) {
-    final _that = this;
-    switch (_that) {
-      case FormatMetadata_Pdf():
-        return pdf(_that);
-      case FormatMetadata_Docx():
-        return docx(_that);
-      case FormatMetadata_Excel():
-        return excel(_that);
-      case FormatMetadata_Email():
-        return email(_that);
-      case FormatMetadata_Pptx():
-        return pptx(_that);
-      case FormatMetadata_Archive():
-        return archive(_that);
-      case FormatMetadata_Image():
-        return image(_that);
-      case FormatMetadata_Xml():
-        return xml(_that);
-      case FormatMetadata_Text():
-        return text(_that);
-      case FormatMetadata_Html():
-        return html(_that);
-      case FormatMetadata_Ocr():
-        return ocr(_that);
-      case FormatMetadata_Csv():
-        return csv(_that);
-      case FormatMetadata_Bibtex():
-        return bibtex(_that);
-      case FormatMetadata_Citation():
-        return citation(_that);
-      case FormatMetadata_FictionBook():
-        return fictionBook(_that);
-      case FormatMetadata_Dbf():
-        return dbf(_that);
-      case FormatMetadata_Jats():
-        return jats(_that);
-      case FormatMetadata_Epub():
-        return epub(_that);
-      case FormatMetadata_Pst():
-        return pst(_that);
-      case FormatMetadata_Code():
-        return code(_that);
-    }
+    return pdf(field0);
   }
 
-  /// A variant of `map` that fallback to returning `null`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult? mapOrNull<TResult extends Object?>({
-    TResult? Function(FormatMetadata_Pdf value)? pdf,
-    TResult? Function(FormatMetadata_Docx value)? docx,
-    TResult? Function(FormatMetadata_Excel value)? excel,
-    TResult? Function(FormatMetadata_Email value)? email,
-    TResult? Function(FormatMetadata_Pptx value)? pptx,
-    TResult? Function(FormatMetadata_Archive value)? archive,
-    TResult? Function(FormatMetadata_Image value)? image,
-    TResult? Function(FormatMetadata_Xml value)? xml,
-    TResult? Function(FormatMetadata_Text value)? text,
-    TResult? Function(FormatMetadata_Html value)? html,
-    TResult? Function(FormatMetadata_Ocr value)? ocr,
-    TResult? Function(FormatMetadata_Csv value)? csv,
-    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
-    TResult? Function(FormatMetadata_Citation value)? citation,
-    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
-    TResult? Function(FormatMetadata_Dbf value)? dbf,
-    TResult? Function(FormatMetadata_Jats value)? jats,
-    TResult? Function(FormatMetadata_Epub value)? epub,
-    TResult? Function(FormatMetadata_Pst value)? pst,
-    TResult? Function(FormatMetadata_Code value)? code,
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
   }) {
-    final _that = this;
-    switch (_that) {
-      case FormatMetadata_Pdf() when pdf != null:
-        return pdf(_that);
-      case FormatMetadata_Docx() when docx != null:
-        return docx(_that);
-      case FormatMetadata_Excel() when excel != null:
-        return excel(_that);
-      case FormatMetadata_Email() when email != null:
-        return email(_that);
-      case FormatMetadata_Pptx() when pptx != null:
-        return pptx(_that);
-      case FormatMetadata_Archive() when archive != null:
-        return archive(_that);
-      case FormatMetadata_Image() when image != null:
-        return image(_that);
-      case FormatMetadata_Xml() when xml != null:
-        return xml(_that);
-      case FormatMetadata_Text() when text != null:
-        return text(_that);
-      case FormatMetadata_Html() when html != null:
-        return html(_that);
-      case FormatMetadata_Ocr() when ocr != null:
-        return ocr(_that);
-      case FormatMetadata_Csv() when csv != null:
-        return csv(_that);
-      case FormatMetadata_Bibtex() when bibtex != null:
-        return bibtex(_that);
-      case FormatMetadata_Citation() when citation != null:
-        return citation(_that);
-      case FormatMetadata_FictionBook() when fictionBook != null:
-        return fictionBook(_that);
-      case FormatMetadata_Dbf() when dbf != null:
-        return dbf(_that);
-      case FormatMetadata_Jats() when jats != null:
-        return jats(_that);
-      case FormatMetadata_Epub() when epub != null:
-        return epub(_that);
-      case FormatMetadata_Pst() when pst != null:
-        return pst(_that);
-      case FormatMetadata_Code() when code != null:
-        return code(_that);
-      case _:
-        return null;
-    }
+    return pdf?.call(field0);
   }
 
-  /// A variant of `when` that fallback to an `orElse` callback.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(PdfMetadata field0)? pdf,
@@ -1920,66 +3689,180 @@ extension FormatMetadataPatterns on FormatMetadata {
     TResult Function(String field0)? code,
     required TResult orElse(),
   }) {
-    final _that = this;
-    switch (_that) {
-      case FormatMetadata_Pdf() when pdf != null:
-        return pdf(_that.field0);
-      case FormatMetadata_Docx() when docx != null:
-        return docx(_that.field0);
-      case FormatMetadata_Excel() when excel != null:
-        return excel(_that.field0);
-      case FormatMetadata_Email() when email != null:
-        return email(_that.field0);
-      case FormatMetadata_Pptx() when pptx != null:
-        return pptx(_that.field0);
-      case FormatMetadata_Archive() when archive != null:
-        return archive(_that.field0);
-      case FormatMetadata_Image() when image != null:
-        return image(_that.field0);
-      case FormatMetadata_Xml() when xml != null:
-        return xml(_that.field0);
-      case FormatMetadata_Text() when text != null:
-        return text(_that.field0);
-      case FormatMetadata_Html() when html != null:
-        return html(_that.field0);
-      case FormatMetadata_Ocr() when ocr != null:
-        return ocr(_that.field0);
-      case FormatMetadata_Csv() when csv != null:
-        return csv(_that.field0);
-      case FormatMetadata_Bibtex() when bibtex != null:
-        return bibtex(_that.field0);
-      case FormatMetadata_Citation() when citation != null:
-        return citation(_that.field0);
-      case FormatMetadata_FictionBook() when fictionBook != null:
-        return fictionBook(_that.field0);
-      case FormatMetadata_Dbf() when dbf != null:
-        return dbf(_that.field0);
-      case FormatMetadata_Jats() when jats != null:
-        return jats(_that.field0);
-      case FormatMetadata_Epub() when epub != null:
-        return epub(_that.field0);
-      case FormatMetadata_Pst() when pst != null:
-        return pst(_that.field0);
-      case FormatMetadata_Code() when code != null:
-        return code(_that.field0);
-      case _:
-        return orElse();
+    if (pdf != null) {
+      return pdf(field0);
     }
+    return orElse();
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// As opposed to `map`, this offers destructuring.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case Subclass2(:final field2):
-  ///     return ...;
-  /// }
-  /// ```
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return pdf(this);
+  }
 
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return pdf?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (pdf != null) {
+      return pdf(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class FormatMetadata_Pdf extends FormatMetadata {
+  const factory FormatMetadata_Pdf({required final PdfMetadata field0}) =
+      _$FormatMetadata_PdfImpl;
+  const FormatMetadata_Pdf._() : super._();
+
+  @override
+  PdfMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_PdfImplCopyWith<_$FormatMetadata_PdfImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$FormatMetadata_DocxImplCopyWith<$Res> {
+  factory _$$FormatMetadata_DocxImplCopyWith(_$FormatMetadata_DocxImpl value,
+          $Res Function(_$FormatMetadata_DocxImpl) then) =
+      __$$FormatMetadata_DocxImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({DocxMetadata field0});
+}
+
+/// @nodoc
+class __$$FormatMetadata_DocxImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_DocxImpl>
+    implements _$$FormatMetadata_DocxImplCopyWith<$Res> {
+  __$$FormatMetadata_DocxImplCopyWithImpl(_$FormatMetadata_DocxImpl _value,
+      $Res Function(_$FormatMetadata_DocxImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(_$FormatMetadata_DocxImpl(
+      field0: null == field0
+          ? _value.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as DocxMetadata,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$FormatMetadata_DocxImpl extends FormatMetadata_Docx {
+  const _$FormatMetadata_DocxImpl({required this.field0}) : super._();
+
+  @override
+  final DocxMetadata field0;
+
+  @override
+  String toString() {
+    return 'FormatMetadata.docx(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$FormatMetadata_DocxImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_DocxImplCopyWith<_$FormatMetadata_DocxImpl> get copyWith =>
+      __$$FormatMetadata_DocxImplCopyWithImpl<_$FormatMetadata_DocxImpl>(
+          this, _$identity);
+
+  @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function(PdfMetadata field0) pdf,
@@ -2003,63 +3886,10 @@ extension FormatMetadataPatterns on FormatMetadata {
     required TResult Function(PstMetadata field0) pst,
     required TResult Function(String field0) code,
   }) {
-    final _that = this;
-    switch (_that) {
-      case FormatMetadata_Pdf():
-        return pdf(_that.field0);
-      case FormatMetadata_Docx():
-        return docx(_that.field0);
-      case FormatMetadata_Excel():
-        return excel(_that.field0);
-      case FormatMetadata_Email():
-        return email(_that.field0);
-      case FormatMetadata_Pptx():
-        return pptx(_that.field0);
-      case FormatMetadata_Archive():
-        return archive(_that.field0);
-      case FormatMetadata_Image():
-        return image(_that.field0);
-      case FormatMetadata_Xml():
-        return xml(_that.field0);
-      case FormatMetadata_Text():
-        return text(_that.field0);
-      case FormatMetadata_Html():
-        return html(_that.field0);
-      case FormatMetadata_Ocr():
-        return ocr(_that.field0);
-      case FormatMetadata_Csv():
-        return csv(_that.field0);
-      case FormatMetadata_Bibtex():
-        return bibtex(_that.field0);
-      case FormatMetadata_Citation():
-        return citation(_that.field0);
-      case FormatMetadata_FictionBook():
-        return fictionBook(_that.field0);
-      case FormatMetadata_Dbf():
-        return dbf(_that.field0);
-      case FormatMetadata_Jats():
-        return jats(_that.field0);
-      case FormatMetadata_Epub():
-        return epub(_that.field0);
-      case FormatMetadata_Pst():
-        return pst(_that.field0);
-      case FormatMetadata_Code():
-        return code(_that.field0);
-    }
+    return docx(field0);
   }
 
-  /// A variant of `when` that fallback to returning `null`
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function(PdfMetadata field0)? pdf,
@@ -2083,244 +3913,168 @@ extension FormatMetadataPatterns on FormatMetadata {
     TResult? Function(PstMetadata field0)? pst,
     TResult? Function(String field0)? code,
   }) {
-    final _that = this;
-    switch (_that) {
-      case FormatMetadata_Pdf() when pdf != null:
-        return pdf(_that.field0);
-      case FormatMetadata_Docx() when docx != null:
-        return docx(_that.field0);
-      case FormatMetadata_Excel() when excel != null:
-        return excel(_that.field0);
-      case FormatMetadata_Email() when email != null:
-        return email(_that.field0);
-      case FormatMetadata_Pptx() when pptx != null:
-        return pptx(_that.field0);
-      case FormatMetadata_Archive() when archive != null:
-        return archive(_that.field0);
-      case FormatMetadata_Image() when image != null:
-        return image(_that.field0);
-      case FormatMetadata_Xml() when xml != null:
-        return xml(_that.field0);
-      case FormatMetadata_Text() when text != null:
-        return text(_that.field0);
-      case FormatMetadata_Html() when html != null:
-        return html(_that.field0);
-      case FormatMetadata_Ocr() when ocr != null:
-        return ocr(_that.field0);
-      case FormatMetadata_Csv() when csv != null:
-        return csv(_that.field0);
-      case FormatMetadata_Bibtex() when bibtex != null:
-        return bibtex(_that.field0);
-      case FormatMetadata_Citation() when citation != null:
-        return citation(_that.field0);
-      case FormatMetadata_FictionBook() when fictionBook != null:
-        return fictionBook(_that.field0);
-      case FormatMetadata_Dbf() when dbf != null:
-        return dbf(_that.field0);
-      case FormatMetadata_Jats() when jats != null:
-        return jats(_that.field0);
-      case FormatMetadata_Epub() when epub != null:
-        return epub(_that.field0);
-      case FormatMetadata_Pst() when pst != null:
-        return pst(_that.field0);
-      case FormatMetadata_Code() when code != null:
-        return code(_that.field0);
-      case _:
-        return null;
+    return docx?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (docx != null) {
+      return docx(field0);
     }
-  }
-}
-
-/// @nodoc
-
-class FormatMetadata_Pdf extends FormatMetadata {
-  const FormatMetadata_Pdf({required this.field0}) : super._();
-
-  @override
-  final PdfMetadata field0;
-
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_PdfCopyWith<FormatMetadata_Pdf> get copyWith =>
-      _$FormatMetadata_PdfCopyWithImpl<FormatMetadata_Pdf>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Pdf &&
-            (identical(other.field0, field0) || other.field0 == field0));
+    return orElse();
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, field0);
-
-  @override
-  String toString() {
-    return 'FormatMetadata.pdf(field0: $field0)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $FormatMetadata_PdfCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_PdfCopyWith(
-          FormatMetadata_Pdf value, $Res Function(FormatMetadata_Pdf) _then) =
-      _$FormatMetadata_PdfCopyWithImpl;
-  @useResult
-  $Res call({PdfMetadata field0});
-}
-
-/// @nodoc
-class _$FormatMetadata_PdfCopyWithImpl<$Res>
-    implements $FormatMetadata_PdfCopyWith<$Res> {
-  _$FormatMetadata_PdfCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Pdf _self;
-  final $Res Function(FormatMetadata_Pdf) _then;
-
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? field0 = null,
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
   }) {
-    return _then(FormatMetadata_Pdf(
-      field0: null == field0
-          ? _self.field0
-          : field0 // ignore: cast_nullable_to_non_nullable
-              as PdfMetadata,
-    ));
-  }
-}
-
-/// @nodoc
-
-class FormatMetadata_Docx extends FormatMetadata {
-  const FormatMetadata_Docx({required this.field0}) : super._();
-
-  @override
-  final DocxMetadata field0;
-
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_DocxCopyWith<FormatMetadata_Docx> get copyWith =>
-      _$FormatMetadata_DocxCopyWithImpl<FormatMetadata_Docx>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Docx &&
-            (identical(other.field0, field0) || other.field0 == field0));
+    return docx(this);
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, field0);
-
-  @override
-  String toString() {
-    return 'FormatMetadata.docx(field0: $field0)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $FormatMetadata_DocxCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_DocxCopyWith(
-          FormatMetadata_Docx value, $Res Function(FormatMetadata_Docx) _then) =
-      _$FormatMetadata_DocxCopyWithImpl;
-  @useResult
-  $Res call({DocxMetadata field0});
-}
-
-/// @nodoc
-class _$FormatMetadata_DocxCopyWithImpl<$Res>
-    implements $FormatMetadata_DocxCopyWith<$Res> {
-  _$FormatMetadata_DocxCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Docx _self;
-  final $Res Function(FormatMetadata_Docx) _then;
-
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? field0 = null,
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
   }) {
-    return _then(FormatMetadata_Docx(
-      field0: null == field0
-          ? _self.field0
-          : field0 // ignore: cast_nullable_to_non_nullable
-              as DocxMetadata,
-    ));
+    return docx?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (docx != null) {
+      return docx(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
-
-class FormatMetadata_Excel extends FormatMetadata {
-  const FormatMetadata_Excel({required this.field0}) : super._();
+abstract class FormatMetadata_Docx extends FormatMetadata {
+  const factory FormatMetadata_Docx({required final DocxMetadata field0}) =
+      _$FormatMetadata_DocxImpl;
+  const FormatMetadata_Docx._() : super._();
 
   @override
-  final ExcelMetadata field0;
+  DocxMetadata get field0;
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_ExcelCopyWith<FormatMetadata_Excel> get copyWith =>
-      _$FormatMetadata_ExcelCopyWithImpl<FormatMetadata_Excel>(
-          this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Excel &&
-            (identical(other.field0, field0) || other.field0 == field0));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, field0);
-
-  @override
-  String toString() {
-    return 'FormatMetadata.excel(field0: $field0)';
-  }
+  _$$FormatMetadata_DocxImplCopyWith<_$FormatMetadata_DocxImpl> get copyWith =>
+      throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract mixin class $FormatMetadata_ExcelCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_ExcelCopyWith(FormatMetadata_Excel value,
-          $Res Function(FormatMetadata_Excel) _then) =
-      _$FormatMetadata_ExcelCopyWithImpl;
+abstract class _$$FormatMetadata_ExcelImplCopyWith<$Res> {
+  factory _$$FormatMetadata_ExcelImplCopyWith(_$FormatMetadata_ExcelImpl value,
+          $Res Function(_$FormatMetadata_ExcelImpl) then) =
+      __$$FormatMetadata_ExcelImplCopyWithImpl<$Res>;
   @useResult
   $Res call({ExcelMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_ExcelCopyWithImpl<$Res>
-    implements $FormatMetadata_ExcelCopyWith<$Res> {
-  _$FormatMetadata_ExcelCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Excel _self;
-  final $Res Function(FormatMetadata_Excel) _then;
+class __$$FormatMetadata_ExcelImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_ExcelImpl>
+    implements _$$FormatMetadata_ExcelImplCopyWith<$Res> {
+  __$$FormatMetadata_ExcelImplCopyWithImpl(_$FormatMetadata_ExcelImpl _value,
+      $Res Function(_$FormatMetadata_ExcelImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Excel(
+    return _then(_$FormatMetadata_ExcelImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as ExcelMetadata,
     ));
@@ -2329,64 +4083,251 @@ class _$FormatMetadata_ExcelCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Email extends FormatMetadata {
-  const FormatMetadata_Email({required this.field0}) : super._();
+class _$FormatMetadata_ExcelImpl extends FormatMetadata_Excel {
+  const _$FormatMetadata_ExcelImpl({required this.field0}) : super._();
 
   @override
-  final EmailMetadata field0;
+  final ExcelMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_EmailCopyWith<FormatMetadata_Email> get copyWith =>
-      _$FormatMetadata_EmailCopyWithImpl<FormatMetadata_Email>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.excel(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Email &&
+            other is _$FormatMetadata_ExcelImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.email(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_ExcelImplCopyWith<_$FormatMetadata_ExcelImpl>
+      get copyWith =>
+          __$$FormatMetadata_ExcelImplCopyWithImpl<_$FormatMetadata_ExcelImpl>(
+              this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return excel(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return excel?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (excel != null) {
+      return excel(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return excel(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return excel?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (excel != null) {
+      return excel(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Excel extends FormatMetadata {
+  const factory FormatMetadata_Excel({required final ExcelMetadata field0}) =
+      _$FormatMetadata_ExcelImpl;
+  const FormatMetadata_Excel._() : super._();
+
+  @override
+  ExcelMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_ExcelImplCopyWith<_$FormatMetadata_ExcelImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_EmailCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_EmailCopyWith(FormatMetadata_Email value,
-          $Res Function(FormatMetadata_Email) _then) =
-      _$FormatMetadata_EmailCopyWithImpl;
+abstract class _$$FormatMetadata_EmailImplCopyWith<$Res> {
+  factory _$$FormatMetadata_EmailImplCopyWith(_$FormatMetadata_EmailImpl value,
+          $Res Function(_$FormatMetadata_EmailImpl) then) =
+      __$$FormatMetadata_EmailImplCopyWithImpl<$Res>;
   @useResult
   $Res call({EmailMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_EmailCopyWithImpl<$Res>
-    implements $FormatMetadata_EmailCopyWith<$Res> {
-  _$FormatMetadata_EmailCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Email _self;
-  final $Res Function(FormatMetadata_Email) _then;
+class __$$FormatMetadata_EmailImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_EmailImpl>
+    implements _$$FormatMetadata_EmailImplCopyWith<$Res> {
+  __$$FormatMetadata_EmailImplCopyWithImpl(_$FormatMetadata_EmailImpl _value,
+      $Res Function(_$FormatMetadata_EmailImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Email(
+    return _then(_$FormatMetadata_EmailImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as EmailMetadata,
     ));
@@ -2395,63 +4336,251 @@ class _$FormatMetadata_EmailCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Pptx extends FormatMetadata {
-  const FormatMetadata_Pptx({required this.field0}) : super._();
+class _$FormatMetadata_EmailImpl extends FormatMetadata_Email {
+  const _$FormatMetadata_EmailImpl({required this.field0}) : super._();
 
   @override
-  final PptxMetadata field0;
+  final EmailMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_PptxCopyWith<FormatMetadata_Pptx> get copyWith =>
-      _$FormatMetadata_PptxCopyWithImpl<FormatMetadata_Pptx>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.email(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Pptx &&
+            other is _$FormatMetadata_EmailImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.pptx(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_EmailImplCopyWith<_$FormatMetadata_EmailImpl>
+      get copyWith =>
+          __$$FormatMetadata_EmailImplCopyWithImpl<_$FormatMetadata_EmailImpl>(
+              this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return email(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return email?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (email != null) {
+      return email(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return email(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return email?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (email != null) {
+      return email(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Email extends FormatMetadata {
+  const factory FormatMetadata_Email({required final EmailMetadata field0}) =
+      _$FormatMetadata_EmailImpl;
+  const FormatMetadata_Email._() : super._();
+
+  @override
+  EmailMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_EmailImplCopyWith<_$FormatMetadata_EmailImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_PptxCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_PptxCopyWith(
-          FormatMetadata_Pptx value, $Res Function(FormatMetadata_Pptx) _then) =
-      _$FormatMetadata_PptxCopyWithImpl;
+abstract class _$$FormatMetadata_PptxImplCopyWith<$Res> {
+  factory _$$FormatMetadata_PptxImplCopyWith(_$FormatMetadata_PptxImpl value,
+          $Res Function(_$FormatMetadata_PptxImpl) then) =
+      __$$FormatMetadata_PptxImplCopyWithImpl<$Res>;
   @useResult
   $Res call({PptxMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_PptxCopyWithImpl<$Res>
-    implements $FormatMetadata_PptxCopyWith<$Res> {
-  _$FormatMetadata_PptxCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Pptx _self;
-  final $Res Function(FormatMetadata_Pptx) _then;
+class __$$FormatMetadata_PptxImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_PptxImpl>
+    implements _$$FormatMetadata_PptxImplCopyWith<$Res> {
+  __$$FormatMetadata_PptxImplCopyWithImpl(_$FormatMetadata_PptxImpl _value,
+      $Res Function(_$FormatMetadata_PptxImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Pptx(
+    return _then(_$FormatMetadata_PptxImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as PptxMetadata,
     ));
@@ -2460,64 +4589,252 @@ class _$FormatMetadata_PptxCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Archive extends FormatMetadata {
-  const FormatMetadata_Archive({required this.field0}) : super._();
+class _$FormatMetadata_PptxImpl extends FormatMetadata_Pptx {
+  const _$FormatMetadata_PptxImpl({required this.field0}) : super._();
 
   @override
-  final ArchiveMetadata field0;
+  final PptxMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_ArchiveCopyWith<FormatMetadata_Archive> get copyWith =>
-      _$FormatMetadata_ArchiveCopyWithImpl<FormatMetadata_Archive>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.pptx(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Archive &&
+            other is _$FormatMetadata_PptxImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.archive(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_PptxImplCopyWith<_$FormatMetadata_PptxImpl> get copyWith =>
+      __$$FormatMetadata_PptxImplCopyWithImpl<_$FormatMetadata_PptxImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return pptx(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return pptx?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (pptx != null) {
+      return pptx(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return pptx(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return pptx?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (pptx != null) {
+      return pptx(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Pptx extends FormatMetadata {
+  const factory FormatMetadata_Pptx({required final PptxMetadata field0}) =
+      _$FormatMetadata_PptxImpl;
+  const FormatMetadata_Pptx._() : super._();
+
+  @override
+  PptxMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_PptxImplCopyWith<_$FormatMetadata_PptxImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_ArchiveCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_ArchiveCopyWith(FormatMetadata_Archive value,
-          $Res Function(FormatMetadata_Archive) _then) =
-      _$FormatMetadata_ArchiveCopyWithImpl;
+abstract class _$$FormatMetadata_ArchiveImplCopyWith<$Res> {
+  factory _$$FormatMetadata_ArchiveImplCopyWith(
+          _$FormatMetadata_ArchiveImpl value,
+          $Res Function(_$FormatMetadata_ArchiveImpl) then) =
+      __$$FormatMetadata_ArchiveImplCopyWithImpl<$Res>;
   @useResult
   $Res call({ArchiveMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_ArchiveCopyWithImpl<$Res>
-    implements $FormatMetadata_ArchiveCopyWith<$Res> {
-  _$FormatMetadata_ArchiveCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Archive _self;
-  final $Res Function(FormatMetadata_Archive) _then;
+class __$$FormatMetadata_ArchiveImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_ArchiveImpl>
+    implements _$$FormatMetadata_ArchiveImplCopyWith<$Res> {
+  __$$FormatMetadata_ArchiveImplCopyWithImpl(
+      _$FormatMetadata_ArchiveImpl _value,
+      $Res Function(_$FormatMetadata_ArchiveImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Archive(
+    return _then(_$FormatMetadata_ArchiveImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as ArchiveMetadata,
     ));
@@ -2526,64 +4843,250 @@ class _$FormatMetadata_ArchiveCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Image extends FormatMetadata {
-  const FormatMetadata_Image({required this.field0}) : super._();
+class _$FormatMetadata_ArchiveImpl extends FormatMetadata_Archive {
+  const _$FormatMetadata_ArchiveImpl({required this.field0}) : super._();
 
   @override
-  final ImageMetadata field0;
+  final ArchiveMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_ImageCopyWith<FormatMetadata_Image> get copyWith =>
-      _$FormatMetadata_ImageCopyWithImpl<FormatMetadata_Image>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.archive(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Image &&
+            other is _$FormatMetadata_ArchiveImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.image(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_ArchiveImplCopyWith<_$FormatMetadata_ArchiveImpl>
+      get copyWith => __$$FormatMetadata_ArchiveImplCopyWithImpl<
+          _$FormatMetadata_ArchiveImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return archive(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return archive?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (archive != null) {
+      return archive(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return archive(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return archive?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (archive != null) {
+      return archive(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Archive extends FormatMetadata {
+  const factory FormatMetadata_Archive(
+      {required final ArchiveMetadata field0}) = _$FormatMetadata_ArchiveImpl;
+  const FormatMetadata_Archive._() : super._();
+
+  @override
+  ArchiveMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_ArchiveImplCopyWith<_$FormatMetadata_ArchiveImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_ImageCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_ImageCopyWith(FormatMetadata_Image value,
-          $Res Function(FormatMetadata_Image) _then) =
-      _$FormatMetadata_ImageCopyWithImpl;
+abstract class _$$FormatMetadata_ImageImplCopyWith<$Res> {
+  factory _$$FormatMetadata_ImageImplCopyWith(_$FormatMetadata_ImageImpl value,
+          $Res Function(_$FormatMetadata_ImageImpl) then) =
+      __$$FormatMetadata_ImageImplCopyWithImpl<$Res>;
   @useResult
   $Res call({ImageMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_ImageCopyWithImpl<$Res>
-    implements $FormatMetadata_ImageCopyWith<$Res> {
-  _$FormatMetadata_ImageCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Image _self;
-  final $Res Function(FormatMetadata_Image) _then;
+class __$$FormatMetadata_ImageImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_ImageImpl>
+    implements _$$FormatMetadata_ImageImplCopyWith<$Res> {
+  __$$FormatMetadata_ImageImplCopyWithImpl(_$FormatMetadata_ImageImpl _value,
+      $Res Function(_$FormatMetadata_ImageImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Image(
+    return _then(_$FormatMetadata_ImageImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as ImageMetadata,
     ));
@@ -2592,63 +5095,251 @@ class _$FormatMetadata_ImageCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Xml extends FormatMetadata {
-  const FormatMetadata_Xml({required this.field0}) : super._();
+class _$FormatMetadata_ImageImpl extends FormatMetadata_Image {
+  const _$FormatMetadata_ImageImpl({required this.field0}) : super._();
 
   @override
-  final XmlMetadata field0;
+  final ImageMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_XmlCopyWith<FormatMetadata_Xml> get copyWith =>
-      _$FormatMetadata_XmlCopyWithImpl<FormatMetadata_Xml>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.image(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Xml &&
+            other is _$FormatMetadata_ImageImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.xml(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_ImageImplCopyWith<_$FormatMetadata_ImageImpl>
+      get copyWith =>
+          __$$FormatMetadata_ImageImplCopyWithImpl<_$FormatMetadata_ImageImpl>(
+              this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return image(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return image?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (image != null) {
+      return image(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return image(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return image?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (image != null) {
+      return image(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Image extends FormatMetadata {
+  const factory FormatMetadata_Image({required final ImageMetadata field0}) =
+      _$FormatMetadata_ImageImpl;
+  const FormatMetadata_Image._() : super._();
+
+  @override
+  ImageMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_ImageImplCopyWith<_$FormatMetadata_ImageImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_XmlCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_XmlCopyWith(
-          FormatMetadata_Xml value, $Res Function(FormatMetadata_Xml) _then) =
-      _$FormatMetadata_XmlCopyWithImpl;
+abstract class _$$FormatMetadata_XmlImplCopyWith<$Res> {
+  factory _$$FormatMetadata_XmlImplCopyWith(_$FormatMetadata_XmlImpl value,
+          $Res Function(_$FormatMetadata_XmlImpl) then) =
+      __$$FormatMetadata_XmlImplCopyWithImpl<$Res>;
   @useResult
   $Res call({XmlMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_XmlCopyWithImpl<$Res>
-    implements $FormatMetadata_XmlCopyWith<$Res> {
-  _$FormatMetadata_XmlCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Xml _self;
-  final $Res Function(FormatMetadata_Xml) _then;
+class __$$FormatMetadata_XmlImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_XmlImpl>
+    implements _$$FormatMetadata_XmlImplCopyWith<$Res> {
+  __$$FormatMetadata_XmlImplCopyWithImpl(_$FormatMetadata_XmlImpl _value,
+      $Res Function(_$FormatMetadata_XmlImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Xml(
+    return _then(_$FormatMetadata_XmlImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as XmlMetadata,
     ));
@@ -2657,63 +5348,250 @@ class _$FormatMetadata_XmlCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Text extends FormatMetadata {
-  const FormatMetadata_Text({required this.field0}) : super._();
+class _$FormatMetadata_XmlImpl extends FormatMetadata_Xml {
+  const _$FormatMetadata_XmlImpl({required this.field0}) : super._();
 
   @override
-  final TextMetadata field0;
+  final XmlMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_TextCopyWith<FormatMetadata_Text> get copyWith =>
-      _$FormatMetadata_TextCopyWithImpl<FormatMetadata_Text>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.xml(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Text &&
+            other is _$FormatMetadata_XmlImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.text(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_XmlImplCopyWith<_$FormatMetadata_XmlImpl> get copyWith =>
+      __$$FormatMetadata_XmlImplCopyWithImpl<_$FormatMetadata_XmlImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return xml(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return xml?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (xml != null) {
+      return xml(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return xml(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return xml?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (xml != null) {
+      return xml(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Xml extends FormatMetadata {
+  const factory FormatMetadata_Xml({required final XmlMetadata field0}) =
+      _$FormatMetadata_XmlImpl;
+  const FormatMetadata_Xml._() : super._();
+
+  @override
+  XmlMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_XmlImplCopyWith<_$FormatMetadata_XmlImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_TextCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_TextCopyWith(
-          FormatMetadata_Text value, $Res Function(FormatMetadata_Text) _then) =
-      _$FormatMetadata_TextCopyWithImpl;
+abstract class _$$FormatMetadata_TextImplCopyWith<$Res> {
+  factory _$$FormatMetadata_TextImplCopyWith(_$FormatMetadata_TextImpl value,
+          $Res Function(_$FormatMetadata_TextImpl) then) =
+      __$$FormatMetadata_TextImplCopyWithImpl<$Res>;
   @useResult
   $Res call({TextMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_TextCopyWithImpl<$Res>
-    implements $FormatMetadata_TextCopyWith<$Res> {
-  _$FormatMetadata_TextCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Text _self;
-  final $Res Function(FormatMetadata_Text) _then;
+class __$$FormatMetadata_TextImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_TextImpl>
+    implements _$$FormatMetadata_TextImplCopyWith<$Res> {
+  __$$FormatMetadata_TextImplCopyWithImpl(_$FormatMetadata_TextImpl _value,
+      $Res Function(_$FormatMetadata_TextImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Text(
+    return _then(_$FormatMetadata_TextImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as TextMetadata,
     ));
@@ -2722,63 +5600,250 @@ class _$FormatMetadata_TextCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Html extends FormatMetadata {
-  const FormatMetadata_Html({required this.field0}) : super._();
+class _$FormatMetadata_TextImpl extends FormatMetadata_Text {
+  const _$FormatMetadata_TextImpl({required this.field0}) : super._();
 
   @override
-  final HtmlMetadata field0;
+  final TextMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_HtmlCopyWith<FormatMetadata_Html> get copyWith =>
-      _$FormatMetadata_HtmlCopyWithImpl<FormatMetadata_Html>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.text(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Html &&
+            other is _$FormatMetadata_TextImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.html(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_TextImplCopyWith<_$FormatMetadata_TextImpl> get copyWith =>
+      __$$FormatMetadata_TextImplCopyWithImpl<_$FormatMetadata_TextImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return text(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return text?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (text != null) {
+      return text(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return text(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return text?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (text != null) {
+      return text(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Text extends FormatMetadata {
+  const factory FormatMetadata_Text({required final TextMetadata field0}) =
+      _$FormatMetadata_TextImpl;
+  const FormatMetadata_Text._() : super._();
+
+  @override
+  TextMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_TextImplCopyWith<_$FormatMetadata_TextImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_HtmlCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_HtmlCopyWith(
-          FormatMetadata_Html value, $Res Function(FormatMetadata_Html) _then) =
-      _$FormatMetadata_HtmlCopyWithImpl;
+abstract class _$$FormatMetadata_HtmlImplCopyWith<$Res> {
+  factory _$$FormatMetadata_HtmlImplCopyWith(_$FormatMetadata_HtmlImpl value,
+          $Res Function(_$FormatMetadata_HtmlImpl) then) =
+      __$$FormatMetadata_HtmlImplCopyWithImpl<$Res>;
   @useResult
   $Res call({HtmlMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_HtmlCopyWithImpl<$Res>
-    implements $FormatMetadata_HtmlCopyWith<$Res> {
-  _$FormatMetadata_HtmlCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Html _self;
-  final $Res Function(FormatMetadata_Html) _then;
+class __$$FormatMetadata_HtmlImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_HtmlImpl>
+    implements _$$FormatMetadata_HtmlImplCopyWith<$Res> {
+  __$$FormatMetadata_HtmlImplCopyWithImpl(_$FormatMetadata_HtmlImpl _value,
+      $Res Function(_$FormatMetadata_HtmlImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Html(
+    return _then(_$FormatMetadata_HtmlImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as HtmlMetadata,
     ));
@@ -2787,63 +5852,250 @@ class _$FormatMetadata_HtmlCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Ocr extends FormatMetadata {
-  const FormatMetadata_Ocr({required this.field0}) : super._();
+class _$FormatMetadata_HtmlImpl extends FormatMetadata_Html {
+  const _$FormatMetadata_HtmlImpl({required this.field0}) : super._();
 
   @override
-  final OcrMetadata field0;
+  final HtmlMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_OcrCopyWith<FormatMetadata_Ocr> get copyWith =>
-      _$FormatMetadata_OcrCopyWithImpl<FormatMetadata_Ocr>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.html(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Ocr &&
+            other is _$FormatMetadata_HtmlImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.ocr(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_HtmlImplCopyWith<_$FormatMetadata_HtmlImpl> get copyWith =>
+      __$$FormatMetadata_HtmlImplCopyWithImpl<_$FormatMetadata_HtmlImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return html(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return html?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (html != null) {
+      return html(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return html(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return html?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (html != null) {
+      return html(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Html extends FormatMetadata {
+  const factory FormatMetadata_Html({required final HtmlMetadata field0}) =
+      _$FormatMetadata_HtmlImpl;
+  const FormatMetadata_Html._() : super._();
+
+  @override
+  HtmlMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_HtmlImplCopyWith<_$FormatMetadata_HtmlImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_OcrCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_OcrCopyWith(
-          FormatMetadata_Ocr value, $Res Function(FormatMetadata_Ocr) _then) =
-      _$FormatMetadata_OcrCopyWithImpl;
+abstract class _$$FormatMetadata_OcrImplCopyWith<$Res> {
+  factory _$$FormatMetadata_OcrImplCopyWith(_$FormatMetadata_OcrImpl value,
+          $Res Function(_$FormatMetadata_OcrImpl) then) =
+      __$$FormatMetadata_OcrImplCopyWithImpl<$Res>;
   @useResult
   $Res call({OcrMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_OcrCopyWithImpl<$Res>
-    implements $FormatMetadata_OcrCopyWith<$Res> {
-  _$FormatMetadata_OcrCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Ocr _self;
-  final $Res Function(FormatMetadata_Ocr) _then;
+class __$$FormatMetadata_OcrImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_OcrImpl>
+    implements _$$FormatMetadata_OcrImplCopyWith<$Res> {
+  __$$FormatMetadata_OcrImplCopyWithImpl(_$FormatMetadata_OcrImpl _value,
+      $Res Function(_$FormatMetadata_OcrImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Ocr(
+    return _then(_$FormatMetadata_OcrImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as OcrMetadata,
     ));
@@ -2852,63 +6104,250 @@ class _$FormatMetadata_OcrCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Csv extends FormatMetadata {
-  const FormatMetadata_Csv({required this.field0}) : super._();
+class _$FormatMetadata_OcrImpl extends FormatMetadata_Ocr {
+  const _$FormatMetadata_OcrImpl({required this.field0}) : super._();
 
   @override
-  final CsvMetadata field0;
+  final OcrMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_CsvCopyWith<FormatMetadata_Csv> get copyWith =>
-      _$FormatMetadata_CsvCopyWithImpl<FormatMetadata_Csv>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.ocr(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Csv &&
+            other is _$FormatMetadata_OcrImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.csv(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_OcrImplCopyWith<_$FormatMetadata_OcrImpl> get copyWith =>
+      __$$FormatMetadata_OcrImplCopyWithImpl<_$FormatMetadata_OcrImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return ocr(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return ocr?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (ocr != null) {
+      return ocr(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return ocr(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return ocr?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (ocr != null) {
+      return ocr(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Ocr extends FormatMetadata {
+  const factory FormatMetadata_Ocr({required final OcrMetadata field0}) =
+      _$FormatMetadata_OcrImpl;
+  const FormatMetadata_Ocr._() : super._();
+
+  @override
+  OcrMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_OcrImplCopyWith<_$FormatMetadata_OcrImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_CsvCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_CsvCopyWith(
-          FormatMetadata_Csv value, $Res Function(FormatMetadata_Csv) _then) =
-      _$FormatMetadata_CsvCopyWithImpl;
+abstract class _$$FormatMetadata_CsvImplCopyWith<$Res> {
+  factory _$$FormatMetadata_CsvImplCopyWith(_$FormatMetadata_CsvImpl value,
+          $Res Function(_$FormatMetadata_CsvImpl) then) =
+      __$$FormatMetadata_CsvImplCopyWithImpl<$Res>;
   @useResult
   $Res call({CsvMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_CsvCopyWithImpl<$Res>
-    implements $FormatMetadata_CsvCopyWith<$Res> {
-  _$FormatMetadata_CsvCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Csv _self;
-  final $Res Function(FormatMetadata_Csv) _then;
+class __$$FormatMetadata_CsvImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_CsvImpl>
+    implements _$$FormatMetadata_CsvImplCopyWith<$Res> {
+  __$$FormatMetadata_CsvImplCopyWithImpl(_$FormatMetadata_CsvImpl _value,
+      $Res Function(_$FormatMetadata_CsvImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Csv(
+    return _then(_$FormatMetadata_CsvImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as CsvMetadata,
     ));
@@ -2917,64 +6356,251 @@ class _$FormatMetadata_CsvCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Bibtex extends FormatMetadata {
-  const FormatMetadata_Bibtex({required this.field0}) : super._();
+class _$FormatMetadata_CsvImpl extends FormatMetadata_Csv {
+  const _$FormatMetadata_CsvImpl({required this.field0}) : super._();
 
   @override
-  final BibtexMetadata field0;
+  final CsvMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_BibtexCopyWith<FormatMetadata_Bibtex> get copyWith =>
-      _$FormatMetadata_BibtexCopyWithImpl<FormatMetadata_Bibtex>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.csv(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Bibtex &&
+            other is _$FormatMetadata_CsvImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.bibtex(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_CsvImplCopyWith<_$FormatMetadata_CsvImpl> get copyWith =>
+      __$$FormatMetadata_CsvImplCopyWithImpl<_$FormatMetadata_CsvImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return csv(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return csv?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (csv != null) {
+      return csv(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return csv(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return csv?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (csv != null) {
+      return csv(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Csv extends FormatMetadata {
+  const factory FormatMetadata_Csv({required final CsvMetadata field0}) =
+      _$FormatMetadata_CsvImpl;
+  const FormatMetadata_Csv._() : super._();
+
+  @override
+  CsvMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_CsvImplCopyWith<_$FormatMetadata_CsvImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_BibtexCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_BibtexCopyWith(FormatMetadata_Bibtex value,
-          $Res Function(FormatMetadata_Bibtex) _then) =
-      _$FormatMetadata_BibtexCopyWithImpl;
+abstract class _$$FormatMetadata_BibtexImplCopyWith<$Res> {
+  factory _$$FormatMetadata_BibtexImplCopyWith(
+          _$FormatMetadata_BibtexImpl value,
+          $Res Function(_$FormatMetadata_BibtexImpl) then) =
+      __$$FormatMetadata_BibtexImplCopyWithImpl<$Res>;
   @useResult
   $Res call({BibtexMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_BibtexCopyWithImpl<$Res>
-    implements $FormatMetadata_BibtexCopyWith<$Res> {
-  _$FormatMetadata_BibtexCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Bibtex _self;
-  final $Res Function(FormatMetadata_Bibtex) _then;
+class __$$FormatMetadata_BibtexImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_BibtexImpl>
+    implements _$$FormatMetadata_BibtexImplCopyWith<$Res> {
+  __$$FormatMetadata_BibtexImplCopyWithImpl(_$FormatMetadata_BibtexImpl _value,
+      $Res Function(_$FormatMetadata_BibtexImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Bibtex(
+    return _then(_$FormatMetadata_BibtexImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as BibtexMetadata,
     ));
@@ -2983,64 +6609,252 @@ class _$FormatMetadata_BibtexCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Citation extends FormatMetadata {
-  const FormatMetadata_Citation({required this.field0}) : super._();
+class _$FormatMetadata_BibtexImpl extends FormatMetadata_Bibtex {
+  const _$FormatMetadata_BibtexImpl({required this.field0}) : super._();
 
   @override
-  final CitationMetadata field0;
+  final BibtexMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_CitationCopyWith<FormatMetadata_Citation> get copyWith =>
-      _$FormatMetadata_CitationCopyWithImpl<FormatMetadata_Citation>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.bibtex(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Citation &&
+            other is _$FormatMetadata_BibtexImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.citation(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_BibtexImplCopyWith<_$FormatMetadata_BibtexImpl>
+      get copyWith => __$$FormatMetadata_BibtexImplCopyWithImpl<
+          _$FormatMetadata_BibtexImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return bibtex(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return bibtex?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (bibtex != null) {
+      return bibtex(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return bibtex(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return bibtex?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (bibtex != null) {
+      return bibtex(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Bibtex extends FormatMetadata {
+  const factory FormatMetadata_Bibtex({required final BibtexMetadata field0}) =
+      _$FormatMetadata_BibtexImpl;
+  const FormatMetadata_Bibtex._() : super._();
+
+  @override
+  BibtexMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_BibtexImplCopyWith<_$FormatMetadata_BibtexImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_CitationCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_CitationCopyWith(FormatMetadata_Citation value,
-          $Res Function(FormatMetadata_Citation) _then) =
-      _$FormatMetadata_CitationCopyWithImpl;
+abstract class _$$FormatMetadata_CitationImplCopyWith<$Res> {
+  factory _$$FormatMetadata_CitationImplCopyWith(
+          _$FormatMetadata_CitationImpl value,
+          $Res Function(_$FormatMetadata_CitationImpl) then) =
+      __$$FormatMetadata_CitationImplCopyWithImpl<$Res>;
   @useResult
   $Res call({CitationMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_CitationCopyWithImpl<$Res>
-    implements $FormatMetadata_CitationCopyWith<$Res> {
-  _$FormatMetadata_CitationCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Citation _self;
-  final $Res Function(FormatMetadata_Citation) _then;
+class __$$FormatMetadata_CitationImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_CitationImpl>
+    implements _$$FormatMetadata_CitationImplCopyWith<$Res> {
+  __$$FormatMetadata_CitationImplCopyWithImpl(
+      _$FormatMetadata_CitationImpl _value,
+      $Res Function(_$FormatMetadata_CitationImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Citation(
+    return _then(_$FormatMetadata_CitationImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as CitationMetadata,
     ));
@@ -3049,65 +6863,252 @@ class _$FormatMetadata_CitationCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_FictionBook extends FormatMetadata {
-  const FormatMetadata_FictionBook({required this.field0}) : super._();
+class _$FormatMetadata_CitationImpl extends FormatMetadata_Citation {
+  const _$FormatMetadata_CitationImpl({required this.field0}) : super._();
 
   @override
-  final FictionBookMetadata field0;
+  final CitationMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_FictionBookCopyWith<FormatMetadata_FictionBook>
-      get copyWith =>
-          _$FormatMetadata_FictionBookCopyWithImpl<FormatMetadata_FictionBook>(
-              this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.citation(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_FictionBook &&
+            other is _$FormatMetadata_CitationImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.fictionBook(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_CitationImplCopyWith<_$FormatMetadata_CitationImpl>
+      get copyWith => __$$FormatMetadata_CitationImplCopyWithImpl<
+          _$FormatMetadata_CitationImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return citation(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return citation?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (citation != null) {
+      return citation(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return citation(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return citation?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (citation != null) {
+      return citation(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Citation extends FormatMetadata {
+  const factory FormatMetadata_Citation(
+      {required final CitationMetadata field0}) = _$FormatMetadata_CitationImpl;
+  const FormatMetadata_Citation._() : super._();
+
+  @override
+  CitationMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_CitationImplCopyWith<_$FormatMetadata_CitationImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_FictionBookCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_FictionBookCopyWith(FormatMetadata_FictionBook value,
-          $Res Function(FormatMetadata_FictionBook) _then) =
-      _$FormatMetadata_FictionBookCopyWithImpl;
+abstract class _$$FormatMetadata_FictionBookImplCopyWith<$Res> {
+  factory _$$FormatMetadata_FictionBookImplCopyWith(
+          _$FormatMetadata_FictionBookImpl value,
+          $Res Function(_$FormatMetadata_FictionBookImpl) then) =
+      __$$FormatMetadata_FictionBookImplCopyWithImpl<$Res>;
   @useResult
   $Res call({FictionBookMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_FictionBookCopyWithImpl<$Res>
-    implements $FormatMetadata_FictionBookCopyWith<$Res> {
-  _$FormatMetadata_FictionBookCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_FictionBook _self;
-  final $Res Function(FormatMetadata_FictionBook) _then;
+class __$$FormatMetadata_FictionBookImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_FictionBookImpl>
+    implements _$$FormatMetadata_FictionBookImplCopyWith<$Res> {
+  __$$FormatMetadata_FictionBookImplCopyWithImpl(
+      _$FormatMetadata_FictionBookImpl _value,
+      $Res Function(_$FormatMetadata_FictionBookImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_FictionBook(
+    return _then(_$FormatMetadata_FictionBookImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as FictionBookMetadata,
     ));
@@ -3116,63 +7117,251 @@ class _$FormatMetadata_FictionBookCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Dbf extends FormatMetadata {
-  const FormatMetadata_Dbf({required this.field0}) : super._();
+class _$FormatMetadata_FictionBookImpl extends FormatMetadata_FictionBook {
+  const _$FormatMetadata_FictionBookImpl({required this.field0}) : super._();
 
   @override
-  final DbfMetadata field0;
+  final FictionBookMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_DbfCopyWith<FormatMetadata_Dbf> get copyWith =>
-      _$FormatMetadata_DbfCopyWithImpl<FormatMetadata_Dbf>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.fictionBook(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Dbf &&
+            other is _$FormatMetadata_FictionBookImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.dbf(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_FictionBookImplCopyWith<_$FormatMetadata_FictionBookImpl>
+      get copyWith => __$$FormatMetadata_FictionBookImplCopyWithImpl<
+          _$FormatMetadata_FictionBookImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return fictionBook(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return fictionBook?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (fictionBook != null) {
+      return fictionBook(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return fictionBook(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return fictionBook?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (fictionBook != null) {
+      return fictionBook(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_FictionBook extends FormatMetadata {
+  const factory FormatMetadata_FictionBook(
+          {required final FictionBookMetadata field0}) =
+      _$FormatMetadata_FictionBookImpl;
+  const FormatMetadata_FictionBook._() : super._();
+
+  @override
+  FictionBookMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_FictionBookImplCopyWith<_$FormatMetadata_FictionBookImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_DbfCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_DbfCopyWith(
-          FormatMetadata_Dbf value, $Res Function(FormatMetadata_Dbf) _then) =
-      _$FormatMetadata_DbfCopyWithImpl;
+abstract class _$$FormatMetadata_DbfImplCopyWith<$Res> {
+  factory _$$FormatMetadata_DbfImplCopyWith(_$FormatMetadata_DbfImpl value,
+          $Res Function(_$FormatMetadata_DbfImpl) then) =
+      __$$FormatMetadata_DbfImplCopyWithImpl<$Res>;
   @useResult
   $Res call({DbfMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_DbfCopyWithImpl<$Res>
-    implements $FormatMetadata_DbfCopyWith<$Res> {
-  _$FormatMetadata_DbfCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Dbf _self;
-  final $Res Function(FormatMetadata_Dbf) _then;
+class __$$FormatMetadata_DbfImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_DbfImpl>
+    implements _$$FormatMetadata_DbfImplCopyWith<$Res> {
+  __$$FormatMetadata_DbfImplCopyWithImpl(_$FormatMetadata_DbfImpl _value,
+      $Res Function(_$FormatMetadata_DbfImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Dbf(
+    return _then(_$FormatMetadata_DbfImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as DbfMetadata,
     ));
@@ -3181,63 +7370,250 @@ class _$FormatMetadata_DbfCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Jats extends FormatMetadata {
-  const FormatMetadata_Jats({required this.field0}) : super._();
+class _$FormatMetadata_DbfImpl extends FormatMetadata_Dbf {
+  const _$FormatMetadata_DbfImpl({required this.field0}) : super._();
 
   @override
-  final JatsMetadata field0;
+  final DbfMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_JatsCopyWith<FormatMetadata_Jats> get copyWith =>
-      _$FormatMetadata_JatsCopyWithImpl<FormatMetadata_Jats>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.dbf(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Jats &&
+            other is _$FormatMetadata_DbfImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.jats(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_DbfImplCopyWith<_$FormatMetadata_DbfImpl> get copyWith =>
+      __$$FormatMetadata_DbfImplCopyWithImpl<_$FormatMetadata_DbfImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return dbf(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return dbf?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (dbf != null) {
+      return dbf(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return dbf(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return dbf?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (dbf != null) {
+      return dbf(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Dbf extends FormatMetadata {
+  const factory FormatMetadata_Dbf({required final DbfMetadata field0}) =
+      _$FormatMetadata_DbfImpl;
+  const FormatMetadata_Dbf._() : super._();
+
+  @override
+  DbfMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_DbfImplCopyWith<_$FormatMetadata_DbfImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_JatsCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_JatsCopyWith(
-          FormatMetadata_Jats value, $Res Function(FormatMetadata_Jats) _then) =
-      _$FormatMetadata_JatsCopyWithImpl;
+abstract class _$$FormatMetadata_JatsImplCopyWith<$Res> {
+  factory _$$FormatMetadata_JatsImplCopyWith(_$FormatMetadata_JatsImpl value,
+          $Res Function(_$FormatMetadata_JatsImpl) then) =
+      __$$FormatMetadata_JatsImplCopyWithImpl<$Res>;
   @useResult
   $Res call({JatsMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_JatsCopyWithImpl<$Res>
-    implements $FormatMetadata_JatsCopyWith<$Res> {
-  _$FormatMetadata_JatsCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Jats _self;
-  final $Res Function(FormatMetadata_Jats) _then;
+class __$$FormatMetadata_JatsImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_JatsImpl>
+    implements _$$FormatMetadata_JatsImplCopyWith<$Res> {
+  __$$FormatMetadata_JatsImplCopyWithImpl(_$FormatMetadata_JatsImpl _value,
+      $Res Function(_$FormatMetadata_JatsImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Jats(
+    return _then(_$FormatMetadata_JatsImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as JatsMetadata,
     ));
@@ -3246,63 +7622,250 @@ class _$FormatMetadata_JatsCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Epub extends FormatMetadata {
-  const FormatMetadata_Epub({required this.field0}) : super._();
+class _$FormatMetadata_JatsImpl extends FormatMetadata_Jats {
+  const _$FormatMetadata_JatsImpl({required this.field0}) : super._();
 
   @override
-  final EpubMetadata field0;
+  final JatsMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_EpubCopyWith<FormatMetadata_Epub> get copyWith =>
-      _$FormatMetadata_EpubCopyWithImpl<FormatMetadata_Epub>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.jats(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Epub &&
+            other is _$FormatMetadata_JatsImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.epub(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_JatsImplCopyWith<_$FormatMetadata_JatsImpl> get copyWith =>
+      __$$FormatMetadata_JatsImplCopyWithImpl<_$FormatMetadata_JatsImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return jats(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return jats?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (jats != null) {
+      return jats(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return jats(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return jats?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (jats != null) {
+      return jats(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Jats extends FormatMetadata {
+  const factory FormatMetadata_Jats({required final JatsMetadata field0}) =
+      _$FormatMetadata_JatsImpl;
+  const FormatMetadata_Jats._() : super._();
+
+  @override
+  JatsMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_JatsImplCopyWith<_$FormatMetadata_JatsImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_EpubCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_EpubCopyWith(
-          FormatMetadata_Epub value, $Res Function(FormatMetadata_Epub) _then) =
-      _$FormatMetadata_EpubCopyWithImpl;
+abstract class _$$FormatMetadata_EpubImplCopyWith<$Res> {
+  factory _$$FormatMetadata_EpubImplCopyWith(_$FormatMetadata_EpubImpl value,
+          $Res Function(_$FormatMetadata_EpubImpl) then) =
+      __$$FormatMetadata_EpubImplCopyWithImpl<$Res>;
   @useResult
   $Res call({EpubMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_EpubCopyWithImpl<$Res>
-    implements $FormatMetadata_EpubCopyWith<$Res> {
-  _$FormatMetadata_EpubCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Epub _self;
-  final $Res Function(FormatMetadata_Epub) _then;
+class __$$FormatMetadata_EpubImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_EpubImpl>
+    implements _$$FormatMetadata_EpubImplCopyWith<$Res> {
+  __$$FormatMetadata_EpubImplCopyWithImpl(_$FormatMetadata_EpubImpl _value,
+      $Res Function(_$FormatMetadata_EpubImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Epub(
+    return _then(_$FormatMetadata_EpubImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as EpubMetadata,
     ));
@@ -3311,63 +7874,250 @@ class _$FormatMetadata_EpubCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Pst extends FormatMetadata {
-  const FormatMetadata_Pst({required this.field0}) : super._();
+class _$FormatMetadata_EpubImpl extends FormatMetadata_Epub {
+  const _$FormatMetadata_EpubImpl({required this.field0}) : super._();
 
   @override
-  final PstMetadata field0;
+  final EpubMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_PstCopyWith<FormatMetadata_Pst> get copyWith =>
-      _$FormatMetadata_PstCopyWithImpl<FormatMetadata_Pst>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.epub(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Pst &&
+            other is _$FormatMetadata_EpubImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.pst(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_EpubImplCopyWith<_$FormatMetadata_EpubImpl> get copyWith =>
+      __$$FormatMetadata_EpubImplCopyWithImpl<_$FormatMetadata_EpubImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return epub(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return epub?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (epub != null) {
+      return epub(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return epub(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return epub?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (epub != null) {
+      return epub(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Epub extends FormatMetadata {
+  const factory FormatMetadata_Epub({required final EpubMetadata field0}) =
+      _$FormatMetadata_EpubImpl;
+  const FormatMetadata_Epub._() : super._();
+
+  @override
+  EpubMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_EpubImplCopyWith<_$FormatMetadata_EpubImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_PstCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_PstCopyWith(
-          FormatMetadata_Pst value, $Res Function(FormatMetadata_Pst) _then) =
-      _$FormatMetadata_PstCopyWithImpl;
+abstract class _$$FormatMetadata_PstImplCopyWith<$Res> {
+  factory _$$FormatMetadata_PstImplCopyWith(_$FormatMetadata_PstImpl value,
+          $Res Function(_$FormatMetadata_PstImpl) then) =
+      __$$FormatMetadata_PstImplCopyWithImpl<$Res>;
   @useResult
   $Res call({PstMetadata field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_PstCopyWithImpl<$Res>
-    implements $FormatMetadata_PstCopyWith<$Res> {
-  _$FormatMetadata_PstCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Pst _self;
-  final $Res Function(FormatMetadata_Pst) _then;
+class __$$FormatMetadata_PstImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_PstImpl>
+    implements _$$FormatMetadata_PstImplCopyWith<$Res> {
+  __$$FormatMetadata_PstImplCopyWithImpl(_$FormatMetadata_PstImpl _value,
+      $Res Function(_$FormatMetadata_PstImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Pst(
+    return _then(_$FormatMetadata_PstImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as PstMetadata,
     ));
@@ -3376,63 +8126,250 @@ class _$FormatMetadata_PstCopyWithImpl<$Res>
 
 /// @nodoc
 
-class FormatMetadata_Code extends FormatMetadata {
-  const FormatMetadata_Code({required this.field0}) : super._();
+class _$FormatMetadata_PstImpl extends FormatMetadata_Pst {
+  const _$FormatMetadata_PstImpl({required this.field0}) : super._();
 
   @override
-  final String field0;
+  final PstMetadata field0;
 
-  /// Create a copy of FormatMetadata
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $FormatMetadata_CodeCopyWith<FormatMetadata_Code> get copyWith =>
-      _$FormatMetadata_CodeCopyWithImpl<FormatMetadata_Code>(this, _$identity);
+  @override
+  String toString() {
+    return 'FormatMetadata.pst(field0: $field0)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is FormatMetadata_Code &&
+            other is _$FormatMetadata_PstImpl &&
             (identical(other.field0, field0) || other.field0 == field0));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, field0);
 
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'FormatMetadata.code(field0: $field0)';
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_PstImplCopyWith<_$FormatMetadata_PstImpl> get copyWith =>
+      __$$FormatMetadata_PstImplCopyWithImpl<_$FormatMetadata_PstImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return pst(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return pst?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (pst != null) {
+      return pst(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return pst(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return pst?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (pst != null) {
+      return pst(this);
+    }
+    return orElse();
   }
 }
 
+abstract class FormatMetadata_Pst extends FormatMetadata {
+  const factory FormatMetadata_Pst({required final PstMetadata field0}) =
+      _$FormatMetadata_PstImpl;
+  const FormatMetadata_Pst._() : super._();
+
+  @override
+  PstMetadata get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_PstImplCopyWith<_$FormatMetadata_PstImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $FormatMetadata_CodeCopyWith<$Res>
-    implements $FormatMetadataCopyWith<$Res> {
-  factory $FormatMetadata_CodeCopyWith(
-          FormatMetadata_Code value, $Res Function(FormatMetadata_Code) _then) =
-      _$FormatMetadata_CodeCopyWithImpl;
+abstract class _$$FormatMetadata_CodeImplCopyWith<$Res> {
+  factory _$$FormatMetadata_CodeImplCopyWith(_$FormatMetadata_CodeImpl value,
+          $Res Function(_$FormatMetadata_CodeImpl) then) =
+      __$$FormatMetadata_CodeImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String field0});
 }
 
 /// @nodoc
-class _$FormatMetadata_CodeCopyWithImpl<$Res>
-    implements $FormatMetadata_CodeCopyWith<$Res> {
-  _$FormatMetadata_CodeCopyWithImpl(this._self, this._then);
-
-  final FormatMetadata_Code _self;
-  final $Res Function(FormatMetadata_Code) _then;
+class __$$FormatMetadata_CodeImplCopyWithImpl<$Res>
+    extends _$FormatMetadataCopyWithImpl<$Res, _$FormatMetadata_CodeImpl>
+    implements _$$FormatMetadata_CodeImplCopyWith<$Res> {
+  __$$FormatMetadata_CodeImplCopyWithImpl(_$FormatMetadata_CodeImpl _value,
+      $Res Function(_$FormatMetadata_CodeImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of FormatMetadata
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(FormatMetadata_Code(
+    return _then(_$FormatMetadata_CodeImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -3440,41 +8377,609 @@ class _$FormatMetadata_CodeCopyWithImpl<$Res>
 }
 
 /// @nodoc
-mixin _$NodeContent {
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is NodeContent);
-  }
+
+class _$FormatMetadata_CodeImpl extends FormatMetadata_Code {
+  const _$FormatMetadata_CodeImpl({required this.field0}) : super._();
 
   @override
-  int get hashCode => runtimeType.hashCode;
+  final String field0;
 
   @override
   String toString() {
-    return 'NodeContent()';
+    return 'FormatMetadata.code(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$FormatMetadata_CodeImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$FormatMetadata_CodeImplCopyWith<_$FormatMetadata_CodeImpl> get copyWith =>
+      __$$FormatMetadata_CodeImplCopyWithImpl<_$FormatMetadata_CodeImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(PdfMetadata field0) pdf,
+    required TResult Function(DocxMetadata field0) docx,
+    required TResult Function(ExcelMetadata field0) excel,
+    required TResult Function(EmailMetadata field0) email,
+    required TResult Function(PptxMetadata field0) pptx,
+    required TResult Function(ArchiveMetadata field0) archive,
+    required TResult Function(ImageMetadata field0) image,
+    required TResult Function(XmlMetadata field0) xml,
+    required TResult Function(TextMetadata field0) text,
+    required TResult Function(HtmlMetadata field0) html,
+    required TResult Function(OcrMetadata field0) ocr,
+    required TResult Function(CsvMetadata field0) csv,
+    required TResult Function(BibtexMetadata field0) bibtex,
+    required TResult Function(CitationMetadata field0) citation,
+    required TResult Function(FictionBookMetadata field0) fictionBook,
+    required TResult Function(DbfMetadata field0) dbf,
+    required TResult Function(JatsMetadata field0) jats,
+    required TResult Function(EpubMetadata field0) epub,
+    required TResult Function(PstMetadata field0) pst,
+    required TResult Function(String field0) code,
+  }) {
+    return code(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(PdfMetadata field0)? pdf,
+    TResult? Function(DocxMetadata field0)? docx,
+    TResult? Function(ExcelMetadata field0)? excel,
+    TResult? Function(EmailMetadata field0)? email,
+    TResult? Function(PptxMetadata field0)? pptx,
+    TResult? Function(ArchiveMetadata field0)? archive,
+    TResult? Function(ImageMetadata field0)? image,
+    TResult? Function(XmlMetadata field0)? xml,
+    TResult? Function(TextMetadata field0)? text,
+    TResult? Function(HtmlMetadata field0)? html,
+    TResult? Function(OcrMetadata field0)? ocr,
+    TResult? Function(CsvMetadata field0)? csv,
+    TResult? Function(BibtexMetadata field0)? bibtex,
+    TResult? Function(CitationMetadata field0)? citation,
+    TResult? Function(FictionBookMetadata field0)? fictionBook,
+    TResult? Function(DbfMetadata field0)? dbf,
+    TResult? Function(JatsMetadata field0)? jats,
+    TResult? Function(EpubMetadata field0)? epub,
+    TResult? Function(PstMetadata field0)? pst,
+    TResult? Function(String field0)? code,
+  }) {
+    return code?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(PdfMetadata field0)? pdf,
+    TResult Function(DocxMetadata field0)? docx,
+    TResult Function(ExcelMetadata field0)? excel,
+    TResult Function(EmailMetadata field0)? email,
+    TResult Function(PptxMetadata field0)? pptx,
+    TResult Function(ArchiveMetadata field0)? archive,
+    TResult Function(ImageMetadata field0)? image,
+    TResult Function(XmlMetadata field0)? xml,
+    TResult Function(TextMetadata field0)? text,
+    TResult Function(HtmlMetadata field0)? html,
+    TResult Function(OcrMetadata field0)? ocr,
+    TResult Function(CsvMetadata field0)? csv,
+    TResult Function(BibtexMetadata field0)? bibtex,
+    TResult Function(CitationMetadata field0)? citation,
+    TResult Function(FictionBookMetadata field0)? fictionBook,
+    TResult Function(DbfMetadata field0)? dbf,
+    TResult Function(JatsMetadata field0)? jats,
+    TResult Function(EpubMetadata field0)? epub,
+    TResult Function(PstMetadata field0)? pst,
+    TResult Function(String field0)? code,
+    required TResult orElse(),
+  }) {
+    if (code != null) {
+      return code(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(FormatMetadata_Pdf value) pdf,
+    required TResult Function(FormatMetadata_Docx value) docx,
+    required TResult Function(FormatMetadata_Excel value) excel,
+    required TResult Function(FormatMetadata_Email value) email,
+    required TResult Function(FormatMetadata_Pptx value) pptx,
+    required TResult Function(FormatMetadata_Archive value) archive,
+    required TResult Function(FormatMetadata_Image value) image,
+    required TResult Function(FormatMetadata_Xml value) xml,
+    required TResult Function(FormatMetadata_Text value) text,
+    required TResult Function(FormatMetadata_Html value) html,
+    required TResult Function(FormatMetadata_Ocr value) ocr,
+    required TResult Function(FormatMetadata_Csv value) csv,
+    required TResult Function(FormatMetadata_Bibtex value) bibtex,
+    required TResult Function(FormatMetadata_Citation value) citation,
+    required TResult Function(FormatMetadata_FictionBook value) fictionBook,
+    required TResult Function(FormatMetadata_Dbf value) dbf,
+    required TResult Function(FormatMetadata_Jats value) jats,
+    required TResult Function(FormatMetadata_Epub value) epub,
+    required TResult Function(FormatMetadata_Pst value) pst,
+    required TResult Function(FormatMetadata_Code value) code,
+  }) {
+    return code(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(FormatMetadata_Pdf value)? pdf,
+    TResult? Function(FormatMetadata_Docx value)? docx,
+    TResult? Function(FormatMetadata_Excel value)? excel,
+    TResult? Function(FormatMetadata_Email value)? email,
+    TResult? Function(FormatMetadata_Pptx value)? pptx,
+    TResult? Function(FormatMetadata_Archive value)? archive,
+    TResult? Function(FormatMetadata_Image value)? image,
+    TResult? Function(FormatMetadata_Xml value)? xml,
+    TResult? Function(FormatMetadata_Text value)? text,
+    TResult? Function(FormatMetadata_Html value)? html,
+    TResult? Function(FormatMetadata_Ocr value)? ocr,
+    TResult? Function(FormatMetadata_Csv value)? csv,
+    TResult? Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult? Function(FormatMetadata_Citation value)? citation,
+    TResult? Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult? Function(FormatMetadata_Dbf value)? dbf,
+    TResult? Function(FormatMetadata_Jats value)? jats,
+    TResult? Function(FormatMetadata_Epub value)? epub,
+    TResult? Function(FormatMetadata_Pst value)? pst,
+    TResult? Function(FormatMetadata_Code value)? code,
+  }) {
+    return code?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(FormatMetadata_Pdf value)? pdf,
+    TResult Function(FormatMetadata_Docx value)? docx,
+    TResult Function(FormatMetadata_Excel value)? excel,
+    TResult Function(FormatMetadata_Email value)? email,
+    TResult Function(FormatMetadata_Pptx value)? pptx,
+    TResult Function(FormatMetadata_Archive value)? archive,
+    TResult Function(FormatMetadata_Image value)? image,
+    TResult Function(FormatMetadata_Xml value)? xml,
+    TResult Function(FormatMetadata_Text value)? text,
+    TResult Function(FormatMetadata_Html value)? html,
+    TResult Function(FormatMetadata_Ocr value)? ocr,
+    TResult Function(FormatMetadata_Csv value)? csv,
+    TResult Function(FormatMetadata_Bibtex value)? bibtex,
+    TResult Function(FormatMetadata_Citation value)? citation,
+    TResult Function(FormatMetadata_FictionBook value)? fictionBook,
+    TResult Function(FormatMetadata_Dbf value)? dbf,
+    TResult Function(FormatMetadata_Jats value)? jats,
+    TResult Function(FormatMetadata_Epub value)? epub,
+    TResult Function(FormatMetadata_Pst value)? pst,
+    TResult Function(FormatMetadata_Code value)? code,
+    required TResult orElse(),
+  }) {
+    if (code != null) {
+      return code(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class FormatMetadata_Code extends FormatMetadata {
+  const factory FormatMetadata_Code({required final String field0}) =
+      _$FormatMetadata_CodeImpl;
+  const FormatMetadata_Code._() : super._();
+
+  @override
+  String get field0;
+
+  /// Create a copy of FormatMetadata
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$FormatMetadata_CodeImplCopyWith<_$FormatMetadata_CodeImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$NodeContent {
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $NodeContentCopyWith<$Res> {
+  factory $NodeContentCopyWith(
+          NodeContent value, $Res Function(NodeContent) then) =
+      _$NodeContentCopyWithImpl<$Res, NodeContent>;
+}
+
+/// @nodoc
+class _$NodeContentCopyWithImpl<$Res, $Val extends NodeContent>
+    implements $NodeContentCopyWith<$Res> {
+  _$NodeContentCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$NodeContent_TitleImplCopyWith<$Res> {
+  factory _$$NodeContent_TitleImplCopyWith(_$NodeContent_TitleImpl value,
+          $Res Function(_$NodeContent_TitleImpl) then) =
+      __$$NodeContent_TitleImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String text});
+}
+
+/// @nodoc
+class __$$NodeContent_TitleImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_TitleImpl>
+    implements _$$NodeContent_TitleImplCopyWith<$Res> {
+  __$$NodeContent_TitleImplCopyWithImpl(_$NodeContent_TitleImpl _value,
+      $Res Function(_$NodeContent_TitleImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? text = null,
+  }) {
+    return _then(_$NodeContent_TitleImpl(
+      text: null == text
+          ? _value.text
+          : text // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
   }
 }
 
 /// @nodoc
-class $NodeContentCopyWith<$Res> {
-  $NodeContentCopyWith(NodeContent _, $Res Function(NodeContent) __);
-}
 
-/// Adds pattern-matching-related methods to [NodeContent].
-extension NodeContentPatterns on NodeContent {
-  /// A variant of `map` that fallback to returning `orElse`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
+class _$NodeContent_TitleImpl extends NodeContent_Title {
+  const _$NodeContent_TitleImpl({required this.text}) : super._();
 
+  @override
+  final String text;
+
+  @override
+  String toString() {
+    return 'NodeContent.title(text: $text)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_TitleImpl &&
+            (identical(other.text, text) || other.text == text));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, text);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_TitleImplCopyWith<_$NodeContent_TitleImpl> get copyWith =>
+      __$$NodeContent_TitleImplCopyWithImpl<_$NodeContent_TitleImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return title(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return title?.call(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (title != null) {
+      return title(text);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return title(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return title?.call(this);
+  }
+
+  @override
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(NodeContent_Title value)? title,
@@ -3499,66 +9004,192 @@ extension NodeContentPatterns on NodeContent {
     TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
     required TResult orElse(),
   }) {
-    final _that = this;
-    switch (_that) {
-      case NodeContent_Title() when title != null:
-        return title(_that);
-      case NodeContent_Heading() when heading != null:
-        return heading(_that);
-      case NodeContent_Paragraph() when paragraph != null:
-        return paragraph(_that);
-      case NodeContent_List() when list != null:
-        return list(_that);
-      case NodeContent_ListItem() when listItem != null:
-        return listItem(_that);
-      case NodeContent_Table() when table != null:
-        return table(_that);
-      case NodeContent_Image() when image != null:
-        return image(_that);
-      case NodeContent_Code() when code != null:
-        return code(_that);
-      case NodeContent_Quote() when quote != null:
-        return quote(_that);
-      case NodeContent_Formula() when formula != null:
-        return formula(_that);
-      case NodeContent_Footnote() when footnote != null:
-        return footnote(_that);
-      case NodeContent_Group() when group != null:
-        return group(_that);
-      case NodeContent_PageBreak() when pageBreak != null:
-        return pageBreak(_that);
-      case NodeContent_Slide() when slide != null:
-        return slide(_that);
-      case NodeContent_DefinitionList() when definitionList != null:
-        return definitionList(_that);
-      case NodeContent_DefinitionItem() when definitionItem != null:
-        return definitionItem(_that);
-      case NodeContent_Citation() when citation != null:
-        return citation(_that);
-      case NodeContent_Admonition() when admonition != null:
-        return admonition(_that);
-      case NodeContent_RawBlock() when rawBlock != null:
-        return rawBlock(_that);
-      case NodeContent_MetadataBlock() when metadataBlock != null:
-        return metadataBlock(_that);
-      case _:
-        return orElse();
+    if (title != null) {
+      return title(this);
     }
+    return orElse();
+  }
+}
+
+abstract class NodeContent_Title extends NodeContent {
+  const factory NodeContent_Title({required final String text}) =
+      _$NodeContent_TitleImpl;
+  const NodeContent_Title._() : super._();
+
+  String get text;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_TitleImplCopyWith<_$NodeContent_TitleImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$NodeContent_HeadingImplCopyWith<$Res> {
+  factory _$$NodeContent_HeadingImplCopyWith(_$NodeContent_HeadingImpl value,
+          $Res Function(_$NodeContent_HeadingImpl) then) =
+      __$$NodeContent_HeadingImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({int level, String text});
+}
+
+/// @nodoc
+class __$$NodeContent_HeadingImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_HeadingImpl>
+    implements _$$NodeContent_HeadingImplCopyWith<$Res> {
+  __$$NodeContent_HeadingImplCopyWithImpl(_$NodeContent_HeadingImpl _value,
+      $Res Function(_$NodeContent_HeadingImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? level = null,
+    Object? text = null,
+  }) {
+    return _then(_$NodeContent_HeadingImpl(
+      level: null == level
+          ? _value.level
+          : level // ignore: cast_nullable_to_non_nullable
+              as int,
+      text: null == text
+          ? _value.text
+          : text // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$NodeContent_HeadingImpl extends NodeContent_Heading {
+  const _$NodeContent_HeadingImpl({required this.level, required this.text})
+      : super._();
+
+  @override
+  final int level;
+  @override
+  final String text;
+
+  @override
+  String toString() {
+    return 'NodeContent.heading(level: $level, text: $text)';
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// Callbacks receives the raw object, upcasted.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case final Subclass2 value:
-  ///     return ...;
-  /// }
-  /// ```
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_HeadingImpl &&
+            (identical(other.level, level) || other.level == level) &&
+            (identical(other.text, text) || other.text == text));
+  }
 
+  @override
+  int get hashCode => Object.hash(runtimeType, level, text);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_HeadingImplCopyWith<_$NodeContent_HeadingImpl> get copyWith =>
+      __$$NodeContent_HeadingImplCopyWithImpl<_$NodeContent_HeadingImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return heading(level, text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return heading?.call(level, text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (heading != null) {
+      return heading(level, text);
+    }
+    return orElse();
+  }
+
+  @override
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(NodeContent_Title value) title,
@@ -3582,63 +9213,10 @@ extension NodeContentPatterns on NodeContent {
     required TResult Function(NodeContent_RawBlock value) rawBlock,
     required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
   }) {
-    final _that = this;
-    switch (_that) {
-      case NodeContent_Title():
-        return title(_that);
-      case NodeContent_Heading():
-        return heading(_that);
-      case NodeContent_Paragraph():
-        return paragraph(_that);
-      case NodeContent_List():
-        return list(_that);
-      case NodeContent_ListItem():
-        return listItem(_that);
-      case NodeContent_Table():
-        return table(_that);
-      case NodeContent_Image():
-        return image(_that);
-      case NodeContent_Code():
-        return code(_that);
-      case NodeContent_Quote():
-        return quote(_that);
-      case NodeContent_Formula():
-        return formula(_that);
-      case NodeContent_Footnote():
-        return footnote(_that);
-      case NodeContent_Group():
-        return group(_that);
-      case NodeContent_PageBreak():
-        return pageBreak(_that);
-      case NodeContent_Slide():
-        return slide(_that);
-      case NodeContent_DefinitionList():
-        return definitionList(_that);
-      case NodeContent_DefinitionItem():
-        return definitionItem(_that);
-      case NodeContent_Citation():
-        return citation(_that);
-      case NodeContent_Admonition():
-        return admonition(_that);
-      case NodeContent_RawBlock():
-        return rawBlock(_that);
-      case NodeContent_MetadataBlock():
-        return metadataBlock(_that);
-    }
+    return heading(this);
   }
 
-  /// A variant of `map` that fallback to returning `null`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(NodeContent_Title value)? title,
@@ -3662,84 +9240,199 @@ extension NodeContentPatterns on NodeContent {
     TResult? Function(NodeContent_RawBlock value)? rawBlock,
     TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
   }) {
-    final _that = this;
-    switch (_that) {
-      case NodeContent_Title() when title != null:
-        return title(_that);
-      case NodeContent_Heading() when heading != null:
-        return heading(_that);
-      case NodeContent_Paragraph() when paragraph != null:
-        return paragraph(_that);
-      case NodeContent_List() when list != null:
-        return list(_that);
-      case NodeContent_ListItem() when listItem != null:
-        return listItem(_that);
-      case NodeContent_Table() when table != null:
-        return table(_that);
-      case NodeContent_Image() when image != null:
-        return image(_that);
-      case NodeContent_Code() when code != null:
-        return code(_that);
-      case NodeContent_Quote() when quote != null:
-        return quote(_that);
-      case NodeContent_Formula() when formula != null:
-        return formula(_that);
-      case NodeContent_Footnote() when footnote != null:
-        return footnote(_that);
-      case NodeContent_Group() when group != null:
-        return group(_that);
-      case NodeContent_PageBreak() when pageBreak != null:
-        return pageBreak(_that);
-      case NodeContent_Slide() when slide != null:
-        return slide(_that);
-      case NodeContent_DefinitionList() when definitionList != null:
-        return definitionList(_that);
-      case NodeContent_DefinitionItem() when definitionItem != null:
-        return definitionItem(_that);
-      case NodeContent_Citation() when citation != null:
-        return citation(_that);
-      case NodeContent_Admonition() when admonition != null:
-        return admonition(_that);
-      case NodeContent_RawBlock() when rawBlock != null:
-        return rawBlock(_that);
-      case NodeContent_MetadataBlock() when metadataBlock != null:
-        return metadataBlock(_that);
-      case _:
-        return null;
-    }
+    return heading?.call(this);
   }
 
-  /// A variant of `when` that fallback to an `orElse` callback.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (heading != null) {
+      return heading(this);
+    }
+    return orElse();
+  }
+}
 
+abstract class NodeContent_Heading extends NodeContent {
+  const factory NodeContent_Heading(
+      {required final int level,
+      required final String text}) = _$NodeContent_HeadingImpl;
+  const NodeContent_Heading._() : super._();
+
+  int get level;
+  String get text;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_HeadingImplCopyWith<_$NodeContent_HeadingImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$NodeContent_ParagraphImplCopyWith<$Res> {
+  factory _$$NodeContent_ParagraphImplCopyWith(
+          _$NodeContent_ParagraphImpl value,
+          $Res Function(_$NodeContent_ParagraphImpl) then) =
+      __$$NodeContent_ParagraphImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String text});
+}
+
+/// @nodoc
+class __$$NodeContent_ParagraphImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_ParagraphImpl>
+    implements _$$NodeContent_ParagraphImplCopyWith<$Res> {
+  __$$NodeContent_ParagraphImplCopyWithImpl(_$NodeContent_ParagraphImpl _value,
+      $Res Function(_$NodeContent_ParagraphImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? text = null,
+  }) {
+    return _then(_$NodeContent_ParagraphImpl(
+      text: null == text
+          ? _value.text
+          : text // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$NodeContent_ParagraphImpl extends NodeContent_Paragraph {
+  const _$NodeContent_ParagraphImpl({required this.text}) : super._();
+
+  @override
+  final String text;
+
+  @override
+  String toString() {
+    return 'NodeContent.paragraph(text: $text)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_ParagraphImpl &&
+            (identical(other.text, text) || other.text == text));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, text);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_ParagraphImplCopyWith<_$NodeContent_ParagraphImpl>
+      get copyWith => __$$NodeContent_ParagraphImplCopyWithImpl<
+          _$NodeContent_ParagraphImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return paragraph(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return paragraph?.call(text);
+  }
+
+  @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function(String text)? title,
-    TResult Function(PlatformInt64 level, String text)? heading,
+    TResult Function(int level, String text)? heading,
     TResult Function(String text)? paragraph,
     TResult Function(bool ordered)? list,
     TResult Function(String text)? listItem,
     TResult Function(TableGrid grid)? table,
-    TResult Function(String description, PlatformInt64 imageIndex, String src)?
-        image,
+    TResult Function(String description, int imageIndex, String src)? image,
     TResult Function(String text, String language)? code,
     TResult Function()? quote,
     TResult Function(String text)? formula,
     TResult Function(String text)? footnote,
-    TResult Function(
-            String label, PlatformInt64 headingLevel, String headingText)?
-        group,
+    TResult Function(String label, int headingLevel, String headingText)? group,
     TResult Function()? pageBreak,
-    TResult Function(PlatformInt64 number, String title)? slide,
+    TResult Function(int number, String title)? slide,
     TResult Function()? definitionList,
     TResult Function(String term, String definition)? definitionItem,
     TResult Function(String key, String text)? citation,
@@ -3748,483 +9441,139 @@ extension NodeContentPatterns on NodeContent {
     TResult Function(List<String> entries)? metadataBlock,
     required TResult orElse(),
   }) {
-    final _that = this;
-    switch (_that) {
-      case NodeContent_Title() when title != null:
-        return title(_that.text);
-      case NodeContent_Heading() when heading != null:
-        return heading(_that.level, _that.text);
-      case NodeContent_Paragraph() when paragraph != null:
-        return paragraph(_that.text);
-      case NodeContent_List() when list != null:
-        return list(_that.ordered);
-      case NodeContent_ListItem() when listItem != null:
-        return listItem(_that.text);
-      case NodeContent_Table() when table != null:
-        return table(_that.grid);
-      case NodeContent_Image() when image != null:
-        return image(_that.description, _that.imageIndex, _that.src);
-      case NodeContent_Code() when code != null:
-        return code(_that.text, _that.language);
-      case NodeContent_Quote() when quote != null:
-        return quote();
-      case NodeContent_Formula() when formula != null:
-        return formula(_that.text);
-      case NodeContent_Footnote() when footnote != null:
-        return footnote(_that.text);
-      case NodeContent_Group() when group != null:
-        return group(_that.label, _that.headingLevel, _that.headingText);
-      case NodeContent_PageBreak() when pageBreak != null:
-        return pageBreak();
-      case NodeContent_Slide() when slide != null:
-        return slide(_that.number, _that.title);
-      case NodeContent_DefinitionList() when definitionList != null:
-        return definitionList();
-      case NodeContent_DefinitionItem() when definitionItem != null:
-        return definitionItem(_that.term, _that.definition);
-      case NodeContent_Citation() when citation != null:
-        return citation(_that.key, _that.text);
-      case NodeContent_Admonition() when admonition != null:
-        return admonition(_that.kind, _that.title);
-      case NodeContent_RawBlock() when rawBlock != null:
-        return rawBlock(_that.format, _that.content);
-      case NodeContent_MetadataBlock() when metadataBlock != null:
-        return metadataBlock(_that.entries);
-      case _:
-        return orElse();
+    if (paragraph != null) {
+      return paragraph(text);
     }
+    return orElse();
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// As opposed to `map`, this offers destructuring.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case Subclass2(:final field2):
-  ///     return ...;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult when<TResult extends Object?>({
-    required TResult Function(String text) title,
-    required TResult Function(PlatformInt64 level, String text) heading,
-    required TResult Function(String text) paragraph,
-    required TResult Function(bool ordered) list,
-    required TResult Function(String text) listItem,
-    required TResult Function(TableGrid grid) table,
-    required TResult Function(
-            String description, PlatformInt64 imageIndex, String src)
-        image,
-    required TResult Function(String text, String language) code,
-    required TResult Function() quote,
-    required TResult Function(String text) formula,
-    required TResult Function(String text) footnote,
-    required TResult Function(
-            String label, PlatformInt64 headingLevel, String headingText)
-        group,
-    required TResult Function() pageBreak,
-    required TResult Function(PlatformInt64 number, String title) slide,
-    required TResult Function() definitionList,
-    required TResult Function(String term, String definition) definitionItem,
-    required TResult Function(String key, String text) citation,
-    required TResult Function(String kind, String title) admonition,
-    required TResult Function(String format, String content) rawBlock,
-    required TResult Function(List<String> entries) metadataBlock,
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
   }) {
-    final _that = this;
-    switch (_that) {
-      case NodeContent_Title():
-        return title(_that.text);
-      case NodeContent_Heading():
-        return heading(_that.level, _that.text);
-      case NodeContent_Paragraph():
-        return paragraph(_that.text);
-      case NodeContent_List():
-        return list(_that.ordered);
-      case NodeContent_ListItem():
-        return listItem(_that.text);
-      case NodeContent_Table():
-        return table(_that.grid);
-      case NodeContent_Image():
-        return image(_that.description, _that.imageIndex, _that.src);
-      case NodeContent_Code():
-        return code(_that.text, _that.language);
-      case NodeContent_Quote():
-        return quote();
-      case NodeContent_Formula():
-        return formula(_that.text);
-      case NodeContent_Footnote():
-        return footnote(_that.text);
-      case NodeContent_Group():
-        return group(_that.label, _that.headingLevel, _that.headingText);
-      case NodeContent_PageBreak():
-        return pageBreak();
-      case NodeContent_Slide():
-        return slide(_that.number, _that.title);
-      case NodeContent_DefinitionList():
-        return definitionList();
-      case NodeContent_DefinitionItem():
-        return definitionItem(_that.term, _that.definition);
-      case NodeContent_Citation():
-        return citation(_that.key, _that.text);
-      case NodeContent_Admonition():
-        return admonition(_that.kind, _that.title);
-      case NodeContent_RawBlock():
-        return rawBlock(_that.format, _that.content);
-      case NodeContent_MetadataBlock():
-        return metadataBlock(_that.entries);
-    }
+    return paragraph(this);
   }
 
-  /// A variant of `when` that fallback to returning `null`
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(String text)? title,
-    TResult? Function(PlatformInt64 level, String text)? heading,
-    TResult? Function(String text)? paragraph,
-    TResult? Function(bool ordered)? list,
-    TResult? Function(String text)? listItem,
-    TResult? Function(TableGrid grid)? table,
-    TResult? Function(String description, PlatformInt64 imageIndex, String src)?
-        image,
-    TResult? Function(String text, String language)? code,
-    TResult? Function()? quote,
-    TResult? Function(String text)? formula,
-    TResult? Function(String text)? footnote,
-    TResult? Function(
-            String label, PlatformInt64 headingLevel, String headingText)?
-        group,
-    TResult? Function()? pageBreak,
-    TResult? Function(PlatformInt64 number, String title)? slide,
-    TResult? Function()? definitionList,
-    TResult? Function(String term, String definition)? definitionItem,
-    TResult? Function(String key, String text)? citation,
-    TResult? Function(String kind, String title)? admonition,
-    TResult? Function(String format, String content)? rawBlock,
-    TResult? Function(List<String> entries)? metadataBlock,
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
   }) {
-    final _that = this;
-    switch (_that) {
-      case NodeContent_Title() when title != null:
-        return title(_that.text);
-      case NodeContent_Heading() when heading != null:
-        return heading(_that.level, _that.text);
-      case NodeContent_Paragraph() when paragraph != null:
-        return paragraph(_that.text);
-      case NodeContent_List() when list != null:
-        return list(_that.ordered);
-      case NodeContent_ListItem() when listItem != null:
-        return listItem(_that.text);
-      case NodeContent_Table() when table != null:
-        return table(_that.grid);
-      case NodeContent_Image() when image != null:
-        return image(_that.description, _that.imageIndex, _that.src);
-      case NodeContent_Code() when code != null:
-        return code(_that.text, _that.language);
-      case NodeContent_Quote() when quote != null:
-        return quote();
-      case NodeContent_Formula() when formula != null:
-        return formula(_that.text);
-      case NodeContent_Footnote() when footnote != null:
-        return footnote(_that.text);
-      case NodeContent_Group() when group != null:
-        return group(_that.label, _that.headingLevel, _that.headingText);
-      case NodeContent_PageBreak() when pageBreak != null:
-        return pageBreak();
-      case NodeContent_Slide() when slide != null:
-        return slide(_that.number, _that.title);
-      case NodeContent_DefinitionList() when definitionList != null:
-        return definitionList();
-      case NodeContent_DefinitionItem() when definitionItem != null:
-        return definitionItem(_that.term, _that.definition);
-      case NodeContent_Citation() when citation != null:
-        return citation(_that.key, _that.text);
-      case NodeContent_Admonition() when admonition != null:
-        return admonition(_that.kind, _that.title);
-      case NodeContent_RawBlock() when rawBlock != null:
-        return rawBlock(_that.format, _that.content);
-      case NodeContent_MetadataBlock() when metadataBlock != null:
-        return metadataBlock(_that.entries);
-      case _:
-        return null;
+    return paragraph?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (paragraph != null) {
+      return paragraph(this);
     }
+    return orElse();
   }
 }
 
-/// @nodoc
+abstract class NodeContent_Paragraph extends NodeContent {
+  const factory NodeContent_Paragraph({required final String text}) =
+      _$NodeContent_ParagraphImpl;
+  const NodeContent_Paragraph._() : super._();
 
-class NodeContent_Title extends NodeContent {
-  const NodeContent_Title({required this.text}) : super._();
-
-  final String text;
+  String get text;
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_TitleCopyWith<NodeContent_Title> get copyWith =>
-      _$NodeContent_TitleCopyWithImpl<NodeContent_Title>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_Title &&
-            (identical(other.text, text) || other.text == text));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, text);
-
-  @override
-  String toString() {
-    return 'NodeContent.title(text: $text)';
-  }
+  _$$NodeContent_ParagraphImplCopyWith<_$NodeContent_ParagraphImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract mixin class $NodeContent_TitleCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_TitleCopyWith(
-          NodeContent_Title value, $Res Function(NodeContent_Title) _then) =
-      _$NodeContent_TitleCopyWithImpl;
-  @useResult
-  $Res call({String text});
-}
-
-/// @nodoc
-class _$NodeContent_TitleCopyWithImpl<$Res>
-    implements $NodeContent_TitleCopyWith<$Res> {
-  _$NodeContent_TitleCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Title _self;
-  final $Res Function(NodeContent_Title) _then;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? text = null,
-  }) {
-    return _then(NodeContent_Title(
-      text: null == text
-          ? _self.text
-          : text // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
-  }
-}
-
-/// @nodoc
-
-class NodeContent_Heading extends NodeContent {
-  const NodeContent_Heading({required this.level, required this.text})
-      : super._();
-
-  final PlatformInt64 level;
-  final String text;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_HeadingCopyWith<NodeContent_Heading> get copyWith =>
-      _$NodeContent_HeadingCopyWithImpl<NodeContent_Heading>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_Heading &&
-            (identical(other.level, level) || other.level == level) &&
-            (identical(other.text, text) || other.text == text));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, level, text);
-
-  @override
-  String toString() {
-    return 'NodeContent.heading(level: $level, text: $text)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $NodeContent_HeadingCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_HeadingCopyWith(
-          NodeContent_Heading value, $Res Function(NodeContent_Heading) _then) =
-      _$NodeContent_HeadingCopyWithImpl;
-  @useResult
-  $Res call({PlatformInt64 level, String text});
-}
-
-/// @nodoc
-class _$NodeContent_HeadingCopyWithImpl<$Res>
-    implements $NodeContent_HeadingCopyWith<$Res> {
-  _$NodeContent_HeadingCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Heading _self;
-  final $Res Function(NodeContent_Heading) _then;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? level = null,
-    Object? text = null,
-  }) {
-    return _then(NodeContent_Heading(
-      level: null == level
-          ? _self.level
-          : level // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-      text: null == text
-          ? _self.text
-          : text // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
-  }
-}
-
-/// @nodoc
-
-class NodeContent_Paragraph extends NodeContent {
-  const NodeContent_Paragraph({required this.text}) : super._();
-
-  final String text;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_ParagraphCopyWith<NodeContent_Paragraph> get copyWith =>
-      _$NodeContent_ParagraphCopyWithImpl<NodeContent_Paragraph>(
-          this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_Paragraph &&
-            (identical(other.text, text) || other.text == text));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, text);
-
-  @override
-  String toString() {
-    return 'NodeContent.paragraph(text: $text)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $NodeContent_ParagraphCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_ParagraphCopyWith(NodeContent_Paragraph value,
-          $Res Function(NodeContent_Paragraph) _then) =
-      _$NodeContent_ParagraphCopyWithImpl;
-  @useResult
-  $Res call({String text});
-}
-
-/// @nodoc
-class _$NodeContent_ParagraphCopyWithImpl<$Res>
-    implements $NodeContent_ParagraphCopyWith<$Res> {
-  _$NodeContent_ParagraphCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Paragraph _self;
-  final $Res Function(NodeContent_Paragraph) _then;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? text = null,
-  }) {
-    return _then(NodeContent_Paragraph(
-      text: null == text
-          ? _self.text
-          : text // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
-  }
-}
-
-/// @nodoc
-
-class NodeContent_List extends NodeContent {
-  const NodeContent_List({required this.ordered}) : super._();
-
-  final bool ordered;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_ListCopyWith<NodeContent_List> get copyWith =>
-      _$NodeContent_ListCopyWithImpl<NodeContent_List>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_List &&
-            (identical(other.ordered, ordered) || other.ordered == ordered));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, ordered);
-
-  @override
-  String toString() {
-    return 'NodeContent.list(ordered: $ordered)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $NodeContent_ListCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_ListCopyWith(
-          NodeContent_List value, $Res Function(NodeContent_List) _then) =
-      _$NodeContent_ListCopyWithImpl;
+abstract class _$$NodeContent_ListImplCopyWith<$Res> {
+  factory _$$NodeContent_ListImplCopyWith(_$NodeContent_ListImpl value,
+          $Res Function(_$NodeContent_ListImpl) then) =
+      __$$NodeContent_ListImplCopyWithImpl<$Res>;
   @useResult
   $Res call({bool ordered});
 }
 
 /// @nodoc
-class _$NodeContent_ListCopyWithImpl<$Res>
-    implements $NodeContent_ListCopyWith<$Res> {
-  _$NodeContent_ListCopyWithImpl(this._self, this._then);
-
-  final NodeContent_List _self;
-  final $Res Function(NodeContent_List) _then;
+class __$$NodeContent_ListImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_ListImpl>
+    implements _$$NodeContent_ListImplCopyWith<$Res> {
+  __$$NodeContent_ListImplCopyWithImpl(_$NodeContent_ListImpl _value,
+      $Res Function(_$NodeContent_ListImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? ordered = null,
   }) {
-    return _then(NodeContent_List(
+    return _then(_$NodeContent_ListImpl(
       ordered: null == ordered
-          ? _self.ordered
+          ? _value.ordered
           : ordered // ignore: cast_nullable_to_non_nullable
               as bool,
     ));
@@ -4233,63 +9582,253 @@ class _$NodeContent_ListCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_ListItem extends NodeContent {
-  const NodeContent_ListItem({required this.text}) : super._();
+class _$NodeContent_ListImpl extends NodeContent_List {
+  const _$NodeContent_ListImpl({required this.ordered}) : super._();
 
-  final String text;
+  @override
+  final bool ordered;
 
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_ListItemCopyWith<NodeContent_ListItem> get copyWith =>
-      _$NodeContent_ListItemCopyWithImpl<NodeContent_ListItem>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'NodeContent.list(ordered: $ordered)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_ListItem &&
-            (identical(other.text, text) || other.text == text));
+            other is _$NodeContent_ListImpl &&
+            (identical(other.ordered, ordered) || other.ordered == ordered));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, text);
+  int get hashCode => Object.hash(runtimeType, ordered);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_ListImplCopyWith<_$NodeContent_ListImpl> get copyWith =>
+      __$$NodeContent_ListImplCopyWithImpl<_$NodeContent_ListImpl>(
+          this, _$identity);
 
   @override
-  String toString() {
-    return 'NodeContent.listItem(text: $text)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return list(ordered);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return list?.call(ordered);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (list != null) {
+      return list(ordered);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return list(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return list?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (list != null) {
+      return list(this);
+    }
+    return orElse();
   }
 }
 
+abstract class NodeContent_List extends NodeContent {
+  const factory NodeContent_List({required final bool ordered}) =
+      _$NodeContent_ListImpl;
+  const NodeContent_List._() : super._();
+
+  bool get ordered;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_ListImplCopyWith<_$NodeContent_ListImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $NodeContent_ListItemCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_ListItemCopyWith(NodeContent_ListItem value,
-          $Res Function(NodeContent_ListItem) _then) =
-      _$NodeContent_ListItemCopyWithImpl;
+abstract class _$$NodeContent_ListItemImplCopyWith<$Res> {
+  factory _$$NodeContent_ListItemImplCopyWith(_$NodeContent_ListItemImpl value,
+          $Res Function(_$NodeContent_ListItemImpl) then) =
+      __$$NodeContent_ListItemImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String text});
 }
 
 /// @nodoc
-class _$NodeContent_ListItemCopyWithImpl<$Res>
-    implements $NodeContent_ListItemCopyWith<$Res> {
-  _$NodeContent_ListItemCopyWithImpl(this._self, this._then);
-
-  final NodeContent_ListItem _self;
-  final $Res Function(NodeContent_ListItem) _then;
+class __$$NodeContent_ListItemImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_ListItemImpl>
+    implements _$$NodeContent_ListItemImplCopyWith<$Res> {
+  __$$NodeContent_ListItemImplCopyWithImpl(_$NodeContent_ListItemImpl _value,
+      $Res Function(_$NodeContent_ListItemImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? text = null,
   }) {
-    return _then(NodeContent_ListItem(
+    return _then(_$NodeContent_ListItemImpl(
       text: null == text
-          ? _self.text
+          ? _value.text
           : text // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -4298,62 +9837,254 @@ class _$NodeContent_ListItemCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_Table extends NodeContent {
-  const NodeContent_Table({required this.grid}) : super._();
+class _$NodeContent_ListItemImpl extends NodeContent_ListItem {
+  const _$NodeContent_ListItemImpl({required this.text}) : super._();
 
-  final TableGrid grid;
+  @override
+  final String text;
 
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_TableCopyWith<NodeContent_Table> get copyWith =>
-      _$NodeContent_TableCopyWithImpl<NodeContent_Table>(this, _$identity);
+  @override
+  String toString() {
+    return 'NodeContent.listItem(text: $text)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_Table &&
-            (identical(other.grid, grid) || other.grid == grid));
+            other is _$NodeContent_ListItemImpl &&
+            (identical(other.text, text) || other.text == text));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, grid);
+  int get hashCode => Object.hash(runtimeType, text);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_ListItemImplCopyWith<_$NodeContent_ListItemImpl>
+      get copyWith =>
+          __$$NodeContent_ListItemImplCopyWithImpl<_$NodeContent_ListItemImpl>(
+              this, _$identity);
 
   @override
-  String toString() {
-    return 'NodeContent.table(grid: $grid)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return listItem(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return listItem?.call(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (listItem != null) {
+      return listItem(text);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return listItem(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return listItem?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (listItem != null) {
+      return listItem(this);
+    }
+    return orElse();
   }
 }
 
+abstract class NodeContent_ListItem extends NodeContent {
+  const factory NodeContent_ListItem({required final String text}) =
+      _$NodeContent_ListItemImpl;
+  const NodeContent_ListItem._() : super._();
+
+  String get text;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_ListItemImplCopyWith<_$NodeContent_ListItemImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $NodeContent_TableCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_TableCopyWith(
-          NodeContent_Table value, $Res Function(NodeContent_Table) _then) =
-      _$NodeContent_TableCopyWithImpl;
+abstract class _$$NodeContent_TableImplCopyWith<$Res> {
+  factory _$$NodeContent_TableImplCopyWith(_$NodeContent_TableImpl value,
+          $Res Function(_$NodeContent_TableImpl) then) =
+      __$$NodeContent_TableImplCopyWithImpl<$Res>;
   @useResult
   $Res call({TableGrid grid});
 }
 
 /// @nodoc
-class _$NodeContent_TableCopyWithImpl<$Res>
-    implements $NodeContent_TableCopyWith<$Res> {
-  _$NodeContent_TableCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Table _self;
-  final $Res Function(NodeContent_Table) _then;
+class __$$NodeContent_TableImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_TableImpl>
+    implements _$$NodeContent_TableImplCopyWith<$Res> {
+  __$$NodeContent_TableImplCopyWithImpl(_$NodeContent_TableImpl _value,
+      $Res Function(_$NodeContent_TableImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? grid = null,
   }) {
-    return _then(NodeContent_Table(
+    return _then(_$NodeContent_TableImpl(
       grid: null == grid
-          ? _self.grid
+          ? _value.grid
           : grid // ignore: cast_nullable_to_non_nullable
               as TableGrid,
     ));
@@ -4362,27 +10093,293 @@ class _$NodeContent_TableCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_Image extends NodeContent {
-  const NodeContent_Image(
-      {required this.description, required this.imageIndex, required this.src})
-      : super._();
+class _$NodeContent_TableImpl extends NodeContent_Table {
+  const _$NodeContent_TableImpl({required this.grid}) : super._();
 
-  final String description;
-  final PlatformInt64 imageIndex;
-  final String src;
+  @override
+  final TableGrid grid;
 
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_ImageCopyWith<NodeContent_Image> get copyWith =>
-      _$NodeContent_ImageCopyWithImpl<NodeContent_Image>(this, _$identity);
+  @override
+  String toString() {
+    return 'NodeContent.table(grid: $grid)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_Image &&
+            other is _$NodeContent_TableImpl &&
+            (identical(other.grid, grid) || other.grid == grid));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, grid);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_TableImplCopyWith<_$NodeContent_TableImpl> get copyWith =>
+      __$$NodeContent_TableImplCopyWithImpl<_$NodeContent_TableImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return table(grid);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return table?.call(grid);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (table != null) {
+      return table(grid);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return table(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return table?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (table != null) {
+      return table(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class NodeContent_Table extends NodeContent {
+  const factory NodeContent_Table({required final TableGrid grid}) =
+      _$NodeContent_TableImpl;
+  const NodeContent_Table._() : super._();
+
+  TableGrid get grid;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_TableImplCopyWith<_$NodeContent_TableImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$NodeContent_ImageImplCopyWith<$Res> {
+  factory _$$NodeContent_ImageImplCopyWith(_$NodeContent_ImageImpl value,
+          $Res Function(_$NodeContent_ImageImpl) then) =
+      __$$NodeContent_ImageImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String description, int imageIndex, String src});
+}
+
+/// @nodoc
+class __$$NodeContent_ImageImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_ImageImpl>
+    implements _$$NodeContent_ImageImplCopyWith<$Res> {
+  __$$NodeContent_ImageImplCopyWithImpl(_$NodeContent_ImageImpl _value,
+      $Res Function(_$NodeContent_ImageImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? description = null,
+    Object? imageIndex = null,
+    Object? src = null,
+  }) {
+    return _then(_$NodeContent_ImageImpl(
+      description: null == description
+          ? _value.description
+          : description // ignore: cast_nullable_to_non_nullable
+              as String,
+      imageIndex: null == imageIndex
+          ? _value.imageIndex
+          : imageIndex // ignore: cast_nullable_to_non_nullable
+              as int,
+      src: null == src
+          ? _value.src
+          : src // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$NodeContent_ImageImpl extends NodeContent_Image {
+  const _$NodeContent_ImageImpl(
+      {required this.description, required this.imageIndex, required this.src})
+      : super._();
+
+  @override
+  final String description;
+  @override
+  final int imageIndex;
+  @override
+  final String src;
+
+  @override
+  String toString() {
+    return 'NodeContent.image(description: $description, imageIndex: $imageIndex, src: $src)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_ImageImpl &&
             (identical(other.description, description) ||
                 other.description == description) &&
             (identical(other.imageIndex, imageIndex) ||
@@ -4393,122 +10390,240 @@ class NodeContent_Image extends NodeContent {
   @override
   int get hashCode => Object.hash(runtimeType, description, imageIndex, src);
 
-  @override
-  String toString() {
-    return 'NodeContent.image(description: $description, imageIndex: $imageIndex, src: $src)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $NodeContent_ImageCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_ImageCopyWith(
-          NodeContent_Image value, $Res Function(NodeContent_Image) _then) =
-      _$NodeContent_ImageCopyWithImpl;
-  @useResult
-  $Res call({String description, PlatformInt64 imageIndex, String src});
-}
-
-/// @nodoc
-class _$NodeContent_ImageCopyWithImpl<$Res>
-    implements $NodeContent_ImageCopyWith<$Res> {
-  _$NodeContent_ImageCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Image _self;
-  final $Res Function(NodeContent_Image) _then;
-
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
   @pragma('vm:prefer-inline')
-  $Res call({
-    Object? description = null,
-    Object? imageIndex = null,
-    Object? src = null,
+  _$$NodeContent_ImageImplCopyWith<_$NodeContent_ImageImpl> get copyWith =>
+      __$$NodeContent_ImageImplCopyWithImpl<_$NodeContent_ImageImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
   }) {
-    return _then(NodeContent_Image(
-      description: null == description
-          ? _self.description
-          : description // ignore: cast_nullable_to_non_nullable
-              as String,
-      imageIndex: null == imageIndex
-          ? _self.imageIndex
-          : imageIndex // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-      src: null == src
-          ? _self.src
-          : src // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
+    return image(description, imageIndex, src);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return image?.call(description, imageIndex, src);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (image != null) {
+      return image(description, imageIndex, src);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return image(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return image?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (image != null) {
+      return image(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
+abstract class NodeContent_Image extends NodeContent {
+  const factory NodeContent_Image(
+      {required final String description,
+      required final int imageIndex,
+      required final String src}) = _$NodeContent_ImageImpl;
+  const NodeContent_Image._() : super._();
 
-class NodeContent_Code extends NodeContent {
-  const NodeContent_Code({required this.text, required this.language})
-      : super._();
-
-  final String text;
-  final String language;
+  String get description;
+  int get imageIndex;
+  String get src;
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_CodeCopyWith<NodeContent_Code> get copyWith =>
-      _$NodeContent_CodeCopyWithImpl<NodeContent_Code>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_Code &&
-            (identical(other.text, text) || other.text == text) &&
-            (identical(other.language, language) ||
-                other.language == language));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, text, language);
-
-  @override
-  String toString() {
-    return 'NodeContent.code(text: $text, language: $language)';
-  }
+  _$$NodeContent_ImageImplCopyWith<_$NodeContent_ImageImpl> get copyWith =>
+      throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract mixin class $NodeContent_CodeCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_CodeCopyWith(
-          NodeContent_Code value, $Res Function(NodeContent_Code) _then) =
-      _$NodeContent_CodeCopyWithImpl;
+abstract class _$$NodeContent_CodeImplCopyWith<$Res> {
+  factory _$$NodeContent_CodeImplCopyWith(_$NodeContent_CodeImpl value,
+          $Res Function(_$NodeContent_CodeImpl) then) =
+      __$$NodeContent_CodeImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String text, String language});
 }
 
 /// @nodoc
-class _$NodeContent_CodeCopyWithImpl<$Res>
-    implements $NodeContent_CodeCopyWith<$Res> {
-  _$NodeContent_CodeCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Code _self;
-  final $Res Function(NodeContent_Code) _then;
+class __$$NodeContent_CodeImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_CodeImpl>
+    implements _$$NodeContent_CodeImplCopyWith<$Res> {
+  __$$NodeContent_CodeImplCopyWithImpl(_$NodeContent_CodeImpl _value,
+      $Res Function(_$NodeContent_CodeImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? text = null,
     Object? language = null,
   }) {
-    return _then(NodeContent_Code(
+    return _then(_$NodeContent_CodeImpl(
       text: null == text
-          ? _self.text
+          ? _value.text
           : text // ignore: cast_nullable_to_non_nullable
               as String,
       language: null == language
-          ? _self.language
+          ? _value.language
           : language // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -4517,147 +10632,733 @@ class _$NodeContent_CodeCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_Quote extends NodeContent {
-  const NodeContent_Quote() : super._();
+class _$NodeContent_CodeImpl extends NodeContent_Code {
+  const _$NodeContent_CodeImpl({required this.text, required this.language})
+      : super._();
+
+  @override
+  final String text;
+  @override
+  final String language;
+
+  @override
+  String toString() {
+    return 'NodeContent.code(text: $text, language: $language)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is NodeContent_Quote);
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_CodeImpl &&
+            (identical(other.text, text) || other.text == text) &&
+            (identical(other.language, language) ||
+                other.language == language));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, text, language);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_CodeImplCopyWith<_$NodeContent_CodeImpl> get copyWith =>
+      __$$NodeContent_CodeImplCopyWithImpl<_$NodeContent_CodeImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return code(text, language);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return code?.call(text, language);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (code != null) {
+      return code(text, language);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return code(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return code?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (code != null) {
+      return code(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class NodeContent_Code extends NodeContent {
+  const factory NodeContent_Code(
+      {required final String text,
+      required final String language}) = _$NodeContent_CodeImpl;
+  const NodeContent_Code._() : super._();
+
+  String get text;
+  String get language;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_CodeImplCopyWith<_$NodeContent_CodeImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$NodeContent_QuoteImplCopyWith<$Res> {
+  factory _$$NodeContent_QuoteImplCopyWith(_$NodeContent_QuoteImpl value,
+          $Res Function(_$NodeContent_QuoteImpl) then) =
+      __$$NodeContent_QuoteImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$NodeContent_QuoteImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_QuoteImpl>
+    implements _$$NodeContent_QuoteImplCopyWith<$Res> {
+  __$$NodeContent_QuoteImplCopyWithImpl(_$NodeContent_QuoteImpl _value,
+      $Res Function(_$NodeContent_QuoteImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$NodeContent_QuoteImpl extends NodeContent_Quote {
+  const _$NodeContent_QuoteImpl() : super._();
+
+  @override
+  String toString() {
+    return 'NodeContent.quote()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is _$NodeContent_QuoteImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'NodeContent.quote()';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return quote();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return quote?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (quote != null) {
+      return quote();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return quote(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return quote?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (quote != null) {
+      return quote(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class NodeContent_Quote extends NodeContent {
+  const factory NodeContent_Quote() = _$NodeContent_QuoteImpl;
+  const NodeContent_Quote._() : super._();
+}
+
+/// @nodoc
+abstract class _$$NodeContent_FormulaImplCopyWith<$Res> {
+  factory _$$NodeContent_FormulaImplCopyWith(_$NodeContent_FormulaImpl value,
+          $Res Function(_$NodeContent_FormulaImpl) then) =
+      __$$NodeContent_FormulaImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String text});
+}
+
+/// @nodoc
+class __$$NodeContent_FormulaImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_FormulaImpl>
+    implements _$$NodeContent_FormulaImplCopyWith<$Res> {
+  __$$NodeContent_FormulaImplCopyWithImpl(_$NodeContent_FormulaImpl _value,
+      $Res Function(_$NodeContent_FormulaImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? text = null,
+  }) {
+    return _then(_$NodeContent_FormulaImpl(
+      text: null == text
+          ? _value.text
+          : text // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
   }
 }
 
 /// @nodoc
 
-class NodeContent_Formula extends NodeContent {
-  const NodeContent_Formula({required this.text}) : super._();
+class _$NodeContent_FormulaImpl extends NodeContent_Formula {
+  const _$NodeContent_FormulaImpl({required this.text}) : super._();
 
+  @override
   final String text;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_FormulaCopyWith<NodeContent_Formula> get copyWith =>
-      _$NodeContent_FormulaCopyWithImpl<NodeContent_Formula>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_Formula &&
-            (identical(other.text, text) || other.text == text));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, text);
 
   @override
   String toString() {
     return 'NodeContent.formula(text: $text)';
   }
-}
-
-/// @nodoc
-abstract mixin class $NodeContent_FormulaCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_FormulaCopyWith(
-          NodeContent_Formula value, $Res Function(NodeContent_Formula) _then) =
-      _$NodeContent_FormulaCopyWithImpl;
-  @useResult
-  $Res call({String text});
-}
-
-/// @nodoc
-class _$NodeContent_FormulaCopyWithImpl<$Res>
-    implements $NodeContent_FormulaCopyWith<$Res> {
-  _$NodeContent_FormulaCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Formula _self;
-  final $Res Function(NodeContent_Formula) _then;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? text = null,
-  }) {
-    return _then(NodeContent_Formula(
-      text: null == text
-          ? _self.text
-          : text // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
-  }
-}
-
-/// @nodoc
-
-class NodeContent_Footnote extends NodeContent {
-  const NodeContent_Footnote({required this.text}) : super._();
-
-  final String text;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_FootnoteCopyWith<NodeContent_Footnote> get copyWith =>
-      _$NodeContent_FootnoteCopyWithImpl<NodeContent_Footnote>(
-          this, _$identity);
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_Footnote &&
+            other is _$NodeContent_FormulaImpl &&
             (identical(other.text, text) || other.text == text));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, text);
 
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'NodeContent.footnote(text: $text)';
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_FormulaImplCopyWith<_$NodeContent_FormulaImpl> get copyWith =>
+      __$$NodeContent_FormulaImplCopyWithImpl<_$NodeContent_FormulaImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return formula(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return formula?.call(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (formula != null) {
+      return formula(text);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return formula(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return formula?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (formula != null) {
+      return formula(this);
+    }
+    return orElse();
   }
 }
 
+abstract class NodeContent_Formula extends NodeContent {
+  const factory NodeContent_Formula({required final String text}) =
+      _$NodeContent_FormulaImpl;
+  const NodeContent_Formula._() : super._();
+
+  String get text;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_FormulaImplCopyWith<_$NodeContent_FormulaImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $NodeContent_FootnoteCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_FootnoteCopyWith(NodeContent_Footnote value,
-          $Res Function(NodeContent_Footnote) _then) =
-      _$NodeContent_FootnoteCopyWithImpl;
+abstract class _$$NodeContent_FootnoteImplCopyWith<$Res> {
+  factory _$$NodeContent_FootnoteImplCopyWith(_$NodeContent_FootnoteImpl value,
+          $Res Function(_$NodeContent_FootnoteImpl) then) =
+      __$$NodeContent_FootnoteImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String text});
 }
 
 /// @nodoc
-class _$NodeContent_FootnoteCopyWithImpl<$Res>
-    implements $NodeContent_FootnoteCopyWith<$Res> {
-  _$NodeContent_FootnoteCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Footnote _self;
-  final $Res Function(NodeContent_Footnote) _then;
+class __$$NodeContent_FootnoteImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_FootnoteImpl>
+    implements _$$NodeContent_FootnoteImplCopyWith<$Res> {
+  __$$NodeContent_FootnoteImplCopyWithImpl(_$NodeContent_FootnoteImpl _value,
+      $Res Function(_$NodeContent_FootnoteImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? text = null,
   }) {
-    return _then(NodeContent_Footnote(
+    return _then(_$NodeContent_FootnoteImpl(
       text: null == text
-          ? _self.text
+          ? _value.text
           : text // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -4666,29 +11367,296 @@ class _$NodeContent_FootnoteCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_Group extends NodeContent {
-  const NodeContent_Group(
-      {required this.label,
-      required this.headingLevel,
-      required this.headingText})
-      : super._();
+class _$NodeContent_FootnoteImpl extends NodeContent_Footnote {
+  const _$NodeContent_FootnoteImpl({required this.text}) : super._();
 
-  final String label;
-  final PlatformInt64 headingLevel;
-  final String headingText;
+  @override
+  final String text;
 
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_GroupCopyWith<NodeContent_Group> get copyWith =>
-      _$NodeContent_GroupCopyWithImpl<NodeContent_Group>(this, _$identity);
+  @override
+  String toString() {
+    return 'NodeContent.footnote(text: $text)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_Group &&
+            other is _$NodeContent_FootnoteImpl &&
+            (identical(other.text, text) || other.text == text));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, text);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_FootnoteImplCopyWith<_$NodeContent_FootnoteImpl>
+      get copyWith =>
+          __$$NodeContent_FootnoteImplCopyWithImpl<_$NodeContent_FootnoteImpl>(
+              this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return footnote(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return footnote?.call(text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (footnote != null) {
+      return footnote(text);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return footnote(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return footnote?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (footnote != null) {
+      return footnote(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class NodeContent_Footnote extends NodeContent {
+  const factory NodeContent_Footnote({required final String text}) =
+      _$NodeContent_FootnoteImpl;
+  const NodeContent_Footnote._() : super._();
+
+  String get text;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_FootnoteImplCopyWith<_$NodeContent_FootnoteImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$NodeContent_GroupImplCopyWith<$Res> {
+  factory _$$NodeContent_GroupImplCopyWith(_$NodeContent_GroupImpl value,
+          $Res Function(_$NodeContent_GroupImpl) then) =
+      __$$NodeContent_GroupImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({String label, int headingLevel, String headingText});
+}
+
+/// @nodoc
+class __$$NodeContent_GroupImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_GroupImpl>
+    implements _$$NodeContent_GroupImplCopyWith<$Res> {
+  __$$NodeContent_GroupImplCopyWithImpl(_$NodeContent_GroupImpl _value,
+      $Res Function(_$NodeContent_GroupImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? label = null,
+    Object? headingLevel = null,
+    Object? headingText = null,
+  }) {
+    return _then(_$NodeContent_GroupImpl(
+      label: null == label
+          ? _value.label
+          : label // ignore: cast_nullable_to_non_nullable
+              as String,
+      headingLevel: null == headingLevel
+          ? _value.headingLevel
+          : headingLevel // ignore: cast_nullable_to_non_nullable
+              as int,
+      headingText: null == headingText
+          ? _value.headingText
+          : headingText // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$NodeContent_GroupImpl extends NodeContent_Group {
+  const _$NodeContent_GroupImpl(
+      {required this.label,
+      required this.headingLevel,
+      required this.headingText})
+      : super._();
+
+  @override
+  final String label;
+  @override
+  final int headingLevel;
+  @override
+  final String headingText;
+
+  @override
+  String toString() {
+    return 'NodeContent.group(label: $label, headingLevel: $headingLevel, headingText: $headingText)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_GroupImpl &&
             (identical(other.label, label) || other.label == label) &&
             (identical(other.headingLevel, headingLevel) ||
                 other.headingLevel == headingLevel) &&
@@ -4700,141 +11668,460 @@ class NodeContent_Group extends NodeContent {
   int get hashCode =>
       Object.hash(runtimeType, label, headingLevel, headingText);
 
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  String toString() {
-    return 'NodeContent.group(label: $label, headingLevel: $headingLevel, headingText: $headingText)';
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_GroupImplCopyWith<_$NodeContent_GroupImpl> get copyWith =>
+      __$$NodeContent_GroupImplCopyWithImpl<_$NodeContent_GroupImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return group(label, headingLevel, headingText);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return group?.call(label, headingLevel, headingText);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (group != null) {
+      return group(label, headingLevel, headingText);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return group(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return group?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (group != null) {
+      return group(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
-abstract mixin class $NodeContent_GroupCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_GroupCopyWith(
-          NodeContent_Group value, $Res Function(NodeContent_Group) _then) =
-      _$NodeContent_GroupCopyWithImpl;
-  @useResult
-  $Res call({String label, PlatformInt64 headingLevel, String headingText});
-}
+abstract class NodeContent_Group extends NodeContent {
+  const factory NodeContent_Group(
+      {required final String label,
+      required final int headingLevel,
+      required final String headingText}) = _$NodeContent_GroupImpl;
+  const NodeContent_Group._() : super._();
 
-/// @nodoc
-class _$NodeContent_GroupCopyWithImpl<$Res>
-    implements $NodeContent_GroupCopyWith<$Res> {
-  _$NodeContent_GroupCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Group _self;
-  final $Res Function(NodeContent_Group) _then;
+  String get label;
+  int get headingLevel;
+  String get headingText;
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  $Res call({
-    Object? label = null,
-    Object? headingLevel = null,
-    Object? headingText = null,
-  }) {
-    return _then(NodeContent_Group(
-      label: null == label
-          ? _self.label
-          : label // ignore: cast_nullable_to_non_nullable
-              as String,
-      headingLevel: null == headingLevel
-          ? _self.headingLevel
-          : headingLevel // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-      headingText: null == headingText
-          ? _self.headingText
-          : headingText // ignore: cast_nullable_to_non_nullable
-              as String,
-    ));
-  }
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_GroupImplCopyWith<_$NodeContent_GroupImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$NodeContent_PageBreakImplCopyWith<$Res> {
+  factory _$$NodeContent_PageBreakImplCopyWith(
+          _$NodeContent_PageBreakImpl value,
+          $Res Function(_$NodeContent_PageBreakImpl) then) =
+      __$$NodeContent_PageBreakImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$NodeContent_PageBreakImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_PageBreakImpl>
+    implements _$$NodeContent_PageBreakImplCopyWith<$Res> {
+  __$$NodeContent_PageBreakImplCopyWithImpl(_$NodeContent_PageBreakImpl _value,
+      $Res Function(_$NodeContent_PageBreakImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
 }
 
 /// @nodoc
 
-class NodeContent_PageBreak extends NodeContent {
-  const NodeContent_PageBreak() : super._();
+class _$NodeContent_PageBreakImpl extends NodeContent_PageBreak {
+  const _$NodeContent_PageBreakImpl() : super._();
+
+  @override
+  String toString() {
+    return 'NodeContent.pageBreak()';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is NodeContent_PageBreak);
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_PageBreakImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'NodeContent.pageBreak()';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return pageBreak();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return pageBreak?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (pageBreak != null) {
+      return pageBreak();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return pageBreak(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return pageBreak?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (pageBreak != null) {
+      return pageBreak(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
-
-class NodeContent_Slide extends NodeContent {
-  const NodeContent_Slide({required this.number, required this.title})
-      : super._();
-
-  final PlatformInt64 number;
-  final String title;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_SlideCopyWith<NodeContent_Slide> get copyWith =>
-      _$NodeContent_SlideCopyWithImpl<NodeContent_Slide>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_Slide &&
-            (identical(other.number, number) || other.number == number) &&
-            (identical(other.title, title) || other.title == title));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, number, title);
-
-  @override
-  String toString() {
-    return 'NodeContent.slide(number: $number, title: $title)';
-  }
+abstract class NodeContent_PageBreak extends NodeContent {
+  const factory NodeContent_PageBreak() = _$NodeContent_PageBreakImpl;
+  const NodeContent_PageBreak._() : super._();
 }
 
 /// @nodoc
-abstract mixin class $NodeContent_SlideCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_SlideCopyWith(
-          NodeContent_Slide value, $Res Function(NodeContent_Slide) _then) =
-      _$NodeContent_SlideCopyWithImpl;
+abstract class _$$NodeContent_SlideImplCopyWith<$Res> {
+  factory _$$NodeContent_SlideImplCopyWith(_$NodeContent_SlideImpl value,
+          $Res Function(_$NodeContent_SlideImpl) then) =
+      __$$NodeContent_SlideImplCopyWithImpl<$Res>;
   @useResult
-  $Res call({PlatformInt64 number, String title});
+  $Res call({int number, String title});
 }
 
 /// @nodoc
-class _$NodeContent_SlideCopyWithImpl<$Res>
-    implements $NodeContent_SlideCopyWith<$Res> {
-  _$NodeContent_SlideCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Slide _self;
-  final $Res Function(NodeContent_Slide) _then;
+class __$$NodeContent_SlideImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_SlideImpl>
+    implements _$$NodeContent_SlideImplCopyWith<$Res> {
+  __$$NodeContent_SlideImplCopyWithImpl(_$NodeContent_SlideImpl _value,
+      $Res Function(_$NodeContent_SlideImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? number = null,
     Object? title = null,
   }) {
-    return _then(NodeContent_Slide(
+    return _then(_$NodeContent_SlideImpl(
       number: null == number
-          ? _self.number
+          ? _value.number
           : number // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
+              as int,
       title: null == title
-          ? _self.title
+          ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -4843,95 +12130,487 @@ class _$NodeContent_SlideCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_DefinitionList extends NodeContent {
-  const NodeContent_DefinitionList() : super._();
+class _$NodeContent_SlideImpl extends NodeContent_Slide {
+  const _$NodeContent_SlideImpl({required this.number, required this.title})
+      : super._();
+
+  @override
+  final int number;
+  @override
+  final String title;
+
+  @override
+  String toString() {
+    return 'NodeContent.slide(number: $number, title: $title)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_DefinitionList);
+            other is _$NodeContent_SlideImpl &&
+            (identical(other.number, number) || other.number == number) &&
+            (identical(other.title, title) || other.title == title));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, number, title);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_SlideImplCopyWith<_$NodeContent_SlideImpl> get copyWith =>
+      __$$NodeContent_SlideImplCopyWithImpl<_$NodeContent_SlideImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return slide(number, this.title);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return slide?.call(number, this.title);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (slide != null) {
+      return slide(number, this.title);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return slide(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return slide?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (slide != null) {
+      return slide(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class NodeContent_Slide extends NodeContent {
+  const factory NodeContent_Slide(
+      {required final int number,
+      required final String title}) = _$NodeContent_SlideImpl;
+  const NodeContent_Slide._() : super._();
+
+  int get number;
+  String get title;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_SlideImplCopyWith<_$NodeContent_SlideImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$NodeContent_DefinitionListImplCopyWith<$Res> {
+  factory _$$NodeContent_DefinitionListImplCopyWith(
+          _$NodeContent_DefinitionListImpl value,
+          $Res Function(_$NodeContent_DefinitionListImpl) then) =
+      __$$NodeContent_DefinitionListImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$NodeContent_DefinitionListImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_DefinitionListImpl>
+    implements _$$NodeContent_DefinitionListImplCopyWith<$Res> {
+  __$$NodeContent_DefinitionListImplCopyWithImpl(
+      _$NodeContent_DefinitionListImpl _value,
+      $Res Function(_$NodeContent_DefinitionListImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$NodeContent_DefinitionListImpl extends NodeContent_DefinitionList {
+  const _$NodeContent_DefinitionListImpl() : super._();
+
+  @override
+  String toString() {
+    return 'NodeContent.definitionList()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_DefinitionListImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'NodeContent.definitionList()';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return definitionList();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return definitionList?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (definitionList != null) {
+      return definitionList();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return definitionList(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return definitionList?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (definitionList != null) {
+      return definitionList(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
-
-class NodeContent_DefinitionItem extends NodeContent {
-  const NodeContent_DefinitionItem(
-      {required this.term, required this.definition})
-      : super._();
-
-  final String term;
-  final String definition;
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_DefinitionItemCopyWith<NodeContent_DefinitionItem>
-      get copyWith =>
-          _$NodeContent_DefinitionItemCopyWithImpl<NodeContent_DefinitionItem>(
-              this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is NodeContent_DefinitionItem &&
-            (identical(other.term, term) || other.term == term) &&
-            (identical(other.definition, definition) ||
-                other.definition == definition));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, term, definition);
-
-  @override
-  String toString() {
-    return 'NodeContent.definitionItem(term: $term, definition: $definition)';
-  }
+abstract class NodeContent_DefinitionList extends NodeContent {
+  const factory NodeContent_DefinitionList() = _$NodeContent_DefinitionListImpl;
+  const NodeContent_DefinitionList._() : super._();
 }
 
 /// @nodoc
-abstract mixin class $NodeContent_DefinitionItemCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_DefinitionItemCopyWith(NodeContent_DefinitionItem value,
-          $Res Function(NodeContent_DefinitionItem) _then) =
-      _$NodeContent_DefinitionItemCopyWithImpl;
+abstract class _$$NodeContent_DefinitionItemImplCopyWith<$Res> {
+  factory _$$NodeContent_DefinitionItemImplCopyWith(
+          _$NodeContent_DefinitionItemImpl value,
+          $Res Function(_$NodeContent_DefinitionItemImpl) then) =
+      __$$NodeContent_DefinitionItemImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String term, String definition});
 }
 
 /// @nodoc
-class _$NodeContent_DefinitionItemCopyWithImpl<$Res>
-    implements $NodeContent_DefinitionItemCopyWith<$Res> {
-  _$NodeContent_DefinitionItemCopyWithImpl(this._self, this._then);
-
-  final NodeContent_DefinitionItem _self;
-  final $Res Function(NodeContent_DefinitionItem) _then;
+class __$$NodeContent_DefinitionItemImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_DefinitionItemImpl>
+    implements _$$NodeContent_DefinitionItemImplCopyWith<$Res> {
+  __$$NodeContent_DefinitionItemImplCopyWithImpl(
+      _$NodeContent_DefinitionItemImpl _value,
+      $Res Function(_$NodeContent_DefinitionItemImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? term = null,
     Object? definition = null,
   }) {
-    return _then(NodeContent_DefinitionItem(
+    return _then(_$NodeContent_DefinitionItemImpl(
       term: null == term
-          ? _self.term
+          ? _value.term
           : term // ignore: cast_nullable_to_non_nullable
               as String,
       definition: null == definition
-          ? _self.definition
+          ? _value.definition
           : definition // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -4940,71 +12619,266 @@ class _$NodeContent_DefinitionItemCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_Citation extends NodeContent {
-  const NodeContent_Citation({required this.key, required this.text})
+class _$NodeContent_DefinitionItemImpl extends NodeContent_DefinitionItem {
+  const _$NodeContent_DefinitionItemImpl(
+      {required this.term, required this.definition})
       : super._();
 
-  final String key;
-  final String text;
+  @override
+  final String term;
+  @override
+  final String definition;
 
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_CitationCopyWith<NodeContent_Citation> get copyWith =>
-      _$NodeContent_CitationCopyWithImpl<NodeContent_Citation>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'NodeContent.definitionItem(term: $term, definition: $definition)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_Citation &&
-            (identical(other.key, key) || other.key == key) &&
-            (identical(other.text, text) || other.text == text));
+            other is _$NodeContent_DefinitionItemImpl &&
+            (identical(other.term, term) || other.term == term) &&
+            (identical(other.definition, definition) ||
+                other.definition == definition));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, key, text);
+  int get hashCode => Object.hash(runtimeType, term, definition);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_DefinitionItemImplCopyWith<_$NodeContent_DefinitionItemImpl>
+      get copyWith => __$$NodeContent_DefinitionItemImplCopyWithImpl<
+          _$NodeContent_DefinitionItemImpl>(this, _$identity);
 
   @override
-  String toString() {
-    return 'NodeContent.citation(key: $key, text: $text)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return definitionItem(term, definition);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return definitionItem?.call(term, definition);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (definitionItem != null) {
+      return definitionItem(term, definition);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return definitionItem(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return definitionItem?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (definitionItem != null) {
+      return definitionItem(this);
+    }
+    return orElse();
   }
 }
 
+abstract class NodeContent_DefinitionItem extends NodeContent {
+  const factory NodeContent_DefinitionItem(
+      {required final String term,
+      required final String definition}) = _$NodeContent_DefinitionItemImpl;
+  const NodeContent_DefinitionItem._() : super._();
+
+  String get term;
+  String get definition;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_DefinitionItemImplCopyWith<_$NodeContent_DefinitionItemImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $NodeContent_CitationCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_CitationCopyWith(NodeContent_Citation value,
-          $Res Function(NodeContent_Citation) _then) =
-      _$NodeContent_CitationCopyWithImpl;
+abstract class _$$NodeContent_CitationImplCopyWith<$Res> {
+  factory _$$NodeContent_CitationImplCopyWith(_$NodeContent_CitationImpl value,
+          $Res Function(_$NodeContent_CitationImpl) then) =
+      __$$NodeContent_CitationImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String key, String text});
 }
 
 /// @nodoc
-class _$NodeContent_CitationCopyWithImpl<$Res>
-    implements $NodeContent_CitationCopyWith<$Res> {
-  _$NodeContent_CitationCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Citation _self;
-  final $Res Function(NodeContent_Citation) _then;
+class __$$NodeContent_CitationImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_CitationImpl>
+    implements _$$NodeContent_CitationImplCopyWith<$Res> {
+  __$$NodeContent_CitationImplCopyWithImpl(_$NodeContent_CitationImpl _value,
+      $Res Function(_$NodeContent_CitationImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? key = null,
     Object? text = null,
   }) {
-    return _then(NodeContent_Citation(
+    return _then(_$NodeContent_CitationImpl(
       key: null == key
-          ? _self.key
+          ? _value.key
           : key // ignore: cast_nullable_to_non_nullable
               as String,
       text: null == text
-          ? _self.text
+          ? _value.text
           : text // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -5013,71 +12887,267 @@ class _$NodeContent_CitationCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_Admonition extends NodeContent {
-  const NodeContent_Admonition({required this.kind, required this.title})
+class _$NodeContent_CitationImpl extends NodeContent_Citation {
+  const _$NodeContent_CitationImpl({required this.key, required this.text})
       : super._();
 
-  final String kind;
-  final String title;
+  @override
+  final String key;
+  @override
+  final String text;
 
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_AdmonitionCopyWith<NodeContent_Admonition> get copyWith =>
-      _$NodeContent_AdmonitionCopyWithImpl<NodeContent_Admonition>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'NodeContent.citation(key: $key, text: $text)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_Admonition &&
-            (identical(other.kind, kind) || other.kind == kind) &&
-            (identical(other.title, title) || other.title == title));
+            other is _$NodeContent_CitationImpl &&
+            (identical(other.key, key) || other.key == key) &&
+            (identical(other.text, text) || other.text == text));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, kind, title);
+  int get hashCode => Object.hash(runtimeType, key, text);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_CitationImplCopyWith<_$NodeContent_CitationImpl>
+      get copyWith =>
+          __$$NodeContent_CitationImplCopyWithImpl<_$NodeContent_CitationImpl>(
+              this, _$identity);
 
   @override
-  String toString() {
-    return 'NodeContent.admonition(kind: $kind, title: $title)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return citation(key, text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return citation?.call(key, text);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (citation != null) {
+      return citation(key, text);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return citation(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return citation?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (citation != null) {
+      return citation(this);
+    }
+    return orElse();
   }
 }
 
+abstract class NodeContent_Citation extends NodeContent {
+  const factory NodeContent_Citation(
+      {required final String key,
+      required final String text}) = _$NodeContent_CitationImpl;
+  const NodeContent_Citation._() : super._();
+
+  String get key;
+  String get text;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_CitationImplCopyWith<_$NodeContent_CitationImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $NodeContent_AdmonitionCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_AdmonitionCopyWith(NodeContent_Admonition value,
-          $Res Function(NodeContent_Admonition) _then) =
-      _$NodeContent_AdmonitionCopyWithImpl;
+abstract class _$$NodeContent_AdmonitionImplCopyWith<$Res> {
+  factory _$$NodeContent_AdmonitionImplCopyWith(
+          _$NodeContent_AdmonitionImpl value,
+          $Res Function(_$NodeContent_AdmonitionImpl) then) =
+      __$$NodeContent_AdmonitionImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String kind, String title});
 }
 
 /// @nodoc
-class _$NodeContent_AdmonitionCopyWithImpl<$Res>
-    implements $NodeContent_AdmonitionCopyWith<$Res> {
-  _$NodeContent_AdmonitionCopyWithImpl(this._self, this._then);
-
-  final NodeContent_Admonition _self;
-  final $Res Function(NodeContent_Admonition) _then;
+class __$$NodeContent_AdmonitionImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_AdmonitionImpl>
+    implements _$$NodeContent_AdmonitionImplCopyWith<$Res> {
+  __$$NodeContent_AdmonitionImplCopyWithImpl(
+      _$NodeContent_AdmonitionImpl _value,
+      $Res Function(_$NodeContent_AdmonitionImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? kind = null,
     Object? title = null,
   }) {
-    return _then(NodeContent_Admonition(
+    return _then(_$NodeContent_AdmonitionImpl(
       kind: null == kind
-          ? _self.kind
+          ? _value.kind
           : kind // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
-          ? _self.title
+          ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -5086,71 +13156,264 @@ class _$NodeContent_AdmonitionCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_RawBlock extends NodeContent {
-  const NodeContent_RawBlock({required this.format, required this.content})
+class _$NodeContent_AdmonitionImpl extends NodeContent_Admonition {
+  const _$NodeContent_AdmonitionImpl({required this.kind, required this.title})
       : super._();
 
-  final String format;
-  final String content;
+  @override
+  final String kind;
+  @override
+  final String title;
 
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_RawBlockCopyWith<NodeContent_RawBlock> get copyWith =>
-      _$NodeContent_RawBlockCopyWithImpl<NodeContent_RawBlock>(
-          this, _$identity);
+  @override
+  String toString() {
+    return 'NodeContent.admonition(kind: $kind, title: $title)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_RawBlock &&
-            (identical(other.format, format) || other.format == format) &&
-            (identical(other.content, content) || other.content == content));
+            other is _$NodeContent_AdmonitionImpl &&
+            (identical(other.kind, kind) || other.kind == kind) &&
+            (identical(other.title, title) || other.title == title));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, format, content);
+  int get hashCode => Object.hash(runtimeType, kind, title);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_AdmonitionImplCopyWith<_$NodeContent_AdmonitionImpl>
+      get copyWith => __$$NodeContent_AdmonitionImplCopyWithImpl<
+          _$NodeContent_AdmonitionImpl>(this, _$identity);
 
   @override
-  String toString() {
-    return 'NodeContent.rawBlock(format: $format, content: $content)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return admonition(kind, this.title);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return admonition?.call(kind, this.title);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (admonition != null) {
+      return admonition(kind, this.title);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return admonition(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return admonition?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (admonition != null) {
+      return admonition(this);
+    }
+    return orElse();
   }
 }
 
+abstract class NodeContent_Admonition extends NodeContent {
+  const factory NodeContent_Admonition(
+      {required final String kind,
+      required final String title}) = _$NodeContent_AdmonitionImpl;
+  const NodeContent_Admonition._() : super._();
+
+  String get kind;
+  String get title;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_AdmonitionImplCopyWith<_$NodeContent_AdmonitionImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $NodeContent_RawBlockCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_RawBlockCopyWith(NodeContent_RawBlock value,
-          $Res Function(NodeContent_RawBlock) _then) =
-      _$NodeContent_RawBlockCopyWithImpl;
+abstract class _$$NodeContent_RawBlockImplCopyWith<$Res> {
+  factory _$$NodeContent_RawBlockImplCopyWith(_$NodeContent_RawBlockImpl value,
+          $Res Function(_$NodeContent_RawBlockImpl) then) =
+      __$$NodeContent_RawBlockImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String format, String content});
 }
 
 /// @nodoc
-class _$NodeContent_RawBlockCopyWithImpl<$Res>
-    implements $NodeContent_RawBlockCopyWith<$Res> {
-  _$NodeContent_RawBlockCopyWithImpl(this._self, this._then);
-
-  final NodeContent_RawBlock _self;
-  final $Res Function(NodeContent_RawBlock) _then;
+class __$$NodeContent_RawBlockImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_RawBlockImpl>
+    implements _$$NodeContent_RawBlockImplCopyWith<$Res> {
+  __$$NodeContent_RawBlockImplCopyWithImpl(_$NodeContent_RawBlockImpl _value,
+      $Res Function(_$NodeContent_RawBlockImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? format = null,
     Object? content = null,
   }) {
-    return _then(NodeContent_RawBlock(
+    return _then(_$NodeContent_RawBlockImpl(
       format: null == format
-          ? _self.format
+          ? _value.format
           : format // ignore: cast_nullable_to_non_nullable
               as String,
       content: null == content
-          ? _self.content
+          ? _value.content
           : content // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -5159,71 +13422,263 @@ class _$NodeContent_RawBlockCopyWithImpl<$Res>
 
 /// @nodoc
 
-class NodeContent_MetadataBlock extends NodeContent {
-  const NodeContent_MetadataBlock({required final List<String> entries})
-      : _entries = entries,
-        super._();
+class _$NodeContent_RawBlockImpl extends NodeContent_RawBlock {
+  const _$NodeContent_RawBlockImpl(
+      {required this.format, required this.content})
+      : super._();
 
-  final List<String> _entries;
-  List<String> get entries {
-    if (_entries is EqualUnmodifiableListView) return _entries;
-    // ignore: implicit_dynamic_type
-    return EqualUnmodifiableListView(_entries);
+  @override
+  final String format;
+  @override
+  final String content;
+
+  @override
+  String toString() {
+    return 'NodeContent.rawBlock(format: $format, content: $content)';
   }
-
-  /// Create a copy of NodeContent
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $NodeContent_MetadataBlockCopyWith<NodeContent_MetadataBlock> get copyWith =>
-      _$NodeContent_MetadataBlockCopyWithImpl<NodeContent_MetadataBlock>(
-          this, _$identity);
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is NodeContent_MetadataBlock &&
-            const DeepCollectionEquality().equals(other._entries, _entries));
+            other is _$NodeContent_RawBlockImpl &&
+            (identical(other.format, format) || other.format == format) &&
+            (identical(other.content, content) || other.content == content));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, const DeepCollectionEquality().hash(_entries));
+  int get hashCode => Object.hash(runtimeType, format, content);
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_RawBlockImplCopyWith<_$NodeContent_RawBlockImpl>
+      get copyWith =>
+          __$$NodeContent_RawBlockImplCopyWithImpl<_$NodeContent_RawBlockImpl>(
+              this, _$identity);
 
   @override
-  String toString() {
-    return 'NodeContent.metadataBlock(entries: $entries)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return rawBlock(format, content);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return rawBlock?.call(format, content);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (rawBlock != null) {
+      return rawBlock(format, content);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return rawBlock(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return rawBlock?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (rawBlock != null) {
+      return rawBlock(this);
+    }
+    return orElse();
   }
 }
 
+abstract class NodeContent_RawBlock extends NodeContent {
+  const factory NodeContent_RawBlock(
+      {required final String format,
+      required final String content}) = _$NodeContent_RawBlockImpl;
+  const NodeContent_RawBlock._() : super._();
+
+  String get format;
+  String get content;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_RawBlockImplCopyWith<_$NodeContent_RawBlockImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 /// @nodoc
-abstract mixin class $NodeContent_MetadataBlockCopyWith<$Res>
-    implements $NodeContentCopyWith<$Res> {
-  factory $NodeContent_MetadataBlockCopyWith(NodeContent_MetadataBlock value,
-          $Res Function(NodeContent_MetadataBlock) _then) =
-      _$NodeContent_MetadataBlockCopyWithImpl;
+abstract class _$$NodeContent_MetadataBlockImplCopyWith<$Res> {
+  factory _$$NodeContent_MetadataBlockImplCopyWith(
+          _$NodeContent_MetadataBlockImpl value,
+          $Res Function(_$NodeContent_MetadataBlockImpl) then) =
+      __$$NodeContent_MetadataBlockImplCopyWithImpl<$Res>;
   @useResult
   $Res call({List<String> entries});
 }
 
 /// @nodoc
-class _$NodeContent_MetadataBlockCopyWithImpl<$Res>
-    implements $NodeContent_MetadataBlockCopyWith<$Res> {
-  _$NodeContent_MetadataBlockCopyWithImpl(this._self, this._then);
-
-  final NodeContent_MetadataBlock _self;
-  final $Res Function(NodeContent_MetadataBlock) _then;
+class __$$NodeContent_MetadataBlockImplCopyWithImpl<$Res>
+    extends _$NodeContentCopyWithImpl<$Res, _$NodeContent_MetadataBlockImpl>
+    implements _$$NodeContent_MetadataBlockImplCopyWith<$Res> {
+  __$$NodeContent_MetadataBlockImplCopyWithImpl(
+      _$NodeContent_MetadataBlockImpl _value,
+      $Res Function(_$NodeContent_MetadataBlockImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of NodeContent
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? entries = null,
   }) {
-    return _then(NodeContent_MetadataBlock(
+    return _then(_$NodeContent_MetadataBlockImpl(
       entries: null == entries
-          ? _self._entries
+          ? _value._entries
           : entries // ignore: cast_nullable_to_non_nullable
               as List<String>,
     ));
@@ -5231,234 +13686,381 @@ class _$NodeContent_MetadataBlockCopyWithImpl<$Res>
 }
 
 /// @nodoc
-mixin _$OcrBoundingGeometry {
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OcrBoundingGeometry);
-  }
 
+class _$NodeContent_MetadataBlockImpl extends NodeContent_MetadataBlock {
+  const _$NodeContent_MetadataBlockImpl({required final List<String> entries})
+      : _entries = entries,
+        super._();
+
+  final List<String> _entries;
   @override
-  int get hashCode => runtimeType.hashCode;
+  List<String> get entries {
+    if (_entries is EqualUnmodifiableListView) return _entries;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_entries);
+  }
 
   @override
   String toString() {
-    return 'OcrBoundingGeometry()';
+    return 'NodeContent.metadataBlock(entries: $entries)';
   }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$NodeContent_MetadataBlockImpl &&
+            const DeepCollectionEquality().equals(other._entries, _entries));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, const DeepCollectionEquality().hash(_entries));
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$NodeContent_MetadataBlockImplCopyWith<_$NodeContent_MetadataBlockImpl>
+      get copyWith => __$$NodeContent_MetadataBlockImplCopyWithImpl<
+          _$NodeContent_MetadataBlockImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String text) title,
+    required TResult Function(int level, String text) heading,
+    required TResult Function(String text) paragraph,
+    required TResult Function(bool ordered) list,
+    required TResult Function(String text) listItem,
+    required TResult Function(TableGrid grid) table,
+    required TResult Function(String description, int imageIndex, String src)
+        image,
+    required TResult Function(String text, String language) code,
+    required TResult Function() quote,
+    required TResult Function(String text) formula,
+    required TResult Function(String text) footnote,
+    required TResult Function(
+            String label, int headingLevel, String headingText)
+        group,
+    required TResult Function() pageBreak,
+    required TResult Function(int number, String title) slide,
+    required TResult Function() definitionList,
+    required TResult Function(String term, String definition) definitionItem,
+    required TResult Function(String key, String text) citation,
+    required TResult Function(String kind, String title) admonition,
+    required TResult Function(String format, String content) rawBlock,
+    required TResult Function(List<String> entries) metadataBlock,
+  }) {
+    return metadataBlock(entries);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String text)? title,
+    TResult? Function(int level, String text)? heading,
+    TResult? Function(String text)? paragraph,
+    TResult? Function(bool ordered)? list,
+    TResult? Function(String text)? listItem,
+    TResult? Function(TableGrid grid)? table,
+    TResult? Function(String description, int imageIndex, String src)? image,
+    TResult? Function(String text, String language)? code,
+    TResult? Function()? quote,
+    TResult? Function(String text)? formula,
+    TResult? Function(String text)? footnote,
+    TResult? Function(String label, int headingLevel, String headingText)?
+        group,
+    TResult? Function()? pageBreak,
+    TResult? Function(int number, String title)? slide,
+    TResult? Function()? definitionList,
+    TResult? Function(String term, String definition)? definitionItem,
+    TResult? Function(String key, String text)? citation,
+    TResult? Function(String kind, String title)? admonition,
+    TResult? Function(String format, String content)? rawBlock,
+    TResult? Function(List<String> entries)? metadataBlock,
+  }) {
+    return metadataBlock?.call(entries);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String text)? title,
+    TResult Function(int level, String text)? heading,
+    TResult Function(String text)? paragraph,
+    TResult Function(bool ordered)? list,
+    TResult Function(String text)? listItem,
+    TResult Function(TableGrid grid)? table,
+    TResult Function(String description, int imageIndex, String src)? image,
+    TResult Function(String text, String language)? code,
+    TResult Function()? quote,
+    TResult Function(String text)? formula,
+    TResult Function(String text)? footnote,
+    TResult Function(String label, int headingLevel, String headingText)? group,
+    TResult Function()? pageBreak,
+    TResult Function(int number, String title)? slide,
+    TResult Function()? definitionList,
+    TResult Function(String term, String definition)? definitionItem,
+    TResult Function(String key, String text)? citation,
+    TResult Function(String kind, String title)? admonition,
+    TResult Function(String format, String content)? rawBlock,
+    TResult Function(List<String> entries)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (metadataBlock != null) {
+      return metadataBlock(entries);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(NodeContent_Title value) title,
+    required TResult Function(NodeContent_Heading value) heading,
+    required TResult Function(NodeContent_Paragraph value) paragraph,
+    required TResult Function(NodeContent_List value) list,
+    required TResult Function(NodeContent_ListItem value) listItem,
+    required TResult Function(NodeContent_Table value) table,
+    required TResult Function(NodeContent_Image value) image,
+    required TResult Function(NodeContent_Code value) code,
+    required TResult Function(NodeContent_Quote value) quote,
+    required TResult Function(NodeContent_Formula value) formula,
+    required TResult Function(NodeContent_Footnote value) footnote,
+    required TResult Function(NodeContent_Group value) group,
+    required TResult Function(NodeContent_PageBreak value) pageBreak,
+    required TResult Function(NodeContent_Slide value) slide,
+    required TResult Function(NodeContent_DefinitionList value) definitionList,
+    required TResult Function(NodeContent_DefinitionItem value) definitionItem,
+    required TResult Function(NodeContent_Citation value) citation,
+    required TResult Function(NodeContent_Admonition value) admonition,
+    required TResult Function(NodeContent_RawBlock value) rawBlock,
+    required TResult Function(NodeContent_MetadataBlock value) metadataBlock,
+  }) {
+    return metadataBlock(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(NodeContent_Title value)? title,
+    TResult? Function(NodeContent_Heading value)? heading,
+    TResult? Function(NodeContent_Paragraph value)? paragraph,
+    TResult? Function(NodeContent_List value)? list,
+    TResult? Function(NodeContent_ListItem value)? listItem,
+    TResult? Function(NodeContent_Table value)? table,
+    TResult? Function(NodeContent_Image value)? image,
+    TResult? Function(NodeContent_Code value)? code,
+    TResult? Function(NodeContent_Quote value)? quote,
+    TResult? Function(NodeContent_Formula value)? formula,
+    TResult? Function(NodeContent_Footnote value)? footnote,
+    TResult? Function(NodeContent_Group value)? group,
+    TResult? Function(NodeContent_PageBreak value)? pageBreak,
+    TResult? Function(NodeContent_Slide value)? slide,
+    TResult? Function(NodeContent_DefinitionList value)? definitionList,
+    TResult? Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult? Function(NodeContent_Citation value)? citation,
+    TResult? Function(NodeContent_Admonition value)? admonition,
+    TResult? Function(NodeContent_RawBlock value)? rawBlock,
+    TResult? Function(NodeContent_MetadataBlock value)? metadataBlock,
+  }) {
+    return metadataBlock?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(NodeContent_Title value)? title,
+    TResult Function(NodeContent_Heading value)? heading,
+    TResult Function(NodeContent_Paragraph value)? paragraph,
+    TResult Function(NodeContent_List value)? list,
+    TResult Function(NodeContent_ListItem value)? listItem,
+    TResult Function(NodeContent_Table value)? table,
+    TResult Function(NodeContent_Image value)? image,
+    TResult Function(NodeContent_Code value)? code,
+    TResult Function(NodeContent_Quote value)? quote,
+    TResult Function(NodeContent_Formula value)? formula,
+    TResult Function(NodeContent_Footnote value)? footnote,
+    TResult Function(NodeContent_Group value)? group,
+    TResult Function(NodeContent_PageBreak value)? pageBreak,
+    TResult Function(NodeContent_Slide value)? slide,
+    TResult Function(NodeContent_DefinitionList value)? definitionList,
+    TResult Function(NodeContent_DefinitionItem value)? definitionItem,
+    TResult Function(NodeContent_Citation value)? citation,
+    TResult Function(NodeContent_Admonition value)? admonition,
+    TResult Function(NodeContent_RawBlock value)? rawBlock,
+    TResult Function(NodeContent_MetadataBlock value)? metadataBlock,
+    required TResult orElse(),
+  }) {
+    if (metadataBlock != null) {
+      return metadataBlock(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class NodeContent_MetadataBlock extends NodeContent {
+  const factory NodeContent_MetadataBlock(
+      {required final List<String> entries}) = _$NodeContent_MetadataBlockImpl;
+  const NodeContent_MetadataBlock._() : super._();
+
+  List<String> get entries;
+
+  /// Create a copy of NodeContent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$NodeContent_MetadataBlockImplCopyWith<_$NodeContent_MetadataBlockImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-class $OcrBoundingGeometryCopyWith<$Res> {
-  $OcrBoundingGeometryCopyWith(
-      OcrBoundingGeometry _, $Res Function(OcrBoundingGeometry) __);
-}
-
-/// Adds pattern-matching-related methods to [OcrBoundingGeometry].
-extension OcrBoundingGeometryPatterns on OcrBoundingGeometry {
-  /// A variant of `map` that fallback to returning `orElse`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+mixin _$OcrBoundingGeometry {
   @optionalTypeArgs
-  TResult maybeMap<TResult extends Object?>({
-    TResult Function(OcrBoundingGeometry_Rectangle value)? rectangle,
-    TResult Function(OcrBoundingGeometry_Quadrilateral value)? quadrilateral,
+  TResult when<TResult extends Object?>({
+    required TResult Function(int left, int top, int width, int height)
+        rectangle,
+    required TResult Function(String points) quadrilateral,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(int left, int top, int width, int height)? rectangle,
+    TResult? Function(String points)? quadrilateral,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(int left, int top, int width, int height)? rectangle,
+    TResult Function(String points)? quadrilateral,
     required TResult orElse(),
-  }) {
-    final _that = this;
-    switch (_that) {
-      case OcrBoundingGeometry_Rectangle() when rectangle != null:
-        return rectangle(_that);
-      case OcrBoundingGeometry_Quadrilateral() when quadrilateral != null:
-        return quadrilateral(_that);
-      case _:
-        return orElse();
-    }
-  }
-
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// Callbacks receives the raw object, upcasted.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case final Subclass2 value:
-  ///     return ...;
-  /// }
-  /// ```
-
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult map<TResult extends Object?>({
     required TResult Function(OcrBoundingGeometry_Rectangle value) rectangle,
     required TResult Function(OcrBoundingGeometry_Quadrilateral value)
         quadrilateral,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case OcrBoundingGeometry_Rectangle():
-        return rectangle(_that);
-      case OcrBoundingGeometry_Quadrilateral():
-        return quadrilateral(_that);
-    }
-  }
-
-  /// A variant of `map` that fallback to returning `null`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
     TResult? Function(OcrBoundingGeometry_Rectangle value)? rectangle,
     TResult? Function(OcrBoundingGeometry_Quadrilateral value)? quadrilateral,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case OcrBoundingGeometry_Rectangle() when rectangle != null:
-        return rectangle(_that);
-      case OcrBoundingGeometry_Quadrilateral() when quadrilateral != null:
-        return quadrilateral(_that);
-      case _:
-        return null;
-    }
-  }
-
-  /// A variant of `when` that fallback to an `orElse` callback.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
-  TResult maybeWhen<TResult extends Object?>({
-    TResult Function(PlatformInt64 left, PlatformInt64 top, PlatformInt64 width,
-            PlatformInt64 height)?
-        rectangle,
-    TResult Function(String points)? quadrilateral,
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OcrBoundingGeometry_Rectangle value)? rectangle,
+    TResult Function(OcrBoundingGeometry_Quadrilateral value)? quadrilateral,
     required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $OcrBoundingGeometryCopyWith<$Res> {
+  factory $OcrBoundingGeometryCopyWith(
+          OcrBoundingGeometry value, $Res Function(OcrBoundingGeometry) then) =
+      _$OcrBoundingGeometryCopyWithImpl<$Res, OcrBoundingGeometry>;
+}
+
+/// @nodoc
+class _$OcrBoundingGeometryCopyWithImpl<$Res, $Val extends OcrBoundingGeometry>
+    implements $OcrBoundingGeometryCopyWith<$Res> {
+  _$OcrBoundingGeometryCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of OcrBoundingGeometry
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$OcrBoundingGeometry_RectangleImplCopyWith<$Res> {
+  factory _$$OcrBoundingGeometry_RectangleImplCopyWith(
+          _$OcrBoundingGeometry_RectangleImpl value,
+          $Res Function(_$OcrBoundingGeometry_RectangleImpl) then) =
+      __$$OcrBoundingGeometry_RectangleImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({int left, int top, int width, int height});
+}
+
+/// @nodoc
+class __$$OcrBoundingGeometry_RectangleImplCopyWithImpl<$Res>
+    extends _$OcrBoundingGeometryCopyWithImpl<$Res,
+        _$OcrBoundingGeometry_RectangleImpl>
+    implements _$$OcrBoundingGeometry_RectangleImplCopyWith<$Res> {
+  __$$OcrBoundingGeometry_RectangleImplCopyWithImpl(
+      _$OcrBoundingGeometry_RectangleImpl _value,
+      $Res Function(_$OcrBoundingGeometry_RectangleImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OcrBoundingGeometry
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? left = null,
+    Object? top = null,
+    Object? width = null,
+    Object? height = null,
   }) {
-    final _that = this;
-    switch (_that) {
-      case OcrBoundingGeometry_Rectangle() when rectangle != null:
-        return rectangle(_that.left, _that.top, _that.width, _that.height);
-      case OcrBoundingGeometry_Quadrilateral() when quadrilateral != null:
-        return quadrilateral(_that.points);
-      case _:
-        return orElse();
-    }
-  }
-
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// As opposed to `map`, this offers destructuring.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case Subclass2(:final field2):
-  ///     return ...;
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult when<TResult extends Object?>({
-    required TResult Function(PlatformInt64 left, PlatformInt64 top,
-            PlatformInt64 width, PlatformInt64 height)
-        rectangle,
-    required TResult Function(String points) quadrilateral,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case OcrBoundingGeometry_Rectangle():
-        return rectangle(_that.left, _that.top, _that.width, _that.height);
-      case OcrBoundingGeometry_Quadrilateral():
-        return quadrilateral(_that.points);
-    }
-  }
-
-  /// A variant of `when` that fallback to returning `null`
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
-  @optionalTypeArgs
-  TResult? whenOrNull<TResult extends Object?>({
-    TResult? Function(PlatformInt64 left, PlatformInt64 top,
-            PlatformInt64 width, PlatformInt64 height)?
-        rectangle,
-    TResult? Function(String points)? quadrilateral,
-  }) {
-    final _that = this;
-    switch (_that) {
-      case OcrBoundingGeometry_Rectangle() when rectangle != null:
-        return rectangle(_that.left, _that.top, _that.width, _that.height);
-      case OcrBoundingGeometry_Quadrilateral() when quadrilateral != null:
-        return quadrilateral(_that.points);
-      case _:
-        return null;
-    }
+    return _then(_$OcrBoundingGeometry_RectangleImpl(
+      left: null == left
+          ? _value.left
+          : left // ignore: cast_nullable_to_non_nullable
+              as int,
+      top: null == top
+          ? _value.top
+          : top // ignore: cast_nullable_to_non_nullable
+              as int,
+      width: null == width
+          ? _value.width
+          : width // ignore: cast_nullable_to_non_nullable
+              as int,
+      height: null == height
+          ? _value.height
+          : height // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
   }
 }
 
 /// @nodoc
 
-class OcrBoundingGeometry_Rectangle extends OcrBoundingGeometry {
-  const OcrBoundingGeometry_Rectangle(
+class _$OcrBoundingGeometry_RectangleImpl
+    extends OcrBoundingGeometry_Rectangle {
+  const _$OcrBoundingGeometry_RectangleImpl(
       {required this.left,
       required this.top,
       required this.width,
       required this.height})
       : super._();
 
-  final PlatformInt64 left;
-  final PlatformInt64 top;
-  final PlatformInt64 width;
-  final PlatformInt64 height;
+  @override
+  final int left;
+  @override
+  final int top;
+  @override
+  final int width;
+  @override
+  final int height;
 
-  /// Create a copy of OcrBoundingGeometry
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $OcrBoundingGeometry_RectangleCopyWith<OcrBoundingGeometry_Rectangle>
-      get copyWith => _$OcrBoundingGeometry_RectangleCopyWithImpl<
-          OcrBoundingGeometry_Rectangle>(this, _$identity);
+  @override
+  String toString() {
+    return 'OcrBoundingGeometry.rectangle(left: $left, top: $top, width: $width, height: $height)';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is OcrBoundingGeometry_Rectangle &&
+            other is _$OcrBoundingGeometry_RectangleImpl &&
             (identical(other.left, left) || other.left == left) &&
             (identical(other.top, top) || other.top == top) &&
             (identical(other.width, width) || other.width == width) &&
@@ -5468,125 +14070,132 @@ class OcrBoundingGeometry_Rectangle extends OcrBoundingGeometry {
   @override
   int get hashCode => Object.hash(runtimeType, left, top, width, height);
 
-  @override
-  String toString() {
-    return 'OcrBoundingGeometry.rectangle(left: $left, top: $top, width: $width, height: $height)';
-  }
-}
-
-/// @nodoc
-abstract mixin class $OcrBoundingGeometry_RectangleCopyWith<$Res>
-    implements $OcrBoundingGeometryCopyWith<$Res> {
-  factory $OcrBoundingGeometry_RectangleCopyWith(
-          OcrBoundingGeometry_Rectangle value,
-          $Res Function(OcrBoundingGeometry_Rectangle) _then) =
-      _$OcrBoundingGeometry_RectangleCopyWithImpl;
-  @useResult
-  $Res call(
-      {PlatformInt64 left,
-      PlatformInt64 top,
-      PlatformInt64 width,
-      PlatformInt64 height});
-}
-
-/// @nodoc
-class _$OcrBoundingGeometry_RectangleCopyWithImpl<$Res>
-    implements $OcrBoundingGeometry_RectangleCopyWith<$Res> {
-  _$OcrBoundingGeometry_RectangleCopyWithImpl(this._self, this._then);
-
-  final OcrBoundingGeometry_Rectangle _self;
-  final $Res Function(OcrBoundingGeometry_Rectangle) _then;
-
   /// Create a copy of OcrBoundingGeometry
   /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
   @pragma('vm:prefer-inline')
-  $Res call({
-    Object? left = null,
-    Object? top = null,
-    Object? width = null,
-    Object? height = null,
+  _$$OcrBoundingGeometry_RectangleImplCopyWith<
+          _$OcrBoundingGeometry_RectangleImpl>
+      get copyWith => __$$OcrBoundingGeometry_RectangleImplCopyWithImpl<
+          _$OcrBoundingGeometry_RectangleImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(int left, int top, int width, int height)
+        rectangle,
+    required TResult Function(String points) quadrilateral,
   }) {
-    return _then(OcrBoundingGeometry_Rectangle(
-      left: null == left
-          ? _self.left
-          : left // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-      top: null == top
-          ? _self.top
-          : top // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-      width: null == width
-          ? _self.width
-          : width // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-      height: null == height
-          ? _self.height
-          : height // ignore: cast_nullable_to_non_nullable
-              as PlatformInt64,
-    ));
+    return rectangle(left, top, width, height);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(int left, int top, int width, int height)? rectangle,
+    TResult? Function(String points)? quadrilateral,
+  }) {
+    return rectangle?.call(left, top, width, height);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(int left, int top, int width, int height)? rectangle,
+    TResult Function(String points)? quadrilateral,
+    required TResult orElse(),
+  }) {
+    if (rectangle != null) {
+      return rectangle(left, top, width, height);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OcrBoundingGeometry_Rectangle value) rectangle,
+    required TResult Function(OcrBoundingGeometry_Quadrilateral value)
+        quadrilateral,
+  }) {
+    return rectangle(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OcrBoundingGeometry_Rectangle value)? rectangle,
+    TResult? Function(OcrBoundingGeometry_Quadrilateral value)? quadrilateral,
+  }) {
+    return rectangle?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OcrBoundingGeometry_Rectangle value)? rectangle,
+    TResult Function(OcrBoundingGeometry_Quadrilateral value)? quadrilateral,
+    required TResult orElse(),
+  }) {
+    if (rectangle != null) {
+      return rectangle(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
+abstract class OcrBoundingGeometry_Rectangle extends OcrBoundingGeometry {
+  const factory OcrBoundingGeometry_Rectangle(
+      {required final int left,
+      required final int top,
+      required final int width,
+      required final int height}) = _$OcrBoundingGeometry_RectangleImpl;
+  const OcrBoundingGeometry_Rectangle._() : super._();
 
-class OcrBoundingGeometry_Quadrilateral extends OcrBoundingGeometry {
-  const OcrBoundingGeometry_Quadrilateral({required this.points}) : super._();
-
-  final String points;
+  int get left;
+  int get top;
+  int get width;
+  int get height;
 
   /// Create a copy of OcrBoundingGeometry
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $OcrBoundingGeometry_QuadrilateralCopyWith<OcrBoundingGeometry_Quadrilateral>
-      get copyWith => _$OcrBoundingGeometry_QuadrilateralCopyWithImpl<
-          OcrBoundingGeometry_Quadrilateral>(this, _$identity);
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is OcrBoundingGeometry_Quadrilateral &&
-            (identical(other.points, points) || other.points == points));
-  }
-
-  @override
-  int get hashCode => Object.hash(runtimeType, points);
-
-  @override
-  String toString() {
-    return 'OcrBoundingGeometry.quadrilateral(points: $points)';
-  }
+  _$$OcrBoundingGeometry_RectangleImplCopyWith<
+          _$OcrBoundingGeometry_RectangleImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract mixin class $OcrBoundingGeometry_QuadrilateralCopyWith<$Res>
-    implements $OcrBoundingGeometryCopyWith<$Res> {
-  factory $OcrBoundingGeometry_QuadrilateralCopyWith(
-          OcrBoundingGeometry_Quadrilateral value,
-          $Res Function(OcrBoundingGeometry_Quadrilateral) _then) =
-      _$OcrBoundingGeometry_QuadrilateralCopyWithImpl;
+abstract class _$$OcrBoundingGeometry_QuadrilateralImplCopyWith<$Res> {
+  factory _$$OcrBoundingGeometry_QuadrilateralImplCopyWith(
+          _$OcrBoundingGeometry_QuadrilateralImpl value,
+          $Res Function(_$OcrBoundingGeometry_QuadrilateralImpl) then) =
+      __$$OcrBoundingGeometry_QuadrilateralImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String points});
 }
 
 /// @nodoc
-class _$OcrBoundingGeometry_QuadrilateralCopyWithImpl<$Res>
-    implements $OcrBoundingGeometry_QuadrilateralCopyWith<$Res> {
-  _$OcrBoundingGeometry_QuadrilateralCopyWithImpl(this._self, this._then);
-
-  final OcrBoundingGeometry_Quadrilateral _self;
-  final $Res Function(OcrBoundingGeometry_Quadrilateral) _then;
+class __$$OcrBoundingGeometry_QuadrilateralImplCopyWithImpl<$Res>
+    extends _$OcrBoundingGeometryCopyWithImpl<$Res,
+        _$OcrBoundingGeometry_QuadrilateralImpl>
+    implements _$$OcrBoundingGeometry_QuadrilateralImplCopyWith<$Res> {
+  __$$OcrBoundingGeometry_QuadrilateralImplCopyWithImpl(
+      _$OcrBoundingGeometry_QuadrilateralImpl _value,
+      $Res Function(_$OcrBoundingGeometry_QuadrilateralImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of OcrBoundingGeometry
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? points = null,
   }) {
-    return _then(OcrBoundingGeometry_Quadrilateral(
+    return _then(_$OcrBoundingGeometry_QuadrilateralImpl(
       points: null == points
-          ? _self.points
+          ? _value.points
           : points // ignore: cast_nullable_to_non_nullable
               as String,
     ));
@@ -5594,41 +14203,179 @@ class _$OcrBoundingGeometry_QuadrilateralCopyWithImpl<$Res>
 }
 
 /// @nodoc
-mixin _$OutputFormat {
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OutputFormat);
-  }
+
+class _$OcrBoundingGeometry_QuadrilateralImpl
+    extends OcrBoundingGeometry_Quadrilateral {
+  const _$OcrBoundingGeometry_QuadrilateralImpl({required this.points})
+      : super._();
 
   @override
-  int get hashCode => runtimeType.hashCode;
+  final String points;
 
   @override
   String toString() {
-    return 'OutputFormat()';
+    return 'OcrBoundingGeometry.quadrilateral(points: $points)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$OcrBoundingGeometry_QuadrilateralImpl &&
+            (identical(other.points, points) || other.points == points));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, points);
+
+  /// Create a copy of OcrBoundingGeometry
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$OcrBoundingGeometry_QuadrilateralImplCopyWith<
+          _$OcrBoundingGeometry_QuadrilateralImpl>
+      get copyWith => __$$OcrBoundingGeometry_QuadrilateralImplCopyWithImpl<
+          _$OcrBoundingGeometry_QuadrilateralImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(int left, int top, int width, int height)
+        rectangle,
+    required TResult Function(String points) quadrilateral,
+  }) {
+    return quadrilateral(points);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(int left, int top, int width, int height)? rectangle,
+    TResult? Function(String points)? quadrilateral,
+  }) {
+    return quadrilateral?.call(points);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(int left, int top, int width, int height)? rectangle,
+    TResult Function(String points)? quadrilateral,
+    required TResult orElse(),
+  }) {
+    if (quadrilateral != null) {
+      return quadrilateral(points);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OcrBoundingGeometry_Rectangle value) rectangle,
+    required TResult Function(OcrBoundingGeometry_Quadrilateral value)
+        quadrilateral,
+  }) {
+    return quadrilateral(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OcrBoundingGeometry_Rectangle value)? rectangle,
+    TResult? Function(OcrBoundingGeometry_Quadrilateral value)? quadrilateral,
+  }) {
+    return quadrilateral?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OcrBoundingGeometry_Rectangle value)? rectangle,
+    TResult Function(OcrBoundingGeometry_Quadrilateral value)? quadrilateral,
+    required TResult orElse(),
+  }) {
+    if (quadrilateral != null) {
+      return quadrilateral(this);
+    }
+    return orElse();
   }
 }
 
-/// @nodoc
-class $OutputFormatCopyWith<$Res> {
-  $OutputFormatCopyWith(OutputFormat _, $Res Function(OutputFormat) __);
+abstract class OcrBoundingGeometry_Quadrilateral extends OcrBoundingGeometry {
+  const factory OcrBoundingGeometry_Quadrilateral(
+      {required final String points}) = _$OcrBoundingGeometry_QuadrilateralImpl;
+  const OcrBoundingGeometry_Quadrilateral._() : super._();
+
+  String get points;
+
+  /// Create a copy of OcrBoundingGeometry
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$OcrBoundingGeometry_QuadrilateralImplCopyWith<
+          _$OcrBoundingGeometry_QuadrilateralImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }
 
-/// Adds pattern-matching-related methods to [OutputFormat].
-extension OutputFormatPatterns on OutputFormat {
-  /// A variant of `map` that fallback to returning `orElse`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+/// @nodoc
+mixin _$OutputFormat {
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() plain,
+    required TResult Function() markdown,
+    required TResult Function() djot,
+    required TResult Function() html,
+    required TResult Function() json,
+    required TResult Function() structured,
+    required TResult Function(String field0) custom,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? plain,
+    TResult? Function()? markdown,
+    TResult? Function()? djot,
+    TResult? Function()? html,
+    TResult? Function()? json,
+    TResult? Function()? structured,
+    TResult? Function(String field0)? custom,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? plain,
+    TResult Function()? markdown,
+    TResult Function()? djot,
+    TResult Function()? html,
+    TResult Function()? json,
+    TResult Function()? structured,
+    TResult Function(String field0)? custom,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) =>
+      throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
     TResult Function(OutputFormat_Plain value)? plain,
@@ -5639,125 +14386,98 @@ extension OutputFormatPatterns on OutputFormat {
     TResult Function(OutputFormat_Structured value)? structured,
     TResult Function(OutputFormat_Custom value)? custom,
     required TResult orElse(),
-  }) {
-    final _that = this;
-    switch (_that) {
-      case OutputFormat_Plain() when plain != null:
-        return plain(_that);
-      case OutputFormat_Markdown() when markdown != null:
-        return markdown(_that);
-      case OutputFormat_Djot() when djot != null:
-        return djot(_that);
-      case OutputFormat_Html() when html != null:
-        return html(_that);
-      case OutputFormat_Json() when json != null:
-        return json(_that);
-      case OutputFormat_Structured() when structured != null:
-        return structured(_that);
-      case OutputFormat_Custom() when custom != null:
-        return custom(_that);
-      case _:
-        return orElse();
-    }
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $OutputFormatCopyWith<$Res> {
+  factory $OutputFormatCopyWith(
+          OutputFormat value, $Res Function(OutputFormat) then) =
+      _$OutputFormatCopyWithImpl<$Res, OutputFormat>;
+}
+
+/// @nodoc
+class _$OutputFormatCopyWithImpl<$Res, $Val extends OutputFormat>
+    implements $OutputFormatCopyWith<$Res> {
+  _$OutputFormatCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$OutputFormat_PlainImplCopyWith<$Res> {
+  factory _$$OutputFormat_PlainImplCopyWith(_$OutputFormat_PlainImpl value,
+          $Res Function(_$OutputFormat_PlainImpl) then) =
+      __$$OutputFormat_PlainImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$OutputFormat_PlainImplCopyWithImpl<$Res>
+    extends _$OutputFormatCopyWithImpl<$Res, _$OutputFormat_PlainImpl>
+    implements _$$OutputFormat_PlainImplCopyWith<$Res> {
+  __$$OutputFormat_PlainImplCopyWithImpl(_$OutputFormat_PlainImpl _value,
+      $Res Function(_$OutputFormat_PlainImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$OutputFormat_PlainImpl extends OutputFormat_Plain {
+  const _$OutputFormat_PlainImpl() : super._();
+
+  @override
+  String toString() {
+    return 'OutputFormat.plain()';
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// Callbacks receives the raw object, upcasted.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case final Subclass2 value:
-  ///     return ...;
-  /// }
-  /// ```
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is _$OutputFormat_PlainImpl);
+  }
 
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
   @optionalTypeArgs
-  TResult map<TResult extends Object?>({
-    required TResult Function(OutputFormat_Plain value) plain,
-    required TResult Function(OutputFormat_Markdown value) markdown,
-    required TResult Function(OutputFormat_Djot value) djot,
-    required TResult Function(OutputFormat_Html value) html,
-    required TResult Function(OutputFormat_Json value) json,
-    required TResult Function(OutputFormat_Structured value) structured,
-    required TResult Function(OutputFormat_Custom value) custom,
+  TResult when<TResult extends Object?>({
+    required TResult Function() plain,
+    required TResult Function() markdown,
+    required TResult Function() djot,
+    required TResult Function() html,
+    required TResult Function() json,
+    required TResult Function() structured,
+    required TResult Function(String field0) custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case OutputFormat_Plain():
-        return plain(_that);
-      case OutputFormat_Markdown():
-        return markdown(_that);
-      case OutputFormat_Djot():
-        return djot(_that);
-      case OutputFormat_Html():
-        return html(_that);
-      case OutputFormat_Json():
-        return json(_that);
-      case OutputFormat_Structured():
-        return structured(_that);
-      case OutputFormat_Custom():
-        return custom(_that);
-    }
+    return plain();
   }
 
-  /// A variant of `map` that fallback to returning `null`.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case final Subclass value:
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
-  TResult? mapOrNull<TResult extends Object?>({
-    TResult? Function(OutputFormat_Plain value)? plain,
-    TResult? Function(OutputFormat_Markdown value)? markdown,
-    TResult? Function(OutputFormat_Djot value)? djot,
-    TResult? Function(OutputFormat_Html value)? html,
-    TResult? Function(OutputFormat_Json value)? json,
-    TResult? Function(OutputFormat_Structured value)? structured,
-    TResult? Function(OutputFormat_Custom value)? custom,
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? plain,
+    TResult? Function()? markdown,
+    TResult? Function()? djot,
+    TResult? Function()? html,
+    TResult? Function()? json,
+    TResult? Function()? structured,
+    TResult? Function(String field0)? custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case OutputFormat_Plain() when plain != null:
-        return plain(_that);
-      case OutputFormat_Markdown() when markdown != null:
-        return markdown(_that);
-      case OutputFormat_Djot() when djot != null:
-        return djot(_that);
-      case OutputFormat_Html() when html != null:
-        return html(_that);
-      case OutputFormat_Json() when json != null:
-        return json(_that);
-      case OutputFormat_Structured() when structured != null:
-        return structured(_that);
-      case OutputFormat_Custom() when custom != null:
-        return custom(_that);
-      case _:
-        return null;
-    }
+    return plain?.call();
   }
 
-  /// A variant of `when` that fallback to an `orElse` callback.
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return orElse();
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? plain,
@@ -5769,40 +14489,105 @@ extension OutputFormatPatterns on OutputFormat {
     TResult Function(String field0)? custom,
     required TResult orElse(),
   }) {
-    final _that = this;
-    switch (_that) {
-      case OutputFormat_Plain() when plain != null:
-        return plain();
-      case OutputFormat_Markdown() when markdown != null:
-        return markdown();
-      case OutputFormat_Djot() when djot != null:
-        return djot();
-      case OutputFormat_Html() when html != null:
-        return html();
-      case OutputFormat_Json() when json != null:
-        return json();
-      case OutputFormat_Structured() when structured != null:
-        return structured();
-      case OutputFormat_Custom() when custom != null:
-        return custom(_that.field0);
-      case _:
-        return orElse();
+    if (plain != null) {
+      return plain();
     }
+    return orElse();
   }
 
-  /// A `switch`-like method, using callbacks.
-  ///
-  /// As opposed to `map`, this offers destructuring.
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case Subclass2(:final field2):
-  ///     return ...;
-  /// }
-  /// ```
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) {
+    return plain(this);
+  }
 
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) {
+    return plain?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OutputFormat_Plain value)? plain,
+    TResult Function(OutputFormat_Markdown value)? markdown,
+    TResult Function(OutputFormat_Djot value)? djot,
+    TResult Function(OutputFormat_Html value)? html,
+    TResult Function(OutputFormat_Json value)? json,
+    TResult Function(OutputFormat_Structured value)? structured,
+    TResult Function(OutputFormat_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (plain != null) {
+      return plain(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class OutputFormat_Plain extends OutputFormat {
+  const factory OutputFormat_Plain() = _$OutputFormat_PlainImpl;
+  const OutputFormat_Plain._() : super._();
+}
+
+/// @nodoc
+abstract class _$$OutputFormat_MarkdownImplCopyWith<$Res> {
+  factory _$$OutputFormat_MarkdownImplCopyWith(
+          _$OutputFormat_MarkdownImpl value,
+          $Res Function(_$OutputFormat_MarkdownImpl) then) =
+      __$$OutputFormat_MarkdownImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$OutputFormat_MarkdownImplCopyWithImpl<$Res>
+    extends _$OutputFormatCopyWithImpl<$Res, _$OutputFormat_MarkdownImpl>
+    implements _$$OutputFormat_MarkdownImplCopyWith<$Res> {
+  __$$OutputFormat_MarkdownImplCopyWithImpl(_$OutputFormat_MarkdownImpl _value,
+      $Res Function(_$OutputFormat_MarkdownImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$OutputFormat_MarkdownImpl extends OutputFormat_Markdown {
+  const _$OutputFormat_MarkdownImpl() : super._();
+
+  @override
+  String toString() {
+    return 'OutputFormat.markdown()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$OutputFormat_MarkdownImpl);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
     required TResult Function() plain,
@@ -5813,37 +14598,10 @@ extension OutputFormatPatterns on OutputFormat {
     required TResult Function() structured,
     required TResult Function(String field0) custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case OutputFormat_Plain():
-        return plain();
-      case OutputFormat_Markdown():
-        return markdown();
-      case OutputFormat_Djot():
-        return djot();
-      case OutputFormat_Html():
-        return html();
-      case OutputFormat_Json():
-        return json();
-      case OutputFormat_Structured():
-        return structured();
-      case OutputFormat_Custom():
-        return custom(_that.field0);
-    }
+    return markdown();
   }
 
-  /// A variant of `when` that fallback to returning `null`
-  ///
-  /// It is equivalent to doing:
-  /// ```dart
-  /// switch (sealedClass) {
-  ///   case Subclass(:final field):
-  ///     return ...;
-  ///   case _:
-  ///     return null;
-  /// }
-  /// ```
-
+  @override
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? plain,
@@ -5854,210 +14612,795 @@ extension OutputFormatPatterns on OutputFormat {
     TResult? Function()? structured,
     TResult? Function(String field0)? custom,
   }) {
-    final _that = this;
-    switch (_that) {
-      case OutputFormat_Plain() when plain != null:
-        return plain();
-      case OutputFormat_Markdown() when markdown != null:
-        return markdown();
-      case OutputFormat_Djot() when djot != null:
-        return djot();
-      case OutputFormat_Html() when html != null:
-        return html();
-      case OutputFormat_Json() when json != null:
-        return json();
-      case OutputFormat_Structured() when structured != null:
-        return structured();
-      case OutputFormat_Custom() when custom != null:
-        return custom(_that.field0);
-      case _:
-        return null;
+    return markdown?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? plain,
+    TResult Function()? markdown,
+    TResult Function()? djot,
+    TResult Function()? html,
+    TResult Function()? json,
+    TResult Function()? structured,
+    TResult Function(String field0)? custom,
+    required TResult orElse(),
+  }) {
+    if (markdown != null) {
+      return markdown();
     }
+    return orElse();
   }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) {
+    return markdown(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) {
+    return markdown?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OutputFormat_Plain value)? plain,
+    TResult Function(OutputFormat_Markdown value)? markdown,
+    TResult Function(OutputFormat_Djot value)? djot,
+    TResult Function(OutputFormat_Html value)? html,
+    TResult Function(OutputFormat_Json value)? json,
+    TResult Function(OutputFormat_Structured value)? structured,
+    TResult Function(OutputFormat_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (markdown != null) {
+      return markdown(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class OutputFormat_Markdown extends OutputFormat {
+  const factory OutputFormat_Markdown() = _$OutputFormat_MarkdownImpl;
+  const OutputFormat_Markdown._() : super._();
+}
+
+/// @nodoc
+abstract class _$$OutputFormat_DjotImplCopyWith<$Res> {
+  factory _$$OutputFormat_DjotImplCopyWith(_$OutputFormat_DjotImpl value,
+          $Res Function(_$OutputFormat_DjotImpl) then) =
+      __$$OutputFormat_DjotImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$OutputFormat_DjotImplCopyWithImpl<$Res>
+    extends _$OutputFormatCopyWithImpl<$Res, _$OutputFormat_DjotImpl>
+    implements _$$OutputFormat_DjotImplCopyWith<$Res> {
+  __$$OutputFormat_DjotImplCopyWithImpl(_$OutputFormat_DjotImpl _value,
+      $Res Function(_$OutputFormat_DjotImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
 }
 
 /// @nodoc
 
-class OutputFormat_Plain extends OutputFormat {
-  const OutputFormat_Plain() : super._();
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OutputFormat_Plain);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
-
-  @override
-  String toString() {
-    return 'OutputFormat.plain()';
-  }
-}
-
-/// @nodoc
-
-class OutputFormat_Markdown extends OutputFormat {
-  const OutputFormat_Markdown() : super._();
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OutputFormat_Markdown);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
-
-  @override
-  String toString() {
-    return 'OutputFormat.markdown()';
-  }
-}
-
-/// @nodoc
-
-class OutputFormat_Djot extends OutputFormat {
-  const OutputFormat_Djot() : super._();
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OutputFormat_Djot);
-  }
-
-  @override
-  int get hashCode => runtimeType.hashCode;
+class _$OutputFormat_DjotImpl extends OutputFormat_Djot {
+  const _$OutputFormat_DjotImpl() : super._();
 
   @override
   String toString() {
     return 'OutputFormat.djot()';
   }
-}
-
-/// @nodoc
-
-class OutputFormat_Html extends OutputFormat {
-  const OutputFormat_Html() : super._();
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OutputFormat_Html);
+        (other.runtimeType == runtimeType && other is _$OutputFormat_DjotImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() plain,
+    required TResult Function() markdown,
+    required TResult Function() djot,
+    required TResult Function() html,
+    required TResult Function() json,
+    required TResult Function() structured,
+    required TResult Function(String field0) custom,
+  }) {
+    return djot();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? plain,
+    TResult? Function()? markdown,
+    TResult? Function()? djot,
+    TResult? Function()? html,
+    TResult? Function()? json,
+    TResult? Function()? structured,
+    TResult? Function(String field0)? custom,
+  }) {
+    return djot?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? plain,
+    TResult Function()? markdown,
+    TResult Function()? djot,
+    TResult Function()? html,
+    TResult Function()? json,
+    TResult Function()? structured,
+    TResult Function(String field0)? custom,
+    required TResult orElse(),
+  }) {
+    if (djot != null) {
+      return djot();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) {
+    return djot(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) {
+    return djot?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OutputFormat_Plain value)? plain,
+    TResult Function(OutputFormat_Markdown value)? markdown,
+    TResult Function(OutputFormat_Djot value)? djot,
+    TResult Function(OutputFormat_Html value)? html,
+    TResult Function(OutputFormat_Json value)? json,
+    TResult Function(OutputFormat_Structured value)? structured,
+    TResult Function(OutputFormat_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (djot != null) {
+      return djot(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class OutputFormat_Djot extends OutputFormat {
+  const factory OutputFormat_Djot() = _$OutputFormat_DjotImpl;
+  const OutputFormat_Djot._() : super._();
+}
+
+/// @nodoc
+abstract class _$$OutputFormat_HtmlImplCopyWith<$Res> {
+  factory _$$OutputFormat_HtmlImplCopyWith(_$OutputFormat_HtmlImpl value,
+          $Res Function(_$OutputFormat_HtmlImpl) then) =
+      __$$OutputFormat_HtmlImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$OutputFormat_HtmlImplCopyWithImpl<$Res>
+    extends _$OutputFormatCopyWithImpl<$Res, _$OutputFormat_HtmlImpl>
+    implements _$$OutputFormat_HtmlImplCopyWith<$Res> {
+  __$$OutputFormat_HtmlImplCopyWithImpl(_$OutputFormat_HtmlImpl _value,
+      $Res Function(_$OutputFormat_HtmlImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$OutputFormat_HtmlImpl extends OutputFormat_Html {
+  const _$OutputFormat_HtmlImpl() : super._();
 
   @override
   String toString() {
     return 'OutputFormat.html()';
   }
-}
-
-/// @nodoc
-
-class OutputFormat_Json extends OutputFormat {
-  const OutputFormat_Json() : super._();
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OutputFormat_Json);
+        (other.runtimeType == runtimeType && other is _$OutputFormat_HtmlImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() plain,
+    required TResult Function() markdown,
+    required TResult Function() djot,
+    required TResult Function() html,
+    required TResult Function() json,
+    required TResult Function() structured,
+    required TResult Function(String field0) custom,
+  }) {
+    return html();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? plain,
+    TResult? Function()? markdown,
+    TResult? Function()? djot,
+    TResult? Function()? html,
+    TResult? Function()? json,
+    TResult? Function()? structured,
+    TResult? Function(String field0)? custom,
+  }) {
+    return html?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? plain,
+    TResult Function()? markdown,
+    TResult Function()? djot,
+    TResult Function()? html,
+    TResult Function()? json,
+    TResult Function()? structured,
+    TResult Function(String field0)? custom,
+    required TResult orElse(),
+  }) {
+    if (html != null) {
+      return html();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) {
+    return html(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) {
+    return html?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OutputFormat_Plain value)? plain,
+    TResult Function(OutputFormat_Markdown value)? markdown,
+    TResult Function(OutputFormat_Djot value)? djot,
+    TResult Function(OutputFormat_Html value)? html,
+    TResult Function(OutputFormat_Json value)? json,
+    TResult Function(OutputFormat_Structured value)? structured,
+    TResult Function(OutputFormat_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (html != null) {
+      return html(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class OutputFormat_Html extends OutputFormat {
+  const factory OutputFormat_Html() = _$OutputFormat_HtmlImpl;
+  const OutputFormat_Html._() : super._();
+}
+
+/// @nodoc
+abstract class _$$OutputFormat_JsonImplCopyWith<$Res> {
+  factory _$$OutputFormat_JsonImplCopyWith(_$OutputFormat_JsonImpl value,
+          $Res Function(_$OutputFormat_JsonImpl) then) =
+      __$$OutputFormat_JsonImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$OutputFormat_JsonImplCopyWithImpl<$Res>
+    extends _$OutputFormatCopyWithImpl<$Res, _$OutputFormat_JsonImpl>
+    implements _$$OutputFormat_JsonImplCopyWith<$Res> {
+  __$$OutputFormat_JsonImplCopyWithImpl(_$OutputFormat_JsonImpl _value,
+      $Res Function(_$OutputFormat_JsonImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$OutputFormat_JsonImpl extends OutputFormat_Json {
+  const _$OutputFormat_JsonImpl() : super._();
 
   @override
   String toString() {
     return 'OutputFormat.json()';
   }
-}
-
-/// @nodoc
-
-class OutputFormat_Structured extends OutputFormat {
-  const OutputFormat_Structured() : super._();
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        (other.runtimeType == runtimeType && other is OutputFormat_Structured);
+        (other.runtimeType == runtimeType && other is _$OutputFormat_JsonImpl);
   }
 
   @override
   int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'OutputFormat.structured()';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() plain,
+    required TResult Function() markdown,
+    required TResult Function() djot,
+    required TResult Function() html,
+    required TResult Function() json,
+    required TResult Function() structured,
+    required TResult Function(String field0) custom,
+  }) {
+    return json();
   }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? plain,
+    TResult? Function()? markdown,
+    TResult? Function()? djot,
+    TResult? Function()? html,
+    TResult? Function()? json,
+    TResult? Function()? structured,
+    TResult? Function(String field0)? custom,
+  }) {
+    return json?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? plain,
+    TResult Function()? markdown,
+    TResult Function()? djot,
+    TResult Function()? html,
+    TResult Function()? json,
+    TResult Function()? structured,
+    TResult Function(String field0)? custom,
+    required TResult orElse(),
+  }) {
+    if (json != null) {
+      return json();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) {
+    return json(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) {
+    return json?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OutputFormat_Plain value)? plain,
+    TResult Function(OutputFormat_Markdown value)? markdown,
+    TResult Function(OutputFormat_Djot value)? djot,
+    TResult Function(OutputFormat_Html value)? html,
+    TResult Function(OutputFormat_Json value)? json,
+    TResult Function(OutputFormat_Structured value)? structured,
+    TResult Function(OutputFormat_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (json != null) {
+      return json(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class OutputFormat_Json extends OutputFormat {
+  const factory OutputFormat_Json() = _$OutputFormat_JsonImpl;
+  const OutputFormat_Json._() : super._();
+}
+
+/// @nodoc
+abstract class _$$OutputFormat_StructuredImplCopyWith<$Res> {
+  factory _$$OutputFormat_StructuredImplCopyWith(
+          _$OutputFormat_StructuredImpl value,
+          $Res Function(_$OutputFormat_StructuredImpl) then) =
+      __$$OutputFormat_StructuredImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$OutputFormat_StructuredImplCopyWithImpl<$Res>
+    extends _$OutputFormatCopyWithImpl<$Res, _$OutputFormat_StructuredImpl>
+    implements _$$OutputFormat_StructuredImplCopyWith<$Res> {
+  __$$OutputFormat_StructuredImplCopyWithImpl(
+      _$OutputFormat_StructuredImpl _value,
+      $Res Function(_$OutputFormat_StructuredImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
 }
 
 /// @nodoc
 
-class OutputFormat_Custom extends OutputFormat {
-  const OutputFormat_Custom({required this.field0}) : super._();
+class _$OutputFormat_StructuredImpl extends OutputFormat_Structured {
+  const _$OutputFormat_StructuredImpl() : super._();
 
-  final String field0;
-
-  /// Create a copy of OutputFormat
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @pragma('vm:prefer-inline')
-  $OutputFormat_CustomCopyWith<OutputFormat_Custom> get copyWith =>
-      _$OutputFormat_CustomCopyWithImpl<OutputFormat_Custom>(this, _$identity);
+  @override
+  String toString() {
+    return 'OutputFormat.structured()';
+  }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is OutputFormat_Custom &&
-            (identical(other.field0, field0) || other.field0 == field0));
+            other is _$OutputFormat_StructuredImpl);
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, field0);
+  int get hashCode => runtimeType.hashCode;
 
   @override
-  String toString() {
-    return 'OutputFormat.custom(field0: $field0)';
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() plain,
+    required TResult Function() markdown,
+    required TResult Function() djot,
+    required TResult Function() html,
+    required TResult Function() json,
+    required TResult Function() structured,
+    required TResult Function(String field0) custom,
+  }) {
+    return structured();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? plain,
+    TResult? Function()? markdown,
+    TResult? Function()? djot,
+    TResult? Function()? html,
+    TResult? Function()? json,
+    TResult? Function()? structured,
+    TResult? Function(String field0)? custom,
+  }) {
+    return structured?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? plain,
+    TResult Function()? markdown,
+    TResult Function()? djot,
+    TResult Function()? html,
+    TResult Function()? json,
+    TResult Function()? structured,
+    TResult Function(String field0)? custom,
+    required TResult orElse(),
+  }) {
+    if (structured != null) {
+      return structured();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) {
+    return structured(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) {
+    return structured?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OutputFormat_Plain value)? plain,
+    TResult Function(OutputFormat_Markdown value)? markdown,
+    TResult Function(OutputFormat_Djot value)? djot,
+    TResult Function(OutputFormat_Html value)? html,
+    TResult Function(OutputFormat_Json value)? json,
+    TResult Function(OutputFormat_Structured value)? structured,
+    TResult Function(OutputFormat_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (structured != null) {
+      return structured(this);
+    }
+    return orElse();
   }
 }
 
+abstract class OutputFormat_Structured extends OutputFormat {
+  const factory OutputFormat_Structured() = _$OutputFormat_StructuredImpl;
+  const OutputFormat_Structured._() : super._();
+}
+
 /// @nodoc
-abstract mixin class $OutputFormat_CustomCopyWith<$Res>
-    implements $OutputFormatCopyWith<$Res> {
-  factory $OutputFormat_CustomCopyWith(
-          OutputFormat_Custom value, $Res Function(OutputFormat_Custom) _then) =
-      _$OutputFormat_CustomCopyWithImpl;
+abstract class _$$OutputFormat_CustomImplCopyWith<$Res> {
+  factory _$$OutputFormat_CustomImplCopyWith(_$OutputFormat_CustomImpl value,
+          $Res Function(_$OutputFormat_CustomImpl) then) =
+      __$$OutputFormat_CustomImplCopyWithImpl<$Res>;
   @useResult
   $Res call({String field0});
 }
 
 /// @nodoc
-class _$OutputFormat_CustomCopyWithImpl<$Res>
-    implements $OutputFormat_CustomCopyWith<$Res> {
-  _$OutputFormat_CustomCopyWithImpl(this._self, this._then);
-
-  final OutputFormat_Custom _self;
-  final $Res Function(OutputFormat_Custom) _then;
+class __$$OutputFormat_CustomImplCopyWithImpl<$Res>
+    extends _$OutputFormatCopyWithImpl<$Res, _$OutputFormat_CustomImpl>
+    implements _$$OutputFormat_CustomImplCopyWith<$Res> {
+  __$$OutputFormat_CustomImplCopyWithImpl(_$OutputFormat_CustomImpl _value,
+      $Res Function(_$OutputFormat_CustomImpl) _then)
+      : super(_value, _then);
 
   /// Create a copy of OutputFormat
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  @override
   $Res call({
     Object? field0 = null,
   }) {
-    return _then(OutputFormat_Custom(
+    return _then(_$OutputFormat_CustomImpl(
       field0: null == field0
-          ? _self.field0
+          ? _value.field0
           : field0 // ignore: cast_nullable_to_non_nullable
               as String,
     ));
   }
 }
 
-// dart format on
+/// @nodoc
+
+class _$OutputFormat_CustomImpl extends OutputFormat_Custom {
+  const _$OutputFormat_CustomImpl({required this.field0}) : super._();
+
+  @override
+  final String field0;
+
+  @override
+  String toString() {
+    return 'OutputFormat.custom(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$OutputFormat_CustomImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$OutputFormat_CustomImplCopyWith<_$OutputFormat_CustomImpl> get copyWith =>
+      __$$OutputFormat_CustomImplCopyWithImpl<_$OutputFormat_CustomImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() plain,
+    required TResult Function() markdown,
+    required TResult Function() djot,
+    required TResult Function() html,
+    required TResult Function() json,
+    required TResult Function() structured,
+    required TResult Function(String field0) custom,
+  }) {
+    return custom(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? plain,
+    TResult? Function()? markdown,
+    TResult? Function()? djot,
+    TResult? Function()? html,
+    TResult? Function()? json,
+    TResult? Function()? structured,
+    TResult? Function(String field0)? custom,
+  }) {
+    return custom?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? plain,
+    TResult Function()? markdown,
+    TResult Function()? djot,
+    TResult Function()? html,
+    TResult Function()? json,
+    TResult Function()? structured,
+    TResult Function(String field0)? custom,
+    required TResult orElse(),
+  }) {
+    if (custom != null) {
+      return custom(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(OutputFormat_Plain value) plain,
+    required TResult Function(OutputFormat_Markdown value) markdown,
+    required TResult Function(OutputFormat_Djot value) djot,
+    required TResult Function(OutputFormat_Html value) html,
+    required TResult Function(OutputFormat_Json value) json,
+    required TResult Function(OutputFormat_Structured value) structured,
+    required TResult Function(OutputFormat_Custom value) custom,
+  }) {
+    return custom(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(OutputFormat_Plain value)? plain,
+    TResult? Function(OutputFormat_Markdown value)? markdown,
+    TResult? Function(OutputFormat_Djot value)? djot,
+    TResult? Function(OutputFormat_Html value)? html,
+    TResult? Function(OutputFormat_Json value)? json,
+    TResult? Function(OutputFormat_Structured value)? structured,
+    TResult? Function(OutputFormat_Custom value)? custom,
+  }) {
+    return custom?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(OutputFormat_Plain value)? plain,
+    TResult Function(OutputFormat_Markdown value)? markdown,
+    TResult Function(OutputFormat_Djot value)? djot,
+    TResult Function(OutputFormat_Html value)? html,
+    TResult Function(OutputFormat_Json value)? json,
+    TResult Function(OutputFormat_Structured value)? structured,
+    TResult Function(OutputFormat_Custom value)? custom,
+    required TResult orElse(),
+  }) {
+    if (custom != null) {
+      return custom(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class OutputFormat_Custom extends OutputFormat {
+  const factory OutputFormat_Custom({required final String field0}) =
+      _$OutputFormat_CustomImpl;
+  const OutputFormat_Custom._() : super._();
+
+  String get field0;
+
+  /// Create a copy of OutputFormat
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$OutputFormat_CustomImplCopyWith<_$OutputFormat_CustomImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

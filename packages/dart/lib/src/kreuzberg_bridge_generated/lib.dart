@@ -241,6 +241,10 @@ Future<List<String>> listPostProcessors() =>
 Future<void> clearPostProcessors() =>
     RustLib.instance.api.crateClearPostProcessors();
 
+/// List names of all registered renderers.
+Future<List<String>> listRenderers() =>
+    RustLib.instance.api.crateListRenderers();
+
 /// List names of all registered validators.
 Future<List<String>> listValidators() =>
     RustLib.instance.api.crateListValidators();
@@ -338,6 +342,13 @@ Future<OcrBackendDartImpl> createOcrBackendDartImpl(
         supportsDocumentProcessing: supportsDocumentProcessing,
         processDocument: processDocument);
 
+/// Register a Dart implementation as a `OcrBackend` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_ocr_backend_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+Future<void> registerOcrBackend({required OcrBackendDartImpl impl}) =>
+    RustLib.instance.api.crateRegisterOcrBackend(impl: impl);
+
 /// Create a `PostProcessorDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
 Future<PostProcessorDartImpl> createPostProcessorDartImpl(
@@ -358,6 +369,13 @@ Future<PostProcessorDartImpl> createPostProcessorDartImpl(
         estimatedDurationMs: estimatedDurationMs,
         priority: priority);
 
+/// Register a Dart implementation as a `PostProcessor` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_post_processor_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+Future<void> registerPostProcessor({required PostProcessorDartImpl impl}) =>
+    RustLib.instance.api.crateRegisterPostProcessor(impl: impl);
+
 /// Create a `ValidatorDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
 Future<ValidatorDartImpl> createValidatorDartImpl(
@@ -374,6 +392,13 @@ Future<ValidatorDartImpl> createValidatorDartImpl(
         shouldValidate: shouldValidate,
         priority: priority);
 
+/// Register a Dart implementation as a `Validator` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_validator_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+Future<void> registerValidator({required ValidatorDartImpl impl}) =>
+    RustLib.instance.api.crateRegisterValidator(impl: impl);
+
 /// Create a `EmbeddingBackendDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
 Future<EmbeddingBackendDartImpl> createEmbeddingBackendDartImpl(
@@ -386,6 +411,14 @@ Future<EmbeddingBackendDartImpl> createEmbeddingBackendDartImpl(
         pluginVersion: pluginVersion,
         dimensions: dimensions,
         embed: embed);
+
+/// Register a Dart implementation as a `EmbeddingBackend` plugin.
+///
+/// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_embedding_backend_registry()`.
+/// Errors from the host registry are stringified for FRB transport.
+Future<void> registerEmbeddingBackend(
+        {required EmbeddingBackendDartImpl impl}) =>
+    RustLib.instance.api.crateRegisterEmbeddingBackend(impl: impl);
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn () -> DartFnFuture < OcrBackendType > + Send + Sync >>>
 abstract class BoxFnDartFnFutureOcrBackendType implements RustOpaqueInterface {}
@@ -1840,6 +1873,7 @@ class ExtractionConfig {
   final SecurityLimits? securityLimits;
   final OutputFormat outputFormat;
   final LayoutDetectionConfig? layout;
+  final bool useLayoutForMarkdown;
   final bool includeDocumentStructure;
   final AccelerationConfig? acceleration;
   final String? cacheNamespace;
@@ -1875,6 +1909,7 @@ class ExtractionConfig {
     this.securityLimits,
     required this.outputFormat,
     this.layout,
+    required this.useLayoutForMarkdown,
     required this.includeDocumentStructure,
     this.acceleration,
     this.cacheNamespace,
@@ -1912,6 +1947,7 @@ class ExtractionConfig {
       securityLimits.hashCode ^
       outputFormat.hashCode ^
       layout.hashCode ^
+      useLayoutForMarkdown.hashCode ^
       includeDocumentStructure.hashCode ^
       acceleration.hashCode ^
       cacheNamespace.hashCode ^
@@ -1951,6 +1987,7 @@ class ExtractionConfig {
           securityLimits == other.securityLimits &&
           outputFormat == other.outputFormat &&
           layout == other.layout &&
+          useLayoutForMarkdown == other.useLayoutForMarkdown &&
           includeDocumentStructure == other.includeDocumentStructure &&
           acceleration == other.acceleration &&
           cacheNamespace == other.cacheNamespace &&
@@ -3283,6 +3320,7 @@ class Metadata {
   final String? documentVersion;
   final String? abstractText;
   final String? outputFormat;
+  final bool ocrUsed;
   final Map<String, String> additional;
 
   const Metadata({
@@ -3306,6 +3344,7 @@ class Metadata {
     this.documentVersion,
     this.abstractText,
     this.outputFormat,
+    required this.ocrUsed,
     required this.additional,
   });
 
@@ -3331,6 +3370,7 @@ class Metadata {
       documentVersion.hashCode ^
       abstractText.hashCode ^
       outputFormat.hashCode ^
+      ocrUsed.hashCode ^
       additional.hashCode;
 
   @override
@@ -3358,6 +3398,7 @@ class Metadata {
           documentVersion == other.documentVersion &&
           abstractText == other.abstractText &&
           outputFormat == other.outputFormat &&
+          ocrUsed == other.ocrUsed &&
           additional == other.additional;
 }
 

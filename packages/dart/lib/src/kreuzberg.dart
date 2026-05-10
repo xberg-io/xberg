@@ -45,7 +45,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractBytes(Uint8List content, String mimeType, [ExtractionConfig? config]) async {
-    return await rust_bridge.extractBytes(content: content, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.extractBytes(content: content, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Extract content from a file.
@@ -85,7 +85,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractFile(String path, String? mimeType, [ExtractionConfig? config]) async {
-    return await rust_bridge.extractFile(path: path, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.extractFile(path: path, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Synchronous wrapper for `extract_file`.
@@ -111,7 +111,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractFileSync(String path, String? mimeType, [ExtractionConfig? config]) async {
-    return await rust_bridge.extractFileSync(path: path, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.extractFileSync(path: path, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Synchronous wrapper for `extract_bytes`.
@@ -135,7 +135,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<ExtractionResult> extractBytesSync(Uint8List content, String mimeType, [ExtractionConfig? config]) async {
-    return await rust_bridge.extractBytesSync(content: content, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.extractBytesSync(content: content, mimeType: mimeType, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Synchronous wrapper for `batch_extract_files`.
@@ -161,7 +161,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<List<ExtractionResult>> batchExtractFilesSync(List<BatchFileItem> items, [ExtractionConfig? config]) async {
-    return await rust_bridge.batchExtractFilesSync(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.batchExtractFilesSync(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Synchronous wrapper for `batch_extract_bytes`.
@@ -190,7 +190,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<List<ExtractionResult>> batchExtractBytesSync(List<BatchBytesItem> items, [ExtractionConfig? config]) async {
-    return await rust_bridge.batchExtractBytesSync(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.batchExtractBytesSync(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Extract content from multiple files concurrently.
@@ -257,7 +257,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<List<ExtractionResult>> batchExtractFiles(List<BatchFileItem> items, [ExtractionConfig? config]) async {
-    return await rust_bridge.batchExtractFiles(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.batchExtractFiles(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Extract content from multiple byte arrays concurrently.
@@ -317,7 +317,7 @@ class KreuzbergBridge {
   /// ```
   /// throws anyhow::Error on failure
   static Future<List<ExtractionResult>> batchExtractBytes(List<BatchBytesItem> items, [ExtractionConfig? config]) async {
-    return await rust_bridge.batchExtractBytes(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3));
+    return await rust_bridge.batchExtractBytes(items: items, config: config ?? ExtractionConfig(useCache: true, enableQualityProcessing: true, forceOcr: false, disableOcr: false, resultFormat: ResultFormat.unified, outputFormat: OutputFormat.plain(), includeDocumentStructure: false, maxArchiveDepth: 3, useLayoutForMarkdown: false));
   }
 
   /// Detect MIME type from raw file bytes.
