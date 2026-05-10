@@ -17,7 +17,8 @@ use image::DynamicImage;
 use crate::{
     KreuzbergError, Result,
     core::config::{ExtractionConfig, layout::LayoutDetectionConfig},
-    pdf::structure::types::PageLayoutResult,
+    extractors::pdf::layout_hints::pixel_detection_to_layout_hints_pdf_space,
+    pdf::structure::types::{LayoutHint, PageLayoutResult},
 };
 
 /// Render every page of `content` to `DynamicImage` at the pdf_oxide default
@@ -36,10 +37,13 @@ use crate::{
 /// than propagating them — hence the engine is returned to the global cache
 /// before any error path exits.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+type LayoutForMarkdownOutput = (Vec<DynamicImage>, Vec<PageLayoutResult>, Vec<Vec<LayoutHint>>);
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
 pub(super) fn run_layout_for_pdf_pages(
     content: &[u8],
     layout_config: &LayoutDetectionConfig,
-) -> Result<(Vec<DynamicImage>, Vec<PageLayoutResult>)> {
+) -> Result<LayoutForMarkdownOutput> {
     use pdf_oxide::rendering::RenderOptions;
 
     // --- 1. Open document and render all pages ---
@@ -54,7 +58,7 @@ pub(super) fn run_layout_for_pdf_pages(
     })?;
 
     if page_count == 0 {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
 
     let render_opts = RenderOptions::default();
@@ -103,15 +107,30 @@ pub(super) fn run_layout_for_pdf_pages(
         }
     };
 
-    // --- 3. Convert pixel detections → PDF coordinate space ---
+    // --- 3. Convert pixel detections → PDF coordinate space + build hints ---
     let mut images: Vec<DynamicImage> = Vec::with_capacity(page_count);
     let mut layout_results: Vec<PageLayoutResult> = Vec::with_capacity(page_count);
+    let mut hints_per_page: Vec<Vec<LayoutHint>> = Vec::with_capacity(page_count);
 
     for ((page_width_pts, page_height_pts, img), (detection, _timings)) in page_data.into_iter().zip(batch_results) {
-        tracing::debug!(
-            detections = detection.detections.len(),
+        let image_width_px = img.width();
+        let image_height_px = img.height();
+
+        let hints = pixel_detection_to_layout_hints_pdf_space(
+            &detection,
+            image_width_px,
+            image_height_px,
             page_width_pts,
             page_height_pts,
+        );
+
+        tracing::debug!(
+            detections = detection.detections.len(),
+            hints = hints.len(),
+            page_width_pts,
+            page_height_pts,
+            image_width_px,
+            image_height_px,
             "layout runner: page detections"
         );
 
@@ -119,11 +138,11 @@ pub(super) fn run_layout_for_pdf_pages(
             page_width_pts,
             page_height_pts,
         });
-
+        hints_per_page.push(hints);
         images.push(img);
     }
 
-    Ok((images, layout_results))
+    Ok((images, layout_results, hints_per_page))
 }
 
 /// Convenience wrapper that reads `use_layout_for_markdown` and other gate
@@ -134,32 +153,44 @@ pub(super) fn run_layout_for_pdf_pages(
 /// failure (logged as a warning so the markdown path can continue without
 /// layout hints).
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+type LayoutForMarkdownOptional = (
+    Option<Vec<DynamicImage>>,
+    Option<Vec<PageLayoutResult>>,
+    Option<Vec<Vec<LayoutHint>>>,
+);
+
+#[cfg(all(feature = "pdf", feature = "layout-detection"))]
 pub(super) fn maybe_run_layout_for_markdown(
     content: &[u8],
     config: &ExtractionConfig,
-) -> (Option<Vec<DynamicImage>>, Option<Vec<PageLayoutResult>>) {
+) -> LayoutForMarkdownOptional {
     if !config.use_layout_for_markdown {
-        return (None, None);
+        return (None, None, None);
     }
     let Some(ref layout_config) = config.layout else {
-        return (None, None);
+        return (None, None, None);
     };
     if config.force_ocr {
         // force_ocr runs every page through OCR, which has its own layout detection path.
         // Running layout here too would be wasteful and produce conflicting hints.
-        return (None, None);
+        return (None, None, None);
     }
     match run_layout_for_pdf_pages(content, layout_config) {
-        Ok((images, results)) => {
-            tracing::info!(pages = images.len(), "layout-for-markdown: detection succeeded");
-            (Some(images), Some(results))
+        Ok((images, results, hints)) => {
+            let total_hints: usize = hints.iter().map(|h| h.len()).sum();
+            tracing::info!(
+                pages = images.len(),
+                total_hints,
+                "layout-for-markdown: detection succeeded"
+            );
+            (Some(images), Some(results), Some(hints))
         }
         Err(e) => {
             tracing::warn!(
                 error = %e,
                 "layout-for-markdown: detection failed, continuing without layout hints"
             );
-            (None, None)
+            (None, None, None)
         }
     }
 }

@@ -823,7 +823,10 @@ pub(crate) async fn extract_with_ocr(
                         crate::pdf::structure::adapters::ocr_doc_to_paragraphs(ocr_doc, ocr_render_height);
 
                     if let Some(ref scaled_det) = scaled_detection {
-                        let hints = detection_to_layout_hints(scaled_det, ocr_render_height as f32);
+                        let hints = super::layout_hints::detection_to_layout_hints_pixel_space(
+                            scaled_det,
+                            ocr_render_height as f32,
+                        );
                         // Trust the layout model for OCR — no body-font-size guard
                         // since OCR text lacks reliable font size information.
                         crate::pdf::structure::layout_classify::apply_layout_overrides(
@@ -1190,48 +1193,10 @@ fn ensure_elements_enabled(config: &crate::core::config::ocr::OcrConfig) -> crat
     config
 }
 
-/// Convert pixel-space layout detections to PDF-space `LayoutHint`s.
-///
-/// Flips y-coordinates from image space (y=0 at top) to PDF space (y=0 at bottom)
-/// to match the coordinate system used by `apply_layout_overrides`.
-#[cfg(all(feature = "ocr", feature = "layout-detection"))]
-fn detection_to_layout_hints(
-    detection: &crate::layout::DetectionResult,
-    page_height: f32,
-) -> Vec<crate::pdf::structure::types::LayoutHint> {
-    use crate::layout::LayoutClass;
-    use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
-
-    detection
-        .detections
-        .iter()
-        .map(|det| {
-            let class = match det.class_name {
-                LayoutClass::Title => LayoutHintClass::Title,
-                LayoutClass::SectionHeader => LayoutHintClass::SectionHeader,
-                LayoutClass::Code => LayoutHintClass::Code,
-                LayoutClass::Formula => LayoutHintClass::Formula,
-                LayoutClass::ListItem => LayoutHintClass::ListItem,
-                LayoutClass::Caption => LayoutHintClass::Caption,
-                LayoutClass::Footnote => LayoutHintClass::Footnote,
-                LayoutClass::PageHeader => LayoutHintClass::PageHeader,
-                LayoutClass::PageFooter => LayoutHintClass::PageFooter,
-                LayoutClass::Table => LayoutHintClass::Table,
-                LayoutClass::Picture => LayoutHintClass::Picture,
-                LayoutClass::Text => LayoutHintClass::Text,
-                _ => LayoutHintClass::Other,
-            };
-            LayoutHint {
-                class_name: class,
-                confidence: det.confidence,
-                left: det.bbox.x1,
-                right: det.bbox.x2,
-                top: page_height - det.bbox.y1,
-                bottom: page_height - det.bbox.y2,
-            }
-        })
-        .collect()
-}
+// `detection_to_layout_hints` for the OCR path lives in the shared
+// `super::layout_hints` module as `detection_to_layout_hints_pixel_space`.
+// The OCR path uses the pixel-space variant because OCR-derived paragraphs
+// reach `apply_layout_overrides` in pixel space (via `ocr_doc_to_paragraphs`).
 
 #[cfg(test)]
 mod tests {

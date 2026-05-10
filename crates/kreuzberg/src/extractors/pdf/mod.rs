@@ -4,6 +4,8 @@
 //! using pdf_oxide (pure Rust). Supports both native text extraction and OCR fallback.
 
 mod extraction;
+#[cfg(feature = "layout-detection")]
+mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
 mod ocr;
@@ -166,11 +168,15 @@ impl PdfExtractor {
     ) -> Result<InternalDocument> {
         let _ = &path; // used only when `ocr` feature is enabled
 
-        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = None;
+        #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+        let (markdown_layout_images, markdown_layout_results, markdown_layout_hints) =
+            layout_runner::maybe_run_layout_for_markdown(content, config);
 
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
-        let (markdown_layout_images, markdown_layout_results) =
-            layout_runner::maybe_run_layout_for_markdown(content, config);
+        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> =
+            markdown_layout_hints.as_deref();
+        #[cfg(not(feature = "layout-detection"))]
+        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = None;
 
         #[allow(unused_variables, unused_mut)]
         let (

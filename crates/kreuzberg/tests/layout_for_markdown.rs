@@ -105,6 +105,58 @@ fn test_use_layout_for_markdown_produces_headings() {
     );
 }
 
+/// **Strict regression guard** — `use_layout_for_markdown=true` must produce
+/// strictly more ATX headings than the baseline (font-clustering only).
+///
+/// This is the test that catches the catastrophic bug where RT-DETR runs but
+/// its detections never reach `apply_layout_overrides`, making the layout
+/// pipeline a 70× slower no-op (identical SF1 to baseline). Presence-only
+/// tests (see `test_use_layout_for_markdown_produces_headings`) pass even
+/// when the layout path is broken, because font-clustering finds some
+/// headings on its own. Only an *inequality* against the baseline reveals
+/// whether layout hints actually changed classification.
+#[test]
+#[ignore = "requires layout model files (ORT inference)"]
+fn test_use_layout_for_markdown_adds_headings_vs_baseline() {
+    if !test_documents_available() {
+        return;
+    }
+
+    let pdf = "pdf/google_doc_document.pdf";
+    let baseline = extract_md(pdf, &baseline_config());
+    let layout = extract_md(pdf, &layout_for_markdown_config());
+
+    fn count_atx_headings(content: &str) -> usize {
+        content
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim_start();
+                trimmed.starts_with("# ")
+                    || trimmed.starts_with("## ")
+                    || trimmed.starts_with("### ")
+                    || trimmed.starts_with("#### ")
+                    || trimmed.starts_with("##### ")
+                    || trimmed.starts_with("###### ")
+            })
+            .count()
+    }
+
+    let baseline_h = count_atx_headings(&baseline);
+    let layout_h = count_atx_headings(&layout);
+
+    assert!(
+        layout_h > baseline_h,
+        "use_layout_for_markdown=true must add at least one heading vs baseline.\n\
+         baseline_headings = {}, layout_headings = {}\n\
+         If these are equal, layout detections are not flowing into \
+         apply_layout_overrides. Check pdf/mod.rs:169 (`layout_hints` should \
+         not be hardcoded `None`) and the pixel→PDF coord-space conversion in \
+         extractors/pdf/layout_hints.rs.",
+        baseline_h,
+        layout_h
+    );
+}
+
 /// Verify that `use_layout_for_markdown = true` with `layout = None` silently
 /// produces the same output as the baseline (no-op when layout config is absent).
 #[test]
