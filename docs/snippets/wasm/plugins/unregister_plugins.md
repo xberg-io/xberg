@@ -1,42 +1,77 @@
 # Unregister Plugins
 
-The WASM binding provides `clear*` functions to remove all plugins of a specific type, but does not expose individual unregistration.
-
-<!-- snippet:skip -->
-
-WASM binding does not expose selective plugin unregistration; only bulk clearing is available via `clearOcrBackends()`, `clearPostProcessors()`, and `clearValidators()`.
+Remove registered plugins from the WASM runtime using individual unregister or bulk clear operations.
 
 ```typescript title="WASM"
 import init, {
+  registerDocumentExtractor,
+  unregisterDocumentExtractor,
+  listDocumentExtractors,
+  clearDocumentExtractors,
+  registerOcrBackend,
+  unregisterOcrBackend,
+  listOcrBackends,
   clearOcrBackends,
+  registerPostProcessor,
+  unregisterPostProcessor,
+  listPostProcessors,
   clearPostProcessors,
-  clearValidators,
-  listPostProcessors
+  registerRenderer,
+  unregisterRenderer,
+  listRenderers,
+  clearRenderers,
+  registerValidator,
+  unregisterValidator,
+  listValidators,
+  clearValidators
 } from "kreuzberg-wasm";
 
 await init();
 
-// List current plugins before clearing
-console.log("Before clearing:");
-console.log("Post-processors:", listPostProcessors());
+// Example: register a custom document extractor
+const extractor = {
+  extractBytes: async (bytes, mimeType, config) => {
+    return JSON.stringify({ text: "test", page_count: 1 });
+  },
+  supportedMimeTypes: () => JSON.stringify(["application/x-test"])
+};
 
-// Remove all post-processors at once
+registerDocumentExtractor(extractor);
+console.log("Registered extractors:", listDocumentExtractors());
+
+// Individual unregistration by plugin name
+try {
+  unregisterDocumentExtractor("wasm_bridge");
+  console.log("Extractor unregistered");
+} catch (error) {
+  console.error("Unregister failed:", error);
+}
+
+// Clear all plugins of a type
 clearPostProcessors();
-console.log("After clearPostProcessors():");
-console.log("Post-processors:", listPostProcessors());
+console.log("After clearPostProcessors:", listPostProcessors());
 
-// If you need selective removal, re-register only the plugins you want to keep
-import { registerPostProcessor } from "kreuzberg-wasm";
+clearOcrBackends();
+console.log("After clearOcrBackends:", listOcrBackends());
 
-// Clear all
+clearRenderers();
+console.log("After clearRenderers:", listRenderers());
+
+clearValidators();
+console.log("After clearValidators:", listValidators());
+
+// Selective re-registration: clear and register only desired plugins
 clearPostProcessors();
+const myProcessor = {
+  processingStage: () => "post-extraction",
+  process: (result) => result // Pass-through
+};
+registerPostProcessor(myProcessor);
+console.log("After selective re-register:", listPostProcessors());
 
-// Re-register only the ones you want
-const processor1 = { processingStage: () => "post-extraction", process: (r) => r };
-registerPostProcessor(processor1);
-
-console.log("After selective re-registration:");
-console.log("Post-processors:", listPostProcessors());
+// Unregister specific plugin by name
+unregisterPostProcessor("wasm_bridge");
+console.log("After selective unregister:", listPostProcessors());
 ```
 
-To remove a specific plugin, clear all and re-register only the ones you need.
+Use `unregister*` to remove individual plugins by name, or `clear*` for bulk removal of all plugins of a type. All custom plugins are registered with the default name `"wasm_bridge"` managed by the bridge.
