@@ -84,8 +84,7 @@ pub fn unregister_renderer(name: &str) -> Result<()> {
 
     let registry = get_renderer_registry();
     let mut registry = registry.write();
-    registry.remove(name);
-    Ok(())
+    registry.remove(name)
 }
 
 /// List names of all registered renderers.
@@ -115,8 +114,7 @@ pub fn clear_renderers() -> Result<()> {
 
     let registry = get_renderer_registry();
     let mut registry = registry.write();
-    registry.clear_all();
-    Ok(())
+    registry.clear_all()
 }
 
 #[cfg(test)]

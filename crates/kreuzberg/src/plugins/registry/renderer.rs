@@ -193,17 +193,29 @@ impl RendererRegistry {
         self.renderers.keys().cloned().collect()
     }
 
-    /// Remove a renderer from the registry.
-    pub fn remove(&mut self, name: &str) {
-        self.renderers.remove(name);
+    /// Remove a renderer from the registry, calling its `shutdown()` method.
+    pub fn remove(&mut self, name: &str) -> Result<()> {
+        if let Some(renderer) = self.renderers.remove(name) {
+            renderer.shutdown()?;
+        }
+        Ok(())
     }
 
     /// Clear all renderers from the registry.
     ///
     /// Removes every renderer, including the built-in defaults. After calling
     /// this the registry is empty; re-register renderers as needed.
-    pub fn clear_all(&mut self) {
-        self.renderers.clear();
+    pub fn clear_all(&mut self) -> Result<()> {
+        let names: Vec<_> = self.renderers.keys().cloned().collect();
+        for name in names {
+            self.remove(&name)?;
+        }
+        Ok(())
+    }
+
+    /// Drain the registry. Alias for `clear_all` used by alef trait-bridge codegen.
+    pub fn clear(&mut self) -> Result<()> {
+        self.clear_all()
     }
 
     /// Clear all renderers and re-register the built-in defaults.
