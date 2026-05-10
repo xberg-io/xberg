@@ -456,6 +456,8 @@ jobs:
           # PyO3 abi3-py310 → one wheel per platform covers Python 3.10+.
           cibw-build: "cp310-*"
           upload-artifact: "false"
+          # ort/reqwest/hf-hub pull native-tls → openssl-sys; manylinux2014 needs openssl-devel.
+          cibw-before-build-linux: "yum install -y openssl-devel pkgconfig && pip install maturin uv && source ~/.cargo/env"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v7
@@ -482,9 +484,11 @@ jobs:
 
       - name: Build sdist via maturin
         # Inline: maturin sdist is a one-liner; no shared action wraps it.
+        # `-m` must point to the Rust crate's Cargo.toml; pyproject.toml in
+        # packages/python/ already declares the manifest-path that maturin reads.
         run: |
           python -m pip install --upgrade pip maturin
-          maturin sdist -m packages/python/pyproject.toml -o dist
+          maturin sdist -m crates/kreuzberg-py/Cargo.toml -o dist
         shell: bash
 
       - uses: actions/upload-artifact@v7
