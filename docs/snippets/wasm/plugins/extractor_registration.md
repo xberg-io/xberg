@@ -1,31 +1,67 @@
 # Document Extractor Registration
 
-Document extractors are built-in and cannot be registered dynamically in WASM at runtime. However, you can list and use the available extractors.
-
-<!-- snippet:skip -->
-
-WASM binding does not expose custom document extractor registration; extractors are compiled into the binary at build time. Only OCR backends, post-processors, and validators can be dynamically registered.
+Register a custom document extractor plugin in WASM that implements the required interface.
 
 ```typescript title="WASM"
-import init, { listDocumentExtractors } from "kreuzberg-wasm";
+import init, {
+  registerDocumentExtractor,
+  unregisterDocumentExtractor,
+  listDocumentExtractors,
+  extractBytes
+} from "kreuzberg-wasm";
 
 await init();
 
-// List available extractors
+// Define a custom extractor as a plain JS object with required methods
+const customExtractor = {
+  // Required: extract document bytes
+  // Takes: (bytes: Uint8Array, mimeType: string, config: object) -> Promise<{text: string, ...}>
+  extractBytes: async (bytes, mimeType, config) => {
+    if (mimeType !== "application/x-custom") {
+      throw new Error("Unsupported MIME type");
+    }
+    // Custom extraction logic
+    const text = new TextDecoder().decode(bytes);
+    return JSON.stringify({
+      text: `Extracted: ${text.slice(0, 100)}`,
+      page_count: 1,
+      language: "en"
+    });
+  },
+
+  // Required: list supported MIME types as JSON array
+  supportedMimeTypes: () => {
+    return JSON.stringify(["application/x-custom"]);
+  },
+
+  // Optional: plugin name (returned by Plugin trait)
+  version: () => "1.0.0"
+};
+
+// Register the custom extractor
+try {
+  registerDocumentExtractor(customExtractor);
+  console.log("Extractor registered successfully");
+} catch (error) {
+  console.error("Failed to register extractor:", error);
+}
+
+// List all extractors (includes your custom one)
 const extractors = listDocumentExtractors();
 console.log("Available extractors:", extractors);
 
-// Use extraction with the built-in extractors
-import { extractBytes } from "kreuzberg-wasm";
-
-const pdfBytes = new Uint8Array([/* PDF content */]);
-const config = {
-  ocr: null,
-  chunking: null
-};
-
-const result = await extractBytes(pdfBytes, "application/pdf", config);
+// Use the custom extractor via normal extraction
+const customBytes = new Uint8Array([0x00, 0x01, 0x02]);
+const result = await extractBytes(customBytes, "application/x-custom", {});
 console.log("Extraction result:", result);
+
+// Unregister when done
+try {
+  unregisterDocumentExtractor("wasm_bridge");
+  console.log("Extractor unregistered");
+} catch (error) {
+  console.error("Failed to unregister:", error);
+}
 ```
 
-To extend extraction capabilities, create a custom post-processor instead (see `word_count_processor.md`).
+The extractor object must implement `extractBytes` and `supportedMimeTypes` methods. Optional methods: `initialize()`, `shutdown()`, and `version()` for lifecycle management.
