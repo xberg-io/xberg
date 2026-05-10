@@ -110,4 +110,3 @@ pub(crate) fn assign_tables_and_images_to_pages(
 
     Some(updated_pages)
 }
-

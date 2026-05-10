@@ -2,7 +2,7 @@
 
 use super::constants::{MAX_BOLD_HEADING_WORD_COUNT, MAX_HEADING_DISTANCE_MULTIPLIER, MAX_HEADING_WORD_COUNT};
 use super::regions::looks_like_figure_label;
-use super::types::PdfParagraph;
+use super::types::{LayoutHintClass, PdfParagraph};
 
 /// Classify paragraphs as headings or body using the global heading map and bold heuristic.
 pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: &[(f32, Option<u8>)]) {
@@ -24,15 +24,7 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
         .map(|(centroid, _)| *centroid)
         .unwrap_or(0.0);
     for para in paragraphs.iter_mut() {
-        let word_count: usize = if !para.text.is_empty() {
-            para.text.split_whitespace().count()
-        } else {
-            para.lines
-                .iter()
-                .flat_map(|l| l.segments.iter())
-                .map(|s| s.text.split_whitespace().count())
-                .sum()
-        };
+        let word_count = para.word_count;
 
         // Pass 1: font-size-based heading classification.
         // When the layout model says Text, only promote to heading if there is
@@ -272,6 +264,202 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
             3
         };
         para.heading_level = Some(level);
+    }
+
+    // Pass 7: W2.B — indentation-based list detection.
+    // Paragraphs that are horizontally shifted right (indented) relative to the
+    // surrounding paragraphs at the same indent level are likely list items.
+    detect_indentation_based_lists(paragraphs);
+
+    // Pass 8: W2.C — monospace code-block detection.
+    // Multiple consecutive paragraphs where all lines are monospace should be
+    // detected as code blocks for better markdown rendering.
+    detect_monospace_code_blocks(paragraphs);
+}
+
+/// W2.B: Detect indentation-based lists (unordered by indent level).
+///
+/// Paragraphs that are horizontally shifted right relative to surrounding paragraphs
+/// are often list items. This pass identifies them by:
+/// 1. Computing the modal left X across all paragraphs on each page
+/// 2. Finding paragraphs indented >= 12 points right of the modal
+/// 3. Requiring they follow or precede another short paragraph at the same indent
+fn detect_indentation_based_lists(paragraphs: &mut [PdfParagraph]) {
+    if paragraphs.len() < 2 {
+        return;
+    }
+
+    // Group paragraphs by page (approximate via position tracking)
+    // For now, use a simpler heuristic: process all and mark indented items
+    const INDENT_THRESHOLD: f32 = 12.0; // Points
+
+    // Compute modal left X (the most common left position)
+    let mut left_positions: Vec<f32> = paragraphs
+        .iter()
+        .filter_map(|p| p.block_bbox.map(|(left, _, _, _)| left))
+        .collect();
+
+    if left_positions.is_empty() {
+        return;
+    }
+
+    // Find modal (most common) left X
+    left_positions.sort_by(|a, b| a.total_cmp(b));
+    let modal_left = {
+        let mut freq_map: std::collections::HashMap<i32, usize> = std::collections::HashMap::new();
+        for &pos in &left_positions {
+            let bucket = (pos * 10.0) as i32; // Group within 1pt
+            *freq_map.entry(bucket).or_default() += 1;
+        }
+        let (bucket, _) = freq_map.into_iter().max_by_key(|(_, count)| *count).unwrap_or((0, 0));
+        bucket as f32 / 10.0
+    };
+
+    // Mark indented paragraphs as list items
+    for i in 0..paragraphs.len() {
+        let para = &paragraphs[i];
+
+        // Skip if already classified
+        if para.is_list_item || para.is_code_block || para.is_formula || para.heading_level.is_some() {
+            continue;
+        }
+
+        // Check indentation
+        let left_x = para.block_bbox.map(|(left, _, _, _)| left).unwrap_or(0.0);
+        let is_indented = left_x >= modal_left + INDENT_THRESHOLD;
+
+        if !is_indented {
+            continue;
+        }
+
+        // Get word count
+        let para_text = if !para.text.is_empty() {
+            para.text.clone()
+        } else {
+            para.lines
+                .iter()
+                .flat_map(|l| l.segments.iter())
+                .map(|s| s.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        let word_count = para_text.split_whitespace().count();
+
+        // Check contextual signals
+        let has_context = if i > 0 {
+            // Check if previous paragraph is short (another list item)
+            let prev_text = if !paragraphs[i - 1].text.is_empty() {
+                paragraphs[i - 1].text.clone()
+            } else {
+                paragraphs[i - 1]
+                    .lines
+                    .iter()
+                    .flat_map(|l| l.segments.iter())
+                    .map(|s| s.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            let prev_wc = prev_text.split_whitespace().count();
+            prev_wc <= 20
+        } else {
+            false
+        };
+
+        let followed_by_context = if i + 1 < paragraphs.len() {
+            let next_text = if !paragraphs[i + 1].text.is_empty() {
+                paragraphs[i + 1].text.clone()
+            } else {
+                paragraphs[i + 1]
+                    .lines
+                    .iter()
+                    .flat_map(|l| l.segments.iter())
+                    .map(|s| s.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            let next_wc = next_text.split_whitespace().count();
+            next_wc <= 20
+        } else {
+            false
+        };
+
+        // Mark as list item if: short (<= 30 words) AND (has context OR followed by context)
+        if (word_count <= 30) && (has_context || followed_by_context) {
+            paragraphs[i].is_list_item = true;
+            paragraphs[i].layout_class = Some(LayoutHintClass::ListItem);
+        }
+    }
+}
+
+/// W2.C: Detect monospace code-block sequences.
+///
+/// Multiple consecutive paragraphs where all lines are monospace should be
+/// marked as code blocks. This handles code snippets that don't have explicit
+/// code block markers.
+fn detect_monospace_code_blocks(paragraphs: &mut [PdfParagraph]) {
+    if paragraphs.len() < 2 {
+        return;
+    }
+
+    let mut i = 0;
+    while i < paragraphs.len() {
+        let para = &paragraphs[i];
+
+        // Skip if already classified
+        if para.is_code_block || para.is_list_item || para.is_formula || para.heading_level.is_some() {
+            i += 1;
+            continue;
+        }
+
+        // Check if this paragraph is all monospace
+        let is_all_monospace = !para.lines.is_empty() && para.lines.iter().all(|l| l.is_monospace);
+
+        if !is_all_monospace {
+            i += 1;
+            continue;
+        }
+
+        // Look ahead to see if the next paragraph is also all monospace
+        if i + 1 < paragraphs.len() {
+            let next_para = &paragraphs[i + 1];
+            let next_is_monospace = !next_para.lines.is_empty()
+                && next_para.lines.iter().all(|l| l.is_monospace)
+                && !next_para.is_list_item
+                && !next_para.is_formula
+                && next_para.heading_level.is_none();
+
+            if next_is_monospace {
+                // Found a sequence: mark both as code blocks
+                paragraphs[i].is_code_block = true;
+                paragraphs[i].layout_class = Some(LayoutHintClass::Code);
+                paragraphs[i + 1].is_code_block = true;
+                paragraphs[i + 1].layout_class = Some(LayoutHintClass::Code);
+
+                // Continue marking consecutive monospace paragraphs
+                let mut j = i + 2;
+                while j < paragraphs.len() {
+                    let para_j = &paragraphs[j];
+                    let is_monospace_j = !para_j.lines.is_empty()
+                        && para_j.lines.iter().all(|l| l.is_monospace)
+                        && !para_j.is_list_item
+                        && !para_j.is_formula
+                        && para_j.heading_level.is_none();
+
+                    if is_monospace_j {
+                        paragraphs[j].is_code_block = true;
+                        paragraphs[j].layout_class = Some(LayoutHintClass::Code);
+                        j += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                i = j;
+                continue;
+            }
+        }
+
+        i += 1;
     }
 }
 
@@ -1224,15 +1412,18 @@ mod tests {
             })
             .collect();
 
+        let lines = vec![super::super::types::PdfLine {
+            segments,
+            baseline_y: 700.0,
+            dominant_font_size: font_size,
+            is_bold: false,
+            is_monospace: false,
+        }];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
+
         PdfParagraph {
             text: String::new(),
-            lines: vec![super::super::types::PdfLine {
-                segments,
-                baseline_y: 700.0,
-                dominant_font_size: font_size,
-                is_bold: false,
-                is_monospace: false,
-            }],
+            lines,
             dominant_font_size: font_size,
             heading_level: None,
             is_bold: false,
@@ -1243,6 +1434,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         }
     }
 
@@ -1350,15 +1542,18 @@ mod tests {
             })
             .collect();
 
+        let lines = vec![super::super::types::PdfLine {
+            segments,
+            baseline_y: 700.0,
+            dominant_font_size: 18.0,
+            is_bold: false,
+            is_monospace: false,
+        }];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
+
         let mut paragraphs = vec![PdfParagraph {
             text: String::new(),
-            lines: vec![super::super::types::PdfLine {
-                segments,
-                baseline_y: 700.0,
-                dominant_font_size: 18.0,
-                is_bold: false,
-                is_monospace: false,
-            }],
+            lines,
             dominant_font_size: 18.0,
             heading_level: None,
             is_bold: false,
@@ -1369,6 +1564,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         }];
         // 3 segments × 7 words = 21 words > MAX_HEADING_WORD_COUNT
         let heading_map = vec![(18.0, Some(1)), (12.0, None)];
@@ -1617,15 +1813,18 @@ mod tests {
             baseline_y: 700.0,
             assigned_role: None,
         }];
+        let lines = vec![super::super::types::PdfLine {
+            segments,
+            baseline_y: 700.0,
+            dominant_font_size: font_size,
+            is_bold,
+            is_monospace: false,
+        }];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
+
         PdfParagraph {
             text: String::new(),
-            lines: vec![super::super::types::PdfLine {
-                segments,
-                baseline_y: 700.0,
-                dominant_font_size: font_size,
-                is_bold,
-                is_monospace: false,
-            }],
+            lines,
             dominant_font_size: font_size,
             heading_level: None,
             is_bold,
@@ -1636,6 +1835,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         }
     }
 

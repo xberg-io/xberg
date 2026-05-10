@@ -107,9 +107,7 @@ pub(super) fn run_layout_for_pdf_pages(
     let mut images: Vec<DynamicImage> = Vec::with_capacity(page_count);
     let mut layout_results: Vec<PageLayoutResult> = Vec::with_capacity(page_count);
 
-    for ((page_width_pts, page_height_pts, img), (detection, _timings)) in
-        page_data.into_iter().zip(batch_results)
-    {
+    for ((page_width_pts, page_height_pts, img), (detection, _timings)) in page_data.into_iter().zip(batch_results) {
         tracing::debug!(
             detections = detection.detections.len(),
             page_width_pts,

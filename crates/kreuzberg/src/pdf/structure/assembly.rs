@@ -681,18 +681,20 @@ mod tests {
     }
 
     fn make_paragraph_at(text: &str, heading_level: Option<u8>, baseline_y: f32) -> PdfParagraph {
+        let lines = vec![PdfLine {
+            segments: vec![SegmentData {
+                baseline_y,
+                ..plain_segment(text)
+            }],
+            baseline_y,
+            dominant_font_size: 12.0,
+            is_bold: false,
+            is_monospace: false,
+        }];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         PdfParagraph {
             text: String::new(),
-            lines: vec![PdfLine {
-                segments: vec![SegmentData {
-                    baseline_y,
-                    ..plain_segment(text)
-                }],
-                baseline_y,
-                dominant_font_size: 12.0,
-                is_bold: false,
-                is_monospace: false,
-            }],
+            lines,
             dominant_font_size: 12.0,
             heading_level,
             is_bold: false,
@@ -703,6 +705,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         }
     }
 
@@ -907,5 +910,148 @@ mod tests {
         assert!(doc.elements.iter().any(|e| e.text == "Main text"));
         // Caption should be present as a separate element with italic annotation
         assert!(doc.elements.iter().any(|e| e.text == "Caption text"));
+    }
+
+    // ========================================================================
+    // W2.A: Inline emphasis (bold/italic) preservation tests
+    // ========================================================================
+
+    fn bold_segment(text: &str) -> SegmentData {
+        SegmentData {
+            is_bold: true,
+            ..plain_segment(text)
+        }
+    }
+
+    fn italic_segment(text: &str) -> SegmentData {
+        SegmentData {
+            is_italic: true,
+            ..plain_segment(text)
+        }
+    }
+
+    #[test]
+    fn test_w2a_inline_bold_and_italic_annotations_preserved() {
+        // Create a paragraph with mixed bold/italic/regular segments.
+        // Expected: annotations should mark bold and italic spans.
+        let segments = vec![
+            plain_segment("Normal "),
+            bold_segment("bold"),
+            plain_segment(" normal "),
+            italic_segment("italic"),
+            plain_segment(" normal"),
+        ];
+
+        let line = PdfLine {
+            segments,
+            baseline_y: 700.0,
+            dominant_font_size: 12.0,
+            is_bold: false,
+            is_monospace: false,
+        };
+
+        let lines = vec![line];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
+        let para = PdfParagraph {
+            text: String::new(), // Use structure tree path (empty text)
+            lines,
+            dominant_font_size: 12.0,
+            heading_level: None,
+            is_bold: false,
+            is_list_item: false,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: None,
+            caption_for: None,
+            block_bbox: None,
+            word_count,
+        };
+
+        let doc = assemble_internal_document(vec![vec![para]], &[], &[]);
+        assert_eq!(doc.elements.len(), 1);
+
+        let elem = &doc.elements[0];
+        assert!(!elem.text.is_empty(), "Paragraph text should be populated");
+
+        // Check that annotations are present for bold and italic
+        let has_bold = elem.annotations.iter().any(|a| matches!(a.kind, AnnotationKind::Bold));
+        let has_italic = elem
+            .annotations
+            .iter()
+            .any(|a| matches!(a.kind, AnnotationKind::Italic));
+
+        assert!(
+            has_bold,
+            "Should have bold annotation; text: {}, annotations: {:?}",
+            elem.text, elem.annotations
+        );
+        assert!(
+            has_italic,
+            "Should have italic annotation; text: {}, annotations: {:?}",
+            elem.text, elem.annotations
+        );
+    }
+
+    #[test]
+    fn test_w2a_consecutive_bold_segments_grouped() {
+        // Multiple consecutive bold segments should produce a single bold annotation covering all of them.
+        let segments = vec![bold_segment("This"), bold_segment(" is"), bold_segment(" bold")];
+
+        let line = PdfLine {
+            segments,
+            baseline_y: 700.0,
+            dominant_font_size: 12.0,
+            is_bold: false,
+            is_monospace: false,
+        };
+
+        let lines = vec![line];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
+        let para = PdfParagraph {
+            text: String::new(),
+            lines,
+            dominant_font_size: 12.0,
+            heading_level: None,
+            is_bold: false,
+            is_list_item: false,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: None,
+            caption_for: None,
+            block_bbox: None,
+            word_count,
+        };
+
+        let doc = assemble_internal_document(vec![vec![para]], &[], &[]);
+        let elem = &doc.elements[0];
+
+        // Should have bold annotation covering the full text (or most of it)
+        let bold_anns: Vec<_> = elem
+            .annotations
+            .iter()
+            .filter(|a| matches!(a.kind, AnnotationKind::Bold))
+            .collect();
+
+        assert!(
+            !bold_anns.is_empty(),
+            "Should have at least one bold annotation; text: {}, annotations: {:?}",
+            elem.text,
+            elem.annotations
+        );
+
+        // The bold annotation should cover a significant portion of the text
+        if !bold_anns.is_empty() {
+            let bold = bold_anns[0];
+            let coverage = (bold.end - bold.start) as usize;
+            let text_len = elem.text.len();
+            assert!(
+                coverage >= text_len / 2,
+                "Bold annotation should cover at least half the text; coverage: {}, text_len: {}",
+                coverage,
+                text_len
+            );
+        }
     }
 }

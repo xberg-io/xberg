@@ -36,6 +36,8 @@ pub(crate) struct PdfParagraph {
     /// Used for spatial matching when per-segment positions aren't available.
     /// Format: (left, bottom, right, top) in PDF coordinate space.
     pub block_bbox: Option<(f32, f32, f32, f32)>,
+    /// Cached word count, computed at construction time.
+    pub word_count: usize,
 }
 
 impl PdfParagraph {
@@ -43,6 +45,19 @@ impl PdfParagraph {
     /// structure tree path checks line-level flags).
     pub(crate) fn is_monospace_hint(&self) -> bool {
         self.is_code_block
+    }
+
+    /// Compute word count from either the full-text path or segment path.
+    pub(crate) fn compute_word_count(text: &str, lines: &[PdfLine]) -> usize {
+        if !text.is_empty() {
+            text.split_whitespace().count()
+        } else {
+            lines
+                .iter()
+                .flat_map(|l| l.segments.iter())
+                .map(|s| s.text.split_whitespace().count())
+                .sum()
+        }
     }
 }
 

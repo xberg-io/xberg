@@ -223,4 +223,3 @@ pub(crate) fn take_or_create_table_classifier(
         }
     }
 }
-

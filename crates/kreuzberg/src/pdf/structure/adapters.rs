@@ -75,6 +75,7 @@ pub(crate) fn ocr_doc_to_paragraphs(
                 })
                 .collect();
 
+            let word_count = types::PdfParagraph::compute_word_count(&e.text, &lines);
             types::PdfParagraph {
                 text: e.text.clone(),
                 lines,
@@ -88,6 +89,7 @@ pub(crate) fn ocr_doc_to_paragraphs(
                 layout_class: None,
                 caption_for: None,
                 block_bbox,
+                word_count,
             }
         })
         .collect();

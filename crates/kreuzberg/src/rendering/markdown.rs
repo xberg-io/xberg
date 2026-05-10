@@ -1,10 +1,18 @@
 //! Render an `InternalDocument` to GFM-compliant Markdown via comrak.
 
 use comrak::{Arena, Options, format_commonmark};
+use std::sync::LazyLock;
 
 use crate::types::internal::InternalDocument;
 
 use super::comrak_bridge::build_comrak_ast;
+
+static ARXIV_WATERMARK_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?:\s+\S+(?:\s+\S+){0,8})?\s*arXiv:\d{4}\.\d{4,5}(?:v\d+)?(?:\s*\[[\w.-]+\])?\s*(?:\d{1,2}\s+\w+\s+\d{4})?",
+    )
+    .expect("static regex compiles")
+});
 
 /// Render an `InternalDocument` to GFM Markdown.
 pub(crate) fn render_markdown(doc: &InternalDocument) -> String {
@@ -118,13 +126,7 @@ fn strip_arxiv_watermark_noise(mut text: String) -> String {
     let search_limit = text.floor_char_boundary(text.len().min(6000));
     let search_area = &text[..search_limit];
 
-    // Match: optional preceding short fragment + arXiv ID + optional version + category + date
-    let re = regex::Regex::new(
-        r"(?:\s+\S+(?:\s+\S+){0,8})?\s*arXiv:\d{4}\.\d{4,5}(?:v\d+)?(?:\s*\[[\w.-]+\])?\s*(?:\d{1,2}\s+\w+\s+\d{4})?",
-    )
-    .expect("valid regex");
-
-    if let Some(m) = re.find(search_area) {
+    if let Some(m) = ARXIV_WATERMARK_REGEX.find(search_area) {
         // Only strip if it looks like a watermark (appears near end of a paragraph,
         // not in the middle of a sentence about arXiv).
         let after = &search_area[m.end()..];

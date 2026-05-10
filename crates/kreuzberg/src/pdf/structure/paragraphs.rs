@@ -155,9 +155,11 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
         is_monospace: false,
     };
 
+    let lines = vec![line];
+    let word_count = PdfParagraph::compute_word_count("", &lines);
     PdfParagraph {
         text: String::new(),
-        lines: vec![line],
+        lines,
         dominant_font_size: font_size,
         heading_level: None,
         is_bold,
@@ -168,9 +170,9 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
         layout_class: None,
         caption_for: None,
         block_bbox: None,
+        word_count,
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -195,15 +197,17 @@ mod tests {
             assigned_role: None,
         }];
 
+        let lines = vec![super::super::types::PdfLine {
+            segments,
+            baseline_y: 700.0,
+            dominant_font_size: font_size,
+            is_bold: false,
+            is_monospace: false,
+        }];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         PdfParagraph {
             text: String::new(),
-            lines: vec![super::super::types::PdfLine {
-                segments,
-                baseline_y: 700.0,
-                dominant_font_size: font_size,
-                is_bold: false,
-                is_monospace: false,
-            }],
+            lines,
             dominant_font_size: font_size,
             heading_level: None,
             is_bold: false,
@@ -214,6 +218,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         }
     }
 

@@ -492,9 +492,11 @@ mod tests {
     }
 
     fn make_para(x: f32, y: f32, width: f32, height: f32) -> PdfParagraph {
+        let lines = vec![make_line(vec![make_segment("text", x, y, width, height)])];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         PdfParagraph {
             text: String::new(),
-            lines: vec![make_line(vec![make_segment("text", x, y, width, height)])],
+            lines,
             dominant_font_size: 12.0,
             heading_level: None,
             is_bold: false,
@@ -505,6 +507,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         }
     }
 
@@ -680,9 +683,11 @@ mod tests {
     fn test_no_positional_data_proportional_applies_page_furniture() {
         // Proportional matching only applies PageHeader/PageFooter (furniture)
         // because positional imprecision makes heading/list/code overrides unreliable.
+        let lines = vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         let mut paragraphs = vec![PdfParagraph {
             text: String::new(),
-            lines: vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])],
+            lines,
             dominant_font_size: 12.0,
             heading_level: None,
             is_bold: false,
@@ -693,6 +698,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         }];
 
         // Title hint IS applied via proportional matching (heading level inferred)
@@ -860,9 +866,11 @@ mod tests {
     #[test]
     fn test_separator_text_not_promoted_to_heading() {
         // A line of dashes should not become a heading even if layout says SectionHeader
+        let lines = vec![make_line(vec![make_segment("----------", 50.0, 600.0, 300.0, 16.0)])];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         let mut para = PdfParagraph {
             text: String::new(),
-            lines: vec![make_line(vec![make_segment("----------", 50.0, 600.0, 300.0, 16.0)])],
+            lines,
             dominant_font_size: 12.0,
             heading_level: None,
             is_bold: false,
@@ -873,6 +881,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         };
         let hint = make_hint(LayoutHintClass::SectionHeader, 0.9, 40.0, 598.0, 400.0, 620.0);
         apply_hint_to_paragraph(&mut para, &hint, None);
@@ -882,9 +891,11 @@ mod tests {
     #[test]
     fn test_compute_paragraph_bbox_no_positional_data() {
         // Segments with all-zero positions should return None
+        let lines = vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         let para = PdfParagraph {
             text: String::new(),
-            lines: vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])],
+            lines,
             dominant_font_size: 12.0,
             heading_level: None,
             is_bold: false,
@@ -895,15 +906,18 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         };
         assert!(compute_paragraph_bbox(&para).is_none());
     }
 
     #[test]
     fn test_compute_paragraph_bbox_with_block_bbox() {
+        let lines = vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         let para = PdfParagraph {
             text: String::new(),
-            lines: vec![make_line(vec![make_segment("text", 0.0, 0.0, 0.0, 0.0)])],
+            lines,
             dominant_font_size: 12.0,
             heading_level: None,
             is_bold: false,
@@ -914,6 +928,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: Some((50.0, 100.0, 400.0, 120.0)),
+            word_count,
         };
         let bbox = compute_paragraph_bbox(&para).unwrap();
         assert!((bbox.left - 50.0).abs() < f32::EPSILON);
@@ -924,12 +939,14 @@ mod tests {
 
     #[test]
     fn test_compute_paragraph_bbox_from_segments() {
+        let lines = vec![
+            make_line_at(vec![make_segment("A", 50.0, 700.0, 100.0, 12.0)], 700.0),
+            make_line_at(vec![make_segment("B", 60.0, 680.0, 120.0, 14.0)], 680.0),
+        ];
+        let word_count = PdfParagraph::compute_word_count("", &lines);
         let para = PdfParagraph {
             text: String::new(),
-            lines: vec![
-                make_line_at(vec![make_segment("A", 50.0, 700.0, 100.0, 12.0)], 700.0),
-                make_line_at(vec![make_segment("B", 60.0, 680.0, 120.0, 14.0)], 680.0),
-            ],
+            lines,
             dominant_font_size: 12.0,
             heading_level: None,
             is_bold: false,
@@ -940,6 +957,7 @@ mod tests {
             layout_class: None,
             caption_for: None,
             block_bbox: None,
+            word_count,
         };
         let bbox = compute_paragraph_bbox(&para).unwrap();
         assert!((bbox.left - 50.0).abs() < f32::EPSILON);

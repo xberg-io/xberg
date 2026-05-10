@@ -195,7 +195,6 @@ pub(crate) fn extract_all_from_oxide_document(
     ))
 }
 
-
 #[cfg(test)]
 mod tests {
 
@@ -295,5 +294,4 @@ mod tests {
         assert_eq!(deserialized.x1, 100.75);
         assert_eq!(deserialized.y1, 200.5);
     }
-
 }

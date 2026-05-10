@@ -17,4 +17,3 @@ pub struct BoundingBox {
     /// Bottom y-coordinate
     pub bottom: f32,
 }
-

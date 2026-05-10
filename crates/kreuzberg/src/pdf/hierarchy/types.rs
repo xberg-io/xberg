@@ -42,4 +42,3 @@ pub struct SegmentData {
     /// when the heading level is unknown and must be inferred via font-size clustering.
     pub assigned_role: Option<u8>,
 }
-
