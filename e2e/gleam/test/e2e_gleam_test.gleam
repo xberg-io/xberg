@@ -3,6 +3,6 @@ import gleeunit
 import e2e_gleam
 
 pub fn main() {
-  let _ = e2e_gleam.start_kreuzberg()
+  let _ = e2e_gleam.start_app()
   gleeunit.main()
 }

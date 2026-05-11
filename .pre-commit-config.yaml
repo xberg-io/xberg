@@ -72,6 +72,7 @@ repos:
             "--exclude=kreuzberg-php",
             "--exclude=kreuzberg-wasm",
             "--exclude=kreuzberg-dart",
+            "--exclude=kreuzberg-swift",
             "--exclude=kreuzberg_nif",
             "--all-features",
             "--all-targets",
@@ -89,6 +90,7 @@ repos:
             "--exclude=kreuzberg-php",
             "--exclude=kreuzberg-wasm",
             "--exclude=kreuzberg-dart",
+            "--exclude=kreuzberg-swift",
             "--exclude=kreuzberg_nif",
             "--all-features",
             "--all-targets",
@@ -189,7 +191,7 @@ repos:
       - id: cpd
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.15.31
+    rev: v0.15.32
     hooks:
       - id: alef-verify
       - id: alef-sync-versions

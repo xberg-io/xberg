@@ -25,7 +25,7 @@ pub fn render_pdf_page_to_png(
     dpi: Option<i32>,
     password: Option<&str>,
 ) -> Result<Vec<u8>> {
-    let mut doc = pdf_oxide::PdfDocument::from_bytes(pdf_bytes.to_vec()).map_err(|e| KreuzbergError::Parsing {
+    let doc = pdf_oxide::PdfDocument::from_bytes(pdf_bytes.to_vec()).map_err(|e| KreuzbergError::Parsing {
         message: format!("Failed to open PDF: {e}"),
         source: None,
     })?;
@@ -52,7 +52,7 @@ pub fn render_pdf_page_to_png(
     let render_dpi = dpi.unwrap_or(150).max(1) as u32;
     let options = pdf_oxide::rendering::RenderOptions::with_dpi(render_dpi);
     let rendered =
-        pdf_oxide::rendering::render_page(&mut doc, page_index, &options).map_err(|e| KreuzbergError::Parsing {
+        pdf_oxide::rendering::render_page(&doc, page_index, &options).map_err(|e| KreuzbergError::Parsing {
             message: format!("Failed to render page {page_index}: {e}"),
             source: None,
         })?;

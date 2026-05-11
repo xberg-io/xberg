@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const test_step = b.step("test", "Run tests");
     const ffi_path = b.option([]const u8, "ffi_path", "Path to directory containing libkreuzberg_ffi") orelse "../../target/debug";
-    const ffi_include = b.option([]const u8, "ffi_include_path", "Path to directory containing kreuzberg FFI header") orelse "../../crates/kreuzberg-ffi/include";
+    const ffi_include = b.option([]const u8, "ffi_include_path", "Path to directory containing FFI header") orelse "../../crates/kreuzberg-ffi/include";
 
     const kreuzberg_module = b.addModule("kreuzberg", .{
         .root_source_file = b.path("../../packages/zig/src/kreuzberg.zig"),

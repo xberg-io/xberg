@@ -18,11 +18,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  extractBytesSync,
-  listDocumentExtractors,
-  listRenderers,
-} from "kreuzberg";
+import { extractBytesSync, listDocumentExtractors, listRenderers } from "kreuzberg";
 
 // The register/unregister/clear functions are exported by the native module but
 // not re-typed in the public TypeScript wrapper.  Import the native binding
@@ -57,8 +53,12 @@ function makeExtractor(name: string, mimeType = "application/x-test"): object {
   return {
     name: (): string => name,
     version: (): string => "0.0.1",
-    initialize: (): void => { /* no-op */ },
-    shutdown: (): void => { /* no-op */ },
+    initialize: (): void => {
+      /* no-op */
+    },
+    shutdown: (): void => {
+      /* no-op */
+    },
     supported_mime_types: (): string[] => [mimeType],
     extract_bytes: (_content: Uint8Array, _mimeType: string, _configJson: string): string =>
       JSON.stringify({
@@ -76,8 +76,12 @@ function makeRenderer(name: string): object {
   return {
     name: (): string => name,
     version: (): string => "0.0.1",
-    initialize: (): void => { /* no-op */ },
-    shutdown: (): void => { /* no-op */ },
+    initialize: (): void => {
+      /* no-op */
+    },
+    shutdown: (): void => {
+      /* no-op */
+    },
     render: (_docJson: string): string => "rendered",
   };
 }
@@ -122,11 +126,7 @@ describe("plugins: document extractor registry", () => {
 
     // Must not throw; falls back to the built-in plain-text extractor.
     const encoded = new TextEncoder().encode("hello world");
-    const result = extractBytesSync(
-      encoded,
-      "text/plain",
-      undefined,
-    );
+    const result = extractBytesSync(encoded, "text/plain", undefined);
     expect(result).toBeDefined();
   });
 });

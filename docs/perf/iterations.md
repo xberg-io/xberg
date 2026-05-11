@@ -41,21 +41,22 @@ Per-iteration tracker for Kreuzberg perf optimization rounds. Append one row per
 | 9 | 0.02% | `kreuzberg::rendering::markdown::render_markdown` |
 
 **Breakdown by crate (aggregate, 88,524 total samples):**
-- system/other: 48.4%
-- std/core/alloc: 25.3%
-- benchmark_harness (quality scorer): 9.9%
-- pdf_oxide: 9.3%
-- rayon: 3.7%
-- **kreuzberg: 3.4%**
-- tokio: 0.1%
 
-**Stopping condition:** kreuzberg layer accounts for only 3.4% of total wall time. The previous queue candidates (fuse_paragraphs, text_repair, normalize_key, classify::merge_consecutive_pages) do not appear in the top-25 kreuzberg frames — confirmed not hot on the baseline pipeline path. Dominant cost is pdf_oxide text/table extraction (9.3%) + system allocator + OS overhead (48.4%) — these are outside kreuzberg's optimization surface.
+- System/other: 48.4%
+- Std/core/alloc: 25.3%
+- Benchmark_harness (quality scorer): 9.9%
+- Pdf_oxide: 9.3%
+- Rayon: 3.7%
+- **Kreuzberg: 3.4%**
+- Tokio: 0.1%
+
+**Stopping condition:** Kreuzberg layer accounts for only 3.4% of total wall time. The previous queue candidates (fuse_paragraphs, text_repair, normalize_key, classify::merge_consecutive_pages) do not appear in the top-25 Kreuzberg frames — confirmed not hot on the baseline pipeline path. Dominant cost is pdf_oxide text/table extraction (9.3%) + system allocator + OS overhead (48.4%) — these are outside kreuzberg's optimization surface.
 
 **Further kreuzberg-layer CPU gains require upstream pdf_oxide work** (table extraction at 0.50% is the single largest kreuzberg-visible hotspot; it delegates to pdf_oxide). Cache I/O (scan_cache_directory) at 0.09% is the next actionable target if cache efficiency becomes a priority, but it's below the noise floor for extraction pipelines.
 
 ### Previous blockers resolved
 
-- Symbol-strip blocker from `flamegraphs/61170f7f6/baseline.svg` is fixed: `.task/workflows/benchmark.yml` patched from `--features full` → `--features all` (kreuzberg-cli has no `full` feature). The `fa356cb7e` flamegraph has 87 kreuzberg symbols resolved.
+- Symbol-strip blocker from `flamegraphs/61170f7f6/baseline.svg` is fixed: `.task/workflows/benchmark.yml` patched from `--features full` → `--features all` (kreuzberg-cli has no `full` feature). The `fa356cb7e` flamegraph has 87 Kreuzberg symbols resolved.
 
 ### Post-M RSS anchor
 

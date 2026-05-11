@@ -44,7 +44,7 @@ pub(super) fn run_layout_for_pdf_pages(
     use pdf_oxide::rendering::RenderOptions;
 
     // --- 1. Open document and render all pages ---
-    let mut doc = pdf_oxide::PdfDocument::from_bytes(content.to_vec()).map_err(|e| KreuzbergError::Parsing {
+    let doc = pdf_oxide::PdfDocument::from_bytes(content.to_vec()).map_err(|e| KreuzbergError::Parsing {
         message: format!("layout runner: failed to open PDF: {e}"),
         source: None,
     })?;
@@ -73,12 +73,11 @@ pub(super) fn run_layout_for_pdf_pages(
             .map(|(llx, lly, urx, ury)| ((urx - llx).abs(), (ury - lly).abs()))
             .unwrap_or((612.0, 792.0)); // Letter fallback
 
-        let rendered = pdf_oxide::rendering::render_page(&mut doc, page_idx, &render_opts).map_err(|e| {
-            KreuzbergError::Parsing {
+        let rendered =
+            pdf_oxide::rendering::render_page(&doc, page_idx, &render_opts).map_err(|e| KreuzbergError::Parsing {
                 message: format!("layout runner: failed to render page {}: {e}", page_idx + 1),
                 source: None,
-            }
-        })?;
+            })?;
 
         // Decode to DynamicImage, convert to RGB immediately, then drop DynamicImage
         // so its pixel buffer is freed before processing the next page.

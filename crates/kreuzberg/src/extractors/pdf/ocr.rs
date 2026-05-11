@@ -280,7 +280,7 @@ pub(crate) fn render_selected_pages_for_ocr(
 ) -> crate::Result<Vec<(usize, image::DynamicImage)>> {
     use pdf_oxide::rendering::{RenderOptions, render_page};
 
-    let mut doc = pdf_oxide::PdfDocument::from_bytes(content.to_vec()).map_err(|e| crate::KreuzbergError::Parsing {
+    let doc = pdf_oxide::PdfDocument::from_bytes(content.to_vec()).map_err(|e| crate::KreuzbergError::Parsing {
         message: format!("Failed to open PDF for rendering: {}", e),
         source: None,
     })?;
@@ -303,7 +303,7 @@ pub(crate) fn render_selected_pages_for_ocr(
             );
             continue;
         }
-        let rendered = render_page(&mut doc, idx, &render_options).map_err(|e| crate::KreuzbergError::Parsing {
+        let rendered = render_page(&doc, idx, &render_options).map_err(|e| crate::KreuzbergError::Parsing {
             message: format!("Failed to render PDF page {}: {}", idx + 1, e),
             source: None,
         })?;
@@ -674,7 +674,7 @@ pub(crate) async fn extract_with_ocr(
                     message: "PDF content is required for OCR rendering but was not provided".to_string(),
                     source: None,
                 })?;
-                let mut doc = pdf_oxide::PdfDocument::from_bytes(pdf_bytes.to_vec()).map_err(|e| {
+                let doc = pdf_oxide::PdfDocument::from_bytes(pdf_bytes.to_vec()).map_err(|e| {
                     crate::KreuzbergError::Parsing {
                         message: format!("Failed to open PDF for OCR batch rendering: {:?}", e),
                         source: None,
@@ -684,7 +684,7 @@ pub(crate) async fn extract_with_ocr(
                 let mut batch_encoded: Vec<(usize, Arc<Vec<u8>>, u32, u32)> =
                     Vec::with_capacity(batch_end - batch_start);
                 for i in batch_start..batch_end {
-                    let rendered = pdf_oxide::rendering::render_page(&mut doc, i, &render_opts).map_err(|e| {
+                    let rendered = pdf_oxide::rendering::render_page(&doc, i, &render_opts).map_err(|e| {
                         crate::KreuzbergError::Parsing {
                             message: format!("Failed to render page {} for OCR: {:?}", i, e),
                             source: None,

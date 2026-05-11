@@ -345,8 +345,10 @@ pub struct HwpImage {
     pub data: Vec<u8>,
 }
 
-#[frb(mirror(StreamReader))]
-pub struct StreamReader {}
+#[frb(opaque)]
+pub struct StreamReader {
+    pub(crate) inner: kreuzberg::StreamReader,
+}
 
 #[frb(mirror(ImageOcrResult))]
 pub struct ImageOcrResult {
@@ -503,8 +505,10 @@ pub struct CoreProperties {
     pub last_printed: Option<String>,
 }
 
-#[frb(mirror(CustomProperties))]
-pub struct CustomProperties {}
+#[frb(opaque)]
+pub struct CustomProperties {
+    pub(crate) inner: kreuzberg::CustomProperties,
+}
 
 #[frb(mirror(OdtProperties))]
 pub struct OdtProperties {
@@ -541,8 +545,10 @@ pub struct SecurityLimits {
     pub max_table_cells: i64,
 }
 
-#[frb(mirror(ZipBombValidator))]
-pub struct ZipBombValidator {}
+#[frb(opaque)]
+pub struct ZipBombValidator {
+    pub(crate) inner: kreuzberg::ZipBombValidator,
+}
 
 #[frb(mirror(TokenReductionConfig))]
 pub struct TokenReductionConfig {
@@ -1309,17 +1315,25 @@ pub struct Uri {
     pub kind: UriKind,
 }
 
-#[frb(mirror(StringBufferPool))]
-pub struct StringBufferPool {}
+#[frb(opaque)]
+pub struct StringBufferPool {
+    pub(crate) inner: kreuzberg::StringBufferPool,
+}
 
-#[frb(mirror(ByteBufferPool))]
-pub struct ByteBufferPool {}
+#[frb(opaque)]
+pub struct ByteBufferPool {
+    pub(crate) inner: kreuzberg::ByteBufferPool,
+}
 
-#[frb(mirror(TracingLayer))]
-pub struct TracingLayer {}
+#[frb(opaque)]
+pub struct TracingLayer {
+    pub(crate) inner: kreuzberg::TracingLayer,
+}
 
-#[frb(mirror(ApiDoc))]
-pub struct ApiDoc {}
+#[frb(opaque)]
+pub struct ApiDoc {
+    pub(crate) inner: kreuzberg::ApiDoc,
+}
 
 #[frb(mirror(InfoResponse))]
 pub struct InfoResponse {
@@ -1327,8 +1341,10 @@ pub struct InfoResponse {
     pub rust_backend: bool,
 }
 
-#[frb(mirror(ExtractResponse))]
-pub struct ExtractResponse {}
+#[frb(opaque)]
+pub struct ExtractResponse {
+    pub(crate) inner: kreuzberg::ExtractResponse,
+}
 
 #[frb(mirror(EmbedRequest))]
 pub struct EmbedRequest {
@@ -1524,8 +1540,10 @@ pub struct RecognizedTable {
     pub markdown: String,
 }
 
-#[frb(mirror(TessdataManager))]
-pub struct TessdataManager {}
+#[frb(opaque)]
+pub struct TessdataManager {
+    pub(crate) inner: kreuzberg::TessdataManager,
+}
 
 #[frb(mirror(PaddleOcrConfig))]
 pub struct PaddleOcrConfig {
@@ -5805,16 +5823,14 @@ pub fn list_validators() -> Result<Vec<String>, String> {
 /// - `KreuzbergError.Embedding` if the preset name is unknown, model download fails,
 ///   or the blocking inference task panics
 pub async fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<Vec<Vec<f64>>, String> {
-    kreuzberg::embed_texts_async(texts, unsafe {
-        std::mem::transmute::<&EmbeddingConfig, &kreuzberg::EmbeddingConfig>(&config)
-    })
-    .await
-    .map(|v| {
-        v.into_iter()
-            .map(|row| row.into_iter().map(|x| x as f64).collect::<Vec<_>>())
-            .collect::<Vec<_>>()
-    })
-    .map_err(|e| e.to_string())
+    kreuzberg::embed_texts_async(texts, &kreuzberg::EmbeddingConfig::from(config))
+        .await
+        .map(|v| {
+            v.into_iter()
+                .map(|row| row.into_iter().map(|x| x as f64).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        })
+        .map_err(|e| e.to_string())
 }
 
 /// Render a single PDF page to PNG bytes.
@@ -5856,15 +5872,13 @@ pub fn detect_mime_type(path: String, check_exists: bool) -> Result<String, Stri
 ///
 /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
 pub fn embed_texts(texts: Vec<String>, config: EmbeddingConfig) -> Result<Vec<Vec<f64>>, String> {
-    kreuzberg::embed_texts(texts, unsafe {
-        std::mem::transmute::<&EmbeddingConfig, &kreuzberg::EmbeddingConfig>(&config)
-    })
-    .map(|v| {
-        v.into_iter()
-            .map(|row| row.into_iter().map(|x| x as f64).collect::<Vec<_>>())
-            .collect::<Vec<_>>()
-    })
-    .map_err(|e| e.to_string())
+    kreuzberg::embed_texts(texts, &kreuzberg::EmbeddingConfig::from(config))
+        .map(|v| {
+            v.into_iter()
+                .map(|row| row.into_iter().map(|x| x as f64).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        })
+        .map_err(|e| e.to_string())
 }
 
 /// Get an embedding preset by name.

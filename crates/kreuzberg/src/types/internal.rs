@@ -771,24 +771,13 @@ mod tests {
         doc.push_element(InternalElement::text(ElementKind::Title, "T", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Title);
 
-        doc.push_element(InternalElement::text(
-            ElementKind::Heading { level: 1 },
-            "H1",
-            1,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::Heading { level: 1 }
-        );
+        doc.push_element(InternalElement::text(ElementKind::Heading { level: 1 }, "H1", 1));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Heading { level: 1 });
 
         doc.push_element(InternalElement::text(ElementKind::Paragraph, "P", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Paragraph);
 
-        doc.push_element(InternalElement::text(
-            ElementKind::ListItem { ordered: false },
-            "li",
-            2,
-        ));
+        doc.push_element(InternalElement::text(ElementKind::ListItem { ordered: false }, "li", 2));
         assert_eq!(
             doc.elements.last().unwrap().kind,
             ElementKind::ListItem { ordered: false }
@@ -800,15 +789,8 @@ mod tests {
         doc.push_element(InternalElement::text(ElementKind::Formula, "E=mc^2", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Formula);
 
-        doc.push_element(InternalElement::text(
-            ElementKind::FootnoteDefinition,
-            "note text",
-            0,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::FootnoteDefinition
-        );
+        doc.push_element(InternalElement::text(ElementKind::FootnoteDefinition, "note text", 0));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::FootnoteDefinition);
 
         doc.push_element(InternalElement::text(ElementKind::FootnoteRef, "1", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::FootnoteRef);
@@ -816,35 +798,14 @@ mod tests {
         doc.push_element(InternalElement::text(ElementKind::Citation, "Smith 2020", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Citation);
 
-        doc.push_element(InternalElement::text(
-            ElementKind::Slide { number: 3 },
-            "slide 3",
-            0,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::Slide { number: 3 }
-        );
+        doc.push_element(InternalElement::text(ElementKind::Slide { number: 3 }, "slide 3", 0));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Slide { number: 3 });
 
-        doc.push_element(InternalElement::text(
-            ElementKind::DefinitionTerm,
-            "term",
-            0,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::DefinitionTerm
-        );
+        doc.push_element(InternalElement::text(ElementKind::DefinitionTerm, "term", 0));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::DefinitionTerm);
 
-        doc.push_element(InternalElement::text(
-            ElementKind::DefinitionDescription,
-            "desc",
-            0,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::DefinitionDescription
-        );
+        doc.push_element(InternalElement::text(ElementKind::DefinitionDescription, "desc", 0));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::DefinitionDescription);
 
         doc.push_element(InternalElement::text(ElementKind::Admonition, "Note:", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Admonition);
@@ -852,22 +813,11 @@ mod tests {
         doc.push_element(InternalElement::text(ElementKind::RawBlock, "<raw/>", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::RawBlock);
 
-        doc.push_element(InternalElement::text(
-            ElementKind::MetadataBlock,
-            "---",
-            0,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::MetadataBlock
-        );
+        doc.push_element(InternalElement::text(ElementKind::MetadataBlock, "---", 0));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::MetadataBlock);
 
         // --- container markers ----------------------------------------------
-        doc.push_element(InternalElement::text(
-            ElementKind::ListStart { ordered: true },
-            "",
-            0,
-        ));
+        doc.push_element(InternalElement::text(ElementKind::ListStart { ordered: true }, "", 0));
         assert_eq!(
             doc.elements.last().unwrap().kind,
             ElementKind::ListStart { ordered: true }
@@ -889,25 +839,11 @@ mod tests {
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::GroupEnd);
 
         // --- structural -----------------------------------------------------
-        doc.push_element(InternalElement::text(
-            ElementKind::Table { table_index: 0 },
-            "",
-            0,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::Table { table_index: 0 }
-        );
+        doc.push_element(InternalElement::text(ElementKind::Table { table_index: 0 }, "", 0));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Table { table_index: 0 });
 
-        doc.push_element(InternalElement::text(
-            ElementKind::Image { image_index: 1 },
-            "",
-            0,
-        ));
-        assert_eq!(
-            doc.elements.last().unwrap().kind,
-            ElementKind::Image { image_index: 1 }
-        );
+        doc.push_element(InternalElement::text(ElementKind::Image { image_index: 1 }, "", 0));
+        assert_eq!(doc.elements.last().unwrap().kind, ElementKind::Image { image_index: 1 });
 
         doc.push_element(InternalElement::text(ElementKind::PageBreak, "", 0));
         assert_eq!(doc.elements.last().unwrap().kind, ElementKind::PageBreak);
@@ -919,52 +855,28 @@ mod tests {
             OcrElementLevel::Block,
             OcrElementLevel::Page,
         ] {
-            doc.push_element(InternalElement::text(
-                ElementKind::OcrText { level },
-                "ocr",
-                0,
-            ));
-            assert_eq!(
-                doc.elements.last().unwrap().kind,
-                ElementKind::OcrText { level }
-            );
+            doc.push_element(InternalElement::text(ElementKind::OcrText { level }, "ocr", 0));
+            assert_eq!(doc.elements.last().unwrap().kind, ElementKind::OcrText { level });
         }
 
         // --- full round-trip ------------------------------------------------
-        let json =
-            serde_json::to_string(&doc).expect("serialize all-variant InternalDocument");
-        let restored: InternalDocument =
-            serde_json::from_str(&json).expect("deserialize all-variant InternalDocument");
+        let json = serde_json::to_string(&doc).expect("serialize all-variant InternalDocument");
+        let restored: InternalDocument = serde_json::from_str(&json).expect("deserialize all-variant InternalDocument");
 
         // 15 text-carrying + 6 container + 3 structural + 4 OCR levels = 28
         assert_eq!(restored.elements.len(), doc.elements.len());
 
         // Spot-check a selection of deserialized kinds across all groups.
         assert_eq!(restored.elements[0].kind, ElementKind::Title);
-        assert_eq!(
-            restored.elements[5].kind,
-            ElementKind::Formula
-        );
-        assert_eq!(
-            restored.elements[9].kind,
-            ElementKind::Slide { number: 3 }
-        );
-        assert_eq!(
-            restored.elements[14].kind,
-            ElementKind::MetadataBlock
-        );
-        assert_eq!(
-            restored.elements[16].kind,
-            ElementKind::ListEnd
-        );
+        assert_eq!(restored.elements[5].kind, ElementKind::Formula);
+        assert_eq!(restored.elements[9].kind, ElementKind::Slide { number: 3 });
+        assert_eq!(restored.elements[14].kind, ElementKind::MetadataBlock);
+        assert_eq!(restored.elements[16].kind, ElementKind::ListEnd);
         assert_eq!(restored.elements[17].kind, ElementKind::QuoteStart);
         assert_eq!(restored.elements[18].kind, ElementKind::QuoteEnd);
         assert_eq!(restored.elements[19].kind, ElementKind::GroupStart);
         assert_eq!(restored.elements[20].kind, ElementKind::GroupEnd);
-        assert_eq!(
-            restored.elements[21].kind,
-            ElementKind::Table { table_index: 0 }
-        );
+        assert_eq!(restored.elements[21].kind, ElementKind::Table { table_index: 0 });
         assert_eq!(restored.elements[23].kind, ElementKind::PageBreak);
         assert_eq!(
             restored.elements[24].kind,
@@ -1002,28 +914,17 @@ mod tests {
             kind: RelationshipKind::FootnoteReference,
         });
 
-        let json =
-            serde_json::to_string(&doc).expect("serialize RelationshipTarget variants");
-        let restored: InternalDocument =
-            serde_json::from_str(&json).expect("deserialize RelationshipTarget variants");
+        let json = serde_json::to_string(&doc).expect("serialize RelationshipTarget variants");
+        let restored: InternalDocument = serde_json::from_str(&json).expect("deserialize RelationshipTarget variants");
 
         assert_eq!(restored.relationships.len(), 2);
-        assert_eq!(
-            restored.relationships[0].target,
-            RelationshipTarget::Index(1)
-        );
+        assert_eq!(restored.relationships[0].target, RelationshipTarget::Index(1));
         assert_eq!(
             restored.relationships[1].target,
             RelationshipTarget::Key("anchor-abc".to_string())
         );
         // Verify kind field also survives
-        assert_eq!(
-            restored.relationships[0].kind,
-            RelationshipKind::CrossReference
-        );
-        assert_eq!(
-            restored.relationships[1].kind,
-            RelationshipKind::FootnoteReference
-        );
+        assert_eq!(restored.relationships[0].kind, RelationshipKind::CrossReference);
+        assert_eq!(restored.relationships[1].kind, RelationshipKind::FootnoteReference);
     }
 }

@@ -14,7 +14,6 @@ A Renderer bridge object must expose:
   - render(doc_json) -> str
 """
 
-import pytest
 from kreuzberg import (
     clear_document_extractors,
     clear_renderers,

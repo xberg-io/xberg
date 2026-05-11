@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.15.30"
+alef_version = "0.15.32"
 languages = [
   "python",
   "node",
@@ -2351,4 +2351,4 @@ registry_getter = "kreuzberg::plugins::registry::get_renderer_registry"
 register_fn = "register_renderer"
 unregister_fn = "unregister_renderer"
 clear_fn = "clear_renderers"
-exclude_languages = ["r"]
+exclude_languages = ["r", "swift"]

@@ -2513,26 +2513,9 @@ mod ffi {
     extern "Rust" {
         type OcrBackendBox;
         fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox>;
-        fn ocr_backend_call_process_image(
-            this: &OcrBackendBox,
-            image_bytes: Vec<u8>,
-            config: OcrConfig,
-        ) -> Result<ExtractionResult, String>;
-        fn ocr_backend_call_process_image_file(
-            this: &OcrBackendBox,
-            path: String,
-            config: OcrConfig,
-        ) -> Result<ExtractionResult, String>;
+        fn ocr_backend_call_process_image(this: &OcrBackendBox, image_bytes: Vec<u8>, config: OcrConfig) -> String;
         fn ocr_backend_call_supports_language(this: &OcrBackendBox, lang: String) -> bool;
         fn ocr_backend_call_backend_type(this: &OcrBackendBox) -> OcrBackendType;
-        fn ocr_backend_call_supported_languages(this: &OcrBackendBox) -> Vec<String>;
-        fn ocr_backend_call_supports_table_detection(this: &OcrBackendBox) -> bool;
-        fn ocr_backend_call_supports_document_processing(this: &OcrBackendBox) -> bool;
-        fn ocr_backend_call_process_document(
-            this: &OcrBackendBox,
-            path: String,
-            config: OcrConfig,
-        ) -> Result<ExtractionResult, String>;
     }
 
     extern "Rust" {
@@ -2542,38 +2525,21 @@ mod ffi {
             this: &PostProcessorBox,
             result: ExtractionResult,
             config: ExtractionConfig,
-        ) -> Result<(), String>;
+        ) -> String;
         fn post_processor_call_processing_stage(this: &PostProcessorBox) -> ProcessingStage;
-        fn post_processor_call_should_process(
-            this: &PostProcessorBox,
-            result: ExtractionResult,
-            config: ExtractionConfig,
-        ) -> bool;
-        fn post_processor_call_estimated_duration_ms(this: &PostProcessorBox, result: ExtractionResult) -> u64;
-        fn post_processor_call_priority(this: &PostProcessorBox) -> i32;
     }
 
     extern "Rust" {
         type ValidatorBox;
         fn alef_phantom_vec_validator() -> Vec<ValidatorBox>;
-        fn validator_call_validate(
-            this: &ValidatorBox,
-            result: ExtractionResult,
-            config: ExtractionConfig,
-        ) -> Result<(), String>;
-        fn validator_call_should_validate(
-            this: &ValidatorBox,
-            result: ExtractionResult,
-            config: ExtractionConfig,
-        ) -> bool;
-        fn validator_call_priority(this: &ValidatorBox) -> i32;
+        fn validator_call_validate(this: &ValidatorBox, result: ExtractionResult, config: ExtractionConfig) -> String;
     }
 
     extern "Rust" {
         type EmbeddingBackendBox;
         fn alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox>;
         fn embedding_backend_call_dimensions(this: &EmbeddingBackendBox) -> usize;
-        fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> Result<String, String>;
+        fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> String;
     }
 
     extern "Rust" {
@@ -2584,23 +2550,8 @@ mod ffi {
             content: Vec<u8>,
             mime_type: String,
             config: ExtractionConfig,
-        ) -> Result<InternalDocument, String>;
-        fn document_extractor_call_extract_file(
-            this: &DocumentExtractorBox,
-            path: String,
-            mime_type: String,
-            config: ExtractionConfig,
-        ) -> Result<InternalDocument, String>;
+        ) -> String;
         fn document_extractor_call_supported_mime_types(this: &DocumentExtractorBox) -> Vec<String>;
-        fn document_extractor_call_priority(this: &DocumentExtractorBox) -> i32;
-        fn document_extractor_call_can_handle(this: &DocumentExtractorBox, path: String, mime_type: String) -> bool;
-        fn document_extractor_call_as_sync_extractor(this: &DocumentExtractorBox) -> String;
-    }
-
-    extern "Rust" {
-        type RendererBox;
-        fn alef_phantom_vec_renderer() -> Vec<RendererBox>;
-        fn renderer_call_render(this: &RendererBox, doc: InternalDocument) -> Result<String, String>;
     }
 
     extern "Rust" {
@@ -2646,15 +2597,6 @@ mod ffi {
         fn unregister_document_extractor(name: String) -> Result<(), String>;
         #[swift_bridge(swift_name = "clearDocumentExtractors")]
         fn clear_document_extractors() -> Result<(), String>;
-    }
-
-    extern "Rust" {
-        #[swift_bridge(swift_name = "registerRenderer")]
-        fn register_renderer(swift_box: SwiftRendererBox) -> Result<(), String>;
-        #[swift_bridge(swift_name = "unregisterRenderer")]
-        fn unregister_renderer(name: String) -> Result<(), String>;
-        #[swift_bridge(swift_name = "clearRenderers")]
-        fn clear_renderers() -> Result<(), String>;
     }
 
     extern "Swift" {
@@ -2719,15 +2661,6 @@ mod ffi {
         fn alef_priority(&self) -> i32;
         fn alef_can_handle(&self, path: String, mime_type: String) -> bool;
         fn alef_as_sync_extractor(&self) -> String;
-    }
-
-    extern "Swift" {
-        type SwiftRendererBox;
-        fn alef_name(&self) -> String;
-        fn alef_version(&self) -> String;
-        fn alef_initialize(&self) -> String;
-        fn alef_shutdown(&self) -> String;
-        fn alef_render(&self, doc: String) -> String;
     }
 
     extern "Rust" {
@@ -7719,10 +7652,10 @@ impl ArchiveMetadata {
     }
 }
 
-pub struct ImageMetadata(pub kreuzberg::extraction::image::ImageMetadata);
+pub struct ImageMetadata(pub kreuzberg::ImageMetadata);
 impl ImageMetadata {
     pub fn new(width: u32, height: u32, format: String, exif: String) -> ImageMetadata {
-        let mut __target: kreuzberg::extraction::image::ImageMetadata = ::std::default::Default::default();
+        let mut __target: kreuzberg::ImageMetadata = ::std::default::Default::default();
         __target.width = width;
         __target.height = height;
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&format) {
@@ -9048,10 +8981,10 @@ impl HierarchicalBlock {
     }
 }
 
-pub struct Table(pub kreuzberg::extraction::docx::parser::Table);
+pub struct Table(pub kreuzberg::Table);
 impl Table {
     pub fn new(cells: String, markdown: String, page_number: usize, bounding_box: Option<String>) -> Table {
-        let mut __target: kreuzberg::extraction::docx::parser::Table = ::std::default::Default::default();
+        let mut __target: kreuzberg::Table = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&cells) {
             if let Ok(t) = ::serde_json::from_value(v) {
                 __target.cells = t;
@@ -9089,10 +9022,10 @@ impl Table {
     }
 }
 
-pub struct TableCell(pub kreuzberg::extraction::docx::parser::TableCell);
+pub struct TableCell(pub kreuzberg::TableCell);
 impl TableCell {
     pub fn new(content: String, row_span: usize, col_span: usize, is_header: bool) -> TableCell {
-        let mut __target: kreuzberg::extraction::docx::parser::TableCell = ::std::default::Default::default();
+        let mut __target: kreuzberg::TableCell = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&content) {
             if let Ok(t) = ::serde_json::from_value(v) {
                 __target.content = t;
@@ -11031,38 +10964,19 @@ pub struct OcrBackendBox(pub Box<dyn kreuzberg::plugins::OcrBackend + Send + Syn
 pub fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox> {
     Vec::new()
 }
-pub fn ocr_backend_call_process_image(
-    this: &OcrBackendBox,
-    image_bytes: Vec<u8>,
-    config: OcrConfig,
-) -> Result<ExtractionResult, String> {
+pub fn ocr_backend_call_process_image(this: &OcrBackendBox, image_bytes: Vec<u8>, config: OcrConfig) -> String {
     ::tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("build tokio runtime")
         .block_on(async {
-            this.0
-                .process_image(&image_bytes, &config.0)
-                .await
-                .map(|v| ExtractionResult(v))
-                .map_err(|e| e.to_string())
-        })
-}
-pub fn ocr_backend_call_process_image_file(
-    this: &OcrBackendBox,
-    path: String,
-    config: OcrConfig,
-) -> Result<ExtractionResult, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            this.0
-                .process_image_file(std::path::Path::new(&path), &config.0)
-                .await
-                .map(|v| ExtractionResult(v))
-                .map_err(|e| e.to_string())
+            match this.0.process_image(&image_bytes, &config.0).await {
+                Ok(v) => format!(
+                    "{{\"ok\": {}}}",
+                    serde_json::to_string(&ExtractionResult(v)).expect("serializable return")
+                ),
+                Err(e) => format!("{{\"err\": \"{}\"}}", e),
+            }
         })
 }
 pub fn ocr_backend_call_supports_language(this: &OcrBackendBox, lang: String) -> bool {
@@ -11070,32 +10984,6 @@ pub fn ocr_backend_call_supports_language(this: &OcrBackendBox, lang: String) ->
 }
 pub fn ocr_backend_call_backend_type(this: &OcrBackendBox) -> OcrBackendType {
     OcrBackendType::from(this.0.backend_type())
-}
-pub fn ocr_backend_call_supported_languages(this: &OcrBackendBox) -> Vec<String> {
-    this.0.supported_languages()
-}
-pub fn ocr_backend_call_supports_table_detection(this: &OcrBackendBox) -> bool {
-    this.0.supports_table_detection()
-}
-pub fn ocr_backend_call_supports_document_processing(this: &OcrBackendBox) -> bool {
-    this.0.supports_document_processing()
-}
-pub fn ocr_backend_call_process_document(
-    this: &OcrBackendBox,
-    path: String,
-    config: OcrConfig,
-) -> Result<ExtractionResult, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            this.0
-                .process_document(std::path::Path::new(&path), &config.0)
-                .await
-                .map(|v| ExtractionResult(v))
-                .map_err(|e| e.to_string())
-        })
 }
 
 pub struct PostProcessorBox(pub Box<dyn kreuzberg::plugins::PostProcessor + Send + Sync>);
@@ -11107,33 +10995,20 @@ pub fn post_processor_call_process(
     this: &PostProcessorBox,
     mut result: ExtractionResult,
     config: ExtractionConfig,
-) -> Result<(), String> {
+) -> String {
     ::tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("build tokio runtime")
         .block_on(async {
-            this.0
-                .process(&mut result.0, &config.0)
-                .await
-                .map_err(|e| e.to_string())
+            match this.0.process(&mut result.0, &config.0).await {
+                Ok(v) => format!("{{\"ok\": {}}}", "null"),
+                Err(e) => format!("{{\"err\": \"{}\"}}", e),
+            }
         })
 }
 pub fn post_processor_call_processing_stage(this: &PostProcessorBox) -> ProcessingStage {
     ProcessingStage::from(this.0.processing_stage())
-}
-pub fn post_processor_call_should_process(
-    this: &PostProcessorBox,
-    result: ExtractionResult,
-    config: ExtractionConfig,
-) -> bool {
-    this.0.should_process(&result.0, &config.0)
-}
-pub fn post_processor_call_estimated_duration_ms(this: &PostProcessorBox, result: ExtractionResult) -> u64 {
-    this.0.estimated_duration_ms(&result.0)
-}
-pub fn post_processor_call_priority(this: &PostProcessorBox) -> i32 {
-    this.0.priority()
 }
 
 pub struct ValidatorBox(pub Box<dyn kreuzberg::plugins::Validator + Send + Sync>);
@@ -11141,22 +11016,17 @@ pub struct ValidatorBox(pub Box<dyn kreuzberg::plugins::Validator + Send + Sync>
 pub fn alef_phantom_vec_validator() -> Vec<ValidatorBox> {
     Vec::new()
 }
-pub fn validator_call_validate(
-    this: &ValidatorBox,
-    result: ExtractionResult,
-    config: ExtractionConfig,
-) -> Result<(), String> {
+pub fn validator_call_validate(this: &ValidatorBox, result: ExtractionResult, config: ExtractionConfig) -> String {
     ::tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("build tokio runtime")
-        .block_on(async { this.0.validate(&result.0, &config.0).await.map_err(|e| e.to_string()) })
-}
-pub fn validator_call_should_validate(this: &ValidatorBox, result: ExtractionResult, config: ExtractionConfig) -> bool {
-    this.0.should_validate(&result.0, &config.0)
-}
-pub fn validator_call_priority(this: &ValidatorBox) -> i32 {
-    this.0.priority()
+        .block_on(async {
+            match this.0.validate(&result.0, &config.0).await {
+                Ok(v) => format!("{{\"ok\": {}}}", "null"),
+                Err(e) => format!("{{\"err\": \"{}\"}}", e),
+            }
+        })
 }
 
 pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::plugins::EmbeddingBackend + Send + Sync>);
@@ -11167,17 +11037,19 @@ pub fn alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox> {
 pub fn embedding_backend_call_dimensions(this: &EmbeddingBackendBox) -> usize {
     this.0.dimensions()
 }
-pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> Result<String, String> {
+pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> String {
     ::tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("build tokio runtime")
         .block_on(async {
-            this.0
-                .embed(texts)
-                .await
-                .map(|v| serde_json::to_string(&v).expect("serializable return"))
-                .map_err(|e| e.to_string())
+            match this.0.embed(texts).await {
+                Ok(v) => format!(
+                    "{{\"ok\": {}}}",
+                    serde_json::to_string(&v).expect("serializable return")
+                ),
+                Err(e) => format!("{{\"err\": \"{}\"}}", e),
+            }
         })
 }
 
@@ -11191,57 +11063,23 @@ pub fn document_extractor_call_extract_bytes(
     content: Vec<u8>,
     mime_type: String,
     config: ExtractionConfig,
-) -> Result<InternalDocument, String> {
+) -> String {
     ::tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("build tokio runtime")
         .block_on(async {
-            this.0
-                .extract_bytes(&content, &mime_type, &config.0)
-                .await
-                .map(|v| InternalDocument(v))
-                .map_err(|e| e.to_string())
-        })
-}
-pub fn document_extractor_call_extract_file(
-    this: &DocumentExtractorBox,
-    path: String,
-    mime_type: String,
-    config: ExtractionConfig,
-) -> Result<InternalDocument, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            this.0
-                .extract_file(std::path::Path::new(&path), &mime_type, &config.0)
-                .await
-                .map(|v| InternalDocument(v))
-                .map_err(|e| e.to_string())
+            match this.0.extract_bytes(&content, &mime_type, &config.0).await {
+                Ok(v) => format!(
+                    "{{\"ok\": {}}}",
+                    serde_json::to_string(&v).expect("serializable return")
+                ),
+                Err(e) => format!("{{\"err\": \"{}\"}}", e),
+            }
         })
 }
 pub fn document_extractor_call_supported_mime_types(this: &DocumentExtractorBox) -> Vec<String> {
-    this.0.supported_mime_types()
-}
-pub fn document_extractor_call_priority(this: &DocumentExtractorBox) -> i32 {
-    this.0.priority()
-}
-pub fn document_extractor_call_can_handle(this: &DocumentExtractorBox, path: String, mime_type: String) -> bool {
-    this.0.can_handle(std::path::Path::new(&path), &mime_type)
-}
-pub fn document_extractor_call_as_sync_extractor(this: &DocumentExtractorBox) -> String {
-    serde_json::to_string(&(this.0.as_sync_extractor())).expect("serializable return")
-}
-
-pub struct RendererBox(pub Box<dyn kreuzberg::plugins::Renderer + Send + Sync>);
-#[doc(hidden)]
-pub fn alef_phantom_vec_renderer() -> Vec<RendererBox> {
-    Vec::new()
-}
-pub fn renderer_call_render(this: &RendererBox, doc: InternalDocument) -> Result<String, String> {
-    this.0.render(&doc.0).map(|s| s.to_string()).map_err(|e| e.to_string())
+    this.0.supported_mime_types().iter().map(|s| s.to_string()).collect()
 }
 
 /// Convert a stringified Swift error into the source crate's `KreuzbergError::Plugin`.
@@ -11335,17 +11173,6 @@ impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
         decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
     }
 
-    async fn process_image_file(
-        &self,
-        path: &::std::path::Path,
-        config: &kreuzberg::OcrConfig,
-    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
-        let path = path.to_string_lossy().into_owned();
-        let config = ::serde_json::to_string(&config).expect("serializable param config");
-        let envelope = self.inner.alef_process_image_file(path, config);
-        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
-    }
-
     fn supports_language(&self, lang: &str) -> bool {
         let lang = lang.to_string();
         self.inner.alef_supports_language(lang)
@@ -11355,29 +11182,6 @@ impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
         let json = self.inner.alef_backend_type();
         ::serde_json::from_str::<kreuzberg::plugins::OcrBackendType>(&json)
             .expect("swift ocr_backend.backend_type returned invalid JSON")
-    }
-
-    fn supported_languages(&self) -> Vec<String> {
-        self.inner.alef_supported_languages()
-    }
-
-    fn supports_table_detection(&self) -> bool {
-        self.inner.alef_supports_table_detection()
-    }
-
-    fn supports_document_processing(&self) -> bool {
-        self.inner.alef_supports_document_processing()
-    }
-
-    async fn process_document(
-        &self,
-        path: &::std::path::Path,
-        config: &kreuzberg::OcrConfig,
-    ) -> kreuzberg::Result<kreuzberg::ExtractionResult> {
-        let path = path.to_string_lossy().into_owned();
-        let config = ::serde_json::to_string(&config).expect("serializable param config");
-        let envelope = self.inner.alef_process_document(path, config);
-        decode_inbound_envelope::<kreuzberg::ExtractionResult>(&envelope)
     }
 }
 
@@ -11468,21 +11272,6 @@ impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
         ::serde_json::from_str::<kreuzberg::plugins::ProcessingStage>(&json)
             .expect("swift post_processor.processing_stage returned invalid JSON")
     }
-
-    fn should_process(&self, result: &kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> bool {
-        let result = ::serde_json::to_string(&result).expect("serializable param result");
-        let config = ::serde_json::to_string(&config).expect("serializable param config");
-        self.inner.alef_should_process(result, config)
-    }
-
-    fn estimated_duration_ms(&self, result: &kreuzberg::ExtractionResult) -> u64 {
-        let result = ::serde_json::to_string(&result).expect("serializable param result");
-        self.inner.alef_estimated_duration_ms(result)
-    }
-
-    fn priority(&self) -> i32 {
-        self.inner.alef_priority()
-    }
 }
 
 /// Register a Swift class implementation as a `PostProcessor` plugin.
@@ -11565,16 +11354,6 @@ impl kreuzberg::plugins::Validator for SwiftValidatorWrapper {
         let config = ::serde_json::to_string(&config).expect("serializable param config");
         let envelope = self.inner.alef_validate(result, config);
         decode_inbound_envelope::<()>(&envelope).map(|_| ())
-    }
-
-    fn should_validate(&self, result: &kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> bool {
-        let result = ::serde_json::to_string(&result).expect("serializable param result");
-        let config = ::serde_json::to_string(&config).expect("serializable param config");
-        self.inner.alef_should_validate(result, config)
-    }
-
-    fn priority(&self) -> i32 {
-        self.inner.alef_priority()
     }
 }
 
@@ -11743,37 +11522,13 @@ impl kreuzberg::plugins::DocumentExtractor for SwiftDocumentExtractorWrapper {
         decode_inbound_envelope::<kreuzberg::internal::InternalDocument>(&envelope)
     }
 
-    async fn extract_file(
-        &self,
-        path: &::std::path::Path,
-        mime_type: &str,
-        config: &kreuzberg::ExtractionConfig,
-    ) -> kreuzberg::Result<kreuzberg::internal::InternalDocument> {
-        let path = path.to_string_lossy().into_owned();
-        let mime_type = mime_type.to_string();
-        let config = ::serde_json::to_string(&config).expect("serializable param config");
-        let envelope = self.inner.alef_extract_file(path, mime_type, config);
-        decode_inbound_envelope::<kreuzberg::internal::InternalDocument>(&envelope)
-    }
-
-    fn supported_mime_types(&self) -> Vec<String> {
-        self.inner.alef_supported_mime_types()
-    }
-
-    fn priority(&self) -> i32 {
-        self.inner.alef_priority()
-    }
-
-    fn can_handle(&self, path: &::std::path::Path, mime_type: &str) -> bool {
-        let path = path.to_string_lossy().into_owned();
-        let mime_type = mime_type.to_string();
-        self.inner.alef_can_handle(path, mime_type)
-    }
-
-    fn as_sync_extractor(&self) -> Option<kreuzberg::extractors::SyncExtractor> {
-        let json = self.inner.alef_as_sync_extractor();
-        ::serde_json::from_str::<Option<kreuzberg::extractors::SyncExtractor>>(&json)
-            .expect("swift document_extractor.as_sync_extractor returned invalid JSON")
+    fn supported_mime_types(&self) -> &'static [&'static str] {
+        let __types: Vec<String> = self.inner.alef_supported_mime_types();
+        let __strs: Vec<&'static str> = __types
+            .into_iter()
+            .map(|s| -> &'static str { Box::leak(s.into_boxed_str()) })
+            .collect();
+        Box::leak(__strs.into_boxed_slice())
     }
 }
 
@@ -11799,83 +11554,6 @@ pub fn unregister_document_extractor(name: String) -> Result<(), String> {
 /// Clear all registered `DocumentExtractor` plugins.
 pub fn clear_document_extractors() -> Result<(), String> {
     let registry = kreuzberg::plugins::registry::get_document_extractor_registry();
-    let mut guard = registry.write();
-    guard.clear().map_err(|e| e.to_string())
-}
-
-/// Rust-side wrapper around a Swift class implementing the `Renderer` plugin protocol.
-///
-/// The Swift instance is held via a `swift-bridge` opaque handle that retains
-/// the underlying ARC reference for the lifetime of this struct. Send + Sync are
-/// asserted unsafely: Swift classes used as kreuzberg plugins must be thread-safe
-/// (the `Plugin` super-trait requires it), and ARC handles themselves are safe to share.
-pub struct SwiftRendererWrapper {
-    inner: ffi::SwiftRendererBox,
-    /// Cached `Plugin::name()` — required because the trait returns `&str` but
-    /// the Swift FFI shim returns an owned `String`. Populated lazily on first access.
-    name_cache: ::std::sync::OnceLock<String>,
-}
-unsafe impl Send for SwiftRendererWrapper {}
-unsafe impl Sync for SwiftRendererWrapper {}
-
-impl SwiftRendererWrapper {
-    /// Construct a new wrapper from a Swift `SwiftRendererBox` handle.
-    pub fn new(inner: ffi::SwiftRendererBox) -> Self {
-        Self {
-            inner,
-            name_cache: ::std::sync::OnceLock::new(),
-        }
-    }
-}
-
-impl kreuzberg::plugins::Plugin for SwiftRendererWrapper {
-    fn name(&self) -> &str {
-        self.name_cache.get_or_init(|| self.inner.alef_name()).as_str()
-    }
-
-    fn version(&self) -> String {
-        self.inner.alef_version()
-    }
-
-    fn initialize(&self) -> kreuzberg::Result<()> {
-        decode_inbound_envelope::<()>(&self.inner.alef_initialize()).map(|_| ())
-    }
-
-    fn shutdown(&self) -> kreuzberg::Result<()> {
-        decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
-    }
-}
-
-impl kreuzberg::plugins::Renderer for SwiftRendererWrapper {
-    fn render(&self, doc: &kreuzberg::internal::InternalDocument) -> kreuzberg::Result<str> {
-        let doc = ::serde_json::to_string(&doc).expect("serializable param doc");
-        let envelope = self.inner.alef_render(doc);
-        decode_inbound_envelope::<String>(&envelope)
-    }
-}
-
-/// Register a Swift class implementation as a `Renderer` plugin.
-///
-/// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
-/// Errors from the registry are stringified for swift-bridge transport.
-pub fn register_renderer(swift_box: ffi::SwiftRendererBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::Renderer> =
-        ::std::sync::Arc::new(SwiftRendererWrapper::new(swift_box));
-    let registry = kreuzberg::plugins::registry::get_renderer_registry();
-    let mut guard = registry.write();
-    guard.register(arc).map_err(|e| e.to_string())
-}
-
-/// Unregister a previously-registered `Renderer` plugin by name.
-pub fn unregister_renderer(name: String) -> Result<(), String> {
-    let registry = kreuzberg::plugins::registry::get_renderer_registry();
-    let mut guard = registry.write();
-    guard.remove(&name).map_err(|e| e.to_string())
-}
-
-/// Clear all registered `Renderer` plugins.
-pub fn clear_renderers() -> Result<(), String> {
-    let registry = kreuzberg::plugins::registry::get_renderer_registry();
     let mut guard = registry.write();
     guard.clear().map_err(|e| e.to_string())
 }

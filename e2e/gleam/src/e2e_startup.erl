@@ -2,9 +2,9 @@
 %% Starts the kreuzberg OTP application and all its dependencies.
 %% Called by e2e_gleam_test.main/0 before gleeunit.main/0.
 -module(e2e_startup).
--export([start_kreuzberg/0]).
+-export([start_app/0]).
 
-start_kreuzberg() ->
+start_app() ->
     %% Elixir runtime must be started before kreuzberg NIF init
     %% because Rustler uses Elixir.Application.app_dir/2 to locate the .so.
     {ok, _} = application:ensure_all_started(elixir),

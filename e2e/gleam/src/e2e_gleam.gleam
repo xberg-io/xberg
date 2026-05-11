@@ -10,7 +10,7 @@ pub fn read_file_bytes(path: String) -> Result(BitArray, dynamic.Dynamic)
 /// Ensure the kreuzberg OTP application and all its dependencies are started.
 /// This is required when running `gleam test` outside of `mix test`, since the
 /// Rustler NIF init hook needs the :kreuzberg application to be started before
-/// any Kreuzberg.Native functions can be called.
-/// Calls the Erlang shim e2e_startup:start_kreuzberg/0.
-@external(erlang, "e2e_startup", "start_kreuzberg")
-pub fn start_kreuzberg() -> Nil
+/// any binding-native functions can be called.
+/// Calls the Erlang shim e2e_startup:start_app/0.
+@external(erlang, "e2e_startup", "start_app")
+pub fn start_app() -> Nil
