@@ -54,6 +54,7 @@ async fn test_full_hierarchy_extraction() {
             top_margin_fraction: None,
             bottom_margin_fraction: None,
             allow_single_column_tables: false,
+            ocr_inline_images: false,
         }),
         ..Default::default()
     };
@@ -171,6 +172,7 @@ async fn test_hierarchy_disabled() {
             top_margin_fraction: None,
             bottom_margin_fraction: None,
             allow_single_column_tables: false,
+            ocr_inline_images: false,
         }),
         ..Default::default()
     };
@@ -231,6 +233,7 @@ async fn test_hierarchy_with_explicit_disabled() {
             top_margin_fraction: None,
             bottom_margin_fraction: None,
             allow_single_column_tables: false,
+            ocr_inline_images: false,
         }),
         ..Default::default()
     };
@@ -292,6 +295,7 @@ async fn test_hierarchy_different_k_clusters() {
                 top_margin_fraction: None,
                 bottom_margin_fraction: None,
                 allow_single_column_tables: false,
+                ocr_inline_images: false,
             }),
             ..Default::default()
         };

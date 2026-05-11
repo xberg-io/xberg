@@ -58,6 +58,15 @@ pub struct PdfConfig {
     /// detection) still apply.
     #[serde(default)]
     pub allow_single_column_tables: bool,
+
+    /// Perform OCR on inline images extracted from PDF pages and attach the
+    /// recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract
+    /// to be available; if `ExtractionConfig.ocr` is `None` the extractor
+    /// falls back to `TesseractConfig::default()`. Per-image failures degrade
+    /// gracefully (the image is returned without OCR text rather than failing
+    /// the whole extraction). Default: `false`.
+    #[serde(default)]
+    pub ocr_inline_images: bool,
 }
 
 /// Hierarchy extraction configuration for PDF text structure analysis.
@@ -104,6 +113,7 @@ impl Default for PdfConfig {
             top_margin_fraction: None,
             bottom_margin_fraction: None,
             allow_single_column_tables: false,
+            ocr_inline_images: false,
         }
     }
 }
@@ -174,6 +184,7 @@ mod tests {
             top_margin_fraction: Some(0.10),
             bottom_margin_fraction: Some(0.08),
             allow_single_column_tables: false,
+            ocr_inline_images: false,
         };
         assert_eq!(config.top_margin_fraction, Some(0.10));
         assert_eq!(config.bottom_margin_fraction, Some(0.08));

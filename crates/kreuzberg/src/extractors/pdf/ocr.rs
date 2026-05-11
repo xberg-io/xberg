@@ -909,6 +909,7 @@ pub(crate) async fn extract_with_ocr(
             Some(crate::pdf::structure::assemble_internal_document(
                 pages,
                 &collected_tables,
+                None,
                 &[],
             ))
         } else {

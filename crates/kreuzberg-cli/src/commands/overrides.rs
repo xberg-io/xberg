@@ -232,6 +232,10 @@ pub struct ExtractionOverrides {
     #[arg(long)]
     pub pdf_extract_tables: Option<bool>,
 
+    /// OCR extracted inline images and inject results into the document.
+    #[arg(long)]
+    pub pdf_ocr_inline_images: Option<bool>,
+
     /// Extract PDF metadata (title, author, etc.).
     #[arg(long)]
     pub pdf_extract_metadata: Option<bool>,
@@ -692,6 +696,7 @@ impl ExtractionOverrides {
     fn apply_pdf(&self, config: &mut ExtractionConfig) {
         let has_pdf_flag = self.pdf_extract_images.is_some()
             || self.pdf_extract_tables.is_some()
+            || self.pdf_ocr_inline_images.is_some()
             || self.pdf_extract_metadata.is_some()
             || !self.pdf_password.is_empty();
         if has_pdf_flag {
@@ -701,6 +706,9 @@ impl ExtractionOverrides {
             }
             if let Some(extract_tables) = self.pdf_extract_tables {
                 pdf_opts.extract_tables = extract_tables;
+            }
+            if let Some(ocr_img) = self.pdf_ocr_inline_images {
+                pdf_opts.ocr_inline_images = ocr_img;
             }
             if let Some(extract_meta) = self.pdf_extract_metadata {
                 pdf_opts.extract_metadata = extract_meta;

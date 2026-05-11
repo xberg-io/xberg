@@ -188,6 +188,7 @@ impl PdfExtractor {
             pre_rendered_doc,
             _has_font_encoding_issues,
             pdf_annotations,
+            extracted_images,
         ) = extract_all_from_oxide_document(
             content,
             config,
@@ -350,26 +351,7 @@ impl PdfExtractor {
         let (images, image_fallback_warning): (
             Option<Vec<crate::types::ExtractedImage>>,
             Option<crate::types::ProcessingWarning>,
-        ) = if config.images.as_ref().map(|c| c.extract_images).unwrap_or(false) {
-            let max_images_per_page = config.images.as_ref().and_then(|i| i.max_images_per_page);
-            match crate::pdf::oxide::OxideDocument::open_bytes(content) {
-                Ok(mut oxide_doc) => {
-                    match crate::pdf::oxide::images::extract_images_with_data(&mut oxide_doc, max_images_per_page) {
-                        Ok(extracted_images) => (Some(extracted_images), None),
-                        Err(e) => {
-                            tracing::warn!(error = %e, "oxide path: image extraction failed");
-                            (None, None)
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "oxide path: could not open PDF for image extraction");
-                    (None, None)
-                }
-            }
-        } else {
-            (None, None)
-        };
+        ) = (extracted_images, None);
 
         #[cfg(feature = "ocr")]
         let mut page_contents = page_contents;
@@ -1184,6 +1166,59 @@ mod tests {
         assert_ne!(page_texts[0], page_texts[1], "each page should get unique OCR text");
     }
 
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    async fn test_pdf_ocr_inline_images() {
+        use crate::core::config::ExtractionConfig;
+        use crate::core::config::OutputFormat;
+        use crate::core::config::pdf::PdfConfig;
+
+        let extractor = PdfExtractor::new();
+
+        // Use embedded_images_tables.pdf which has a large image on page 1
+        let pdf_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents/pdf/embedded_images_tables.pdf");
+
+        assert!(
+            pdf_path.exists(),
+            "missing test fixture: {pdf_path:?} — add embedded_images_tables.pdf to test_documents/pdf/"
+        );
+
+        let content = std::fs::read(pdf_path).expect("Failed to read PDF");
+
+        let config = ExtractionConfig {
+            output_format: OutputFormat::Markdown,
+            pdf_options: Some(PdfConfig {
+                ocr_inline_images: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extractor
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("Inline-image OCR extraction failed");
+
+        let result = crate::extraction::derive::derive_extraction_result(result, true, OutputFormat::Markdown);
+
+        // Result should contain Markdown image references
+        assert!(
+            result.content.contains("![](image_"),
+            "Markdown should contain image references"
+        );
+
+        // Result should have non-empty images list
+        let images = result.images.as_ref().expect("Images list should be Some");
+        assert!(!images.is_empty(), "Images list should not be empty");
+
+        // At least one image should have an OCR result (the large one)
+        let has_ocr = images
+            .iter()
+            .any(|img| img.ocr_result.as_ref().is_some_and(|r| !r.content.trim().is_empty()));
+        assert!(has_ocr, "At least one image should have OCR content");
+    }
+
     /// Verifies that when a VLM returns a single string for a multi-page PDF,
     /// the guard clears stale native text on secondary pages (#928).
     #[cfg(feature = "ocr")]
@@ -1220,5 +1255,82 @@ mod tests {
         assert_eq!(pages[0].content, vlm_text, "page 1 should carry the VLM text");
         assert!(pages[1].content.is_empty(), "page 2 must be cleared by VLM guard");
         assert!(pages[2].content.is_empty(), "page 3 must be cleared by VLM guard");
+    }
+
+    /// ocr_inline_images=true on a text-only PDF (no embedded images) must succeed
+    /// and return an empty images list, not panic or error.
+    #[tokio::test]
+    #[cfg(feature = "pdf")]
+    async fn test_pdf_ocr_inline_images_no_images_in_document() {
+        use crate::core::config::ExtractionConfig;
+        use crate::core::config::pdf::PdfConfig;
+
+        let extractor = PdfExtractor::new();
+
+        // code_and_formula.pdf is a text-only document with no embedded raster images.
+        let pdf_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/pdf/code_and_formula.pdf");
+
+        if !pdf_path.exists() {
+            panic!("missing test fixture: {pdf_path:?}");
+        }
+
+        let content = std::fs::read(pdf_path).expect("Failed to read PDF");
+
+        let config = ExtractionConfig {
+            pdf_options: Some(PdfConfig {
+                ocr_inline_images: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extractor
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("Extraction should succeed even when there are no images to OCR");
+
+        // Images list should be empty — must not panic or error.
+        for img in &result.images {
+            // Without embedded images, no ocr_result should be present.
+            assert!(img.ocr_result.is_none(), "text-only PDF should produce no OCR results");
+        }
+    }
+
+    /// ocr_inline_images=true with config.ocr=None must use TesseractConfig::default()
+    /// and not panic.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    async fn test_pdf_ocr_inline_images_no_ocr_config() {
+        use crate::core::config::ExtractionConfig;
+        use crate::core::config::pdf::PdfConfig;
+
+        let extractor = PdfExtractor::new();
+
+        let pdf_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents/pdf/embedded_images_tables.pdf");
+
+        assert!(
+            pdf_path.exists(),
+            "missing test fixture: {pdf_path:?} — add embedded_images_tables.pdf to test_documents/pdf/"
+        );
+
+        let content = std::fs::read(pdf_path).expect("Failed to read PDF");
+
+        // ocr = None → code falls back to TesseractConfig::default(); must not panic.
+        let config = ExtractionConfig {
+            ocr: None,
+            pdf_options: Some(PdfConfig {
+                ocr_inline_images: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        // Should complete without panicking; OCR may succeed or warn, but must not crash.
+        let _result = extractor
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("Extraction with ocr=None and ocr_inline_images=true must not panic");
     }
 }
