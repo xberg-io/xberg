@@ -58,6 +58,7 @@ office = [
     "html",
 ]
 hwp = ["dep:cfb", "dep:flate2"]
+hwpx = ["dep:unhwp", "dep:zip"]
 iwork = ["dep:zip", "dep:snap"]
 email = ["dep:mail-parser", "dep:cfb", "dep:outlook-pst", "dep:tempfile", "dep:chrono"]
 html = ["dep:html-to-markdown-rs", "dep:v_htmlescape"]
@@ -209,6 +210,7 @@ formats = [
     "excel",
     "office",
     "hwp",
+    "hwpx",
     "iwork",
     "email",
     "html",
@@ -370,6 +372,7 @@ tower-http = { version = "0.6", features = [
 ], optional = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { version = "0.32", optional = true }
+unhwp = { version = "0.2.4", default-features = false, features = ["hwpx"], optional = true }
 unicode-normalization = { version = "0.1.25", optional = true }
 urlencoding = "2"
 utoipa = { version = "5.5", features = ["axum_extras"], optional = true }

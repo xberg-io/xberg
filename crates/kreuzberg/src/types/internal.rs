@@ -364,7 +364,8 @@ impl InternalElement {
         feature = "pdf",
         feature = "paddle-ocr",
         feature = "xml",
-        feature = "office"
+        feature = "office",
+        feature = "hwpx"
     ))]
     pub(crate) fn with_page(mut self, page: u32) -> Self {
         self.page = Some(page);
@@ -393,14 +394,14 @@ impl InternalElement {
     }
 
     /// Set attributes.
-    #[cfg(any(feature = "xml", feature = "office"))]
+    #[cfg(any(feature = "xml", feature = "office", feature = "hwpx"))]
     pub(crate) fn with_attributes(mut self, attributes: AHashMap<String, String>) -> Self {
         self.attributes = Some(attributes);
         self
     }
 
     /// Regenerate the ID with the correct index (call after pushing to the document).
-    #[cfg(any(feature = "ocr", feature = "xml", feature = "office"))]
+    #[cfg(any(feature = "ocr", feature = "xml", feature = "office", feature = "hwpx"))]
     pub(crate) fn with_index(mut self, index: u32) -> Self {
         self.id = InternalElementId::generate(self.kind.discriminant(), &self.text, self.page, index);
         self

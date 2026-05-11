@@ -1,0 +1,26 @@
+{
+  "id": "format_hwpx_standalone",
+  "category": "format_specific",
+  "description": "Standalone HWPX extraction using extract_bytes_sync",
+  "tags": ["format_specific", "hwpx", "text_extraction"],
+  "call": "extract_bytes_sync",
+  "input": {
+    "data": "hwpx/simple.hwpx",
+    "mime_type": "application/haansofthwpx"
+  },
+  "assertions": [
+    {
+      "type": "not_error"
+    },
+    {
+      "type": "min_length",
+      "field": "content",
+      "value": 20
+    },
+    {
+      "type": "contains",
+      "field": "content",
+      "value": "Hello from HWPX"
+    }
+  ]
+}
