@@ -24,7 +24,7 @@ default-members = ["crates/kreuzberg", "crates/kreuzberg-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "5.0.0-rc.3"
+version = "5.0.0-rc.1"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]
