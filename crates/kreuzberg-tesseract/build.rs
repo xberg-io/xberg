@@ -102,6 +102,48 @@ mod build_tesseract {
         target_matches(target, "wasm32") || target_matches(target, "wasm64")
     }
 
+    fn is_android_target(target: &str) -> bool {
+        target_matches(target, "android")
+    }
+
+    /// Map a Rust Android target triple to the NDK ABI name.
+    fn android_abi(target: &str) -> &'static str {
+        if target.contains("aarch64") {
+            "arm64-v8a"
+        } else if target.contains("x86_64") {
+            "x86_64"
+        } else if target.contains("i686") {
+            "x86"
+        } else {
+            "armeabi-v7a"
+        }
+    }
+
+    /// Derive the versioned NDK clang++ path for a given ABI.
+    /// e.g. `{ndk}/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang++`
+    fn ndk_clangxx(ndk_home: &str, abi: &str, api: u32) -> Option<String> {
+        // NDK ships darwin-x86_64 binaries even on Apple Silicon (runs via Rosetta)
+        let host_tags: &[&str] = if cfg!(target_os = "macos") {
+            &["darwin-x86_64", "darwin-aarch64"]
+        } else {
+            &["linux-x86_64", "linux-aarch64"]
+        };
+        let clang_arch = match abi {
+            "arm64-v8a" => "aarch64-linux-android",
+            "x86_64" => "x86_64-linux-android",
+            "x86" => "i686-linux-android",
+            _ => "armv7a-linux-androideabi",
+        };
+        for tag in host_tags {
+            let bin = format!("{}/toolchains/llvm/prebuilt/{}/bin", ndk_home, tag);
+            let path = format!("{}/{}{}-clang++", bin, clang_arch, api);
+            if Path::new(&path).exists() {
+                return Some(path);
+            }
+        }
+        None
+    }
+
     /// Detect whether the build is driven by cargo-zigbuild, which wraps the
     /// C toolchain in a `zigcc`/`zigcxx` shim. zig's bundled libstdc++ has
     /// `std::filesystem` inline (no standalone `libstdc++fs`) and its clang
@@ -371,6 +413,7 @@ mod build_tesseract {
         let windows_target = is_windows_target(&target);
         let msvc_target = is_msvc_target(&target);
         let mingw_target = is_mingw_target(&target);
+        let android_target = is_android_target(&target);
 
         eprintln!("custom_out_dir: {:?}", custom_out_dir);
 
@@ -558,6 +601,27 @@ mod build_tesseract {
                          endif()",
                         "",
                     );
+
+                // NDK r25+ no longer ships CpuFeaturesNdkCompatConfig.cmake.
+                // Strip the find_package block so the build doesn't abort.
+                let cmakelists = if android_target {
+                    cmakelists.replace(
+                        "if(ANDROID)\n\
+                         \x20 add_definitions(-DANDROID)\n\
+                         \x20 find_package(CpuFeaturesNdkCompat REQUIRED)\n\
+                         \x20 target_include_directories(\n\
+                         \x20\x20\x20 libtesseract\n\
+                         \x20\x20\x20 PRIVATE \"${CpuFeaturesNdkCompat_DIR}/../../../include/ndk_compat\")\n\
+                         \x20 target_link_libraries(libtesseract PRIVATE CpuFeatures::ndk_compat)\n\
+                         endif()",
+                        "if(ANDROID)\n\
+                         \x20 add_definitions(-DANDROID)\n\
+                         endif()",
+                    )
+                } else {
+                    cmakelists
+                };
+
                 std::fs::write(&cmakelists_path, cmakelists).expect("Failed to write CMakeLists.txt");
 
                 let mut tesseract_config = Config::new(&tesseract_dir);
@@ -717,6 +781,44 @@ mod build_tesseract {
             cmake_cxx_flags.push_str("-stdlib=libc++ ");
             cmake_cxx_flags.push_str("-std=c++17 ");
             cmake_cxx_flags.push_str("-fno-exceptions ");
+        } else if is_android_target(&target) {
+            cmake_c_flags.push_str("-std=gnu11 ");
+            cmake_cxx_flags.push_str("-std=c++17 ");
+            cmake_cxx_flags.push_str("-fno-exceptions ");
+
+            let abi = android_abi(&target);
+            let api: u32 = 21;
+            additional_defines.push(("ANDROID_ABI".to_string(), abi.to_string()));
+            additional_defines.push(("ANDROID_PLATFORM".to_string(), format!("android-{api}")));
+
+            // cmake-rs sets CMAKE_C_COMPILER from the NDK but not CMAKE_ANDROID_NDK
+            // (needed for CMake's Android platform detection) or CMAKE_CXX_COMPILER.
+            let ndk_home = env::var("ANDROID_NDK_HOME")
+                .or_else(|_| env::var("ANDROID_NDK"))
+                .or_else(|_| env::var("NDK_HOME"))
+                .ok();
+            if let Some(ref ndk) = ndk_home {
+                additional_defines.push(("CMAKE_ANDROID_NDK".to_string(), ndk.clone()));
+                let cxx = ndk_clangxx(ndk, abi, api).unwrap_or_else(|| resolve_cxx_compiler(&target, "clang++"));
+                additional_defines.push(("CMAKE_CXX_COMPILER".to_string(), cxx));
+            } else {
+                let cxx = resolve_cxx_compiler(&target, "clang++");
+                additional_defines.push(("CMAKE_CXX_COMPILER".to_string(), cxx));
+            }
+
+            // Force CMake to search only inside the NDK sysroot / CMAKE_FIND_ROOT_PATH.
+            // Without ONLY mode, CMake falls back to host Homebrew paths (e.g.
+            // /opt/homebrew/Cellar/leptonica) and picks up the wrong architecture.
+            additional_defines.push(("CMAKE_FIND_ROOT_PATH_MODE_INCLUDE".to_string(), "ONLY".to_string()));
+            additional_defines.push(("CMAKE_FIND_ROOT_PATH_MODE_LIBRARY".to_string(), "ONLY".to_string()));
+            // Programs (e.g. cmake tools, pkg-config) must come from the host.
+            additional_defines.push(("CMAKE_FIND_ROOT_PATH_MODE_PROGRAM".to_string(), "NEVER".to_string()));
+            // Belt-and-suspenders: explicitly ignore host-only include/lib trees.
+            additional_defines.push((
+                "CMAKE_IGNORE_PATH".to_string(),
+                "/opt/homebrew/Cellar;/opt/homebrew/include;/opt/homebrew/lib;/usr/local/include;/usr/local/lib"
+                    .to_string(),
+            ));
         } else if target_linux {
             // Prevent GCC 14+ from emitting C23-versioned glibc symbols (__isoc23_strtoll etc.)
             // that require glibc >= 2.38. Force C11 mode for C code.
@@ -810,6 +912,10 @@ mod build_tesseract {
 
         if target_macos {
             println!("cargo:rustc-link-lib=c++");
+        } else if is_android_target(&target) {
+            // NDK toolchain handles C++ runtime linkage; link against log for Android logging.
+            println!("cargo:rustc-link-lib=c++_static");
+            println!("cargo:rustc-link-lib=log");
         } else if target_linux {
             if target_musl {
                 // musl builds: statically link libstdc++ for fully portable binaries

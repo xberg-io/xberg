@@ -199,6 +199,10 @@ wasm-target = [
     "stopwords",
     "embedding-presets",
 ]
+# Mobile deployment preset — formats + analysis + Tesseract OCR + code intelligence + API types.
+# Excludes ORT-dependent features (paddle-ocr, layout-detection, embeddings, auto-rotate)
+# and server transport infrastructure (mcp, otel, liter-llm).
+mobile = ["formats", "analysis", "ocr", "tree-sitter", "api", "tokio-runtime"]
 # WASM only: enables wasm-bindgen-rayon for multi-threaded WASM builds.
 # No #[cfg] gates — activates the wasm-bindgen-rayon dependency.
 wasm-threads = ["dep:wasm-bindgen-rayon"]

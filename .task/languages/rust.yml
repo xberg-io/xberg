@@ -216,3 +216,32 @@ tasks:
       RUST_TEST_THREADS: "1"
     cmds:
       - cargo test --manifest-path e2e/rust/Cargo.toml --release
+
+  check:android:
+    desc: "cargo check kreuzberg-dart + kreuzberg-ffi for Android ABIs (requires ANDROID_NDK_HOME and cargo-ndk)"
+    preconditions:
+      - sh: command -v cargo-ndk
+        msg: "cargo-ndk not installed. Run: cargo install cargo-ndk --locked"
+      - sh: 'test -n "${ANDROID_NDK_HOME:-}"'
+        msg: "ANDROID_NDK_HOME is not set. Install Android NDK and export ANDROID_NDK_HOME=<path-to-ndk>"
+    cmds:
+      - cargo ndk --target arm64-v8a --platform 21 -- check -p kreuzberg-dart
+      - cargo ndk --target x86_64 --platform 21 -- check -p kreuzberg-dart
+      - cargo ndk --target arm64-v8a --platform 21 -- check -p kreuzberg-ffi
+      - cargo ndk --target x86_64 --platform 21 -- check -p kreuzberg-ffi
+
+  check:ios:
+    desc: "cargo check kreuzberg-dart + kreuzberg-swift for iOS targets (macOS only)"
+    platforms: [darwin]
+    cmds:
+      - rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - cargo check -p kreuzberg-dart --target aarch64-apple-ios
+      - cargo check -p kreuzberg-dart --target aarch64-apple-ios-sim
+      - cargo check -p kreuzberg-swift --target aarch64-apple-ios
+      - cargo check -p kreuzberg-swift --target aarch64-apple-ios-sim
+
+  check:mobile:
+    desc: "cargo check Android + iOS mobile targets"
+    cmds:
+      - task: check:android
+      - task: check:ios

@@ -1,0 +1,74 @@
+name: CI Mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'packages/dart/**'
+      - 'packages/swift/**'
+      - 'packages/kotlin-android/**'
+      - '.github/workflows/ci-mobile.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'packages/dart/**'
+      - 'packages/swift/**'
+      - 'packages/kotlin-android/**'
+      - '.github/workflows/ci-mobile.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  android-check:
+    name: Android cargo check (${{ matrix.abi }})
+    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: kreuzberg-dev/actions/setup-rust@v1
+        with:
+          cache-key-prefix: ci-mobile-android-${{ matrix.abi }}
+      - uses: kreuzberg-dev/actions/setup-android-ndk@v1
+      - name: cargo ndk check kreuzberg-dart
+        run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-dart
+      - name: cargo ndk check kreuzberg-ffi
+        run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-ffi
+
+  ios-check:
+    name: iOS cargo check (${{ matrix.target }})
+    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-ios, aarch64-apple-ios-sim]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: kreuzberg-dev/actions/setup-rust@v1
+        with:
+          target: ${{ matrix.target }}
+          cache-key-prefix: ci-mobile-ios-${{ matrix.target }}
+      - name: cargo check kreuzberg-dart
+        run: cargo check -p kreuzberg-dart --target ${{ matrix.target }}
+      - name: cargo check kreuzberg-swift
+        run: cargo check -p kreuzberg-swift --target ${{ matrix.target }}

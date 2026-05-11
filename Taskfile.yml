@@ -150,6 +150,21 @@ tasks:
       - task: format:check
       - task: lint:check
 
+  check:android:
+    desc: "cargo check kreuzberg-dart + kreuzberg-ffi for Android ABIs"
+    cmds:
+      - task: rust:check:android
+
+  check:ios:
+    desc: "cargo check kreuzberg-dart + kreuzberg-swift for iOS targets (macOS only)"
+    cmds:
+      - task: rust:check:ios
+
+  check:mobile:
+    desc: "cargo check Android + iOS mobile targets"
+    cmds:
+      - task: rust:check:mobile
+
   # === Update / Upgrade ===
   update:
     desc: "Update dependencies (compatible only)"
