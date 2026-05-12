@@ -333,7 +333,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     content: &[u8],
     config: &ExtractionConfig,
     _path: Option<&std::path::Path>,
-) -> crate::Result<(String, Vec<crate::types::LlmUsage>)> {
+) -> crate::Result<(String, ahash::AHashMap<usize, String>, Vec<crate::types::LlmUsage>)> {
     use std::collections::HashSet;
 
     // Deduplicate and validate page numbers (must be >= 1)
@@ -351,7 +351,7 @@ pub(crate) async fn extract_mixed_ocr_native(
         .collect();
 
     if ocr_set.is_empty() {
-        return Ok((native_text.to_string(), Vec::new()));
+        return Ok((native_text.to_string(), ahash::AHashMap::new(), Vec::new()));
     }
 
     // Convert 1-indexed page numbers to 0-indexed for rendering (sorted + deduplicated)
@@ -360,7 +360,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     let page_images = render_selected_pages_for_ocr(content, &page_indices)?;
 
     if page_images.is_empty() {
-        return Ok((native_text.to_string(), Vec::new()));
+        return Ok((native_text.to_string(), ahash::AHashMap::new(), Vec::new()));
     }
 
     // OCR all selected pages concurrently using the same batched pipeline pattern
@@ -456,7 +456,7 @@ pub(crate) async fn extract_mixed_ocr_native(
         }
     }
 
-    Ok((result, accumulated_llm_usage))
+    Ok((result, ocr_results, accumulated_llm_usage))
 }
 
 /// Extract text from PDF using OCR on pre-rendered page images.
@@ -483,6 +483,7 @@ pub(crate) async fn extract_with_ocr(
     path: Option<&std::path::Path>,
 ) -> crate::Result<(
     String,
+    Vec<String>,
     Option<f64>,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
@@ -558,7 +559,20 @@ pub(crate) async fn extract_with_ocr(
             .map(|v| v / 100.0);
         let ocr_elements = result.ocr_elements.unwrap_or_default();
         let llm_usage = result.llm_usage.unwrap_or_default();
-        return Ok((result.content, mean_conf, Vec::new(), ocr_elements, None, llm_usage));
+        let page_texts = if let Some(pages) = result.pages {
+            pages.into_iter().map(|p| p.content).collect()
+        } else {
+            vec![result.content.clone()]
+        };
+        return Ok((
+            result.content,
+            page_texts,
+            mean_conf,
+            Vec::new(),
+            ocr_elements,
+            None,
+            llm_usage,
+        ));
     }
     let mut lazy_pdf_page_count = 0;
 
@@ -920,6 +934,7 @@ pub(crate) async fn extract_with_ocr(
 
     Ok((
         result,
+        page_texts,
         mean_text_conf,
         collected_tables,
         all_ocr_elements,
@@ -1028,6 +1043,7 @@ pub(crate) async fn run_ocr_pipeline(
     path: Option<&std::path::Path>,
 ) -> crate::Result<(
     String,
+    Vec<String>,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
     Option<crate::types::internal::InternalDocument>,
@@ -1066,6 +1082,7 @@ pub(crate) async fn run_ocr_pipeline(
     #[allow(clippy::type_complexity)]
     let mut best_result: Option<(
         String,
+        Vec<String>,
         f64,
         Vec<crate::types::Table>,
         Vec<crate::types::OcrElement>,
@@ -1112,7 +1129,7 @@ pub(crate) async fn run_ocr_pipeline(
         .await;
 
         match result {
-            Ok((text, mean_conf, stage_tables, stage_ocr_elements, stage_doc, stage_llm_usage)) => {
+            Ok((text, page_texts, mean_conf, stage_tables, stage_ocr_elements, stage_doc, stage_llm_usage)) => {
                 let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
 
                 let score = match mean_conf {
@@ -1133,16 +1150,23 @@ pub(crate) async fn run_ocr_pipeline(
                 accumulated_usage.extend(stage_llm_usage);
 
                 if score >= pipeline.quality_thresholds.pipeline_min_quality {
-                    return Ok((text, stage_tables, stage_ocr_elements, stage_doc, accumulated_usage));
+                    return Ok((
+                        text,
+                        page_texts,
+                        stage_tables,
+                        stage_ocr_elements,
+                        stage_doc,
+                        accumulated_usage,
+                    ));
                 }
 
                 // Track best-so-far (without usage, which is in accumulated_usage)
                 match best_result {
-                    Some((_, best_score, _, _, _)) if score > best_score => {
-                        best_result = Some((text, score, stage_tables, stage_ocr_elements, stage_doc));
+                    Some((_, _, best_score, _, _, _)) if score > best_score => {
+                        best_result = Some((text, page_texts, score, stage_tables, stage_ocr_elements, stage_doc));
                     }
                     None => {
-                        best_result = Some((text, score, stage_tables, stage_ocr_elements, stage_doc));
+                        best_result = Some((text, page_texts, score, stage_tables, stage_ocr_elements, stage_doc));
                     }
                     _ => {}
                 }
@@ -1159,13 +1183,13 @@ pub(crate) async fn run_ocr_pipeline(
 
     // Return best result (with warning) or error if all backends failed entirely
     match best_result {
-        Some((text, score, tables, elements, doc)) => {
+        Some((text, page_texts, score, tables, elements, doc)) => {
             tracing::warn!(
                 score,
                 threshold = pipeline.quality_thresholds.pipeline_min_quality,
                 "All OCR pipeline backends produced suboptimal quality, using best result"
             );
-            Ok((text, tables, elements, doc, accumulated_usage))
+            Ok((text, page_texts, tables, elements, doc, accumulated_usage))
         }
         None => Err(crate::KreuzbergError::Parsing {
             message: "All OCR pipeline backends failed".to_string(),
@@ -1925,7 +1949,7 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(called.load(Ordering::SeqCst), "process_document was not called");
-        let (_, _, _, _, _, llm_usage) = result.unwrap();
+        let (_, _, _, _, _, _, llm_usage) = result.unwrap();
         assert!(llm_usage.is_empty(), "No LLM usage expected for mock backend");
 
         // Clean up
@@ -2026,7 +2050,7 @@ mod tests {
 
         crate::plugins::unregister_ocr_backend("vlm-mock").unwrap();
 
-        let (_, _, _, _, _, llm_usage) = result.expect("extract_with_ocr should succeed");
+        let (_, _, _, _, _, _, llm_usage) = result.expect("extract_with_ocr should succeed");
         assert_eq!(
             llm_usage.len(),
             2,

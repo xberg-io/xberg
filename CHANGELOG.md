@@ -92,6 +92,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **VLM OCR per-page propagation (#928)**: VLM OCR results now populate
+  individual `PageContent` structures in PDF extractions, not just
+  `ExtractionResult.content`. Per-page text segments are mapped to document
+  pages, and stale native text is cleared on secondary pages when a VLM
+  returns a single whole-document string.
 - **LLM base URL normalization**: fixed a regression where a custom
   `KREUZBERG_LLM_BASE_URL` with a trailing slash caused authentication (401)
   or 404 errors due to double-slash path construction (e.g. `/v1//chat/completions`).

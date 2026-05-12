@@ -62,7 +62,7 @@ impl OcrBoundingGeometry {
     /// # Returns
     ///
     /// Tuple of `(left, top, width, height)` in pixels.
-    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection"))]
+    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection", test))]
     pub(crate) fn to_aabb(&self) -> (u32, u32, u32, u32) {
         match self {
             Self::Rectangle {
@@ -392,6 +392,7 @@ mod tests {
         assert!((conf.recognition - 0.85).abs() < 0.001);
     }
 
+    #[cfg(feature = "paddle-ocr")]
     #[test]
     fn test_confidence_from_paddle() {
         let conf = OcrConfidence::from_paddle(0.95, 0.88);
@@ -401,6 +402,7 @@ mod tests {
         assert!((conf.recognition - 0.88).abs() < 0.001);
     }
 
+    #[cfg(feature = "paddle-ocr")]
     #[test]
     fn test_rotation_from_paddle() {
         let rot = OcrRotation::from_paddle(1, 0.92).expect("Valid angle_index");
@@ -410,6 +412,7 @@ mod tests {
         assert!((rot.confidence.unwrap() - 0.92).abs() < 0.001);
     }
 
+    #[cfg(feature = "paddle-ocr")]
     #[test]
     fn test_rotation_from_paddle_invalid_angle_index() {
         // Test that invalid angle indices are rejected
@@ -493,6 +496,7 @@ mod tests {
         assert!((cy - 25.0).abs() < 0.001);
     }
 
+    #[cfg(feature = "paddle-ocr")]
     #[test]
     fn test_serialization_roundtrip() {
         let geom = OcrBoundingGeometry::Quadrilateral {

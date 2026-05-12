@@ -37,6 +37,7 @@ async fn run_ocr_with_layout(
     path: Option<&std::path::Path>,
 ) -> crate::Result<(
     String,
+    Vec<String>,
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
     Option<crate::types::internal::InternalDocument>,
@@ -50,7 +51,7 @@ async fn run_ocr_with_layout(
 
     // Check for pipeline configuration
     if let Some(pipeline) = ocr_config.effective_pipeline() {
-        let (text, _ocr_tables, ocr_elements, pipeline_doc, llm_usage) = ocr::run_ocr_pipeline(
+        let (text, ocr_pts, _ocr_tables, ocr_elements, pipeline_doc, llm_usage) = ocr::run_ocr_pipeline(
             Some(content),
             None,
             #[cfg(feature = "layout-detection")]
@@ -60,10 +61,10 @@ async fn run_ocr_with_layout(
             path,
         )
         .await?;
-        return Ok((text, Vec::new(), ocr_elements, pipeline_doc, llm_usage));
+        return Ok((text, ocr_pts, Vec::new(), ocr_elements, pipeline_doc, llm_usage));
     }
 
-    let (text, _mean_conf, ocr_tables, ocr_elements, ocr_doc, llm_usage) = extract_with_ocr(
+    let (text, ocr_pts, _mean_conf, ocr_tables, ocr_elements, ocr_doc, llm_usage) = extract_with_ocr(
         Some(content),
         None,
         #[cfg(feature = "layout-detection")]
@@ -72,7 +73,7 @@ async fn run_ocr_with_layout(
         path,
     )
     .await?;
-    Ok((text, ocr_tables, ocr_elements, ocr_doc, llm_usage))
+    Ok((text, ocr_pts, ocr_tables, ocr_elements, ocr_doc, llm_usage))
 }
 
 /// PDF document extractor using pdf_oxide.
@@ -210,26 +211,32 @@ impl PdfExtractor {
         let mut ocr_internal_doc: Option<InternalDocument> = None;
         #[cfg(feature = "ocr")]
         let mut ocr_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
+        #[cfg(feature = "ocr")]
+        let mut ocr_page_texts: Option<Vec<String>> = None;
+        #[cfg(feature = "ocr")]
+        let mut ocr_results_map: Option<ahash::AHashMap<usize, String>> = None;
 
         #[cfg(feature = "ocr")]
         let (text, extraction_method) = if config.effective_disable_ocr() {
             (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
-            let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
+            let (ocr_text, ocr_pts, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
                 run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
             ocr_elements = ocr_elems;
             ocr_internal_doc = ocr_doc;
             ocr_llm_usage = llm_usage;
+            ocr_page_texts = Some(ocr_pts);
             (ocr_text, ExtractionMethod::Ocr)
         } else if let Some(ref ocr_pages) = config.force_ocr_pages {
             if !ocr_pages.is_empty() {
                 if let Some(ref bounds) = boundaries {
                     if !bounds.is_empty() {
-                        let (mixed, mixed_llm_usage) =
+                        let (mixed, results_map, mixed_llm_usage) =
                             ocr::extract_mixed_ocr_native(&native_text, bounds, ocr_pages, content, config, path)
                                 .await?;
                         ocr_llm_usage = mixed_llm_usage;
+                        ocr_results_map = Some(results_map);
                         (mixed, ExtractionMethod::Mixed)
                     } else {
                         tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
@@ -307,11 +314,12 @@ impl PdfExtractor {
                 (native_text, ExtractionMethod::Native)
             } else if decision.fallback {
                 match run_ocr_with_layout(content, config, path).await {
-                    Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
+                    Ok((ocr_text, ocr_pts, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
                         ocr_tables = ocr_tbls;
                         ocr_elements = ocr_elems;
                         ocr_internal_doc = ocr_doc;
                         ocr_llm_usage = llm_usage;
+                        ocr_page_texts = Some(ocr_pts);
                         (ocr_text, ExtractionMethod::Ocr)
                     }
                     Err(e) => {
@@ -362,6 +370,56 @@ impl PdfExtractor {
         } else {
             (None, None)
         };
+
+        #[cfg(feature = "ocr")]
+        let mut page_contents = page_contents;
+
+        #[cfg(feature = "ocr")]
+        {
+            if let Some(pts) = ocr_page_texts {
+                if let Some(ref mut pages) = page_contents {
+                    let pts_len = pts.len();
+                    let pages_len = pages.len();
+
+                    for (page, text) in pages.iter_mut().zip(pts) {
+                        page.content = text;
+                    }
+
+                    // Special case for VLM models that return a single string for a multi-page PDF:
+                    // we clear the content of the remaining pages to avoid stale native text fallback.
+                    if pts_len == 1 && pages_len > 1 {
+                        for p in pages.iter_mut().skip(1) {
+                            p.content.clear();
+                        }
+                    }
+                } else {
+                    // No native pages, but we have OCR page texts - build the page array.
+                    page_contents = Some(
+                        pts.into_iter()
+                            .enumerate()
+                            .map(|(i, text)| crate::types::PageContent {
+                                page_number: i + 1,
+                                content: text,
+                                tables: Vec::new(),
+                                images: Vec::new(),
+                                hierarchy: None,
+                                is_blank: None,
+                                layout_regions: None,
+                            })
+                            .collect(),
+                    );
+                }
+            }
+
+            if let Some(results_map) = ocr_results_map
+                && let Some(ref mut pages) = page_contents {
+                    for page in pages.iter_mut() {
+                        if let Some(ocr_text) = results_map.get(&page.page_number) {
+                            page.content = ocr_text.clone();
+                        }
+                    }
+                }
+        }
 
         // --- Page assembly ---
         let mut final_pages =
