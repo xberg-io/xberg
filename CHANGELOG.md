@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Email encoding data corruption (#910)**: replaced brittle 4-byte heuristic
+  for UTF-16 detection in `EmailExtractor` with a robust statistical approach
+  using `chardetng`. Tiny 4-byte ASCII files (e.g., binary sequences with
+  nulls) are no longer incorrectly transcoded as UTF-16LE, preventing silent
+  data corruption. The fix maintains support for legitimate non-BOM UTF-16
+  messages by requiring a 16-byte minimum sample and verifying the encoding
+  guess against `chardetng` when alternating null patterns are detected.
+
 ### Removed
 
 - **Gleam binding** (`kreuzberg_gleam` Hex package): dropped entirely. Gleam targets the BEAM and Gleam consumers can keep using the Elixir binding via Erlang interop, so the dedicated package added negligible audience reach at a real maintenance cost (regen on every alef bump, dedicated CI workflow, Hex publish job, e2e fixtures, 92 doc snippets). Existing published versions of `kreuzberg_gleam` on Hex remain available for anyone still pinning them — no further releases will be made.

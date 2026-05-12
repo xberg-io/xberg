@@ -70,16 +70,35 @@ fn maybe_transcode_utf16(data: &[u8]) -> Option<Vec<u8>> {
         return None;
     }
 
+    // Unambiguous BOM checks
     let (is_le, skip) = if data[0] == 0xFF && data[1] == 0xFE {
         (true, 2)
     } else if data[0] == 0xFE && data[1] == 0xFF {
         (false, 2)
-    } else if data[1] == 0x00 && data[3] == 0x00 && data[0] != 0x00 && data[2] != 0x00 {
-        // No BOM, but looks like UTF-16 LE (e.g. "M\0I\0M\0E\0")
-        (true, 0)
-    } else if data[0] == 0x00 && data[2] == 0x00 && data[1] != 0x00 && data[3] != 0x00 {
-        // No BOM, but looks like UTF-16 BE (e.g. "\0M\0I\0M\0E")
-        (false, 0)
+    } else if data.len() >= 16 {
+        // No BOM, but check for alternating null bytes in the first 16 bytes.
+        // This is a common pattern for UTF-16 encoded EML files starting with ASCII headers.
+        let is_le_heuristic = data[1] == 0x00 && data[3] == 0x00 && data[5] == 0x00 && data[7] == 0x00;
+        let is_be_heuristic = data[0] == 0x00 && data[2] == 0x00 && data[4] == 0x00 && data[6] == 0x00;
+
+        if is_le_heuristic || is_be_heuristic {
+            // Option III: Use chardetng to statistically resolve ambiguity.
+            // If chardetng detects a specific non-UTF-8 legacy encoding, we might trust it.
+            // However, chardetng often identifies UTF-16LE (with nulls) as UTF-8.
+            let mut detector = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Allow);
+            detector.feed(data, true);
+            let guess = detector.guess(None, chardetng::Utf8Detection::Allow);
+
+            // If it's valid UTF-8 but contains nulls at alternating positions,
+            // it's almost certainly UTF-16LE/BE misidentified as UTF-8.
+            if guess.name() == "UTF-8" || guess.name() == "windows-1252" {
+                (is_le_heuristic, 0)
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        }
     } else {
         return None;
     };

@@ -60,7 +60,14 @@ office = [
 hwp = ["dep:cfb", "dep:flate2"]
 hwpx = ["dep:unhwp", "dep:zip"]
 iwork = ["dep:zip", "dep:snap"]
-email = ["dep:mail-parser", "dep:cfb", "dep:outlook-pst", "dep:tempfile", "dep:chrono"]
+email = [
+    "dep:mail-parser",
+    "dep:cfb",
+    "dep:outlook-pst",
+    "dep:tempfile",
+    "dep:chrono",
+    "dep:chardetng",
+]
 html = ["dep:html-to-markdown-rs", "dep:v_htmlescape"]
 xml = ["dep:quick-xml", "dep:roxmltree"]
 archives = ["dep:zip", "dep:tar", "dep:sevenz-rust2", "dep:flate2"]
