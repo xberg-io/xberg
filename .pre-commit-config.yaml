@@ -187,7 +187,7 @@ repos:
       - id: cpd
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.15.48
+    rev: v0.15.49
     hooks:
       - id: alef-verify
       - id: alef-sync-versions
