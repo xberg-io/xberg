@@ -2,9 +2,12 @@
   "name": "kreuzberg-dev/kreuzberg",
   "description": "High-performance document intelligence library",
   "license": "Elastic-2.0",
-  "type": "php-ext",
+  "type": "library",
   "require": {
     "php": ">=8.2"
+  },
+  "suggest": {
+    "ext-kreuzberg": "Required at runtime. Build from crates/kreuzberg-php (cargo) or install a prebuilt .so — see https://github.com/kreuzberg-dev/kreuzberg/releases"
   },
   "require-dev": {
     "phpstan/phpstan": "^2.1",
@@ -23,11 +26,6 @@
     "test": "php vendor/bin/phpunit",
     "lint": "@phpstan",
     "lint:fix": "PHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer fix && php -d detect_unicode=0 vendor/bin/phpstan --configuration=phpstan.neon --memory-limit=512M"
-  },
-  "php-ext": {
-    "extension-name": "kreuzberg",
-    "support-zts": true,
-    "support-nts": true
   },
   "keywords": ["document", "extraction", "pdf", "ocr", "text"]
 }
