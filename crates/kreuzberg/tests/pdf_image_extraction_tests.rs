@@ -288,36 +288,31 @@ fn test_regression_796_plain_no_images_when_disabled() {
     );
 }
 
-// ─── Regression tests for issue #914 ────────────────────────────────────────
+// ─── Content-level image suppression tests ───────────────────────────────────
 //
-// Issue #914: the existing #796 tests only assert `result.images.is_empty()`.
-// That field is gated separately (extraction.rs:112) and is always empty when
+// The earlier #796 tests only assert `result.images.is_empty()`. That field is
+// gated separately (extraction.rs:112) and is always empty when
 // `extract_images=false`, even if the `inject_placeholders` guard at line 216 is
 // removed. The guard controls whether `ElementKind::Image` elements are injected
 // into the InternalDocument — which in turn controls whether image placeholder
 // references (`![]()` / `![](image_N.fmt)`) appear in `result.content`.
 //
-// Critically, the Djot renderer (`djot.rs`) lacked the `doc.images.get()` None
-// check that comrak_bridge, html_styled, and plain all have. Removing the guard
-// would cause `![]()` to leak into Djot content with no test catching it.
-//
-// Fix: (A) add content-level assertions for all rich output formats, and
-//      (B) align the Djot renderer with the other renderers' None guard.
+// The Djot renderer (`djot.rs`) lacked the `doc.images.get()` None check that
+// comrak_bridge, html_styled, and plain all have. Removing the guard would cause
+// `![]()` to leak into Djot content with no test catching it.
 //
 // JSON renderer gap (out of scope): json.rs emits `{"type":"image","alt":null,"src":null}`
 // for orphaned elements — null fields are valid structured JSON and produce no broken
 // markup, so it is intentionally not addressed here.
 
-/// Regression #914: Djot content must not contain image references when
-/// `extract_images=false`.
+/// Djot content must not contain image markup when `extract_images=false`.
 ///
-/// End-to-end contract test: asserts the full pipeline produces no image markup when
-/// `extract_images=false`. Requires both the `inject_placeholders` guard in `extraction.rs`
-/// AND the Djot renderer's `None` guard to be absent before it fails — the renderer-level
-/// unit test `test_djot_renderer_skips_orphaned_image_element` in `djot.rs` is the minimal
-/// proof that the renderer fix works independently.
+/// End-to-end contract test: requires both the `inject_placeholders` guard in
+/// `extraction.rs` AND the Djot renderer's `None` guard to be absent before it
+/// fails. The renderer-level unit test `test_djot_renderer_skips_orphaned_image_element`
+/// in `djot.rs` is the minimal proof that the renderer fix works independently.
 #[test]
-fn test_914_djot_no_image_refs_in_content_when_extraction_disabled() {
+fn test_djot_content_has_no_image_refs_when_extraction_disabled() {
     let result = extract_no_images("pdf/embedded_images_tables.pdf", OutputFormat::Djot);
     assert!(
         !result.content.contains("![]()"),
@@ -338,13 +333,12 @@ fn test_914_djot_no_image_refs_in_content_when_extraction_disabled() {
     );
 }
 
-/// Regression #914: Markdown content must not contain image references when
-/// `extract_images=false`.
+/// Markdown content must not contain image markup when `extract_images=false`.
 ///
-/// The comrak_bridge already has a None guard so this would pass even without
-/// the extraction-level guard, but it pins the end-to-end contract explicitly.
+/// comrak_bridge already has a None guard so this would pass even without the
+/// extraction-level guard, but it pins the end-to-end contract explicitly.
 #[test]
-fn test_914_markdown_no_image_refs_in_content_when_extraction_disabled() {
+fn test_markdown_content_has_no_image_refs_when_extraction_disabled() {
     let result = extract_no_images("pdf/embedded_images_tables.pdf", OutputFormat::Markdown);
     assert!(
         !result.content.contains("![]()"),
@@ -360,12 +354,12 @@ fn test_914_markdown_no_image_refs_in_content_when_extraction_disabled() {
     );
 }
 
-/// Regression #914: same guarantee via `pdf_options.extract_images = false`.
+/// Djot content must not contain image markup when disabled via `pdf_options.extract_images`.
 ///
-/// Verifies both config paths are covered for Djot content — mirrors the
-/// existing #796 `result.images` test for the pdf_options path.
+/// Verifies both config paths are covered — mirrors the existing `result.images`
+/// test for the pdf_options path.
 #[test]
-fn test_914_djot_no_image_refs_via_pdf_options() {
+fn test_djot_content_has_no_image_refs_when_disabled_via_pdf_options() {
     let result = extract_no_images_via_pdf_options("pdf/embedded_images_tables.pdf", OutputFormat::Djot);
     assert!(
         !result.content.contains("![]()"),
