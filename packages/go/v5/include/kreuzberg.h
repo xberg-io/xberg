@@ -104,6 +104,7 @@ typedef struct KREUZBERGHtmlMetadata KREUZBERGHtmlMetadata;
 typedef struct KREUZBERGHtmlOutputConfig KREUZBERGHtmlOutputConfig;
 typedef struct KREUZBERGHtmlTheme KREUZBERGHtmlTheme;
 typedef struct KREUZBERGHwpImage KREUZBERGHwpImage;
+typedef struct KREUZBERGHwpxExtractor KREUZBERGHwpxExtractor;
 typedef struct KREUZBERGImageExtractionConfig KREUZBERGImageExtractionConfig;
 typedef struct KREUZBERGImageKind KREUZBERGImageKind;
 typedef struct KREUZBERGImageMetadata KREUZBERGImageMetadata;
@@ -185,6 +186,7 @@ typedef struct KREUZBERGRecognizedTable KREUZBERGRecognizedTable;
 typedef struct KREUZBERGRecyclable KREUZBERGRecyclable;
 typedef struct KREUZBERGReductionLevel KREUZBERGReductionLevel;
 typedef struct KREUZBERGRelationshipKind KREUZBERGRelationshipKind;
+typedef struct KREUZBERGRenderer KREUZBERGRenderer;
 typedef struct KREUZBERGResolvedStyle KREUZBERGResolvedStyle;
 typedef struct KREUZBERGResultFormat KREUZBERGResultFormat;
 typedef struct KREUZBERGSecurityLimits KREUZBERGSecurityLimits;
@@ -801,6 +803,202 @@ typedef struct KREUZBERGKreuzbergEmbeddingBackendVTable {
 } KREUZBERGKreuzbergEmbeddingBackendVTable;
 
 /**
+ * VTable for C plugin bridges implementing the `DocumentExtractor` trait.
+ *
+ * # Safety
+ *
+ * All function pointers must be valid for the lifetime of any bridge created from
+ * this vtable.  `free_user_data`, when non-null, is called once with `user_data`
+ * when the bridge is dropped.
+ */
+typedef struct KREUZBERGKreuzbergDocumentExtractorVTable {
+  /**
+   * Return a null-terminated UTF-8 name string into `out_name`.
+   */
+  void (*name_fn)(const void *user_data,
+                  char **out_name);
+  /**
+   * Return a null-terminated UTF-8 version string into `out_version`.
+   */
+  void (*version_fn)(const void *user_data,
+                     char **out_version);
+  /**
+   * Initialise the plugin; return 0 on success, non-zero on failure (error text in `out_error`).
+   */
+  int32_t (*initialize_fn)(const void *user_data,
+                           char **out_error);
+  /**
+   * Shut down the plugin; return 0 on success, non-zero on failure (error text in `out_error`).
+   */
+  int32_t (*shutdown_fn)(const void *user_data,
+                         char **out_error);
+  /**
+   * Extract content from a byte array.
+   *
+   * This is the core extraction method that processes in-memory document data.
+   *
+   * # Arguments
+   *
+   * * `content` - Raw document bytes
+   * * `mime_type` - MIME type of the document (already validated)
+   * * `config` - Extraction configuration
+   *
+   * # Returns
+   *
+   * An `InternalDocument` containing the extracted elements, metadata, and tables.
+   * The pipeline will convert this into the public `ExtractionResult`.
+   *
+   * # Errors
+   *
+   * - `KreuzbergError::Parsing` - Document parsing failed
+   * - `KreuzbergError::Validation` - Invalid document structure
+   * - `KreuzbergError::Io` - I/O errors (these always bubble up)
+   * - `KreuzbergError::MissingDependency` - Required dependency not available
+   */
+  int32_t (*extract_bytes)(const void *user_data,
+                           const uint8_t *content,
+                           const char *mime_type,
+                           const char *config,
+                           char **out_result,
+                           char **out_error);
+  /**
+   * Extract content from a file.
+   *
+   * Default implementation reads the file and calls `extract_bytes`.
+   * Override for custom file handling, streaming, or memory optimizations.
+   *
+   * # Arguments
+   *
+   * * `path` - Path to the document file
+   * * `mime_type` - MIME type of the document (already validated)
+   * * `config` - Extraction configuration
+   *
+   * # Returns
+   *
+   * An `InternalDocument` containing the extracted elements, metadata, and tables.
+   *
+   * # Errors
+   *
+   * Same as `extract_bytes`, plus file I/O errors.
+   */
+  int32_t (*extract_file)(const void *user_data,
+                          const char *path,
+                          const char *mime_type,
+                          const char *config,
+                          char **out_result,
+                          char **out_error);
+  /**
+   * Get the list of MIME types supported by this extractor.
+   *
+   * Can include exact MIME types and prefix patterns:
+   * - Exact: `"application/pdf"`, `"text/plain"`
+   * - Prefix: `"image/*"` (matches any image type)
+   *
+   * # Returns
+   *
+   * A slice of MIME type strings.
+   */
+  int32_t (*supported_mime_types)(const void *user_data,
+                                  char **out_result);
+  /**
+   * Get the priority of this extractor.
+   *
+   * Higher priority extractors are preferred when multiple extractors
+   * support the same MIME type.
+   *
+   * # Priority Guidelines
+   *
+   * - **0-25**: Fallback/low-quality extractors
+   * - **26-49**: Alternative extractors
+   * - **50**: Default priority (built-in extractors)
+   * - **51-75**: Premium/enhanced extractors
+   * - **76-100**: Specialized/high-priority extractors
+   *
+   * # Returns
+   *
+   * Priority value (default: 50)
+   */
+  int32_t (*priority)(const void *user_data);
+  /**
+   * Optional: Check if this extractor can handle a specific file.
+   *
+   * Allows for more sophisticated detection beyond MIME types.
+   * Defaults to `true` (rely on MIME type matching).
+   *
+   * # Arguments
+   *
+   * * `path` - Path to the file to check
+   * * `mime_type` - Detected MIME type
+   *
+   * # Returns
+   *
+   * `true` if the extractor can handle this file, `false` otherwise.
+   */
+  int32_t (*can_handle)(const void *user_data,
+                        const char *_path,
+                        const char *_mime_type);
+  /**
+   * Optional destructor: called once with `user_data` when the bridge is dropped.
+   */
+  void (*free_user_data)(void*);
+} KREUZBERGKreuzbergDocumentExtractorVTable;
+
+/**
+ * VTable for C plugin bridges implementing the `Renderer` trait.
+ *
+ * # Safety
+ *
+ * All function pointers must be valid for the lifetime of any bridge created from
+ * this vtable.  `free_user_data`, when non-null, is called once with `user_data`
+ * when the bridge is dropped.
+ */
+typedef struct KREUZBERGKreuzbergRendererVTable {
+  /**
+   * Return a null-terminated UTF-8 name string into `out_name`.
+   */
+  void (*name_fn)(const void *user_data,
+                  char **out_name);
+  /**
+   * Return a null-terminated UTF-8 version string into `out_version`.
+   */
+  void (*version_fn)(const void *user_data,
+                     char **out_version);
+  /**
+   * Initialise the plugin; return 0 on success, non-zero on failure (error text in `out_error`).
+   */
+  int32_t (*initialize_fn)(const void *user_data,
+                           char **out_error);
+  /**
+   * Shut down the plugin; return 0 on success, non-zero on failure (error text in `out_error`).
+   */
+  int32_t (*shutdown_fn)(const void *user_data,
+                         char **out_error);
+  /**
+   * Render an [`InternalDocument`] to the output format.
+   *
+   * # Arguments
+   *
+   * * `doc` - The internal document to render
+   *
+   * # Returns
+   *
+   * The rendered output as a string.
+   *
+   * # Errors
+   *
+   * Returns an error if rendering fails.
+   */
+  int32_t (*render)(const void *user_data,
+                    const char *doc,
+                    char **out_result,
+                    char **out_error);
+  /**
+   * Optional destructor: called once with `user_data` when the bridge is dropped.
+   */
+  void (*free_user_data)(void*);
+} KREUZBERGKreuzbergRendererVTable;
+
+/**
  * Return the last error code (0 means no error).
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
@@ -1144,6 +1342,13 @@ KREUZBERGOutputFormat *kreuzberg_extraction_config_output_format(const KREUZBERG
  * Pointer must be a valid handle returned by this library.
  */
 KREUZBERGLayoutDetectionConfig *kreuzberg_extraction_config_layout(const KREUZBERGExtractionConfig *ptr);
+
+/**
+ * Get the `use_layout_for_markdown` field from a `ExtractionConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t kreuzberg_extraction_config_use_layout_for_markdown(const KREUZBERGExtractionConfig *ptr);
 
 /**
  * Get the `include_document_structure` field from a `ExtractionConfig`.
@@ -2285,6 +2490,13 @@ char *kreuzberg_ocr_config_vlm_prompt(const KREUZBERGOcrConfig *ptr);
 KREUZBERGAccelerationConfig *kreuzberg_ocr_config_acceleration(const KREUZBERGOcrConfig *ptr);
 
 /**
+ * Get the `tessdata_bytes` field from a `OcrConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_ocr_config_tessdata_bytes(const KREUZBERGOcrConfig *ptr);
+
+/**
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
@@ -2371,6 +2583,13 @@ void kreuzberg_pdf_config_free(KREUZBERGPdfConfig *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 int32_t kreuzberg_pdf_config_extract_images(const KREUZBERGPdfConfig *ptr);
+
+/**
+ * Get the `extract_tables` field from a `PdfConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t kreuzberg_pdf_config_extract_tables(const KREUZBERGPdfConfig *ptr);
 
 /**
  * Get the `passwords` field from a `PdfConfig`.
@@ -4244,6 +4463,87 @@ KREUZBERGSecurityLimits *kreuzberg_security_limits_default(void);
  * Pointer must have been returned by this library, or be null.
  */
 void kreuzberg_zip_bomb_validator_free(KREUZBERGZipBombValidator *ptr);
+
+/**
+ * Free a `HwpxExtractor` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_hwpx_extractor_free(KREUZBERGHwpxExtractor *ptr);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+KREUZBERGHwpxExtractor *kreuzberg_hwpx_extractor_default(void);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_hwpx_extractor_name(const KREUZBERGHwpxExtractor *this_);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_hwpx_extractor_version(const KREUZBERGHwpxExtractor *this_);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t kreuzberg_hwpx_extractor_initialize(const KREUZBERGHwpxExtractor *this_);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t kreuzberg_hwpx_extractor_shutdown(const KREUZBERGHwpxExtractor *this_);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_hwpx_extractor_description(const KREUZBERGHwpxExtractor *this_);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_hwpx_extractor_author(const KREUZBERGHwpxExtractor *this_);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_hwpx_extractor_extract_bytes(const KREUZBERGHwpxExtractor *_this,
+                                             const uint8_t *_content,
+                                             uintptr_t _content_len,
+                                             const char *_mime_type,
+                                             const KREUZBERGExtractionConfig *_config);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_hwpx_extractor_supported_mime_types(const KREUZBERGHwpxExtractor *this_);
+
+/**
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+int32_t kreuzberg_hwpx_extractor_priority(const KREUZBERGHwpxExtractor *this_);
 
 /**
  * Create a `TokenReductionConfig` from a JSON string. Returns null on failure.
@@ -6937,6 +7237,13 @@ char *kreuzberg_metadata_abstract_text(const KREUZBERGMetadata *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 char *kreuzberg_metadata_output_format(const KREUZBERGMetadata *ptr);
+
+/**
+ * Get the `ocr_used` field from a `Metadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t kreuzberg_metadata_ocr_used(const KREUZBERGMetadata *ptr);
 
 /**
  * Get the `additional` field from a `Metadata`.
@@ -10831,6 +11138,22 @@ uint32_t kreuzberg_detection_result_page_height(const KREUZBERGDetectionResult *
 char *kreuzberg_detection_result_detections(const KREUZBERGDetectionResult *ptr);
 
 /**
+ * Create a `EmbeddedFile` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_embedded_file_free`.
+ */
+KREUZBERGEmbeddedFile *kreuzberg_embedded_file_from_json(const char *json);
+
+/**
+ * Serialize a `EmbeddedFile` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_embedded_file_to_json(const KREUZBERGEmbeddedFile *ptr);
+
+/**
  * Free a `EmbeddedFile` handle.
  * # Safety
  * Pointer must have been returned by this library, or be null.
@@ -11495,6 +11818,806 @@ int32_t kreuzberg_layout_class_from_i32(int32_t value);
 int32_t kreuzberg_layout_class_from_str(const char *name);
 
 /**
+ * Free a heap-allocated `ExecutionProviderType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_execution_provider_type_free(KREUZBERGExecutionProviderType *ptr);
+
+/**
+ * Serialize a heap-allocated `ExecutionProviderType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_execution_provider_type_to_json(const KREUZBERGExecutionProviderType *ptr);
+
+/**
+ * Render a heap-allocated `ExecutionProviderType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_execution_provider_type_to_string(const KREUZBERGExecutionProviderType *ptr);
+
+/**
+ * Free a heap-allocated `OutputFormat` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_output_format_free(KREUZBERGOutputFormat *ptr);
+
+/**
+ * Serialize a heap-allocated `OutputFormat` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_output_format_to_json(const KREUZBERGOutputFormat *ptr);
+
+/**
+ * Render a heap-allocated `OutputFormat` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_output_format_to_string(const KREUZBERGOutputFormat *ptr);
+
+/**
+ * Free a heap-allocated `HtmlTheme` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_html_theme_free(KREUZBERGHtmlTheme *ptr);
+
+/**
+ * Serialize a heap-allocated `HtmlTheme` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_html_theme_to_json(const KREUZBERGHtmlTheme *ptr);
+
+/**
+ * Render a heap-allocated `HtmlTheme` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_html_theme_to_string(const KREUZBERGHtmlTheme *ptr);
+
+/**
+ * Free a heap-allocated `TableModel` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_table_model_free(KREUZBERGTableModel *ptr);
+
+/**
+ * Serialize a heap-allocated `TableModel` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_table_model_to_json(const KREUZBERGTableModel *ptr);
+
+/**
+ * Render a heap-allocated `TableModel` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_table_model_to_string(const KREUZBERGTableModel *ptr);
+
+/**
+ * Free a heap-allocated `ChunkerType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_chunker_type_free(KREUZBERGChunkerType *ptr);
+
+/**
+ * Serialize a heap-allocated `ChunkerType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_chunker_type_to_json(const KREUZBERGChunkerType *ptr);
+
+/**
+ * Render a heap-allocated `ChunkerType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_chunker_type_to_string(const KREUZBERGChunkerType *ptr);
+
+/**
+ * Free a heap-allocated `ChunkSizing` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_chunk_sizing_free(KREUZBERGChunkSizing *ptr);
+
+/**
+ * Serialize a heap-allocated `ChunkSizing` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_chunk_sizing_to_json(const KREUZBERGChunkSizing *ptr);
+
+/**
+ * Render a heap-allocated `ChunkSizing` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_chunk_sizing_to_string(const KREUZBERGChunkSizing *ptr);
+
+/**
+ * Free a heap-allocated `EmbeddingModelType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_embedding_model_type_free(KREUZBERGEmbeddingModelType *ptr);
+
+/**
+ * Serialize a heap-allocated `EmbeddingModelType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_embedding_model_type_to_json(const KREUZBERGEmbeddingModelType *ptr);
+
+/**
+ * Render a heap-allocated `EmbeddingModelType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_embedding_model_type_to_string(const KREUZBERGEmbeddingModelType *ptr);
+
+/**
+ * Free a heap-allocated `CodeContentMode` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_code_content_mode_free(KREUZBERGCodeContentMode *ptr);
+
+/**
+ * Serialize a heap-allocated `CodeContentMode` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_code_content_mode_to_json(const KREUZBERGCodeContentMode *ptr);
+
+/**
+ * Render a heap-allocated `CodeContentMode` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_code_content_mode_to_string(const KREUZBERGCodeContentMode *ptr);
+
+/**
+ * Free a heap-allocated `ReductionLevel` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_reduction_level_free(KREUZBERGReductionLevel *ptr);
+
+/**
+ * Serialize a heap-allocated `ReductionLevel` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_reduction_level_to_json(const KREUZBERGReductionLevel *ptr);
+
+/**
+ * Render a heap-allocated `ReductionLevel` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_reduction_level_to_string(const KREUZBERGReductionLevel *ptr);
+
+/**
+ * Free a heap-allocated `PdfAnnotationType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_pdf_annotation_type_free(KREUZBERGPdfAnnotationType *ptr);
+
+/**
+ * Serialize a heap-allocated `PdfAnnotationType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_pdf_annotation_type_to_json(const KREUZBERGPdfAnnotationType *ptr);
+
+/**
+ * Render a heap-allocated `PdfAnnotationType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_pdf_annotation_type_to_string(const KREUZBERGPdfAnnotationType *ptr);
+
+/**
+ * Free a heap-allocated `BlockType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_block_type_free(KREUZBERGBlockType *ptr);
+
+/**
+ * Serialize a heap-allocated `BlockType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_block_type_to_json(const KREUZBERGBlockType *ptr);
+
+/**
+ * Render a heap-allocated `BlockType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_block_type_to_string(const KREUZBERGBlockType *ptr);
+
+/**
+ * Free a heap-allocated `InlineType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_inline_type_free(KREUZBERGInlineType *ptr);
+
+/**
+ * Serialize a heap-allocated `InlineType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_inline_type_to_json(const KREUZBERGInlineType *ptr);
+
+/**
+ * Render a heap-allocated `InlineType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_inline_type_to_string(const KREUZBERGInlineType *ptr);
+
+/**
+ * Free a heap-allocated `RelationshipKind` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_relationship_kind_free(KREUZBERGRelationshipKind *ptr);
+
+/**
+ * Serialize a heap-allocated `RelationshipKind` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_relationship_kind_to_json(const KREUZBERGRelationshipKind *ptr);
+
+/**
+ * Render a heap-allocated `RelationshipKind` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_relationship_kind_to_string(const KREUZBERGRelationshipKind *ptr);
+
+/**
+ * Free a heap-allocated `ContentLayer` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_content_layer_free(KREUZBERGContentLayer *ptr);
+
+/**
+ * Serialize a heap-allocated `ContentLayer` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_content_layer_to_json(const KREUZBERGContentLayer *ptr);
+
+/**
+ * Render a heap-allocated `ContentLayer` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_content_layer_to_string(const KREUZBERGContentLayer *ptr);
+
+/**
+ * Free a heap-allocated `NodeContent` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_node_content_free(KREUZBERGNodeContent *ptr);
+
+/**
+ * Serialize a heap-allocated `NodeContent` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_node_content_to_json(const KREUZBERGNodeContent *ptr);
+
+/**
+ * Render a heap-allocated `NodeContent` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_node_content_to_string(const KREUZBERGNodeContent *ptr);
+
+/**
+ * Free a heap-allocated `AnnotationKind` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_annotation_kind_free(KREUZBERGAnnotationKind *ptr);
+
+/**
+ * Serialize a heap-allocated `AnnotationKind` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_annotation_kind_to_json(const KREUZBERGAnnotationKind *ptr);
+
+/**
+ * Render a heap-allocated `AnnotationKind` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_annotation_kind_to_string(const KREUZBERGAnnotationKind *ptr);
+
+/**
+ * Free a heap-allocated `ExtractionMethod` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_extraction_method_free(KREUZBERGExtractionMethod *ptr);
+
+/**
+ * Serialize a heap-allocated `ExtractionMethod` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_extraction_method_to_json(const KREUZBERGExtractionMethod *ptr);
+
+/**
+ * Render a heap-allocated `ExtractionMethod` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_extraction_method_to_string(const KREUZBERGExtractionMethod *ptr);
+
+/**
+ * Free a heap-allocated `ChunkType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_chunk_type_free(KREUZBERGChunkType *ptr);
+
+/**
+ * Serialize a heap-allocated `ChunkType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_chunk_type_to_json(const KREUZBERGChunkType *ptr);
+
+/**
+ * Render a heap-allocated `ChunkType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_chunk_type_to_string(const KREUZBERGChunkType *ptr);
+
+/**
+ * Free a heap-allocated `ImageKind` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_image_kind_free(KREUZBERGImageKind *ptr);
+
+/**
+ * Serialize a heap-allocated `ImageKind` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_image_kind_to_json(const KREUZBERGImageKind *ptr);
+
+/**
+ * Render a heap-allocated `ImageKind` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_image_kind_to_string(const KREUZBERGImageKind *ptr);
+
+/**
+ * Free a heap-allocated `ResultFormat` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_result_format_free(KREUZBERGResultFormat *ptr);
+
+/**
+ * Serialize a heap-allocated `ResultFormat` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_result_format_to_json(const KREUZBERGResultFormat *ptr);
+
+/**
+ * Render a heap-allocated `ResultFormat` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_result_format_to_string(const KREUZBERGResultFormat *ptr);
+
+/**
+ * Free a heap-allocated `ElementType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_element_type_free(KREUZBERGElementType *ptr);
+
+/**
+ * Serialize a heap-allocated `ElementType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_element_type_to_json(const KREUZBERGElementType *ptr);
+
+/**
+ * Render a heap-allocated `ElementType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_element_type_to_string(const KREUZBERGElementType *ptr);
+
+/**
+ * Free a heap-allocated `FormatMetadata` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_format_metadata_free(KREUZBERGFormatMetadata *ptr);
+
+/**
+ * Serialize a heap-allocated `FormatMetadata` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_format_metadata_to_json(const KREUZBERGFormatMetadata *ptr);
+
+/**
+ * Render a heap-allocated `FormatMetadata` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_format_metadata_to_string(const KREUZBERGFormatMetadata *ptr);
+
+/**
+ * Free a heap-allocated `TextDirection` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_text_direction_free(KREUZBERGTextDirection *ptr);
+
+/**
+ * Serialize a heap-allocated `TextDirection` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_text_direction_to_json(const KREUZBERGTextDirection *ptr);
+
+/**
+ * Render a heap-allocated `TextDirection` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_text_direction_to_string(const KREUZBERGTextDirection *ptr);
+
+/**
+ * Free a heap-allocated `LinkType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_link_type_free(KREUZBERGLinkType *ptr);
+
+/**
+ * Serialize a heap-allocated `LinkType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_link_type_to_json(const KREUZBERGLinkType *ptr);
+
+/**
+ * Render a heap-allocated `LinkType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_link_type_to_string(const KREUZBERGLinkType *ptr);
+
+/**
+ * Free a heap-allocated `ImageType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_image_type_free(KREUZBERGImageType *ptr);
+
+/**
+ * Serialize a heap-allocated `ImageType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_image_type_to_json(const KREUZBERGImageType *ptr);
+
+/**
+ * Render a heap-allocated `ImageType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_image_type_to_string(const KREUZBERGImageType *ptr);
+
+/**
+ * Free a heap-allocated `StructuredDataType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_structured_data_type_free(KREUZBERGStructuredDataType *ptr);
+
+/**
+ * Serialize a heap-allocated `StructuredDataType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_structured_data_type_to_json(const KREUZBERGStructuredDataType *ptr);
+
+/**
+ * Render a heap-allocated `StructuredDataType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_structured_data_type_to_string(const KREUZBERGStructuredDataType *ptr);
+
+/**
+ * Free a heap-allocated `OcrBoundingGeometry` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_ocr_bounding_geometry_free(KREUZBERGOcrBoundingGeometry *ptr);
+
+/**
+ * Serialize a heap-allocated `OcrBoundingGeometry` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_ocr_bounding_geometry_to_json(const KREUZBERGOcrBoundingGeometry *ptr);
+
+/**
+ * Render a heap-allocated `OcrBoundingGeometry` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_ocr_bounding_geometry_to_string(const KREUZBERGOcrBoundingGeometry *ptr);
+
+/**
+ * Free a heap-allocated `OcrElementLevel` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_ocr_element_level_free(KREUZBERGOcrElementLevel *ptr);
+
+/**
+ * Serialize a heap-allocated `OcrElementLevel` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_ocr_element_level_to_json(const KREUZBERGOcrElementLevel *ptr);
+
+/**
+ * Render a heap-allocated `OcrElementLevel` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_ocr_element_level_to_string(const KREUZBERGOcrElementLevel *ptr);
+
+/**
+ * Free a heap-allocated `PageUnitType` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_page_unit_type_free(KREUZBERGPageUnitType *ptr);
+
+/**
+ * Serialize a heap-allocated `PageUnitType` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_page_unit_type_to_json(const KREUZBERGPageUnitType *ptr);
+
+/**
+ * Render a heap-allocated `PageUnitType` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_page_unit_type_to_string(const KREUZBERGPageUnitType *ptr);
+
+/**
+ * Free a heap-allocated `UriKind` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_uri_kind_free(KREUZBERGUriKind *ptr);
+
+/**
+ * Serialize a heap-allocated `UriKind` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_uri_kind_to_json(const KREUZBERGUriKind *ptr);
+
+/**
+ * Render a heap-allocated `UriKind` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_uri_kind_to_string(const KREUZBERGUriKind *ptr);
+
+/**
+ * Free a heap-allocated `KeywordAlgorithm` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_keyword_algorithm_free(KREUZBERGKeywordAlgorithm *ptr);
+
+/**
+ * Serialize a heap-allocated `KeywordAlgorithm` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_keyword_algorithm_to_json(const KREUZBERGKeywordAlgorithm *ptr);
+
+/**
+ * Render a heap-allocated `KeywordAlgorithm` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_keyword_algorithm_to_string(const KREUZBERGKeywordAlgorithm *ptr);
+
+/**
+ * Free a heap-allocated `LayoutClass` returned by a pointer-returning FFI function.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_layout_class_free(KREUZBERGLayoutClass *ptr);
+
+/**
+ * Serialize a heap-allocated `LayoutClass` to a JSON string.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_layout_class_to_json(const KREUZBERGLayoutClass *ptr);
+
+/**
+ * Render a heap-allocated `LayoutClass` as its string representation
+ * (the unit-variant name as serialized by serde — e.g. `"completed"`,
+ * without surrounding JSON quotes).
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_layout_class_to_string(const KREUZBERGLayoutClass *ptr);
+
+/**
  * Extract content from a byte array.
  *
  * This is the main entry point for in-memory extraction. It performs the following steps:
@@ -11718,7 +12841,7 @@ char *kreuzberg_batch_extract_bytes_sync(const char *items,
  *
  * # Arguments
  *
- * * `items` - Vector of [`BatchFileItem`] structs, each containing a path and optional
+ * * `items` - Vector of `BatchFileItem` structs, each containing a path and optional
  *   per-file configuration overrides.
  * * `config` - Batch-level extraction configuration (provides defaults and batch settings)
  *
@@ -11787,7 +12910,7 @@ char *kreuzberg_batch_extract_files(const char *items,
  *
  * # Arguments
  *
- * * `items` - Vector of [`BatchBytesItem`] structs, each containing content bytes,
+ * * `items` - Vector of `BatchBytesItem` structs, each containing content bytes,
  *   MIME type, and optional per-item configuration overrides.
  * * `config` - Batch-level extraction configuration
  *
@@ -11894,6 +13017,17 @@ char *kreuzberg_detect_mime_type_from_bytes(const uint8_t *content,
 char *kreuzberg_get_extensions_for_mime(const char *mime_type);
 
 /**
+ * List the names of all registered embedding backends.
+ *
+ * Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
+ * language bindings via `alef.toml [exclude].functions`.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+char *kreuzberg_list_embedding_backends(void);
+
+/**
  * List names of all registered document extractors.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
@@ -11927,29 +13061,6 @@ char *kreuzberg_list_document_extractors(void);
 char *kreuzberg_list_ocr_backends(void);
 
 /**
- * Clear all OCR backends from the global registry.
- *
- * Removes all OCR backends and calls their `shutdown()` methods.
- *
- * # Returns
- *
- * - `Ok(())` if all backends were cleared successfully
- * - `Err(...)` if any shutdown method failed
- *
- * # Example
- *
- * ```rust
- * use kreuzberg::plugins::clear_ocr_backends;
- *
- * clear_ocr_backends()?;
- * ```
- * # Safety
- * Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_ocr_backends(void);
-
-/**
  * List all registered post-processor names.
  *
  * Returns a vector of all post-processor names currently registered in the
@@ -11977,12 +13088,16 @@ int32_t kreuzberg_clear_ocr_backends(void);
 char *kreuzberg_list_post_processors(void);
 
 /**
- * Remove all registered post-processors.
+ * List names of all registered renderers.
+ *
+ * # Errors
+ *
+ * Returns an error if the registry lock is poisoned.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
-int32_t kreuzberg_clear_post_processors(void);
+char *kreuzberg_list_renderers(void);
 
 /**
  * List names of all registered validators.
@@ -11991,14 +13106,6 @@ int32_t kreuzberg_clear_post_processors(void);
  * Returned pointers must be freed with the appropriate free function.
  */
 char *kreuzberg_list_validators(void);
-
-/**
- * Remove all registered validators.
- * # Safety
- * Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_validators(void);
 
 /**
  * Generate embeddings asynchronously for a list of text strings.
@@ -12148,6 +13255,20 @@ int32_t kreuzberg_unregister_ocr_backend(const char *name,
                                          char **out_error);
 
 /**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_ocr_backend(char **out_error);
+
+/**
  * Register a C plugin implementing `PostProcessor` via a vtable.
  *
  * # Parameters
@@ -12182,6 +13303,20 @@ int32_t kreuzberg_register_post_processor(const char *name,
  */
 int32_t kreuzberg_unregister_post_processor(const char *name,
                                             char **out_error);
+
+/**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_post_processor(char **out_error);
 
 /**
  * Register a C plugin implementing `Validator` via a vtable.
@@ -12220,6 +13355,20 @@ int32_t kreuzberg_unregister_validator(const char *name,
                                        char **out_error);
 
 /**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_validator(char **out_error);
+
+/**
  * Register a C plugin implementing `EmbeddingBackend` via a vtable.
  *
  * # Parameters
@@ -12254,5 +13403,119 @@ int32_t kreuzberg_register_embedding_backend(const char *name,
  */
 int32_t kreuzberg_unregister_embedding_backend(const char *name,
                                                char **out_error);
+
+/**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_embedding_backend(char **out_error);
+
+/**
+ * Register a C plugin implementing `DocumentExtractor` via a vtable.
+ *
+ * # Parameters
+ *
+ * - `name`: null-terminated UTF-8 plugin name. Must not be null.
+ * - `vtable`: vtable with function pointers implementing the trait.
+ * - `user_data`: opaque pointer forwarded to every vtable function.
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * All function pointers in `vtable` must remain valid until the plugin is
+ * unregistered. `user_data` must be safe to use from any thread that calls
+ * into the plugin.
+ */
+int32_t kreuzberg_register_document_extractor(const char *name,
+                                              struct KREUZBERGKreuzbergDocumentExtractorVTable vtable,
+                                              const void *user_data,
+                                              char **out_error);
+
+/**
+ * Unregister a previously registered C plugin by name.
+ *
+ * # Parameters
+ *
+ * - `name`: null-terminated UTF-8 plugin name. Must not be null.
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `name` must point to a valid null-terminated C string.
+ */
+int32_t kreuzberg_unregister_document_extractor(const char *name,
+                                                char **out_error);
+
+/**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_document_extractor(char **out_error);
+
+/**
+ * Register a C plugin implementing `Renderer` via a vtable.
+ *
+ * # Parameters
+ *
+ * - `name`: null-terminated UTF-8 plugin name. Must not be null.
+ * - `vtable`: vtable with function pointers implementing the trait.
+ * - `user_data`: opaque pointer forwarded to every vtable function.
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * All function pointers in `vtable` must remain valid until the plugin is
+ * unregistered. `user_data` must be safe to use from any thread that calls
+ * into the plugin.
+ */
+int32_t kreuzberg_register_renderer(const char *name,
+                                    struct KREUZBERGKreuzbergRendererVTable vtable,
+                                    const void *user_data,
+                                    char **out_error);
+
+/**
+ * Unregister a previously registered C plugin by name.
+ *
+ * # Parameters
+ *
+ * - `name`: null-terminated UTF-8 plugin name. Must not be null.
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `name` must point to a valid null-terminated C string.
+ */
+int32_t kreuzberg_unregister_renderer(const char *name,
+                                      char **out_error);
+
+/**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_renderer(char **out_error);
 
 #endif  /* KREUZBERG_H */

@@ -81,7 +81,7 @@
     },
     {
       "name": "freezed_annotation",
-      "rootUri": "file:///Users/naamanhirschfeld/.pub-cache/hosted/pub.dev/freezed_annotation-3.1.0",
+      "rootUri": "file:///Users/naamanhirschfeld/.pub-cache/hosted/pub.dev/freezed_annotation-2.4.4",
       "packageUri": "lib/",
       "languageVersion": "3.0"
     },
@@ -131,7 +131,7 @@
       "name": "kreuzberg",
       "rootUri": "../../../packages/dart",
       "packageUri": "lib/",
-      "languageVersion": "3.0"
+      "languageVersion": "3.3"
     },
     {
       "name": "logging",
@@ -323,10 +323,12 @@
       "name": "e2e_dart",
       "rootUri": "../",
       "packageUri": "lib/",
-      "languageVersion": "3.0"
+      "languageVersion": "3.3"
     }
   ],
   "generator": "pub",
-  "generatorVersion": "3.11.6",
+  "generatorVersion": "3.11.5",
+  "flutterRoot": "file:///opt/homebrew/share/flutter",
+  "flutterVersion": "3.41.9",
   "pubCache": "file:///Users/naamanhirschfeld/.pub-cache"
 }

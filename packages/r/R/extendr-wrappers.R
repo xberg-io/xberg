@@ -1401,3 +1401,58 @@ FormatMetadata <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.FormatMetadata` <- `$.FormatMetadata`
+ChunkSizing <- new.env(parent = emptyenv())
+ChunkSizing$default <- function() .Call("wrap__ChunkSizing__default", PACKAGE = "kreuzberg")
+ChunkSizing$from_json <- function(json) .Call("wrap__ChunkSizing__from_json", json, PACKAGE = "kreuzberg")
+#' @export
+`$.ChunkSizing` <- function(self, name) {
+  func <- ChunkSizing[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.ChunkSizing` <- `$.ChunkSizing`
+EmbeddingModelType <- new.env(parent = emptyenv())
+EmbeddingModelType$default <- function() .Call("wrap__EmbeddingModelType__default", PACKAGE = "kreuzberg")
+EmbeddingModelType$from_json <- function(json) .Call("wrap__EmbeddingModelType__from_json", json, PACKAGE = "kreuzberg")
+#' @export
+`$.EmbeddingModelType` <- function(self, name) {
+  func <- EmbeddingModelType[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.EmbeddingModelType` <- `$.EmbeddingModelType`
+NodeContent <- new.env(parent = emptyenv())
+NodeContent$default <- function() .Call("wrap__NodeContent__default", PACKAGE = "kreuzberg")
+NodeContent$from_json <- function(json) .Call("wrap__NodeContent__from_json", json, PACKAGE = "kreuzberg")
+#' @export
+`$.NodeContent` <- function(self, name) {
+  func <- NodeContent[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.NodeContent` <- `$.NodeContent`
+AnnotationKind <- new.env(parent = emptyenv())
+AnnotationKind$default <- function() .Call("wrap__AnnotationKind__default", PACKAGE = "kreuzberg")
+AnnotationKind$from_json <- function(json) .Call("wrap__AnnotationKind__from_json", json, PACKAGE = "kreuzberg")
+#' @export
+`$.AnnotationKind` <- function(self, name) {
+  func <- AnnotationKind[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.AnnotationKind` <- `$.AnnotationKind`
+OcrBoundingGeometry <- new.env(parent = emptyenv())
+OcrBoundingGeometry$default <- function() .Call("wrap__OcrBoundingGeometry__default", PACKAGE = "kreuzberg")
+OcrBoundingGeometry$from_json <- function(json) .Call("wrap__OcrBoundingGeometry__from_json", json, PACKAGE = "kreuzberg")
+#' @export
+`$.OcrBoundingGeometry` <- function(self, name) {
+  func <- OcrBoundingGeometry[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.OcrBoundingGeometry` <- `$.OcrBoundingGeometry`

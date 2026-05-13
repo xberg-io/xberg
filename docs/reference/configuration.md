@@ -319,6 +319,7 @@ OCR configuration.
 | `vlm_config` | `LlmConfig | None` | `None` | VLM (Vision Language Model) OCR configuration. Required when `backend` is `"vlm"`. Uses liter-llm to send page images to a vision model for text extraction. |
 | `vlm_prompt` | `str | None` | `None` | Custom Jinja2 prompt template for VLM OCR. When `None`, uses the default template. Available variables: - `{{ language }}` — The document language code (e.g., "eng", "deu"). |
 | `acceleration` | `AccelerationConfig | None` | `None` | Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection). Not user-configurable via config files — injected at runtime from `ExtractionConfig.acceleration` before each `process_image` call. |
+| `tessdata_bytes` | `dict[str, bytes] | None` | `None` | Caller-supplied Tesseract `traineddata` bytes per language code. Primary use case is the WASM build, which has no filesystem and cannot download tessdata at runtime. Native builds typically rely on `TessdataManager` and ignore this field. When present, the WASM Tesseract backend prefers these bytes over its compile-time-bundled English data. Skipped by serde to keep config files small — supply via the typed API at runtime. |
 
 ---
 
@@ -351,6 +352,7 @@ PDF-specific configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `extract_images` | `bool` | `False` | Extract images from PDF |
+| `extract_tables` | `bool` | `True` | Extract tables from PDF. When `True` (default), runs pdf_oxide's native grid detector and, if it finds nothing, falls back to the heuristic text-layer reconstruction in `pdf.oxide.table.extract_tables_heuristic`. Set to `False` to skip both passes — `tables` will then be empty in the result. |
 | `passwords` | `list[str] | None` | `None` | List of passwords to try when opening encrypted PDFs |
 | `extract_metadata` | `bool` | `True` | Extract PDF metadata |
 | `hierarchy` | `HierarchyConfig | None` | `None` | Hierarchy extraction configuration (None = hierarchy extraction disabled) |

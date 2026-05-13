@@ -1661,63 +1661,6 @@ public enum KreuzbergError: Error {
     case other(message: String, field0: String)
 }
 
-public final class HwpxExtractor {
-    private let inner: RustBridge.HwpxExtractor
-    public init(apiKey: String, baseUrl: String? = nil) throws {
-        self.inner = try RustBridge.createHwpxExtractor(apiKey, baseUrl)
-    }
-    public func default_() -> HwpxExtractor {
-        return RustBridge.hwpxExtractorDefault(self.inner)
-    }
-    public func name() -> String {
-        return RustBridge.hwpxExtractorName(self.inner)
-    }
-    public func version() -> String {
-        return RustBridge.hwpxExtractorVersion(self.inner)
-    }
-    public func initialize() throws {
-        try RustBridge.hwpxExtractorInitialize(self.inner)
-    }
-    public func shutdown() throws {
-        try RustBridge.hwpxExtractorShutdown(self.inner)
-    }
-    public func description() -> String {
-        return RustBridge.hwpxExtractorDescription(self.inner)
-    }
-    public func author() -> String {
-        return RustBridge.hwpxExtractorAuthor(self.inner)
-    }
-    public func supportedMimeTypes() -> [String] {
-        return RustBridge.hwpxExtractorSupportedMimeTypes(self.inner)
-    }
-    public func priority() -> Int32 {
-        return RustBridge.hwpxExtractorPriority(self.inner)
-    }
-}
-
-public final class TessdataManager {
-    private let inner: RustBridge.TessdataManager
-    public init(apiKey: String, baseUrl: String? = nil) throws {
-        self.inner = try RustBridge.createTessdataManager(apiKey, baseUrl)
-    }
-    /// Get the cache directory path.
-    public func cacheDir() -> URL {
-        return RustBridge.tessdataManagerCacheDir(self.inner)
-    }
-    /// Check if a specific language traineddata file is cached.
-    public func isLanguageCached(_ lang: String) -> Bool {
-        return RustBridge.tessdataManagerIsLanguageCached(self.inner, lang)
-    }
-    /// Downloads all tessdata_fast traineddata files to the cache directory.
-    ///
-    /// Skips files that already exist. Returns the count of newly downloaded files.
-    ///
-    /// Requires the `paddle-ocr` feature for HTTP download support (ureq).
-    public func ensureAllLanguages() throws -> UInt {
-        return try RustBridge.tessdataManagerEnsureAllLanguages(self.inner)
-    }
-}
-
 // MARK: - Convenience Wrapper Functions
 // These wrappers bridge String / [UInt8] inputs to RustBridge's
 // RustVec<UInt8> requirement. The config parameter must be a fully
@@ -1901,4 +1844,23 @@ public func detectMimeTypeFromBytes(
     let url = resolveFixturePath(filePath)
     let data = try Data(contentsOf: url)
     return try detectMimeTypeFromBytes(makeByteVec(data.map { $0 })).toString()
+}
+// MARK: - From-JSON Helpers
+// Public wrappers forwarding RustBridge's swift_bridge-generated
+// `{TypeName}FromJson` helpers into this module's namespace.
+
+public func ocrConfigFromJson(_ json: String) throws -> OcrConfig {
+    return try RustBridge.ocrConfigFromJson(json)
+}
+
+public func embeddingConfigFromJson(_ json: String) throws -> EmbeddingConfig {
+    return try RustBridge.embeddingConfigFromJson(json)
+}
+
+public func extractionResultFromJson(_ json: String) throws -> ExtractionResult {
+    return try RustBridge.extractionResultFromJson(json)
+}
+
+public func htmlMetadataFromJson(_ json: String) throws -> HtmlMetadata {
+    return try RustBridge.htmlMetadataFromJson(json)
 }

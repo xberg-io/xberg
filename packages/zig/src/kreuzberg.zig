@@ -2951,18 +2951,26 @@ pub fn embed_texts(texts: []const u8, config: []const u8) (KreuzbergError||error
 ///
 /// Returns `null` if no preset with the given name exists. Returns an owned
 /// clone so the value is safe to pass across FFI boundaries.
-pub fn get_embedding_preset(name: []const u8) ?EmbeddingPreset {
+pub fn get_embedding_preset(name: []const u8) error{OutOfMemory}!?[]u8 {
     const name_z = try std.fmt.allocPrintSentinel(
         std.heap.c_allocator, "{s}", .{name}, 0);
     std.heap.c_allocator.free(name_z);
     const _result = c.kreuzberg_get_embedding_preset(name_z);
-    return _result;
+    return if (_result == null) null else blk: {
+        const _json_ptr = c.kreuzberg_embedding_preset_to_json(_result.?);
+        defer _free_string(_json_ptr);
+        c.kreuzberg_embedding_preset_free(_result.?);
+        const slice = std.mem.sliceTo(_json_ptr, 0);
+        const owned = try std.heap.c_allocator.dupe(u8, slice);
+        break :blk owned;
+    }
+;
 }
 
 /// List the names of all available embedding presets.
 ///
 /// Returns owned `String`s so the values are safe to pass across FFI boundaries.
-pub fn list_embedding_presets() []u8 {
+pub fn list_embedding_presets() error{OutOfMemory}![]u8 {
     const _result = c.kreuzberg_list_embedding_presets();
     return blk: {
         const slice = std.mem.sliceTo(_result, 0);

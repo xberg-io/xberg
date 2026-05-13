@@ -249,6 +249,10 @@ docs/snippets/
 
 When you change a user-facing API, update the matching snippet. When you add a new feature, create a snippet and include it from the relevant doc page.
 
+### Theme tokens (light mode)
+
+Inline `code` and command-style monospace in light mode use the text token **`#26203A`**, defined in `docs/css/extra.css` as `--kb-text` (referenced as `var(--kb-text)`; brand backgrounds use the same value via `--kb-brand-ink`).
+
 ---
 
 ## Debugging

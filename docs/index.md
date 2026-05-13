@@ -27,43 +27,29 @@ Document intelligence with a Rust core and native bindings for 17 languages. Ext
 
 - :material-flash:{ .lg .middle } **High Performance**
 
----
-
     Rust core with native PDFium, SIMD optimizations, and full parallelism. Process thousands of documents per minute without a GPU.
 
 - :material-file-document-multiple:{ .lg .middle } **91+ File Formats**
-
----
 
     PDF, DOCX, XLSX, PPTX, images, HTML, XML, emails, archives, academic formats — one API handles them all.
 
 - :material-eye:{ .lg .middle } **Multi-Engine OCR**
 
----
-
     Tesseract and PaddleOCR work across all language bindings. EasyOCR is available for Python only.
 
 - :material-translate:{ .lg .middle } **16 Language Bindings**
-
----
 
     Native bindings for Python, TypeScript, Rust, Go, Java, Kotlin, C#, Ruby, PHP, Elixir, R, Dart, Swift, Zig, C, and WebAssembly.
 
 - :material-code-tags:{ .lg .middle } **Code Intelligence**
 
----
-
-    Extract functions, classes, imports, symbols, and docstrings from 248 programming languages. Results in `code_intelligence` field with semantic chunking.
+    Extract functions, classes, imports, symbols, and docstrings from 248 programming languages. Results in the **code_intelligence** field with semantic chunking.
 
 - :material-puzzle:{ .lg .middle } **Plugin System**
-
----
 
     Register custom extractors, OCR backends, post-processors, and validators. Plugin authoring is primarily supported in Python; all bindings can consume registered plugins.
 
 - :material-server:{ .lg .middle } **Flexible Deployment**
-
----
 
     Use as a library, CLI tool, REST API server, MCP server, or Docker container. Pick what fits your stack.
 
@@ -110,15 +96,11 @@ Document intelligence with a Rust core and native bindings for 17 languages. Ext
 
 - :material-rocket-launch:{ .lg .middle } **Getting Started**
 
----
-
     Install Kreuzberg and extract your first document in minutes.
 
     [:octicons-arrow-right-24: Quick Start](getting-started/quickstart.md)
 
 - :material-book-open-variant:{ .lg .middle } **Guides**
-
----
 
     Configuration, OCR setup, Docker deployment, plugins, and more.
 
@@ -126,15 +108,11 @@ Document intelligence with a Rust core and native bindings for 17 languages. Ext
 
 - :material-puzzle-outline:{ .lg .middle } **Concepts**
 
----
-
     Architecture, extraction pipeline, MIME detection, and performance.
 
     [:octicons-arrow-right-24: Architecture](concepts/architecture.md)
 
 - :material-api:{ .lg .middle } **API Reference**
-
----
 
     Complete API docs for every language binding, types, and errors.
 
@@ -142,15 +120,11 @@ Document intelligence with a Rust core and native bindings for 17 languages. Ext
 
 - :material-console:{ .lg .middle } **CLI & Servers**
 
----
-
     Command-line tool, REST API server, and MCP server for AI agents.
 
     [:octicons-arrow-right-24: CLI Usage](cli/usage.md)
 
 - :material-swap-horizontal:{ .lg .middle } **Migration**
-
----
 
     Migrate from Unstructured or other document extraction libraries.
 

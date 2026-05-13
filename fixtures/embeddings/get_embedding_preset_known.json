@@ -4,7 +4,7 @@
   "description": "get_embedding_preset: known preset",
   "call": "get_embedding_preset",
   "input": {
-    "preset_name": "default"
+    "preset_name": "balanced"
   },
   "assertions": [
     {

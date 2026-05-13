@@ -12,15 +12,13 @@ extra_css = ["css/extra.css"]
 
 nav = [
   { "Home" = "index.md" },
-  { "Live Demo" = "demo.html" },
-  { "Installation" = "getting-started/installation.md" },
-  { "Quick Start" = "getting-started/quickstart.md" },
-  { "Features" = "features.md" },
-  { "Concepts" = [
-    { "Architecture" = "concepts/architecture.md" },
-    { "Extraction Pipeline" = "concepts/extraction-pipeline.md" },
-    { "Plugin System" = "concepts/plugin-system.md" },
+
+  { "Get Started" = [
+    { "Installation" = "getting-started/installation.md" },
+    { "Quick Start" = "getting-started/quickstart.md" },
+    { "Live Demo" = "demo.html" },
   ] },
+
   { "Guides" = [
     { "Core" = [
       { "Extraction Basics" = "guides/extraction.md" },
@@ -43,57 +41,70 @@ nav = [
       { "MCP Integration" = "guides/mcp-integration.md" },
       { "AI Coding Assistants" = "guides/agent-skills.md" },
     ] },
+    { "Integrations" = [
+      { "Overview" = "integrations/index.md" },
+      { "Open WebUI" = "integrations/openwebui.md" },
+      { "SurrealDB" = "integrations/surrealdb.md" },
+    ] },
+    { "CLI" = "cli/usage.md" },
     { "Development" = [
       { "Creating Plugins" = "guides/plugins.md" },
       { "Development Workflow" = "guides/development.md" },
     ] },
   ] },
-  { "Benchmarks" = "https://kreuzberg.dev/benchmarks" },
-  { "Integrations" = [
-    { "Overview" = "integrations/index.md" },
-    { "Open WebUI" = "integrations/openwebui.md" },
-    { "SurrealDB" = "integrations/surrealdb.md" },
+
+  { "Concepts" = [
+    { "Architecture" = "concepts/architecture.md" },
+    { "Extraction Pipeline" = "concepts/extraction-pipeline.md" },
+    { "Plugin System" = "concepts/plugin-system.md" },
+    { "Features" = "features.md" },
   ] },
-  { "CLI" = "cli/usage.md" },
-  { "API Reference" = [
-    { "Python" = "reference/api-python.md" },
-    { "TypeScript" = "reference/api-typescript.md" },
-    { "WebAssembly" = "reference/api-wasm.md" },
-    { "PHP" = "reference/api-php.md" },
-    { "C" = "reference/api-c.md" },
-    { "C#" = "reference/api-csharp.md" },
-    { "Dart" = "reference/api-dart.md" },
-    { "Elixir" = "reference/api-elixir.md" },
-    { "Go" = "reference/api-go.md" },
-    { "Java" = "reference/api-java.md" },
-    { "Kotlin" = "reference/api-kotlin.md" },
-    { "Ruby" = "reference/api-ruby.md" },
-    { "R" = "reference/api-r.md" },
-    { "Rust" = "reference/api-rust.md" },
-    { "Swift" = "reference/api-swift.md" },
-    { "Zig" = "reference/api-zig.md" },
+
+  { "Reference" = [
+    { "API" = [
+      { "Python" = "reference/api-python.md" },
+      { "TypeScript" = "reference/api-typescript.md" },
+      { "WebAssembly" = "reference/api-wasm.md" },
+      { "Rust" = "reference/api-rust.md" },
+      { "Go" = "reference/api-go.md" },
+      { "Java" = "reference/api-java.md" },
+      { "Kotlin" = "reference/api-kotlin.md" },
+      { "C#" = "reference/api-csharp.md" },
+      { "Swift" = "reference/api-swift.md" },
+      { "Ruby" = "reference/api-ruby.md" },
+      { "PHP" = "reference/api-php.md" },
+      { "Elixir" = "reference/api-elixir.md" },
+      { "R" = "reference/api-r.md" },
+      { "Dart" = "reference/api-dart.md" },
+      { "Zig" = "reference/api-zig.md" },
+      { "C" = "reference/api-c.md" },
+    ] },
     { "Types" = "reference/types.md" },
     { "Configuration" = "reference/configuration.md" },
     { "Errors" = "reference/errors.md" },
     { "Environment Variables" = "reference/environment-variables.md" },
     { "File Size Limits" = "reference/file-size-limits.md" },
     { "Format Support" = "reference/formats.md" },
+    { "Benchmarks" = "https://kreuzberg.dev/benchmarks" },
   ] },
-  { "Migration Guides" = [
-    { "From Unstructured" = "migration/from-unstructured.md" },
-    { "v4.0 Font Changes" = "migration/v4.0-fonts.md" },
-    { "v4.0 HTML Metadata" = "migration/v4.0-html-metadata.md" },
+
+  { "More" = [
+    { "Comparisons" = [
+      { "Overview" = "comparisons/index.md" },
+      { "vs Unstructured" = "comparisons/kreuzberg-vs-unstructured.md" },
+      { "vs Docling" = "comparisons/kreuzberg-vs-docling.md" },
+      { "vs Apache Tika" = "comparisons/kreuzberg-vs-tika.md" },
+      { "vs MarkItDown" = "comparisons/kreuzberg-vs-markitdown.md" },
+      { "vs MinerU" = "comparisons/kreuzberg-vs-mineru.md" },
+    ] },
+    { "Migration" = [
+      { "From Unstructured" = "migration/from-unstructured.md" },
+      { "v4.0 Font Changes" = "migration/v4.0-fonts.md" },
+      { "v4.0 HTML Metadata" = "migration/v4.0-html-metadata.md" },
+    ] },
+    { "Changelog" = "CHANGELOG.md" },
+    { "Contributing" = "contributing.md" },
   ] },
-  { "Comparisons" = [
-    { "Overview" = "comparisons/index.md" },
-    { "vs Unstructured" = "comparisons/kreuzberg-vs-unstructured.md" },
-    { "vs Docling" = "comparisons/kreuzberg-vs-docling.md" },
-    { "vs Apache Tika" = "comparisons/kreuzberg-vs-tika.md" },
-    { "vs MarkItDown" = "comparisons/kreuzberg-vs-markitdown.md" },
-    { "vs MinerU" = "comparisons/kreuzberg-vs-mineru.md" },
-  ] },
-  { "Changelog" = "CHANGELOG.md" },
-  { "Contributing" = "contributing.md" },
 ]
 
 [project.theme]
@@ -116,15 +127,12 @@ features = [
   "navigation.tabs.sticky",
   "navigation.tracking",
   "navigation.top",
-  "navigation.footer",
   "search.highlight",
   "search.share",
   "search.suggest",
   "toc.follow",
   "toc.integrate",
   "announce.dismiss",
-  "content.action.edit",
-  "content.action.view",
 ]
 
 [project.theme.font]
@@ -135,8 +143,8 @@ code = "JetBrains Mono"
 repo = "github"
 search = "search"
 
+# First palette is the default (dark). Second is light; users can toggle via header.
 [[project.theme.palette]]
-media = "(prefers-color-scheme: dark)"
 scheme = "slate"
 primary = "custom"
 accent = "custom"
@@ -146,7 +154,6 @@ icon = "sun"
 name = "Switch to light mode"
 
 [[project.theme.palette]]
-media = "(prefers-color-scheme: light)"
 scheme = "default"
 primary = "custom"
 accent = "custom"

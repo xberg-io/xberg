@@ -8,8 +8,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AnchorProperties`, `ApiDoc`, `BBox`, `ByteBufferPool`, `CacheWarmParams`, `CharShape`, `ChunkRequest`, `ChunkResponse`, `ChunkTextParams`, `ChunkingResult`, `CustomProperties`, `DetectMimeTypeParams`, `DetectResponse`, `DetectedBoundary`, `DetectionResult`, `DoclingCompatResponse`, `Drawing`, `EmailAttachment`, `EmailExtractionResult`, `EmbedRequest`, `EmbedResponse`, `EmbedTextParams`, `EmbeddedFile`, `ExcelSheet`, `ExcelWorkbook`, `ExtractResponse`, `ExtractStructuredParams`, `ExtractedInlineImage`, `FracType`, `HtmlExtractionResult`, `HwpImage`, `HwpxExtractor`, `ImageOcrResult`, `InfoResponse`, `LayoutClass`, `LayoutDetection`, `ManifestEntryResponse`, `ManifestResponse`, `MergedChunk`, `ModelPaths`, `OcrBackendType`, `OcrCacheStats`, `OcrExtractionResult`, `OcrTableBoundingBox`, `OcrTable`, `OdtProperties`, `OpenWebDocumentResponse`, `OrientationResult`, `PSMMode`, `PaddleLanguage`, `PaddleOcrConfig`, `PageMarginsPoints`, `PoolError`, `PptxAppProperties`, `PptxExtractionResult`, `ProcessingStage`, `RecognizedTable`, `ReductionLevel`, `ResolvedStyle`, `ServerConfig`, `StreamReader`, `StringBufferPool`, `StructuredDataResult`, `StructuredExtractionResponse`, `StyleDefinition`, `SupportedFormat`, `TableCell`, `TableProperties`, `TessdataManager`, `TextExtractionResult`, `TokenReductionConfig`, `TracingLayer`, `WarmResponse`, `XlsxAppProperties`, `XmlExtractionResult`, `ZipBombValidator`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `as_sync_extractor`, `backend_type`, `can_handle`, `dimensions`, `embed`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ApiDoc`, `ByteBufferPool`, `CharShape`, `CustomProperties`, `ExtractResponse`, `FracType`, `HwpImage`, `ImageOcrResult`, `MergedChunk`, `OcrBackendType`, `OcrCacheStats`, `OdtProperties`, `PSMMode`, `PaddleLanguage`, `PageMarginsPoints`, `PoolError`, `ProcessingStage`, `ResolvedStyle`, `StreamReader`, `StringBufferPool`, `StyleDefinition`, `TracingLayer`, `ZipBombValidator`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `dimensions`, `embed`, `extract_bytes`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `process_image`, `process`, `processing_stage`, `render`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_mime_types`, `supports_language`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a byte array.
 ///
@@ -201,6 +201,13 @@ Future<String> detectMimeTypeFromBytes({required List<int> content}) =>
 Future<List<String>> getExtensionsForMime({required String mimeType}) =>
     RustLib.instance.api.crateGetExtensionsForMime(mimeType: mimeType);
 
+/// List the names of all registered embedding backends.
+///
+/// Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
+/// language bindings via `alef.toml [exclude].functions`.
+Future<List<String>> listEmbeddingBackends() =>
+    RustLib.instance.api.crateListEmbeddingBackends();
+
 /// List names of all registered document extractors.
 Future<List<String>> listDocumentExtractors() =>
     RustLib.instance.api.crateListDocumentExtractors();
@@ -302,32 +309,527 @@ Future<EmbeddingPreset?> getEmbeddingPreset({required String name}) =>
 Future<List<String>> listEmbeddingPresets() =>
     RustLib.instance.api.crateListEmbeddingPresets();
 
+Future<AccelerationConfig> createAccelerationConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateAccelerationConfigFromJson(json: json);
+
+Future<ContentFilterConfig> createContentFilterConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateContentFilterConfigFromJson(json: json);
+
+Future<EmailConfig> createEmailConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmailConfigFromJson(json: json);
+
+Future<ExtractionConfig> createExtractionConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateExtractionConfigFromJson(json: json);
+
+Future<FileExtractionConfig> createFileExtractionConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateFileExtractionConfigFromJson(json: json);
+
+Future<BatchBytesItem> createBatchBytesItemFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateBatchBytesItemFromJson(json: json);
+
+Future<BatchFileItem> createBatchFileItemFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateBatchFileItemFromJson(json: json);
+
+Future<ImageExtractionConfig> createImageExtractionConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateImageExtractionConfigFromJson(json: json);
+
+Future<TokenReductionOptions> createTokenReductionOptionsFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateTokenReductionOptionsFromJson(json: json);
+
+Future<LanguageDetectionConfig> createLanguageDetectionConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateLanguageDetectionConfigFromJson(json: json);
+
+Future<HtmlOutputConfig> createHtmlOutputConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateHtmlOutputConfigFromJson(json: json);
+
+Future<LayoutDetectionConfig> createLayoutDetectionConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateLayoutDetectionConfigFromJson(json: json);
+
+Future<LlmConfig> createLlmConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateLlmConfigFromJson(json: json);
+
+Future<StructuredExtractionConfig> createStructuredExtractionConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api
+        .crateCreateStructuredExtractionConfigFromJson(json: json);
+
+Future<OcrQualityThresholds> createOcrQualityThresholdsFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOcrQualityThresholdsFromJson(json: json);
+
+Future<OcrPipelineStage> createOcrPipelineStageFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOcrPipelineStageFromJson(json: json);
+
+Future<OcrPipelineConfig> createOcrPipelineConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOcrPipelineConfigFromJson(json: json);
+
+Future<OcrConfig> createOcrConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateOcrConfigFromJson(json: json);
+
+Future<PageConfig> createPageConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageConfigFromJson(json: json);
+
+Future<PdfConfig> createPdfConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePdfConfigFromJson(json: json);
+
+Future<HierarchyConfig> createHierarchyConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateHierarchyConfigFromJson(json: json);
+
+Future<PostProcessorConfig> createPostProcessorConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreatePostProcessorConfigFromJson(json: json);
+
+Future<ChunkingConfig> createChunkingConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateChunkingConfigFromJson(json: json);
+
+Future<EmbeddingConfig> createEmbeddingConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmbeddingConfigFromJson(json: json);
+
+Future<TreeSitterConfig> createTreeSitterConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateTreeSitterConfigFromJson(json: json);
+
+Future<TreeSitterProcessConfig> createTreeSitterProcessConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateTreeSitterProcessConfigFromJson(json: json);
+
+Future<SupportedFormat> createSupportedFormatFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateSupportedFormatFromJson(json: json);
+
+Future<ServerConfig> createServerConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateServerConfigFromJson(json: json);
+
+Future<StructuredDataResult> createStructuredDataResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
+
+Future<HtmlExtractionResult> createHtmlExtractionResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateHtmlExtractionResultFromJson(json: json);
+
+Future<ExtractedInlineImage> createExtractedInlineImageFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateExtractedInlineImageFromJson(json: json);
+
+Future<Drawing> createDrawingFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDrawingFromJson(json: json);
+
+Future<AnchorProperties> createAnchorPropertiesFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateAnchorPropertiesFromJson(json: json);
+
+Future<TableProperties> createTablePropertiesFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTablePropertiesFromJson(json: json);
+
+Future<DocxAppProperties> createDocxAppPropertiesFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateDocxAppPropertiesFromJson(json: json);
+
+Future<XlsxAppProperties> createXlsxAppPropertiesFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateXlsxAppPropertiesFromJson(json: json);
+
+Future<PptxAppProperties> createPptxAppPropertiesFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreatePptxAppPropertiesFromJson(json: json);
+
+Future<CoreProperties> createCorePropertiesFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateCorePropertiesFromJson(json: json);
+
+Future<SecurityLimits> createSecurityLimitsFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateSecurityLimitsFromJson(json: json);
+
+Future<TokenReductionConfig> createTokenReductionConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateTokenReductionConfigFromJson(json: json);
+
+Future<PdfAnnotation> createPdfAnnotationFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePdfAnnotationFromJson(json: json);
+
+Future<DjotContent> createDjotContentFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDjotContentFromJson(json: json);
+
+Future<FormattedBlock> createFormattedBlockFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateFormattedBlockFromJson(json: json);
+
+Future<InlineElement> createInlineElementFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateInlineElementFromJson(json: json);
+
+Future<DjotImage> createDjotImageFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDjotImageFromJson(json: json);
+
+Future<DjotLink> createDjotLinkFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDjotLinkFromJson(json: json);
+
+Future<Footnote> createFootnoteFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateFootnoteFromJson(json: json);
+
+Future<DocumentStructure> createDocumentStructureFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateDocumentStructureFromJson(json: json);
+
+Future<DocumentRelationship> createDocumentRelationshipFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateDocumentRelationshipFromJson(json: json);
+
+Future<DocumentNode> createDocumentNodeFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDocumentNodeFromJson(json: json);
+
+Future<TableGrid> createTableGridFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTableGridFromJson(json: json);
+
+Future<GridCell> createGridCellFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateGridCellFromJson(json: json);
+
+Future<TextAnnotation> createTextAnnotationFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTextAnnotationFromJson(json: json);
+
+Future<ExtractionResult> createExtractionResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateExtractionResultFromJson(json: json);
+
+Future<ArchiveEntry> createArchiveEntryFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateArchiveEntryFromJson(json: json);
+
+Future<ProcessingWarning> createProcessingWarningFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateProcessingWarningFromJson(json: json);
+
+Future<LlmUsage> createLlmUsageFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateLlmUsageFromJson(json: json);
+
+Future<Chunk> createChunkFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateChunkFromJson(json: json);
+
+Future<HeadingContext> createHeadingContextFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateHeadingContextFromJson(json: json);
+
+Future<HeadingLevel> createHeadingLevelFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateHeadingLevelFromJson(json: json);
+
+Future<ChunkMetadata> createChunkMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateChunkMetadataFromJson(json: json);
+
+Future<ExtractedImage> createExtractedImageFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateExtractedImageFromJson(json: json);
+
+Future<ElementMetadata> createElementMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateElementMetadataFromJson(json: json);
+
+Future<Element> createElementFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateElementFromJson(json: json);
+
+Future<ExcelWorkbook> createExcelWorkbookFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateExcelWorkbookFromJson(json: json);
+
+Future<ExcelSheet> createExcelSheetFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateExcelSheetFromJson(json: json);
+
+Future<XmlExtractionResult> createXmlExtractionResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateXmlExtractionResultFromJson(json: json);
+
+Future<TextExtractionResult> createTextExtractionResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateTextExtractionResultFromJson(json: json);
+
+Future<PptxExtractionResult> createPptxExtractionResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreatePptxExtractionResultFromJson(json: json);
+
+Future<EmailExtractionResult> createEmailExtractionResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateEmailExtractionResultFromJson(json: json);
+
+Future<EmailAttachment> createEmailAttachmentFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmailAttachmentFromJson(json: json);
+
+Future<OcrExtractionResult> createOcrExtractionResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOcrExtractionResultFromJson(json: json);
+
+Future<OcrTable> createOcrTableFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateOcrTableFromJson(json: json);
+
+Future<OcrTableBoundingBox> createOcrTableBoundingBoxFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOcrTableBoundingBoxFromJson(json: json);
+
+Future<ImagePreprocessingConfig> createImagePreprocessingConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api
+        .crateCreateImagePreprocessingConfigFromJson(json: json);
+
+Future<TesseractConfig> createTesseractConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTesseractConfigFromJson(json: json);
+
+Future<ImagePreprocessingMetadata> createImagePreprocessingMetadataFromJson(
+        {required String json}) =>
+    RustLib.instance.api
+        .crateCreateImagePreprocessingMetadataFromJson(json: json);
+
+Future<Metadata> createMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateMetadataFromJson(json: json);
+
+Future<ExcelMetadata> createExcelMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateExcelMetadataFromJson(json: json);
+
+Future<EmailMetadata> createEmailMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmailMetadataFromJson(json: json);
+
+Future<ArchiveMetadata> createArchiveMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateArchiveMetadataFromJson(json: json);
+
+Future<ImageMetadata> createImageMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateImageMetadataFromJson(json: json);
+
+Future<XmlMetadata> createXmlMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateXmlMetadataFromJson(json: json);
+
+Future<TextMetadata> createTextMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTextMetadataFromJson(json: json);
+
+Future<HeaderMetadata> createHeaderMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateHeaderMetadataFromJson(json: json);
+
+Future<LinkMetadata> createLinkMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateLinkMetadataFromJson(json: json);
+
+Future<ImageMetadataType> createImageMetadataTypeFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateImageMetadataTypeFromJson(json: json);
+
+Future<StructuredData> createStructuredDataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateStructuredDataFromJson(json: json);
+
+Future<HtmlMetadata> createHtmlMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateHtmlMetadataFromJson(json: json);
+
+Future<OcrMetadata> createOcrMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateOcrMetadataFromJson(json: json);
+
+Future<ErrorMetadata> createErrorMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateErrorMetadataFromJson(json: json);
+
+Future<PptxMetadata> createPptxMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePptxMetadataFromJson(json: json);
+
+Future<DocxMetadata> createDocxMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDocxMetadataFromJson(json: json);
+
+Future<CsvMetadata> createCsvMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateCsvMetadataFromJson(json: json);
+
+Future<BibtexMetadata> createBibtexMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateBibtexMetadataFromJson(json: json);
+
+Future<CitationMetadata> createCitationMetadataFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateCitationMetadataFromJson(json: json);
+
+Future<YearRange> createYearRangeFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateYearRangeFromJson(json: json);
+
+Future<FictionBookMetadata> createFictionBookMetadataFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateFictionBookMetadataFromJson(json: json);
+
+Future<DbfMetadata> createDbfMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDbfMetadataFromJson(json: json);
+
+Future<DbfFieldInfo> createDbfFieldInfoFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDbfFieldInfoFromJson(json: json);
+
+Future<JatsMetadata> createJatsMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateJatsMetadataFromJson(json: json);
+
+Future<ContributorRole> createContributorRoleFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateContributorRoleFromJson(json: json);
+
+Future<EpubMetadata> createEpubMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEpubMetadataFromJson(json: json);
+
+Future<PstMetadata> createPstMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePstMetadataFromJson(json: json);
+
+Future<OcrConfidence> createOcrConfidenceFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateOcrConfidenceFromJson(json: json);
+
+Future<OcrRotation> createOcrRotationFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateOcrRotationFromJson(json: json);
+
+Future<OcrElement> createOcrElementFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateOcrElementFromJson(json: json);
+
+Future<OcrElementConfig> createOcrElementConfigFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOcrElementConfigFromJson(json: json);
+
+Future<PageStructure> createPageStructureFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageStructureFromJson(json: json);
+
+Future<PageBoundary> createPageBoundaryFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageBoundaryFromJson(json: json);
+
+Future<PageInfo> createPageInfoFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageInfoFromJson(json: json);
+
+Future<PageContent> createPageContentFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageContentFromJson(json: json);
+
+Future<LayoutRegion> createLayoutRegionFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateLayoutRegionFromJson(json: json);
+
+Future<PageHierarchy> createPageHierarchyFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePageHierarchyFromJson(json: json);
+
+Future<HierarchicalBlock> createHierarchicalBlockFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateHierarchicalBlockFromJson(json: json);
+
+Future<Table> createTableFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTableFromJson(json: json);
+
+Future<TableCell> createTableCellFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateTableCellFromJson(json: json);
+
+Future<Uri> createUriFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateUriFromJson(json: json);
+
+Future<InfoResponse> createInfoResponseFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateInfoResponseFromJson(json: json);
+
+Future<EmbedRequest> createEmbedRequestFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmbedRequestFromJson(json: json);
+
+Future<EmbedResponse> createEmbedResponseFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmbedResponseFromJson(json: json);
+
+Future<ChunkRequest> createChunkRequestFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateChunkRequestFromJson(json: json);
+
+Future<ChunkResponse> createChunkResponseFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateChunkResponseFromJson(json: json);
+
+Future<DetectResponse> createDetectResponseFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDetectResponseFromJson(json: json);
+
+Future<ManifestEntryResponse> createManifestEntryResponseFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateManifestEntryResponseFromJson(json: json);
+
+Future<ManifestResponse> createManifestResponseFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateManifestResponseFromJson(json: json);
+
+Future<WarmResponse> createWarmResponseFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateWarmResponseFromJson(json: json);
+
+Future<StructuredExtractionResponse> createStructuredExtractionResponseFromJson(
+        {required String json}) =>
+    RustLib.instance.api
+        .crateCreateStructuredExtractionResponseFromJson(json: json);
+
+Future<OpenWebDocumentResponse> createOpenWebDocumentResponseFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOpenWebDocumentResponseFromJson(json: json);
+
+Future<DoclingCompatResponse> createDoclingCompatResponseFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateDoclingCompatResponseFromJson(json: json);
+
+Future<DetectMimeTypeParams> createDetectMimeTypeParamsFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateDetectMimeTypeParamsFromJson(json: json);
+
+Future<CacheWarmParams> createCacheWarmParamsFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateCacheWarmParamsFromJson(json: json);
+
+Future<EmbedTextParams> createEmbedTextParamsFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmbedTextParamsFromJson(json: json);
+
+Future<ExtractStructuredParams> createExtractStructuredParamsFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateExtractStructuredParamsFromJson(json: json);
+
+Future<ChunkTextParams> createChunkTextParamsFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateChunkTextParamsFromJson(json: json);
+
+Future<DetectedBoundary> createDetectedBoundaryFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateDetectedBoundaryFromJson(json: json);
+
+Future<ChunkingResult> createChunkingResultFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateChunkingResultFromJson(json: json);
+
+Future<EmbeddingPreset> createEmbeddingPresetFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmbeddingPresetFromJson(json: json);
+
+Future<YakeParams> createYakeParamsFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateYakeParamsFromJson(json: json);
+
+Future<RakeParams> createRakeParamsFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateRakeParamsFromJson(json: json);
+
+Future<KeywordConfig> createKeywordConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateKeywordConfigFromJson(json: json);
+
+Future<Keyword> createKeywordFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateKeywordFromJson(json: json);
+
+Future<RecognizedTable> createRecognizedTableFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateRecognizedTableFromJson(json: json);
+
+Future<PaddleOcrConfig> createPaddleOcrConfigFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePaddleOcrConfigFromJson(json: json);
+
+Future<ModelPaths> createModelPathsFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateModelPathsFromJson(json: json);
+
+Future<OrientationResult> createOrientationResultFromJson(
+        {required String json}) =>
+    RustLib.instance.api.crateCreateOrientationResultFromJson(json: json);
+
+Future<BBox> createBBoxFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateBBoxFromJson(json: json);
+
+Future<LayoutDetection> createLayoutDetectionFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateLayoutDetectionFromJson(json: json);
+
+Future<DetectionResult> createDetectionResultFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateDetectionResultFromJson(json: json);
+
+Future<EmbeddedFile> createEmbeddedFileFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateEmbeddedFileFromJson(json: json);
+
+Future<PdfMetadata> createPdfMetadataFromJson({required String json}) =>
+    RustLib.instance.api.crateCreatePdfMetadataFromJson(json: json);
+
 /// Create a `OcrBackendDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
 Future<OcrBackendDartImpl> createOcrBackendDartImpl(
         {required String pluginName,
         required String pluginVersion,
         required BoxFnVecU8OcrConfigDartFnFutureExtractionResult processImage,
-        required BoxFnStringOcrConfigDartFnFutureExtractionResult
-            processImageFile,
         required BoxFnStringDartFnFutureBool supportsLanguage,
-        required BoxFnDartFnFutureOcrBackendType backendType,
-        required BoxFnDartFnFutureVecString supportedLanguages,
-        required BoxFnDartFnFutureBool supportsTableDetection,
-        required BoxFnDartFnFutureBool supportsDocumentProcessing,
-        required BoxFnStringOcrConfigDartFnFutureExtractionResult
-            processDocument}) =>
+        required BoxFnDartFnFutureOcrBackendType backendType}) =>
     RustLib.instance.api.crateCreateOcrBackendDartImpl(
         pluginName: pluginName,
         pluginVersion: pluginVersion,
         processImage: processImage,
-        processImageFile: processImageFile,
         supportsLanguage: supportsLanguage,
-        backendType: backendType,
-        supportedLanguages: supportedLanguages,
-        supportsTableDetection: supportsTableDetection,
-        supportsDocumentProcessing: supportsDocumentProcessing,
-        processDocument: processDocument);
+        backendType: backendType);
 
 /// Register a Dart implementation as a `OcrBackend` plugin.
 ///
@@ -351,19 +853,12 @@ Future<PostProcessorDartImpl> createPostProcessorDartImpl(
         {required String pluginName,
         required String pluginVersion,
         required BoxFnExtractionResultExtractionConfigDartFnFuture process,
-        required BoxFnDartFnFutureProcessingStage processingStage,
-        required BoxFnExtractionResultExtractionConfigDartFnFutureBool
-            shouldProcess,
-        required BoxFnExtractionResultDartFnFutureI64 estimatedDurationMs,
-        required BoxFnDartFnFutureI64 priority}) =>
+        required BoxFnDartFnFutureProcessingStage processingStage}) =>
     RustLib.instance.api.crateCreatePostProcessorDartImpl(
         pluginName: pluginName,
         pluginVersion: pluginVersion,
         process: process,
-        processingStage: processingStage,
-        shouldProcess: shouldProcess,
-        estimatedDurationMs: estimatedDurationMs,
-        priority: priority);
+        processingStage: processingStage);
 
 /// Register a Dart implementation as a `PostProcessor` plugin.
 ///
@@ -387,16 +882,11 @@ Future<void> clearPostProcessors() =>
 Future<ValidatorDartImpl> createValidatorDartImpl(
         {required String pluginName,
         required String pluginVersion,
-        required BoxFnExtractionResultExtractionConfigDartFnFuture validate,
-        required BoxFnExtractionResultExtractionConfigDartFnFutureBool
-            shouldValidate,
-        required BoxFnDartFnFutureI64 priority}) =>
+        required BoxFnExtractionResultExtractionConfigDartFnFuture validate}) =>
     RustLib.instance.api.crateCreateValidatorDartImpl(
         pluginName: pluginName,
         pluginVersion: pluginVersion,
-        validate: validate,
-        shouldValidate: shouldValidate,
-        priority: priority);
+        validate: validate);
 
 /// Register a Dart implementation as a `Validator` plugin.
 ///
@@ -452,21 +942,12 @@ Future<DocumentExtractorDartImpl> createDocumentExtractorDartImpl(
         required String pluginVersion,
         required BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument
             extractBytes,
-        required BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
-            extractFile,
-        required BoxFnDartFnFutureVecString supportedMimeTypes,
-        required BoxFnDartFnFutureI64 priority,
-        required BoxFnStringStringDartFnFutureBool canHandle,
-        required BoxFnDartFnFutureOptionSyncExtractor asSyncExtractor}) =>
+        required BoxFnDartFnFutureVecString supportedMimeTypes}) =>
     RustLib.instance.api.crateCreateDocumentExtractorDartImpl(
         pluginName: pluginName,
         pluginVersion: pluginVersion,
         extractBytes: extractBytes,
-        extractFile: extractFile,
-        supportedMimeTypes: supportedMimeTypes,
-        priority: priority,
-        canHandle: canHandle,
-        asSyncExtractor: asSyncExtractor);
+        supportedMimeTypes: supportedMimeTypes);
 
 /// Register a Dart implementation as a `DocumentExtractor` plugin.
 ///
@@ -514,10 +995,6 @@ Future<void> clearRenderers() => RustLib.instance.api.crateClearRenderers();
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn () -> DartFnFuture < OcrBackendType > + Send + Sync >>>
 abstract class BoxFnDartFnFutureOcrBackendType implements RustOpaqueInterface {}
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn () -> DartFnFuture < Option < SyncExtractor > > + Send + Sync >>>
-abstract class BoxFnDartFnFutureOptionSyncExtractor
-    implements RustOpaqueInterface {}
-
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn () -> DartFnFuture < ProcessingStage > + Send + Sync >>>
 abstract class BoxFnDartFnFutureProcessingStage
     implements RustOpaqueInterface {}
@@ -525,22 +1002,11 @@ abstract class BoxFnDartFnFutureProcessingStage
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn () -> DartFnFuture < Vec < String > > + Send + Sync >>>
 abstract class BoxFnDartFnFutureVecString implements RustOpaqueInterface {}
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn () -> DartFnFuture < bool > + Send + Sync >>>
-abstract class BoxFnDartFnFutureBool implements RustOpaqueInterface {}
-
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn () -> DartFnFuture < i64 > + Send + Sync >>>
 abstract class BoxFnDartFnFutureI64 implements RustOpaqueInterface {}
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (ExtractionResult) -> DartFnFuture < i64 > + Send + Sync >>>
-abstract class BoxFnExtractionResultDartFnFutureI64
-    implements RustOpaqueInterface {}
-
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (ExtractionResult , ExtractionConfig) -> DartFnFuture < () > + Send + Sync >>>
 abstract class BoxFnExtractionResultExtractionConfigDartFnFuture
-    implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (ExtractionResult , ExtractionConfig) -> DartFnFuture < bool > + Send + Sync >>>
-abstract class BoxFnExtractionResultExtractionConfigDartFnFutureBool
     implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (InternalDocument) -> DartFnFuture < String > + Send + Sync >>>
@@ -549,18 +1015,6 @@ abstract class BoxFnInternalDocumentDartFnFutureString
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (String) -> DartFnFuture < bool > + Send + Sync >>>
 abstract class BoxFnStringDartFnFutureBool implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (String , OcrConfig) -> DartFnFuture < ExtractionResult > + Send + Sync >>>
-abstract class BoxFnStringOcrConfigDartFnFutureExtractionResult
-    implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (String , String) -> DartFnFuture < bool > + Send + Sync >>>
-abstract class BoxFnStringStringDartFnFutureBool
-    implements RustOpaqueInterface {}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (String , String , ExtractionConfig) -> DartFnFuture < InternalDocument > + Send + Sync >>>
-abstract class BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
-    implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Box < dyn Fn (Vec < String >) -> DartFnFuture < Vec < Vec < f64 > > > + Send + Sync >>>
 abstract class BoxFnVecStringDartFnFutureVecVecF64
@@ -580,6 +1034,25 @@ abstract class DocumentExtractorDartImpl implements RustOpaqueInterface {}
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EmbeddingBackendDartImpl>>
 abstract class EmbeddingBackendDartImpl implements RustOpaqueInterface {}
 
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<HwpxExtractor>>
+abstract class HwpxExtractor implements RustOpaqueInterface {
+  Future<String> author();
+
+  Future<String> description();
+
+  Future<void> initialize();
+
+  Future<String> name();
+
+  Future<PlatformInt64> priority();
+
+  Future<void> shutdown();
+
+  Future<List<String>> supportedMimeTypes();
+
+  Future<String> version();
+}
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<OcrBackendDartImpl>>
 abstract class OcrBackendDartImpl implements RustOpaqueInterface {}
 
@@ -588,6 +1061,15 @@ abstract class PostProcessorDartImpl implements RustOpaqueInterface {}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RendererDartImpl>>
 abstract class RendererDartImpl implements RustOpaqueInterface {}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TessdataManager>>
+abstract class TessdataManager implements RustOpaqueInterface {
+  Future<String> cacheDir();
+
+  Future<PlatformInt64> ensureAllLanguages();
+
+  Future<bool> isLanguageCached({required String lang});
+}
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ValidatorDartImpl>>
 abstract class ValidatorDartImpl implements RustOpaqueInterface {}
@@ -611,6 +1093,45 @@ class AccelerationConfig {
           runtimeType == other.runtimeType &&
           provider == other.provider &&
           deviceId == other.deviceId;
+}
+
+class AnchorProperties {
+  final bool behindDoc;
+  final bool layoutInCell;
+  final PlatformInt64? relativeHeight;
+  final String? positionH;
+  final String? positionV;
+  final String wrapType;
+
+  const AnchorProperties({
+    required this.behindDoc,
+    required this.layoutInCell,
+    this.relativeHeight,
+    this.positionH,
+    this.positionV,
+    required this.wrapType,
+  });
+
+  @override
+  int get hashCode =>
+      behindDoc.hashCode ^
+      layoutInCell.hashCode ^
+      relativeHeight.hashCode ^
+      positionH.hashCode ^
+      positionV.hashCode ^
+      wrapType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AnchorProperties &&
+          runtimeType == other.runtimeType &&
+          behindDoc == other.behindDoc &&
+          layoutInCell == other.layoutInCell &&
+          relativeHeight == other.relativeHeight &&
+          positionH == other.positionH &&
+          positionV == other.positionV &&
+          wrapType == other.wrapType;
 }
 
 @freezed
@@ -698,6 +1219,33 @@ class ArchiveMetadata {
           fileList == other.fileList &&
           totalSize == other.totalSize &&
           compressedSize == other.compressedSize;
+}
+
+class BBox {
+  final double x1;
+  final double y1;
+  final double x2;
+  final double y2;
+
+  const BBox({
+    required this.x1,
+    required this.y1,
+    required this.x2,
+    required this.y2,
+  });
+
+  @override
+  int get hashCode => x1.hashCode ^ y1.hashCode ^ x2.hashCode ^ y2.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BBox &&
+          runtimeType == other.runtimeType &&
+          x1 == other.x1 &&
+          y1 == other.y1 &&
+          x2 == other.x2 &&
+          y2 == other.y2;
 }
 
 class BatchBytesItem {
@@ -800,6 +1348,27 @@ enum BlockType {
   ;
 }
 
+class CacheWarmParams {
+  final bool allEmbeddings;
+  final String? embeddingModel;
+
+  const CacheWarmParams({
+    required this.allEmbeddings,
+    this.embeddingModel,
+  });
+
+  @override
+  int get hashCode => allEmbeddings.hashCode ^ embeddingModel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CacheWarmParams &&
+          runtimeType == other.runtimeType &&
+          allEmbeddings == other.allEmbeddings &&
+          embeddingModel == other.embeddingModel;
+}
+
 class Chunk {
   final String content;
   final ChunkType chunkType;
@@ -878,6 +1447,65 @@ class ChunkMetadata {
           headingContext == other.headingContext;
 }
 
+class ChunkRequest {
+  final String text;
+  final String? config;
+  final String chunkerType;
+
+  const ChunkRequest({
+    required this.text,
+    this.config,
+    required this.chunkerType,
+  });
+
+  @override
+  int get hashCode => text.hashCode ^ config.hashCode ^ chunkerType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChunkRequest &&
+          runtimeType == other.runtimeType &&
+          text == other.text &&
+          config == other.config &&
+          chunkerType == other.chunkerType;
+}
+
+class ChunkResponse {
+  final List<String> chunks;
+  final PlatformInt64 chunkCount;
+  final String config;
+  final PlatformInt64 inputSizeBytes;
+  final String chunkerType;
+
+  const ChunkResponse({
+    required this.chunks,
+    required this.chunkCount,
+    required this.config,
+    required this.inputSizeBytes,
+    required this.chunkerType,
+  });
+
+  @override
+  int get hashCode =>
+      chunks.hashCode ^
+      chunkCount.hashCode ^
+      config.hashCode ^
+      inputSizeBytes.hashCode ^
+      chunkerType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChunkResponse &&
+          runtimeType == other.runtimeType &&
+          chunks == other.chunks &&
+          chunkCount == other.chunkCount &&
+          config == other.config &&
+          inputSizeBytes == other.inputSizeBytes &&
+          chunkerType == other.chunkerType;
+}
+
 @freezed
 sealed class ChunkSizing with _$ChunkSizing {
   const ChunkSizing._();
@@ -887,6 +1515,41 @@ sealed class ChunkSizing with _$ChunkSizing {
     required String model,
     required String cacheDir,
   }) = ChunkSizing_Tokenizer;
+}
+
+class ChunkTextParams {
+  final String text;
+  final PlatformInt64? maxCharacters;
+  final PlatformInt64? overlap;
+  final String? chunkerType;
+  final double? topicThreshold;
+
+  const ChunkTextParams({
+    required this.text,
+    this.maxCharacters,
+    this.overlap,
+    this.chunkerType,
+    this.topicThreshold,
+  });
+
+  @override
+  int get hashCode =>
+      text.hashCode ^
+      maxCharacters.hashCode ^
+      overlap.hashCode ^
+      chunkerType.hashCode ^
+      topicThreshold.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChunkTextParams &&
+          runtimeType == other.runtimeType &&
+          text == other.text &&
+          maxCharacters == other.maxCharacters &&
+          overlap == other.overlap &&
+          chunkerType == other.chunkerType &&
+          topicThreshold == other.topicThreshold;
 }
 
 enum ChunkType {
@@ -963,6 +1626,27 @@ class ChunkingConfig {
           sizing == other.sizing &&
           prependHeadingContext == other.prependHeadingContext &&
           topicThreshold == other.topicThreshold;
+}
+
+class ChunkingResult {
+  final List<Chunk> chunks;
+  final PlatformInt64 chunkCount;
+
+  const ChunkingResult({
+    required this.chunks,
+    required this.chunkCount,
+  });
+
+  @override
+  int get hashCode => chunks.hashCode ^ chunkCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChunkingResult &&
+          runtimeType == other.runtimeType &&
+          chunks == other.chunks &&
+          chunkCount == other.chunkCount;
 }
 
 class CitationMetadata {
@@ -1227,6 +1911,94 @@ class DbfMetadata {
           fields == other.fields;
 }
 
+class DetectMimeTypeParams {
+  final String path;
+  final bool useContent;
+
+  const DetectMimeTypeParams({
+    required this.path,
+    required this.useContent,
+  });
+
+  @override
+  int get hashCode => path.hashCode ^ useContent.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DetectMimeTypeParams &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          useContent == other.useContent;
+}
+
+class DetectResponse {
+  final String mimeType;
+  final String? filename;
+
+  const DetectResponse({
+    required this.mimeType,
+    this.filename,
+  });
+
+  @override
+  int get hashCode => mimeType.hashCode ^ filename.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DetectResponse &&
+          runtimeType == other.runtimeType &&
+          mimeType == other.mimeType &&
+          filename == other.filename;
+}
+
+class DetectedBoundary {
+  final PlatformInt64 byteOffset;
+  final bool isHeader;
+
+  const DetectedBoundary({
+    required this.byteOffset,
+    required this.isHeader,
+  });
+
+  @override
+  int get hashCode => byteOffset.hashCode ^ isHeader.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DetectedBoundary &&
+          runtimeType == other.runtimeType &&
+          byteOffset == other.byteOffset &&
+          isHeader == other.isHeader;
+}
+
+class DetectionResult {
+  final PlatformInt64 pageWidth;
+  final PlatformInt64 pageHeight;
+  final List<LayoutDetection> detections;
+
+  const DetectionResult({
+    required this.pageWidth,
+    required this.pageHeight,
+    required this.detections,
+  });
+
+  @override
+  int get hashCode =>
+      pageWidth.hashCode ^ pageHeight.hashCode ^ detections.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DetectionResult &&
+          runtimeType == other.runtimeType &&
+          pageWidth == other.pageWidth &&
+          pageHeight == other.pageHeight &&
+          detections == other.detections;
+}
+
 class DjotContent {
   final String plainText;
   final List<FormattedBlock> blocks;
@@ -1328,6 +2100,27 @@ class DjotLink {
           text == other.text &&
           title == other.title &&
           attributes == other.attributes;
+}
+
+class DoclingCompatResponse {
+  final String document;
+  final String status;
+
+  const DoclingCompatResponse({
+    required this.document,
+    required this.status,
+  });
+
+  @override
+  int get hashCode => document.hashCode ^ status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DoclingCompatResponse &&
+          runtimeType == other.runtimeType &&
+          document == other.document &&
+          status == other.status;
 }
 
 class DocumentNode {
@@ -1546,6 +2339,37 @@ class DocxMetadata {
           customProperties == other.customProperties;
 }
 
+class Drawing {
+  final String drawingType;
+  final String? extent;
+  final String? docProperties;
+  final String? imageRef;
+
+  const Drawing({
+    required this.drawingType,
+    this.extent,
+    this.docProperties,
+    this.imageRef,
+  });
+
+  @override
+  int get hashCode =>
+      drawingType.hashCode ^
+      extent.hashCode ^
+      docProperties.hashCode ^
+      imageRef.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Drawing &&
+          runtimeType == other.runtimeType &&
+          drawingType == other.drawingType &&
+          extent == other.extent &&
+          docProperties == other.docProperties &&
+          imageRef == other.imageRef;
+}
+
 class Element {
   final String elementId;
   final ElementType elementType;
@@ -1627,6 +2451,45 @@ enum ElementType {
   ;
 }
 
+class EmailAttachment {
+  final String? name;
+  final String? filename;
+  final String? mimeType;
+  final PlatformInt64? size;
+  final bool isImage;
+  final Uint8List? data;
+
+  const EmailAttachment({
+    this.name,
+    this.filename,
+    this.mimeType,
+    this.size,
+    required this.isImage,
+    this.data,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      filename.hashCode ^
+      mimeType.hashCode ^
+      size.hashCode ^
+      isImage.hashCode ^
+      data.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmailAttachment &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          filename == other.filename &&
+          mimeType == other.mimeType &&
+          size == other.size &&
+          isImage == other.isImage &&
+          data == other.data;
+}
+
 class EmailConfig {
   final PlatformInt64? msgFallbackCodepage;
 
@@ -1643,6 +2506,69 @@ class EmailConfig {
       other is EmailConfig &&
           runtimeType == other.runtimeType &&
           msgFallbackCodepage == other.msgFallbackCodepage;
+}
+
+class EmailExtractionResult {
+  final String? subject;
+  final String? fromEmail;
+  final List<String> toEmails;
+  final List<String> ccEmails;
+  final List<String> bccEmails;
+  final String? date;
+  final String? messageId;
+  final String? plainText;
+  final String? htmlContent;
+  final String content;
+  final List<EmailAttachment> attachments;
+  final Map<String, String> metadata;
+
+  const EmailExtractionResult({
+    this.subject,
+    this.fromEmail,
+    required this.toEmails,
+    required this.ccEmails,
+    required this.bccEmails,
+    this.date,
+    this.messageId,
+    this.plainText,
+    this.htmlContent,
+    required this.content,
+    required this.attachments,
+    required this.metadata,
+  });
+
+  @override
+  int get hashCode =>
+      subject.hashCode ^
+      fromEmail.hashCode ^
+      toEmails.hashCode ^
+      ccEmails.hashCode ^
+      bccEmails.hashCode ^
+      date.hashCode ^
+      messageId.hashCode ^
+      plainText.hashCode ^
+      htmlContent.hashCode ^
+      content.hashCode ^
+      attachments.hashCode ^
+      metadata.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmailExtractionResult &&
+          runtimeType == other.runtimeType &&
+          subject == other.subject &&
+          fromEmail == other.fromEmail &&
+          toEmails == other.toEmails &&
+          ccEmails == other.ccEmails &&
+          bccEmails == other.bccEmails &&
+          date == other.date &&
+          messageId == other.messageId &&
+          plainText == other.plainText &&
+          htmlContent == other.htmlContent &&
+          content == other.content &&
+          attachments == other.attachments &&
+          metadata == other.metadata;
 }
 
 class EmailMetadata {
@@ -1686,6 +2612,117 @@ class EmailMetadata {
           bccEmails == other.bccEmails &&
           messageId == other.messageId &&
           attachments == other.attachments;
+}
+
+class EmbedRequest {
+  final List<String> texts;
+  final EmbeddingConfig? config;
+
+  const EmbedRequest({
+    required this.texts,
+    this.config,
+  });
+
+  @override
+  int get hashCode => texts.hashCode ^ config.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmbedRequest &&
+          runtimeType == other.runtimeType &&
+          texts == other.texts &&
+          config == other.config;
+}
+
+class EmbedResponse {
+  final List<Float64List> embeddings;
+  final String model;
+  final PlatformInt64 dimensions;
+  final PlatformInt64 count;
+
+  const EmbedResponse({
+    required this.embeddings,
+    required this.model,
+    required this.dimensions,
+    required this.count,
+  });
+
+  @override
+  int get hashCode =>
+      embeddings.hashCode ^
+      model.hashCode ^
+      dimensions.hashCode ^
+      count.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmbedResponse &&
+          runtimeType == other.runtimeType &&
+          embeddings == other.embeddings &&
+          model == other.model &&
+          dimensions == other.dimensions &&
+          count == other.count;
+}
+
+class EmbedTextParams {
+  final List<String> texts;
+  final String? preset;
+  final String? model;
+  final String? apiKey;
+  final String? embeddingPlugin;
+
+  const EmbedTextParams({
+    required this.texts,
+    this.preset,
+    this.model,
+    this.apiKey,
+    this.embeddingPlugin,
+  });
+
+  @override
+  int get hashCode =>
+      texts.hashCode ^
+      preset.hashCode ^
+      model.hashCode ^
+      apiKey.hashCode ^
+      embeddingPlugin.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmbedTextParams &&
+          runtimeType == other.runtimeType &&
+          texts == other.texts &&
+          preset == other.preset &&
+          model == other.model &&
+          apiKey == other.apiKey &&
+          embeddingPlugin == other.embeddingPlugin;
+}
+
+class EmbeddedFile {
+  final String name;
+  final Uint8List data;
+  final String? mimeType;
+
+  const EmbeddedFile({
+    required this.name,
+    required this.data,
+    this.mimeType,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ data.hashCode ^ mimeType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmbeddedFile &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          data == other.data &&
+          mimeType == other.mimeType;
 }
 
 class EmbeddingConfig {
@@ -1878,6 +2915,66 @@ class ExcelMetadata {
           sheetNames == other.sheetNames;
 }
 
+class ExcelSheet {
+  final String name;
+  final String markdown;
+  final PlatformInt64 rowCount;
+  final PlatformInt64 colCount;
+  final PlatformInt64 cellCount;
+  final List<List<String>>? tableCells;
+
+  const ExcelSheet({
+    required this.name,
+    required this.markdown,
+    required this.rowCount,
+    required this.colCount,
+    required this.cellCount,
+    this.tableCells,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      markdown.hashCode ^
+      rowCount.hashCode ^
+      colCount.hashCode ^
+      cellCount.hashCode ^
+      tableCells.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExcelSheet &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          markdown == other.markdown &&
+          rowCount == other.rowCount &&
+          colCount == other.colCount &&
+          cellCount == other.cellCount &&
+          tableCells == other.tableCells;
+}
+
+class ExcelWorkbook {
+  final List<ExcelSheet> sheets;
+  final Map<String, String> metadata;
+
+  const ExcelWorkbook({
+    required this.sheets,
+    required this.metadata,
+  });
+
+  @override
+  int get hashCode => sheets.hashCode ^ metadata.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExcelWorkbook &&
+          runtimeType == other.runtimeType &&
+          sheets == other.sheets &&
+          metadata == other.metadata;
+}
+
 enum ExecutionProviderType {
   auto,
   cpu,
@@ -1885,6 +2982,53 @@ enum ExecutionProviderType {
   cuda,
   tensorRt,
   ;
+}
+
+class ExtractStructuredParams {
+  final String path;
+  final String schema;
+  final String model;
+  final String schemaName;
+  final String? schemaDescription;
+  final String? prompt;
+  final String? apiKey;
+  final bool strict;
+
+  const ExtractStructuredParams({
+    required this.path,
+    required this.schema,
+    required this.model,
+    required this.schemaName,
+    this.schemaDescription,
+    this.prompt,
+    this.apiKey,
+    required this.strict,
+  });
+
+  @override
+  int get hashCode =>
+      path.hashCode ^
+      schema.hashCode ^
+      model.hashCode ^
+      schemaName.hashCode ^
+      schemaDescription.hashCode ^
+      prompt.hashCode ^
+      apiKey.hashCode ^
+      strict.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtractStructuredParams &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          schema == other.schema &&
+          model == other.model &&
+          schemaName == other.schemaName &&
+          schemaDescription == other.schemaDescription &&
+          prompt == other.prompt &&
+          apiKey == other.apiKey &&
+          strict == other.strict;
 }
 
 class ExtractedImage {
@@ -1964,6 +3108,45 @@ class ExtractedImage {
           imageKind == other.imageKind &&
           kindConfidence == other.kindConfidence &&
           clusterId == other.clusterId;
+}
+
+class ExtractedInlineImage {
+  final Uint8List data;
+  final String format;
+  final String? filename;
+  final String? description;
+  final Int64List? dimensions;
+  final List<String> attributes;
+
+  const ExtractedInlineImage({
+    required this.data,
+    required this.format,
+    this.filename,
+    this.description,
+    this.dimensions,
+    required this.attributes,
+  });
+
+  @override
+  int get hashCode =>
+      data.hashCode ^
+      format.hashCode ^
+      filename.hashCode ^
+      description.hashCode ^
+      dimensions.hashCode ^
+      attributes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtractedInlineImage &&
+          runtimeType == other.runtimeType &&
+          data == other.data &&
+          format == other.format &&
+          filename == other.filename &&
+          description == other.description &&
+          dimensions == other.dimensions &&
+          attributes == other.attributes;
 }
 
 class ExtractionConfig {
@@ -2669,6 +3852,30 @@ class HierarchyConfig {
           ocrCoverageThreshold == other.ocrCoverageThreshold;
 }
 
+class HtmlExtractionResult {
+  final String markdown;
+  final List<ExtractedInlineImage> images;
+  final List<String> warnings;
+
+  const HtmlExtractionResult({
+    required this.markdown,
+    required this.images,
+    required this.warnings,
+  });
+
+  @override
+  int get hashCode => markdown.hashCode ^ images.hashCode ^ warnings.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HtmlExtractionResult &&
+          runtimeType == other.runtimeType &&
+          markdown == other.markdown &&
+          images == other.images &&
+          warnings == other.warnings;
+}
+
 class HtmlMetadata {
   final String? title;
   final String? description;
@@ -3035,6 +4242,27 @@ enum ImageType {
   ;
 }
 
+class InfoResponse {
+  final String version;
+  final bool rustBackend;
+
+  const InfoResponse({
+    required this.version,
+    required this.rustBackend,
+  });
+
+  @override
+  int get hashCode => version.hashCode ^ rustBackend.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InfoResponse &&
+          runtimeType == other.runtimeType &&
+          version == other.version &&
+          rustBackend == other.rustBackend;
+}
+
 class InlineElement {
   final InlineType elementType;
   final String content;
@@ -3217,6 +4445,51 @@ class LanguageDetectionConfig {
           enabled == other.enabled &&
           minConfidence == other.minConfidence &&
           detectMultiple == other.detectMultiple;
+}
+
+enum LayoutClass {
+  caption,
+  footnote,
+  formula,
+  listItem,
+  pageFooter,
+  pageHeader,
+  picture,
+  sectionHeader,
+  table,
+  text,
+  title,
+  documentIndex,
+  code,
+  checkboxSelected,
+  checkboxUnselected,
+  form,
+  keyValueRegion,
+  ;
+}
+
+class LayoutDetection {
+  final LayoutClass className;
+  final double confidence;
+  final BBox bbox;
+
+  const LayoutDetection({
+    required this.className,
+    required this.confidence,
+    required this.bbox,
+  });
+
+  @override
+  int get hashCode => className.hashCode ^ confidence.hashCode ^ bbox.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LayoutDetection &&
+          runtimeType == other.runtimeType &&
+          className == other.className &&
+          confidence == other.confidence &&
+          bbox == other.bbox;
 }
 
 class LayoutDetectionConfig {
@@ -3416,6 +4689,68 @@ class LlmUsage {
           finishReason == other.finishReason;
 }
 
+class ManifestEntryResponse {
+  final String relativePath;
+  final String sha256;
+  final PlatformInt64 sizeBytes;
+  final String sourceUrl;
+
+  const ManifestEntryResponse({
+    required this.relativePath,
+    required this.sha256,
+    required this.sizeBytes,
+    required this.sourceUrl,
+  });
+
+  @override
+  int get hashCode =>
+      relativePath.hashCode ^
+      sha256.hashCode ^
+      sizeBytes.hashCode ^
+      sourceUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ManifestEntryResponse &&
+          runtimeType == other.runtimeType &&
+          relativePath == other.relativePath &&
+          sha256 == other.sha256 &&
+          sizeBytes == other.sizeBytes &&
+          sourceUrl == other.sourceUrl;
+}
+
+class ManifestResponse {
+  final String kreuzbergVersion;
+  final PlatformInt64 totalSizeBytes;
+  final PlatformInt64 modelCount;
+  final List<ManifestEntryResponse> models;
+
+  const ManifestResponse({
+    required this.kreuzbergVersion,
+    required this.totalSizeBytes,
+    required this.modelCount,
+    required this.models,
+  });
+
+  @override
+  int get hashCode =>
+      kreuzbergVersion.hashCode ^
+      totalSizeBytes.hashCode ^
+      modelCount.hashCode ^
+      models.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ManifestResponse &&
+          runtimeType == other.runtimeType &&
+          kreuzbergVersion == other.kreuzbergVersion &&
+          totalSizeBytes == other.totalSizeBytes &&
+          modelCount == other.modelCount &&
+          models == other.models;
+}
+
 class Metadata {
   final String? title;
   final String? subject;
@@ -3517,6 +4852,37 @@ class Metadata {
           outputFormat == other.outputFormat &&
           ocrUsed == other.ocrUsed &&
           additional == other.additional;
+}
+
+class ModelPaths {
+  final String detModel;
+  final String clsModel;
+  final String recModel;
+  final String dictFile;
+
+  const ModelPaths({
+    required this.detModel,
+    required this.clsModel,
+    required this.recModel,
+    required this.dictFile,
+  });
+
+  @override
+  int get hashCode =>
+      detModel.hashCode ^
+      clsModel.hashCode ^
+      recModel.hashCode ^
+      dictFile.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ModelPaths &&
+          runtimeType == other.runtimeType &&
+          detModel == other.detModel &&
+          clsModel == other.clsModel &&
+          recModel == other.recModel &&
+          dictFile == other.dictFile;
 }
 
 @freezed
@@ -3783,6 +5149,45 @@ enum OcrElementLevel {
   ;
 }
 
+class OcrExtractionResult {
+  final String content;
+  final String mimeType;
+  final Map<String, String> metadata;
+  final List<OcrTable> tables;
+  final List<OcrElement>? ocrElements;
+  final String? internalDocument;
+
+  const OcrExtractionResult({
+    required this.content,
+    required this.mimeType,
+    required this.metadata,
+    required this.tables,
+    this.ocrElements,
+    this.internalDocument,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^
+      mimeType.hashCode ^
+      metadata.hashCode ^
+      tables.hashCode ^
+      ocrElements.hashCode ^
+      internalDocument.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OcrExtractionResult &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          mimeType == other.mimeType &&
+          metadata == other.metadata &&
+          tables == other.tables &&
+          ocrElements == other.ocrElements &&
+          internalDocument == other.internalDocument;
+}
+
 class OcrMetadata {
   final String language;
   final PlatformInt64 psm;
@@ -3982,6 +5387,107 @@ class OcrRotation {
           confidence == other.confidence;
 }
 
+class OcrTable {
+  final List<List<String>> cells;
+  final String markdown;
+  final PlatformInt64 pageNumber;
+  final OcrTableBoundingBox? boundingBox;
+
+  const OcrTable({
+    required this.cells,
+    required this.markdown,
+    required this.pageNumber,
+    this.boundingBox,
+  });
+
+  @override
+  int get hashCode =>
+      cells.hashCode ^
+      markdown.hashCode ^
+      pageNumber.hashCode ^
+      boundingBox.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OcrTable &&
+          runtimeType == other.runtimeType &&
+          cells == other.cells &&
+          markdown == other.markdown &&
+          pageNumber == other.pageNumber &&
+          boundingBox == other.boundingBox;
+}
+
+class OcrTableBoundingBox {
+  final PlatformInt64 left;
+  final PlatformInt64 top;
+  final PlatformInt64 right;
+  final PlatformInt64 bottom;
+
+  const OcrTableBoundingBox({
+    required this.left,
+    required this.top,
+    required this.right,
+    required this.bottom,
+  });
+
+  @override
+  int get hashCode =>
+      left.hashCode ^ top.hashCode ^ right.hashCode ^ bottom.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OcrTableBoundingBox &&
+          runtimeType == other.runtimeType &&
+          left == other.left &&
+          top == other.top &&
+          right == other.right &&
+          bottom == other.bottom;
+}
+
+class OpenWebDocumentResponse {
+  final String pageContent;
+  final String metadata;
+
+  const OpenWebDocumentResponse({
+    required this.pageContent,
+    required this.metadata,
+  });
+
+  @override
+  int get hashCode => pageContent.hashCode ^ metadata.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OpenWebDocumentResponse &&
+          runtimeType == other.runtimeType &&
+          pageContent == other.pageContent &&
+          metadata == other.metadata;
+}
+
+class OrientationResult {
+  final PlatformInt64 degrees;
+  final double confidence;
+
+  const OrientationResult({
+    required this.degrees,
+    required this.confidence,
+  });
+
+  @override
+  int get hashCode => degrees.hashCode ^ confidence.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OrientationResult &&
+          runtimeType == other.runtimeType &&
+          degrees == other.degrees &&
+          confidence == other.confidence;
+}
+
 @freezed
 sealed class OutputFormat with _$OutputFormat {
   const OutputFormat._();
@@ -3995,6 +5501,69 @@ sealed class OutputFormat with _$OutputFormat {
   const factory OutputFormat.custom({
     required String field0,
   }) = OutputFormat_Custom;
+}
+
+class PaddleOcrConfig {
+  final String language;
+  final String? cacheDir;
+  final bool useAngleCls;
+  final bool enableTableDetection;
+  final double detDbThresh;
+  final double detDbBoxThresh;
+  final double detDbUnclipRatio;
+  final PlatformInt64 detLimitSideLen;
+  final PlatformInt64 recBatchNum;
+  final PlatformInt64 padding;
+  final double dropScore;
+  final String modelTier;
+
+  const PaddleOcrConfig({
+    required this.language,
+    this.cacheDir,
+    required this.useAngleCls,
+    required this.enableTableDetection,
+    required this.detDbThresh,
+    required this.detDbBoxThresh,
+    required this.detDbUnclipRatio,
+    required this.detLimitSideLen,
+    required this.recBatchNum,
+    required this.padding,
+    required this.dropScore,
+    required this.modelTier,
+  });
+
+  @override
+  int get hashCode =>
+      language.hashCode ^
+      cacheDir.hashCode ^
+      useAngleCls.hashCode ^
+      enableTableDetection.hashCode ^
+      detDbThresh.hashCode ^
+      detDbBoxThresh.hashCode ^
+      detDbUnclipRatio.hashCode ^
+      detLimitSideLen.hashCode ^
+      recBatchNum.hashCode ^
+      padding.hashCode ^
+      dropScore.hashCode ^
+      modelTier.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PaddleOcrConfig &&
+          runtimeType == other.runtimeType &&
+          language == other.language &&
+          cacheDir == other.cacheDir &&
+          useAngleCls == other.useAngleCls &&
+          enableTableDetection == other.enableTableDetection &&
+          detDbThresh == other.detDbThresh &&
+          detDbBoxThresh == other.detDbBoxThresh &&
+          detDbUnclipRatio == other.detDbUnclipRatio &&
+          detLimitSideLen == other.detLimitSideLen &&
+          recBatchNum == other.recBatchNum &&
+          padding == other.padding &&
+          dropScore == other.dropScore &&
+          modelTier == other.modelTier;
 }
 
 class PageBoundary {
@@ -4242,6 +5811,7 @@ enum PdfAnnotationType {
 
 class PdfConfig {
   final bool extractImages;
+  final bool extractTables;
   final List<String>? passwords;
   final bool extractMetadata;
   final HierarchyConfig? hierarchy;
@@ -4252,6 +5822,7 @@ class PdfConfig {
 
   const PdfConfig({
     required this.extractImages,
+    required this.extractTables,
     this.passwords,
     required this.extractMetadata,
     this.hierarchy,
@@ -4264,6 +5835,7 @@ class PdfConfig {
   @override
   int get hashCode =>
       extractImages.hashCode ^
+      extractTables.hashCode ^
       passwords.hashCode ^
       extractMetadata.hashCode ^
       hierarchy.hashCode ^
@@ -4278,6 +5850,7 @@ class PdfConfig {
       other is PdfConfig &&
           runtimeType == other.runtimeType &&
           extractImages == other.extractImages &&
+          extractTables == other.extractTables &&
           passwords == other.passwords &&
           extractMetadata == other.extractMetadata &&
           hierarchy == other.hierarchy &&
@@ -4359,6 +5932,140 @@ class PostProcessorConfig {
           disabledProcessors == other.disabledProcessors &&
           enabledSet == other.enabledSet &&
           disabledSet == other.disabledSet;
+}
+
+class PptxAppProperties {
+  final String? application;
+  final String? appVersion;
+  final PlatformInt64? totalTime;
+  final String? company;
+  final PlatformInt64? docSecurity;
+  final bool? scaleCrop;
+  final bool? linksUpToDate;
+  final bool? sharedDoc;
+  final bool? hyperlinksChanged;
+  final PlatformInt64? slides;
+  final PlatformInt64? notes;
+  final PlatformInt64? hiddenSlides;
+  final PlatformInt64? multimediaClips;
+  final String? presentationFormat;
+  final List<String> slideTitles;
+
+  const PptxAppProperties({
+    this.application,
+    this.appVersion,
+    this.totalTime,
+    this.company,
+    this.docSecurity,
+    this.scaleCrop,
+    this.linksUpToDate,
+    this.sharedDoc,
+    this.hyperlinksChanged,
+    this.slides,
+    this.notes,
+    this.hiddenSlides,
+    this.multimediaClips,
+    this.presentationFormat,
+    required this.slideTitles,
+  });
+
+  @override
+  int get hashCode =>
+      application.hashCode ^
+      appVersion.hashCode ^
+      totalTime.hashCode ^
+      company.hashCode ^
+      docSecurity.hashCode ^
+      scaleCrop.hashCode ^
+      linksUpToDate.hashCode ^
+      sharedDoc.hashCode ^
+      hyperlinksChanged.hashCode ^
+      slides.hashCode ^
+      notes.hashCode ^
+      hiddenSlides.hashCode ^
+      multimediaClips.hashCode ^
+      presentationFormat.hashCode ^
+      slideTitles.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PptxAppProperties &&
+          runtimeType == other.runtimeType &&
+          application == other.application &&
+          appVersion == other.appVersion &&
+          totalTime == other.totalTime &&
+          company == other.company &&
+          docSecurity == other.docSecurity &&
+          scaleCrop == other.scaleCrop &&
+          linksUpToDate == other.linksUpToDate &&
+          sharedDoc == other.sharedDoc &&
+          hyperlinksChanged == other.hyperlinksChanged &&
+          slides == other.slides &&
+          notes == other.notes &&
+          hiddenSlides == other.hiddenSlides &&
+          multimediaClips == other.multimediaClips &&
+          presentationFormat == other.presentationFormat &&
+          slideTitles == other.slideTitles;
+}
+
+class PptxExtractionResult {
+  final String content;
+  final PptxMetadata metadata;
+  final PlatformInt64 slideCount;
+  final PlatformInt64 imageCount;
+  final PlatformInt64 tableCount;
+  final List<ExtractedImage> images;
+  final PageStructure? pageStructure;
+  final List<PageContent>? pageContents;
+  final DocumentStructure? document;
+  final List<String> hyperlinks;
+  final Map<String, String> officeMetadata;
+
+  const PptxExtractionResult({
+    required this.content,
+    required this.metadata,
+    required this.slideCount,
+    required this.imageCount,
+    required this.tableCount,
+    required this.images,
+    this.pageStructure,
+    this.pageContents,
+    this.document,
+    required this.hyperlinks,
+    required this.officeMetadata,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^
+      metadata.hashCode ^
+      slideCount.hashCode ^
+      imageCount.hashCode ^
+      tableCount.hashCode ^
+      images.hashCode ^
+      pageStructure.hashCode ^
+      pageContents.hashCode ^
+      document.hashCode ^
+      hyperlinks.hashCode ^
+      officeMetadata.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PptxExtractionResult &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          metadata == other.metadata &&
+          slideCount == other.slideCount &&
+          imageCount == other.imageCount &&
+          tableCount == other.tableCount &&
+          images == other.images &&
+          pageStructure == other.pageStructure &&
+          pageContents == other.pageContents &&
+          document == other.document &&
+          hyperlinks == other.hyperlinks &&
+          officeMetadata == other.officeMetadata;
 }
 
 class PptxMetadata {
@@ -4452,6 +6159,40 @@ class RakeParams {
           maxWordsPerPhrase == other.maxWordsPerPhrase;
 }
 
+class RecognizedTable {
+  final BBox detectionBbox;
+  final List<List<String>> cells;
+  final String markdown;
+
+  const RecognizedTable({
+    required this.detectionBbox,
+    required this.cells,
+    required this.markdown,
+  });
+
+  @override
+  int get hashCode =>
+      detectionBbox.hashCode ^ cells.hashCode ^ markdown.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecognizedTable &&
+          runtimeType == other.runtimeType &&
+          detectionBbox == other.detectionBbox &&
+          cells == other.cells &&
+          markdown == other.markdown;
+}
+
+enum ReductionLevel {
+  off,
+  light,
+  moderate,
+  aggressive,
+  maximum,
+  ;
+}
+
 enum RelationshipKind {
   footnoteReference,
   citationReference,
@@ -4520,6 +6261,41 @@ class SecurityLimits {
           maxTableCells == other.maxTableCells;
 }
 
+class ServerConfig {
+  final String host;
+  final PlatformInt64 port;
+  final List<String> corsOrigins;
+  final PlatformInt64 maxRequestBodyBytes;
+  final PlatformInt64 maxMultipartFieldBytes;
+
+  const ServerConfig({
+    required this.host,
+    required this.port,
+    required this.corsOrigins,
+    required this.maxRequestBodyBytes,
+    required this.maxMultipartFieldBytes,
+  });
+
+  @override
+  int get hashCode =>
+      host.hashCode ^
+      port.hashCode ^
+      corsOrigins.hashCode ^
+      maxRequestBodyBytes.hashCode ^
+      maxMultipartFieldBytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ServerConfig &&
+          runtimeType == other.runtimeType &&
+          host == other.host &&
+          port == other.port &&
+          corsOrigins == other.corsOrigins &&
+          maxRequestBodyBytes == other.maxRequestBodyBytes &&
+          maxMultipartFieldBytes == other.maxMultipartFieldBytes;
+}
+
 class StructuredData {
   final StructuredDataType dataType;
   final String rawJson;
@@ -4543,6 +6319,37 @@ class StructuredData {
           dataType == other.dataType &&
           rawJson == other.rawJson &&
           schemaType == other.schemaType;
+}
+
+class StructuredDataResult {
+  final String content;
+  final String format;
+  final Map<String, String> metadata;
+  final List<String> textFields;
+
+  const StructuredDataResult({
+    required this.content,
+    required this.format,
+    required this.metadata,
+    required this.textFields,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^
+      format.hashCode ^
+      metadata.hashCode ^
+      textFields.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StructuredDataResult &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          format == other.format &&
+          metadata == other.metadata &&
+          textFields == other.textFields;
 }
 
 enum StructuredDataType {
@@ -4591,6 +6398,52 @@ class StructuredExtractionConfig {
           llm == other.llm;
 }
 
+class StructuredExtractionResponse {
+  final String structuredOutput;
+  final String content;
+  final String mimeType;
+
+  const StructuredExtractionResponse({
+    required this.structuredOutput,
+    required this.content,
+    required this.mimeType,
+  });
+
+  @override
+  int get hashCode =>
+      structuredOutput.hashCode ^ content.hashCode ^ mimeType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StructuredExtractionResponse &&
+          runtimeType == other.runtimeType &&
+          structuredOutput == other.structuredOutput &&
+          content == other.content &&
+          mimeType == other.mimeType;
+}
+
+class SupportedFormat {
+  final String extension_;
+  final String mimeType;
+
+  const SupportedFormat({
+    required this.extension_,
+    required this.mimeType,
+  });
+
+  @override
+  int get hashCode => extension_.hashCode ^ mimeType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SupportedFormat &&
+          runtimeType == other.runtimeType &&
+          extension_ == other.extension_ &&
+          mimeType == other.mimeType;
+}
+
 class Table {
   final List<List<String>> cells;
   final String markdown;
@@ -4620,6 +6473,37 @@ class Table {
           markdown == other.markdown &&
           pageNumber == other.pageNumber &&
           boundingBox == other.boundingBox;
+}
+
+class TableCell {
+  final String content;
+  final PlatformInt64 rowSpan;
+  final PlatformInt64 colSpan;
+  final bool isHeader;
+
+  const TableCell({
+    required this.content,
+    required this.rowSpan,
+    required this.colSpan,
+    required this.isHeader,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^
+      rowSpan.hashCode ^
+      colSpan.hashCode ^
+      isHeader.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TableCell &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          rowSpan == other.rowSpan &&
+          colSpan == other.colSpan &&
+          isHeader == other.isHeader;
 }
 
 class TableGrid {
@@ -4654,6 +6538,57 @@ enum TableModel {
   slanetAuto,
   disabled,
   ;
+}
+
+class TableProperties {
+  final String? styleId;
+  final String? width;
+  final String? alignment;
+  final String? layout;
+  final String? look;
+  final String? borders;
+  final String? cellMargins;
+  final String? indent;
+  final String? caption;
+
+  const TableProperties({
+    this.styleId,
+    this.width,
+    this.alignment,
+    this.layout,
+    this.look,
+    this.borders,
+    this.cellMargins,
+    this.indent,
+    this.caption,
+  });
+
+  @override
+  int get hashCode =>
+      styleId.hashCode ^
+      width.hashCode ^
+      alignment.hashCode ^
+      layout.hashCode ^
+      look.hashCode ^
+      borders.hashCode ^
+      cellMargins.hashCode ^
+      indent.hashCode ^
+      caption.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TableProperties &&
+          runtimeType == other.runtimeType &&
+          styleId == other.styleId &&
+          width == other.width &&
+          alignment == other.alignment &&
+          layout == other.layout &&
+          look == other.look &&
+          borders == other.borders &&
+          cellMargins == other.cellMargins &&
+          indent == other.indent &&
+          caption == other.caption;
 }
 
 class TesseractConfig {
@@ -4788,6 +6723,49 @@ enum TextDirection {
   ;
 }
 
+class TextExtractionResult {
+  final String content;
+  final PlatformInt64 lineCount;
+  final PlatformInt64 wordCount;
+  final PlatformInt64 characterCount;
+  final List<String>? headers;
+  final List<String>? links;
+  final List<String>? codeBlocks;
+
+  const TextExtractionResult({
+    required this.content,
+    required this.lineCount,
+    required this.wordCount,
+    required this.characterCount,
+    this.headers,
+    this.links,
+    this.codeBlocks,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^
+      lineCount.hashCode ^
+      wordCount.hashCode ^
+      characterCount.hashCode ^
+      headers.hashCode ^
+      links.hashCode ^
+      codeBlocks.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TextExtractionResult &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          lineCount == other.lineCount &&
+          wordCount == other.wordCount &&
+          characterCount == other.characterCount &&
+          headers == other.headers &&
+          links == other.links &&
+          codeBlocks == other.codeBlocks;
+}
+
 class TextMetadata {
   final PlatformInt64 lineCount;
   final PlatformInt64 wordCount;
@@ -4825,6 +6803,65 @@ class TextMetadata {
           headers == other.headers &&
           links == other.links &&
           codeBlocks == other.codeBlocks;
+}
+
+class TokenReductionConfig {
+  final ReductionLevel level;
+  final String? languageHint;
+  final bool preserveMarkdown;
+  final bool preserveCode;
+  final double semanticThreshold;
+  final bool enableParallel;
+  final bool useSimd;
+  final Map<String, List<String>>? customStopwords;
+  final List<String> preservePatterns;
+  final double? targetReduction;
+  final bool enableSemanticClustering;
+
+  const TokenReductionConfig({
+    required this.level,
+    this.languageHint,
+    required this.preserveMarkdown,
+    required this.preserveCode,
+    required this.semanticThreshold,
+    required this.enableParallel,
+    required this.useSimd,
+    this.customStopwords,
+    required this.preservePatterns,
+    this.targetReduction,
+    required this.enableSemanticClustering,
+  });
+
+  @override
+  int get hashCode =>
+      level.hashCode ^
+      languageHint.hashCode ^
+      preserveMarkdown.hashCode ^
+      preserveCode.hashCode ^
+      semanticThreshold.hashCode ^
+      enableParallel.hashCode ^
+      useSimd.hashCode ^
+      customStopwords.hashCode ^
+      preservePatterns.hashCode ^
+      targetReduction.hashCode ^
+      enableSemanticClustering.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TokenReductionConfig &&
+          runtimeType == other.runtimeType &&
+          level == other.level &&
+          languageHint == other.languageHint &&
+          preserveMarkdown == other.preserveMarkdown &&
+          preserveCode == other.preserveCode &&
+          semanticThreshold == other.semanticThreshold &&
+          enableParallel == other.enableParallel &&
+          useSimd == other.useSimd &&
+          customStopwords == other.customStopwords &&
+          preservePatterns == other.preservePatterns &&
+          targetReduction == other.targetReduction &&
+          enableSemanticClustering == other.enableSemanticClustering;
 }
 
 class TokenReductionOptions {
@@ -4970,6 +7007,107 @@ enum UriKind {
   reference,
   email,
   ;
+}
+
+class WarmResponse {
+  final String cacheDir;
+  final List<String> downloaded;
+  final List<String> alreadyCached;
+
+  const WarmResponse({
+    required this.cacheDir,
+    required this.downloaded,
+    required this.alreadyCached,
+  });
+
+  @override
+  int get hashCode =>
+      cacheDir.hashCode ^ downloaded.hashCode ^ alreadyCached.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WarmResponse &&
+          runtimeType == other.runtimeType &&
+          cacheDir == other.cacheDir &&
+          downloaded == other.downloaded &&
+          alreadyCached == other.alreadyCached;
+}
+
+class XlsxAppProperties {
+  final String? application;
+  final String? appVersion;
+  final PlatformInt64? docSecurity;
+  final bool? scaleCrop;
+  final bool? linksUpToDate;
+  final bool? sharedDoc;
+  final bool? hyperlinksChanged;
+  final String? company;
+  final List<String> worksheetNames;
+
+  const XlsxAppProperties({
+    this.application,
+    this.appVersion,
+    this.docSecurity,
+    this.scaleCrop,
+    this.linksUpToDate,
+    this.sharedDoc,
+    this.hyperlinksChanged,
+    this.company,
+    required this.worksheetNames,
+  });
+
+  @override
+  int get hashCode =>
+      application.hashCode ^
+      appVersion.hashCode ^
+      docSecurity.hashCode ^
+      scaleCrop.hashCode ^
+      linksUpToDate.hashCode ^
+      sharedDoc.hashCode ^
+      hyperlinksChanged.hashCode ^
+      company.hashCode ^
+      worksheetNames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is XlsxAppProperties &&
+          runtimeType == other.runtimeType &&
+          application == other.application &&
+          appVersion == other.appVersion &&
+          docSecurity == other.docSecurity &&
+          scaleCrop == other.scaleCrop &&
+          linksUpToDate == other.linksUpToDate &&
+          sharedDoc == other.sharedDoc &&
+          hyperlinksChanged == other.hyperlinksChanged &&
+          company == other.company &&
+          worksheetNames == other.worksheetNames;
+}
+
+class XmlExtractionResult {
+  final String content;
+  final PlatformInt64 elementCount;
+  final List<String> uniqueElements;
+
+  const XmlExtractionResult({
+    required this.content,
+    required this.elementCount,
+    required this.uniqueElements,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^ elementCount.hashCode ^ uniqueElements.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is XmlExtractionResult &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          elementCount == other.elementCount &&
+          uniqueElements == other.uniqueElements;
 }
 
 class XmlMetadata {

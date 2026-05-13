@@ -36,7 +36,7 @@ public interface IOcrBackend {
     bool SupportsLanguage(string Lang);
 
     /// <summary>backend_type</summary>
-    OcrBackendType BackendType();
+    string BackendType();
 
     /// <summary>supported_languages</summary>
     List<string> SupportedLanguages();
@@ -287,7 +287,7 @@ public sealed class OcrBackendBridge : IDisposable {
     private int BackendTypeFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         try {
             var result = _impl.BackendType();
-            outResult = Marshal.StringToCoTaskMemUTF8(result.ToFfiJson());
+            outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
             outError = IntPtr.Zero;
             return 0;
         } catch (Exception ex) {
@@ -457,7 +457,7 @@ public interface IPostProcessor {
     void Process(ExtractionResult Result, ExtractionConfig Config);
 
     /// <summary>processing_stage</summary>
-    ProcessingStage ProcessingStage();
+    string ProcessingStage();
 
     /// <summary>should_process</summary>
     bool ShouldProcess(ExtractionResult Result, ExtractionConfig Config);
@@ -645,7 +645,7 @@ public sealed class PostProcessorBridge : IDisposable {
     private int ProcessingStageFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         try {
             var result = _impl.ProcessingStage();
-            outResult = Marshal.StringToCoTaskMemUTF8(result.ToFfiJson());
+            outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
             outError = IntPtr.Zero;
             return 0;
         } catch (Exception ex) {
@@ -1365,10 +1365,10 @@ public interface IDocumentExtractor {
     void Shutdown();
 
     /// <summary>extract_bytes</summary>
-    InternalDocument ExtractBytes(byte[] Content, string MimeType, ExtractionConfig Config);
+    string ExtractBytes(byte[] Content, string MimeType, ExtractionConfig Config);
 
     /// <summary>extract_file</summary>
-    InternalDocument ExtractFile(string Path, string MimeType, ExtractionConfig Config);
+    string ExtractFile(string Path, string MimeType, ExtractionConfig Config);
 
     /// <summary>supported_mime_types</summary>
     List<string> SupportedMimeTypes();
@@ -1380,7 +1380,7 @@ public interface IDocumentExtractor {
     bool CanHandle(string Path, string MimeType);
 
     /// <summary>as_sync_extractor</summary>
-    SyncExtractor? AsSyncExtractor();
+    string? AsSyncExtractor();
 }
 
 /// <summary>
@@ -1560,7 +1560,7 @@ public sealed class DocumentExtractorBridge : IDisposable {
             var json_Config = Marshal.PtrToStringUTF8(Config) ?? "{}";
             var managed_Config = JsonSerializer.Deserialize<ExtractionConfig>(json_Config)!;
             var result = _impl.ExtractBytes(managed_Content, managed_MimeType, managed_Config);
-            outResult = Marshal.StringToCoTaskMemUTF8(result.ToFfiJson());
+            outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
             outError = IntPtr.Zero;
             return 0;
         } catch (Exception ex) {
@@ -1578,7 +1578,7 @@ public sealed class DocumentExtractorBridge : IDisposable {
             var json_Config = Marshal.PtrToStringUTF8(Config) ?? "{}";
             var managed_Config = JsonSerializer.Deserialize<ExtractionConfig>(json_Config)!;
             var result = _impl.ExtractFile(managed_Path, managed_MimeType, managed_Config);
-            outResult = Marshal.StringToCoTaskMemUTF8(result.ToFfiJson());
+            outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
             outError = IntPtr.Zero;
             return 0;
         } catch (Exception ex) {
@@ -1744,7 +1744,7 @@ public interface IRenderer {
     void Shutdown();
 
     /// <summary>render</summary>
-    string Render(InternalDocument Doc);
+    string Render(string Doc);
 }
 
 /// <summary>
@@ -1874,8 +1874,7 @@ public sealed class RendererBridge : IDisposable {
     private int RenderFnCallback(IntPtr userData, IntPtr Doc, out IntPtr outResult, out IntPtr outError) {
         try {
             var json_Doc = Marshal.PtrToStringUTF8(Doc) ?? "{}";
-            var managed_Doc = JsonSerializer.Deserialize<InternalDocument>(json_Doc)!;
-            var result = _impl.Render(managed_Doc);
+            var result = _impl.Render(json_Doc);
             outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
             outError = IntPtr.Zero;
             return 0;

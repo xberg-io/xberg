@@ -341,7 +341,7 @@
     },
     {
       "name": "freezed_annotation",
-      "version": "3.1.0",
+      "version": "2.4.4",
       "dependencies": [
         "collection",
         "json_annotation",

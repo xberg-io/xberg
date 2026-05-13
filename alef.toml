@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.15.49"
+alef_version = "0.15.50"
 languages = [
   "python",
   "node",
@@ -1092,10 +1092,13 @@ command = "cd packages/swift && swift test"
 e2e = "cd packages/swift && swift test"
 
 [crates.test.dart]
-precondition = "command -v dart >/dev/null 2>&1"
-before = "{ command -v flutter_rust_bridge_codegen >/dev/null 2>&1 || cargo install flutter_rust_bridge_codegen --version 2.12.0; } && cd packages/dart && dart pub get && cd rust && flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml && cd ../../.. && cargo build --release -p kreuzberg-dart"
-command = "cd packages/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart test"
-e2e = "cd e2e/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release dart test"
+# packages/dart is a Flutter plugin (pubspec declares `flutter:` SDK constraint
+# plus a `flutter: plugin:` ffiPlugin block), so `dart pub` is rejected by the
+# resolver — use `flutter pub` / `flutter test` throughout.
+precondition = "command -v flutter >/dev/null 2>&1"
+before = "{ command -v flutter_rust_bridge_codegen >/dev/null 2>&1 || cargo install flutter_rust_bridge_codegen --version 2.12.0; } && cd packages/dart && flutter pub get && cd rust && flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml && cd ../../.. && cargo build --release -p kreuzberg-dart"
+command = "cd packages/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
+e2e = "cd e2e/dart && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter pub get && DYLD_FALLBACK_LIBRARY_PATH=$PWD/../../target/release LD_LIBRARY_PATH=$PWD/../../target/release FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR=$PWD/../../target/release flutter test"
 
 [crates.test.zig]
 precondition = "command -v zig >/dev/null 2>&1"
@@ -1601,6 +1604,11 @@ options_type = "EmbeddingConfig"
 result_is_simple = true
 options_type = "EmbeddingConfig"
 
+# Zig returns `[]u8` (JSON) for Vec<Vec<f32>>; assertions are rendered against
+# the parsed JSON value rather than struct fields.
+[crates.e2e.calls.embed_texts.overrides.zig]
+result_is_json_struct = true
+
 [crates.e2e.calls.batch_extract_bytes]
 function = "batch_extract_bytes"
 module = "kreuzberg"
@@ -1717,25 +1725,28 @@ result_is_simple = true
 returns_result = true
 
 [crates.e2e.calls.clear_ocr_backends]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
-function = "clear_ocr_backends"
-module = "kreuzberg"
+function = ""
+module = ""
 async = false
 returns_result = false
 args = []
 
 [crates.e2e.calls.clear_post_processors]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
-function = "clear_post_processors"
-module = "kreuzberg"
+function = ""
+module = ""
 async = false
 returns_result = false
 args = []
 
 [crates.e2e.calls.clear_validators]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
-function = "clear_validators"
-module = "kreuzberg"
+function = ""
+module = ""
 async = false
 returns_result = false
 args = []

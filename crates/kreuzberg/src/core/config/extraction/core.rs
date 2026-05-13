@@ -201,7 +201,6 @@ pub struct ExtractionConfig {
     /// improves SF1 (structural F1) at the cost of inference latency
     /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
     /// Requires the `layout-detection` feature.
-    #[cfg(feature = "layout-detection")]
     #[serde(default)]
     pub use_layout_for_markdown: bool,
 
@@ -317,7 +316,6 @@ impl Default for ExtractionConfig {
             security_limits: None,
             #[cfg(feature = "layout-detection")]
             layout: None,
-            #[cfg(feature = "layout-detection")]
             use_layout_for_markdown: false,
             result_format: crate::types::ResultFormat::Unified,
             output_format: OutputFormat::Plain,

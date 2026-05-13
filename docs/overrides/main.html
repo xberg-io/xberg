@@ -1,82 +1,140 @@
-{% extends "base.html" %} {% block scripts %} {{ super() }}
-<script>
-  // Changelog headings use [ver] link-reference syntax, which renders a nested <a> inside
-  // the outer .md-nav__link anchor. Browsers break nested anchors apart (HTML5 adoption
-  // agency algorithm), leaving the TOC anchor empty and the version text as orphaned nodes.
-  // This repairs those empty anchors by reading the text from the sibling nav's aria-label.
-  document$.subscribe(function () {
-    document.querySelectorAll("li.md-nav__item").forEach(function (item) {
-      var link = item.querySelector(":scope > a.md-nav__link");
-      var subNav = item.querySelector(":scope > nav.md-nav[aria-label]");
-      var label = subNav && subNav.getAttribute("aria-label");
-      if (link && label && !link.textContent.trim()) {
-        link.textContent = label;
-        var toRemove = [];
-        for (var node = link.nextSibling; node && node !== subNav; node = node.nextSibling) {
-          toRemove.push(node);
+{% extends "base.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    // Changelog headings use [ver] link-reference syntax, which renders a nested <a> inside
+    // the outer .md-nav__link anchor. Browsers break nested anchors apart (HTML5 adoption
+    // agency algorithm), leaving the TOC anchor empty and the version text as orphaned nodes.
+    // This repairs those empty anchors by reading the text from the sibling nav's aria-label.
+    document$.subscribe(function () {
+      document.querySelectorAll("li.md-nav__item").forEach(function (item) {
+        var link = item.querySelector(":scope > a.md-nav__link");
+        var subNav = item.querySelector(":scope > nav.md-nav[aria-label]");
+        var label = subNav && subNav.getAttribute("aria-label");
+        if (link && label && !link.textContent.trim()) {
+          link.textContent = label;
+          var toRemove = [];
+          for (var node = link.nextSibling; node && node !== subNav; node = node.nextSibling) {
+            toRemove.push(node);
+          }
+          toRemove.forEach(function (n) {
+            n.parentNode && n.parentNode.removeChild(n);
+          });
         }
-        toRemove.forEach(function (n) {
-          n.parentNode && n.parentNode.removeChild(n);
-        });
-      }
-    });
+      });
 
-    // Workaround: zensical's repo source observable re-emits on each instant
-    // navigation, appending another <ul class="md-source__facts"> without
-    // removing the previous one. Keep only the most recent list. The GitHub
-    // stars fetch is async, so an immediate sweep isn't enough — also attach
-    // a MutationObserver so late appends get collapsed too.
-    document.querySelectorAll(".md-source__repository").forEach(function (repo) {
-      var dedupe = function () {
-        var lists = repo.querySelectorAll(":scope > ul.md-source__facts");
-        for (var i = 0; i < lists.length - 1; i++) {
-          lists[i].remove();
+      // Workaround: zensical's repo source observable re-emits on each instant
+      // navigation, appending another <ul class="md-source__facts"> without
+      // removing the previous one. Keep only the most recent list. The GitHub
+      // stars fetch is async, so an immediate sweep isn't enough — also attach
+      // a MutationObserver so late appends get collapsed too.
+      document.querySelectorAll(".md-source__repository").forEach(function (repo) {
+        var dedupe = function () {
+          var lists = repo.querySelectorAll(":scope > ul.md-source__facts");
+          for (var i = 0; i < lists.length - 1; i++) {
+            lists[i].remove();
+          }
+        };
+        dedupe();
+        if (!repo.__factsObserver) {
+          repo.__factsObserver = new MutationObserver(dedupe);
+          repo.__factsObserver.observe(repo, { childList: true });
         }
-      };
-      dedupe();
-      if (!repo.__factsObserver) {
-        repo.__factsObserver = new MutationObserver(dedupe);
-        repo.__factsObserver.observe(repo, { childList: true });
-      }
+      });
     });
-  });
-</script>
-{% endblock %} {% block extrahead %}
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-8G4NQW55PF"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag() {
-    dataLayer.push(arguments);
-  }
-  gtag("js", new Date());
+  </script>
+{% endblock %}
 
-  gtag("config", "G-8G4NQW55PF");
-  gtag("config", "AW-17853694443");
-</script>
+{% block extrahead %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8G4NQW55PF"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+    gtag("js", new Date());
 
-<meta property="og:type" content="website" />
-<meta
-  property="og:title"
-  content="{{ config.site_name }}{% if page and page.title and not page.is_homepage %} - {{ page.title | striptags }}{% endif %}"
-/>
-<meta
-  property="og:description"
-  content="{% if page and page.meta and page.meta.description %}{{ page.meta.description }}{% else %}{{ config.site_description }}{% endif %}"
-/>
-<meta property="og:url" content="{{ page.canonical_url }}" />
-<meta property="og:site_name" content="{{ config.site_name }}" />
-<meta property="og:image" content="{{ config.site_url }}assets/og-image.png" />
-<meta property="og:image:width" content="1200" />
-<meta property="og:image:height" content="630" />
+    gtag("config", "G-8G4NQW55PF");
+    gtag("config", "AW-17853694443");
+  </script>
 
-<meta name="twitter:card" content="summary_large_image" />
-<meta
-  name="twitter:title"
-  content="{{ config.site_name }}{% if page and page.title and not page.is_homepage %} - {{ page.title | striptags }}{% endif %}"
-/>
-<meta
-  name="twitter:description"
-  content="{% if page and page.meta and page.meta.description %}{{ page.meta.description }}{% else %}{{ config.site_description }}{% endif %}"
-/>
-<meta name="twitter:image" content="{{ config.site_url }}assets/og-image.png" />
+  <meta property="og:type" content="website" />
+  <meta
+    property="og:title"
+    content="{{ config.site_name }}{% if page and page.title and not page.is_homepage %} - {{ page.title | striptags }}{% endif %}"
+  />
+  <meta
+    property="og:description"
+    content="{% if page and page.meta and page.meta.description %}{{ page.meta.description }}{% else %}{{ config.site_description }}{% endif %}"
+  />
+  <meta property="og:url" content="{{ page.canonical_url }}" />
+  <meta property="og:site_name" content="{{ config.site_name }}" />
+  <meta property="og:image" content="{{ config.site_url }}assets/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta
+    name="twitter:title"
+    content="{{ config.site_name }}{% if page and page.title and not page.is_homepage %} - {{ page.title | striptags }}{% endif %}"
+  />
+  <meta
+    name="twitter:description"
+    content="{% if page and page.meta and page.meta.description %}{{ page.meta.description }}{% else %}{{ config.site_description }}{% endif %}"
+  />
+  <meta name="twitter:image" content="{{ config.site_url }}assets/og-image.png" />
+{% endblock %}
+
+{# Match Material: `.md-content` wraps article; `data-md-component="content"` stays on the wrapper for theme JS. #}
+{% block container %}
+  <div class="md-content" data-md-component="content">
+    <article class="md-content__inner md-typeset">
+      {% if "navigation.path" in features %}
+        {% include "partials/path.html" %}
+      {% endif %}
+      {% include "partials/content.html" %}
+      {% if page and page.edit_url %}
+        <p
+          style="
+            margin-top: 2rem;
+            margin-bottom: 0;
+            font-size: 0.75rem;
+            line-height: 1.5;
+          "
+        >
+          <a
+            href="{{ page.edit_url }}"
+            style="
+              color: var(--md-default-fg-color--lighter, #737373);
+              text-decoration: underline;
+              text-underline-offset: 0.15em;
+            "
+            >Edit this page on GitHub</a>
+        </p>
+      {% endif %}
+      {% if page and (
+        page.is_homepage | default(false)
+        or (page.url | default("")) == ""
+        or (page.url | default("")) == "/"
+        or (page.url | default("")) == "."
+      ) %}
+        <div class="cloud-banner">
+          <a
+            href="https://kreuzberg.dev/"
+            title="Kreuzberg — document intelligence"
+          >
+            <img
+              src="{{ 'assets/Kreuzberg.svg' | url }}"
+              alt="Kreuzberg — document intelligence"
+              width="800"
+              height="200"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
+        </div>
+      {% endif %}
+    </article>
+  </div>
 {% endblock %}

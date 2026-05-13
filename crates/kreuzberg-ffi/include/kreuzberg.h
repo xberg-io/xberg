@@ -13255,6 +13255,20 @@ int32_t kreuzberg_unregister_ocr_backend(const char *name,
                                          char **out_error);
 
 /**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_ocr_backend(char **out_error);
+
+/**
  * Register a C plugin implementing `PostProcessor` via a vtable.
  *
  * # Parameters
@@ -13289,6 +13303,20 @@ int32_t kreuzberg_register_post_processor(const char *name,
  */
 int32_t kreuzberg_unregister_post_processor(const char *name,
                                             char **out_error);
+
+/**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_post_processor(char **out_error);
 
 /**
  * Register a C plugin implementing `Validator` via a vtable.
@@ -13327,6 +13355,20 @@ int32_t kreuzberg_unregister_validator(const char *name,
                                        char **out_error);
 
 /**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_validator(char **out_error);
+
+/**
  * Register a C plugin implementing `EmbeddingBackend` via a vtable.
  *
  * # Parameters
@@ -13361,6 +13403,20 @@ int32_t kreuzberg_register_embedding_backend(const char *name,
  */
 int32_t kreuzberg_unregister_embedding_backend(const char *name,
                                                char **out_error);
+
+/**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_embedding_backend(char **out_error);
 
 /**
  * Register a C plugin implementing `DocumentExtractor` via a vtable.
@@ -13399,6 +13455,20 @@ int32_t kreuzberg_unregister_document_extractor(const char *name,
                                                 char **out_error);
 
 /**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_document_extractor(char **out_error);
+
+/**
  * Register a C plugin implementing `Renderer` via a vtable.
  *
  * # Parameters
@@ -13433,5 +13503,19 @@ int32_t kreuzberg_register_renderer(const char *name,
  */
 int32_t kreuzberg_unregister_renderer(const char *name,
                                       char **out_error);
+
+/**
+ * Remove all registered C plugins of this trait.
+ *
+ * # Parameters
+ *
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `out_error` may be null. When non-null, the caller owns the resulting string
+ * and must free it with `kreuzberg_free_string`.
+ */
+int32_t kreuzberg_clear_renderer(char **out_error);
 
 #endif  /* KREUZBERG_H */
