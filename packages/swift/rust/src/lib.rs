@@ -20,7 +20,7 @@ mod ffi {
         type AccelerationConfig;
         #[swift_bridge(init)]
         fn new(provider: ExecutionProviderType, device_id: u32) -> AccelerationConfig;
-        fn provider(&self) -> ExecutionProviderType;
+        fn provider(&self) -> String;
         fn device_id(&self) -> u32;
     }
 
@@ -104,9 +104,9 @@ mod ffi {
         fn html_output(&self) -> Option<HtmlOutputConfig>;
         fn extraction_timeout_secs(&self) -> Option<u64>;
         fn max_concurrent_extractions(&self) -> Option<usize>;
-        fn result_format(&self) -> ResultFormat;
+        fn result_format(&self) -> String;
         fn security_limits(&self) -> Option<SecurityLimits>;
-        fn output_format(&self) -> OutputFormat;
+        fn output_format(&self) -> String;
         fn layout(&self) -> Option<LayoutDetectionConfig>;
         fn use_layout_for_markdown(&self) -> bool;
         fn include_document_structure(&self) -> bool;
@@ -163,8 +163,8 @@ mod ffi {
         fn keywords(&self) -> Option<KeywordConfig>;
         fn postprocessor(&self) -> Option<PostProcessorConfig>;
         fn html_options(&self) -> Option<String>;
-        fn result_format(&self) -> Option<ResultFormat>;
-        fn output_format(&self) -> Option<OutputFormat>;
+        fn result_format(&self) -> Option<String>;
+        fn output_format(&self) -> Option<String>;
         fn include_document_structure(&self) -> Option<bool>;
         fn layout(&self) -> Option<LayoutDetectionConfig>;
         fn timeout_secs(&self) -> Option<u64>;
@@ -239,7 +239,7 @@ mod ffi {
         ) -> HtmlOutputConfig;
         fn css(&self) -> Option<String>;
         fn css_file(&self) -> Option<String>;
-        fn theme(&self) -> HtmlTheme;
+        fn theme(&self) -> String;
         fn class_prefix(&self) -> String;
         fn embed_css(&self) -> bool;
     }
@@ -255,7 +255,7 @@ mod ffi {
         ) -> LayoutDetectionConfig;
         fn confidence_threshold(&self) -> Option<f32>;
         fn apply_heuristics(&self) -> bool;
-        fn table_model(&self) -> TableModel;
+        fn table_model(&self) -> String;
         fn acceleration(&self) -> Option<AccelerationConfig>;
     }
 
@@ -368,7 +368,7 @@ mod ffi {
         fn backend(&self) -> String;
         fn language(&self) -> String;
         fn tesseract_config(&self) -> Option<TesseractConfig>;
-        fn output_format(&self) -> Option<OutputFormat>;
+        fn output_format(&self) -> Option<String>;
         fn paddle_ocr_config(&self) -> Option<String>;
         fn element_config(&self) -> Option<OcrElementConfig>;
         fn quality_thresholds(&self) -> Option<OcrQualityThresholds>;
@@ -465,10 +465,10 @@ mod ffi {
         fn max_characters(&self) -> usize;
         fn overlap(&self) -> usize;
         fn trim(&self) -> bool;
-        fn chunker_type(&self) -> ChunkerType;
+        fn chunker_type(&self) -> String;
         fn embedding(&self) -> Option<EmbeddingConfig>;
         fn preset(&self) -> Option<String>;
-        fn sizing(&self) -> ChunkSizing;
+        fn sizing(&self) -> String;
         fn prepend_heading_context(&self) -> bool;
         fn topic_threshold(&self) -> Option<f32>;
     }
@@ -485,7 +485,7 @@ mod ffi {
             acceleration: Option<AccelerationConfig>,
             max_embed_duration_secs: Option<u64>,
         ) -> EmbeddingConfig;
-        fn model(&self) -> EmbeddingModelType;
+        fn model(&self) -> String;
         fn normalize(&self) -> bool;
         fn batch_size(&self) -> usize;
         fn show_download_progress(&self) -> bool;
@@ -533,7 +533,7 @@ mod ffi {
         fn symbols(&self) -> bool;
         fn diagnostics(&self) -> bool;
         fn chunk_max_size(&self) -> Option<usize>;
-        fn content_mode(&self) -> CodeContentMode;
+        fn content_mode(&self) -> String;
     }
 
     extern "Rust" {
@@ -963,7 +963,7 @@ mod ffi {
             target_reduction: Option<f32>,
             enable_semantic_clustering: bool,
         ) -> TokenReductionConfig;
-        fn level(&self) -> ReductionLevel;
+        fn level(&self) -> String;
         fn language_hint(&self) -> Option<String>;
         fn preserve_markdown(&self) -> bool;
         fn preserve_code(&self) -> bool;
@@ -978,7 +978,7 @@ mod ffi {
 
     extern "Rust" {
         type PdfAnnotation;
-        fn annotation_type(&self) -> PdfAnnotationType;
+        fn annotation_type(&self) -> String;
         fn content(&self) -> Option<String>;
         fn page_number(&self) -> usize;
         fn bounding_box(&self) -> Option<String>;
@@ -998,7 +998,7 @@ mod ffi {
 
     extern "Rust" {
         type FormattedBlock;
-        fn block_type(&self) -> BlockType;
+        fn block_type(&self) -> String;
         fn level(&self) -> Option<usize>;
         fn inline_content(&self) -> Vec<InlineElement>;
         fn attributes(&self) -> Option<String>;
@@ -1009,7 +1009,7 @@ mod ffi {
 
     extern "Rust" {
         type InlineElement;
-        fn element_type(&self) -> InlineType;
+        fn element_type(&self) -> String;
         fn content(&self) -> String;
         fn attributes(&self) -> Option<String>;
         fn metadata(&self) -> String;
@@ -1056,16 +1056,16 @@ mod ffi {
         type DocumentRelationship;
         fn source(&self) -> u32;
         fn target(&self) -> u32;
-        fn kind(&self) -> RelationshipKind;
+        fn kind(&self) -> String;
     }
 
     extern "Rust" {
         type DocumentNode;
         fn id(&self) -> String;
-        fn content(&self) -> NodeContent;
+        fn content(&self) -> String;
         fn parent(&self) -> Option<u32>;
         fn children(&self) -> Vec<u32>;
-        fn content_layer(&self) -> ContentLayer;
+        fn content_layer(&self) -> String;
         fn page(&self) -> Option<u32>;
         fn page_end(&self) -> Option<u32>;
         fn bbox(&self) -> Option<String>;
@@ -1097,7 +1097,7 @@ mod ffi {
         type TextAnnotation;
         fn start(&self) -> u32;
         fn end(&self) -> u32;
-        fn kind(&self) -> AnnotationKind;
+        fn kind(&self) -> String;
     }
 
     extern "Rust" {
@@ -1131,7 +1131,7 @@ mod ffi {
         fn content(&self) -> String;
         fn mime_type(&self) -> String;
         fn metadata(&self) -> Metadata;
-        fn extraction_method(&self) -> Option<ExtractionMethod>;
+        fn extraction_method(&self) -> Option<String>;
         fn tables(&self) -> Vec<Table>;
         fn detected_languages(&self) -> Option<Vec<String>>;
         fn chunks(&self) -> Option<Vec<Chunk>>;
@@ -1190,7 +1190,7 @@ mod ffi {
     extern "Rust" {
         type Chunk;
         fn content(&self) -> String;
-        fn chunk_type(&self) -> ChunkType;
+        fn chunk_type(&self) -> String;
         fn embedding(&self) -> Option<Vec<f32>>;
         fn metadata(&self) -> ChunkMetadata;
     }
@@ -1233,7 +1233,7 @@ mod ffi {
         fn ocr_result(&self) -> Option<ExtractionResult>;
         fn bounding_box(&self) -> Option<String>;
         fn source_path(&self) -> Option<String>;
-        fn image_kind(&self) -> Option<ImageKind>;
+        fn image_kind(&self) -> Option<String>;
         fn kind_confidence(&self) -> Option<f32>;
         fn cluster_id(&self) -> Option<u32>;
     }
@@ -1250,7 +1250,7 @@ mod ffi {
     extern "Rust" {
         type Element;
         fn element_id(&self) -> String;
-        fn element_type(&self) -> ElementType;
+        fn element_type(&self) -> String;
         fn text(&self) -> String;
         fn metadata(&self) -> ElementMetadata;
     }
@@ -1478,7 +1478,7 @@ mod ffi {
         fn created_by(&self) -> Option<String>;
         fn modified_by(&self) -> Option<String>;
         fn pages(&self) -> Option<PageStructure>;
-        fn format(&self) -> Option<FormatMetadata>;
+        fn format(&self) -> Option<String>;
         fn image_preprocessing(&self) -> Option<ImagePreprocessingMetadata>;
         fn json_schema(&self) -> Option<String>;
         fn error(&self) -> Option<ErrorMetadata>;
@@ -1589,7 +1589,7 @@ mod ffi {
         fn href(&self) -> String;
         fn text(&self) -> String;
         fn title(&self) -> Option<String>;
-        fn link_type(&self) -> LinkType;
+        fn link_type(&self) -> String;
         fn rel(&self) -> Vec<String>;
         fn attributes(&self) -> Vec<String>;
     }
@@ -1600,13 +1600,13 @@ mod ffi {
         fn alt(&self) -> Option<String>;
         fn title(&self) -> Option<String>;
         fn dimensions(&self) -> Option<Vec<u32>>;
-        fn image_type(&self) -> ImageType;
+        fn image_type(&self) -> String;
         fn attributes(&self) -> Vec<String>;
     }
 
     extern "Rust" {
         type StructuredData;
-        fn data_type(&self) -> StructuredDataType;
+        fn data_type(&self) -> String;
         fn raw_json(&self) -> String;
         fn schema_type(&self) -> Option<String>;
     }
@@ -1638,7 +1638,7 @@ mod ffi {
         fn canonical_url(&self) -> Option<String>;
         fn base_href(&self) -> Option<String>;
         fn language(&self) -> Option<String>;
-        fn text_direction(&self) -> Option<TextDirection>;
+        fn text_direction(&self) -> Option<String>;
         fn open_graph(&self) -> String;
         fn twitter_card(&self) -> String;
         fn meta_tags(&self) -> String;
@@ -1860,9 +1860,9 @@ mod ffi {
             backend_metadata: String,
         ) -> OcrElement;
         fn text(&self) -> String;
-        fn geometry(&self) -> OcrBoundingGeometry;
+        fn geometry(&self) -> String;
         fn confidence(&self) -> OcrConfidence;
-        fn level(&self) -> OcrElementLevel;
+        fn level(&self) -> String;
         fn rotation(&self) -> Option<OcrRotation>;
         fn page_number(&self) -> usize;
         fn parent_id(&self) -> Option<String>;
@@ -1879,7 +1879,7 @@ mod ffi {
             build_hierarchy: bool,
         ) -> OcrElementConfig;
         fn include_elements(&self) -> bool;
-        fn min_level(&self) -> OcrElementLevel;
+        fn min_level(&self) -> String;
         fn min_confidence(&self) -> f64;
         fn build_hierarchy(&self) -> bool;
     }
@@ -1887,7 +1887,7 @@ mod ffi {
     extern "Rust" {
         type PageStructure;
         fn total_count(&self) -> usize;
-        fn unit_type(&self) -> PageUnitType;
+        fn unit_type(&self) -> String;
         fn boundaries(&self) -> Option<Vec<PageBoundary>>;
         fn pages(&self) -> Option<Vec<PageInfo>>;
     }
@@ -1971,7 +1971,7 @@ mod ffi {
         fn url(&self) -> String;
         fn label(&self) -> Option<String>;
         fn page(&self) -> Option<u32>;
-        fn kind(&self) -> UriKind;
+        fn kind(&self) -> String;
     }
 
     extern "Rust" {
@@ -2178,7 +2178,7 @@ mod ffi {
             yake_params: Option<YakeParams>,
             rake_params: Option<RakeParams>,
         ) -> KeywordConfig;
-        fn algorithm(&self) -> KeywordAlgorithm;
+        fn algorithm(&self) -> String;
         fn max_keywords(&self) -> usize;
         fn min_score(&self) -> f32;
         fn ngram_range(&self) -> Vec<usize>;
@@ -2191,7 +2191,7 @@ mod ffi {
         type Keyword;
         fn text(&self) -> String;
         fn score(&self) -> f32;
-        fn algorithm(&self) -> KeywordAlgorithm;
+        fn algorithm(&self) -> String;
         fn positions(&self) -> Option<Vec<usize>>;
     }
 
@@ -2278,7 +2278,7 @@ mod ffi {
 
     extern "Rust" {
         type LayoutDetection;
-        fn class_name(&self) -> LayoutClass;
+        fn class_name(&self) -> String;
         fn confidence(&self) -> f32;
         fn bbox(&self) -> BBox;
     }
@@ -2795,8 +2795,8 @@ impl AccelerationConfig {
         __target.device_id = device_id;
         AccelerationConfig(__target)
     }
-    pub fn provider(&self) -> ExecutionProviderType {
-        ExecutionProviderType::from(self.0.provider.clone())
+    pub fn provider(&self) -> String {
+        ExecutionProviderType::from(self.0.provider.clone()).to_string()
     }
     pub fn device_id(&self) -> u32 {
         ::serde_json::to_value(&self.0.device_id)
@@ -3081,14 +3081,14 @@ impl ExtractionConfig {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn result_format(&self) -> ResultFormat {
-        ResultFormat::from(self.0.result_format.clone())
+    pub fn result_format(&self) -> String {
+        ResultFormat::from(self.0.result_format.clone()).to_string()
     }
     pub fn security_limits(&self) -> Option<SecurityLimits> {
         self.0.security_limits.clone().map(SecurityLimits)
     }
-    pub fn output_format(&self) -> OutputFormat {
-        OutputFormat::from(self.0.output_format.clone())
+    pub fn output_format(&self) -> String {
+        OutputFormat::from(self.0.output_format.clone()).to_string()
     }
     pub fn layout(&self) -> Option<LayoutDetectionConfig> {
         self.0.layout.clone().map(LayoutDetectionConfig)
@@ -3289,11 +3289,11 @@ impl FileExtractionConfig {
     pub fn html_options(&self) -> Option<String> {
         self.0.html_options.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
-    pub fn result_format(&self) -> Option<ResultFormat> {
-        self.0.result_format.clone().map(ResultFormat::from)
+    pub fn result_format(&self) -> Option<String> {
+        self.0.result_format.clone().map(|w| ResultFormat::from(w).to_string())
     }
-    pub fn output_format(&self) -> Option<OutputFormat> {
-        self.0.output_format.clone().map(OutputFormat::from)
+    pub fn output_format(&self) -> Option<String> {
+        self.0.output_format.clone().map(|w| OutputFormat::from(w).to_string())
     }
     pub fn include_document_structure(&self) -> Option<bool> {
         self.0.include_document_structure.as_ref().and_then(|v| {
@@ -3516,8 +3516,8 @@ impl HtmlOutputConfig {
     pub fn css_file(&self) -> Option<String> {
         self.0.css_file.as_ref().and_then(|v| serde_json::to_string(v).ok())
     }
-    pub fn theme(&self) -> HtmlTheme {
-        HtmlTheme::from(self.0.theme.clone())
+    pub fn theme(&self) -> String {
+        HtmlTheme::from(self.0.theme.clone()).to_string()
     }
     pub fn class_prefix(&self) -> String {
         self.0.class_prefix.clone()
@@ -3560,8 +3560,8 @@ impl LayoutDetectionConfig {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn table_model(&self) -> TableModel {
-        TableModel::from(self.0.table_model.clone())
+    pub fn table_model(&self) -> String {
+        TableModel::from(self.0.table_model.clone()).to_string()
     }
     pub fn acceleration(&self) -> Option<AccelerationConfig> {
         self.0.acceleration.clone().map(AccelerationConfig)
@@ -3934,8 +3934,8 @@ impl OcrConfig {
     pub fn tesseract_config(&self) -> Option<TesseractConfig> {
         self.0.tesseract_config.clone().map(TesseractConfig)
     }
-    pub fn output_format(&self) -> Option<OutputFormat> {
-        self.0.output_format.clone().map(OutputFormat::from)
+    pub fn output_format(&self) -> Option<String> {
+        self.0.output_format.clone().map(|w| OutputFormat::from(w).to_string())
     }
     pub fn paddle_ocr_config(&self) -> Option<String> {
         self.0
@@ -4255,8 +4255,8 @@ impl ChunkingConfig {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn chunker_type(&self) -> ChunkerType {
-        ChunkerType::from(self.0.chunker_type.clone())
+    pub fn chunker_type(&self) -> String {
+        ChunkerType::from(self.0.chunker_type.clone()).to_string()
     }
     pub fn embedding(&self) -> Option<EmbeddingConfig> {
         self.0.embedding.clone().map(EmbeddingConfig)
@@ -4264,8 +4264,8 @@ impl ChunkingConfig {
     pub fn preset(&self) -> Option<String> {
         self.0.preset.clone()
     }
-    pub fn sizing(&self) -> ChunkSizing {
-        ChunkSizing::from(self.0.sizing.clone())
+    pub fn sizing(&self) -> String {
+        ChunkSizing::from(self.0.sizing.clone()).to_string()
     }
     pub fn prepend_heading_context(&self) -> bool {
         ::serde_json::to_value(&self.0.prepend_heading_context)
@@ -4311,8 +4311,8 @@ impl EmbeddingConfig {
         __target.max_embed_duration_secs = max_embed_duration_secs;
         EmbeddingConfig(__target)
     }
-    pub fn model(&self) -> EmbeddingModelType {
-        EmbeddingModelType::from(self.0.model.clone())
+    pub fn model(&self) -> String {
+        EmbeddingModelType::from(self.0.model.clone()).to_string()
     }
     pub fn normalize(&self) -> bool {
         ::serde_json::to_value(&self.0.normalize)
@@ -4480,8 +4480,8 @@ impl TreeSitterProcessConfig {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn content_mode(&self) -> CodeContentMode {
-        CodeContentMode::from(self.0.content_mode.clone())
+    pub fn content_mode(&self) -> String {
+        CodeContentMode::from(self.0.content_mode.clone()).to_string()
     }
 }
 
@@ -5830,8 +5830,8 @@ impl TokenReductionConfig {
         __target.enable_semantic_clustering = enable_semantic_clustering;
         TokenReductionConfig(__target)
     }
-    pub fn level(&self) -> ReductionLevel {
-        ReductionLevel::from(self.0.level.clone())
+    pub fn level(&self) -> String {
+        ReductionLevel::from(self.0.level.clone()).to_string()
     }
     pub fn language_hint(&self) -> Option<String> {
         self.0.language_hint.clone()
@@ -5892,8 +5892,8 @@ impl TokenReductionConfig {
 
 pub struct PdfAnnotation(pub kreuzberg::PdfAnnotation);
 impl PdfAnnotation {
-    pub fn annotation_type(&self) -> PdfAnnotationType {
-        PdfAnnotationType::from(self.0.annotation_type.clone())
+    pub fn annotation_type(&self) -> String {
+        PdfAnnotationType::from(self.0.annotation_type.clone()).to_string()
     }
     pub fn content(&self) -> Option<String> {
         self.0.content.clone()
@@ -5942,8 +5942,8 @@ impl DjotContent {
 
 pub struct FormattedBlock(pub kreuzberg::FormattedBlock);
 impl FormattedBlock {
-    pub fn block_type(&self) -> BlockType {
-        BlockType::from(self.0.block_type.clone())
+    pub fn block_type(&self) -> String {
+        BlockType::from(self.0.block_type.clone()).to_string()
     }
     pub fn level(&self) -> Option<usize> {
         self.0.level.as_ref().and_then(|v| {
@@ -5979,8 +5979,8 @@ impl FormattedBlock {
 
 pub struct InlineElement(pub kreuzberg::InlineElement);
 impl InlineElement {
-    pub fn element_type(&self) -> InlineType {
-        InlineType::from(self.0.element_type.clone())
+    pub fn element_type(&self) -> String {
+        InlineType::from(self.0.element_type.clone()).to_string()
     }
     pub fn content(&self) -> String {
         self.0.content.clone()
@@ -6095,8 +6095,8 @@ impl DocumentRelationship {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn kind(&self) -> RelationshipKind {
-        RelationshipKind::from(self.0.kind.clone())
+    pub fn kind(&self) -> String {
+        RelationshipKind::from(self.0.kind.clone()).to_string()
     }
 }
 
@@ -6105,8 +6105,8 @@ impl DocumentNode {
     pub fn id(&self) -> String {
         serde_json::to_string(&self.0.id).unwrap_or_default()
     }
-    pub fn content(&self) -> NodeContent {
-        NodeContent::from(self.0.content.clone())
+    pub fn content(&self) -> String {
+        NodeContent::from(self.0.content.clone()).to_string()
     }
     pub fn parent(&self) -> Option<u32> {
         self.0.parent.as_ref().and_then(|v| {
@@ -6121,8 +6121,8 @@ impl DocumentNode {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn content_layer(&self) -> ContentLayer {
-        ContentLayer::from(self.0.content_layer.clone())
+    pub fn content_layer(&self) -> String {
+        ContentLayer::from(self.0.content_layer.clone()).to_string()
     }
     pub fn page(&self) -> Option<u32> {
         self.0.page.as_ref().and_then(|v| {
@@ -6233,8 +6233,8 @@ impl TextAnnotation {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn kind(&self) -> AnnotationKind {
-        AnnotationKind::from(self.0.kind.clone())
+    pub fn kind(&self) -> String {
+        AnnotationKind::from(self.0.kind.clone()).to_string()
     }
 }
 
@@ -6355,8 +6355,11 @@ impl ExtractionResult {
     pub fn metadata(&self) -> Metadata {
         Metadata(self.0.metadata.clone())
     }
-    pub fn extraction_method(&self) -> Option<ExtractionMethod> {
-        self.0.extraction_method.clone().map(ExtractionMethod::from)
+    pub fn extraction_method(&self) -> Option<String> {
+        self.0
+            .extraction_method
+            .clone()
+            .map(|w| ExtractionMethod::from(w).to_string())
     }
     pub fn tables(&self) -> Vec<Table> {
         self.0.tables.iter().map(|elem| Table(elem.clone())).collect()
@@ -6568,8 +6571,8 @@ impl Chunk {
     pub fn content(&self) -> String {
         self.0.content.clone()
     }
-    pub fn chunk_type(&self) -> ChunkType {
-        ChunkType::from(self.0.chunk_type.clone())
+    pub fn chunk_type(&self) -> String {
+        ChunkType::from(self.0.chunk_type.clone()).to_string()
     }
     pub fn embedding(&self) -> Option<Vec<f32>> {
         self.0.embedding.as_ref().and_then(|v| {
@@ -6718,8 +6721,8 @@ impl ExtractedImage {
     pub fn source_path(&self) -> Option<String> {
         self.0.source_path.clone()
     }
-    pub fn image_kind(&self) -> Option<ImageKind> {
-        self.0.image_kind.clone().map(ImageKind::from)
+    pub fn image_kind(&self) -> Option<String> {
+        self.0.image_kind.clone().map(|w| ImageKind::from(w).to_string())
     }
     pub fn kind_confidence(&self) -> Option<f32> {
         self.0.kind_confidence.as_ref().and_then(|v| {
@@ -6769,8 +6772,8 @@ impl Element {
     pub fn element_id(&self) -> String {
         serde_json::to_string(&self.0.element_id).unwrap_or_default()
     }
-    pub fn element_type(&self) -> ElementType {
-        ElementType::from(self.0.element_type.clone())
+    pub fn element_type(&self) -> String {
+        ElementType::from(self.0.element_type.clone()).to_string()
     }
     pub fn text(&self) -> String {
         self.0.text.clone()
@@ -7591,8 +7594,8 @@ impl Metadata {
     pub fn pages(&self) -> Option<PageStructure> {
         self.0.pages.clone().map(PageStructure)
     }
-    pub fn format(&self) -> Option<FormatMetadata> {
-        self.0.format.clone().map(FormatMetadata::from)
+    pub fn format(&self) -> Option<String> {
+        self.0.format.clone().map(|w| FormatMetadata::from(w).to_string())
     }
     pub fn image_preprocessing(&self) -> Option<ImagePreprocessingMetadata> {
         self.0.image_preprocessing.clone().map(ImagePreprocessingMetadata)
@@ -7988,8 +7991,8 @@ impl LinkMetadata {
     pub fn title(&self) -> Option<String> {
         self.0.title.clone()
     }
-    pub fn link_type(&self) -> LinkType {
-        LinkType::from(self.0.link_type.clone())
+    pub fn link_type(&self) -> String {
+        LinkType::from(self.0.link_type.clone()).to_string()
     }
     pub fn rel(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.rel)
@@ -8023,8 +8026,8 @@ impl ImageMetadataType {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn image_type(&self) -> ImageType {
-        ImageType::from(self.0.image_type.clone())
+    pub fn image_type(&self) -> String {
+        ImageType::from(self.0.image_type.clone()).to_string()
     }
     pub fn attributes(&self) -> Vec<String> {
         ::serde_json::to_value(&self.0.attributes)
@@ -8036,8 +8039,8 @@ impl ImageMetadataType {
 
 pub struct StructuredData(pub kreuzberg::StructuredData);
 impl StructuredData {
-    pub fn data_type(&self) -> StructuredDataType {
-        StructuredDataType::from(self.0.data_type.clone())
+    pub fn data_type(&self) -> String {
+        StructuredDataType::from(self.0.data_type.clone()).to_string()
     }
     pub fn raw_json(&self) -> String {
         self.0.raw_json.clone()
@@ -8160,8 +8163,11 @@ impl HtmlMetadata {
     pub fn language(&self) -> Option<String> {
         self.0.language.clone()
     }
-    pub fn text_direction(&self) -> Option<TextDirection> {
-        self.0.text_direction.clone().map(TextDirection::from)
+    pub fn text_direction(&self) -> Option<String> {
+        self.0
+            .text_direction
+            .clone()
+            .map(|w| TextDirection::from(w).to_string())
     }
     pub fn open_graph(&self) -> String {
         serde_json::to_string(&self.0.open_graph).expect("serializable open_graph")
@@ -8860,14 +8866,14 @@ impl OcrElement {
     pub fn text(&self) -> String {
         self.0.text.clone()
     }
-    pub fn geometry(&self) -> OcrBoundingGeometry {
-        OcrBoundingGeometry::from(self.0.geometry.clone())
+    pub fn geometry(&self) -> String {
+        OcrBoundingGeometry::from(self.0.geometry.clone()).to_string()
     }
     pub fn confidence(&self) -> OcrConfidence {
         OcrConfidence(self.0.confidence.clone())
     }
-    pub fn level(&self) -> OcrElementLevel {
-        OcrElementLevel::from(self.0.level.clone())
+    pub fn level(&self) -> String {
+        OcrElementLevel::from(self.0.level.clone()).to_string()
     }
     pub fn rotation(&self) -> Option<OcrRotation> {
         self.0.rotation.clone().map(OcrRotation)
@@ -8907,8 +8913,8 @@ impl OcrElementConfig {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn min_level(&self) -> OcrElementLevel {
-        OcrElementLevel::from(self.0.min_level.clone())
+    pub fn min_level(&self) -> String {
+        OcrElementLevel::from(self.0.min_level.clone()).to_string()
     }
     pub fn min_confidence(&self) -> f64 {
         ::serde_json::to_value(&self.0.min_confidence)
@@ -8932,8 +8938,8 @@ impl PageStructure {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn unit_type(&self) -> PageUnitType {
-        PageUnitType::from(self.0.unit_type.clone())
+    pub fn unit_type(&self) -> String {
+        PageUnitType::from(self.0.unit_type.clone()).to_string()
     }
     pub fn boundaries(&self) -> Option<Vec<PageBoundary>> {
         self.0
@@ -9235,8 +9241,8 @@ impl Uri {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn kind(&self) -> UriKind {
-        UriKind::from(self.0.kind.clone())
+    pub fn kind(&self) -> String {
+        UriKind::from(self.0.kind.clone()).to_string()
     }
 }
 
@@ -9707,8 +9713,8 @@ impl KeywordConfig {
         }
         KeywordConfig(__target)
     }
-    pub fn algorithm(&self) -> KeywordAlgorithm {
-        KeywordAlgorithm::from(self.0.algorithm.clone())
+    pub fn algorithm(&self) -> String {
+        KeywordAlgorithm::from(self.0.algorithm.clone()).to_string()
     }
     pub fn max_keywords(&self) -> usize {
         ::serde_json::to_value(&self.0.max_keywords)
@@ -9750,8 +9756,8 @@ impl Keyword {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn algorithm(&self) -> KeywordAlgorithm {
-        KeywordAlgorithm::from(self.0.algorithm.clone())
+    pub fn algorithm(&self) -> String {
+        KeywordAlgorithm::from(self.0.algorithm.clone()).to_string()
     }
     pub fn positions(&self) -> Option<Vec<usize>> {
         self.0.positions.as_ref().and_then(|v| {
@@ -9975,8 +9981,8 @@ impl BBox {
 
 pub struct LayoutDetection(pub kreuzberg::LayoutDetection);
 impl LayoutDetection {
-    pub fn class_name(&self) -> LayoutClass {
-        LayoutClass::from(self.0.class_name.clone())
+    pub fn class_name(&self) -> String {
+        LayoutClass::from(self.0.class_name.clone()).to_string()
     }
     pub fn confidence(&self) -> f32 {
         ::serde_json::to_value(&self.0.confidence)

@@ -36,7 +36,7 @@ public interface IOcrBackend {
     bool SupportsLanguage(string Lang);
 
     /// <summary>backend_type</summary>
-    string BackendType();
+    OcrBackendType BackendType();
 
     /// <summary>supported_languages</summary>
     List<string> SupportedLanguages();
@@ -287,7 +287,7 @@ public sealed class OcrBackendBridge : IDisposable {
     private int BackendTypeFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         try {
             var result = _impl.BackendType();
-            outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
+            outResult = Marshal.StringToCoTaskMemUTF8(result.ToFfiJson());
             outError = IntPtr.Zero;
             return 0;
         } catch (Exception ex) {
@@ -457,7 +457,7 @@ public interface IPostProcessor {
     void Process(ExtractionResult Result, ExtractionConfig Config);
 
     /// <summary>processing_stage</summary>
-    string ProcessingStage();
+    ProcessingStage ProcessingStage();
 
     /// <summary>should_process</summary>
     bool ShouldProcess(ExtractionResult Result, ExtractionConfig Config);
@@ -645,7 +645,7 @@ public sealed class PostProcessorBridge : IDisposable {
     private int ProcessingStageFnCallback(IntPtr userData, out IntPtr outResult, out IntPtr outError) {
         try {
             var result = _impl.ProcessingStage();
-            outResult = Marshal.StringToCoTaskMemUTF8(ToJsonString(result));
+            outResult = Marshal.StringToCoTaskMemUTF8(result.ToFfiJson());
             outError = IntPtr.Zero;
             return 0;
         } catch (Exception ex) {
