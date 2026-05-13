@@ -22,7 +22,7 @@ use kreuzberg::plugins::DocumentExtractor;
 use kreuzberg::plugins::Plugin;
 use std::cell::RefCell;
 use std::ffi::c_void;
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{c_char, CStr, CString};
 use std::sync::Arc;
 
 thread_local! {
@@ -1067,7 +1067,11 @@ pub unsafe extern "C" fn kreuzberg_extraction_config_needs_image_processing(
     let obj = unsafe { &*this };
 
     let result = obj.needs_image_processing();
-    if result { 1 } else { 0 }
+    if result {
+        1
+    } else {
+        0
+    }
 }
 
 /// Create a `FileExtractionConfig` from a JSON string. Returns null on failure.
@@ -5622,7 +5626,11 @@ pub unsafe extern "C" fn kreuzberg_server_config_cors_allows_all(this: *const kr
     let obj = unsafe { &*this };
 
     let result = obj.cors_allows_all();
-    if result { 1 } else { 0 }
+    if result {
+        1
+    } else {
+        0
+    }
 }
 
 /// Check if a given origin is allowed by CORS configuration.
@@ -5676,7 +5684,11 @@ pub unsafe extern "C" fn kreuzberg_server_config_is_origin_allowed(
         }
     };
     let result = obj.is_origin_allowed(&origin_rs);
-    if result { 1 } else { 0 }
+    if result {
+        1
+    } else {
+        0
+    }
 }
 
 /// Get maximum request body size in megabytes (rounded up).
@@ -10652,7 +10664,11 @@ pub unsafe extern "C" fn kreuzberg_document_structure_is_empty(this: *const kreu
     let obj = unsafe { &*this };
 
     let result = obj.is_empty();
-    if result { 1 } else { 0 }
+    if result {
+        1
+    } else {
+        0
+    }
 }
 
 /// # Safety
@@ -16411,7 +16427,11 @@ pub unsafe extern "C" fn kreuzberg_metadata_is_empty(this: *const kreuzberg::Met
     let obj = unsafe { &*this };
 
     let result = obj.is_empty();
-    if result { 1 } else { 0 }
+    if result {
+        1
+    } else {
+        0
+    }
 }
 
 /// Create a `ExcelMetadata` from a JSON string. Returns null on failure.
@@ -25543,7 +25563,11 @@ pub unsafe extern "C" fn kreuzberg_tessdata_manager_is_language_cached(
         }
     };
     let result = obj.is_language_cached(&lang_rs);
-    if result { 1 } else { 0 }
+    if result {
+        1
+    } else {
+        0
+    }
 }
 
 /// Downloads all tessdata_fast traineddata files to the cache directory.

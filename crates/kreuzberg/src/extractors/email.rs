@@ -64,39 +64,11 @@ impl EmailExtractor {
         // plain text paragraph splitting.
         if let Some(ref html) = email_result.html_content {
             let html_doc = crate::extraction::html::structure::build_document_structure(html);
-            for node in &html_doc.nodes {
-                match &node.content {
-                    crate::types::NodeContent::Paragraph { text } => {
-                        let trimmed = text.trim();
-                        if !trimmed.is_empty() {
-                            builder.push_paragraph(trimmed, node.annotations.clone(), None, None);
-                        }
-                    }
-                    crate::types::NodeContent::Heading { level, text } => {
-                        builder.push_heading(*level, text.as_str(), None, None);
-                    }
-                    crate::types::NodeContent::List { ordered } => {
-                        builder.push_list(*ordered);
-                        for &child_idx in &node.children {
-                            if let Some(child) = html_doc.nodes.get(child_idx.0 as usize)
-                                && let crate::types::NodeContent::ListItem { text } = &child.content
-                            {
-                                builder.push_list_item(text.as_str(), *ordered, vec![], None, None);
-                            }
-                        }
-                        builder.end_list();
-                    }
-                    crate::types::NodeContent::Code { text, language } => {
-                        builder.push_code(text.as_str(), language.as_deref(), None, None);
-                    }
-                    _ => {
-                        if let Some(text) = node.content.text() {
-                            let trimmed = text.trim();
-                            if !trimmed.is_empty() {
-                                builder.push_paragraph(trimmed, node.annotations.clone(), None, None);
-                            }
-                        }
-                    }
+            // Process root-level nodes (those without a parent) and their children recursively
+            // to avoid duplication and preserve structural integrity.
+            for (idx, node) in html_doc.nodes.iter().enumerate() {
+                if node.parent.is_none() {
+                    process_node(&html_doc, idx, &mut builder);
                 }
             }
         } else {
@@ -120,6 +92,113 @@ impl EmailExtractor {
         }
 
         builder.build()
+    }
+}
+
+/// Recursively process a `DocumentNode` and its children into the `InternalDocumentBuilder`.
+fn process_node(
+    doc: &crate::types::document_structure::DocumentStructure,
+    node_idx: usize,
+    builder: &mut InternalDocumentBuilder,
+) {
+    if let Some(node) = doc.nodes.get(node_idx) {
+        match &node.content {
+            crate::types::NodeContent::Paragraph { text } => {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    builder.push_paragraph(trimmed, node.annotations.clone(), None, None);
+                }
+            }
+            crate::types::NodeContent::Heading { level, text } => {
+                builder.push_heading(*level, text.as_str(), None, None);
+            }
+            crate::types::NodeContent::Title { text } => {
+                builder.push_title(text.as_str(), None, None);
+            }
+            crate::types::NodeContent::List { ordered } => {
+                builder.push_list(*ordered);
+                for &child_idx in &node.children {
+                    process_node(doc, child_idx.0 as usize, builder);
+                }
+                builder.end_list();
+            }
+            crate::types::NodeContent::ListItem { text } => {
+                // Determine if this item is ordered based on its parent list
+                let ordered = if let Some(parent_idx) = node.parent
+                    && let Some(parent) = doc.nodes.get(parent_idx.0 as usize)
+                    && let crate::types::NodeContent::List { ordered } = parent.content
+                {
+                    ordered
+                } else {
+                    false
+                };
+                builder.push_list_item(text.as_str(), ordered, node.annotations.clone(), None, None);
+
+                // Process any nested content inside the list item (e.g. nested lists)
+                for &child_idx in &node.children {
+                    process_node(doc, child_idx.0 as usize, builder);
+                }
+            }
+            crate::types::NodeContent::Table { grid } => {
+                // Convert TableGrid to Vec<Vec<String>> for InternalDocumentBuilder
+                let mut rows = vec![vec![String::new(); grid.cols as usize]; grid.rows as usize];
+                for cell in &grid.cells {
+                    if (cell.row as usize) < rows.len() && (cell.col as usize) < rows[0].len() {
+                        rows[cell.row as usize][cell.col as usize] = cell.content.clone();
+                    }
+                }
+                builder.push_table_from_cells(&rows, None, None);
+            }
+            crate::types::NodeContent::Code { text, language } => {
+                builder.push_code(text.as_str(), language.as_deref(), None, None);
+            }
+            crate::types::NodeContent::Formula { text } => {
+                builder.push_formula(text.as_str(), None, None);
+            }
+            crate::types::NodeContent::MetadataBlock { entries } => {
+                builder.push_metadata_block(entries, None);
+            }
+            crate::types::NodeContent::Quote => {
+                builder.push_quote_start();
+                for &child_idx in &node.children {
+                    process_node(doc, child_idx.0 as usize, builder);
+                }
+                builder.push_quote_end();
+            }
+            crate::types::NodeContent::Group { label, .. } => {
+                builder.push_group_start(label.as_deref(), None);
+                for &child_idx in &node.children {
+                    process_node(doc, child_idx.0 as usize, builder);
+                }
+                builder.push_group_end();
+            }
+            crate::types::NodeContent::Admonition { kind, title } => {
+                builder.push_admonition(kind, title.as_deref(), None);
+                for &child_idx in &node.children {
+                    process_node(doc, child_idx.0 as usize, builder);
+                }
+                // InternalDocumentBuilder doesn't have an explicit end_admonition,
+                // it handles it via depth decrement in push_container_end if it's a container.
+                // Looking at push_admonition, it calls push_simple which DOES NOT increment depth.
+                // Wait, InternalDocumentBuilder::push_admonition:
+                // 325:         self.push_simple(ElementKind::Admonition, text, page, None, Vec::new(), Some(attrs), None)
+                // It's a leaf node in the current builder.
+            }
+            crate::types::NodeContent::Image { description, .. } => {
+                // html::structure doesn't extract image bytes, only metadata.
+                // We push it as a paragraph or use a placeholder if appropriate.
+                let text = description.as_deref().unwrap_or("[Image]");
+                builder.push_paragraph(text, vec![], None, None);
+            }
+            _ => {
+                if let Some(text) = node.content.text() {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        builder.push_paragraph(trimmed, node.annotations.clone(), None, None);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -437,5 +516,88 @@ mod tests {
         // Empty data returns a validation error — config is still used without panic
         let result = extractor.extract_sync(b"", "application/vnd.ms-outlook", &config);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_email_with_table_and_list_preservation() {
+        let eml = r#"From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Table and List Repro
+Content-Type: multipart/alternative; boundary="boundary"
+
+--boundary
+Content-Type: text/plain; charset=utf-8
+
+Plain text fallback.
+
+--boundary
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+    <p>Introduction.</p>
+    <table>
+        <tr><th>Name</th><th>Value</th></tr>
+        <tr><td>Key</td><td>123</td></tr>
+    </table>
+    <ol>
+        <li>First item</li>
+        <li>Second item</li>
+    </ol>
+    <p>Conclusion.</p>
+</body>
+</html>
+--boundary--
+"#;
+        let extractor = EmailExtractor::new();
+        let config = ExtractionConfig::default();
+        let doc = extractor
+            .extract_sync(eml.as_bytes(), "message/rfc822", &config)
+            .unwrap();
+
+        // Elements should be:
+        // 1. Metadata block (headers)
+        // 2. Paragraph ("Introduction.")
+        // 3. Table
+        // 4. List Start
+        // 5. List Item 1
+        // 6. List Item 2
+        // 7. List End
+        // 8. Paragraph ("Conclusion.")
+
+        // Assertions:
+        // 1. We should have a Table element (table_index: 0)
+        // 2. We should have exactly one List Start and List End
+        // 3. We should NOT have duplicate list items as paragraphs
+
+        let has_table = doc
+            .elements
+            .iter()
+            .any(|e| matches!(e.kind, crate::types::internal::ElementKind::Table { .. }));
+        let list_item_count = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e.kind, crate::types::internal::ElementKind::ListItem { .. }))
+            .count();
+        let paragraph_count = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e.kind, crate::types::internal::ElementKind::Paragraph))
+            .count();
+
+        // Current implementation fails:
+        // - Table is missing (has_table = false)
+        // - List items are duplicated as paragraphs (paragraph_count will be higher than 3 if they are duplicated)
+        // Note: MetadataBlock is also a paragraph in the current builder? No, it's a MetadataBlock.
+        // Wait, current EmailExtractor pushes "Attachments:" as a paragraph (if it exists).
+
+        assert!(has_table, "Table element should be present");
+        assert_eq!(list_item_count, 2, "Should have 2 list items");
+        // Expected paragraphs: "Introduction.", "Conclusion." = 2
+        // If duplicates are present, "First item" and "Second item" will also be paragraphs.
+        assert_eq!(
+            paragraph_count, 2,
+            "Should have exactly 2 body paragraphs (no duplicates)"
+        );
     }
 }
