@@ -2039,6 +2039,15 @@ path = "../../packages/swift"
 [crates.e2e.packages.zig]
 path = "../../packages/zig"
 
+# Point WASM e2e at the wasm-pack `nodejs` target. The default `pkg/` is the
+# bundler target whose JS glue uses `import * as foo from "env"` statements
+# (unresolved namespace imports for getrandom/wasi-bound symbols), which Node
+# cannot satisfy at import time. The `pkg/nodejs/` variant inlines those
+# imports as `require()` calls handled by wasm-bindgen's Node loader.
+[crates.e2e.packages.wasm]
+name = "kreuzberg"
+path = "../../crates/kreuzberg-wasm/pkg/nodejs"
+
 [crates.e2e.format]
 python = "ruff check --fix {dir} && ruff format {dir}"
 go = "gofmt -w {dir}"
