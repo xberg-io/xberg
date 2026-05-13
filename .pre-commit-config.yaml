@@ -51,7 +51,7 @@ repos:
 
   # Node/TS/WASM: oxlint
   - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
-    rev: v1.0.1
+    rev: v1.0.3
     hooks:
       - id: cargo-sort
         # `-w` (workspace) iterates ALL workspace members regardless of which Cargo.toml
