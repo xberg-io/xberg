@@ -42,67 +42,6 @@
           repo.__factsObserver.observe(repo, { childList: true });
         }
       });
-
-      // #region agent log
-      (function () {
-        function send(payload) {
-          fetch("http://127.0.0.1:7664/ingest/db5442b6-4ce7-48e8-8739-60da38727619", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "bde698",
-            },
-            body: JSON.stringify(
-              Object.assign(
-                { sessionId: "bde698", timestamp: Date.now(), runId: "pre-fix" },
-                payload
-              )
-            ),
-          }).catch(function () {});
-        }
-        var navs = document.querySelectorAll(".md-code__nav");
-        var sample = [];
-        for (var i = 0; i < Math.min(navs.length, 5); i++) {
-          var el = navs[i];
-          var cs = window.getComputedStyle(el);
-          var btn = el.querySelector(".md-code__button");
-          var bcs = btn ? window.getComputedStyle(btn) : null;
-          var svg = btn ? btn.querySelector("svg") : null;
-          var scs = svg ? window.getComputedStyle(svg) : null;
-          var rect = el.getBoundingClientRect();
-          var hl = el.closest(".highlight");
-          var parent = hl && hl.parentElement;
-          var inFeatureGridCardHighlight = !!(
-            parent &&
-            parent.classList.contains("grid") &&
-            parent.classList.contains("cards") &&
-            !parent.classList.contains("install-cards")
-          );
-          sample.push({
-            navDisplay: cs.display,
-            navOpacity: cs.opacity,
-            navVisibility: cs.visibility,
-            rect: { w: rect.width, h: rect.height, top: rect.top, left: rect.left },
-            btnOpacity: bcs ? bcs.opacity : null,
-            btnColor: bcs ? bcs.color : null,
-            svgFill: scs ? scs.fill : null,
-            inFeatureGridCardHighlight: inFeatureGridCardHighlight,
-            highlightClasses: hl ? hl.className : null,
-          });
-        }
-        send({
-          location: "main.html:document$",
-          message: "md-code__nav copy control audit",
-          hypothesisId: "H1-H5",
-          data: {
-            navCount: navs.length,
-            path: location.pathname,
-            colorScheme: document.body.getAttribute("data-md-color-scheme") || "(unset)",
-            sample: sample,
-          },
-        });
-      })();
-      // #endregion agent log
     });
   </script>
 {% endblock %}
