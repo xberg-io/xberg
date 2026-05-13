@@ -205,9 +205,6 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
 
 /// Extract without caching logic.
 async fn extract_file_uncached(path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
-    let config = config.normalized();
-    let config = config.as_ref();
-
     let budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
     crate::core::config::concurrency::init_thread_pools(budget);
 

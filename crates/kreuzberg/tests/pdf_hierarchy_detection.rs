@@ -36,8 +36,7 @@ async fn test_full_hierarchy_extraction() {
     let config = ExtractionConfig {
         pages: Some(PageConfig {
             extract_pages: true,
-            insert_page_markers: false,
-            marker_format: "\n\n<!-- PAGE {page_num} -->\n\n".to_string(),
+            ..Default::default()
         }),
         pdf_options: Some(PdfConfig {
             extract_images: false,
@@ -51,10 +50,7 @@ async fn test_full_hierarchy_extraction() {
                 ocr_coverage_threshold: None,
             }),
             extract_annotations: false,
-            top_margin_fraction: None,
-            bottom_margin_fraction: None,
-            allow_single_column_tables: false,
-            ocr_inline_images: false,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -154,8 +150,7 @@ async fn test_hierarchy_disabled() {
     let config = ExtractionConfig {
         pages: Some(PageConfig {
             extract_pages: true,
-            insert_page_markers: false,
-            marker_format: "\n\n<!-- PAGE {page_num} -->\n\n".to_string(),
+            ..Default::default()
         }),
         pdf_options: Some(PdfConfig {
             extract_images: false,
@@ -169,10 +164,7 @@ async fn test_hierarchy_disabled() {
                 ocr_coverage_threshold: None,
             }),
             extract_annotations: false,
-            top_margin_fraction: None,
-            bottom_margin_fraction: None,
-            allow_single_column_tables: false,
-            ocr_inline_images: false,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -215,8 +207,7 @@ async fn test_hierarchy_with_explicit_disabled() {
     let config = ExtractionConfig {
         pages: Some(PageConfig {
             extract_pages: true,
-            insert_page_markers: false,
-            marker_format: "\n\n<!-- PAGE {page_num} -->\n\n".to_string(),
+            ..Default::default()
         }),
         pdf_options: Some(PdfConfig {
             extract_images: false,
@@ -230,10 +221,7 @@ async fn test_hierarchy_with_explicit_disabled() {
                 ocr_coverage_threshold: None,
             }),
             extract_annotations: false,
-            top_margin_fraction: None,
-            bottom_margin_fraction: None,
-            allow_single_column_tables: false,
-            ocr_inline_images: false,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -277,8 +265,7 @@ async fn test_hierarchy_different_k_clusters() {
         let config = ExtractionConfig {
             pages: Some(PageConfig {
                 extract_pages: true,
-                insert_page_markers: false,
-                marker_format: "\n\n<!-- PAGE {page_num} -->\n\n".to_string(),
+                ..Default::default()
             }),
             pdf_options: Some(PdfConfig {
                 extract_images: false,
@@ -292,10 +279,7 @@ async fn test_hierarchy_different_k_clusters() {
                     ocr_coverage_threshold: None,
                 }),
                 extract_annotations: false,
-                top_margin_fraction: None,
-                bottom_margin_fraction: None,
-                allow_single_column_tables: false,
-                ocr_inline_images: false,
+                ..Default::default()
             }),
             ..Default::default()
         };

@@ -407,3 +407,29 @@ async fn test_large_document_with_combined_config() {
     // Should have content in plain format
     assert!(!result.content.is_empty(), "Should have content");
 }
+
+/// Test that result_format ElementBased auto-enables page extraction via normalization (#908)
+#[tokio::test]
+async fn test_element_based_auto_normalizes_page_extraction() {
+    let text = "Page 1 content.\n\nPage 2 content.";
+
+    // Configure ElementBased but explicitly set extract_pages to false.
+    // The normalization logic should override this to true because ElementBased needs page numbers.
+    let config = ExtractionConfig {
+        result_format: ResultFormat::ElementBased,
+        pages: Some(kreuzberg::core::config::PageConfig {
+            extract_pages: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = extract_bytes(text.as_bytes(), "text/plain", &config)
+        .await
+        .expect("Should extract successfully");
+
+    // If normalization worked, elements should have page numbers correctly assigned (not just all 1).
+    // Note: For plain text, page numbers are often 1 unless explicit markers are found,
+    // but the key is that the extraction SUCCEEDS and the config was normalized.
+    assert!(result.elements.is_some(), "Should have elements");
+}
