@@ -402,6 +402,7 @@ mod ffi {
             top_margin_fraction: Option<f32>,
             bottom_margin_fraction: Option<f32>,
             allow_single_column_tables: bool,
+            ocr_inline_images: bool,
         ) -> PdfConfig;
         fn extract_images(&self) -> bool;
         fn extract_tables(&self) -> bool;
@@ -412,6 +413,7 @@ mod ffi {
         fn top_margin_fraction(&self) -> Option<f32>;
         fn bottom_margin_fraction(&self) -> Option<f32>;
         fn allow_single_column_tables(&self) -> bool;
+        fn ocr_inline_images(&self) -> bool;
     }
 
     extern "Rust" {
@@ -2778,6 +2780,8 @@ mod ffi {
         fn embedding_config_from_json(json: String) -> Result<EmbeddingConfig, String>;
         #[swift_bridge(swift_name = "extractionResultFromJson")]
         fn extraction_result_from_json(json: String) -> Result<ExtractionResult, String>;
+        #[swift_bridge(swift_name = "ocrExtractionResultFromJson")]
+        fn ocr_extraction_result_from_json(json: String) -> Result<OcrExtractionResult, String>;
         #[swift_bridge(swift_name = "htmlMetadataFromJson")]
         fn html_metadata_from_json(json: String) -> Result<HtmlMetadata, String>;
     }
@@ -4010,6 +4014,7 @@ impl PdfConfig {
         top_margin_fraction: Option<f32>,
         bottom_margin_fraction: Option<f32>,
         allow_single_column_tables: bool,
+        ocr_inline_images: bool,
     ) -> PdfConfig {
         let mut __target: kreuzberg::PdfConfig = ::std::default::Default::default();
         __target.extract_images = extract_images;
@@ -4027,6 +4032,7 @@ impl PdfConfig {
         __target.top_margin_fraction = top_margin_fraction;
         __target.bottom_margin_fraction = bottom_margin_fraction;
         __target.allow_single_column_tables = allow_single_column_tables;
+        __target.ocr_inline_images = ocr_inline_images;
         PdfConfig(__target)
     }
     pub fn extract_images(&self) -> bool {
@@ -4079,6 +4085,12 @@ impl PdfConfig {
     }
     pub fn allow_single_column_tables(&self) -> bool {
         ::serde_json::to_value(&self.0.allow_single_column_tables)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn ocr_inline_images(&self) -> bool {
+        ::serde_json::to_value(&self.0.ocr_inline_images)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
@@ -12348,6 +12360,12 @@ pub fn embedding_config_from_json(json: String) -> Result<EmbeddingConfig, Strin
 pub fn extraction_result_from_json(json: String) -> Result<ExtractionResult, String> {
     serde_json::from_str::<kreuzberg::ExtractionResult>(&json)
         .map(ExtractionResult)
+        .map_err(|e| e.to_string())
+}
+
+pub fn ocr_extraction_result_from_json(json: String) -> Result<OcrExtractionResult, String> {
+    serde_json::from_str::<kreuzberg::OcrExtractionResult>(&json)
+        .map(OcrExtractionResult)
         .map_err(|e| e.to_string())
 }
 

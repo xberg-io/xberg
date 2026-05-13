@@ -247,6 +247,7 @@ pub struct PdfConfig {
     pub top_margin_fraction: Option<f64>,
     pub bottom_margin_fraction: Option<f64>,
     pub allow_single_column_tables: bool,
+    pub ocr_inline_images: bool,
 }
 
 #[frb(mirror(HierarchyConfig))]
@@ -2455,6 +2456,7 @@ impl From<kreuzberg::PdfConfig> for PdfConfig {
             top_margin_fraction: v.top_margin_fraction.map(|x| x as _),
             bottom_margin_fraction: v.bottom_margin_fraction.map(|x| x as _),
             allow_single_column_tables: v.allow_single_column_tables as _,
+            ocr_inline_images: v.ocr_inline_images as _,
         }
     }
 }
@@ -5216,6 +5218,7 @@ impl From<PdfConfig> for kreuzberg::PdfConfig {
             top_margin_fraction: v.top_margin_fraction.map(|x| x as _),
             bottom_margin_fraction: v.bottom_margin_fraction.map(|x| x as _),
             allow_single_column_tables: v.allow_single_column_tables as _,
+            ocr_inline_images: v.ocr_inline_images as _,
         }
     }
 }
