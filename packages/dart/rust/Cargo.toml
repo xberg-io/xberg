@@ -25,7 +25,7 @@ async-trait = "0.1"
 kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, features = ["formats", "ocr", "tree-sitter", "liter-llm", "stopwords", "keywords"] }
+kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, features = ["formats", "ocr", "chunking", "tree-sitter", "liter-llm", "stopwords", "keywords"] }
 
 [lints.rust]
 # flutter_rust_bridge uses #[cfg(frb_expand)] internally during macro expansion.
