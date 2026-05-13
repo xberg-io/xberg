@@ -48,11 +48,11 @@ No SDK, no code — just your terminal.
 
 </div>
 
-!!! warning "x86_64 CPU — AVX/AVX2 instruction set required"
+!!! Warning "x86_64 CPU — AVX/AVX2 instruction set required"
 
     The bundled ONNX Runtime binaries require **AVX/AVX2** CPU instructions. CPUs without AVX support (e.g. Intel Atom, Celeron N5105/Jasper Lake, older pre-2011 processors) will crash with an `invalid opcode` trap when using ONNX-dependent features. The affected features are **PaddleOCR**, **layout detection**, and **embeddings**. All other Kreuzberg functionality (text extraction, Tesseract OCR, chunking, metadata, etc.) works normally on any x86_64 CPU. ARM platforms (aarch64) are unaffected.
 
-!!! warning "Windows — ONNX Runtime required for Go, Elixir, and C/C++"
+!!! Warning "Windows — ONNX Runtime required for Go, Elixir, and C/C++"
 
     Go, Elixir, and C/C++ bindings on Windows link against ONNX Runtime dynamically. You must have `onnxruntime.dll` on your `PATH` at runtime. Download it from the [ONNX Runtime releases](https://github.com/microsoft/onnxruntime/releases) (for example `onnxruntime-win-x64-1.24.1.zip`). Python, TypeScript, Java, C#, Ruby, PHP, and Wasm are unaffected.
 
@@ -213,7 +213,7 @@ No SDK, no code — just your terminal.
     ```
 
     [API Reference](../reference/api-c.md){ .install-api-link }
-    [:material-lightning-bolt: Quick Start](#c--c){ .install-btn .install-btn--solid .install-btn--sm }
+    [:material-lightning-bolt: Quick Start](#c-c){ .install-btn .install-btn--solid .install-btn--sm }
 
 - :material-language-dart:{ .lg .middle } **Dart / Flutter**
 
@@ -286,7 +286,7 @@ Two npm packages target different runtimes:
 
 Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 
-!!! note "pnpm workspaces"
+!!! Note "pnpm workspaces"
 
     In monorepos, add this to your root `.npmrc` so platform-specific optional deps resolve correctly:
 
@@ -294,7 +294,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
     auto-install-peers=true
     ```
 
-??? note "Wasm — Browser usage"
+??? Note "Wasm — Browser usage"
 
     ```html
     <script type="module">
@@ -312,7 +312,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
     <input type="file" id="file" />
     ```
 
-??? note "Wasm — Deno"
+??? Note "Wasm — Deno"
 
     ```typescript
     import { initWasm, extractFile } from "npm:@kreuzberg/wasm";
@@ -322,7 +322,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
     console.log(result.content);
     ```
 
-??? note "Wasm — Cloudflare Workers"
+??? Note "Wasm — Cloudflare Workers"
 
     ```typescript
     import { initWasm, extractBytes } from "@kreuzberg/wasm";
@@ -339,7 +339,7 @@ Both work with **pnpm** (`pnpm add`) and **Yarn** (`yarn add`) as well.
 
 **Supported runtimes:** Chrome 74+, Firefox 79+, Safari 14+, Edge 79+, Node.js 22+, Deno 1.35+, Cloudflare Workers.
 
-!!! warning "Wasm Platform Limitations"
+!!! Warning "Wasm Platform Limitations"
 
     The Wasm binding does not support:
 
@@ -388,7 +388,7 @@ mix deps.get
 
 Ships prebuilt NIF binaries via RustlerPrecompiled. Falls back to compiling from source if no prebuilt matches your platform (requires Rust).
 
-!!! warning "Windows"
+!!! Warning "Windows"
 
     The Windows NIF links against ONNX Runtime dynamically. `onnxruntime.dll` must be on your `PATH` at runtime — see the note at the top of this page.
 
@@ -398,11 +398,11 @@ Ships prebuilt NIF binaries via RustlerPrecompiled. Falls back to compiling from
 go get github.com/kreuzberg-dev/kreuzberg/v5@latest
 ```
 
-!!! warning "Windows"
+!!! Warning "Windows"
 
     The Go binding links against ONNX Runtime dynamically on Windows. `onnxruntime.dll` must be on your `PATH` at runtime — see the note at the top of this page.
 
-!!! note "Windows feature limitations"
+!!! Note "Windows feature limitations"
 
     The Go and C/C++ bindings on Windows (MinGW/GNU target) do not include **PaddleOCR**, **layout detection**, or **auto-rotate**. Tesseract OCR and all other features work normally. These limitations apply only to Windows; Linux and macOS builds include the full feature set.
 
@@ -437,13 +437,13 @@ my_app: my_app.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 ```
 
-!!! tip "Platform-specific linker flags"
+!!! Tip "Platform-specific linker flags"
 
     **macOS:** add `-framework CoreFoundation -framework Security`
 
     **Windows:** add `-lws2_32 -luserenv -lbcrypt`
 
-!!! warning "Windows"
+!!! Warning "Windows"
 
     The Windows FFI library links against ONNX Runtime dynamically. `onnxruntime.dll` must be on your `PATH` at runtime — see the note at the top of this page.
 
