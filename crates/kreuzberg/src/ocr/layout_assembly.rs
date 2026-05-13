@@ -6,22 +6,11 @@
 //! coordinate system (origin top-left, y increases downward).
 
 use crate::layout::models::tatr::{self, TatrModel};
-use crate::layout::types::{BBox, DetectionResult, LayoutClass};
+use crate::layout::types::{BBox, DetectionResult, LayoutClass, RecognizedTable};
 use crate::types::OcrElement;
 
 /// Default confidence threshold for layout detections.
 const MIN_CONFIDENCE: f32 = 0.3;
-
-/// Pre-computed table markdown for a table detection region.
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct RecognizedTable {
-    /// Detection bbox that this table corresponds to (for matching).
-    pub detection_bbox: BBox,
-    /// Table cells as a 2D vector (rows x columns).
-    pub cells: Vec<Vec<String>>,
-    /// Rendered markdown table.
-    pub markdown: String,
-}
 
 /// Run TATR table recognition for all Table regions in a page.
 ///

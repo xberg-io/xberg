@@ -239,6 +239,22 @@ impl fmt::Display for LayoutDetection {
     }
 }
 
+/// Pre-computed table markdown for a table detection region.
+///
+/// Produced by the TATR-based table structure recognizer and surfaced as part of
+/// layout-aware OCR results.  The struct lives here (under `layout-types`, pure-Rust)
+/// so that consumers who do not enable `layout-detection` (ORT) can still reference
+/// the type in their own code.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RecognizedTable {
+    /// Detection bbox that this table corresponds to (for matching).
+    pub detection_bbox: BBox,
+    /// Table cells as a 2D vector (rows × columns).
+    pub cells: Vec<Vec<String>>,
+    /// Rendered markdown table.
+    pub markdown: String,
+}
+
 /// Page-level detection result containing all detections and page metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DetectionResult {
