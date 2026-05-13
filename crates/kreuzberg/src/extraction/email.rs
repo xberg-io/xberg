@@ -82,15 +82,12 @@ fn maybe_transcode_utf16(data: &[u8]) -> Option<Vec<u8>> {
         let is_be_heuristic = data[0] == 0x00 && data[2] == 0x00 && data[4] == 0x00 && data[6] == 0x00;
 
         if is_le_heuristic || is_be_heuristic {
-            // Option III: Use chardetng to statistically resolve ambiguity.
-            // If chardetng detects a specific non-UTF-8 legacy encoding, we might trust it.
-            // However, chardetng often identifies UTF-16LE (with nulls) as UTF-8.
+            // chardetng often labels UTF-16 (with nulls) as UTF-8; treat that
+            // (and windows-1252) as confirmation the heuristic is right and
+            // any specific legacy encoding as evidence to bail.
             let mut detector = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Allow);
             detector.feed(data, true);
             let guess = detector.guess(None, chardetng::Utf8Detection::Allow);
-
-            // If it's valid UTF-8 but contains nulls at alternating positions,
-            // it's almost certainly UTF-16LE/BE misidentified as UTF-8.
             if guess.name() == "UTF-8" || guess.name() == "windows-1252" {
                 (is_le_heuristic, 0)
             } else {
