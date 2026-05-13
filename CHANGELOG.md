@@ -92,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Performance (#908)**: Removed a redundant `config.normalized()` call in the internal `extract_file_uncached` helper that caused unnecessary heap allocations when bypassing the extraction cache.
 - **VLM OCR per-page propagation (#928)**: VLM OCR results now populate
   individual `PageContent` structures in PDF extractions, not just
   `ExtractionResult.content`. Per-page text segments are mapped to document
