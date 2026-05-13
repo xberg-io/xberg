@@ -2571,7 +2571,7 @@ impl From<kreuzberg::extraction::structured::StructuredDataResult> for Structure
     fn from(v: kreuzberg::extraction::structured::StructuredDataResult) -> Self {
         StructuredDataResult {
             content: v.content,
-            format: Default::default(),
+            format: v.format.into_owned(),
             metadata: v.metadata.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
             text_fields: v.text_fields.into_iter().map(|s| s.into()).collect(),
         }
@@ -3018,7 +3018,7 @@ impl From<kreuzberg::ExtractionResult> for ExtractionResult {
     fn from(v: kreuzberg::ExtractionResult) -> Self {
         ExtractionResult {
             content: v.content,
-            mime_type: Default::default(),
+            mime_type: v.mime_type.into_owned(),
             metadata: Metadata::from(v.metadata),
             extraction_method: v.extraction_method.map(ExtractionMethod::from),
             tables: v.tables.into_iter().map(Table::from).collect(),
@@ -3068,8 +3068,8 @@ impl From<kreuzberg::ArchiveEntry> for ArchiveEntry {
 impl From<kreuzberg::ProcessingWarning> for ProcessingWarning {
     fn from(v: kreuzberg::ProcessingWarning) -> Self {
         ProcessingWarning {
-            source: Default::default(),
-            message: Default::default(),
+            source: v.source.into_owned(),
+            message: v.message.into_owned(),
         }
     }
 }
@@ -3135,7 +3135,7 @@ impl From<kreuzberg::ExtractedImage> for ExtractedImage {
     fn from(v: kreuzberg::ExtractedImage) -> Self {
         ExtractedImage {
             data: v.data.into(),
-            format: Default::default(),
+            format: v.format.into_owned(),
             image_index: v.image_index as _,
             page_number: v.page_number.map(|x| x as _),
             width: v.width.map(|x| x as _),
@@ -3440,7 +3440,7 @@ impl From<kreuzberg::EmailMetadata> for EmailMetadata {
 impl From<kreuzberg::ArchiveMetadata> for ArchiveMetadata {
     fn from(v: kreuzberg::ArchiveMetadata) -> Self {
         ArchiveMetadata {
-            format: Default::default(),
+            format: v.format.into_owned(),
             file_count: v.file_count as _,
             file_list: v.file_list.into_iter().map(|s| s.into()).collect(),
             total_size: v.total_size as _,
