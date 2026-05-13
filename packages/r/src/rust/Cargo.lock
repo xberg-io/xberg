@@ -2991,6 +2991,7 @@ dependencies = [
 name = "kreuzberg-r"
 version = "5.0.0-rc.1"
 dependencies = [
+ "async-trait",
  "extendr-api",
  "kreuzberg",
  "serde",

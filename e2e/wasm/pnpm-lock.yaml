@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       kreuzberg:
-        specifier: file:../../crates/kreuzberg-wasm/pkg
-        version: kreuzberg-wasm@file:../../crates/kreuzberg-wasm/pkg
+        specifier: file:../../crates/kreuzberg-wasm/pkg/nodejs
+        version: kreuzberg-wasm@file:../../crates/kreuzberg-wasm/pkg/nodejs
       rollup:
         specifier: ^4.53.3
         version: 4.60.2
@@ -363,8 +363,8 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
-  kreuzberg-wasm@file:../../crates/kreuzberg-wasm/pkg:
-    resolution: {directory: ../../crates/kreuzberg-wasm/pkg, type: directory}
+  kreuzberg-wasm@file:../../crates/kreuzberg-wasm/pkg/nodejs:
+    resolution: {directory: ../../crates/kreuzberg-wasm/pkg/nodejs, type: directory}
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -835,7 +835,7 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  kreuzberg-wasm@file:../../crates/kreuzberg-wasm/pkg: {}
+  kreuzberg-wasm@file:../../crates/kreuzberg-wasm/pkg/nodejs: {}
 
   lightningcss-android-arm64@1.32.0:
     optional: true

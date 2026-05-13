@@ -28,7 +28,7 @@
 
 use crate::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -7352,6 +7352,7 @@ const _: fn() = || {
         let _: Option<f64> = PdfConfig.top_margin_fraction;
         let _: Option<f64> = PdfConfig.bottom_margin_fraction;
         let _: bool = PdfConfig.allow_single_column_tables;
+        let _: bool = PdfConfig.ocr_inline_images;
     }
     {
         let PdfMetadata = None::<crate::PdfMetadata>.unwrap();
@@ -12619,6 +12620,7 @@ impl SseDecode for crate::PdfConfig {
         let mut var_topMarginFraction = <Option<f64>>::sse_decode(deserializer);
         let mut var_bottomMarginFraction = <Option<f64>>::sse_decode(deserializer);
         let mut var_allowSingleColumnTables = <bool>::sse_decode(deserializer);
+        let mut var_ocrInlineImages = <bool>::sse_decode(deserializer);
         return crate::PdfConfig {
             extract_images: var_extractImages,
             extract_tables: var_extractTables,
@@ -12629,6 +12631,7 @@ impl SseDecode for crate::PdfConfig {
             top_margin_fraction: var_topMarginFraction,
             bottom_margin_fraction: var_bottomMarginFraction,
             allow_single_column_tables: var_allowSingleColumnTables,
+            ocr_inline_images: var_ocrInlineImages,
         };
     }
 }
@@ -16971,6 +16974,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::PdfConfig> {
             self.0.top_margin_fraction.into_into_dart().into_dart(),
             self.0.bottom_margin_fraction.into_into_dart().into_dart(),
             self.0.allow_single_column_tables.into_into_dart().into_dart(),
+            self.0.ocr_inline_images.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -21667,6 +21671,7 @@ impl SseEncode for crate::PdfConfig {
         <Option<f64>>::sse_encode(self.top_margin_fraction, serializer);
         <Option<f64>>::sse_encode(self.bottom_margin_fraction, serializer);
         <bool>::sse_encode(self.allow_single_column_tables, serializer);
+        <bool>::sse_encode(self.ocr_inline_images, serializer);
     }
 }
 
@@ -22261,7 +22266,7 @@ mod io {
     use super::*;
     use crate::*;
     use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -22632,7 +22637,7 @@ mod web {
     use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

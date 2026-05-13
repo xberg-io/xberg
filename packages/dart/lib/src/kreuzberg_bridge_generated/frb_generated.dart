@@ -10251,8 +10251,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PdfConfig dco_decode_pdf_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return PdfConfig(
       extractImages: dco_decode_bool(arr[0]),
       extractTables: dco_decode_bool(arr[1]),
@@ -10263,6 +10263,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       topMarginFraction: dco_decode_opt_box_autoadd_f_64(arr[6]),
       bottomMarginFraction: dco_decode_opt_box_autoadd_f_64(arr[7]),
       allowSingleColumnTables: dco_decode_bool(arr[8]),
+      ocrInlineImages: dco_decode_bool(arr[9]),
     );
   }
 
@@ -15835,6 +15836,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_bottomMarginFraction =
         sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_allowSingleColumnTables = sse_decode_bool(deserializer);
+    var var_ocrInlineImages = sse_decode_bool(deserializer);
     return PdfConfig(
         extractImages: var_extractImages,
         extractTables: var_extractTables,
@@ -15844,7 +15846,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         extractAnnotations: var_extractAnnotations,
         topMarginFraction: var_topMarginFraction,
         bottomMarginFraction: var_bottomMarginFraction,
-        allowSingleColumnTables: var_allowSingleColumnTables);
+        allowSingleColumnTables: var_allowSingleColumnTables,
+        ocrInlineImages: var_ocrInlineImages);
   }
 
   @protected
@@ -20560,6 +20563,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_64(self.topMarginFraction, serializer);
     sse_encode_opt_box_autoadd_f_64(self.bottomMarginFraction, serializer);
     sse_encode_bool(self.allowSingleColumnTables, serializer);
+    sse_encode_bool(self.ocrInlineImages, serializer);
   }
 
   @protected

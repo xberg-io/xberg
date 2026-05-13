@@ -1062,7 +1062,12 @@ e2e = "cd e2e/r && Rscript -e \"devtools::load_all('../../packages/r'); testthat
 
 [crates.test.wasm]
 precondition = "command -v wasm-pack >/dev/null 2>&1"
-before = "wasm-pack build crates/kreuzberg-wasm --release --target web && cd e2e/wasm && pnpm install --ignore-workspace"
+# Build the nodejs target into pkg/nodejs/ so the e2e harness (Node-based vitest)
+# can resolve the wasi/env imports — wasm-pack inlines them as require() shims
+# under --target nodejs. The web target leaves them as ESM `import * as foo from "env"`
+# statements that Node cannot resolve. The published bundler target (pkg/*) is built
+# separately by the publish pipeline.
+before = "wasm-pack build crates/kreuzberg-wasm --release --target nodejs --out-dir pkg/nodejs && cd e2e/wasm && pnpm install --ignore-workspace"
 e2e = "cd e2e/wasm && pnpm test"
 
 [crates.test.rust]

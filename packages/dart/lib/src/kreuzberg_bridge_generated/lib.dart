@@ -5819,6 +5819,7 @@ class PdfConfig {
   final double? topMarginFraction;
   final double? bottomMarginFraction;
   final bool allowSingleColumnTables;
+  final bool ocrInlineImages;
 
   const PdfConfig({
     required this.extractImages,
@@ -5830,6 +5831,7 @@ class PdfConfig {
     this.topMarginFraction,
     this.bottomMarginFraction,
     required this.allowSingleColumnTables,
+    required this.ocrInlineImages,
   });
 
   @override
@@ -5842,7 +5844,8 @@ class PdfConfig {
       extractAnnotations.hashCode ^
       topMarginFraction.hashCode ^
       bottomMarginFraction.hashCode ^
-      allowSingleColumnTables.hashCode;
+      allowSingleColumnTables.hashCode ^
+      ocrInlineImages.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -5857,7 +5860,8 @@ class PdfConfig {
           extractAnnotations == other.extractAnnotations &&
           topMarginFraction == other.topMarginFraction &&
           bottomMarginFraction == other.bottomMarginFraction &&
-          allowSingleColumnTables == other.allowSingleColumnTables;
+          allowSingleColumnTables == other.allowSingleColumnTables &&
+          ocrInlineImages == other.ocrInlineImages;
 }
 
 class PdfMetadata {
