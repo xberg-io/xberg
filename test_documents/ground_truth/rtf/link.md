@@ -1,1 +1,0 @@
-[pandoc](http://pandoc.org)

@@ -1,3 +1,0 @@
-From: "Michael Elkins" <elkins@aero.org>
-To: "Michael Elkins" <elkins@aero.org>
-Date: 2023-08-25T18:00:55.353+00:00

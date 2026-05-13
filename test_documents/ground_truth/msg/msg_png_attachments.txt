@@ -1,4 +1,0 @@
-Subject: This is the subject
-From: "peterpan@neverland.com" <peterpan@neverland.com>
-To: crocodile@neverland.com
-Date: 2016-12-03T18:08:54+00:00

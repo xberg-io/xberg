@@ -1,9 +1,0 @@
-Subject: Example MIME Email
-From: sender@example.com
-To: recipient@example.com
-Date: Tue, 01 Oct 2024 12:34:56 -0500
-This is the text/plain part.
-
-Did you know that the first email was sent by Ray Tomlinson in 1971? He used the "@" symbol to separate the user's name from the computer name, a practice that is still in use today.
-
-Another interesting fact is that the first known instance of email spam occurred in 1978. A marketing message was sent to 393 recipients on ARPANET, marking the beginning of what we now know as email spam.

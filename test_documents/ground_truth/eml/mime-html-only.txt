@@ -1,7 +1,0 @@
-Subject: Example HTML Only MIME Email
-From: sender@example.com
-To: recipient@example.com
-Date: Tue, 01 Oct 2024 12:34:56 -0500
-This is a text/html part.
-The first emoticon, :) , was proposed by Scott Fahlman in 1982 to indicate just or sarcasm in text emails.
-Gmail was launched by Google in 2004 with 1 GB of free storage, significantly more than what other services offered at the time.

@@ -1,5 +1,0 @@
-Subject: Test Email Message
-From: "M. C. Kurtuluş" <test.sender@example.com>
-To: test.recipient@example.com
-Date: 2024-12-22T08:23:00+00:00
-This is the body of the test email message

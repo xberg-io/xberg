@@ -1,5 +1,0 @@
-[Clickable Example]
-
-[This is an example caption for the image.]
-
-[Image with Caption]

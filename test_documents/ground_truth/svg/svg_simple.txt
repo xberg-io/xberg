@@ -1,1 +1,0 @@
-Simple SVG Example A simple SVG file with basic shapes Hello SVG

@@ -1,1 +1,0 @@
-contract_test.txt

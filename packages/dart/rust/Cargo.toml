@@ -13,13 +13,24 @@ ignored = ["kreuzberg"]
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
 flutter_rust_bridge = "2.12.0"
 serde_json = "1"
 tokio = { version = "1", features = ["rt"] }
 async-trait = "0.1"
 
+# Android lacks ORT prebuilts (ort-sys has no x86_64-linux-android binary),
+# so disable the ORT-requiring sub-features (paddle-ocr, layout-detection,
+# embeddings, auto-rotate) on that platform.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, features = ["formats", "ocr", "tree-sitter", "liter-llm", "stopwords", "keywords"] }
+
 [lints.rust]
 # flutter_rust_bridge uses #[cfg(frb_expand)] internally during macro expansion.
 # Declare it as a known cfg so rustc does not emit unexpected_cfgs warnings.
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+# alef-generated opaque struct mirrors keep `inner` fields for type alignment
+# even when no method reads them; that's intentional, not dead code.
+dead_code = "allow"

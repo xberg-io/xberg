@@ -1,5 +1,0 @@
-Subject: Test invalid date format
-From: sender@example.com
-To: recipient@example.com
-Date: INVALID-DATE-FORMAT
-This is a test-email with an invalid date format.
