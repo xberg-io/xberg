@@ -17,6 +17,7 @@ use crate::types::internal_builder::InternalDocumentBuilder;
 pub(crate) fn assemble_internal_document(
     pages: Vec<Vec<PdfParagraph>>,
     tables: &[crate::types::Table],
+    images: Option<&[crate::types::ExtractedImage]>,
     image_positions: &[(usize, usize)], // (page_idx, image_index) for image placeholders
 ) -> InternalDocument {
     tracing::debug!(
@@ -86,11 +87,18 @@ pub(crate) fn assemble_internal_document(
         // Inject image placeholders for this page
         if let Some(image_indices) = images_by_page.get(&(page_idx + 1)) {
             for &image_index in image_indices {
+                // Determine text content from OCR result if available
+                let ocr_text = images
+                    .and_then(|imgs| imgs.get(image_index))
+                    .and_then(|img| img.ocr_result.as_ref())
+                    .map(|res| res.content.as_str())
+                    .unwrap_or("");
+
                 let elem = crate::types::internal::InternalElement::text(
                     ElementKind::Image {
                         image_index: image_index as u32,
                     },
-                    "",
+                    ocr_text,
                     0,
                 )
                 .with_page((page_idx + 1) as u32);
@@ -715,7 +723,7 @@ mod tests {
             make_paragraph("Title", Some(1)),
             make_paragraph("Body text", None),
         ]];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
         assert_eq!(doc.elements.len(), 2);
         assert!(matches!(doc.elements[0].kind, ElementKind::Heading { level: 1 }));
         assert_eq!(doc.elements[0].text, "Title");
@@ -725,7 +733,7 @@ mod tests {
 
     #[test]
     fn test_assemble_internal_document_empty() {
-        let doc = assemble_internal_document(vec![], &[], &[]);
+        let doc = assemble_internal_document(vec![], &[], None, &[]);
         assert!(doc.elements.is_empty());
     }
 
@@ -735,7 +743,7 @@ mod tests {
             vec![make_paragraph("Page 1", None)],
             vec![make_paragraph("Page 2", None)],
         ];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
         // Should have page break between pages + 2 paragraphs
         let paragraphs: Vec<_> = doc
             .elements
@@ -756,7 +764,7 @@ mod tests {
             page_number: 1,
             bounding_box: None,
         }];
-        let doc = assemble_internal_document(pages, &tables, &[]);
+        let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Before"));
         assert!(doc.tables.iter().any(|t| t.markdown.contains("| A | B |")));
     }
@@ -773,7 +781,7 @@ mod tests {
             page_number: 2,
             bounding_box: None,
         }];
-        let doc = assemble_internal_document(pages, &tables, &[]);
+        let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Page 1"));
         assert!(doc.elements.iter().any(|e| e.text == "Page 2"));
         assert!(doc.tables.iter().any(|t| t.markdown.contains("| Table |")));
@@ -788,7 +796,7 @@ mod tests {
             page_number: 5,
             bounding_box: None,
         }];
-        let doc = assemble_internal_document(pages, &tables, &[]);
+        let doc = assemble_internal_document(pages, &tables, None, &[]);
         assert!(doc.elements.iter().any(|e| e.text == "Page 1"));
         assert!(doc.tables.iter().any(|t| t.markdown.contains("| Extra |")));
     }
@@ -802,7 +810,7 @@ mod tests {
             page_number: 1,
             bounding_box: None,
         }];
-        let doc = assemble_internal_document(pages, &tables, &[]);
+        let doc = assemble_internal_document(pages, &tables, None, &[]);
         // Table with whitespace-only markdown should be skipped
         assert!(doc.tables.is_empty() || doc.tables.iter().all(|t| t.markdown.trim().is_empty()));
     }
@@ -814,7 +822,7 @@ mod tests {
             vec![], // empty page 1
             vec![make_paragraph("Content on page 2", None)],
         ];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
         assert!(
             !doc.elements.iter().any(|e| matches!(e.kind, ElementKind::PageBreak)),
             "Blank leading page should not produce a page break"
@@ -835,7 +843,7 @@ mod tests {
             vec![make_paragraph("Content on page 1", None)],
             vec![], // empty page 2
         ];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
         assert!(
             !doc.elements.iter().any(|e| matches!(e.kind, ElementKind::PageBreak)),
             "Blank trailing page should not produce a page break"
@@ -849,7 +857,7 @@ mod tests {
             vec![make_paragraph("Page 1", None)],
             vec![make_paragraph("Page 2", None)],
         ];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
         assert!(
             doc.elements.iter().any(|e| matches!(e.kind, ElementKind::PageBreak)),
             "PageBreak should separate two content pages"
@@ -860,7 +868,7 @@ mod tests {
     fn test_no_page_break_single_page() {
         // Single page with content — no PageBreak.
         let pages = vec![vec![make_paragraph("Only page", None)]];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
         assert!(
             !doc.elements.iter().any(|e| matches!(e.kind, ElementKind::PageBreak)),
             "Single page should not produce a page break"
@@ -872,7 +880,7 @@ mod tests {
         let pages = vec![vec![make_paragraph("Page with image", None)]];
         // Image at page 1 (1-indexed), image_index = 0
         let image_positions = vec![(1usize, 0usize)];
-        let doc = assemble_internal_document(pages, &[], &image_positions);
+        let doc = assemble_internal_document(pages, &[], None, &image_positions);
 
         let image_elems: Vec<_> = doc
             .elements
@@ -887,9 +895,49 @@ mod tests {
     }
 
     #[test]
+    fn test_image_ocr_text_appears_in_element() {
+        use crate::types::ExtractedImage;
+        use bytes::Bytes;
+        use std::borrow::Cow;
+
+        let pages = vec![vec![make_paragraph("Page with OCR image", None)]];
+        let image_positions = vec![(1usize, 0usize)];
+        let ocr_result = Box::new(crate::types::ExtractionResult {
+            content: "OCR extracted text".to_string(),
+            mime_type: Cow::Borrowed("text/plain"),
+            ..Default::default()
+        });
+        let images = vec![ExtractedImage {
+            data: Bytes::new(),
+            format: Cow::Borrowed("png"),
+            image_index: 0,
+            page_number: Some(1),
+            width: None,
+            height: None,
+            colorspace: None,
+            bits_per_component: None,
+            is_mask: false,
+            description: None,
+            ocr_result: Some(ocr_result),
+            bounding_box: None,
+            source_path: None,
+            cluster_id: None,
+            image_kind: None,
+            kind_confidence: None,
+        }];
+        let doc = assemble_internal_document(pages, &[], Some(&images), &image_positions);
+        let img_elem = doc
+            .elements
+            .iter()
+            .find(|e| matches!(e.kind, ElementKind::Image { .. }))
+            .unwrap();
+        assert_eq!(img_elem.text, "OCR extracted text");
+    }
+
+    #[test]
     fn test_no_image_elements_with_empty_positions() {
         let pages = vec![vec![make_paragraph("No images here", None)]];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
 
         let image_count = doc
             .elements
@@ -905,7 +953,7 @@ mod tests {
         let mut caption = make_paragraph("Caption text", None);
         caption.caption_for = Some(0); // Caption for para at index 0
         let pages = vec![vec![para1, caption]];
-        let doc = assemble_internal_document(pages, &[], &[]);
+        let doc = assemble_internal_document(pages, &[], None, &[]);
         // Main text paragraph should be present
         assert!(doc.elements.iter().any(|e| e.text == "Main text"));
         // Caption should be present as a separate element with italic annotation
@@ -968,7 +1016,7 @@ mod tests {
             word_count,
         };
 
-        let doc = assemble_internal_document(vec![vec![para]], &[], &[]);
+        let doc = assemble_internal_document(vec![vec![para]], &[], None, &[]);
         assert_eq!(doc.elements.len(), 1);
 
         let elem = &doc.elements[0];
@@ -1024,7 +1072,7 @@ mod tests {
             word_count,
         };
 
-        let doc = assemble_internal_document(vec![vec![para]], &[], &[]);
+        let doc = assemble_internal_document(vec![vec![para]], &[], None, &[]);
         let elem = &doc.elements[0];
 
         // Should have bold annotation covering the full text (or most of it)

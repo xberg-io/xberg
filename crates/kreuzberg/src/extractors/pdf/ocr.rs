@@ -909,6 +909,7 @@ pub(crate) async fn extract_with_ocr(
             Some(crate::pdf::structure::assemble_internal_document(
                 pages,
                 &collected_tables,
+                None,
                 &[],
             ))
         } else {
@@ -1163,10 +1164,24 @@ pub(crate) async fn run_ocr_pipeline(
                 // Track best-so-far (without usage, which is in accumulated_usage)
                 match best_result {
                     Some((_, best_score, _, _, _, _)) if score > best_score => {
-                        best_result = Some((text, score, stage_tables, stage_ocr_elements, stage_doc, stage_page_texts));
+                        best_result = Some((
+                            text,
+                            score,
+                            stage_tables,
+                            stage_ocr_elements,
+                            stage_doc,
+                            stage_page_texts,
+                        ));
                     }
                     None => {
-                        best_result = Some((text, score, stage_tables, stage_ocr_elements, stage_doc, stage_page_texts));
+                        best_result = Some((
+                            text,
+                            score,
+                            stage_tables,
+                            stage_ocr_elements,
+                            stage_doc,
+                            stage_page_texts,
+                        ));
                     }
                     _ => {}
                 }

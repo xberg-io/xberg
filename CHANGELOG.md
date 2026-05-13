@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   models. New config: `PdfConfig.extract_tables: bool` (default `true`)
   and CLI flag `--pdf-extract-tables`. Set to `false` to skip table
   extraction entirely.
-
+- **Inline-image OCR for PDFs**: Added `ocr_inline_images` field to `PdfConfig` and `--pdf-ocr-inline-images` CLI flag. When enabled, this performs OCR on inline images found within PDF pages and injects the results into the extracted document.
 - **InternalDocument is serde-bridgeable**: `InternalDocument` and its four
   previously-non-serde sub-types (`InternalElement`, `ElementKind`,
   `Relationship`, `RelationshipTarget`) gained `Serialize` + `Deserialize`

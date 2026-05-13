@@ -19,6 +19,7 @@ pub(crate) type PdfExtractionPhaseResult = (
     Option<crate::types::internal::InternalDocument>, // pre-rendered structured doc (when output_format == Markdown/Djot/Html)
     bool,                                             // has_font_encoding_issues (unicode map errors detected)
     Option<Vec<PdfAnnotation>>,                       // extracted annotations (when extract_annotations is enabled)
+    Option<Vec<crate::types::ExtractedImage>>, // extracted images (when extract_images or ocr_inline_images is enabled)
 );
 
 /// Extract text, metadata, tables, and annotations from a PDF document using the pdf_oxide backend.
@@ -98,6 +99,70 @@ pub(crate) fn extract_all_from_oxide_document(
         }
     })?;
 
+    // --- Extracted images (data + OCR) ---
+    let images_extraction_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
+        || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
+
+    let ocr_inline_images = config
+        .pdf_options
+        .as_ref()
+        .map(|p| p.ocr_inline_images)
+        .unwrap_or(false);
+
+    let images = if images_extraction_enabled || ocr_inline_images {
+        let max_images = config.images.as_ref().and_then(|i| i.max_images_per_page);
+        let mut extracted = crate::pdf::oxide::images::extract_images_with_data(&mut doc, max_images).map_err(|e| {
+            crate::error::KreuzbergError::Parsing {
+                message: format!("pdf_oxide image extraction failed: {e}"),
+                source: None,
+            }
+        })?;
+
+        // Perform OCR on extracted images if enabled
+        if ocr_inline_images && !extracted.is_empty() {
+            #[cfg(feature = "ocr")]
+            {
+                let cache_dir = std::env::var("KREUZBERG_CACHE_DIR").ok().map(std::path::PathBuf::from);
+                let ocr_processor = crate::ocr::processor::OcrProcessor::new(cache_dir).map_err(|e| {
+                    crate::error::KreuzbergError::Parsing {
+                        message: format!("Failed to initialize OCR processor for inline images: {e}"),
+                        source: None,
+                    }
+                })?;
+
+                let tesseract_config = config
+                    .ocr
+                    .as_ref()
+                    .map(|o| o.tesseract_config.clone().unwrap_or_default())
+                    .unwrap_or_default();
+
+                for img in &mut extracted {
+                    let internal_config: crate::ocr::types::TesseractConfig = (&tesseract_config).into();
+                    match ocr_processor.process_image(&img.data, &internal_config) {
+                        Ok(ocr_result) => {
+                            img.ocr_result = Some(Box::new(crate::types::ExtractionResult::from_ocr(ocr_result)));
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                page = img.page_number,
+                                image_index = img.image_index,
+                                error = %e,
+                                "inline image OCR failed; image returned without OCR result"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Some(extracted)
+    } else {
+        None
+    };
+
+    if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+        return Err(crate::error::KreuzbergError::Cancelled);
+    }
+
     // Pre-render structured document for output formats that benefit from headings,
     // or when hierarchy extraction is explicitly enabled.
     let hierarchy_enabled = config
@@ -108,7 +173,8 @@ pub(crate) fn extract_all_from_oxide_document(
         || matches!(
             config.output_format,
             OutputFormat::Markdown | OutputFormat::Djot | OutputFormat::Html
-        );
+        )
+        || ocr_inline_images;
 
     let pre_rendered_doc =
         if needs_structured && !config.force_ocr {
@@ -160,6 +226,7 @@ pub(crate) fn extract_all_from_oxide_document(
                     include_footers,
                     used_structure_tree,
                     image_positions: &image_positions,
+                    images: images.as_deref(),
                     inject_placeholders,
                     layout_hints,
                     allow_single_column,
@@ -209,6 +276,7 @@ pub(crate) fn extract_all_from_oxide_document(
         pre_rendered_doc,
         has_font_encoding_issues,
         annotations,
+        images,
     ))
 }
 

@@ -1861,6 +1861,10 @@ public func extractionResultFromJson(_ json: String) throws -> ExtractionResult 
     return try RustBridge.extractionResultFromJson(json)
 }
 
+public func ocrExtractionResultFromJson(_ json: String) throws -> OcrExtractionResult {
+    return try RustBridge.ocrExtractionResultFromJson(json)
+}
+
 public func htmlMetadataFromJson(_ json: String) throws -> HtmlMetadata {
     return try RustBridge.htmlMetadataFromJson(json)
 }

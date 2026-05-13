@@ -362,6 +362,7 @@ pub const PdfConfig = struct {
     top_margin_fraction: ?f32,
     bottom_margin_fraction: ?f32,
     allow_single_column_tables: bool,
+    ocr_inline_images: bool,
 };
 
 /// Hierarchy extraction configuration for PDF text structure analysis.

@@ -688,3 +688,34 @@ pub struct Element {
     /// Metadata about the element
     pub metadata: ElementMetadata,
 }
+
+impl ExtractionResult {
+    /// Convert from an OCR result.
+    pub fn from_ocr(ocr: super::formats::OcrExtractionResult) -> Self {
+        Self {
+            content: ocr.content,
+            mime_type: Cow::Owned(ocr.mime_type),
+            extraction_method: Some(ExtractionMethod::Ocr),
+            tables: ocr.tables.into_iter().map(super::tables::Table::from_ocr).collect(),
+            ocr_elements: ocr.ocr_elements,
+            ..Default::default()
+        }
+    }
+}
+
+impl super::tables::Table {
+    /// Convert from an OCR table result.
+    pub fn from_ocr(ocr: super::formats::OcrTable) -> Self {
+        Self {
+            cells: ocr.cells,
+            markdown: ocr.markdown,
+            page_number: ocr.page_number,
+            bounding_box: ocr.bounding_box.map(|b| super::extraction::BoundingBox {
+                x0: b.left as f64,
+                y0: b.top as f64,
+                x1: b.right as f64,
+                y1: b.bottom as f64,
+            }),
+        }
+    }
+}

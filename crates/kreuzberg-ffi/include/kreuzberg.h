@@ -2641,6 +2641,13 @@ float kreuzberg_pdf_config_bottom_margin_fraction(const KREUZBERGPdfConfig *ptr)
 int32_t kreuzberg_pdf_config_allow_single_column_tables(const KREUZBERGPdfConfig *ptr);
 
 /**
+ * Get the `ocr_inline_images` field from a `PdfConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t kreuzberg_pdf_config_ocr_inline_images(const KREUZBERGPdfConfig *ptr);
+
+/**
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
@@ -5550,6 +5557,14 @@ char *kreuzberg_extraction_result_llm_usage(const KREUZBERGExtractionResult *ptr
  * Pointer must be a valid handle returned by this library.
  */
 char *kreuzberg_extraction_result_formatted_content(const KREUZBERGExtractionResult *ptr);
+
+/**
+ * Convert from an OCR result.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+KREUZBERGExtractionResult *kreuzberg_extraction_result_from_ocr(const KREUZBERGOcrExtractionResult *ocr);
 
 /**
  * Create a `ArchiveEntry` from a JSON string. Returns null on failure.

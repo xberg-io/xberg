@@ -787,6 +787,7 @@ pub(crate) struct SegmentStructureConfig<'a> {
     pub include_footers: bool,
     pub used_structure_tree: bool,
     pub image_positions: &'a [(usize, usize)],
+    pub images: Option<&'a [crate::types::ExtractedImage]>,
     pub inject_placeholders: bool,
     pub layout_hints: Option<&'a [Vec<LayoutHint>]>,
     pub allow_single_column: bool,
@@ -813,6 +814,7 @@ pub(crate) fn extract_document_structure_from_segments(
         include_footers,
         used_structure_tree,
         image_positions,
+        images,
         inject_placeholders,
         layout_hints,
         allow_single_column,
@@ -1346,7 +1348,7 @@ pub(crate) fn extract_document_structure_from_segments(
     let mut combined_tables: Vec<crate::types::Table> = tables.iter().cloned().chain(layout_tables).collect();
     deduplicate_overlapping_tables(&mut combined_tables);
     let effective_image_positions = if inject_placeholders { image_positions } else { &[] };
-    let mut doc = assemble_internal_document(all_page_paragraphs, &combined_tables, effective_image_positions);
+    let mut doc = assemble_internal_document(all_page_paragraphs, &combined_tables, images, effective_image_positions);
 
     // Stage 5: Element-level text normalization.
     for elem in &mut doc.elements {
