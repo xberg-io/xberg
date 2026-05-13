@@ -72,11 +72,7 @@ pub fn build_env_filter(level_override: Option<&str>) -> EnvFilter {
                 .unwrap_or(true)
         })
         .fold(base, |filter, directive| {
-            filter.add_directive(
-                directive
-                    .parse()
-                    .unwrap_or_else(|_| panic!("BUG: invalid built-in logging directive: {directive}")),
-            )
+            filter.add_directive(directive.parse().expect("built-in logging directive must be valid"))
         })
 }
 
@@ -172,7 +168,7 @@ mod tests {
         for directive in super::QUIET_DIRECTIVES {
             directive
                 .parse::<tracing_subscriber::filter::Directive>()
-                .unwrap_or_else(|e| panic!("built-in directive '{directive}' is invalid: {e}"));
+                .expect("built-in directive is invalid");
         }
     }
 
