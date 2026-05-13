@@ -250,7 +250,6 @@ object Kreuzberg {
         return withContext(Dispatchers.IO) {
             Bridge.extractBytes(content, mimeType, config)
         }
-
     }
 
     /**
@@ -278,7 +277,6 @@ object Kreuzberg {
         return withContext(Dispatchers.IO) {
             Bridge.extractFile(path, mimeType, config)
         }
-
     }
 
     /**
@@ -296,7 +294,6 @@ object Kreuzberg {
     fun extractFileSync(path: Path, mimeType: String? = null, config: ExtractionConfig): ExtractionResult {
 
         return Bridge.extractFileSync(path, mimeType, config)
-
     }
 
     /**
@@ -311,7 +308,6 @@ object Kreuzberg {
     fun extractBytesSync(content: ByteArray, mimeType: String, config: ExtractionConfig): ExtractionResult {
 
         return Bridge.extractBytesSync(content, mimeType, config)
-
     }
 
     /**
@@ -323,7 +319,6 @@ object Kreuzberg {
     fun batchExtractFilesSync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> {
 
         return Bridge.batchExtractFilesSync(items, config)
-
     }
 
     /**
@@ -337,7 +332,6 @@ object Kreuzberg {
     fun batchExtractBytesSync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> {
 
         return Bridge.batchExtractBytesSync(items, config)
-
     }
 
     /**
@@ -375,7 +369,6 @@ object Kreuzberg {
         return withContext(Dispatchers.IO) {
             Bridge.batchExtractFiles(items, config)
         }
-
     }
 
     /**
@@ -407,7 +400,6 @@ object Kreuzberg {
         return withContext(Dispatchers.IO) {
             Bridge.batchExtractBytes(items, config)
         }
-
     }
 
     /**
@@ -430,7 +422,6 @@ object Kreuzberg {
     fun detectMimeTypeFromBytes(content: ByteArray): String {
 
         return Bridge.detectMimeTypeFromBytes(content)
-
     }
 
     /**
@@ -445,7 +436,6 @@ object Kreuzberg {
     fun getExtensionsForMime(mimeType: String): List<String> {
 
         return Bridge.getExtensionsForMime(mimeType)
-
     }
 
     /**
@@ -457,7 +447,6 @@ object Kreuzberg {
     fun listEmbeddingBackends(): List<String> {
 
         return Bridge.listEmbeddingBackends()
-
     }
 
     /**
@@ -466,7 +455,6 @@ object Kreuzberg {
     fun listDocumentExtractors(): List<String> {
 
         return Bridge.listDocumentExtractors()
-
     }
 
     /**
@@ -481,7 +469,6 @@ object Kreuzberg {
     fun listOcrBackends(): List<String> {
 
         return Bridge.listOcrBackends()
-
     }
 
     /**
@@ -498,7 +485,6 @@ object Kreuzberg {
     fun listPostProcessors(): List<String> {
 
         return Bridge.listPostProcessors()
-
     }
 
     /**
@@ -511,7 +497,6 @@ object Kreuzberg {
     fun listRenderers(): List<String> {
 
         return Bridge.listRenderers()
-
     }
 
     /**
@@ -520,7 +505,6 @@ object Kreuzberg {
     fun listValidators(): List<String> {
 
         return Bridge.listValidators()
-
     }
 
     /**
@@ -543,7 +527,6 @@ object Kreuzberg {
         return withContext(Dispatchers.IO) {
             Bridge.embedTextsAsync(texts, config)
         }
-
     }
 
     /**
@@ -560,7 +543,6 @@ object Kreuzberg {
     fun renderPdfPageToPng(pdfBytes: ByteArray, pageIndex: Long, dpi: Int? = null, password: String? = null): ByteArray {
 
         return Bridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password)
-
     }
 
     /**
@@ -572,7 +554,6 @@ object Kreuzberg {
     fun detectMimeType(path: String, checkExists: Boolean): String {
 
         return Bridge.detectMimeType(path, checkExists)
-
     }
 
     /**
@@ -583,7 +564,6 @@ object Kreuzberg {
     fun embedTexts(texts: List<String>, config: EmbeddingConfig): List<List<Float>> {
 
         return Bridge.embedTexts(texts, config)
-
     }
 
     /**
@@ -594,8 +574,7 @@ object Kreuzberg {
      */
     fun getEmbeddingPreset(name: String): EmbeddingPreset? {
 
-        return Bridge.getEmbeddingPreset(name)
-
+        return Bridge.getEmbeddingPreset(name).orElse(null)
     }
 
     /**
@@ -606,7 +585,6 @@ object Kreuzberg {
     fun listEmbeddingPresets(): List<String> {
 
         return Bridge.listEmbeddingPresets()
-
     }
 
 }
