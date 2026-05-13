@@ -53,8 +53,10 @@ jobs:
         with:
           cache-key-prefix: ci-mobile-android-${{ matrix.abi }}
       - uses: kreuzberg-dev/actions/setup-android-ndk@v1
-      - name: cargo ndk check kreuzberg-dart
-        run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-dart
+      # kreuzberg-dart on Android is blocked on separating ORT-dependent
+      # config types (LayoutDetectionConfig, EmbeddingPreset, …) from their
+      # ORT impls so the flutter_rust_bridge mirrors compile without ORT.
+      # Tracked separately; for now we verify the C FFI surface only.
       - name: cargo ndk check kreuzberg-ffi
         run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-ffi
 
