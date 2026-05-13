@@ -47,12 +47,13 @@ mod tests {
     #[tokio::test]
     async fn test_client_path_normalization_with_base_url() {
         use axum::{Router, routing::post};
+        use liter_llm::LlmClient;
         use tokio::sync::mpsc;
 
         let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
         let app = Router::new().fallback(post(
-            move |method: axum::http::Method, uri: axum::http::Uri, headers: axum::http::HeaderMap| async move {
+            move |_method: axum::http::Method, uri: axum::http::Uri, headers: axum::http::HeaderMap| async move {
                 // Assert no double slash in the path
                 assert_eq!(uri.path(), "/v1/chat/completions");
 

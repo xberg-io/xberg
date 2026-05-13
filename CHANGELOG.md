@@ -91,12 +91,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boilerplate.
 
 ### Fixed
+
 - **LLM base URL normalization**: fixed a regression where a custom
   `KREUZBERG_LLM_BASE_URL` with a trailing slash caused authentication (401)
   or 404 errors due to double-slash path construction (e.g. `/v1//chat/completions`).
   The LLM client now automatically trims trailing slashes from the base URL.
-- **PDF hierarchy tests**: fixed compilation errors in integration tests
-  caused by missing `extract_tables` fields in `PdfConfig` initializers.
 - **PDF layout-classify regression on text-heavy structure-tree PDFs**:
   three coupled fixes to the layout-for-markdown pipeline that recover
   quality lost when RT-DETR hints were applied too aggressively.
