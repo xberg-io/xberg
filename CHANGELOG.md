@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pre-rendered doc is substantive and no per-page fallback is needed, or when
   the content is non-textual.
 
+- **Djot renderer emitted dangling `![]()` for orphaned image elements (#914)**:
+  when an `ElementKind::Image` referenced an index outside `doc.images`, the
+  Djot renderer fell through to its normal output path and produced empty
+  image markup. Aligned with the existing `comrak_bridge` behavior: skip the
+  element only when both the image lookup is `None` and the description text
+  is empty. When alt text is present, it is still emitted so user-visible
+  content is preserved.
+
 - **Email encoding data corruption (#910)**: replaced brittle 4-byte heuristic
   for UTF-16 detection in `EmailExtractor` with a robust statistical approach
   using `chardetng`. Tiny 4-byte ASCII files (e.g., binary sequences with
