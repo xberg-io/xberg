@@ -208,7 +208,7 @@ pub struct OcrTable {
     /// Markdown representation of the table
     pub markdown: String,
     /// Page number where the table was found (1-indexed)
-    pub page_number: usize,
+    pub page_number: u32,
     /// Bounding box of the table in pixel coordinates (from OCR word positions).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]

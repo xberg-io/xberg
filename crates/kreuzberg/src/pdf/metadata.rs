@@ -37,7 +37,7 @@ pub struct PdfMetadata {
 
     /// Total number of pages in the PDF document
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_count: Option<usize>,
+    pub page_count: Option<u32>,
 }
 
 /// Complete PDF extraction metadata including common and PDF-specific fields.

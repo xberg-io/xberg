@@ -111,8 +111,8 @@ impl DocumentExtractor for CsvExtractor {
         };
 
         let csv_metadata = CsvMetadata {
-            row_count,
-            column_count: col_count,
+            row_count: row_count as u32,
+            column_count: col_count as u32,
             delimiter: if delimiter != ',' {
                 Some(delimiter.to_string())
             } else {

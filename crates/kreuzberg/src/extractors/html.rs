@@ -429,7 +429,7 @@ impl SyncExtractor for HtmlExtractor {
             tables.push(Table {
                 cells,
                 markdown: t.markdown,
-                page_number: i + 1,
+                page_number: (i + 1) as u32,
                 bounding_box: None,
             });
         }
@@ -544,7 +544,7 @@ impl SyncExtractor for HtmlExtractor {
                 let extracted = ExtractedImage {
                     data: Bytes::from(img.data),
                     format,
-                    image_index: i,
+                    image_index: i as u32,
                     page_number: None,
                     width,
                     height,

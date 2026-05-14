@@ -59,7 +59,7 @@ pub struct FileExtractionConfig {
 
     /// Override force OCR pages for this file (1-indexed page numbers).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub force_ocr_pages: Option<Vec<usize>>,
+    pub force_ocr_pages: Option<Vec<u32>>,
 
     /// Override disable OCR for this file.
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -57,7 +57,7 @@ pub struct ExtractionConfig {
     /// An `ocr` config is recommended for backend/language selection; defaults are used if absent.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub force_ocr_pages: Option<Vec<usize>>,
+    pub force_ocr_pages: Option<Vec<u32>>,
 
     /// Disable OCR entirely, even for images.
     ///

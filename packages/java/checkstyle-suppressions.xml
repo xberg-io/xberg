@@ -8,6 +8,7 @@
     <suppress checks="ConstantName" files=".*FFI\.java"/>
     <suppress checks="MagicNumber" files=".*FFI\.java"/>
 
+
     <!-- Allow star imports and magic numbers in test files -->
     <suppress checks="AvoidStarImport" files=".*Test\.java"/>
     <suppress checks="MagicNumber" files=".*Test\.java"/>

@@ -172,10 +172,9 @@ fn build_chunks_from_sections(sections: &[Section], config: &ChunkingConfig) -> 
                     token_count: None,
                     chunk_index: 0,
                     total_chunks: 0,
-                    // Section chunker does not track page provenance, so first_page/last_page
-                    // remain None. features.rs skips image_indices population for chunks where
-                    // either bound is None, so YAML-section chunks always have empty image_indices
-                    // regardless of whether images were extracted.
+                    // TODO(#963): populate image_indices for YAML chunks — YamlSectionChunker
+                    // lacks page provenance (first_page/last_page always None), so the
+                    // image-index population step in features.rs is skipped for these chunks.
                     first_page: None,
                     last_page: None,
                     heading_context: None,

@@ -2,9 +2,11 @@
 title: "Go API Reference"
 ---
 ## Go API Reference <span class="version-badge">v5.0.0-rc.1</span>
+
 ### Functions
 
 #### ExtractBytes()
+
 Extract content from a byte array.
 
 This is the main entry point for in-memory extraction. It performs the following steps:
@@ -42,6 +44,7 @@ func ExtractBytes(content []byte, mimeType string, config ExtractionConfig) (Ext
 ---
 
 #### ExtractFile()
+
 Extract content from a file.
 
 This is the main entry point for file-based extraction. It performs the following steps:
@@ -80,6 +83,7 @@ func ExtractFile(path string, mimeType string, config ExtractionConfig) (Extract
 ---
 
 #### ExtractFileSync()
+
 Synchronous wrapper for `extract_file`.
 
 This is a convenience function that blocks the current thread until extraction completes.
@@ -110,6 +114,7 @@ func ExtractFileSync(path string, mimeType string, config ExtractionConfig) (Ext
 ---
 
 #### ExtractBytesSync()
+
 Synchronous wrapper for `extract_bytes`.
 
 Uses the global Tokio runtime for 100x+ performance improvement over creating
@@ -137,6 +142,7 @@ func ExtractBytesSync(content []byte, mimeType string, config ExtractionConfig) 
 ---
 
 #### BatchExtractFilesSync()
+
 Synchronous wrapper for `batch_extract_files`.
 
 Uses the global Tokio runtime for optimal performance.
@@ -160,6 +166,7 @@ func BatchExtractFilesSync(items []BatchFileItem, config ExtractionConfig) ([]Ex
 ---
 
 #### BatchExtractBytesSync()
+
 Synchronous wrapper for `batch_extract_bytes`.
 
 Uses the global Tokio runtime for optimal performance.
@@ -185,6 +192,7 @@ func BatchExtractBytesSync(items []BatchBytesItem, config ExtractionConfig) ([]E
 ---
 
 #### BatchExtractFiles()
+
 Extract content from multiple files concurrently.
 
 This function processes multiple files in parallel, automatically managing
@@ -232,6 +240,7 @@ func BatchExtractFiles(items []BatchFileItem, config ExtractionConfig) ([]Extrac
 ---
 
 #### BatchExtractBytes()
+
 Extract content from multiple byte arrays concurrently.
 
 This function processes multiple byte arrays in parallel, automatically managing
@@ -273,6 +282,7 @@ func BatchExtractBytes(items []BatchBytesItem, config ExtractionConfig) ([]Extra
 ---
 
 #### DetectMimeTypeFromBytes()
+
 Detect MIME type from raw file bytes.
 
 Uses magic byte signatures to detect file type from content.
@@ -306,6 +316,7 @@ func DetectMimeTypeFromBytes(content []byte) (string, error)
 ---
 
 #### GetExtensionsForMime()
+
 Get file extensions for a given MIME type.
 
 Returns all known file extensions that map to the specified MIME type.
@@ -331,6 +342,7 @@ func GetExtensionsForMime(mimeType string) ([]string, error)
 ---
 
 #### ListEmbeddingBackends()
+
 List the names of all registered embedding backends.
 
 Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
@@ -347,6 +359,7 @@ func ListEmbeddingBackends() ([]string, error)
 ---
 
 #### ListDocumentExtractors()
+
 List names of all registered document extractors.
 
 **Signature:**
@@ -360,6 +373,7 @@ func ListDocumentExtractors() ([]string, error)
 ---
 
 #### ListOcrBackends()
+
 List all registered OCR backends.
 
 Returns the names of all OCR backends currently registered in the global registry.
@@ -379,6 +393,7 @@ func ListOcrBackends() ([]string, error)
 ---
 
 #### ListPostProcessors()
+
 List all registered post-processor names.
 
 Returns a vector of all post-processor names currently registered in the
@@ -400,6 +415,7 @@ func ListPostProcessors() ([]string, error)
 ---
 
 #### ListRenderers()
+
 List names of all registered renderers.
 
 **Errors:**
@@ -417,6 +433,7 @@ func ListRenderers() ([]string, error)
 ---
 
 #### ListValidators()
+
 List names of all registered validators.
 
 **Signature:**
@@ -430,6 +447,7 @@ func ListValidators() ([]string, error)
 ---
 
 #### EmbedTextsAsync()
+
 Generate embeddings asynchronously for a list of text strings.
 
 This is the async counterpart to `embed_texts`. It offloads the blocking
@@ -462,6 +480,7 @@ func EmbedTextsAsync(texts []string, config EmbeddingConfig) ([][]float32, error
 ---
 
 #### RenderPdfPageToPng()
+
 Render a single PDF page to PNG bytes.
 
 Returns raw PNG-encoded bytes for the specified page at the given DPI.
@@ -492,6 +511,7 @@ func RenderPdfPageToPng(pdfBytes []byte, pageIndex int, dpi int32, password stri
 ---
 
 #### DetectMimeType()
+
 Detect the MIME type of a file at the given path.
 
 Uses the file extension and optionally the file content to determine the MIME type.
@@ -515,6 +535,7 @@ func DetectMimeType(path string, checkExists bool) (string, error)
 ---
 
 #### EmbedTexts()
+
 Embed a list of texts using the configured embedding model.
 
 Returns a 2D vector where each inner vector is the embedding for the corresponding text.
@@ -537,6 +558,7 @@ func EmbedTexts(texts []string, config EmbeddingConfig) ([][]float32, error)
 ---
 
 #### GetEmbeddingPreset()
+
 Get an embedding preset by name.
 
 Returns `nil` if no preset with the given name exists. Returns an owned
@@ -558,6 +580,7 @@ func GetEmbeddingPreset(name string) *EmbeddingPreset
 ---
 
 #### ListEmbeddingPresets()
+
 List the names of all available embedding presets.
 
 Returns owned `String`s so the values are safe to pass across FFI boundaries.
@@ -574,6 +597,7 @@ func ListEmbeddingPresets() []string
 ### Types
 
 #### AccelerationConfig
+
 Hardware acceleration configuration for ONNX Runtime models.
 
 Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
@@ -588,6 +612,7 @@ for inference in layout detection and embedding generation.
 ---
 
 #### AnchorProperties
+
 Properties for anchored drawings.
 
 | Field | Type | Default | Description |
@@ -603,6 +628,7 @@ Properties for anchored drawings.
 ---
 
 #### ApiDoc
+
 OpenAPI documentation structure.
 
 Defines all endpoints, request/response schemas, and examples
@@ -612,6 +638,7 @@ for the Kreuzberg document extraction API.
 ---
 
 #### ArchiveEntry
+
 A single file extracted from an archive.
 
 When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
@@ -627,6 +654,7 @@ enabled, each processable file produces its own full `ExtractionResult`.
 ---
 
 #### ArchiveMetadata
+
 Archive (ZIP/TAR/7Z) metadata.
 
 Extracted from compressed archive files containing file lists and size information.
@@ -634,15 +662,16 @@ Extracted from compressed archive files containing file lists and size informati
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Format` | `string` | — | Archive format ("ZIP", "TAR", "7Z", etc.) |
-| `FileCount` | `int` | — | Total number of files in the archive |
+| `FileCount` | `uint32` | — | Total number of files in the archive |
 | `FileList` | `[]string` | `nil` | List of file paths within the archive |
-| `TotalSize` | `int` | — | Total uncompressed size in bytes |
-| `CompressedSize` | `*int` | `nil` | Compressed size in bytes (if available) |
+| `TotalSize` | `uint64` | — | Total uncompressed size in bytes |
+| `CompressedSize` | `*uint64` | `nil` | Compressed size in bytes (if available) |
 
 
 ---
 
 #### BBox
+
 Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
 
 | Field | Type | Default | Description |
@@ -656,6 +685,7 @@ Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-ri
 ---
 
 #### BatchBytesItem
+
 Batch item for byte array extraction.
 
 Used with `batch_extract_bytes` and `batch_extract_bytes_sync`
@@ -671,6 +701,7 @@ to represent a single item in a batch extraction job.
 ---
 
 #### BatchFileItem
+
 Batch item for file extraction.
 
 Used with `batch_extract_files` and `batch_extract_files_sync`
@@ -685,6 +716,7 @@ to represent a single file in a batch extraction job.
 ---
 
 #### BibtexMetadata
+
 BibTeX bibliography metadata.
 
 | Field | Type | Default | Description |
@@ -699,12 +731,14 @@ BibTeX bibliography metadata.
 ---
 
 #### ByteBufferPool
+
 Convenience type alias for a pooled Vec<u8>.
 
 
 ---
 
 #### CacheWarmParams
+
 Request parameters for cache warm (model download).
 
 | Field | Type | Default | Description |
@@ -716,6 +750,7 @@ Request parameters for cache warm (model download).
 ---
 
 #### CharShape
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Bold` | `bool` | — | Bold |
@@ -726,6 +761,7 @@ Request parameters for cache warm (model download).
 ---
 
 #### Chunk
+
 A text chunk with optional embedding and metadata.
 
 Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
@@ -743,6 +779,7 @@ is configured), and metadata about its position in the document.
 ---
 
 #### ChunkMetadata
+
 Metadata about a chunk's position in the original document.
 
 | Field | Type | Default | Description |
@@ -752,14 +789,16 @@ Metadata about a chunk's position in the original document.
 | `TokenCount` | `*int` | `nil` | Number of tokens in this chunk (if available). This is calculated by the embedding model's tokenizer if embeddings are enabled. |
 | `ChunkIndex` | `int` | — | Zero-based index of this chunk in the document. |
 | `TotalChunks` | `int` | — | Total number of chunks in the document. |
-| `FirstPage` | `*int` | `nil` | First page number this chunk spans (1-indexed). Only populated when page tracking is enabled in extraction configuration. |
-| `LastPage` | `*int` | `nil` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
+| `FirstPage` | `*uint32` | `nil` | First page number this chunk spans (1-indexed). Only populated when page tracking is enabled in extraction configuration. |
+| `LastPage` | `*uint32` | `nil` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
 | `HeadingContext` | `*HeadingContext` | `nil` | Heading context when using Markdown chunker. Contains the heading hierarchy this chunk falls under. Only populated when `ChunkerType.Markdown` is used. |
+| `ImageIndices` | `[]uint32` | — | Indices into `ExtractionResult.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `[first_page, last_page]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
 
 
 ---
 
 #### ChunkRequest
+
 Chunk request with text and configuration.
 
 | Field | Type | Default | Description |
@@ -772,6 +811,7 @@ Chunk request with text and configuration.
 ---
 
 #### ChunkResponse
+
 Chunk response with chunks and metadata.
 
 | Field | Type | Default | Description |
@@ -786,6 +826,7 @@ Chunk response with chunks and metadata.
 ---
 
 #### ChunkTextParams
+
 Request parameters for text chunking.
 
 | Field | Type | Default | Description |
@@ -800,6 +841,7 @@ Request parameters for text chunking.
 ---
 
 #### ChunkingConfig
+
 Chunking configuration.
 
 Configures text chunking for document content, including chunk size,
@@ -820,7 +862,9 @@ Use `..the default constructor` when constructing to allow for future field addi
 | `TopicThreshold` | `*float32` | `nil` | Optional cosine similarity threshold for semantic topic boundary detection. Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is provided. You almost never need to set this. When omitted, defaults to `0.75` which works well for most documents. Lower values detect more topic boundaries (more, smaller chunks); higher values detect fewer. Range: `0.0..=1.0`. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -830,6 +874,7 @@ func (o *ChunkingConfig) Default() ChunkingConfig
 ---
 
 #### ChunkingResult
+
 Result of a text chunking operation.
 
 Contains the generated chunks and metadata about the chunking.
@@ -843,6 +888,7 @@ Contains the generated chunks and metadata about the chunking.
 ---
 
 #### CitationMetadata
+
 Citation file metadata (RIS, PubMed, EndNote).
 
 | Field | Type | Default | Description |
@@ -858,6 +904,7 @@ Citation file metadata (RIS, PubMed, EndNote).
 ---
 
 #### ContentFilterConfig
+
 Cross-extractor content filtering configuration.
 
 Controls whether "furniture" content (headers, footers, page numbers,
@@ -876,7 +923,9 @@ default behavior unchanged.
 | `IncludeWatermarks` | `bool` | `false` | Include watermark text in extraction output. - PDF: Keeps watermark artifacts and arXiv identifiers. - Other formats: No effect currently. Default: `false` (watermarks are stripped). |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -886,6 +935,7 @@ func (o *ContentFilterConfig) Default() ContentFilterConfig
 ---
 
 #### ContributorRole
+
 JATS contributor with role.
 
 | Field | Type | Default | Description |
@@ -897,6 +947,7 @@ JATS contributor with role.
 ---
 
 #### CoreProperties
+
 Dublin Core metadata from docProps/core.xml
 
 Contains standard metadata fields defined by the Dublin Core standard
@@ -924,12 +975,13 @@ and Office-specific extensions.
 ---
 
 #### CsvMetadata
+
 CSV/TSV file metadata.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `RowCount` | `int` | — | Number of rows |
-| `ColumnCount` | `int` | — | Number of columns |
+| `RowCount` | `uint32` | — | Number of rows |
+| `ColumnCount` | `uint32` | — | Number of columns |
 | `Delimiter` | `*string` | `nil` | Delimiter |
 | `HasHeader` | `bool` | — | Whether header |
 | `ColumnTypes` | `*[]string` | `nil` | Column types |
@@ -938,6 +990,7 @@ CSV/TSV file metadata.
 ---
 
 #### CustomProperties
+
 Custom properties from docProps/custom.xml
 
 Maps property names to their values. Values are converted to JSON types
@@ -947,6 +1000,7 @@ based on the VT (Variant Type) specified in the XML.
 ---
 
 #### DbfFieldInfo
+
 dBASE field information.
 
 | Field | Type | Default | Description |
@@ -958,6 +1012,7 @@ dBASE field information.
 ---
 
 #### DbfMetadata
+
 dBASE (DBF) file metadata.
 
 | Field | Type | Default | Description |
@@ -970,6 +1025,7 @@ dBASE (DBF) file metadata.
 ---
 
 #### DetectMimeTypeParams
+
 Request parameters for MIME type detection.
 
 | Field | Type | Default | Description |
@@ -981,6 +1037,7 @@ Request parameters for MIME type detection.
 ---
 
 #### DetectResponse
+
 MIME type detection response.
 
 | Field | Type | Default | Description |
@@ -992,6 +1049,7 @@ MIME type detection response.
 ---
 
 #### DetectedBoundary
+
 A detected structural boundary in the text.
 
 | Field | Type | Default | Description |
@@ -1003,6 +1061,7 @@ A detected structural boundary in the text.
 ---
 
 #### DetectionResult
+
 Page-level detection result containing all detections and page metadata.
 
 | Field | Type | Default | Description |
@@ -1015,6 +1074,7 @@ Page-level detection result containing all detections and page metadata.
 ---
 
 #### DjotContent
+
 Comprehensive Djot document structure with semantic preservation.
 
 This type captures the full richness of Djot markup, including:
@@ -1042,6 +1102,7 @@ Available when the `djot` feature is enabled.
 ---
 
 #### DjotImage
+
 Image element in Djot.
 
 | Field | Type | Default | Description |
@@ -1055,6 +1116,7 @@ Image element in Djot.
 ---
 
 #### DjotLink
+
 Link element in Djot.
 
 | Field | Type | Default | Description |
@@ -1068,6 +1130,7 @@ Link element in Djot.
 ---
 
 #### DoclingCompatResponse
+
 OpenWebUI "Docling" engine response format.
 
 Returned by `POST /v1/convert/file` for docling-serve compatibility.
@@ -1081,6 +1144,7 @@ Returned by `POST /v1/convert/file` for docling-serve compatibility.
 ---
 
 #### DocumentExtractor
+
 Trait for document extractor plugins.
 
 Implement this trait to add support for new document formats or to override
@@ -1107,7 +1171,9 @@ Default priority is 50.
 Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
 
 ##### Methods
+
 ###### ExtractBytes()
+
 Extract content from a byte array.
 
 This is the core extraction method that processes in-memory document data.
@@ -1130,6 +1196,7 @@ The pipeline will convert this into the public `ExtractionResult`.
 func (o *DocumentExtractor) ExtractBytes(content []byte, mimeType string, config ExtractionConfig) (InternalDocument, error)
 ```
 ###### ExtractFile()
+
 Extract content from a file.
 
 Default implementation reads the file and calls `extract_bytes`.
@@ -1149,6 +1216,7 @@ Same as `extract_bytes`, plus file I/O errors.
 func (o *DocumentExtractor) ExtractFile(path string, mimeType string, config ExtractionConfig) (InternalDocument, error)
 ```
 ###### SupportedMimeTypes()
+
 Get the list of MIME types supported by this extractor.
 
 Can include exact MIME types and prefix patterns:
@@ -1165,6 +1233,7 @@ A slice of MIME type strings.
 func (o *DocumentExtractor) SupportedMimeTypes() []string
 ```
 ###### Priority()
+
 Get the priority of this extractor.
 
 Higher priority extractors are preferred when multiple extractors
@@ -1188,6 +1257,7 @@ Priority value (default: 50)
 func (o *DocumentExtractor) Priority() int32
 ```
 ###### CanHandle()
+
 Optional: Check if this extractor can handle a specific file.
 
 Allows for more sophisticated detection beyond MIME types.
@@ -1203,6 +1273,7 @@ Defaults to `true` (rely on MIME type matching).
 func (o *DocumentExtractor) CanHandle(path string, mimeType string) bool
 ```
 ###### AsSyncExtractor()
+
 Attempt to get a reference to this extractor as a SyncExtractor.
 
 Returns None if the extractor doesn't support synchronous extraction.
@@ -1217,6 +1288,7 @@ func (o *DocumentExtractor) AsSyncExtractor() *SyncExtractor
 ---
 
 #### DocumentNode
+
 A single node in the document tree.
 
 Each node has deterministic `id`, typed `content`, optional `parent`/`children`
@@ -1239,6 +1311,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 ---
 
 #### DocumentRelationship
+
 A resolved relationship between two nodes in the document tree.
 
 | Field | Type | Default | Description |
@@ -1251,6 +1324,7 @@ A resolved relationship between two nodes in the document tree.
 ---
 
 #### DocumentStructure
+
 Top-level structured document representation.
 
 A flat array of nodes with index-based parent/child references forming a tree.
@@ -1270,7 +1344,9 @@ and parent-child relationships are bidirectionally consistent.
 | `NodeTypes` | `[]string` | `nil` | Sorted, deduplicated list of node type names present in this document. Each value is the snake_case `node_type` tag of the corresponding `NodeContent` variant (e.g. `"paragraph"`, `"heading"`, `"table"`, …). Computed from `nodes` via `DocumentStructure.finalize_node_types`. Empty until that method is called (internal construction paths call it at the end of derivation). |
 
 ##### Methods
+
 ###### FinalizeNodeTypes()
+
 Compute and populate the `node_types` field from the current `nodes`.
 
 Call this after all nodes have been added to the structure. Internal
@@ -1282,6 +1358,7 @@ construction paths (builder, derivation) call this automatically.
 func (o *DocumentStructure) FinalizeNodeTypes()
 ```
 ###### IsEmpty()
+
 Check if the document structure is empty.
 
 **Signature:**
@@ -1290,6 +1367,7 @@ Check if the document structure is empty.
 func (o *DocumentStructure) IsEmpty() bool
 ```
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -1299,6 +1377,7 @@ func (o *DocumentStructure) Default() DocumentStructure
 ---
 
 #### DocxAppProperties
+
 Application properties from docProps/app.xml for DOCX
 
 Contains Word-specific document statistics and metadata.
@@ -1326,6 +1405,7 @@ Contains Word-specific document statistics and metadata.
 ---
 
 #### DocxMetadata
+
 Word document metadata.
 
 Extracted from DOCX files using shared Office Open XML metadata extraction.
@@ -1341,6 +1421,7 @@ Integrates with `office_metadata` module for core/app/custom properties.
 ---
 
 #### Drawing
+
 A drawing object extracted from `<w:drawing>`.
 
 | Field | Type | Default | Description |
@@ -1354,6 +1435,7 @@ A drawing object extracted from `<w:drawing>`.
 ---
 
 #### Element
+
 Semantic element extracted from document.
 
 Represents a logical unit of content with semantic classification,
@@ -1370,11 +1452,12 @@ unique identifier, and metadata for tracking origin and position.
 ---
 
 #### ElementMetadata
+
 Metadata for a semantic element.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `PageNumber` | `*int` | `nil` | Page number (1-indexed) |
+| `PageNumber` | `*uint32` | `nil` | Page number (1-indexed) |
 | `Filename` | `*string` | `nil` | Source filename or document name |
 | `Coordinates` | `*string` | `nil` | Bounding box coordinates if available |
 | `ElementIndex` | `*int` | `nil` | Position index in the element sequence |
@@ -1384,6 +1467,7 @@ Metadata for a semantic element.
 ---
 
 #### EmailAttachment
+
 Email attachment representation.
 
 Contains metadata and optionally the content of an email attachment.
@@ -1401,6 +1485,7 @@ Contains metadata and optionally the content of an email attachment.
 ---
 
 #### EmailConfig
+
 Configuration for email extraction.
 
 | Field | Type | Default | Description |
@@ -1411,6 +1496,7 @@ Configuration for email extraction.
 ---
 
 #### EmailExtractionResult
+
 Email extraction result.
 
 Complete representation of an extracted email message (.eml or .msg)
@@ -1435,6 +1521,7 @@ including headers, body content, and attachments.
 ---
 
 #### EmailMetadata
+
 Email metadata extracted from .eml and .msg files.
 
 Includes sender/recipient information, message ID, and attachment list.
@@ -1453,6 +1540,7 @@ Includes sender/recipient information, message ID, and attachment list.
 ---
 
 #### EmbedRequest
+
 Embedding request for generating embeddings from text.
 
 | Field | Type | Default | Description |
@@ -1464,6 +1552,7 @@ Embedding request for generating embeddings from text.
 ---
 
 #### EmbedResponse
+
 Embedding response containing generated embeddings.
 
 | Field | Type | Default | Description |
@@ -1477,6 +1566,7 @@ Embedding response containing generated embeddings.
 ---
 
 #### EmbedTextParams
+
 Request parameters for embedding generation.
 
 | Field | Type | Default | Description |
@@ -1491,6 +1581,7 @@ Request parameters for embedding generation.
 ---
 
 #### EmbeddedFile
+
 Embedded file descriptor extracted from the PDF name tree.
 
 | Field | Type | Default | Description |
@@ -1503,6 +1594,7 @@ Embedded file descriptor extracted from the PDF name tree.
 ---
 
 #### EmbeddingBackend
+
 Trait for in-process embedding backend plugins.
 
 Async to match the convention used by `OcrBackend`,
@@ -1550,7 +1642,9 @@ or `tokio.runtime.Builder.new_current_thread()`) must use
 `block_in_place`.
 
 ##### Methods
+
 ###### Dimensions()
+
 Embedding vector dimension. Must be `> 0` and must match the length of
 every vector returned by `embed`.
 
@@ -1560,6 +1654,7 @@ every vector returned by `embed`.
 func (o *EmbeddingBackend) Dimensions() int
 ```
 ###### Embed()
+
 Embed a batch of texts, returning one vector per input in order.
 
 **Errors:**
@@ -1577,6 +1672,7 @@ func (o *EmbeddingBackend) Embed(texts []string) ([][]float32, error)
 ---
 
 #### EmbeddingConfig
+
 Embedding configuration for text chunks.
 
 Configures embedding generation using ONNX models via the vendored embedding engine.
@@ -1593,7 +1689,9 @@ Requires the `embeddings` feature to be enabled.
 | `MaxEmbedDurationSecs` | `*uint64` | `nil` | Maximum wall-clock duration (in seconds) for a single `embed()` call when using `EmbeddingModelType.Plugin`. Applies only to the in-process plugin path — protects against hung host-language backends (e.g. a Python callback deadlocked on the GIL, a model stuck on CUDA OOM retries, etc.). On timeout, the dispatcher returns `Plugin` instead of blocking forever. `nil` disables the timeout. The default (60 seconds) is conservative for common in-process inference; increase for large batches on slow hardware. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -1603,6 +1701,7 @@ func (o *EmbeddingConfig) Default() EmbeddingConfig
 ---
 
 #### EmbeddingPreset
+
 Preset configurations for common RAG use cases.
 
 Each preset combines chunk size, overlap, and embedding model
@@ -1626,6 +1725,7 @@ are safe to clone and pass across language boundaries.
 ---
 
 #### EpubMetadata
+
 EPUB metadata (Dublin Core extensions).
 
 | Field | Type | Default | Description |
@@ -1641,6 +1741,7 @@ EPUB metadata (Dublin Core extensions).
 ---
 
 #### ErrorMetadata
+
 Error metadata (for batch operations).
 
 | Field | Type | Default | Description |
@@ -1652,6 +1753,7 @@ Error metadata (for batch operations).
 ---
 
 #### ExcelMetadata
+
 Excel/spreadsheet format metadata.
 
 Identifies the document as a spreadsheet source via the `FormatMetadata.Excel`
@@ -1659,13 +1761,14 @@ discriminant. Sheet count and sheet names are stored inside this struct.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `SheetCount` | `*int` | `nil` | Number of sheets in the workbook. |
+| `SheetCount` | `*uint32` | `nil` | Number of sheets in the workbook. |
 | `SheetNames` | `*[]string` | `nil` | Names of all sheets in the workbook. |
 
 
 ---
 
 #### ExcelSheet
+
 Single Excel worksheet.
 
 Represents one sheet from an Excel workbook with its content
@@ -1684,6 +1787,7 @@ converted to Markdown format and dimensional statistics.
 ---
 
 #### ExcelWorkbook
+
 Excel workbook representation.
 
 Contains all sheets from an Excel file (.xlsx, .xls, etc.) with
@@ -1698,12 +1802,14 @@ extracted content and metadata.
 ---
 
 #### ExtractResponse
+
 Extraction response (list of results).
 
 
 ---
 
 #### ExtractStructuredParams
+
 Request parameters for LLM-based structured extraction.
 
 | Field | Type | Default | Description |
@@ -1721,6 +1827,7 @@ Request parameters for LLM-based structured extraction.
 ---
 
 #### ExtractedImage
+
 Extracted image from a document.
 
 Contains raw image data, metadata, and optional nested OCR results.
@@ -1731,8 +1838,8 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 |-------|------|---------|-------------|
 | `Data` | `[]byte` | — | Raw image data (PNG, JPEG, WebP, etc. bytes). Uses `bytes.Bytes` for cheap cloning of large buffers. |
 | `Format` | `string` | — | Image format (e.g., "jpeg", "png", "webp") Uses Cow<'static, str> to avoid allocation for static literals. |
-| `ImageIndex` | `int` | — | Zero-indexed position of this image in the document/page |
-| `PageNumber` | `*int` | `nil` | Page/slide number where image was found (1-indexed) |
+| `ImageIndex` | `uint32` | — | Zero-indexed position of this image in the document/page |
+| `PageNumber` | `*uint32` | `nil` | Page/slide number where image was found (1-indexed) |
 | `Width` | `*uint32` | `nil` | Image width in pixels |
 | `Height` | `*uint32` | `nil` | Image height in pixels |
 | `Colorspace` | `*string` | `nil` | Colorspace information (e.g., "RGB", "CMYK", "Gray") |
@@ -1750,6 +1857,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 ---
 
 #### ExtractedInlineImage
+
 Extracted inline image with metadata.
 
 | Field | Type | Default | Description |
@@ -1765,6 +1873,7 @@ Extracted inline image with metadata.
 ---
 
 #### ExtractionConfig
+
 Main extraction configuration.
 
 This struct contains all configuration options for the extraction process.
@@ -1776,7 +1885,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `EnableQualityProcessing` | `bool` | `true` | Enable quality post-processing |
 | `Ocr` | `*OcrConfig` | `nil` | OCR configuration (None = OCR disabled) |
 | `ForceOcr` | `bool` | `false` | Force OCR even for searchable PDFs |
-| `ForceOcrPages` | `*[]int` | `nil` | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent. |
+| `ForceOcrPages` | `*[]uint32` | `nil` | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent. |
 | `DisableOcr` | `bool` | `false` | Disable OCR entirely, even for images. When `true`, OCR is skipped for all document types. Images return metadata only (dimensions, format, EXIF) without text extraction. PDFs use only native text extraction without OCR fallback. Cannot be `true` simultaneously with `force_ocr`. *Added in v4.7.0.* |
 | `Chunking` | `*ChunkingConfig` | `nil` | Text chunking configuration (None = chunking disabled) |
 | `ContentFilter` | `*ContentFilterConfig` | `nil` | Content filtering configuration (None = use extractor defaults). Controls whether document "furniture" (headers, footers, watermarks, repeating text) is included in or stripped from extraction results. See `ContentFilterConfig` for per-field documentation. |
@@ -1794,7 +1903,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `ResultFormat` | `ResultFormat` | `ResultFormat.Unified` | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output). |
 | `SecurityLimits` | `*SecurityLimits` | `nil` | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `nil`, default limits are used. |
 | `OutputFormat` | `OutputFormat` | `OutputFormat.Plain` | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied. |
-| `Layout` | `*LayoutDetectionConfig` | `nil` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature. |
+| `Layout` | `*LayoutDetectionConfig` | `nil` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `UseLayoutForMarkdown` | `bool` | `false` | Run layout detection on the non-OCR PDF markdown path. When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Substantially improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection` feature. |
 | `IncludeDocumentStructure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `Acceleration` | `*AccelerationConfig` | `nil` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `nil`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
@@ -1808,13 +1917,16 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `CancelToken` | `*string` | `nil` | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
 func (o *ExtractionConfig) Default() ExtractionConfig
 ```
 ###### NeedsImageProcessing()
+
 Check if image processing is needed by examining OCR and image extraction settings.
 
 Returns `true` if either OCR is enabled or image extraction is configured,
@@ -1836,6 +1948,7 @@ func (o *ExtractionConfig) NeedsImageProcessing() bool
 ---
 
 #### ExtractionResult
+
 General extraction result used by the core extraction API.
 
 This is the main result type returned by all extraction functions.
@@ -1867,10 +1980,22 @@ This is the main result type returned by all extraction functions.
 | `FormattedContent` | `*string` | `nil` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
 | `OcrInternalDocument` | `*string` | `nil` | Structured hOCR document for the OCR+layout pipeline. When tesseract produces hOCR output, the parsed `InternalDocument` carries paragraph structure with bounding boxes and confidence scores. The layout classification step enriches these elements before final rendering. |
 
+##### Methods
+
+###### FromOcr()
+
+Convert from an OCR result.
+
+**Signature:**
+
+```go
+func (o *ExtractionResult) FromOcr(ocr OcrExtractionResult) ExtractionResult
+```
 
 ---
 
 #### FictionBookMetadata
+
 FictionBook (FB2) metadata.
 
 | Field | Type | Default | Description |
@@ -1883,6 +2008,7 @@ FictionBook (FB2) metadata.
 ---
 
 #### FileExtractionConfig
+
 Per-file extraction configuration overrides for batch processing.
 
 All fields are `Option<T>` — `nil` means "use the batch-level default."
@@ -1904,7 +2030,7 @@ cannot be overridden per file:
 | `EnableQualityProcessing` | `*bool` | `nil` | Override quality post-processing for this file. |
 | `Ocr` | `*OcrConfig` | `nil` | Override OCR configuration for this file (None in the Option = use batch default). |
 | `ForceOcr` | `*bool` | `nil` | Override force OCR for this file. |
-| `ForceOcrPages` | `*[]int` | `nil` | Override force OCR pages for this file (1-indexed page numbers). |
+| `ForceOcrPages` | `*[]uint32` | `nil` | Override force OCR pages for this file (1-indexed page numbers). |
 | `DisableOcr` | `*bool` | `nil` | Override disable OCR for this file. |
 | `Chunking` | `*ChunkingConfig` | `nil` | Override chunking configuration for this file. |
 | `ContentFilter` | `*ContentFilterConfig` | `nil` | Override content filtering configuration for this file. |
@@ -1928,6 +2054,7 @@ cannot be overridden per file:
 ---
 
 #### Footnote
+
 Footnote in Djot.
 
 | Field | Type | Default | Description |
@@ -1939,6 +2066,7 @@ Footnote in Djot.
 ---
 
 #### FormattedBlock
+
 Block-level element in a Djot document.
 
 Represents structural elements like headings, paragraphs, lists, code blocks, etc.
@@ -1957,6 +2085,7 @@ Represents structural elements like headings, paragraphs, lists, code blocks, et
 ---
 
 #### GridCell
+
 Individual grid cell with position and span metadata.
 
 | Field | Type | Default | Description |
@@ -1973,6 +2102,7 @@ Individual grid cell with position and span metadata.
 ---
 
 #### HeaderMetadata
+
 Header/heading element metadata.
 
 | Field | Type | Default | Description |
@@ -1980,13 +2110,14 @@ Header/heading element metadata.
 | `Level` | `uint8` | — | Header level: 1 (h1) through 6 (h6) |
 | `Text` | `string` | — | Normalized text content of the header |
 | `Id` | `*string` | `nil` | HTML id attribute if present |
-| `Depth` | `int` | — | Document tree depth at the header element |
-| `HtmlOffset` | `int` | — | Byte offset in original HTML document |
+| `Depth` | `uint32` | — | Document tree depth at the header element |
+| `HtmlOffset` | `uint32` | — | Byte offset in original HTML document |
 
 
 ---
 
 #### HeadingContext
+
 Heading context for a chunk within a Markdown document.
 
 Contains the heading hierarchy from document root to this chunk's section.
@@ -1999,6 +2130,7 @@ Contains the heading hierarchy from document root to this chunk's section.
 ---
 
 #### HeadingLevel
+
 A single heading in the hierarchy.
 
 | Field | Type | Default | Description |
@@ -2010,6 +2142,7 @@ A single heading in the hierarchy.
 ---
 
 #### HierarchicalBlock
+
 A text block with hierarchy level assignment.
 
 Represents a block of text with semantic heading information extracted from
@@ -2026,6 +2159,7 @@ font size clustering and hierarchical analysis.
 ---
 
 #### HierarchyConfig
+
 Hierarchy extraction configuration for PDF text structure analysis.
 
 Enables extraction of document hierarchy levels (H1-H6) based on font size
@@ -2040,7 +2174,9 @@ included in page content.
 | `OcrCoverageThreshold` | `*float32` | `nil` | OCR coverage threshold for smart OCR triggering (0.0-1.0) Determines when OCR should be triggered based on text block coverage. OCR is triggered when text blocks cover less than this fraction of the page. Default: 0.5 (trigger OCR if less than 50% of page has text) |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2050,6 +2186,7 @@ func (o *HierarchyConfig) Default() HierarchyConfig
 ---
 
 #### HtmlExtractionResult
+
 Result of HTML extraction with optional images and warnings.
 
 | Field | Type | Default | Description |
@@ -2062,6 +2199,7 @@ Result of HTML extraction with optional images and warnings.
 ---
 
 #### HtmlMetadata
+
 HTML metadata extracted from HTML documents.
 
 Includes document-level metadata, Open Graph data, Twitter Card metadata,
@@ -2086,7 +2224,9 @@ and extracted structural elements (headers, links, images, structured data).
 | `StructuredData` | `[]StructuredData` | `nil` | Extracted structured data blocks |
 
 ##### Methods
+
 ###### From()
+
 **Signature:**
 
 ```go
@@ -2096,6 +2236,7 @@ func (o *HtmlMetadata) From(metadata HtmlMetadata) HtmlMetadata
 ---
 
 #### HtmlOutputConfig
+
 Configuration for styled HTML output.
 
 When set on `ExtractionConfig.html_output` alongside
@@ -2112,7 +2253,9 @@ the plain comrak-based renderer.
 | `EmbedCss` | `bool` | `true` | When `true` (default), write the resolved CSS into a `<style>` block immediately after the opening `<div class="{prefix}doc">`. Set to `false` to emit only the structural markup and wire up your own stylesheet targeting the `kb-*` class names. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2122,6 +2265,7 @@ func (o *HtmlOutputConfig) Default() HtmlOutputConfig
 ---
 
 #### HwpImage
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Name` | `string` | — | The name |
@@ -2131,66 +2275,78 @@ func (o *HtmlOutputConfig) Default() HtmlOutputConfig
 ---
 
 #### HwpxExtractor
+
 Extractor for Hangul Word Processor XML (.hwpx) files.
 
 Supports HWPX (Open HWPML), the ZIP-based XML successor to the binary HWP 5.0 format.
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) Default() HwpxExtractor
 ```
 ###### Name()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) Name() string
 ```
 ###### Version()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) Version() string
 ```
 ###### Initialize()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) Initialize() error
 ```
 ###### Shutdown()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) Shutdown() error
 ```
 ###### Description()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) Description() string
 ```
 ###### Author()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) Author() string
 ```
 ###### ExtractBytes()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) ExtractBytes(content []byte, mimeType string, config ExtractionConfig) (string, error)
 ```
 ###### SupportedMimeTypes()
+
 **Signature:**
 
 ```go
 func (o *HwpxExtractor) SupportedMimeTypes() []string
 ```
 ###### Priority()
+
 **Signature:**
 
 ```go
@@ -2200,6 +2356,7 @@ func (o *HwpxExtractor) Priority() int32
 ---
 
 #### ImageExtractionConfig
+
 Image extraction configuration.
 
 | Field | Type | Default | Description |
@@ -2215,7 +2372,9 @@ Image extraction configuration.
 | `Classify` | `bool` | `true` | When `true` (default), extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2225,6 +2384,7 @@ func (o *ImageExtractionConfig) Default() ImageExtractionConfig
 ---
 
 #### ImageMetadata
+
 Image metadata extracted from image files.
 
 Includes dimensions, format, and EXIF data.
@@ -2240,6 +2400,7 @@ Includes dimensions, format, and EXIF data.
 ---
 
 #### ImageMetadataType
+
 Image element metadata.
 
 | Field | Type | Default | Description |
@@ -2255,6 +2416,7 @@ Image element metadata.
 ---
 
 #### ImageOcrResult
+
 Result of OCR extraction from an image with optional page tracking.
 
 | Field | Type | Default | Description |
@@ -2267,6 +2429,7 @@ Result of OCR extraction from an image with optional page tracking.
 ---
 
 #### ImagePreprocessingConfig
+
 Image preprocessing configuration for OCR.
 
 These settings control how images are preprocessed before OCR to improve
@@ -2284,7 +2447,9 @@ for different document types.
 | `InvertColors` | `bool` | `false` | Invert colors (white text on black → black on white). |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2294,6 +2459,7 @@ func (o *ImagePreprocessingConfig) Default() ImagePreprocessingConfig
 ---
 
 #### ImagePreprocessingMetadata
+
 Image preprocessing metadata.
 
 Tracks the transformations applied to an image during OCR preprocessing,
@@ -2318,6 +2484,7 @@ including DPI normalization, resizing, and resampling.
 ---
 
 #### InfoResponse
+
 Server information response.
 
 | Field | Type | Default | Description |
@@ -2329,6 +2496,7 @@ Server information response.
 ---
 
 #### InlineElement
+
 Inline element within a block.
 
 Represents text with formatting, links, images, etc.
@@ -2344,6 +2512,7 @@ Represents text with formatting, links, images, etc.
 ---
 
 #### JatsMetadata
+
 JATS (Journal Article Tag Suite) metadata.
 
 | Field | Type | Default | Description |
@@ -2357,6 +2526,7 @@ JATS (Journal Article Tag Suite) metadata.
 ---
 
 #### Keyword
+
 Extracted keyword with metadata.
 
 | Field | Type | Default | Description |
@@ -2370,6 +2540,7 @@ Extracted keyword with metadata.
 ---
 
 #### KeywordConfig
+
 Keyword extraction configuration.
 
 | Field | Type | Default | Description |
@@ -2383,7 +2554,9 @@ Keyword extraction configuration.
 | `RakeParams` | `*RakeParams` | `nil` | RAKE-specific tuning parameters. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2393,6 +2566,7 @@ func (o *KeywordConfig) Default() KeywordConfig
 ---
 
 #### LanguageDetectionConfig
+
 Language detection configuration.
 
 | Field | Type | Default | Description |
@@ -2402,7 +2576,9 @@ Language detection configuration.
 | `DetectMultiple` | `bool` | `false` | Detect multiple languages in the document |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2412,6 +2588,7 @@ func (o *LanguageDetectionConfig) Default() LanguageDetectionConfig
 ---
 
 #### LayoutDetection
+
 A single layout detection result.
 
 | Field | Type | Default | Description |
@@ -2424,6 +2601,7 @@ A single layout detection result.
 ---
 
 #### LayoutDetectionConfig
+
 Layout detection configuration.
 
 Controls layout detection behavior in the extraction pipeline.
@@ -2438,7 +2616,9 @@ is enabled for PDF extraction.
 | `Acceleration` | `*AccelerationConfig` | `nil` | Hardware acceleration for ONNX models (layout detection + table structure). When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for inference. Defaults to `nil` (auto-select per platform). |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2448,6 +2628,7 @@ func (o *LayoutDetectionConfig) Default() LayoutDetectionConfig
 ---
 
 #### LayoutRegion
+
 A detected layout region on a page.
 
 When layout detection is enabled, each page may have layout regions
@@ -2465,6 +2646,7 @@ with confidence scores and spatial positions.
 ---
 
 #### LinkMetadata
+
 Link element metadata.
 
 | Field | Type | Default | Description |
@@ -2480,6 +2662,7 @@ Link element metadata.
 ---
 
 #### LlmConfig
+
 Configuration for an LLM provider/model via liter-llm.
 
 Each feature (VLM OCR, VLM embeddings, structured extraction) carries
@@ -2499,6 +2682,7 @@ its own `LlmConfig`, allowing different providers per feature.
 ---
 
 #### LlmUsage
+
 Token usage and cost data for a single LLM call made during extraction.
 
 Populated when VLM OCR, structured extraction, or LLM-based embeddings
@@ -2519,6 +2703,7 @@ within one extraction (e.g. VLM OCR + structured extraction).
 ---
 
 #### ManifestEntryResponse
+
 Model manifest entry for cache management.
 
 | Field | Type | Default | Description |
@@ -2532,6 +2717,7 @@ Model manifest entry for cache management.
 ---
 
 #### ManifestResponse
+
 Model manifest response.
 
 | Field | Type | Default | Description |
@@ -2545,6 +2731,7 @@ Model manifest response.
 ---
 
 #### MergedChunk
+
 A merged chunk produced by `merge_segments`.
 
 | Field | Type | Default | Description |
@@ -2557,6 +2744,7 @@ A merged chunk produced by `merge_segments`.
 ---
 
 #### Metadata
+
 Extraction result metadata.
 
 Contains common fields applicable to all formats, format-specific metadata
@@ -2588,7 +2776,9 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `Additional` | `map[string]interface{}` | `nil` | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation. |
 
 ##### Methods
+
 ###### IsEmpty()
+
 Returns `true` when no metadata fields, format-specific metadata, or
 additional postprocessor fields are populated.
 
@@ -2601,6 +2791,7 @@ func (o *Metadata) IsEmpty() bool
 ---
 
 #### ModelPaths
+
 Combined paths to all models needed for OCR (backward compatibility).
 
 | Field | Type | Default | Description |
@@ -2614,6 +2805,7 @@ Combined paths to all models needed for OCR (backward compatibility).
 ---
 
 #### OcrBackend
+
 Trait for OCR backend plugins.
 
 Implement this trait to add custom OCR capabilities. OCR backends can be:
@@ -2626,7 +2818,9 @@ Implement this trait to add custom OCR capabilities. OCR backends can be:
 OCR backends must be thread-safe (`Send + Sync`) to support concurrent processing.
 
 ##### Methods
+
 ###### ProcessImage()
+
 Process an image and extract text via OCR.
 
 **Returns:**
@@ -2645,6 +2839,7 @@ An `ExtractionResult` containing the extracted text and metadata.
 func (o *OcrBackend) ProcessImage(imageBytes []byte, config OcrConfig) (ExtractionResult, error)
 ```
 ###### ProcessImageFile()
+
 Process a file and extract text via OCR.
 
 Default implementation reads the file and calls `process_image`.
@@ -2660,6 +2855,7 @@ Same as `process_image`, plus file I/O errors.
 func (o *OcrBackend) ProcessImageFile(path string, config OcrConfig) (ExtractionResult, error)
 ```
 ###### SupportsLanguage()
+
 Check if this backend supports a given language code.
 
 **Returns:**
@@ -2672,6 +2868,7 @@ Check if this backend supports a given language code.
 func (o *OcrBackend) SupportsLanguage(lang string) bool
 ```
 ###### BackendType()
+
 Get the backend type identifier.
 
 **Returns:**
@@ -2684,6 +2881,7 @@ The backend type enum value.
 func (o *OcrBackend) BackendType() OcrBackendType
 ```
 ###### SupportedLanguages()
+
 Optional: Get a list of all supported languages.
 
 Defaults to empty list. Override to provide comprehensive language support info.
@@ -2694,6 +2892,7 @@ Defaults to empty list. Override to provide comprehensive language support info.
 func (o *OcrBackend) SupportedLanguages() []string
 ```
 ###### SupportsTableDetection()
+
 Optional: Check if the backend supports table detection.
 
 Defaults to `false`. Override if your backend can detect and extract tables.
@@ -2704,6 +2903,7 @@ Defaults to `false`. Override if your backend can detect and extract tables.
 func (o *OcrBackend) SupportsTableDetection() bool
 ```
 ###### SupportsDocumentProcessing()
+
 Check if the backend supports direct document-level processing (e.g. for PDFs).
 
 Defaults to `false`. Override if the backend has optimized document processing.
@@ -2714,6 +2914,7 @@ Defaults to `false`. Override if the backend has optimized document processing.
 func (o *OcrBackend) SupportsDocumentProcessing() bool
 ```
 ###### ProcessDocument()
+
 Process a document file directly via OCR.
 
 Only called if `supports_document_processing` returns `true`.
@@ -2727,6 +2928,7 @@ func (o *OcrBackend) ProcessDocument(path string, config OcrConfig) (ExtractionR
 ---
 
 #### OcrCacheStats
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `TotalFiles` | `int` | — | Total files |
@@ -2736,6 +2938,7 @@ func (o *OcrBackend) ProcessDocument(path string, config OcrConfig) (ExtractionR
 ---
 
 #### OcrConfidence
+
 Confidence scores for an OCR element.
 
 Separates detection confidence (how confident that text exists at this location)
@@ -2750,6 +2953,7 @@ from recognition confidence (how confident about the actual text content).
 ---
 
 #### OcrConfig
+
 OCR configuration.
 
 | Field | Type | Default | Description |
@@ -2770,7 +2974,9 @@ OCR configuration.
 | `TessdataBytes` | `*map[string][]byte` | `nil` | Caller-supplied Tesseract `traineddata` bytes per language code. Primary use case is the WASM build, which has no filesystem and cannot download tessdata at runtime. Native builds typically rely on `TessdataManager` and ignore this field. When present, the WASM Tesseract backend prefers these bytes over its compile-time-bundled English data. Skipped by serde to keep config files small — supply via the typed API at runtime. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2780,6 +2986,7 @@ func (o *OcrConfig) Default() OcrConfig
 ---
 
 #### OcrElement
+
 A unified OCR element representing detected text with full metadata.
 
 This is the primary type for structured OCR output, preserving all information
@@ -2792,7 +2999,7 @@ from both Tesseract and PaddleOCR backends.
 | `Confidence` | `OcrConfidence` | — | Confidence scores for detection and recognition. |
 | `Level` | `OcrElementLevel` | `OcrElementLevel.Line` | Hierarchical level (word, line, block, page). |
 | `Rotation` | `*OcrRotation` | `nil` | Rotation information (if detected). |
-| `PageNumber` | `int` | — | Page number (1-indexed). |
+| `PageNumber` | `uint32` | — | Page number (1-indexed). |
 | `ParentId` | `*string` | `nil` | Parent element ID for hierarchical relationships. Only used for Tesseract output which has word -> line -> block hierarchy. |
 | `BackendMetadata` | `map[string]interface{}` | `nil` | Backend-specific metadata that doesn't fit the unified schema. |
 
@@ -2800,6 +3007,7 @@ from both Tesseract and PaddleOCR backends.
 ---
 
 #### OcrElementConfig
+
 Configuration for OCR element extraction.
 
 Controls how OCR elements are extracted and filtered.
@@ -2815,6 +3023,7 @@ Controls how OCR elements are extracted and filtered.
 ---
 
 #### OcrExtractionResult
+
 OCR extraction result.
 
 Result of performing OCR on an image or scanned document,
@@ -2833,6 +3042,7 @@ including recognized text and detected tables.
 ---
 
 #### OcrMetadata
+
 OCR processing metadata.
 
 Captures information about OCR processing configuration and results.
@@ -2842,14 +3052,15 @@ Captures information about OCR processing configuration and results.
 | `Language` | `string` | — | OCR language code(s) used |
 | `Psm` | `int32` | — | Tesseract Page Segmentation Mode (PSM) |
 | `OutputFormat` | `string` | — | Output format (e.g., "text", "hocr") |
-| `TableCount` | `int` | — | Number of tables detected |
-| `TableRows` | `*int` | `nil` | Table rows |
-| `TableCols` | `*int` | `nil` | Table cols |
+| `TableCount` | `uint32` | — | Number of tables detected |
+| `TableRows` | `*uint32` | `nil` | Table rows |
+| `TableCols` | `*uint32` | `nil` | Table cols |
 
 
 ---
 
 #### OcrPipelineConfig
+
 Multi-backend OCR pipeline with quality-based fallback.
 
 Backends are tried in priority order (highest first). After each backend
@@ -2865,6 +3076,7 @@ the result is accepted. Otherwise the next backend is tried.
 ---
 
 #### OcrPipelineStage
+
 A single backend stage in the OCR pipeline.
 
 | Field | Type | Default | Description |
@@ -2880,6 +3092,7 @@ A single backend stage in the OCR pipeline.
 ---
 
 #### OcrQualityThresholds
+
 Quality thresholds for OCR fallback decisions and pipeline quality gating.
 
 All fields default to the values that match the previous hardcoded behavior,
@@ -2905,7 +3118,9 @@ so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 | `PipelineMinQuality` | `float64` | `0.5` | Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted. If the result from a backend scores below this, try the next backend. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -2915,6 +3130,7 @@ func (o *OcrQualityThresholds) Default() OcrQualityThresholds
 ---
 
 #### OcrRotation
+
 Rotation information for an OCR element.
 
 | Field | Type | Default | Description |
@@ -2926,6 +3142,7 @@ Rotation information for an OCR element.
 ---
 
 #### OcrTable
+
 Table detected via OCR.
 
 Represents a table structure recognized during OCR processing.
@@ -2934,13 +3151,14 @@ Represents a table structure recognized during OCR processing.
 |-------|------|---------|-------------|
 | `Cells` | `[][]string` | — | Table cells as a 2D vector (rows × columns) |
 | `Markdown` | `string` | — | Markdown representation of the table |
-| `PageNumber` | `int` | — | Page number where the table was found (1-indexed) |
+| `PageNumber` | `uint32` | — | Page number where the table was found (1-indexed) |
 | `BoundingBox` | `*OcrTableBoundingBox` | `nil` | Bounding box of the table in pixel coordinates (from OCR word positions). |
 
 
 ---
 
 #### OcrTableBoundingBox
+
 Bounding box for an OCR-detected table in pixel coordinates.
 
 | Field | Type | Default | Description |
@@ -2954,6 +3172,7 @@ Bounding box for an OCR-detected table in pixel coordinates.
 ---
 
 #### OdtProperties
+
 OpenDocument metadata from meta.xml
 
 Contains metadata fields defined by the OASIS OpenDocument Format standard.
@@ -2984,6 +3203,7 @@ Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
 ---
 
 #### OpenWebDocumentResponse
+
 OpenWebUI "External" engine response format.
 
 Returned by `PUT /process` for the OpenWebUI external document loader.
@@ -2997,6 +3217,7 @@ Returned by `PUT /process` for the OpenWebUI external document loader.
 ---
 
 #### OrientationResult
+
 Document orientation detection result.
 
 | Field | Type | Default | Description |
@@ -3008,6 +3229,7 @@ Document orientation detection result.
 ---
 
 #### PaddleOcrConfig
+
 Configuration for PaddleOCR backend.
 
 Configures PaddleOCR text detection and recognition with multi-language support.
@@ -3029,7 +3251,9 @@ Uses a builder pattern for convenient configuration.
 | `ModelTier` | `string` | — | Model tier controlling detection/recognition model size and accuracy trade-off. - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents |
 
 ##### Methods
+
 ###### WithCacheDir()
+
 Sets a custom cache directory for model files.
 
 **Signature:**
@@ -3038,6 +3262,7 @@ Sets a custom cache directory for model files.
 func (o *PaddleOcrConfig) WithCacheDir(path string) PaddleOcrConfig
 ```
 ###### WithTableDetection()
+
 Enables or disables table structure detection.
 
 **Signature:**
@@ -3046,6 +3271,7 @@ Enables or disables table structure detection.
 func (o *PaddleOcrConfig) WithTableDetection(enable bool) PaddleOcrConfig
 ```
 ###### WithAngleCls()
+
 Enables or disables angle classification for rotated text.
 
 **Signature:**
@@ -3054,6 +3280,7 @@ Enables or disables angle classification for rotated text.
 func (o *PaddleOcrConfig) WithAngleCls(enable bool) PaddleOcrConfig
 ```
 ###### WithDetDbThresh()
+
 Sets the database threshold for text detection.
 
 **Signature:**
@@ -3062,6 +3289,7 @@ Sets the database threshold for text detection.
 func (o *PaddleOcrConfig) WithDetDbThresh(threshold float32) PaddleOcrConfig
 ```
 ###### WithDetDbBoxThresh()
+
 Sets the box threshold for text bounding box refinement.
 
 **Signature:**
@@ -3070,6 +3298,7 @@ Sets the box threshold for text bounding box refinement.
 func (o *PaddleOcrConfig) WithDetDbBoxThresh(threshold float32) PaddleOcrConfig
 ```
 ###### WithDetDbUnclipRatio()
+
 Sets the unclip ratio for expanding text bounding boxes.
 
 **Signature:**
@@ -3078,6 +3307,7 @@ Sets the unclip ratio for expanding text bounding boxes.
 func (o *PaddleOcrConfig) WithDetDbUnclipRatio(ratio float32) PaddleOcrConfig
 ```
 ###### WithDetLimitSideLen()
+
 Sets the maximum side length for detection images.
 
 **Signature:**
@@ -3086,6 +3316,7 @@ Sets the maximum side length for detection images.
 func (o *PaddleOcrConfig) WithDetLimitSideLen(length uint32) PaddleOcrConfig
 ```
 ###### WithRecBatchNum()
+
 Sets the batch size for recognition inference.
 
 **Signature:**
@@ -3094,6 +3325,7 @@ Sets the batch size for recognition inference.
 func (o *PaddleOcrConfig) WithRecBatchNum(batchSize uint32) PaddleOcrConfig
 ```
 ###### WithDropScore()
+
 Sets the minimum recognition confidence threshold.
 
 **Signature:**
@@ -3102,6 +3334,7 @@ Sets the minimum recognition confidence threshold.
 func (o *PaddleOcrConfig) WithDropScore(score float32) PaddleOcrConfig
 ```
 ###### WithPadding()
+
 Sets padding in pixels added around images before detection.
 
 **Signature:**
@@ -3110,6 +3343,7 @@ Sets padding in pixels added around images before detection.
 func (o *PaddleOcrConfig) WithPadding(padding uint32) PaddleOcrConfig
 ```
 ###### WithModelTier()
+
 Sets the model tier controlling detection/recognition model size.
 
 **Signature:**
@@ -3118,6 +3352,7 @@ Sets the model tier controlling detection/recognition model size.
 func (o *PaddleOcrConfig) WithModelTier(tier string) PaddleOcrConfig
 ```
 ###### Default()
+
 Creates a default configuration with English language support.
 
 **Signature:**
@@ -3129,6 +3364,7 @@ func (o *PaddleOcrConfig) Default() PaddleOcrConfig
 ---
 
 #### PageBoundary
+
 Byte offset boundary for a page.
 
 Tracks where a specific page's content starts and ends in the main content string,
@@ -3139,12 +3375,13 @@ at valid UTF-8 character boundaries when using standard String methods (push_str
 |-------|------|---------|-------------|
 | `ByteStart` | `int` | — | Byte offset where this page starts in the content string (UTF-8 valid boundary, inclusive) |
 | `ByteEnd` | `int` | — | Byte offset where this page ends in the content string (UTF-8 valid boundary, exclusive) |
-| `PageNumber` | `int` | — | Page number (1-indexed) |
+| `PageNumber` | `uint32` | — | Page number (1-indexed) |
 
 
 ---
 
 #### PageConfig
+
 Page extraction and tracking configuration.
 
 Controls how pages are extracted, tracked, and represented in the extraction results.
@@ -3164,7 +3401,9 @@ when page boundaries are available and chunking is configured.
 "` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -3174,6 +3413,7 @@ func (o *PageConfig) Default() PageConfig
 ---
 
 #### PageContent
+
 Content for a single page/slide.
 
 When page extraction is enabled, documents are split into per-page content
@@ -3191,10 +3431,10 @@ by avoiding redundant copies during serialization.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `PageNumber` | `int` | — | Page number (1-indexed) |
+| `PageNumber` | `uint32` | — | Page number (1-indexed) |
 | `Content` | `string` | — | Text content for this page |
 | `Tables` | `[]Table` | — | Tables found on this page (uses Arc for memory efficiency) Serializes as Vec<Table> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
-| `Images` | `[]ExtractedImage` | — | Images found on this page (uses Arc for memory efficiency) Serializes as Vec<ExtractedImage> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
+| `ImageIndices` | `[]uint32` | — | Indices into `ExtractionResult.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
 | `Hierarchy` | `*PageHierarchy` | `nil` | Hierarchy information for the page (when hierarchy extraction is enabled) Contains text hierarchy levels (H1-H6) extracted from the page content. |
 | `IsBlank` | `*bool` | `nil` | Whether this page is blank (no meaningful text content) Determined during extraction based on text content analysis. A page is blank if it has fewer than 3 non-whitespace characters and contains no tables or images. |
 | `LayoutRegions` | `*[]LayoutRegion` | `nil` | Layout detection regions for this page (when layout detection is enabled). Contains detected layout regions with class, confidence, bounding box, and area fraction. Only populated when layout detection is configured. |
@@ -3203,6 +3443,7 @@ by avoiding redundant copies during serialization.
 ---
 
 #### PageHierarchy
+
 Page hierarchy structure containing heading levels and block information.
 
 Used when PDF text hierarchy extraction is enabled. Contains hierarchical
@@ -3210,13 +3451,14 @@ blocks with heading levels (H1-H6) for semantic document structure.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `BlockCount` | `int` | — | Number of hierarchy blocks on this page |
+| `BlockCount` | `uint32` | — | Number of hierarchy blocks on this page |
 | `Blocks` | `[]HierarchicalBlock` | — | Hierarchical blocks with heading levels |
 
 
 ---
 
 #### PageInfo
+
 Metadata for individual page/slide/sheet.
 
 Captures per-page information including dimensions, content counts,
@@ -3224,11 +3466,11 @@ and visibility state (for presentations).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Number` | `int` | — | Page number (1-indexed) |
+| `Number` | `uint32` | — | Page number (1-indexed) |
 | `Title` | `*string` | `nil` | Page title (usually for presentations) |
 | `Dimensions` | `*[]float64` | `nil` | Dimensions in points (PDF) or pixels (images): (width, height) |
-| `ImageCount` | `*int` | `nil` | Number of images on this page |
-| `TableCount` | `*int` | `nil` | Number of tables on this page |
+| `ImageCount` | `*uint32` | `nil` | Number of images on this page |
+| `TableCount` | `*uint32` | `nil` | Number of tables on this page |
 | `Hidden` | `*bool` | `nil` | Whether this page is hidden (e.g., in presentations) |
 | `IsBlank` | `*bool` | `nil` | Whether this page is blank (no meaningful text, no images, no tables) A page is considered blank if it has fewer than 3 non-whitespace characters and contains no tables or images. This is useful for filtering out empty pages in scanned documents or PDFs with blank separator pages. |
 | `HasVectorGraphics` | `bool` | — | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `nil` for other document types. |
@@ -3237,6 +3479,7 @@ and visibility state (for presentations).
 ---
 
 #### PageMarginsPoints
+
 Page margins converted to points (1/72 inch).
 
 | Field | Type | Default | Description |
@@ -3253,6 +3496,7 @@ Page margins converted to points (1/72 inch).
 ---
 
 #### PageStructure
+
 Unified page structure for documents.
 
 Supports different page types (PDF pages, PPTX slides, Excel sheets)
@@ -3260,7 +3504,7 @@ with character offset boundaries for chunk-to-page mapping.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `TotalCount` | `int` | — | Total number of pages/slides/sheets |
+| `TotalCount` | `uint32` | — | Total number of pages/slides/sheets |
 | `UnitType` | `PageUnitType` | — | Type of paginated unit |
 | `Boundaries` | `*[]PageBoundary` | `nil` | Character offset boundaries for each page Maps character ranges in the extracted content to page numbers. Used for chunk page range calculation. |
 | `Pages` | `*[]PageInfo` | `nil` | Detailed per-page metadata (optional, only when needed) |
@@ -3269,19 +3513,21 @@ with character offset boundaries for chunk-to-page mapping.
 ---
 
 #### PdfAnnotation
+
 A PDF annotation extracted from a document page.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `AnnotationType` | `PdfAnnotationType` | — | The type of annotation. |
 | `Content` | `*string` | `nil` | Text content of the annotation (e.g., comment text, link URL). |
-| `PageNumber` | `int` | — | Page number where the annotation appears (1-indexed). |
+| `PageNumber` | `uint32` | — | Page number where the annotation appears (1-indexed). |
 | `BoundingBox` | `*string` | `nil` | Bounding box of the annotation on the page. |
 
 
 ---
 
 #### PdfConfig
+
 PDF-specific configuration.
 
 | Field | Type | Default | Description |
@@ -3295,9 +3541,12 @@ PDF-specific configuration.
 | `TopMarginFraction` | `*float32` | `nil` | Top margin fraction (0.0–1.0) of page height to exclude headers/running heads. Default: 0.06 (6%) |
 | `BottomMarginFraction` | `*float32` | `nil` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `AllowSingleColumnTables` | `bool` | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
+| `OcrInlineImages` | `bool` | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `nil` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -3307,6 +3556,7 @@ func (o *PdfConfig) Default() PdfConfig
 ---
 
 #### PdfMetadata
+
 PDF-specific metadata.
 
 Contains metadata fields specific to PDF documents that are not in the common
@@ -3320,12 +3570,13 @@ are at the `Metadata` level.
 | `IsEncrypted` | `*bool` | `nil` | Whether the PDF is encrypted/password-protected |
 | `Width` | `*int64` | `nil` | First page width in points (1/72 inch) |
 | `Height` | `*int64` | `nil` | First page height in points (1/72 inch) |
-| `PageCount` | `*int` | `nil` | Total number of pages in the PDF document |
+| `PageCount` | `*uint32` | `nil` | Total number of pages in the PDF document |
 
 
 ---
 
 #### Plugin
+
 Base trait that all plugins must implement.
 
 This trait provides common functionality for plugin lifecycle management,
@@ -3336,7 +3587,9 @@ identification, and metadata.
 All plugins must be `Send + Sync` to support concurrent usage across threads.
 
 ##### Methods
+
 ###### Name()
+
 Returns the unique name/identifier for this plugin.
 
 The name should be:
@@ -3350,6 +3603,7 @@ The name should be:
 func (o *Plugin) Name() string
 ```
 ###### Version()
+
 Returns the semantic version of this plugin.
 
 Should follow semver format: `MAJOR.MINOR.PATCH`
@@ -3362,6 +3616,7 @@ Defaults to the kreuzberg crate version.
 func (o *Plugin) Version() string
 ```
 ###### Initialize()
+
 Initialize the plugin.
 
 Called once when the plugin is registered. Use this to:
@@ -3388,6 +3643,7 @@ Defaults to a no-op for stateless plugins.
 func (o *Plugin) Initialize() error
 ```
 ###### Shutdown()
+
 Shutdown the plugin.
 
 Called when the plugin is being unregistered or the application is shutting down.
@@ -3414,6 +3670,7 @@ Defaults to a no-op for stateless plugins.
 func (o *Plugin) Shutdown() error
 ```
 ###### Description()
+
 Optional plugin description for debugging and logging.
 
 Defaults to empty string if not overridden.
@@ -3424,6 +3681,7 @@ Defaults to empty string if not overridden.
 func (o *Plugin) Description() string
 ```
 ###### Author()
+
 Optional plugin author information.
 
 Defaults to empty string if not overridden.
@@ -3437,6 +3695,7 @@ func (o *Plugin) Author() string
 ---
 
 #### PostProcessor
+
 Trait for post-processor plugins.
 
 Post-processors transform or enrich extraction results after the initial
@@ -3466,7 +3725,9 @@ and execution continues. To make errors fatal, return an error from `process()`.
 Post-processors must be thread-safe (`Send + Sync`).
 
 ##### Methods
+
 ###### Process()
+
 Process an extraction result.
 
 Transform or enrich the extraction result. Can modify:
@@ -3514,6 +3775,7 @@ async fn process(&self, result: &mut ExtractionResult, config: &ExtractionConfig
 func (o *PostProcessor) Process(result ExtractionResult, config ExtractionConfig) error
 ```
 ###### ProcessingStage()
+
 Get the processing stage for this post-processor.
 
 Determines when this processor runs in the pipeline.
@@ -3528,6 +3790,7 @@ The `ProcessingStage` (Early, Middle, or Late).
 func (o *PostProcessor) ProcessingStage() ProcessingStage
 ```
 ###### ShouldProcess()
+
 Optional: Check if this processor should run for a given result.
 
 Allows conditional processing based on MIME type, metadata, or content.
@@ -3543,6 +3806,7 @@ Defaults to `true` (always run).
 func (o *PostProcessor) ShouldProcess(result ExtractionResult, config ExtractionConfig) bool
 ```
 ###### EstimatedDurationMs()
+
 Optional: Estimate processing time in milliseconds.
 
 Used for logging and debugging. Defaults to 0 (unknown).
@@ -3557,6 +3821,7 @@ Estimated processing time in milliseconds.
 func (o *PostProcessor) EstimatedDurationMs(result ExtractionResult) uint64
 ```
 ###### Priority()
+
 Execution priority within the processing stage.
 
 Higher values run first within the same `ProcessingStage`. Defaults to 50.
@@ -3572,6 +3837,7 @@ func (o *PostProcessor) Priority() int32
 ---
 
 #### PostProcessorConfig
+
 Post-processor configuration.
 
 | Field | Type | Default | Description |
@@ -3583,7 +3849,9 @@ Post-processor configuration.
 | `DisabledSet` | `*string` | `nil` | Pre-computed AHashSet for O(1) disabled processor lookup |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -3593,6 +3861,7 @@ func (o *PostProcessorConfig) Default() PostProcessorConfig
 ---
 
 #### PptxAppProperties
+
 Application properties from docProps/app.xml for PPTX
 
 Contains PowerPoint-specific document metadata.
@@ -3619,6 +3888,7 @@ Contains PowerPoint-specific document metadata.
 ---
 
 #### PptxExtractionResult
+
 PowerPoint (PPTX) extraction result.
 
 Contains extracted slide content, metadata, and embedded images/tables.
@@ -3641,21 +3911,23 @@ Contains extracted slide content, metadata, and embedded images/tables.
 ---
 
 #### PptxMetadata
+
 PowerPoint presentation metadata.
 
 Extracted from PPTX files containing slide counts and presentation details.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `SlideCount` | `int` | — | Total number of slides in the presentation |
+| `SlideCount` | `uint32` | — | Total number of slides in the presentation |
 | `SlideNames` | `[]string` | `nil` | Names of slides (if available) |
-| `ImageCount` | `*int` | `nil` | Number of embedded images |
-| `TableCount` | `*int` | `nil` | Number of tables |
+| `ImageCount` | `*uint32` | `nil` | Number of embedded images |
+| `TableCount` | `*uint32` | `nil` | Number of tables |
 
 
 ---
 
 #### ProcessingWarning
+
 A non-fatal warning from a processing pipeline stage.
 
 Captures errors from optional features that don't prevent extraction
@@ -3670,6 +3942,7 @@ but may indicate degraded results.
 ---
 
 #### PstMetadata
+
 Outlook PST archive metadata.
 
 | Field | Type | Default | Description |
@@ -3680,6 +3953,7 @@ Outlook PST archive metadata.
 ---
 
 #### RakeParams
+
 RAKE-specific parameters.
 
 | Field | Type | Default | Description |
@@ -3688,7 +3962,9 @@ RAKE-specific parameters.
 | `MaxWordsPerPhrase` | `int` | `3` | Maximum words in a keyword phrase (default: 3). |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -3698,25 +3974,34 @@ func (o *RakeParams) Default() RakeParams
 ---
 
 #### RecognizedTable
+
 Pre-computed table markdown for a table detection region.
+
+Produced by the TATR-based table structure recognizer and surfaced as part of
+layout-aware OCR results.  The struct lives here (under `layout-types`, pure-Rust)
+so that consumers who do not enable `layout-detection` (ORT) can still reference
+the type in their own code.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `DetectionBbox` | `BBox` | — | Detection bbox that this table corresponds to (for matching). |
-| `Cells` | `[][]string` | — | Table cells as a 2D vector (rows x columns). |
+| `Cells` | `[][]string` | — | Table cells as a 2D vector (rows × columns). |
 | `Markdown` | `string` | — | Rendered markdown table. |
 
 
 ---
 
 #### Recyclable
+
 Trait for types that can be pooled and reused.
 
 Implementing this trait allows a type to be used with `Pool<T>`.
 The `reset()` method should clear the object's state for reuse.
 
 ##### Methods
+
 ###### Reset()
+
 Reset the object to a reusable state.
 
 This is called when returning an object to the pool.
@@ -3731,6 +4016,7 @@ func (o *Recyclable) Reset()
 ---
 
 #### Renderer
+
 Trait for document renderers that convert `InternalDocument` to output strings.
 
 Renderers are typically stateless converters that transform the internal
@@ -3748,7 +4034,9 @@ take no-op defaults and need not be overridden.
 Renderers must be `Send + Sync` (inherited from `Plugin`).
 
 ##### Methods
+
 ###### Render()
+
 Render an `InternalDocument` to the output format.
 
 **Returns:**
@@ -3768,6 +4056,7 @@ func (o *Renderer) Render(doc InternalDocument) (string, error)
 ---
 
 #### ResolvedStyle
+
 Fully resolved (flattened) style after walking the inheritance chain.
 
 | Field | Type | Default | Description |
@@ -3779,6 +4068,7 @@ Fully resolved (flattened) style after walking the inheritance chain.
 ---
 
 #### SecurityLimits
+
 Configuration for security limits across extractors.
 
 All limits are intentionally conservative to prevent DoS attacks
@@ -3797,7 +4087,9 @@ while still supporting legitimate documents.
 | `MaxTableCells` | `int` | `100000` | Maximum cells per table (100,000) |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -3807,6 +4099,7 @@ func (o *SecurityLimits) Default() SecurityLimits
 ---
 
 #### ServerConfig
+
 API server configuration.
 
 This struct holds all configuration options for the Kreuzberg API server,
@@ -3829,13 +4122,16 @@ including host/port settings, CORS configuration, and upload limits.
 | `MaxMultipartFieldBytes` | `int` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
 func (o *ServerConfig) Default() ServerConfig
 ```
 ###### ListenAddr()
+
 Get the server listen address (host:port).
 
 **Signature:**
@@ -3844,6 +4140,7 @@ Get the server listen address (host:port).
 func (o *ServerConfig) ListenAddr() string
 ```
 ###### CorsAllowsAll()
+
 Check if CORS allows all origins.
 
 Returns `true` if the `cors_origins` vector is empty, meaning all origins
@@ -3855,6 +4152,7 @@ are allowed. Returns `false` if specific origins are configured.
 func (o *ServerConfig) CorsAllowsAll() bool
 ```
 ###### IsOriginAllowed()
+
 Check if a given origin is allowed by CORS configuration.
 
 Returns `true` if:
@@ -3867,6 +4165,7 @@ Returns `true` if:
 func (o *ServerConfig) IsOriginAllowed(origin string) bool
 ```
 ###### MaxRequestBodyMb()
+
 Get maximum request body size in megabytes (rounded up).
 
 **Signature:**
@@ -3875,6 +4174,7 @@ Get maximum request body size in megabytes (rounded up).
 func (o *ServerConfig) MaxRequestBodyMb() int
 ```
 ###### MaxMultipartFieldMb()
+
 Get maximum multipart field size in megabytes (rounded up).
 
 **Signature:**
@@ -3887,15 +4187,18 @@ func (o *ServerConfig) MaxMultipartFieldMb() int
 
 #### StreamReader
 
+
 ---
 
 #### StringBufferPool
+
 Convenience type alias for a pooled String.
 
 
 ---
 
 #### StructuredData
+
 Structured data (Schema.org, microdata, RDFa) block.
 
 | Field | Type | Default | Description |
@@ -3908,6 +4211,7 @@ Structured data (Schema.org, microdata, RDFa) block.
 ---
 
 #### StructuredDataResult
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Content` | `string` | — | The extracted text content |
@@ -3919,6 +4223,7 @@ Structured data (Schema.org, microdata, RDFa) block.
 ---
 
 #### StructuredExtractionConfig
+
 Configuration for LLM-based structured data extraction.
 
 Sends extracted document content to a VLM with a JSON schema,
@@ -3937,6 +4242,7 @@ returning structured data that conforms to the schema.
 ---
 
 #### StructuredExtractionResponse
+
 Response from structured extraction endpoint.
 
 | Field | Type | Default | Description |
@@ -3949,6 +4255,7 @@ Response from structured extraction endpoint.
 ---
 
 #### StyleDefinition
+
 A single style definition parsed from `<w:style>` in `word/styles.xml`.
 
 | Field | Type | Default | Description |
@@ -3966,6 +4273,7 @@ A single style definition parsed from `<w:style>` in `word/styles.xml`.
 ---
 
 #### SupportedFormat
+
 A supported document format entry.
 
 Represents a file extension and its corresponding MIME type that Kreuzberg can process.
@@ -3979,6 +4287,7 @@ Represents a file extension and its corresponding MIME type that Kreuzberg can p
 ---
 
 #### SyncExtractor
+
 Trait for extractors that can work synchronously (WASM-compatible).
 
 This trait defines the synchronous extraction interface for WASM targets and other
@@ -3995,7 +4304,9 @@ environments by delegating to the sync implementation.
 The `mime_type` parameter is guaranteed to be already validated.
 
 ##### Methods
+
 ###### ExtractSync()
+
 Extract content from a byte array synchronously.
 
 This method performs extraction without requiring an async runtime.
@@ -4014,6 +4325,7 @@ func (o *SyncExtractor) ExtractSync(content []byte, mimeType string, config Extr
 ---
 
 #### Table
+
 Extracted table structure.
 
 Represents a table detected and extracted from a document (PDF, image, etc.).
@@ -4023,13 +4335,14 @@ Tables are converted to both structured cell data and Markdown format.
 |-------|------|---------|-------------|
 | `Cells` | `[][]string` | `nil` | Table cells as a 2D vector (rows × columns) |
 | `Markdown` | `string` | — | Markdown representation of the table |
-| `PageNumber` | `int` | — | Page number where the table was found (1-indexed) |
+| `PageNumber` | `uint32` | — | Page number where the table was found (1-indexed) |
 | `BoundingBox` | `*string` | `nil` | Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted tables when position data is available. |
 
 
 ---
 
 #### TableCell
+
 Individual table cell with content and optional styling.
 
 Future extension point for rich table support with cell-level metadata.
@@ -4037,14 +4350,15 @@ Future extension point for rich table support with cell-level metadata.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Content` | `string` | — | Cell content as text |
-| `RowSpan` | `int` | — | Row span (number of rows this cell spans) |
-| `ColSpan` | `int` | — | Column span (number of columns this cell spans) |
+| `RowSpan` | `uint32` | — | Row span (number of rows this cell spans) |
+| `ColSpan` | `uint32` | — | Column span (number of columns this cell spans) |
 | `IsHeader` | `bool` | — | Whether this is a header cell |
 
 
 ---
 
 #### TableGrid
+
 Structured table grid with cell-level metadata.
 
 Stores row/column dimensions and a flat list of cells with position info.
@@ -4059,6 +4373,7 @@ Stores row/column dimensions and a flat list of cells with position info.
 ---
 
 #### TableProperties
+
 Table-level properties from `<w:tblPr>`.
 
 | Field | Type | Default | Description |
@@ -4077,10 +4392,13 @@ Table-level properties from `<w:tblPr>`.
 ---
 
 #### TessdataManager
+
 Manages tessdata file downloading, caching, and manifest generation.
 
 ##### Methods
+
 ###### CacheDir()
+
 Get the cache directory path.
 
 **Signature:**
@@ -4089,6 +4407,7 @@ Get the cache directory path.
 func (o *TessdataManager) CacheDir() string
 ```
 ###### IsLanguageCached()
+
 Check if a specific language traineddata file is cached.
 
 **Signature:**
@@ -4097,11 +4416,13 @@ Check if a specific language traineddata file is cached.
 func (o *TessdataManager) IsLanguageCached(lang string) bool
 ```
 ###### EnsureAllLanguages()
+
 Downloads all tessdata_fast traineddata files to the cache directory.
 
 Skips files that already exist. Returns the count of newly downloaded files.
 
-Requires the `paddle-ocr` feature for HTTP download support (ureq).
+When the `paddle-ocr` feature is not enabled, no download URLs are available
+and this method always returns `Ok(0)`.
 
 **Signature:**
 
@@ -4112,6 +4433,7 @@ func (o *TessdataManager) EnsureAllLanguages() (int, error)
 ---
 
 #### TesseractConfig
+
 Tesseract OCR configuration.
 
 Provides fine-grained control over Tesseract OCR engine parameters.
@@ -4143,7 +4465,9 @@ for specific document types (invoices, handwriting, etc.).
 | `ThresholdingMethod` | `bool` | `false` | Use adaptive thresholding method |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -4153,6 +4477,7 @@ func (o *TesseractConfig) Default() TesseractConfig
 ---
 
 #### TextAnnotation
+
 Inline text annotation — byte-range based formatting and links.
 
 Annotations reference byte offsets into the node's text content,
@@ -4168,6 +4493,7 @@ enabling precise identification of formatted regions.
 ---
 
 #### TextExtractionResult
+
 Plain text and Markdown extraction result.
 
 Contains the extracted text along with statistics and,
@@ -4187,6 +4513,7 @@ for Markdown files, structural elements like headers and links.
 ---
 
 #### TextMetadata
+
 Text/Markdown metadata.
 
 Extracted from plain text and Markdown files. Includes word counts and,
@@ -4194,9 +4521,9 @@ for Markdown, structural elements like headers and links.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `LineCount` | `int` | — | Number of lines in the document |
-| `WordCount` | `int` | — | Number of words |
-| `CharacterCount` | `int` | — | Number of characters |
+| `LineCount` | `uint32` | — | Number of lines in the document |
+| `WordCount` | `uint32` | — | Number of words |
+| `CharacterCount` | `uint32` | — | Number of characters |
 | `Headers` | `*[]string` | `nil` | Markdown headers (headings text only, for Markdown files) |
 | `Links` | `*[]string` | `nil` | Markdown links as (text, url) tuples (for Markdown files) |
 | `CodeBlocks` | `*[]string` | `nil` | Code blocks as (language, code) tuples (for Markdown files) |
@@ -4205,6 +4532,7 @@ for Markdown, structural elements like headers and links.
 ---
 
 #### TokenReductionConfig
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Level` | `ReductionLevel` | `ReductionLevel.Moderate` | Level (reduction level) |
@@ -4220,7 +4548,9 @@ for Markdown, structural elements like headers and links.
 | `EnableSemanticClustering` | `bool` | `false` | Enable semantic clustering |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -4230,6 +4560,7 @@ func (o *TokenReductionConfig) Default() TokenReductionConfig
 ---
 
 #### TokenReductionOptions
+
 Token reduction configuration.
 
 | Field | Type | Default | Description |
@@ -4238,7 +4569,9 @@ Token reduction configuration.
 | `PreserveImportantWords` | `bool` | `true` | Preserve important words (capitalized, technical terms) |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -4248,12 +4581,14 @@ func (o *TokenReductionOptions) Default() TokenReductionOptions
 ---
 
 #### TracingLayer
+
 A `tower.Layer` that wraps each extraction in a semantic tracing span.
 
 
 ---
 
 #### TreeSitterConfig
+
 Configuration for tree-sitter language pack integration.
 
 Controls grammar download behavior and code analysis options.
@@ -4280,7 +4615,9 @@ docstrings = true
 | `Process` | `TreeSitterProcessConfig` | — | Processing options for code analysis. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -4290,6 +4627,7 @@ func (o *TreeSitterConfig) Default() TreeSitterConfig
 ---
 
 #### TreeSitterProcessConfig
+
 Processing options for tree-sitter code analysis.
 
 Controls which analysis features are enabled when extracting code files.
@@ -4307,7 +4645,9 @@ Controls which analysis features are enabled when extracting code files.
 | `ContentMode` | `CodeContentMode` | `CodeContentMode.Chunks` | Content rendering mode for code extraction. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -4317,6 +4657,7 @@ func (o *TreeSitterProcessConfig) Default() TreeSitterProcessConfig
 ---
 
 #### Uri
+
 A URI extracted from a document.
 
 Represents any link, reference, or resource pointer found during extraction.
@@ -4334,6 +4675,7 @@ optional human-readable display text.
 ---
 
 #### Validator
+
 Trait for validator plugins.
 
 Validators check extraction results for quality, completeness, or correctness.
@@ -4360,7 +4702,9 @@ For non-fatal checks, use post-processors instead.
 Validators must be thread-safe (`Send + Sync`).
 
 ##### Methods
+
 ###### Validate()
+
 Validate an extraction result.
 
 Check the extraction result and return `Ok(())` if valid, or an error
@@ -4449,6 +4793,7 @@ async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
 func (o *Validator) Validate(result ExtractionResult, config ExtractionConfig) error
 ```
 ###### ShouldValidate()
+
 Optional: Check if this validator should run for a given result.
 
 Allows conditional validation based on MIME type, metadata, or content.
@@ -4464,6 +4809,7 @@ Defaults to `true` (always run).
 func (o *Validator) ShouldValidate(result ExtractionResult, config ExtractionConfig) bool
 ```
 ###### Priority()
+
 Optional: Get the validation priority.
 
 Higher priority validators run first. Useful for ordering validation checks
@@ -4484,6 +4830,7 @@ func (o *Validator) Priority() int32
 ---
 
 #### WarmResponse
+
 Cache warm response.
 
 | Field | Type | Default | Description |
@@ -4496,6 +4843,7 @@ Cache warm response.
 ---
 
 #### XlsxAppProperties
+
 Application properties from docProps/app.xml for XLSX
 
 Contains Excel-specific document metadata.
@@ -4516,6 +4864,7 @@ Contains Excel-specific document metadata.
 ---
 
 #### XmlExtractionResult
+
 XML extraction result.
 
 Contains extracted text content from XML files along with
@@ -4531,19 +4880,21 @@ structural statistics about the XML document.
 ---
 
 #### XmlMetadata
+
 XML metadata extracted during XML parsing.
 
 Provides statistics about XML document structure.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `ElementCount` | `int` | — | Total number of XML elements processed |
+| `ElementCount` | `uint32` | — | Total number of XML elements processed |
 | `UniqueElements` | `[]string` | `nil` | List of unique element tag names (sorted) |
 
 
 ---
 
 #### YakeParams
+
 YAKE-specific parameters.
 
 | Field | Type | Default | Description |
@@ -4551,7 +4902,9 @@ YAKE-specific parameters.
 | `WindowSize` | `int` | `2` | Window size for co-occurrence analysis (default: 2). Controls the context window for computing co-occurrence statistics. |
 
 ##### Methods
+
 ###### Default()
+
 **Signature:**
 
 ```go
@@ -4561,6 +4914,7 @@ func (o *YakeParams) Default() YakeParams
 ---
 
 #### YearRange
+
 Year range for bibliographic metadata.
 
 | Field | Type | Default | Description |
@@ -4573,6 +4927,7 @@ Year range for bibliographic metadata.
 ---
 
 #### ZipBombValidator
+
 Helper struct for validating ZIP archives for security issues.
 
 
@@ -4581,6 +4936,7 @@ Helper struct for validating ZIP archives for security issues.
 ### Enums
 
 #### ExecutionProviderType
+
 ONNX Runtime execution provider type.
 
 Determines which hardware backend is used for model inference.
@@ -4598,6 +4954,7 @@ Determines which hardware backend is used for model inference.
 ---
 
 #### OutputFormat
+
 Output format for extraction results.
 
 Controls the format of the `content` field in `ExtractionResult`.
@@ -4620,6 +4977,7 @@ boxes and confidence scores.
 ---
 
 #### HtmlTheme
+
 Built-in HTML theme selection.
 
 | Value | Description |
@@ -4634,6 +4992,7 @@ Built-in HTML theme selection.
 ---
 
 #### TableModel
+
 Which table structure recognition model to use.
 
 Controls the model used for table cell detection within layout-detected
@@ -4653,6 +5012,7 @@ YAML).
 ---
 
 #### ChunkerType
+
 Type of text chunker to use.
 
 # Variants
@@ -4679,6 +5039,7 @@ Type of text chunker to use.
 ---
 
 #### ChunkSizing
+
 How chunk size is measured.
 
 Defaults to `Characters` (Unicode character count). When using token-based sizing,
@@ -4697,6 +5058,7 @@ available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 ---
 
 #### EmbeddingModelType
+
 Embedding model types supported by Kreuzberg.
 
 | Value | Description |
@@ -4710,6 +5072,7 @@ Embedding model types supported by Kreuzberg.
 ---
 
 #### CodeContentMode
+
 Content rendering mode for code extraction.
 
 Controls how extracted code content is represented in the `content` field
@@ -4725,6 +5088,7 @@ of `ExtractionResult`.
 ---
 
 #### FracType
+
 | Value | Description |
 |-------|-------------|
 | `Bar` | Bar |
@@ -4736,6 +5100,7 @@ of `ExtractionResult`.
 ---
 
 #### OcrBackendType
+
 OCR backend types.
 
 | Value | Description |
@@ -4749,6 +5114,7 @@ OCR backend types.
 ---
 
 #### ProcessingStage
+
 Processing stages for post-processors.
 
 Post-processors are executed in stage order (Early → Middle → Late).
@@ -4764,6 +5130,7 @@ Use stages to control the order of post-processing operations.
 ---
 
 #### ReductionLevel
+
 | Value | Description |
 |-------|-------------|
 | `Off` | Off |
@@ -4776,6 +5143,7 @@ Use stages to control the order of post-processing operations.
 ---
 
 #### PdfAnnotationType
+
 Type of PDF annotation.
 
 | Value | Description |
@@ -4792,6 +5160,7 @@ Type of PDF annotation.
 ---
 
 #### BlockType
+
 Types of block-level elements in Djot.
 
 | Value | Description |
@@ -4817,6 +5186,7 @@ Types of block-level elements in Djot.
 ---
 
 #### InlineType
+
 Types of inline elements in Djot.
 
 | Value | Description |
@@ -4842,6 +5212,7 @@ Types of inline elements in Djot.
 ---
 
 #### RelationshipKind
+
 Semantic kind of a relationship between document elements.
 
 | Value | Description |
@@ -4858,6 +5229,7 @@ Semantic kind of a relationship between document elements.
 ---
 
 #### ContentLayer
+
 Content layer classification for document nodes.
 
 Replaces separate body/furniture arrays with per-node granularity.
@@ -4873,6 +5245,7 @@ Replaces separate body/furniture arrays with per-node granularity.
 ---
 
 #### NodeContent
+
 Tagged enum for node content. Each variant carries only type-specific data.
 
 Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
@@ -4905,6 +5278,7 @@ Go/Java/TypeScript bindings.
 ---
 
 #### AnnotationKind
+
 Types of inline text annotations.
 
 | Value | Description |
@@ -4926,6 +5300,7 @@ Types of inline text annotations.
 ---
 
 #### ExtractionMethod
+
 How the extracted text was produced.
 
 | Value | Description |
@@ -4938,6 +5313,7 @@ How the extracted text was produced.
 ---
 
 #### ChunkType
+
 Semantic structural classification of a text chunk.
 
 Assigned by the heuristic classifier in `chunking.classifier`.
@@ -4964,6 +5340,7 @@ Designed to be extended in future versions without breaking changes.
 ---
 
 #### ImageKind
+
 Heuristic classification of what an image likely depicts.
 
 | Value | Description |
@@ -4984,6 +5361,7 @@ Heuristic classification of what an image likely depicts.
 ---
 
 #### ResultFormat
+
 Result-shape selection for extraction results.
 
 Distinct from `OutputFormat` (which controls rendering — Plain, Markdown,
@@ -4999,6 +5377,7 @@ blob vs. an element-based decomposition.
 ---
 
 #### ElementType
+
 Semantic element type classification.
 
 Categorizes text content into semantic units for downstream processing.
@@ -5022,6 +5401,7 @@ Supports the element types commonly found in Unstructured documents.
 ---
 
 #### FormatMetadata
+
 Format-specific metadata (discriminated union).
 
 Only one format type can exist per extraction result. This provides
@@ -5054,6 +5434,7 @@ type-safe, clean metadata without nested optionals.
 ---
 
 #### TextDirection
+
 Text direction enumeration for HTML documents.
 
 | Value | Description |
@@ -5066,6 +5447,7 @@ Text direction enumeration for HTML documents.
 ---
 
 #### LinkType
+
 Link type classification.
 
 | Value | Description |
@@ -5081,6 +5463,7 @@ Link type classification.
 ---
 
 #### ImageType
+
 Image type classification.
 
 | Value | Description |
@@ -5094,6 +5477,7 @@ Image type classification.
 ---
 
 #### StructuredDataType
+
 Structured data type classification.
 
 | Value | Description |
@@ -5106,6 +5490,7 @@ Structured data type classification.
 ---
 
 #### OcrBoundingGeometry
+
 Bounding geometry for an OCR element.
 
 Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
@@ -5120,6 +5505,7 @@ Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilateral
 ---
 
 #### OcrElementLevel
+
 Hierarchical level of an OCR element.
 
 Maps to Tesseract's page segmentation hierarchy and provides
@@ -5136,6 +5522,7 @@ equivalent semantics for PaddleOCR.
 ---
 
 #### PageUnitType
+
 Type of paginated unit in a document.
 
 Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet sheets).
@@ -5150,6 +5537,7 @@ Distinguishes between different types of "pages" (PDF pages, presentation slides
 ---
 
 #### UriKind
+
 Semantic classification of an extracted URI.
 
 | Value | Description |
@@ -5165,6 +5553,7 @@ Semantic classification of an extracted URI.
 ---
 
 #### PoolError
+
 Error type for pool operations.
 
 | Value | Description |
@@ -5175,6 +5564,7 @@ Error type for pool operations.
 ---
 
 #### KeywordAlgorithm
+
 Keyword algorithm selection.
 
 | Value | Description |
@@ -5186,6 +5576,7 @@ Keyword algorithm selection.
 ---
 
 #### PsmMode
+
 Page Segmentation Mode for Tesseract OCR
 
 | Value | Description |
@@ -5206,6 +5597,7 @@ Page Segmentation Mode for Tesseract OCR
 ---
 
 #### PaddleLanguage
+
 Supported languages in PaddleOCR.
 
 Maps user-friendly language codes to paddle-ocr-rs language identifiers.
@@ -5233,6 +5625,7 @@ Maps user-friendly language codes to paddle-ocr-rs language identifiers.
 ---
 
 #### LayoutClass
+
 The 17 canonical document layout classes.
 
 All model backends (RT-DETR, YOLO, etc.) map their native class IDs
@@ -5267,6 +5660,7 @@ Wire format is snake_case in all serializers (JSON, TOML, YAML).
 ### Errors
 
 #### KreuzbergError
+
 Main error type for all Kreuzberg operations.
 
 All errors in Kreuzberg use this enum, which preserves error chains

@@ -94,9 +94,9 @@ impl DocumentExtractor for PlainTextExtractor {
 
         doc.metadata = Metadata {
             format: Some(crate::types::FormatMetadata::Text(crate::types::TextMetadata {
-                line_count,
-                word_count,
-                character_count,
+                line_count: line_count as u32,
+                word_count: word_count as u32,
+                character_count: character_count as u32,
                 headers: None,
                 links: None,
                 code_blocks: None,

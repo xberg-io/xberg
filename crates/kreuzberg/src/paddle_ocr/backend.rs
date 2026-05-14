@@ -501,7 +501,7 @@ impl OcrBackend for PaddleOcrBackend {
                     &elem.text,
                     0,
                 )
-                .with_page(elem.page_number as u32);
+                .with_page(elem.page_number);
                 ie.bbox = Some(bbox);
                 ie.ocr_confidence = Some(elem.confidence.clone());
                 ie.ocr_geometry = Some(elem.geometry.clone());
@@ -520,8 +520,8 @@ impl OcrBackend for PaddleOcrBackend {
         // Table detection
         let mut tables: Vec<Table> = vec![];
         let mut table_count = 0;
-        let mut table_rows: Option<usize> = None;
-        let mut table_cols: Option<usize> = None;
+        let mut table_rows: Option<u32> = None;
+        let mut table_cols: Option<u32> = None;
 
         if effective_config.enable_table_detection && !ocr_elements.is_empty() {
             let words = elements_to_hocr_words(&ocr_elements, 0.3);
@@ -531,8 +531,8 @@ impl OcrBackend for PaddleOcrBackend {
 
                 if !cells.is_empty() {
                     table_count = 1;
-                    table_rows = Some(cells.len());
-                    table_cols = cells.first().map(|row| row.len());
+                    table_rows = Some(cells.len() as u32);
+                    table_cols = cells.first().map(|row| row.len() as u32);
 
                     let table_markdown = table_to_markdown(&cells);
 

@@ -233,12 +233,12 @@ impl OcrBackend for TesseractBackend {
                 language: resolved_language,
                 psm: tess_config.psm as i32,
                 output_format: tess_config.output_format.clone(),
-                table_count: ocr_result.tables.len(),
-                table_rows: ocr_result.tables.first().map(|t| t.cells.len()),
+                table_count: ocr_result.tables.len() as u32,
+                table_rows: ocr_result.tables.first().map(|t| t.cells.len() as u32),
                 table_cols: ocr_result
                     .tables
                     .first()
-                    .and_then(|t| t.cells.first().map(|row| row.len())),
+                    .and_then(|t| t.cells.first().map(|row| row.len() as u32)),
             })),
             // Signal pre-formatted content so apply_output_format() skips re-conversion
             output_format: pre_formatted,
@@ -329,12 +329,12 @@ impl OcrBackend for TesseractBackend {
                 language: resolved_language,
                 psm: tess_config.psm as i32,
                 output_format: tess_config.output_format.clone(),
-                table_count: ocr_result.tables.len(),
-                table_rows: ocr_result.tables.first().map(|t| t.cells.len()),
+                table_count: ocr_result.tables.len() as u32,
+                table_rows: ocr_result.tables.first().map(|t| t.cells.len() as u32),
                 table_cols: ocr_result
                     .tables
                     .first()
-                    .and_then(|t| t.cells.first().map(|row| row.len())),
+                    .and_then(|t| t.cells.first().map(|row| row.len() as u32)),
             })),
             // Signal pre-formatted content so apply_output_format() skips re-conversion
             output_format: pre_formatted,

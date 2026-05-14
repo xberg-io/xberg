@@ -242,7 +242,7 @@ impl RtfExtractor {
             let image = ExtractedImage {
                 data: Bytes::from(rtf_img.data),
                 format: Cow::Borrowed(rtf_img.format),
-                image_index: i,
+                image_index: i as u32,
                 page_number: None,
                 width: None,
                 height: None,

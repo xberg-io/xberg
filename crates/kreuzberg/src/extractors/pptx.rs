@@ -224,8 +224,8 @@ impl PptxExtractor {
 
         // Populate image_count and table_count on PptxMetadata struct
         let mut pptx_metadata = pptx_result.metadata;
-        pptx_metadata.image_count = Some(pptx_result.image_count);
-        pptx_metadata.table_count = Some(pptx_result.table_count);
+        pptx_metadata.image_count = Some(pptx_result.image_count as u32);
+        pptx_metadata.table_count = Some(pptx_result.table_count as u32);
 
         // Map office metadata to standard Metadata fields
         let office_meta = &pptx_result.office_metadata;

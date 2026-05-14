@@ -549,7 +549,10 @@ abstract class DocumentExtractor {
   /// - `KreuzbergError::MissingDependency` - Required dependency not available
   /// throws anyhow::Error on failure
   Future<InternalDocument> extractBytes(
-      Uint8List content, String mimeType, ExtractionConfig config);
+    Uint8List content,
+    String mimeType,
+    ExtractionConfig config,
+  );
 
   /// Extract content from a file.
   ///
@@ -571,7 +574,10 @@ abstract class DocumentExtractor {
   /// Same as `extract_bytes`, plus file I/O errors.
   /// throws anyhow::Error on failure
   Future<InternalDocument> extractFile(
-      String path, String mimeType, ExtractionConfig config);
+    String path,
+    String mimeType,
+    ExtractionConfig config,
+  );
 
   /// Get the list of MIME types supported by this extractor.
   ///

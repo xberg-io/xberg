@@ -44,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Gleam binding** (`kreuzberg_gleam` Hex package): dropped entirely. Gleam targets the BEAM and Gleam consumers can keep using the Elixir binding via Erlang interop, so the dedicated package added negligible audience reach at a real maintenance cost (regen on every alef bump, dedicated CI workflow, Hex publish job, e2e fixtures, 92 doc snippets). Existing published versions of `kreuzberg_gleam` on Hex remain available for anyone still pinning them — no further releases will be made.
+- **`PageContent.images: Vec<Arc<ExtractedImage>>` (#777)**: removed and replaced by
+  `PageContent.image_indices: Vec<u32>`. All image data lives once in
+  `ExtractionResult.images`; pages and chunks now carry indices into that collection.
+  See `docs/migration/v5.0-image-indices.md` for migration guidance.
 
 ### Security
 
@@ -105,12 +109,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **BREAKING: `PageContent.images` replaced by `PageContent.image_indices` (#777)**:
   `PageContent.images: Vec<Arc<ExtractedImage>>` is removed. Pages now carry
-  `image_indices: Vec<usize>` — zero-based indices into the top-level
+  `image_indices: Vec<u32>` — zero-based indices into the top-level
   `ExtractionResult.images` collection. `ChunkMetadata` gains the same
-  `image_indices: Vec<usize>` field (populated post-chunking by matching
+  `image_indices: Vec<u32>` field (populated post-chunking by matching
   each image's `page_number` against the chunk's `[first_page, last_page]`
   range). **Migration:** replace `page.images[i].data` with
-  `result.images.as_ref().unwrap()[page.image_indices[i]].data`. All image
+  `result.images.as_ref().unwrap()[page.image_indices[i] as usize].data`. All image
   data still lives in `ExtractionResult.images`; pages and chunks reference
   it by index rather than carrying full copies.
 

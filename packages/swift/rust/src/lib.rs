@@ -56,7 +56,7 @@ mod ffi {
             enable_quality_processing: bool,
             ocr: Option<OcrConfig>,
             force_ocr: bool,
-            force_ocr_pages: Option<Vec<usize>>,
+            force_ocr_pages: Option<Vec<u32>>,
             disable_ocr: bool,
             chunking: Option<ChunkingConfig>,
             content_filter: Option<ContentFilterConfig>,
@@ -91,7 +91,7 @@ mod ffi {
         fn enable_quality_processing(&self) -> bool;
         fn ocr(&self) -> Option<OcrConfig>;
         fn force_ocr(&self) -> bool;
-        fn force_ocr_pages(&self) -> Option<Vec<usize>>;
+        fn force_ocr_pages(&self) -> Option<Vec<u32>>;
         fn disable_ocr(&self) -> bool;
         fn chunking(&self) -> Option<ChunkingConfig>;
         fn content_filter(&self) -> Option<ContentFilterConfig>;
@@ -130,7 +130,7 @@ mod ffi {
             enable_quality_processing: Option<bool>,
             ocr: Option<OcrConfig>,
             force_ocr: Option<bool>,
-            force_ocr_pages: Option<Vec<usize>>,
+            force_ocr_pages: Option<Vec<u32>>,
             disable_ocr: Option<bool>,
             chunking: Option<ChunkingConfig>,
             content_filter: Option<ContentFilterConfig>,
@@ -153,7 +153,7 @@ mod ffi {
         fn enable_quality_processing(&self) -> Option<bool>;
         fn ocr(&self) -> Option<OcrConfig>;
         fn force_ocr(&self) -> Option<bool>;
-        fn force_ocr_pages(&self) -> Option<Vec<usize>>;
+        fn force_ocr_pages(&self) -> Option<Vec<u32>>;
         fn disable_ocr(&self) -> Option<bool>;
         fn chunking(&self) -> Option<ChunkingConfig>;
         fn content_filter(&self) -> Option<ContentFilterConfig>;
@@ -981,7 +981,7 @@ mod ffi {
         type PdfAnnotation;
         fn annotation_type(&self) -> String;
         fn content(&self) -> Option<String>;
-        fn page_number(&self) -> usize;
+        fn page_number(&self) -> u32;
         fn bounding_box(&self) -> Option<String>;
     }
 
@@ -1213,17 +1213,18 @@ mod ffi {
         fn token_count(&self) -> Option<usize>;
         fn chunk_index(&self) -> usize;
         fn total_chunks(&self) -> usize;
-        fn first_page(&self) -> Option<usize>;
-        fn last_page(&self) -> Option<usize>;
+        fn first_page(&self) -> Option<u32>;
+        fn last_page(&self) -> Option<u32>;
         fn heading_context(&self) -> Option<HeadingContext>;
+        fn image_indices(&self) -> Vec<u32>;
     }
 
     extern "Rust" {
         type ExtractedImage;
         fn data(&self) -> Vec<u8>;
         fn format(&self) -> String;
-        fn image_index(&self) -> usize;
-        fn page_number(&self) -> Option<usize>;
+        fn image_index(&self) -> u32;
+        fn page_number(&self) -> Option<u32>;
         fn width(&self) -> Option<u32>;
         fn height(&self) -> Option<u32>;
         fn colorspace(&self) -> Option<String>;
@@ -1240,7 +1241,7 @@ mod ffi {
 
     extern "Rust" {
         type ElementMetadata;
-        fn page_number(&self) -> Option<usize>;
+        fn page_number(&self) -> Option<u32>;
         fn filename(&self) -> Option<String>;
         fn coordinates(&self) -> Option<String>;
         fn element_index(&self) -> Option<usize>;
@@ -1340,7 +1341,7 @@ mod ffi {
         type OcrTable;
         fn cells(&self) -> String;
         fn markdown(&self) -> String;
-        fn page_number(&self) -> usize;
+        fn page_number(&self) -> u32;
         fn bounding_box(&self) -> Option<OcrTableBoundingBox>;
     }
 
@@ -1492,8 +1493,8 @@ mod ffi {
     extern "Rust" {
         type ExcelMetadata;
         #[swift_bridge(init)]
-        fn new(sheet_count: Option<usize>, sheet_names: Option<Vec<String>>) -> ExcelMetadata;
-        fn sheet_count(&self) -> Option<usize>;
+        fn new(sheet_count: Option<u32>, sheet_names: Option<Vec<String>>) -> ExcelMetadata;
+        fn sheet_count(&self) -> Option<u32>;
         fn sheet_names(&self) -> Option<Vec<String>>;
     }
 
@@ -1523,16 +1524,16 @@ mod ffi {
         #[swift_bridge(init)]
         fn new(
             format: String,
-            file_count: usize,
+            file_count: u32,
             file_list: Vec<String>,
-            total_size: usize,
-            compressed_size: Option<usize>,
+            total_size: u64,
+            compressed_size: Option<u64>,
         ) -> ArchiveMetadata;
         fn format(&self) -> String;
-        fn file_count(&self) -> usize;
+        fn file_count(&self) -> u32;
         fn file_list(&self) -> Vec<String>;
-        fn total_size(&self) -> usize;
-        fn compressed_size(&self) -> Option<usize>;
+        fn total_size(&self) -> u64;
+        fn compressed_size(&self) -> Option<u64>;
     }
 
     extern "Rust" {
@@ -1548,8 +1549,8 @@ mod ffi {
     extern "Rust" {
         type XmlMetadata;
         #[swift_bridge(init)]
-        fn new(element_count: usize, unique_elements: Vec<String>) -> XmlMetadata;
-        fn element_count(&self) -> usize;
+        fn new(element_count: u32, unique_elements: Vec<String>) -> XmlMetadata;
+        fn element_count(&self) -> u32;
         fn unique_elements(&self) -> Vec<String>;
     }
 
@@ -1557,16 +1558,16 @@ mod ffi {
         type TextMetadata;
         #[swift_bridge(init)]
         fn new(
-            line_count: usize,
-            word_count: usize,
-            character_count: usize,
+            line_count: u32,
+            word_count: u32,
+            character_count: u32,
             headers: Option<Vec<String>>,
             links: Option<Vec<String>>,
             code_blocks: Option<Vec<String>>,
         ) -> TextMetadata;
-        fn line_count(&self) -> usize;
-        fn word_count(&self) -> usize;
-        fn character_count(&self) -> usize;
+        fn line_count(&self) -> u32;
+        fn word_count(&self) -> u32;
+        fn character_count(&self) -> u32;
         fn headers(&self) -> Option<Vec<String>>;
     }
 
@@ -1575,8 +1576,8 @@ mod ffi {
         fn level(&self) -> u8;
         fn text(&self) -> String;
         fn id(&self) -> Option<String>;
-        fn depth(&self) -> usize;
-        fn html_offset(&self) -> usize;
+        fn depth(&self) -> u32;
+        fn html_offset(&self) -> u32;
     }
 
     extern "Rust" {
@@ -1648,16 +1649,16 @@ mod ffi {
             language: String,
             psm: i32,
             output_format: String,
-            table_count: usize,
-            table_rows: Option<usize>,
-            table_cols: Option<usize>,
+            table_count: u32,
+            table_rows: Option<u32>,
+            table_cols: Option<u32>,
         ) -> OcrMetadata;
         fn language(&self) -> String;
         fn psm(&self) -> i32;
         fn output_format(&self) -> String;
-        fn table_count(&self) -> usize;
-        fn table_rows(&self) -> Option<usize>;
-        fn table_cols(&self) -> Option<usize>;
+        fn table_count(&self) -> u32;
+        fn table_rows(&self) -> Option<u32>;
+        fn table_cols(&self) -> Option<u32>;
     }
 
     extern "Rust" {
@@ -1670,15 +1671,15 @@ mod ffi {
         type PptxMetadata;
         #[swift_bridge(init)]
         fn new(
-            slide_count: usize,
+            slide_count: u32,
             slide_names: Vec<String>,
-            image_count: Option<usize>,
-            table_count: Option<usize>,
+            image_count: Option<u32>,
+            table_count: Option<u32>,
         ) -> PptxMetadata;
-        fn slide_count(&self) -> usize;
+        fn slide_count(&self) -> u32;
         fn slide_names(&self) -> Vec<String>;
-        fn image_count(&self) -> Option<usize>;
-        fn table_count(&self) -> Option<usize>;
+        fn image_count(&self) -> Option<u32>;
+        fn table_count(&self) -> Option<u32>;
     }
 
     extern "Rust" {
@@ -1698,14 +1699,14 @@ mod ffi {
         type CsvMetadata;
         #[swift_bridge(init)]
         fn new(
-            row_count: usize,
-            column_count: usize,
+            row_count: u32,
+            column_count: u32,
             delimiter: Option<String>,
             has_header: bool,
             column_types: Option<Vec<String>>,
         ) -> CsvMetadata;
-        fn row_count(&self) -> usize;
-        fn column_count(&self) -> usize;
+        fn row_count(&self) -> u32;
+        fn column_count(&self) -> u32;
         fn delimiter(&self) -> Option<String>;
         fn has_header(&self) -> bool;
         fn column_types(&self) -> Option<Vec<String>>;
@@ -1848,7 +1849,7 @@ mod ffi {
             confidence: OcrConfidence,
             level: OcrElementLevel,
             rotation: Option<OcrRotation>,
-            page_number: usize,
+            page_number: u32,
             parent_id: Option<String>,
             backend_metadata: String,
         ) -> OcrElement;
@@ -1857,7 +1858,7 @@ mod ffi {
         fn confidence(&self) -> OcrConfidence;
         fn level(&self) -> String;
         fn rotation(&self) -> Option<OcrRotation>;
-        fn page_number(&self) -> usize;
+        fn page_number(&self) -> u32;
         fn parent_id(&self) -> Option<String>;
         fn backend_metadata(&self) -> String;
     }
@@ -1879,7 +1880,7 @@ mod ffi {
 
     extern "Rust" {
         type PageStructure;
-        fn total_count(&self) -> usize;
+        fn total_count(&self) -> u32;
         fn unit_type(&self) -> String;
         fn boundaries(&self) -> Option<Vec<PageBoundary>>;
         fn pages(&self) -> Option<Vec<PageInfo>>;
@@ -1889,16 +1890,16 @@ mod ffi {
         type PageBoundary;
         fn byte_start(&self) -> usize;
         fn byte_end(&self) -> usize;
-        fn page_number(&self) -> usize;
+        fn page_number(&self) -> u32;
     }
 
     extern "Rust" {
         type PageInfo;
-        fn number(&self) -> usize;
+        fn number(&self) -> u32;
         fn title(&self) -> Option<String>;
         fn dimensions(&self) -> Option<Vec<f64>>;
-        fn image_count(&self) -> Option<usize>;
-        fn table_count(&self) -> Option<usize>;
+        fn image_count(&self) -> Option<u32>;
+        fn table_count(&self) -> Option<u32>;
         fn hidden(&self) -> Option<bool>;
         fn is_blank(&self) -> Option<bool>;
         fn has_vector_graphics(&self) -> bool;
@@ -1906,10 +1907,10 @@ mod ffi {
 
     extern "Rust" {
         type PageContent;
-        fn page_number(&self) -> usize;
+        fn page_number(&self) -> u32;
         fn content(&self) -> String;
         fn tables(&self) -> Vec<Table>;
-        fn images(&self) -> Vec<ExtractedImage>;
+        fn image_indices(&self) -> Vec<u32>;
         fn hierarchy(&self) -> Option<PageHierarchy>;
         fn is_blank(&self) -> Option<bool>;
         fn layout_regions(&self) -> Option<Vec<LayoutRegion>>;
@@ -1927,7 +1928,7 @@ mod ffi {
 
     extern "Rust" {
         type PageHierarchy;
-        fn block_count(&self) -> usize;
+        fn block_count(&self) -> u32;
         fn blocks(&self) -> Vec<HierarchicalBlock>;
     }
 
@@ -1942,20 +1943,20 @@ mod ffi {
     extern "Rust" {
         type Table;
         #[swift_bridge(init)]
-        fn new(cells: String, markdown: String, page_number: usize, bounding_box: Option<String>) -> Table;
+        fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<String>) -> Table;
         fn cells(&self) -> String;
         fn markdown(&self) -> String;
-        fn page_number(&self) -> usize;
+        fn page_number(&self) -> u32;
         fn bounding_box(&self) -> Option<String>;
     }
 
     extern "Rust" {
         type TableCell;
         #[swift_bridge(init)]
-        fn new(content: String, row_span: usize, col_span: usize, is_header: bool) -> TableCell;
+        fn new(content: String, row_span: u32, col_span: u32, is_header: bool) -> TableCell;
         fn content(&self) -> String;
-        fn row_span(&self) -> usize;
-        fn col_span(&self) -> usize;
+        fn row_span(&self) -> u32;
+        fn col_span(&self) -> u32;
         fn is_header(&self) -> bool;
     }
 
@@ -2298,14 +2299,14 @@ mod ffi {
             is_encrypted: Option<bool>,
             width: Option<i64>,
             height: Option<i64>,
-            page_count: Option<usize>,
+            page_count: Option<u32>,
         ) -> PdfMetadata;
         fn pdf_version(&self) -> Option<String>;
         fn producer(&self) -> Option<String>;
         fn is_encrypted(&self) -> Option<bool>;
         fn width(&self) -> Option<i64>;
         fn height(&self) -> Option<i64>;
-        fn page_count(&self) -> Option<usize>;
+        fn page_count(&self) -> Option<u32>;
     }
 
     extern "Rust" {
@@ -2862,7 +2863,7 @@ impl ExtractionConfig {
         enable_quality_processing: bool,
         ocr: Option<OcrConfig>,
         force_ocr: bool,
-        force_ocr_pages: Option<Vec<usize>>,
+        force_ocr_pages: Option<Vec<u32>>,
         disable_ocr: bool,
         chunking: Option<ChunkingConfig>,
         content_filter: Option<ContentFilterConfig>,
@@ -3013,7 +3014,7 @@ impl ExtractionConfig {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn force_ocr_pages(&self) -> Option<Vec<usize>> {
+    pub fn force_ocr_pages(&self) -> Option<Vec<u32>> {
         self.0.force_ocr_pages.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -3139,7 +3140,7 @@ impl FileExtractionConfig {
         enable_quality_processing: Option<bool>,
         ocr: Option<OcrConfig>,
         force_ocr: Option<bool>,
-        force_ocr_pages: Option<Vec<usize>>,
+        force_ocr_pages: Option<Vec<u32>>,
         disable_ocr: Option<bool>,
         chunking: Option<ChunkingConfig>,
         content_filter: Option<ContentFilterConfig>,
@@ -3237,7 +3238,7 @@ impl FileExtractionConfig {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn force_ocr_pages(&self) -> Option<Vec<usize>> {
+    pub fn force_ocr_pages(&self) -> Option<Vec<u32>> {
         self.0.force_ocr_pages.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -5885,7 +5886,7 @@ impl PdfAnnotation {
     pub fn content(&self) -> Option<String> {
         self.0.content.clone()
     }
-    pub fn page_number(&self) -> usize {
+    pub fn page_number(&self) -> u32 {
         ::serde_json::to_value(&self.0.page_number)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -6621,14 +6622,14 @@ impl ChunkMetadata {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn first_page(&self) -> Option<usize> {
+    pub fn first_page(&self) -> Option<u32> {
         self.0.first_page.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn last_page(&self) -> Option<usize> {
+    pub fn last_page(&self) -> Option<u32> {
         self.0.last_page.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -6637,6 +6638,12 @@ impl ChunkMetadata {
     }
     pub fn heading_context(&self) -> Option<HeadingContext> {
         self.0.heading_context.clone().map(HeadingContext)
+    }
+    pub fn image_indices(&self) -> Vec<u32> {
+        ::serde_json::to_value(&self.0.image_indices)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
     }
 }
 
@@ -6648,13 +6655,13 @@ impl ExtractedImage {
     pub fn format(&self) -> String {
         self.0.format.to_string()
     }
-    pub fn image_index(&self) -> usize {
+    pub fn image_index(&self) -> u32 {
         ::serde_json::to_value(&self.0.image_index)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn page_number(&self) -> Option<usize> {
+    pub fn page_number(&self) -> Option<u32> {
         self.0.page_number.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -6724,7 +6731,7 @@ impl ExtractedImage {
 
 pub struct ElementMetadata(pub kreuzberg::ElementMetadata);
 impl ElementMetadata {
-    pub fn page_number(&self) -> Option<usize> {
+    pub fn page_number(&self) -> Option<u32> {
         self.0.page_number.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -7019,7 +7026,7 @@ impl OcrTable {
     pub fn markdown(&self) -> String {
         self.0.markdown.clone()
     }
-    pub fn page_number(&self) -> usize {
+    pub fn page_number(&self) -> u32 {
         ::serde_json::to_value(&self.0.page_number)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -7610,7 +7617,7 @@ impl Metadata {
 
 pub struct ExcelMetadata(pub kreuzberg::ExcelMetadata);
 impl ExcelMetadata {
-    pub fn new(sheet_count: Option<usize>, sheet_names: Option<Vec<String>>) -> ExcelMetadata {
+    pub fn new(sheet_count: Option<u32>, sheet_names: Option<Vec<String>>) -> ExcelMetadata {
         let mut __target: kreuzberg::ExcelMetadata = ::std::default::Default::default();
         __target.sheet_count = sheet_count;
         if let Ok(__v) = ::serde_json::to_value(sheet_names) {
@@ -7620,7 +7627,7 @@ impl ExcelMetadata {
         }
         ExcelMetadata(__target)
     }
-    pub fn sheet_count(&self) -> Option<usize> {
+    pub fn sheet_count(&self) -> Option<u32> {
         self.0.sheet_count.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -7730,10 +7737,10 @@ pub struct ArchiveMetadata(pub kreuzberg::ArchiveMetadata);
 impl ArchiveMetadata {
     pub fn new(
         format: String,
-        file_count: usize,
+        file_count: u32,
         file_list: Vec<String>,
-        total_size: usize,
-        compressed_size: Option<usize>,
+        total_size: u64,
+        compressed_size: Option<u64>,
     ) -> ArchiveMetadata {
         let mut __target: kreuzberg::ArchiveMetadata = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&format) {
@@ -7754,7 +7761,7 @@ impl ArchiveMetadata {
     pub fn format(&self) -> String {
         self.0.format.to_string()
     }
-    pub fn file_count(&self) -> usize {
+    pub fn file_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.file_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -7766,13 +7773,13 @@ impl ArchiveMetadata {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn total_size(&self) -> usize {
+    pub fn total_size(&self) -> u64 {
         ::serde_json::to_value(&self.0.total_size)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn compressed_size(&self) -> Option<usize> {
+    pub fn compressed_size(&self) -> Option<u64> {
         self.0.compressed_size.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -7821,7 +7828,7 @@ impl ImageMetadata {
 
 pub struct XmlMetadata(pub kreuzberg::XmlMetadata);
 impl XmlMetadata {
-    pub fn new(element_count: usize, unique_elements: Vec<String>) -> XmlMetadata {
+    pub fn new(element_count: u32, unique_elements: Vec<String>) -> XmlMetadata {
         let mut __target: kreuzberg::XmlMetadata = ::std::default::Default::default();
         __target.element_count = element_count;
         if let Ok(__v) = ::serde_json::to_value(unique_elements) {
@@ -7831,7 +7838,7 @@ impl XmlMetadata {
         }
         XmlMetadata(__target)
     }
-    pub fn element_count(&self) -> usize {
+    pub fn element_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.element_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -7848,9 +7855,9 @@ impl XmlMetadata {
 pub struct TextMetadata(pub kreuzberg::TextMetadata);
 impl TextMetadata {
     pub fn new(
-        line_count: usize,
-        word_count: usize,
-        character_count: usize,
+        line_count: u32,
+        word_count: u32,
+        character_count: u32,
         headers: Option<Vec<String>>,
         links: Option<Vec<String>>,
         code_blocks: Option<Vec<String>>,
@@ -7868,19 +7875,19 @@ impl TextMetadata {
         // alef: code_blocks — Vec field type may differ from IR in non-serde struct, left at default
         TextMetadata(__target)
     }
-    pub fn line_count(&self) -> usize {
+    pub fn line_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.line_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn word_count(&self) -> usize {
+    pub fn word_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.word_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn character_count(&self) -> usize {
+    pub fn character_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.character_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -7911,13 +7918,13 @@ impl HeaderMetadata {
     pub fn id(&self) -> Option<String> {
         self.0.id.clone()
     }
-    pub fn depth(&self) -> usize {
+    pub fn depth(&self) -> u32 {
         ::serde_json::to_value(&self.0.depth)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn html_offset(&self) -> usize {
+    pub fn html_offset(&self) -> u32 {
         ::serde_json::to_value(&self.0.html_offset)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8141,9 +8148,9 @@ impl OcrMetadata {
         language: String,
         psm: i32,
         output_format: String,
-        table_count: usize,
-        table_rows: Option<usize>,
-        table_cols: Option<usize>,
+        table_count: u32,
+        table_rows: Option<u32>,
+        table_cols: Option<u32>,
     ) -> OcrMetadata {
         let mut __target: kreuzberg::OcrMetadata = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&language) {
@@ -8174,20 +8181,20 @@ impl OcrMetadata {
     pub fn output_format(&self) -> String {
         self.0.output_format.clone()
     }
-    pub fn table_count(&self) -> usize {
+    pub fn table_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.table_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn table_rows(&self) -> Option<usize> {
+    pub fn table_rows(&self) -> Option<u32> {
         self.0.table_rows.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn table_cols(&self) -> Option<usize> {
+    pub fn table_cols(&self) -> Option<u32> {
         self.0.table_cols.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -8209,10 +8216,10 @@ impl ErrorMetadata {
 pub struct PptxMetadata(pub kreuzberg::PptxMetadata);
 impl PptxMetadata {
     pub fn new(
-        slide_count: usize,
+        slide_count: u32,
         slide_names: Vec<String>,
-        image_count: Option<usize>,
-        table_count: Option<usize>,
+        image_count: Option<u32>,
+        table_count: Option<u32>,
     ) -> PptxMetadata {
         let mut __target: kreuzberg::PptxMetadata = ::std::default::Default::default();
         __target.slide_count = slide_count;
@@ -8225,7 +8232,7 @@ impl PptxMetadata {
         __target.table_count = table_count;
         PptxMetadata(__target)
     }
-    pub fn slide_count(&self) -> usize {
+    pub fn slide_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.slide_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8237,14 +8244,14 @@ impl PptxMetadata {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn image_count(&self) -> Option<usize> {
+    pub fn image_count(&self) -> Option<u32> {
         self.0.image_count.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn table_count(&self) -> Option<usize> {
+    pub fn table_count(&self) -> Option<u32> {
         self.0.table_count.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -8288,8 +8295,8 @@ impl DocxMetadata {
 pub struct CsvMetadata(pub kreuzberg::CsvMetadata);
 impl CsvMetadata {
     pub fn new(
-        row_count: usize,
-        column_count: usize,
+        row_count: u32,
+        column_count: u32,
         delimiter: Option<String>,
         has_header: bool,
         column_types: Option<Vec<String>>,
@@ -8312,13 +8319,13 @@ impl CsvMetadata {
         }
         CsvMetadata(__target)
     }
-    pub fn row_count(&self) -> usize {
+    pub fn row_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.row_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn column_count(&self) -> usize {
+    pub fn column_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.column_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8767,7 +8774,7 @@ impl OcrElement {
         confidence: OcrConfidence,
         level: OcrElementLevel,
         rotation: Option<OcrRotation>,
-        page_number: usize,
+        page_number: u32,
         parent_id: Option<String>,
         backend_metadata: String,
     ) -> OcrElement {
@@ -8813,7 +8820,7 @@ impl OcrElement {
     pub fn rotation(&self) -> Option<OcrRotation> {
         self.0.rotation.clone().map(OcrRotation)
     }
-    pub fn page_number(&self) -> usize {
+    pub fn page_number(&self) -> u32 {
         ::serde_json::to_value(&self.0.page_number)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8867,7 +8874,7 @@ impl OcrElementConfig {
 
 pub struct PageStructure(pub kreuzberg::PageStructure);
 impl PageStructure {
-    pub fn total_count(&self) -> usize {
+    pub fn total_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.total_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8904,7 +8911,7 @@ impl PageBoundary {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn page_number(&self) -> usize {
+    pub fn page_number(&self) -> u32 {
         ::serde_json::to_value(&self.0.page_number)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8914,7 +8921,7 @@ impl PageBoundary {
 
 pub struct PageInfo(pub kreuzberg::PageInfo);
 impl PageInfo {
-    pub fn number(&self) -> usize {
+    pub fn number(&self) -> u32 {
         ::serde_json::to_value(&self.0.number)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8930,14 +8937,14 @@ impl PageInfo {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn image_count(&self) -> Option<usize> {
+    pub fn image_count(&self) -> Option<u32> {
         self.0.image_count.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn table_count(&self) -> Option<usize> {
+    pub fn table_count(&self) -> Option<u32> {
         self.0.table_count.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()
@@ -8968,7 +8975,7 @@ impl PageInfo {
 
 pub struct PageContent(pub kreuzberg::PageContent);
 impl PageContent {
-    pub fn page_number(&self) -> usize {
+    pub fn page_number(&self) -> u32 {
         ::serde_json::to_value(&self.0.page_number)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -8980,12 +8987,11 @@ impl PageContent {
     pub fn tables(&self) -> Vec<Table> {
         self.0.tables.iter().map(|elem| Table((**elem).clone())).collect()
     }
-    pub fn images(&self) -> Vec<ExtractedImage> {
-        self.0
-            .images
-            .iter()
-            .map(|elem| ExtractedImage((**elem).clone()))
-            .collect()
+    pub fn image_indices(&self) -> Vec<u32> {
+        ::serde_json::to_value(&self.0.image_indices)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
     }
     pub fn hierarchy(&self) -> Option<PageHierarchy> {
         self.0.hierarchy.clone().map(PageHierarchy)
@@ -9045,7 +9051,7 @@ impl LayoutRegion {
 
 pub struct PageHierarchy(pub kreuzberg::PageHierarchy);
 impl PageHierarchy {
-    pub fn block_count(&self) -> usize {
+    pub fn block_count(&self) -> u32 {
         ::serde_json::to_value(&self.0.block_count)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -9085,7 +9091,7 @@ impl HierarchicalBlock {
 
 pub struct Table(pub kreuzberg::Table);
 impl Table {
-    pub fn new(cells: String, markdown: String, page_number: usize, bounding_box: Option<String>) -> Table {
+    pub fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<String>) -> Table {
         let mut __target: kreuzberg::Table = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&cells) {
             if let Ok(t) = ::serde_json::from_value(v) {
@@ -9113,7 +9119,7 @@ impl Table {
     pub fn markdown(&self) -> String {
         self.0.markdown.clone()
     }
-    pub fn page_number(&self) -> usize {
+    pub fn page_number(&self) -> u32 {
         ::serde_json::to_value(&self.0.page_number)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -9126,7 +9132,7 @@ impl Table {
 
 pub struct TableCell(pub kreuzberg::TableCell);
 impl TableCell {
-    pub fn new(content: String, row_span: usize, col_span: usize, is_header: bool) -> TableCell {
+    pub fn new(content: String, row_span: u32, col_span: u32, is_header: bool) -> TableCell {
         let mut __target: kreuzberg::TableCell = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&content) {
             if let Ok(t) = ::serde_json::from_value(v) {
@@ -9141,13 +9147,13 @@ impl TableCell {
     pub fn content(&self) -> String {
         self.0.content.clone()
     }
-    pub fn row_span(&self) -> usize {
+    pub fn row_span(&self) -> u32 {
         ::serde_json::to_value(&self.0.row_span)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn col_span(&self) -> usize {
+    pub fn col_span(&self) -> u32 {
         ::serde_json::to_value(&self.0.col_span)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
@@ -9965,7 +9971,7 @@ impl PdfMetadata {
         is_encrypted: Option<bool>,
         width: Option<i64>,
         height: Option<i64>,
-        page_count: Option<usize>,
+        page_count: Option<u32>,
     ) -> PdfMetadata {
         let mut __target: kreuzberg::pdf::metadata::PdfMetadata = ::std::default::Default::default();
         if let Some(s) = pdf_version {
@@ -10015,7 +10021,7 @@ impl PdfMetadata {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn page_count(&self) -> Option<usize> {
+    pub fn page_count(&self) -> Option<u32> {
         self.0.page_count.as_ref().and_then(|v| {
             ::serde_json::to_value(v)
                 .ok()

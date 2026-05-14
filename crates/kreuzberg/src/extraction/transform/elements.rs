@@ -166,7 +166,7 @@ pub(crate) fn detect_list_items(text: &str) -> Vec<ListItemMetadata> {
 /// # Returns
 ///
 /// An ElementId suitable for referencing this semantic element
-pub(crate) fn generate_element_id(text: &str, element_type: ElementType, page_number: Option<usize>) -> ElementId {
+pub(crate) fn generate_element_id(text: &str, element_type: ElementType, page_number: Option<u32>) -> ElementId {
     // Simple deterministic hash using wrapping multiplication
     let type_hash = format!("{:?}", element_type)
         .bytes()
@@ -192,7 +192,7 @@ pub(crate) fn generate_element_id(text: &str, element_type: ElementType, page_nu
 }
 
 /// Add paragraphs as NarrativeText elements, splitting on double newlines.
-pub(super) fn add_paragraphs(elements: &mut Vec<Element>, text: &str, page_number: usize, title: &Option<String>) {
+pub(super) fn add_paragraphs(elements: &mut Vec<Element>, text: &str, page_number: u32, title: &Option<String>) {
     if text.is_empty() {
         return;
     }

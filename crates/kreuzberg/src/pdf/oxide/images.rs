@@ -21,15 +21,15 @@ use std::borrow::Cow;
 ///
 /// # Returns
 ///
-/// A `Vec<(usize, usize)>` of (1-indexed page number, global image index) pairs.
-pub(crate) fn extract_image_positions(doc: &mut OxideDocument) -> Result<Vec<(usize, usize)>> {
+/// A `Vec<(u32, u32)>` of (1-indexed page number, global image index) pairs.
+pub(crate) fn extract_image_positions(doc: &mut OxideDocument) -> Result<Vec<(u32, u32)>> {
     let page_count = doc
         .doc
         .page_count()
         .map_err(|e| PdfError::MetadataExtractionFailed(format!("pdf_oxide: failed to get page count: {e}")))?;
 
     let mut positions = Vec::new();
-    let mut global_index = 0usize;
+    let mut global_index = 0u32;
 
     for page_idx in 0..page_count {
         let oxide_images = match doc.doc.extract_images(page_idx) {
@@ -43,7 +43,7 @@ pub(crate) fn extract_image_positions(doc: &mut OxideDocument) -> Result<Vec<(us
             }
         };
 
-        let page_number = page_idx + 1; // Kreuzberg uses 1-indexed page numbers
+        let page_number = (page_idx + 1) as u32; // Kreuzberg uses 1-indexed page numbers
 
         for _img in &oxide_images {
             positions.push((page_number, global_index));
@@ -77,7 +77,7 @@ pub(crate) fn extract_images_with_data(
         .map_err(|e| PdfError::MetadataExtractionFailed(format!("pdf_oxide: failed to get page count: {e}")))?;
 
     let mut all_images = Vec::new();
-    let mut global_index = 0usize;
+    let mut global_index = 0u32;
 
     for page_idx in 0..page_count {
         let oxide_images = match doc.doc.extract_images(page_idx) {
@@ -88,7 +88,7 @@ pub(crate) fn extract_images_with_data(
             }
         };
 
-        let page_number = page_idx + 1; // Kreuzberg uses 1-indexed page numbers
+        let page_number = (page_idx + 1) as u32; // Kreuzberg uses 1-indexed page numbers
         let limit = max_images_per_page.unwrap_or(u32::MAX) as usize;
         let count = oxide_images.len().min(limit);
 

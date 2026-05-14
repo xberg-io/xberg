@@ -274,7 +274,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `enable_quality_processing` | `bool` | `true` | Enable quality post-processing |
 | `ocr` | `Option<OcrConfig>` | `None` | OCR configuration (None = OCR disabled) |
 | `force_ocr` | `bool` | `false` | Force OCR even for searchable PDFs |
-| `force_ocr_pages` | `Vec<usize>` | `None` | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent. |
+| `force_ocr_pages` | `Vec<u32>` | `None` | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent. |
 | `disable_ocr` | `bool` | `false` | Disable OCR entirely, even for images. When `true`, OCR is skipped for all document types. Images return metadata only (dimensions, format, EXIF) without text extraction. PDFs use only native text extraction without OCR fallback. Cannot be `true` simultaneously with `force_ocr`. *Added in v4.7.0.* |
 | `chunking` | `Option<ChunkingConfig>` | `None` | Text chunking configuration (None = chunking disabled) |
 | `content_filter` | `Option<ContentFilterConfig>` | `None` | Content filtering configuration (None = use extractor defaults). Controls whether document "furniture" (headers, footers, watermarks, repeating text) is included in or stripped from extraction results. See `ContentFilterConfig` for per-field documentation. |
@@ -292,7 +292,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `result_format` | `ResultFormat` | `ResultFormat::Unified` | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output). |
 | `security_limits` | `Option<SecurityLimits>` | `None` | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `None`, default limits are used. |
 | `output_format` | `OutputFormat` | `OutputFormat::Plain` | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied. |
-| `layout` | `Option<LayoutDetectionConfig>` | `None` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature. |
+| `layout` | `Option<LayoutDetectionConfig>` | `None` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `use_layout_for_markdown` | `bool` | `false` | Run layout detection on the non-OCR PDF markdown path. When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Substantially improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection` feature. |
 | `include_document_structure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `acceleration` | `Option<AccelerationConfig>` | `None` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `None`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
@@ -331,7 +331,7 @@ cannot be overridden per file:
 | `enable_quality_processing` | `Option<bool>` | `Default::default()` | Override quality post-processing for this file. |
 | `ocr` | `Option<OcrConfig>` | `Default::default()` | Override OCR configuration for this file (None in the Option = use batch default). |
 | `force_ocr` | `Option<bool>` | `Default::default()` | Override force OCR for this file. |
-| `force_ocr_pages` | `Vec<usize>` | `vec![]` | Override force OCR pages for this file (1-indexed page numbers). |
+| `force_ocr_pages` | `Vec<u32>` | `vec![]` | Override force OCR pages for this file (1-indexed page numbers). |
 | `disable_ocr` | `Option<bool>` | `Default::default()` | Override disable OCR for this file. |
 | `chunking` | `Option<ChunkingConfig>` | `Default::default()` | Override chunking configuration for this file. |
 | `content_filter` | `Option<ContentFilterConfig>` | `Default::default()` | Override content filtering configuration for this file. |
@@ -570,6 +570,7 @@ PDF-specific configuration.
 | `top_margin_fraction` | `Option<f32>` | `None` | Top margin fraction (0.0–1.0) of page height to exclude headers/running heads. Default: 0.06 (6%) |
 | `bottom_margin_fraction` | `Option<f32>` | `None` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `allow_single_column_tables` | `bool` | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
+| `ocr_inline_images` | `bool` | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `None` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
 
 ---
 
@@ -1129,7 +1130,7 @@ from both Tesseract and PaddleOCR backends.
 | `confidence` | `OcrConfidence` | — | Confidence scores for detection and recognition. |
 | `level` | `OcrElementLevel` | `OcrElementLevel::Line` | Hierarchical level (word, line, block, page). |
 | `rotation` | `Option<OcrRotation>` | `Default::default()` | Rotation information (if detected). |
-| `page_number` | `usize` | — | Page number (1-indexed). |
+| `page_number` | `u32` | — | Page number (1-indexed). |
 | `parent_id` | `Option<String>` | `Default::default()` | Parent element ID for hierarchical relationships. Only used for Tesseract output which has word -> line -> block hierarchy. |
 | `backend_metadata` | `HashMap<String, serde_json::Value>` | `HashMap::new()` | Backend-specific metadata that doesn't fit the unified schema. |
 
@@ -1178,7 +1179,7 @@ Tables are converted to both structured cell data and Markdown format.
 |-------|------|---------|-------------|
 | `cells` | `Vec<Vec<String>>` | `vec![]` | Table cells as a 2D vector (rows × columns) |
 | `markdown` | `String` | — | Markdown representation of the table |
-| `page_number` | `usize` | — | Page number where the table was found (1-indexed) |
+| `page_number` | `u32` | — | Page number where the table was found (1-indexed) |
 | `bounding_box` | `Option<String>` | `Default::default()` | Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted tables when position data is available. |
 
 ---
@@ -1192,8 +1193,8 @@ Future extension point for rich table support with cell-level metadata.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `content` | `String` | — | Cell content as text |
-| `row_span` | `usize` | — | Row span (number of rows this cell spans) |
-| `col_span` | `usize` | — | Column span (number of columns this cell spans) |
+| `row_span` | `u32` | — | Row span (number of rows this cell spans) |
+| `col_span` | `u32` | — | Column span (number of columns this cell spans) |
 | `is_header` | `bool` | — | Whether this is a header cell |
 
 ---
@@ -1289,9 +1290,10 @@ Metadata about a chunk's position in the original document.
 | `token_count` | `Option<usize>` | `None` | Number of tokens in this chunk (if available). This is calculated by the embedding model's tokenizer if embeddings are enabled. |
 | `chunk_index` | `usize` | — | Zero-based index of this chunk in the document. |
 | `total_chunks` | `usize` | — | Total number of chunks in the document. |
-| `first_page` | `Option<usize>` | `None` | First page number this chunk spans (1-indexed). Only populated when page tracking is enabled in extraction configuration. |
-| `last_page` | `Option<usize>` | `None` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
+| `first_page` | `Option<u32>` | `None` | First page number this chunk spans (1-indexed). Only populated when page tracking is enabled in extraction configuration. |
+| `last_page` | `Option<u32>` | `None` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
 | `heading_context` | `Option<HeadingContext>` | `None` | Heading context when using Markdown chunker. Contains the heading hierarchy this chunk falls under. Only populated when `ChunkerType.Markdown` is used. |
+| `image_indices` | `Vec<u32>` | — | Indices into `ExtractionResult.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `[first_page, last_page]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
 
 ---
 
@@ -1301,7 +1303,7 @@ Metadata for a semantic element.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `page_number` | `Option<usize>` | `None` | Page number (1-indexed) |
+| `page_number` | `Option<u32>` | `None` | Page number (1-indexed) |
 | `filename` | `Option<String>` | `None` | Source filename or document name |
 | `coordinates` | `Option<String>` | `None` | Bounding box coordinates if available |
 | `element_index` | `Option<usize>` | `None` | Position index in the element sequence |
@@ -1376,7 +1378,7 @@ discriminant. Sheet count and sheet names are stored inside this struct.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `sheet_count` | `Option<usize>` | `Default::default()` | Number of sheets in the workbook. |
+| `sheet_count` | `Option<u32>` | `Default::default()` | Number of sheets in the workbook. |
 | `sheet_names` | `Vec<String>` | `vec![]` | Names of all sheets in the workbook. |
 
 ---
@@ -1408,10 +1410,10 @@ Extracted from compressed archive files containing file lists and size informati
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `format` | `String` | — | Archive format ("ZIP", "TAR", "7Z", etc.) |
-| `file_count` | `usize` | — | Total number of files in the archive |
+| `file_count` | `u32` | — | Total number of files in the archive |
 | `file_list` | `Vec<String>` | `vec![]` | List of file paths within the archive |
-| `total_size` | `usize` | — | Total uncompressed size in bytes |
-| `compressed_size` | `Option<usize>` | `Default::default()` | Compressed size in bytes (if available) |
+| `total_size` | `u64` | — | Total uncompressed size in bytes |
+| `compressed_size` | `Option<u64>` | `Default::default()` | Compressed size in bytes (if available) |
 
 ---
 
@@ -1438,7 +1440,7 @@ Provides statistics about XML document structure.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `element_count` | `usize` | — | Total number of XML elements processed |
+| `element_count` | `u32` | — | Total number of XML elements processed |
 | `unique_elements` | `Vec<String>` | `vec![]` | List of unique element tag names (sorted) |
 
 ---
@@ -1452,9 +1454,9 @@ for Markdown, structural elements like headers and links.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `line_count` | `usize` | — | Number of lines in the document |
-| `word_count` | `usize` | — | Number of words |
-| `character_count` | `usize` | — | Number of characters |
+| `line_count` | `u32` | — | Number of lines in the document |
+| `word_count` | `u32` | — | Number of words |
+| `character_count` | `u32` | — | Number of characters |
 | `headers` | `Vec<String>` | `vec![]` | Markdown headers (headings text only, for Markdown files) |
 | `links` | `Vec<String>` | `vec![]` | Markdown links as (text, url) tuples (for Markdown files) |
 | `code_blocks` | `Vec<String>` | `vec![]` | Code blocks as (language, code) tuples (for Markdown files) |
@@ -1470,8 +1472,8 @@ Header/heading element metadata.
 | `level` | `u8` | — | Header level: 1 (h1) through 6 (h6) |
 | `text` | `String` | — | Normalized text content of the header |
 | `id` | `Option<String>` | `None` | HTML id attribute if present |
-| `depth` | `usize` | — | Document tree depth at the header element |
-| `html_offset` | `usize` | — | Byte offset in original HTML document |
+| `depth` | `u32` | — | Document tree depth at the header element |
+| `html_offset` | `u32` | — | Byte offset in original HTML document |
 
 ---
 
@@ -1543,9 +1545,9 @@ Captures information about OCR processing configuration and results.
 | `language` | `String` | — | OCR language code(s) used |
 | `psm` | `i32` | — | Tesseract Page Segmentation Mode (PSM) |
 | `output_format` | `String` | — | Output format (e.g., "text", "hocr") |
-| `table_count` | `usize` | — | Number of tables detected |
-| `table_rows` | `Option<usize>` | `Default::default()` | Table rows |
-| `table_cols` | `Option<usize>` | `Default::default()` | Table cols |
+| `table_count` | `u32` | — | Number of tables detected |
+| `table_rows` | `Option<u32>` | `Default::default()` | Table rows |
+| `table_cols` | `Option<u32>` | `Default::default()` | Table cols |
 
 ---
 
@@ -1568,10 +1570,10 @@ Extracted from PPTX files containing slide counts and presentation details.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `slide_count` | `usize` | — | Total number of slides in the presentation |
+| `slide_count` | `u32` | — | Total number of slides in the presentation |
 | `slide_names` | `Vec<String>` | `vec![]` | Names of slides (if available) |
-| `image_count` | `Option<usize>` | `Default::default()` | Number of embedded images |
-| `table_count` | `Option<usize>` | `Default::default()` | Number of tables |
+| `image_count` | `Option<u32>` | `Default::default()` | Number of embedded images |
+| `table_count` | `Option<u32>` | `Default::default()` | Number of tables |
 
 ---
 
@@ -1596,8 +1598,8 @@ CSV/TSV file metadata.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `row_count` | `usize` | — | Number of rows |
-| `column_count` | `usize` | — | Number of columns |
+| `row_count` | `u32` | — | Number of rows |
+| `column_count` | `u32` | — | Number of columns |
 | `delimiter` | `Option<String>` | `Default::default()` | Delimiter |
 | `has_header` | `bool` | — | Whether header |
 | `column_types` | `Vec<String>` | `vec![]` | Column types |
@@ -1710,7 +1712,7 @@ are at the `Metadata` level.
 | `is_encrypted` | `Option<bool>` | `Default::default()` | Whether the PDF is encrypted/password-protected |
 | `width` | `Option<i64>` | `Default::default()` | First page width in points (1/72 inch) |
 | `height` | `Option<i64>` | `Default::default()` | First page height in points (1/72 inch) |
-| `page_count` | `Option<usize>` | `Default::default()` | Total number of pages in the PDF document |
+| `page_count` | `Option<u32>` | `Default::default()` | Total number of pages in the PDF document |
 
 ---
 
@@ -1808,7 +1810,7 @@ Represents a table structure recognized during OCR processing.
 |-------|------|---------|-------------|
 | `cells` | `Vec<Vec<String>>` | — | Table cells as a 2D vector (rows × columns) |
 | `markdown` | `String` | — | Markdown representation of the table |
-| `page_number` | `usize` | — | Page number where the table was found (1-indexed) |
+| `page_number` | `u32` | — | Page number where the table was found (1-indexed) |
 | `bounding_box` | `Option<OcrTableBoundingBox>` | `None` | Bounding box of the table in pixel coordinates (from OCR word positions). |
 
 ---
@@ -1843,10 +1845,15 @@ Returned by `PUT /process` for the OpenWebUI external document loader.
 
 Pre-computed table markdown for a table detection region.
 
+Produced by the TATR-based table structure recognizer and surfaced as part of
+layout-aware OCR results. The struct lives here (under `layout-types`, pure-Rust)
+so that consumers who do not enable `layout-detection` (ORT) can still reference
+the type in their own code.
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `detection_bbox` | `BBox` | — | Detection bbox that this table corresponds to (for matching). |
-| `cells` | `Vec<Vec<String>>` | — | Table cells as a 2D vector (rows x columns). |
+| `cells` | `Vec<Vec<String>>` | — | Table cells as a 2D vector (rows × columns). |
 | `markdown` | `String` | — | Rendered markdown table. |
 
 ---
@@ -2183,7 +2190,7 @@ A PDF annotation extracted from a document page.
 |-------|------|---------|-------------|
 | `annotation_type` | `PdfAnnotationType` | — | The type of annotation. |
 | `content` | `Option<String>` | `None` | Text content of the annotation (e.g., comment text, link URL). |
-| `page_number` | `usize` | — | Page number where the annotation appears (1-indexed). |
+| `page_number` | `u32` | — | Page number where the annotation appears (1-indexed). |
 | `bounding_box` | `Option<String>` | `None` | Bounding box of the annotation on the page. |
 
 ---
@@ -2382,8 +2389,8 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 |-------|------|---------|-------------|
 | `data` | `Vec<u8>` | — | Raw image data (PNG, JPEG, WebP, etc. bytes). Uses `bytes.Bytes` for cheap cloning of large buffers. |
 | `format` | `String` | — | Image format (e.g., "jpeg", "png", "webp") Uses Cow<'static, str> to avoid allocation for static literals. |
-| `image_index` | `usize` | — | Zero-indexed position of this image in the document/page |
-| `page_number` | `Option<usize>` | `None` | Page/slide number where image was found (1-indexed) |
+| `image_index` | `u32` | — | Zero-indexed position of this image in the document/page |
+| `page_number` | `Option<u32>` | `None` | Page/slide number where image was found (1-indexed) |
 | `width` | `Option<u32>` | `None` | Image width in pixels |
 | `height` | `Option<u32>` | `None` | Image height in pixels |
 | `colorspace` | `Option<String>` | `None` | Colorspace information (e.g., "RGB", "CMYK", "Gray") |
@@ -2519,7 +2526,7 @@ with character offset boundaries for chunk-to-page mapping.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `total_count` | `usize` | — | Total number of pages/slides/sheets |
+| `total_count` | `u32` | — | Total number of pages/slides/sheets |
 | `unit_type` | `PageUnitType` | — | Type of paginated unit |
 | `boundaries` | `Vec<PageBoundary>` | `None` | Character offset boundaries for each page Maps character ranges in the extracted content to page numbers. Used for chunk page range calculation. |
 | `pages` | `Vec<PageInfo>` | `None` | Detailed per-page metadata (optional, only when needed) |
@@ -2538,7 +2545,7 @@ at valid UTF-8 character boundaries when using standard String methods (push_str
 |-------|------|---------|-------------|
 | `byte_start` | `usize` | — | Byte offset where this page starts in the content string (UTF-8 valid boundary, inclusive) |
 | `byte_end` | `usize` | — | Byte offset where this page ends in the content string (UTF-8 valid boundary, exclusive) |
-| `page_number` | `usize` | — | Page number (1-indexed) |
+| `page_number` | `u32` | — | Page number (1-indexed) |
 
 ---
 
@@ -2551,11 +2558,11 @@ and visibility state (for presentations).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `number` | `usize` | — | Page number (1-indexed) |
+| `number` | `u32` | — | Page number (1-indexed) |
 | `title` | `Option<String>` | `None` | Page title (usually for presentations) |
 | `dimensions` | `Vec<f64>` | `None` | Dimensions in points (PDF) or pixels (images): (width, height) |
-| `image_count` | `Option<usize>` | `None` | Number of images on this page |
-| `table_count` | `Option<usize>` | `None` | Number of tables on this page |
+| `image_count` | `Option<u32>` | `None` | Number of images on this page |
+| `table_count` | `Option<u32>` | `None` | Number of tables on this page |
 | `hidden` | `Option<bool>` | `None` | Whether this page is hidden (e.g., in presentations) |
 | `is_blank` | `Option<bool>` | `None` | Whether this page is blank (no meaningful text, no images, no tables) A page is considered blank if it has fewer than 3 non-whitespace characters and contains no tables or images. This is useful for filtering out empty pages in scanned documents or PDFs with blank separator pages. |
 | `has_vector_graphics` | `bool` | — | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `None` for other document types. |
@@ -2582,10 +2589,10 @@ by avoiding redundant copies during serialization.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `page_number` | `usize` | — | Page number (1-indexed) |
+| `page_number` | `u32` | — | Page number (1-indexed) |
 | `content` | `String` | — | Text content for this page |
 | `tables` | `Vec<Table>` | — | Tables found on this page (uses Arc for memory efficiency) Serializes as Vec<Table> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
-| `images` | `Vec<ExtractedImage>` | — | Images found on this page (uses Arc for memory efficiency) Serializes as Vec<ExtractedImage> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
+| `image_indices` | `Vec<u32>` | — | Indices into `ExtractionResult.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
 | `hierarchy` | `Option<PageHierarchy>` | `None` | Hierarchy information for the page (when hierarchy extraction is enabled) Contains text hierarchy levels (H1-H6) extracted from the page content. |
 | `is_blank` | `Option<bool>` | `None` | Whether this page is blank (no meaningful text content) Determined during extraction based on text content analysis. A page is blank if it has fewer than 3 non-whitespace characters and contains no tables or images. |
 | `layout_regions` | `Vec<LayoutRegion>` | `None` | Layout detection regions for this page (when layout detection is enabled). Contains detected layout regions with class, confidence, bounding box, and area fraction. Only populated when layout detection is configured. |
@@ -2601,7 +2608,7 @@ blocks with heading levels (H1-H6) for semantic document structure.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `block_count` | `usize` | — | Number of hierarchy blocks on this page |
+| `block_count` | `u32` | — | Number of hierarchy blocks on this page |
 | `blocks` | `Vec<HierarchicalBlock>` | — | Hierarchical blocks with heading levels |
 
 ---

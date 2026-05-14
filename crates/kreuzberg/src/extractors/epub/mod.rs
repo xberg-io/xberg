@@ -427,7 +427,7 @@ impl EpubExtractor {
                                     data: bytes::Bytes::from(data),
                                     format: Cow::Owned(format),
                                     image_index: 0,
-                                    page_number: Some(index + 1),
+                                    page_number: Some((index + 1) as u32),
                                     width: None,
                                     height: None,
                                     colorspace: None,

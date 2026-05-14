@@ -34,7 +34,7 @@ pub(crate) fn extract_annotations(doc: &mut OxideDocument) -> Vec<PdfAnnotation>
     let mut annotations = Vec::new();
 
     for page_index in 0..page_count {
-        let page_number = page_index + 1;
+        let page_number = (page_index + 1) as u32;
 
         let page_annotations = match doc.doc.get_annotations(page_index) {
             Ok(annots) => annots,

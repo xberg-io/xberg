@@ -34,7 +34,7 @@ pub struct PdfAnnotation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     /// Page number where the annotation appears (1-indexed).
-    pub page_number: usize,
+    pub page_number: u32,
     /// Bounding box of the annotation on the page.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bounding_box: Option<BoundingBox>,

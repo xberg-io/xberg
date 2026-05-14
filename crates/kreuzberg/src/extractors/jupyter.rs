@@ -306,8 +306,8 @@ impl JupyterExtractor {
                         images.push(ExtractedImage {
                             data: Bytes::from(decoded),
                             format: Cow::Borrowed(format),
-                            image_index: images.len(),
-                            page_number: Some(cell_idx + 1),
+                            image_index: images.len() as u32,
+                            page_number: Some((cell_idx + 1) as u32),
                             width: None,
                             height: None,
                             colorspace: None,

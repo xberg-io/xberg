@@ -258,7 +258,7 @@ pub struct OcrElement {
 
     /// Page number (1-indexed).
     #[serde(default = "default_page_number")]
-    pub page_number: usize,
+    pub page_number: u32,
 
     /// Parent element ID for hierarchical relationships.
     ///
@@ -271,7 +271,7 @@ pub struct OcrElement {
     pub backend_metadata: HashMap<String, serde_json::Value>,
 }
 
-fn default_page_number() -> usize {
+fn default_page_number() -> u32 {
     1
 }
 
@@ -305,7 +305,7 @@ impl OcrElement {
     }
 
     /// Set page number.
-    pub(crate) fn with_page_number(mut self, page_number: usize) -> Self {
+    pub(crate) fn with_page_number(mut self, page_number: u32) -> Self {
         self.page_number = page_number;
         self
     }

@@ -922,16 +922,16 @@ public typealias PdfMetadata = RustBridge.PdfMetadata
 /// Determines which hardware backend is used for model inference.
 /// `Auto` (default) selects the best available provider per platform.
 public enum ExecutionProviderType {
-  /// Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere.
-  case auto
-  /// CPU execution provider (always available).
-  case cpu
-  /// Apple CoreML (macOS/iOS Neural Engine + GPU).
-  case coreMl
-  /// NVIDIA CUDA GPU acceleration.
-  case cuda
-  /// NVIDIA TensorRT (optimized CUDA inference).
-  case tensorRt
+    /// Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere.
+    case auto
+    /// CPU execution provider (always available).
+    case cpu
+    /// Apple CoreML (macOS/iOS Neural Engine + GPU).
+    case coreMl
+    /// NVIDIA CUDA GPU acceleration.
+    case cuda
+    /// NVIDIA TensorRT (optimized CUDA inference).
+    case tensorRt
 }
 
 /// Output format for extraction results.
@@ -942,38 +942,38 @@ public enum ExecutionProviderType {
 /// `Structured` returns JSON with full OCR element data including bounding
 /// boxes and confidence scores.
 public enum OutputFormat {
-  /// Plain text content only (default)
-  case plain
-  /// Markdown format
-  case markdown
-  /// Djot markup format
-  case djot
-  /// HTML format
-  case html
-  /// JSON tree format with heading-driven sections.
-  case json
-  /// Structured JSON format with full OCR element metadata.
-  case structured
-  /// Custom renderer registered via the RendererRegistry.
-  /// The string is the renderer name (e.g., "docx", "latex").
-  case custom(field0: String)
+    /// Plain text content only (default)
+    case plain
+    /// Markdown format
+    case markdown
+    /// Djot markup format
+    case djot
+    /// HTML format
+    case html
+    /// JSON tree format with heading-driven sections.
+    case json
+    /// Structured JSON format with full OCR element metadata.
+    case structured
+    /// Custom renderer registered via the RendererRegistry.
+    /// The string is the renderer name (e.g., "docx", "latex").
+    case custom(field0: String)
 }
 
 /// Built-in HTML theme selection.
 public enum HtmlTheme {
-  /// Sensible defaults: system font stack, neutral colours, readable line
-  /// measure. CSS custom properties (`--kb-*`) are all defined so user CSS
-  /// can override individual values.
-  case default_
-  /// GitHub Markdown-inspired palette and spacing.
-  case gitHub
-  /// Dark background, light text.
-  case dark
-  /// Minimal light theme with generous whitespace.
-  case light
-  /// No built-in stylesheet emitted. CSS custom properties are still defined
-  /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
-  case unstyled
+    /// Sensible defaults: system font stack, neutral colours, readable line
+    /// measure. CSS custom properties (`--kb-*`) are all defined so user CSS
+    /// can override individual values.
+    case default_
+    /// GitHub Markdown-inspired palette and spacing.
+    case gitHub
+    /// Dark background, light text.
+    case dark
+    /// Minimal light theme with generous whitespace.
+    case light
+    /// No built-in stylesheet emitted. CSS custom properties are still defined
+    /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
+    case unstyled
 }
 
 /// Which table structure recognition model to use.
@@ -982,19 +982,19 @@ public enum HtmlTheme {
 /// table regions. Wire format is snake_case in all serializers (JSON, TOML,
 /// YAML).
 public enum TableModel {
-  /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
-  case tatr
-  /// SLANeXT wired variant -- 365MB, optimized for bordered tables.
-  case slanetWired
-  /// SLANeXT wireless variant -- 365MB, optimized for borderless tables.
-  case slanetWireless
-  /// SLANet-plus -- 7.78MB, lightweight general-purpose.
-  case slanetPlus
-  /// Classifier-routed SLANeXT: auto-select wired/wireless per table.
-  /// Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
-  case slanetAuto
-  /// Disable table structure model inference entirely; use heuristic path only.
-  case disabled
+    /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
+    case tatr
+    /// SLANeXT wired variant -- 365MB, optimized for bordered tables.
+    case slanetWired
+    /// SLANeXT wireless variant -- 365MB, optimized for borderless tables.
+    case slanetWireless
+    /// SLANet-plus -- 7.78MB, lightweight general-purpose.
+    case slanetPlus
+    /// Classifier-routed SLANeXT: auto-select wired/wireless per table.
+    /// Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
+    case slanetAuto
+    /// Disable table structure model inference entirely; use heuristic path only.
+    case disabled
 }
 
 /// Type of text chunker to use.
@@ -1012,10 +1012,10 @@ public enum TableModel {
 ///   `max_characters` (default 1000). `topic_threshold` has no effect in the
 ///   fallback path. For best results, pair with an embedding model.
 public enum ChunkerType {
-  case text
-  case markdown
-  case yaml
-  case semantic
+    case text
+    case markdown
+    case yaml
+    case semantic
 }
 
 /// How chunk size is measured.
@@ -1027,43 +1027,43 @@ public enum ChunkerType {
 /// available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 /// (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
 public enum ChunkSizing {
-  /// Size measured in Unicode characters (default).
-  case characters
-  /// Size measured in tokens from a HuggingFace tokenizer.
-  case tokenizer(model: String, cacheDir: URL)
+    /// Size measured in Unicode characters (default).
+    case characters
+    /// Size measured in tokens from a HuggingFace tokenizer.
+    case tokenizer(model: String, cacheDir: URL)
 }
 
 /// Embedding model types supported by Kreuzberg.
 public enum EmbeddingModelType {
-  /// Use a preset model configuration (recommended)
-  case preset(name: String)
-  /// Use a custom ONNX model from HuggingFace
-  case custom(modelId: String, dimensions: UInt)
-  /// Provider-hosted embedding model via liter-llm.
-  ///
-  /// Uses the model specified in the nested `LlmConfig` (e.g.,
-  /// `"openai/text-embedding-3-small"`).
-  case llm(llm: LlmConfig)
-  /// In-process embedding backend registered via the plugin system.
-  ///
-  /// The caller registers an [`EmbeddingBackend`](crate::plugins::EmbeddingBackend) once
-  /// (e.g. a wrapper around an already-loaded `llama-cpp-python`, `sentence-transformers`,
-  /// or tuned ONNX model), then references it by name in config. Kreuzberg calls back
-  /// into the registered backend during chunking and standalone embed requests —
-  /// no HuggingFace download, no ONNX Runtime requirement, no HTTP sidecar.
-  ///
-  /// When this variant is selected, only the following [`EmbeddingConfig`] fields
-  /// apply: `normalize` (post-call L2 normalization) and `max_embed_duration_secs`
-  /// (dispatcher timeout). Model-loading fields (`batch_size`, `cache_dir`,
-  /// `show_download_progress`, `acceleration`) are ignored — the host owns the
-  /// model lifecycle.
-  ///
-  /// Semantic chunking falls back to [`ChunkingConfig::max_characters`] when this variant
-  /// is used, since there is no preset to look a chunk-size ceiling up against — size your
-  /// context window via `max_characters` directly.
-  ///
-  /// See `register_embedding_backend`.
-  case plugin(name: String)
+    /// Use a preset model configuration (recommended)
+    case preset(name: String)
+    /// Use a custom ONNX model from HuggingFace
+    case custom(modelId: String, dimensions: UInt)
+    /// Provider-hosted embedding model via liter-llm.
+    ///
+    /// Uses the model specified in the nested `LlmConfig` (e.g.,
+    /// `"openai/text-embedding-3-small"`).
+    case llm(llm: LlmConfig)
+    /// In-process embedding backend registered via the plugin system.
+    ///
+    /// The caller registers an [`EmbeddingBackend`](crate::plugins::EmbeddingBackend) once
+    /// (e.g. a wrapper around an already-loaded `llama-cpp-python`, `sentence-transformers`,
+    /// or tuned ONNX model), then references it by name in config. Kreuzberg calls back
+    /// into the registered backend during chunking and standalone embed requests —
+    /// no HuggingFace download, no ONNX Runtime requirement, no HTTP sidecar.
+    ///
+    /// When this variant is selected, only the following [`EmbeddingConfig`] fields
+    /// apply: `normalize` (post-call L2 normalization) and `max_embed_duration_secs`
+    /// (dispatcher timeout). Model-loading fields (`batch_size`, `cache_dir`,
+    /// `show_download_progress`, `acceleration`) are ignored — the host owns the
+    /// model lifecycle.
+    ///
+    /// Semantic chunking falls back to [`ChunkingConfig::max_characters`] when this variant
+    /// is used, since there is no preset to look a chunk-size ceiling up against — size your
+    /// context window via `max_characters` directly.
+    ///
+    /// See `register_embedding_backend`.
+    case plugin(name: String)
 }
 
 /// Content rendering mode for code extraction.
@@ -1071,26 +1071,26 @@ public enum EmbeddingModelType {
 /// Controls how extracted code content is represented in the `content` field
 /// of `ExtractionResult`.
 public enum CodeContentMode {
-  /// Use TSLP semantic chunks as content (default).
-  case chunks
-  /// Use raw source code as content.
-  case raw
-  /// Emit function/class headings + docstrings (no code bodies).
-  case structure
+    /// Use TSLP semantic chunks as content (default).
+    case chunks
+    /// Use raw source code as content.
+    case raw
+    /// Emit function/class headings + docstrings (no code bodies).
+    case structure
 }
 
 public typealias FracType = RustBridge.FracType
 
 /// OCR backend types.
 public enum OcrBackendType {
-  /// Tesseract OCR (native Rust binding)
-  case tesseract
-  /// EasyOCR (Python-based, via FFI)
-  case easyOcr
-  /// PaddleOCR (Python-based, via FFI)
-  case paddleOcr
-  /// Custom/third-party OCR backend
-  case custom
+    /// Tesseract OCR (native Rust binding)
+    case tesseract
+    /// EasyOCR (Python-based, via FFI)
+    case easyOcr
+    /// PaddleOCR (Python-based, via FFI)
+    case paddleOcr
+    /// Custom/third-party OCR backend
+    case custom
 }
 
 /// Processing stages for post-processors.
@@ -1098,128 +1098,128 @@ public enum OcrBackendType {
 /// Post-processors are executed in stage order (Early → Middle → Late).
 /// Use stages to control the order of post-processing operations.
 public enum ProcessingStage {
-  /// Early stage - foundational processing.
-  ///
-  /// Use for:
-  /// - Language detection
-  /// - Character encoding normalization
-  /// - Entity extraction (NER)
-  /// - Text quality scoring
-  case early
-  /// Middle stage - content transformation.
-  ///
-  /// Use for:
-  /// - Keyword extraction
-  /// - Token reduction
-  /// - Text summarization
-  /// - Semantic analysis
-  case middle
-  /// Late stage - final enrichment.
-  ///
-  /// Use for:
-  /// - Custom user hooks
-  /// - Analytics/logging
-  /// - Final validation
-  /// - Output formatting
-  case late
+    /// Early stage - foundational processing.
+    ///
+    /// Use for:
+    /// - Language detection
+    /// - Character encoding normalization
+    /// - Entity extraction (NER)
+    /// - Text quality scoring
+    case early
+    /// Middle stage - content transformation.
+    ///
+    /// Use for:
+    /// - Keyword extraction
+    /// - Token reduction
+    /// - Text summarization
+    /// - Semantic analysis
+    case middle
+    /// Late stage - final enrichment.
+    ///
+    /// Use for:
+    /// - Custom user hooks
+    /// - Analytics/logging
+    /// - Final validation
+    /// - Output formatting
+    case late
 }
 
 public enum ReductionLevel {
-  case off
-  case light
-  case moderate
-  case aggressive
-  case maximum
+    case off
+    case light
+    case moderate
+    case aggressive
+    case maximum
 }
 
 /// Type of PDF annotation.
 public enum PdfAnnotationType {
-  /// Sticky note / text annotation
-  case text
-  /// Highlighted text region
-  case highlight
-  /// Hyperlink annotation
-  case link
-  /// Rubber stamp annotation
-  case stamp
-  /// Underline text markup
-  case underline
-  /// Strikeout text markup
-  case strikeOut
-  /// Any other annotation type
-  case other
+    /// Sticky note / text annotation
+    case text
+    /// Highlighted text region
+    case highlight
+    /// Hyperlink annotation
+    case link
+    /// Rubber stamp annotation
+    case stamp
+    /// Underline text markup
+    case underline
+    /// Strikeout text markup
+    case strikeOut
+    /// Any other annotation type
+    case other
 }
 
 /// Types of block-level elements in Djot.
 public enum BlockType {
-  case paragraph
-  case heading
-  case blockquote
-  case codeBlock
-  case listItem
-  case orderedList
-  case bulletList
-  case taskList
-  case definitionList
-  case definitionTerm
-  case definitionDescription
-  case div
-  case section
-  case thematicBreak
-  case rawBlock
-  case mathDisplay
+    case paragraph
+    case heading
+    case blockquote
+    case codeBlock
+    case listItem
+    case orderedList
+    case bulletList
+    case taskList
+    case definitionList
+    case definitionTerm
+    case definitionDescription
+    case div
+    case section
+    case thematicBreak
+    case rawBlock
+    case mathDisplay
 }
 
 /// Types of inline elements in Djot.
 public enum InlineType {
-  case text
-  case strong
-  case emphasis
-  case highlight
-  case subscript_
-  case superscript
-  case insert
-  case delete
-  case code
-  case link
-  case image
-  case span
-  case math
-  case rawInline
-  case footnoteRef
-  case symbol
+    case text
+    case strong
+    case emphasis
+    case highlight
+    case subscript_
+    case superscript
+    case insert
+    case delete
+    case code
+    case link
+    case image
+    case span
+    case math
+    case rawInline
+    case footnoteRef
+    case symbol
 }
 
 /// Semantic kind of a relationship between document elements.
 public enum RelationshipKind {
-  /// Footnote marker -> footnote definition.
-  case footnoteReference
-  /// Citation marker -> bibliography entry.
-  case citationReference
-  /// Internal anchor link (`#id`) -> target heading/element.
-  case internalLink
-  /// Caption paragraph -> figure/table it describes.
-  case caption
-  /// Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`).
-  case label
-  /// TOC entry -> target section.
-  case tocEntry
-  /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
-  case crossReference
+    /// Footnote marker -> footnote definition.
+    case footnoteReference
+    /// Citation marker -> bibliography entry.
+    case citationReference
+    /// Internal anchor link (`#id`) -> target heading/element.
+    case internalLink
+    /// Caption paragraph -> figure/table it describes.
+    case caption
+    /// Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`).
+    case label
+    /// TOC entry -> target section.
+    case tocEntry
+    /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
+    case crossReference
 }
 
 /// Content layer classification for document nodes.
 ///
 /// Replaces separate body/furniture arrays with per-node granularity.
 public enum ContentLayer {
-  /// Main document body content.
-  case body
-  /// Page/section header (running header).
-  case header
-  /// Page/section footer (running footer).
-  case footer
-  /// Footnote content.
-  case footnote
+    /// Main document body content.
+    case body
+    /// Page/section header (running header).
+    case header
+    /// Page/section footer (running footer).
+    case footer
+    /// Footnote content.
+    case footnote
 }
 
 /// Tagged enum for node content. Each variant carries only type-specific data.
@@ -1227,81 +1227,81 @@ public enum ContentLayer {
 /// Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
 /// Go/Java/TypeScript bindings.
 public enum NodeContent {
-  /// Document title.
-  case title(text: String)
-  /// Section heading with level (1-6).
-  case heading(level: UInt8, text: String)
-  /// Body text paragraph.
-  case paragraph(text: String)
-  /// List container — children are `ListItem` nodes.
-  case list(ordered: Bool)
-  /// Individual list item.
-  case listItem(text: String)
-  /// Table with structured cell grid.
-  case table(grid: TableGrid)
-  /// Image reference.
-  case image(description: String, imageIndex: UInt32, src: String)
-  /// Code block.
-  case code(text: String, language: String)
-  /// Block quote — container, children carry the quoted content.
-  case quote
-  /// Mathematical formula / equation.
-  case formula(text: String)
-  /// Footnote reference content.
-  case footnote(text: String)
-  /// Logical grouping container (section, key-value area).
-  ///
-  /// `heading_level` + `heading_text` capture the section heading directly
-  /// rather than relying on a first-child positional convention.
-  case group(label: String, headingLevel: UInt8, headingText: String)
-  /// Page break marker.
-  case pageBreak
-  /// Presentation slide container — children are the slide's content nodes.
-  case slide(number: UInt32, title: String)
-  /// Definition list container — children are `DefinitionItem` nodes.
-  case definitionList
-  /// Individual definition list entry with term and definition.
-  case definitionItem(term: String, definition: String)
-  /// Citation or bibliographic reference.
-  case citation(key: String, text: String)
-  /// Admonition / callout container (note, warning, tip, etc.).
-  ///
-  /// Children carry the admonition body content.
-  case admonition(kind: String, title: String)
-  /// Raw block preserved verbatim from the source format.
-  ///
-  /// Used for content that cannot be mapped to a semantic node type
-  /// (e.g. JSX in MDX, raw LaTeX in markdown, embedded HTML).
-  case rawBlock(format: String, content: String)
-  /// Structured metadata block (email headers, YAML frontmatter, etc.).
-  case metadataBlock(entries: [String])
+    /// Document title.
+    case title(text: String)
+    /// Section heading with level (1-6).
+    case heading(level: UInt8, text: String)
+    /// Body text paragraph.
+    case paragraph(text: String)
+    /// List container — children are `ListItem` nodes.
+    case list(ordered: Bool)
+    /// Individual list item.
+    case listItem(text: String)
+    /// Table with structured cell grid.
+    case table(grid: TableGrid)
+    /// Image reference.
+    case image(description: String, imageIndex: UInt32, src: String)
+    /// Code block.
+    case code(text: String, language: String)
+    /// Block quote — container, children carry the quoted content.
+    case quote
+    /// Mathematical formula / equation.
+    case formula(text: String)
+    /// Footnote reference content.
+    case footnote(text: String)
+    /// Logical grouping container (section, key-value area).
+    ///
+    /// `heading_level` + `heading_text` capture the section heading directly
+    /// rather than relying on a first-child positional convention.
+    case group(label: String, headingLevel: UInt8, headingText: String)
+    /// Page break marker.
+    case pageBreak
+    /// Presentation slide container — children are the slide's content nodes.
+    case slide(number: UInt32, title: String)
+    /// Definition list container — children are `DefinitionItem` nodes.
+    case definitionList
+    /// Individual definition list entry with term and definition.
+    case definitionItem(term: String, definition: String)
+    /// Citation or bibliographic reference.
+    case citation(key: String, text: String)
+    /// Admonition / callout container (note, warning, tip, etc.).
+    ///
+    /// Children carry the admonition body content.
+    case admonition(kind: String, title: String)
+    /// Raw block preserved verbatim from the source format.
+    ///
+    /// Used for content that cannot be mapped to a semantic node type
+    /// (e.g. JSX in MDX, raw LaTeX in markdown, embedded HTML).
+    case rawBlock(format: String, content: String)
+    /// Structured metadata block (email headers, YAML frontmatter, etc.).
+    case metadataBlock(entries: [String])
 }
 
 /// Types of inline text annotations.
 public enum AnnotationKind {
-  case bold
-  case italic
-  case underline
-  case strikethrough
-  case code
-  case subscript_
-  case superscript
-  case link(url: String, title: String)
-  /// Highlighted text (PDF highlights, HTML `<mark>`).
-  case highlight
-  /// Text color (CSS-compatible value, e.g. "#ff0000", "red").
-  case color(value: String)
-  /// Font size with units (e.g. "12pt", "1.2em", "16px").
-  case fontSize(value: String)
-  /// Extensible annotation for format-specific styling.
-  case custom(name: String, value: String)
+    case bold
+    case italic
+    case underline
+    case strikethrough
+    case code
+    case subscript_
+    case superscript
+    case link(url: String, title: String)
+    /// Highlighted text (PDF highlights, HTML `<mark>`).
+    case highlight
+    /// Text color (CSS-compatible value, e.g. "#ff0000", "red").
+    case color(value: String)
+    /// Font size with units (e.g. "12pt", "1.2em", "16px").
+    case fontSize(value: String)
+    /// Extensible annotation for format-specific styling.
+    case custom(name: String, value: String)
 }
 
 /// How the extracted text was produced.
 public enum ExtractionMethod {
-  case native
-  case ocr
-  case mixed
+    case native
+    case ocr
+    case mixed
 }
 
 /// Semantic structural classification of a text chunk.
@@ -1310,58 +1310,58 @@ public enum ExtractionMethod {
 /// Defaults to `Unknown` when no rule matches.
 /// Designed to be extended in future versions without breaking changes.
 public enum ChunkType {
-  /// Section heading or document title.
-  case heading
-  /// Party list: names, addresses, and signatories.
-  case partyList
-  /// Definition clause ("X means…", "X shall mean…").
-  case definitions
-  /// Operative clause containing legal/contractual action verbs.
-  case operativeClause
-  /// Signature block with signatures, names, and dates.
-  case signatureBlock
-  /// Schedule, annex, appendix, or exhibit section.
-  case schedule
-  /// Table-like content with aligned columns or repeated patterns.
-  case tableLike
-  /// Mathematical formula or equation.
-  case formula
-  /// Code block or preformatted content.
-  case codeBlock
-  /// Embedded or referenced image content.
-  case image
-  /// Organizational chart or hierarchy diagram.
-  case orgChart
-  /// Diagram, figure, or visual illustration.
-  case diagram
-  /// Unclassified or mixed content.
-  case unknown
+    /// Section heading or document title.
+    case heading
+    /// Party list: names, addresses, and signatories.
+    case partyList
+    /// Definition clause ("X means…", "X shall mean…").
+    case definitions
+    /// Operative clause containing legal/contractual action verbs.
+    case operativeClause
+    /// Signature block with signatures, names, and dates.
+    case signatureBlock
+    /// Schedule, annex, appendix, or exhibit section.
+    case schedule
+    /// Table-like content with aligned columns or repeated patterns.
+    case tableLike
+    /// Mathematical formula or equation.
+    case formula
+    /// Code block or preformatted content.
+    case codeBlock
+    /// Embedded or referenced image content.
+    case image
+    /// Organizational chart or hierarchy diagram.
+    case orgChart
+    /// Diagram, figure, or visual illustration.
+    case diagram
+    /// Unclassified or mixed content.
+    case unknown
 }
 
 /// Heuristic classification of what an image likely depicts.
 public enum ImageKind {
-  /// Photographic image (natural scene, photograph)
-  case photograph
-  /// Technical or schematic diagram
-  case diagram
-  /// Chart, graph, or plot
-  case chart
-  /// Freehand or technical drawing
-  case drawing
-  /// Text-heavy image (scanned text, document)
-  case textBlock
-  /// Decorative element or border
-  case decoration
-  /// Logo or brand mark
-  case logo
-  /// Small icon
-  case icon
-  /// Fragment of a larger tiled image (tile of a technical drawing)
-  case tileFragment
-  /// Mask or transparency map
-  case mask
-  /// Could not classify with reasonable confidence
-  case unknown
+    /// Photographic image (natural scene, photograph)
+    case photograph
+    /// Technical or schematic diagram
+    case diagram
+    /// Chart, graph, or plot
+    case chart
+    /// Freehand or technical drawing
+    case drawing
+    /// Text-heavy image (scanned text, document)
+    case textBlock
+    /// Decorative element or border
+    case decoration
+    /// Logo or brand mark
+    case logo
+    /// Small icon
+    case icon
+    /// Fragment of a larger tiled image (tile of a technical drawing)
+    case tileFragment
+    /// Mask or transparency map
+    case mask
+    /// Could not classify with reasonable confidence
+    case unknown
 }
 
 /// Result-shape selection for extraction results.
@@ -1370,10 +1370,10 @@ public enum ImageKind {
 /// HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
 /// blob vs. an element-based decomposition.
 public enum ResultFormat {
-  /// Unified format with all content in `content` field
-  case unified
-  /// Element-based format with semantic element extraction
-  case elementBased
+    /// Unified format with all content in `content` field
+    case unified
+    /// Element-based format with semantic element extraction
+    case elementBased
 }
 
 /// Semantic element type classification.
@@ -1381,28 +1381,28 @@ public enum ResultFormat {
 /// Categorizes text content into semantic units for downstream processing.
 /// Supports the element types commonly found in Unstructured documents.
 public enum ElementType {
-  /// Document title
-  case title
-  /// Main narrative text body
-  case narrativeText
-  /// Section heading
-  case heading
-  /// List item (bullet, numbered, etc.)
-  case listItem
-  /// Table element
-  case table
-  /// Image element
-  case image
-  /// Page break marker
-  case pageBreak
-  /// Code block
-  case codeBlock
-  /// Block quote
-  case blockQuote
-  /// Footer text
-  case footer
-  /// Header text
-  case header
+    /// Document title
+    case title
+    /// Main narrative text body
+    case narrativeText
+    /// Section heading
+    case heading
+    /// List item (bullet, numbered, etc.)
+    case listItem
+    /// Table element
+    case table
+    /// Image element
+    case image
+    /// Page break marker
+    case pageBreak
+    /// Code block
+    case codeBlock
+    /// Block quote
+    case blockQuote
+    /// Footer text
+    case footer
+    /// Header text
+    case header
 }
 
 /// Format-specific metadata (discriminated union).
@@ -1410,74 +1410,74 @@ public enum ElementType {
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
 public enum FormatMetadata {
-  case pdf(field0: PdfMetadata)
-  case docx(field0: DocxMetadata)
-  case excel(field0: ExcelMetadata)
-  case email(field0: EmailMetadata)
-  case pptx(field0: PptxMetadata)
-  case archive(field0: ArchiveMetadata)
-  case image(field0: ImageMetadata)
-  case xml(field0: XmlMetadata)
-  case text(field0: TextMetadata)
-  case html(field0: HtmlMetadata)
-  case ocr(field0: OcrMetadata)
-  case csv(field0: CsvMetadata)
-  case bibtex(field0: BibtexMetadata)
-  case citation(field0: CitationMetadata)
-  case fictionBook(field0: FictionBookMetadata)
-  case dbf(field0: DbfMetadata)
-  case jats(field0: JatsMetadata)
-  case epub(field0: EpubMetadata)
-  case pst(field0: PstMetadata)
-  case code(field0: String)
+    case pdf(field0: PdfMetadata)
+    case docx(field0: DocxMetadata)
+    case excel(field0: ExcelMetadata)
+    case email(field0: EmailMetadata)
+    case pptx(field0: PptxMetadata)
+    case archive(field0: ArchiveMetadata)
+    case image(field0: ImageMetadata)
+    case xml(field0: XmlMetadata)
+    case text(field0: TextMetadata)
+    case html(field0: HtmlMetadata)
+    case ocr(field0: OcrMetadata)
+    case csv(field0: CsvMetadata)
+    case bibtex(field0: BibtexMetadata)
+    case citation(field0: CitationMetadata)
+    case fictionBook(field0: FictionBookMetadata)
+    case dbf(field0: DbfMetadata)
+    case jats(field0: JatsMetadata)
+    case epub(field0: EpubMetadata)
+    case pst(field0: PstMetadata)
+    case code(field0: String)
 }
 
 /// Text direction enumeration for HTML documents.
 public enum TextDirection {
-  /// Left-to-right text direction
-  case leftToRight
-  /// Right-to-left text direction
-  case rightToLeft
-  /// Automatic text direction detection
-  case auto
+    /// Left-to-right text direction
+    case leftToRight
+    /// Right-to-left text direction
+    case rightToLeft
+    /// Automatic text direction detection
+    case auto
 }
 
 /// Link type classification.
 public enum LinkType {
-  /// Anchor link (#section)
-  case anchor
-  /// Internal link (same domain)
-  case internal_
-  /// External link (different domain)
-  case external
-  /// Email link (mailto:)
-  case email
-  /// Phone link (tel:)
-  case phone
-  /// Other link type
-  case other
+    /// Anchor link (#section)
+    case anchor
+    /// Internal link (same domain)
+    case internal_
+    /// External link (different domain)
+    case external
+    /// Email link (mailto:)
+    case email
+    /// Phone link (tel:)
+    case phone
+    /// Other link type
+    case other
 }
 
 /// Image type classification.
 public enum ImageType {
-  /// Data URI image
-  case dataUri
-  /// Inline SVG
-  case inlineSvg
-  /// External image URL
-  case external
-  /// Relative path image
-  case relative
+    /// Data URI image
+    case dataUri
+    /// Inline SVG
+    case inlineSvg
+    /// External image URL
+    case external
+    /// Relative path image
+    case relative
 }
 
 /// Structured data type classification.
 public enum StructuredDataType {
-  /// JSON-LD structured data
-  case jsonLd
-  /// Microdata
-  case microdata
-  /// RDFa
-  case rdFa
+    /// JSON-LD structured data
+    case jsonLd
+    /// Microdata
+    case microdata
+    /// RDFa
+    case rdFa
 }
 
 /// Bounding geometry for an OCR element.
@@ -1485,13 +1485,13 @@ public enum StructuredDataType {
 /// Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
 /// (from PaddleOCR and rotated text detection).
 public enum OcrBoundingGeometry {
-  /// Axis-aligned bounding box (typical for Tesseract output).
-  case rectangle(left: UInt32, top: UInt32, width: UInt32, height: UInt32)
-  /// 4-point quadrilateral for rotated/skewed text (PaddleOCR).
-  ///
-  /// Points are in clockwise order starting from top-left:
-  /// `[top_left, top_right, bottom_right, bottom_left]`
-  case quadrilateral(points: String)
+    /// Axis-aligned bounding box (typical for Tesseract output).
+    case rectangle(left: UInt32, top: UInt32, width: UInt32, height: UInt32)
+    /// 4-point quadrilateral for rotated/skewed text (PaddleOCR).
+    ///
+    /// Points are in clockwise order starting from top-left:
+    /// `[top_left, top_right, bottom_right, bottom_left]`
+    case quadrilateral(points: String)
 }
 
 /// Hierarchical level of an OCR element.
@@ -1499,42 +1499,42 @@ public enum OcrBoundingGeometry {
 /// Maps to Tesseract's page segmentation hierarchy and provides
 /// equivalent semantics for PaddleOCR.
 public enum OcrElementLevel {
-  /// Individual word
-  case word
-  /// Line of text (default for PaddleOCR)
-  case line
-  /// Paragraph or text block
-  case block
-  /// Page-level element
-  case page
+    /// Individual word
+    case word
+    /// Line of text (default for PaddleOCR)
+    case line
+    /// Paragraph or text block
+    case block
+    /// Page-level element
+    case page
 }
 
 /// Type of paginated unit in a document.
 ///
 /// Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet sheets).
 public enum PageUnitType {
-  /// Standard document pages (PDF, DOCX, images)
-  case page
-  /// Presentation slides (PPTX, ODP)
-  case slide
-  /// Spreadsheet sheets (XLSX, ODS)
-  case sheet
+    /// Standard document pages (PDF, DOCX, images)
+    case page
+    /// Presentation slides (PPTX, ODP)
+    case slide
+    /// Spreadsheet sheets (XLSX, ODS)
+    case sheet
 }
 
 /// Semantic classification of an extracted URI.
 public enum UriKind {
-  /// A clickable hyperlink (web URL, file link).
-  case hyperlink
-  /// An image or media resource reference.
-  case image
-  /// An internal anchor or cross-reference target.
-  case anchor
-  /// A citation or bibliographic reference (DOI, academic ref).
-  case citation
-  /// A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST).
-  case reference
-  /// An email address (`mailto:` link or bare email).
-  case email
+    /// A clickable hyperlink (web URL, file link).
+    case hyperlink
+    /// An image or media resource reference.
+    case image
+    /// An internal anchor or cross-reference target.
+    case anchor
+    /// A citation or bibliographic reference (DOI, academic ref).
+    case citation
+    /// A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST).
+    case reference
+    /// An email address (`mailto:` link or bare email).
+    case email
 }
 
 /// Error type for pool operations.
@@ -1542,63 +1542,63 @@ public typealias PoolError = RustBridge.PoolError
 
 /// Keyword algorithm selection.
 public enum KeywordAlgorithm {
-  /// YAKE (Yet Another Keyword Extractor) - statistical approach
-  case yake
-  /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
-  case rake
+    /// YAKE (Yet Another Keyword Extractor) - statistical approach
+    case yake
+    /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
+    case rake
 }
 
 /// Page Segmentation Mode for Tesseract OCR
 public enum PSMMode {
-  case osdOnly
-  case autoOsd
-  case autoOnly
-  case auto
-  case singleColumn
-  case singleBlockVertical
-  case singleBlock
-  case singleLine
-  case singleWord
-  case circleWord
-  case singleChar
+    case osdOnly
+    case autoOsd
+    case autoOnly
+    case auto
+    case singleColumn
+    case singleBlockVertical
+    case singleBlock
+    case singleLine
+    case singleWord
+    case circleWord
+    case singleChar
 }
 
 /// Supported languages in PaddleOCR.
 ///
 /// Maps user-friendly language codes to paddle-ocr-rs language identifiers.
 public enum PaddleLanguage {
-  /// English
-  case english
-  /// Simplified Chinese
-  case chinese
-  /// Japanese
-  case japanese
-  /// Korean
-  case korean
-  /// German
-  case german
-  /// French
-  case french
-  /// Latin script (covers most European languages)
-  case latin
-  /// Cyrillic (Russian and related)
-  case cyrillic
-  /// Traditional Chinese
-  case traditionalChinese
-  /// Thai
-  case thai
-  /// Greek
-  case greek
-  /// East Slavic (Russian, Ukrainian, Belarusian)
-  case eastSlavic
-  /// Arabic (Arabic, Persian, Urdu)
-  case arabic
-  /// Devanagari (Hindi, Marathi, Sanskrit, Nepali)
-  case devanagari
-  /// Tamil
-  case tamil
-  /// Telugu
-  case telugu
+    /// English
+    case english
+    /// Simplified Chinese
+    case chinese
+    /// Japanese
+    case japanese
+    /// Korean
+    case korean
+    /// German
+    case german
+    /// French
+    case french
+    /// Latin script (covers most European languages)
+    case latin
+    /// Cyrillic (Russian and related)
+    case cyrillic
+    /// Traditional Chinese
+    case traditionalChinese
+    /// Thai
+    case thai
+    /// Greek
+    case greek
+    /// East Slavic (Russian, Ukrainian, Belarusian)
+    case eastSlavic
+    /// Arabic (Arabic, Persian, Urdu)
+    case arabic
+    /// Devanagari (Hindi, Marathi, Sanskrit, Nepali)
+    case devanagari
+    /// Tamil
+    case tamil
+    /// Telugu
+    case telugu
 }
 
 /// The 17 canonical document layout classes.
@@ -1609,23 +1609,23 @@ public enum PaddleLanguage {
 ///
 /// Wire format is snake_case in all serializers (JSON, TOML, YAML).
 public enum LayoutClass {
-  case caption
-  case footnote
-  case formula
-  case listItem
-  case pageFooter
-  case pageHeader
-  case picture
-  case sectionHeader
-  case table
-  case text
-  case title
-  case documentIndex
-  case code
-  case checkboxSelected
-  case checkboxUnselected
-  case form
-  case keyValueRegion
+    case caption
+    case footnote
+    case formula
+    case listItem
+    case pageFooter
+    case pageHeader
+    case picture
+    case sectionHeader
+    case table
+    case text
+    case title
+    case documentIndex
+    case code
+    case checkboxSelected
+    case checkboxUnselected
+    case form
+    case keyValueRegion
 }
 
 /// Main error type for all Kreuzberg operations.
@@ -1648,22 +1648,22 @@ public enum LayoutClass {
 /// - `UnsupportedFormat` - Unsupported MIME type or file format
 /// - `Other` - Catch-all for uncommon errors
 public enum KreuzbergError: Error {
-  case io(message: String, field0: String)
-  case parsing(message: String, source: String)
-  case ocr(message: String, source: String)
-  case validation(message: String, source: String)
-  case cache(message: String, source: String)
-  case imageProcessing(message: String, source: String)
-  case serialization(message: String, source: String)
-  case missingDependency(message: String, field0: String)
-  case plugin(message: String, pluginName: String)
-  case lockPoisoned(message: String, field0: String)
-  case unsupportedFormat(message: String, field0: String)
-  case embedding(message: String, source: String)
-  case timeout(message: String, elapsedMs: UInt64, limitMs: UInt64)
-  case cancelled
-  case security(message: String, source: String)
-  case other(message: String, field0: String)
+    case io(message: String, field0: String)
+    case parsing(message: String, source: String)
+    case ocr(message: String, source: String)
+    case validation(message: String, source: String)
+    case cache(message: String, source: String)
+    case imageProcessing(message: String, source: String)
+    case serialization(message: String, source: String)
+    case missingDependency(message: String, field0: String)
+    case plugin(message: String, pluginName: String)
+    case lockPoisoned(message: String, field0: String)
+    case unsupportedFormat(message: String, field0: String)
+    case embedding(message: String, source: String)
+    case timeout(message: String, elapsedMs: UInt64, limitMs: UInt64)
+    case cancelled
+    case security(message: String, source: String)
+    case other(message: String, field0: String)
 }
 
 // MARK: - Convenience Wrapper Functions
@@ -1677,196 +1677,199 @@ public enum KreuzbergError: Error {
 /// swift-bridge's `RustVec<T>` runtime only exposes `init()` and `push(value:)`;
 /// no array-initializer shorthand exists.
 private func makeByteVec(_ bytes: [UInt8]) -> RustVec<UInt8> {
-  let vec = RustVec<UInt8>()
-  for b in bytes { vec.push(value: b) }
-  return vec
+    let vec = RustVec<UInt8>()
+    for b in bytes { vec.push(value: b) }
+    return vec
 }
 
 /// Convenience overload: accepts a UTF-8 `String` and converts it to bytes.
 public func extractBytes(
-  content: String,
-  mimeType: String,
-  config: ExtractionConfig
+    content: String,
+    mimeType: String
+,
+    config: ExtractionConfig
 
 ) throws -> ExtractionResult {
-  return try extractBytesSync(
-    makeByteVec(Array(content.utf8)), mimeType, config
-  )
+    return try extractBytesSync(makeByteVec(Array(content.utf8)), mimeType
+, config
+)
 }
 /// Convenience overload: accepts a `[UInt8]` byte array.
 public func extractBytes(
-  content: [UInt8],
-  mimeType: String,
-  config: ExtractionConfig
+    content: [UInt8],
+    mimeType: String
+,
+    config: ExtractionConfig
 
 ) throws -> ExtractionResult {
-  return try extractBytesSync(
-    makeByteVec(content), mimeType, config
-  )
+    return try extractBytesSync(makeByteVec(content), mimeType
+, config
+)
 }
 /// Convenience overload: accepts a file path as a `String`.
 public func extractFile(
-  path: String,
-  mimeType: String? = nil,
-  config: ExtractionConfig
+    path: String,
+    mimeType: String? = nil
+,
+    config: ExtractionConfig
 
 ) throws -> ExtractionResult {
-  return try extractFileSync(
-    path, mimeType, config
-  )
+    return try extractFileSync(path, mimeType
+, config
+)
 }
 // MARK: - E2e Test Convenience Wrappers
 // JSON-config and file-loading wrappers used exclusively by the generated e2e tests.
 
 private func resolveFixturePath(_ name: String) -> URL {
-  if let dir = ProcessInfo.processInfo.environment["FIXTURES_DIR"] {
-    return URL(fileURLWithPath: dir).appendingPathComponent(name)
-  }
-  return URL(fileURLWithPath: name)
+    if let dir = ProcessInfo.processInfo.environment["FIXTURES_DIR"] {
+        return URL(fileURLWithPath: dir).appendingPathComponent(name)
+    }
+    return URL(fileURLWithPath: name)
 }
 
 /// E2e wrapper: reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
 public func extractBytesSync(
-  _ filePath: String,
-  _ mimeType: String,
-  _ configJson: String
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
 ) throws -> ExtractionResult {
-  let url = resolveFixturePath(filePath)
-  let data = try Data(contentsOf: url)
-  let config = try extractionConfigFromJson(configJson)
-  return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
 }
 
 /// E2e wrapper (async): reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
 public func extractBytes(
-  _ filePath: String,
-  _ mimeType: String,
-  _ configJson: String
+    _ filePath: String,
+    _ mimeType: String,
+    _ configJson: String
 ) async throws -> ExtractionResult {
-  let url = resolveFixturePath(filePath)
-  let data = try Data(contentsOf: url)
-  let config = try extractionConfigFromJson(configJson)
-  return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    let config = try extractionConfigFromJson(configJson)
+    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
 }
 
 /// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
 public func extractFileSync(
-  _ path: String,
-  _ mimeType: String?,
-  _ configJson: String
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
 ) throws -> ExtractionResult {
-  let resolvedPath = resolveFixturePath(path).path
-  let config = try extractionConfigFromJson(configJson)
-  return try extractFileSync(resolvedPath, mimeType, config)
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
 }
 
 /// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
 public func extractFileSync(
-  _ path: String,
-  _ configJson: String
+    _ path: String,
+    _ configJson: String
 ) throws -> ExtractionResult {
-  let resolvedPath = resolveFixturePath(path).path
-  let config = try extractionConfigFromJson(configJson)
-  return try extractFileSync(resolvedPath, nil, config)
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
 }
 
 /// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
 public func extractFile(
-  _ path: String,
-  _ mimeType: String?,
-  _ configJson: String
+    _ path: String,
+    _ mimeType: String?,
+    _ configJson: String
 ) async throws -> ExtractionResult {
-  let resolvedPath = resolveFixturePath(path).path
-  let config = try extractionConfigFromJson(configJson)
-  return try extractFileSync(resolvedPath, mimeType, config)
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, mimeType, config)
 }
 
 /// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
 public func extractFile(
-  _ path: String,
-  _ configJson: String
+    _ path: String,
+    _ configJson: String
 ) async throws -> ExtractionResult {
-  let resolvedPath = resolveFixturePath(path).path
-  let config = try extractionConfigFromJson(configJson)
-  return try extractFileSync(resolvedPath, nil, config)
+    let resolvedPath = resolveFixturePath(path).path
+    let config = try extractionConfigFromJson(configJson)
+    return try extractFileSync(resolvedPath, nil, config)
 }
 
 /// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchBytesItem.
 public func batchExtractBytesSync(
-  _ jsonItems: [String]
+    _ jsonItems: [String]
 ) throws -> [ExtractionResultRef] {
-  var items = RustVec<BatchBytesItem>()
-  for json in jsonItems {
-    items.push(value: try batchBytesItemFromJson(json))
-  }
-  let config = try extractionConfigFromJson("{}")
-  return try batchExtractBytesSync(items, config).map { $0 }
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
 }
 
 /// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchBytesItem.
 public func batchExtractBytes(
-  _ jsonItems: [String]
+    _ jsonItems: [String]
 ) async throws -> [ExtractionResultRef] {
-  var items = RustVec<BatchBytesItem>()
-  for json in jsonItems {
-    items.push(value: try batchBytesItemFromJson(json))
-  }
-  let config = try extractionConfigFromJson("{}")
-  return try batchExtractBytesSync(items, config).map { $0 }
+    var items = RustVec<BatchBytesItem>()
+    for json in jsonItems {
+        items.push(value: try batchBytesItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractBytesSync(items, config).map { $0 }
 }
 
 /// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchFileItem.
 public func batchExtractFilesSync(
-  _ jsonItems: [String]
+    _ jsonItems: [String]
 ) throws -> [ExtractionResultRef] {
-  var items = RustVec<BatchFileItem>()
-  for json in jsonItems {
-    items.push(value: try batchFileItemFromJson(json))
-  }
-  let config = try extractionConfigFromJson("{}")
-  return try batchExtractFilesSync(items, config).map { $0 }
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
 }
 
 /// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchFileItem.
 public func batchExtractFiles(
-  _ jsonItems: [String]
+    _ jsonItems: [String]
 ) async throws -> [ExtractionResultRef] {
-  var items = RustVec<BatchFileItem>()
-  for json in jsonItems {
-    items.push(value: try batchFileItemFromJson(json))
-  }
-  let config = try extractionConfigFromJson("{}")
-  return try batchExtractFilesSync(items, config).map { $0 }
+    var items = RustVec<BatchFileItem>()
+    for json in jsonItems {
+        items.push(value: try batchFileItemFromJson(json))
+    }
+    let config = try extractionConfigFromJson("{}")
+    return try batchExtractFilesSync(items, config).map { $0 }
 }
 
 /// E2e wrapper: reads `filePath` into bytes and calls detectMimeTypeFromBytes.
 public func detectMimeTypeFromBytes(
-  _ filePath: String
+    _ filePath: String
 ) throws -> String {
-  let url = resolveFixturePath(filePath)
-  let data = try Data(contentsOf: url)
-  return try detectMimeTypeFromBytes(makeByteVec(data.map { $0 })).toString()
+    let url = resolveFixturePath(filePath)
+    let data = try Data(contentsOf: url)
+    return try detectMimeTypeFromBytes(makeByteVec(data.map { $0 })).toString()
 }
 // MARK: - From-JSON Helpers
 // Public wrappers forwarding RustBridge's swift_bridge-generated
 // `{TypeName}FromJson` helpers into this module's namespace.
 
 public func ocrConfigFromJson(_ json: String) throws -> OcrConfig {
-  return try RustBridge.ocrConfigFromJson(json)
+    return try RustBridge.ocrConfigFromJson(json)
 }
 
 public func embeddingConfigFromJson(_ json: String) throws -> EmbeddingConfig {
-  return try RustBridge.embeddingConfigFromJson(json)
+    return try RustBridge.embeddingConfigFromJson(json)
 }
 
 public func extractionResultFromJson(_ json: String) throws -> ExtractionResult {
-  return try RustBridge.extractionResultFromJson(json)
+    return try RustBridge.extractionResultFromJson(json)
 }
 
 public func ocrExtractionResultFromJson(_ json: String) throws -> OcrExtractionResult {
-  return try RustBridge.ocrExtractionResultFromJson(json)
+    return try RustBridge.ocrExtractionResultFromJson(json)
 }
 
 public func htmlMetadataFromJson(_ json: String) throws -> HtmlMetadata {
-  return try RustBridge.htmlMetadataFromJson(json)
+    return try RustBridge.htmlMetadataFromJson(json)
 }

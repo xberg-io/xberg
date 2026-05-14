@@ -173,7 +173,7 @@ impl InternalDocumentBuilder {
             cells: cells.to_vec(),
             markdown,
             // 0 means "no page information available"; pages are otherwise 1-indexed.
-            page_number: page.map(|p| p as usize).unwrap_or(0),
+            page_number: page.unwrap_or(0),
             bounding_box: None,
         };
         self.push_table(table, page, bbox)

@@ -441,7 +441,7 @@ fn point_in_bbox(x: i32, y: i32, left: i32, top: i32, right: i32, bottom: i32) -
 /// TSV-based extraction with significantly richer metadata.
 fn extract_elements_via_iterator(
     api: &TesseractAPI,
-    page_number: usize,
+    page_number: u32,
     min_confidence: f64,
 ) -> Result<Vec<OcrElement>, OcrError> {
     // Obtain page iterator for block/paragraph spatial data.

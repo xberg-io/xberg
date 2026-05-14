@@ -404,7 +404,10 @@ fn test_page_image_indices_are_valid_when_images_extracted() {
     let images = result.images.as_ref().expect("images must be Some");
     assert!(!images.is_empty(), "fixture must have extracted images");
 
-    let pages = result.pages.as_ref().expect("pages must be Some when extract_pages=true");
+    let pages = result
+        .pages
+        .as_ref()
+        .expect("pages must be Some when extract_pages=true");
     assert!(!pages.is_empty(), "fixture must have pages");
 
     // At least one page must carry image_indices (not all pages need images).
@@ -506,7 +509,10 @@ fn test_chunk_image_indices_are_valid_when_images_extracted() {
     let images = result.images.as_ref().expect("images must be Some");
     assert!(!images.is_empty(), "fixture must have extracted images");
 
-    let chunks = result.chunks.as_ref().expect("chunks must be Some when chunking is configured");
+    let chunks = result
+        .chunks
+        .as_ref()
+        .expect("chunks must be Some when chunking is configured");
     assert!(!chunks.is_empty(), "fixture must produce chunks");
 
     // At least one chunk must carry image_indices.
@@ -530,9 +536,9 @@ fn test_chunk_image_indices_are_valid_when_images_extracted() {
             // Cross-validation: referenced image must belong to a page within
             // the chunk's page range.
             if let (Some(first), Some(last)) = (chunk.metadata.first_page, chunk.metadata.last_page) {
-                let img_page = images[idx].page_number.expect(
-                    "image referenced by a chunk must have a page_number set",
-                );
+                let img_page = images[idx]
+                    .page_number
+                    .expect("image referenced by a chunk must have a page_number set");
                 assert!(
                     img_page >= first && img_page <= last,
                     "image at index {} is on page {} but chunk covers pages [{}, {}]",

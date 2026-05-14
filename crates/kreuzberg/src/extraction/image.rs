@@ -544,15 +544,15 @@ pub(crate) fn extract_text_from_image_with_ocr(
         boundaries.push(crate::types::PageBoundary {
             byte_start: byte_offset,
             byte_end: frame_end,
-            page_number: frame_num,
+            page_number: frame_num as u32,
         });
 
         let frame_text = &ocr_result[byte_offset..frame_end];
         page_contents.push(crate::types::PageContent {
-            page_number: frame_num,
+            page_number: frame_num as u32,
             content: frame_text.to_string(),
             tables: vec![],
-            images: vec![],
+            image_indices: vec![],
             hierarchy: None,
             is_blank: Some(crate::extraction::blank_detection::is_page_text_blank(frame_text)),
             layout_regions: None,

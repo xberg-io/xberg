@@ -113,7 +113,7 @@ pub(super) fn extract_metadata<R: Read + Seek>(archive: &mut ZipArchive<R>) -> (
 
         (
             PptxMetadata {
-                slide_count,
+                slide_count: slide_count as u32,
                 slide_names,
                 image_count: None,
                 table_count: None,

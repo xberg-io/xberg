@@ -215,7 +215,7 @@ impl PdfExtractor {
         #[cfg(feature = "ocr")]
         let mut ocr_page_texts: Option<Vec<String>> = None;
         #[cfg(feature = "ocr")]
-        let mut ocr_results_map: Option<ahash::AHashMap<usize, String>> = None;
+        let mut ocr_results_map: Option<ahash::AHashMap<u32, String>> = None;
 
         #[cfg(feature = "ocr")]
         let (text, extraction_method) = if config.effective_disable_ocr() {
@@ -379,10 +379,10 @@ impl PdfExtractor {
                         pts.into_iter()
                             .enumerate()
                             .map(|(i, text)| crate::types::PageContent {
-                                page_number: i + 1,
+                                page_number: (i + 1) as u32,
                                 content: text,
                                 tables: Vec::new(),
-                                images: Vec::new(),
+                                image_indices: vec![],
                                 hierarchy: None,
                                 is_blank: None,
                                 layout_regions: None,
@@ -508,7 +508,7 @@ impl PdfExtractor {
                                 Uri {
                                     url: url.clone(),
                                     label: Some(url.clone()),
-                                    page: Some(a.page_number as u32),
+                                    page: Some(a.page_number),
                                     kind,
                                 }
                             })

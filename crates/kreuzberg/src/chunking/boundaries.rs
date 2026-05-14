@@ -101,7 +101,7 @@ pub(crate) fn calculate_page_range(
     byte_start: usize,
     byte_end: usize,
     boundaries: &[PageBoundary],
-) -> Result<(Option<usize>, Option<usize>)> {
+) -> Result<(Option<u32>, Option<u32>)> {
     if boundaries.is_empty() {
         return Ok((None, None));
     }

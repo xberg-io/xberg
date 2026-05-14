@@ -18,7 +18,7 @@ use super::tables::Table;
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct PageStructure {
     /// Total number of pages/slides/sheets
-    pub total_count: usize,
+    pub total_count: u32,
 
     /// Type of paginated unit
     pub unit_type: PageUnitType,
@@ -63,7 +63,7 @@ pub struct PageBoundary {
     /// Byte offset where this page ends in the content string (UTF-8 valid boundary, exclusive)
     pub byte_end: usize,
     /// Page number (1-indexed)
-    pub page_number: usize,
+    pub page_number: u32,
 }
 
 /// Metadata for individual page/slide/sheet.
@@ -74,7 +74,7 @@ pub struct PageBoundary {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct PageInfo {
     /// Page number (1-indexed)
-    pub number: usize,
+    pub number: u32,
 
     /// Page title (usually for presentations)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,11 +86,11 @@ pub struct PageInfo {
 
     /// Number of images on this page
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub image_count: Option<usize>,
+    pub image_count: Option<u32>,
 
     /// Number of tables on this page
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub table_count: Option<usize>,
+    pub table_count: Option<u32>,
 
     /// Whether this page is hidden (e.g., in presentations)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -136,7 +136,7 @@ pub struct PageInfo {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct PageContent {
     /// Page number (1-indexed)
-    pub page_number: usize,
+    pub page_number: u32,
 
     /// Text content for this page
     pub content: String,
@@ -154,7 +154,7 @@ pub struct PageContent {
     /// Each value is a zero-based index into the top-level `images` collection.
     /// Only populated when `extract_images = true` in the extraction config.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub image_indices: Vec<usize>,
+    pub image_indices: Vec<u32>,
 
     /// Hierarchy information for the page (when hierarchy extraction is enabled)
     ///
@@ -213,7 +213,7 @@ impl LayoutRegion {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct PageHierarchy {
     /// Number of hierarchy blocks on this page
-    pub block_count: usize,
+    pub block_count: u32,
 
     /// Hierarchical blocks with heading levels
     #[serde(skip_serializing_if = "Vec::is_empty", default)]

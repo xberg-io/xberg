@@ -269,7 +269,7 @@ impl Metadata {
 pub struct ExcelMetadata {
     /// Number of sheets in the workbook.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sheet_count: Option<usize>,
+    pub sheet_count: Option<u32>,
 
     /// Names of all sheets in the workbook.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -315,15 +315,15 @@ pub struct ArchiveMetadata {
     #[cfg_attr(feature = "api", schema(value_type = String))]
     pub format: Cow<'static, str>,
     /// Total number of files in the archive
-    pub file_count: usize,
+    pub file_count: u32,
     /// List of file paths within the archive
     pub file_list: Vec<String>,
     /// Total uncompressed size in bytes
-    pub total_size: usize,
+    pub total_size: u64,
 
     /// Compressed size in bytes (if available)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub compressed_size: Option<usize>,
+    pub compressed_size: Option<u64>,
 }
 
 /// Image metadata extracted from image files.
@@ -349,7 +349,7 @@ pub struct ImageMetadata {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct XmlMetadata {
     /// Total number of XML elements processed
-    pub element_count: usize,
+    pub element_count: u32,
     /// List of unique element tag names (sorted)
     pub unique_elements: Vec<String>,
 }
@@ -362,11 +362,11 @@ pub struct XmlMetadata {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct TextMetadata {
     /// Number of lines in the document
-    pub line_count: usize,
+    pub line_count: u32,
     /// Number of words
-    pub word_count: usize,
+    pub word_count: u32,
     /// Number of characters
-    pub character_count: usize,
+    pub character_count: u32,
 
     /// Markdown headers (headings text only, for Markdown files)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -409,9 +409,9 @@ pub struct HeaderMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// Document tree depth at the header element
-    pub depth: usize,
+    pub depth: u32,
     /// Byte offset in original HTML document
-    pub html_offset: usize,
+    pub html_offset: u32,
 }
 
 /// Link element metadata.
@@ -638,8 +638,8 @@ impl From<html_to_markdown_rs::HtmlMetadata> for HtmlMetadata {
                     level: h.level,
                     text: h.text,
                     id: h.id,
-                    depth: h.depth,
-                    html_offset: h.html_offset,
+                    depth: h.depth as u32,
+                    html_offset: h.html_offset as u32,
                 })
                 .collect(),
             links: metadata
@@ -708,13 +708,13 @@ pub struct OcrMetadata {
     /// Output format (e.g., "text", "hocr")
     pub output_format: String,
     /// Number of tables detected
-    pub table_count: usize,
+    pub table_count: u32,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub table_rows: Option<usize>,
+    pub table_rows: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub table_cols: Option<usize>,
+    pub table_cols: Option<u32>,
 }
 
 /// Error metadata (for batch operations).
@@ -732,15 +732,15 @@ pub struct ErrorMetadata {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct PptxMetadata {
     /// Total number of slides in the presentation
-    pub slide_count: usize,
+    pub slide_count: u32,
     /// Names of slides (if available)
     pub slide_names: Vec<String>,
     /// Number of embedded images
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub image_count: Option<usize>,
+    pub image_count: Option<u32>,
     /// Number of tables
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub table_count: Option<usize>,
+    pub table_count: Option<u32>,
 }
 
 /// Word document metadata.
@@ -787,8 +787,8 @@ pub struct DocxMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct CsvMetadata {
-    pub row_count: usize,
-    pub column_count: usize,
+    pub row_count: u32,
+    pub column_count: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delimiter: Option<String>,
     pub has_header: bool,

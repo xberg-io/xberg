@@ -64,15 +64,15 @@ impl ContentBuilder {
             self.boundaries.push(crate::types::PageBoundary {
                 byte_start,
                 byte_end,
-                page_number: slide_number as usize,
+                page_number: slide_number,
             });
 
             let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&slide_content));
             self.page_contents.push(crate::types::PageContent {
-                page_number: slide_number as usize,
+                page_number: slide_number,
                 content: slide_content,
                 tables: Vec::new(),
-                images: Vec::new(),
+                image_indices: vec![],
                 hierarchy: None,
                 is_blank,
                 layout_regions: None,

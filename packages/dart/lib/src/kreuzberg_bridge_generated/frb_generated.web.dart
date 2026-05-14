@@ -21,239 +21,196 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnDartFnFutureOcrBackendTypePtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync;
+  get rust_arc_decrement_strong_count_BoxFnDartFnFutureOcrBackendTypePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnDartFnFutureOptionSyncExtractorPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync;
+  get rust_arc_decrement_strong_count_BoxFnDartFnFutureProcessingStagePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnDartFnFutureProcessingStagePtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync;
+  get rust_arc_decrement_strong_count_BoxFnDartFnFutureVecStringPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnDartFnFutureVecStringPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync;
+  get rust_arc_decrement_strong_count_BoxFnDartFnFutureI64Ptr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnDartFnFutureBoolPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync;
+  get rust_arc_decrement_strong_count_BoxFnExtractionResultExtractionConfigDartFnFuturePtr =>
+      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnDartFnFutureI64Ptr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync;
+  get rust_arc_decrement_strong_count_BoxFnInternalDocumentDartFnFutureStringPtr =>
+      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnExtractionResultDartFnFutureI64Ptr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync;
+  get rust_arc_decrement_strong_count_BoxFnStringDartFnFutureBoolPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnExtractionResultExtractionConfigDartFnFuturePtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync;
+  get rust_arc_decrement_strong_count_BoxFnVecStringDartFnFutureVecVecF64Ptr =>
+      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnExtractionResultExtractionConfigDartFnFutureBoolPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync;
+  get rust_arc_decrement_strong_count_BoxFnVecU8OcrConfigDartFnFutureExtractionResultPtr =>
+      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnInternalDocumentDartFnFutureStringPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync;
+  get rust_arc_decrement_strong_count_BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocumentPtr =>
+      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnStringDartFnFutureBoolPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync;
+  get rust_arc_decrement_strong_count_DocumentExtractorDartImplPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnStringOcrConfigDartFnFutureExtractionResultPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync;
+  get rust_arc_decrement_strong_count_EmbeddingBackendDartImplPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnStringStringDartFnFutureBoolPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync;
+  get rust_arc_decrement_strong_count_HwpxExtractorPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnStringStringExtractionConfigDartFnFutureInternalDocumentPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync;
+  get rust_arc_decrement_strong_count_OcrBackendDartImplPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnVecStringDartFnFutureVecVecF64Ptr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync;
+  get rust_arc_decrement_strong_count_PostProcessorDartImplPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnVecU8OcrConfigDartFnFutureExtractionResultPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync;
+  get rust_arc_decrement_strong_count_RendererDartImplPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocumentPtr =>
-          wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync;
+  get rust_arc_decrement_strong_count_TessdataManagerPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager;
 
   CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_DocumentExtractorDartImplPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl;
-
-  CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_EmbeddingBackendDartImplPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl;
-
-  CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_HwpxExtractorPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor;
-
-  CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_OcrBackendDartImplPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl;
-
-  CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_PostProcessorDartImplPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl;
-
-  CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_RendererDartImplPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl;
-
-  CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_TessdataManagerPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager;
-
-  CrossPlatformFinalizerArg
-      get rust_arc_decrement_strong_count_ValidatorDartImplPtr => wire
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl;
+  get rust_arc_decrement_strong_count_ValidatorDartImplPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl;
 
   @protected
   BoxFnDartFnFutureOcrBackendType
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnDartFnFutureOptionSyncExtractor
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnDartFnFutureProcessingStage
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnDartFnFutureVecString
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnDartFnFutureBool
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnDartFnFutureI64
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnExtractionResultDartFnFutureI64
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnExtractionResultExtractionConfigDartFnFuture
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnExtractionResultExtractionConfigDartFnFutureBool
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnInternalDocumentDartFnFutureString
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnStringDartFnFutureBool
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnStringOcrConfigDartFnFutureExtractionResult
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnStringStringDartFnFutureBool
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnVecStringDartFnFutureVecVecF64
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnVecU8OcrConfigDartFnFutureExtractionResult
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    dynamic raw,
+  );
 
   @protected
   DocumentExtractorDartImpl
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    dynamic raw,
+  );
 
   @protected
   EmbeddingBackendDartImpl
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    dynamic raw,
+  );
 
   @protected
   HwpxExtractor
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    dynamic raw,
+  );
 
   @protected
   OcrBackendDartImpl
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    dynamic raw,
+  );
 
   @protected
   PostProcessorDartImpl
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    dynamic raw,
+  );
 
   @protected
   RendererDartImpl
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    dynamic raw,
+  );
 
   @protected
   TessdataManager
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    dynamic raw,
+  );
 
   @protected
   ValidatorDartImpl
-      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          dynamic raw);
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    dynamic raw,
+  );
 
   @protected
   HwpxExtractor
-      dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          dynamic raw);
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    dynamic raw,
+  );
 
   @protected
   TessdataManager
-      dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          dynamic raw);
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    dynamic raw,
+  );
 
   @protected
   Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
@@ -266,132 +223,116 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<String, Uint8List> dco_decode_Map_String_list_prim_u_8_strict_None(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   BoxFnDartFnFutureOcrBackendType
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnDartFnFutureOptionSyncExtractor
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnDartFnFutureProcessingStage
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnDartFnFutureVecString
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnDartFnFutureBool
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnDartFnFutureI64
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnExtractionResultDartFnFutureI64
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnExtractionResultExtractionConfigDartFnFuture
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnExtractionResultExtractionConfigDartFnFutureBool
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnInternalDocumentDartFnFutureString
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnStringDartFnFutureBool
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnStringOcrConfigDartFnFutureExtractionResult
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnStringStringDartFnFutureBool
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          dynamic raw);
-
-  @protected
-  BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnVecStringDartFnFutureVecVecF64
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnVecU8OcrConfigDartFnFutureExtractionResult
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    dynamic raw,
+  );
 
   @protected
   BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    dynamic raw,
+  );
 
   @protected
   DocumentExtractorDartImpl
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    dynamic raw,
+  );
 
   @protected
   EmbeddingBackendDartImpl
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    dynamic raw,
+  );
 
   @protected
   HwpxExtractor
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    dynamic raw,
+  );
 
   @protected
   OcrBackendDartImpl
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    dynamic raw,
+  );
 
   @protected
   PostProcessorDartImpl
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    dynamic raw,
+  );
 
   @protected
   RendererDartImpl
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    dynamic raw,
+  );
 
   @protected
   TessdataManager
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    dynamic raw,
+  );
 
   @protected
   ValidatorDartImpl
-      dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          dynamic raw);
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    dynamic raw,
+  );
 
   @protected
   String dco_decode_String(dynamic raw);
@@ -509,7 +450,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FileExtractionConfig dco_decode_box_autoadd_file_extraction_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   FormatMetadata dco_decode_box_autoadd_format_metadata(dynamic raw);
@@ -531,7 +473,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ImageExtractionConfig dco_decode_box_autoadd_image_extraction_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   ImageKind dco_decode_box_autoadd_image_kind(dynamic raw);
@@ -541,11 +484,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ImagePreprocessingConfig dco_decode_box_autoadd_image_preprocessing_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   ImagePreprocessingMetadata
-      dco_decode_box_autoadd_image_preprocessing_metadata(dynamic raw);
+  dco_decode_box_autoadd_image_preprocessing_metadata(dynamic raw);
 
   @protected
   JatsMetadata dco_decode_box_autoadd_jats_metadata(dynamic raw);
@@ -555,11 +499,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LanguageDetectionConfig dco_decode_box_autoadd_language_detection_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   LayoutDetectionConfig dco_decode_box_autoadd_layout_detection_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   LlmConfig dco_decode_box_autoadd_llm_config(dynamic raw);
@@ -578,14 +524,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrQualityThresholds dco_decode_box_autoadd_ocr_quality_thresholds(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   OcrRotation dco_decode_box_autoadd_ocr_rotation(dynamic raw);
 
   @protected
   OcrTableBoundingBox dco_decode_box_autoadd_ocr_table_bounding_box(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   OutputFormat dco_decode_box_autoadd_output_format(dynamic raw);
@@ -625,7 +573,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StructuredExtractionConfig
-      dco_decode_box_autoadd_structured_extraction_config(dynamic raw);
+  dco_decode_box_autoadd_structured_extraction_config(dynamic raw);
 
   @protected
   TableGrid dco_decode_box_autoadd_table_grid(dynamic raw);
@@ -641,7 +589,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TokenReductionOptions dco_decode_box_autoadd_token_reduction_options(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   TreeSitterConfig dco_decode_box_autoadd_tree_sitter_config(dynamic raw);
@@ -906,7 +855,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ImagePreprocessingMetadata dco_decode_image_preprocessing_metadata(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   ImageType dco_decode_image_type(dynamic raw);
@@ -1000,7 +950,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ExtractedInlineImage> dco_decode_list_extracted_inline_image(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   List<ExtractionResult> dco_decode_list_extraction_result(dynamic raw);
@@ -1052,7 +1003,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ManifestEntryResponse> dco_decode_list_manifest_entry_response(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   List<OcrElement> dco_decode_list_ocr_element(dynamic raw);
@@ -1095,11 +1047,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(String, Uint8List)> dco_decode_list_record_string_list_prim_u_8_strict(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   List<(String, List<String>)> dco_decode_list_record_string_list_string(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
@@ -1190,18 +1144,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<String, List<String>>? dco_decode_opt_Map_String_list_String_None(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   Map<String, Uint8List>? dco_decode_opt_Map_String_list_prim_u_8_strict_None(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
   AccelerationConfig? dco_decode_opt_box_autoadd_acceleration_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
@@ -1211,7 +1168,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ContentFilterConfig? dco_decode_opt_box_autoadd_content_filter_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   CoreProperties? dco_decode_opt_box_autoadd_core_properties(dynamic raw);
@@ -1224,7 +1182,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DocxAppProperties? dco_decode_opt_box_autoadd_docx_app_properties(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   EmailConfig? dco_decode_opt_box_autoadd_email_config(dynamic raw);
@@ -1249,7 +1208,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FileExtractionConfig? dco_decode_opt_box_autoadd_file_extraction_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   FormatMetadata? dco_decode_opt_box_autoadd_format_metadata(dynamic raw);
@@ -1268,29 +1228,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ImageExtractionConfig? dco_decode_opt_box_autoadd_image_extraction_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   ImageKind? dco_decode_opt_box_autoadd_image_kind(dynamic raw);
 
   @protected
   ImagePreprocessingConfig?
-      dco_decode_opt_box_autoadd_image_preprocessing_config(dynamic raw);
+  dco_decode_opt_box_autoadd_image_preprocessing_config(dynamic raw);
 
   @protected
   ImagePreprocessingMetadata?
-      dco_decode_opt_box_autoadd_image_preprocessing_metadata(dynamic raw);
+  dco_decode_opt_box_autoadd_image_preprocessing_metadata(dynamic raw);
 
   @protected
   KeywordConfig? dco_decode_opt_box_autoadd_keyword_config(dynamic raw);
 
   @protected
   LanguageDetectionConfig? dco_decode_opt_box_autoadd_language_detection_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   LayoutDetectionConfig? dco_decode_opt_box_autoadd_layout_detection_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   LlmConfig? dco_decode_opt_box_autoadd_llm_config(dynamic raw);
@@ -1303,18 +1266,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrPipelineConfig? dco_decode_opt_box_autoadd_ocr_pipeline_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   OcrQualityThresholds? dco_decode_opt_box_autoadd_ocr_quality_thresholds(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   OcrRotation? dco_decode_opt_box_autoadd_ocr_rotation(dynamic raw);
 
   @protected
   OcrTableBoundingBox? dco_decode_opt_box_autoadd_ocr_table_bounding_box(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   OutputFormat? dco_decode_opt_box_autoadd_output_format(dynamic raw);
@@ -1333,7 +1299,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PostProcessorConfig? dco_decode_opt_box_autoadd_post_processor_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   RakeParams? dco_decode_opt_box_autoadd_rake_params(dynamic raw);
@@ -1346,7 +1313,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StructuredExtractionConfig?
-      dco_decode_opt_box_autoadd_structured_extraction_config(dynamic raw);
+  dco_decode_opt_box_autoadd_structured_extraction_config(dynamic raw);
 
   @protected
   TesseractConfig? dco_decode_opt_box_autoadd_tesseract_config(dynamic raw);
@@ -1356,7 +1323,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TokenReductionOptions? dco_decode_opt_box_autoadd_token_reduction_options(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   TreeSitterConfig? dco_decode_opt_box_autoadd_tree_sitter_config(dynamic raw);
@@ -1492,7 +1460,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, Uint8List) dco_decode_record_string_list_prim_u_8_strict(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   (String, List<String>) dco_decode_record_string_list_string(dynamic raw);
@@ -1526,11 +1495,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StructuredExtractionConfig dco_decode_structured_extraction_config(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   StructuredExtractionResponse dco_decode_structured_extraction_response(
-      dynamic raw);
+    dynamic raw,
+  );
 
   @protected
   SupportedFormat dco_decode_supported_format(dynamic raw);
@@ -1612,286 +1583,259 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BoxFnDartFnFutureOcrBackendType
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnDartFnFutureOptionSyncExtractor
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnDartFnFutureProcessingStage
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnDartFnFutureVecString
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnDartFnFutureBool
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnDartFnFutureI64
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnExtractionResultDartFnFutureI64
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnExtractionResultExtractionConfigDartFnFuture
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnExtractionResultExtractionConfigDartFnFutureBool
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnInternalDocumentDartFnFutureString
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnStringDartFnFutureBool
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnStringOcrConfigDartFnFutureExtractionResult
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnStringStringDartFnFutureBool
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnVecStringDartFnFutureVecVecF64
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnVecU8OcrConfigDartFnFutureExtractionResult
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocumentExtractorDartImpl
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingBackendDartImpl
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   HwpxExtractor
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrBackendDartImpl
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PostProcessorDartImpl
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RendererDartImpl
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TessdataManager
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ValidatorDartImpl
-      sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   HwpxExtractor
-      sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TessdataManager
-      sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          SseDeserializer deserializer);
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, String> sse_decode_Map_String_String_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, PlatformInt64> sse_decode_Map_String_i_64_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, List<String>> sse_decode_Map_String_list_String_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, Uint8List> sse_decode_Map_String_list_prim_u_8_strict_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnDartFnFutureOcrBackendType
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnDartFnFutureOptionSyncExtractor
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnDartFnFutureProcessingStage
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnDartFnFutureVecString
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnDartFnFutureBool
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnDartFnFutureI64
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnExtractionResultDartFnFutureI64
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnExtractionResultExtractionConfigDartFnFuture
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnExtractionResultExtractionConfigDartFnFutureBool
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnInternalDocumentDartFnFutureString
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnStringDartFnFutureBool
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnStringOcrConfigDartFnFutureExtractionResult
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnStringStringDartFnFutureBool
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          SseDeserializer deserializer);
-
-  @protected
-  BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnVecStringDartFnFutureVecVecF64
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnVecU8OcrConfigDartFnFutureExtractionResult
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocumentExtractorDartImpl
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingBackendDartImpl
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   HwpxExtractor
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrBackendDartImpl
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PostProcessorDartImpl
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RendererDartImpl
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TessdataManager
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ValidatorDartImpl
-      sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          SseDeserializer deserializer);
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    SseDeserializer deserializer,
+  );
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
   AccelerationConfig sse_decode_acceleration_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   AnchorProperties sse_decode_anchor_properties(SseDeserializer deserializer);
@@ -1925,34 +1869,41 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AccelerationConfig sse_decode_box_autoadd_acceleration_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ArchiveMetadata sse_decode_box_autoadd_archive_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   BibtexMetadata sse_decode_box_autoadd_bibtex_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   ChunkingConfig sse_decode_box_autoadd_chunking_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   CitationMetadata sse_decode_box_autoadd_citation_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ContentFilterConfig sse_decode_box_autoadd_content_filter_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   CoreProperties sse_decode_box_autoadd_core_properties(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   CsvMetadata sse_decode_box_autoadd_csv_metadata(SseDeserializer deserializer);
@@ -1965,124 +1916,151 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DocumentStructure sse_decode_box_autoadd_document_structure(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocxAppProperties sse_decode_box_autoadd_docx_app_properties(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocxMetadata sse_decode_box_autoadd_docx_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmailConfig sse_decode_box_autoadd_email_config(SseDeserializer deserializer);
 
   @protected
   EmailMetadata sse_decode_box_autoadd_email_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingConfig sse_decode_box_autoadd_embedding_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingPreset sse_decode_box_autoadd_embedding_preset(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EpubMetadata sse_decode_box_autoadd_epub_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ErrorMetadata sse_decode_box_autoadd_error_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExcelMetadata sse_decode_box_autoadd_excel_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractionConfig sse_decode_box_autoadd_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractionMethod sse_decode_box_autoadd_extraction_method(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractionResult sse_decode_box_autoadd_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
   FictionBookMetadata sse_decode_box_autoadd_fiction_book_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   FileExtractionConfig sse_decode_box_autoadd_file_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   FormatMetadata sse_decode_box_autoadd_format_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HeadingContext sse_decode_box_autoadd_heading_context(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HierarchyConfig sse_decode_box_autoadd_hierarchy_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HtmlMetadata sse_decode_box_autoadd_html_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HtmlOutputConfig sse_decode_box_autoadd_html_output_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   ImageExtractionConfig sse_decode_box_autoadd_image_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImageKind sse_decode_box_autoadd_image_kind(SseDeserializer deserializer);
 
   @protected
   ImageMetadata sse_decode_box_autoadd_image_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImagePreprocessingConfig sse_decode_box_autoadd_image_preprocessing_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImagePreprocessingMetadata
-      sse_decode_box_autoadd_image_preprocessing_metadata(
-          SseDeserializer deserializer);
+  sse_decode_box_autoadd_image_preprocessing_metadata(
+    SseDeserializer deserializer,
+  );
 
   @protected
   JatsMetadata sse_decode_box_autoadd_jats_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   KeywordConfig sse_decode_box_autoadd_keyword_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LanguageDetectionConfig sse_decode_box_autoadd_language_detection_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LayoutDetectionConfig sse_decode_box_autoadd_layout_detection_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LlmConfig sse_decode_box_autoadd_llm_config(SseDeserializer deserializer);
@@ -2092,40 +2070,47 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrElementConfig sse_decode_box_autoadd_ocr_element_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrMetadata sse_decode_box_autoadd_ocr_metadata(SseDeserializer deserializer);
 
   @protected
   OcrPipelineConfig sse_decode_box_autoadd_ocr_pipeline_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrQualityThresholds sse_decode_box_autoadd_ocr_quality_thresholds(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrRotation sse_decode_box_autoadd_ocr_rotation(SseDeserializer deserializer);
 
   @protected
   OcrTableBoundingBox sse_decode_box_autoadd_ocr_table_bounding_box(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OutputFormat sse_decode_box_autoadd_output_format(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PageConfig sse_decode_box_autoadd_page_config(SseDeserializer deserializer);
 
   @protected
   PageHierarchy sse_decode_box_autoadd_page_hierarchy(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PageStructure sse_decode_box_autoadd_page_structure(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PdfConfig sse_decode_box_autoadd_pdf_config(SseDeserializer deserializer);
@@ -2135,11 +2120,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PostProcessorConfig sse_decode_box_autoadd_post_processor_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PptxMetadata sse_decode_box_autoadd_pptx_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PstMetadata sse_decode_box_autoadd_pst_metadata(SseDeserializer deserializer);
@@ -2149,39 +2136,47 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ResultFormat sse_decode_box_autoadd_result_format(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SecurityLimits sse_decode_box_autoadd_security_limits(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   StructuredExtractionConfig
-      sse_decode_box_autoadd_structured_extraction_config(
-          SseDeserializer deserializer);
+  sse_decode_box_autoadd_structured_extraction_config(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TableGrid sse_decode_box_autoadd_table_grid(SseDeserializer deserializer);
 
   @protected
   TesseractConfig sse_decode_box_autoadd_tesseract_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TextDirection sse_decode_box_autoadd_text_direction(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TextMetadata sse_decode_box_autoadd_text_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TokenReductionOptions sse_decode_box_autoadd_token_reduction_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TreeSitterConfig sse_decode_box_autoadd_tree_sitter_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   XmlMetadata sse_decode_box_autoadd_xml_metadata(SseDeserializer deserializer);
@@ -2233,7 +2228,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ContentFilterConfig sse_decode_content_filter_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ContentLayer sse_decode_content_layer(SseDeserializer deserializer);
@@ -2255,7 +2251,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DetectMimeTypeParams sse_decode_detect_mime_type_params(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DetectResponse sse_decode_detect_response(SseDeserializer deserializer);
@@ -2277,21 +2274,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DoclingCompatResponse sse_decode_docling_compat_response(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocumentNode sse_decode_document_node(SseDeserializer deserializer);
 
   @protected
   DocumentRelationship sse_decode_document_relationship(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocumentStructure sse_decode_document_structure(SseDeserializer deserializer);
 
   @protected
   DocxAppProperties sse_decode_docx_app_properties(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocxMetadata sse_decode_docx_metadata(SseDeserializer deserializer);
@@ -2316,7 +2316,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   EmailExtractionResult sse_decode_email_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmailMetadata sse_decode_email_metadata(SseDeserializer deserializer);
@@ -2338,7 +2339,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   EmbeddingModelType sse_decode_embedding_model_type(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingPreset sse_decode_embedding_preset(SseDeserializer deserializer);
@@ -2360,18 +2362,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ExecutionProviderType sse_decode_execution_provider_type(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractStructuredParams sse_decode_extract_structured_params(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractedImage sse_decode_extracted_image(SseDeserializer deserializer);
 
   @protected
   ExtractedInlineImage sse_decode_extracted_inline_image(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractionConfig sse_decode_extraction_config(SseDeserializer deserializer);
@@ -2387,11 +2392,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FictionBookMetadata sse_decode_fiction_book_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   FileExtractionConfig sse_decode_file_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Footnote sse_decode_footnote(SseDeserializer deserializer);
@@ -2422,7 +2429,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HtmlExtractionResult sse_decode_html_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HtmlMetadata sse_decode_html_metadata(SseDeserializer deserializer);
@@ -2441,7 +2449,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ImageExtractionConfig sse_decode_image_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImageKind sse_decode_image_kind(SseDeserializer deserializer);
@@ -2451,15 +2460,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ImageMetadataType sse_decode_image_metadata_type(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImagePreprocessingConfig sse_decode_image_preprocessing_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImagePreprocessingMetadata sse_decode_image_preprocessing_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImageType sse_decode_image_type(SseDeserializer deserializer);
@@ -2487,7 +2499,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LanguageDetectionConfig sse_decode_language_detection_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LayoutClass sse_decode_layout_class(SseDeserializer deserializer);
@@ -2497,7 +2510,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LayoutDetectionConfig sse_decode_layout_detection_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LayoutRegion sse_decode_layout_region(SseDeserializer deserializer);
@@ -2513,26 +2527,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ArchiveEntry> sse_decode_list_archive_entry(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<BatchBytesItem> sse_decode_list_batch_bytes_item(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<BatchFileItem> sse_decode_list_batch_file_item(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Chunk> sse_decode_list_chunk(SseDeserializer deserializer);
 
   @protected
   List<ContributorRole> sse_decode_list_contributor_role(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<DbfFieldInfo> sse_decode_list_dbf_field_info(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<DjotImage> sse_decode_list_djot_image(SseDeserializer deserializer);
@@ -2542,106 +2561,125 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<DocumentNode> sse_decode_list_document_node(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<DocumentRelationship> sse_decode_list_document_relationship(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Element> sse_decode_list_element(SseDeserializer deserializer);
 
   @protected
   List<EmailAttachment> sse_decode_list_email_attachment(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ExcelSheet> sse_decode_list_excel_sheet(SseDeserializer deserializer);
 
   @protected
   List<ExtractedImage> sse_decode_list_extracted_image(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ExtractedInlineImage> sse_decode_list_extracted_inline_image(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ExtractionResult> sse_decode_list_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Footnote> sse_decode_list_footnote(SseDeserializer deserializer);
 
   @protected
   List<FormattedBlock> sse_decode_list_formatted_block(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<GridCell> sse_decode_list_grid_cell(SseDeserializer deserializer);
 
   @protected
   List<HeaderMetadata> sse_decode_list_header_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<HeadingLevel> sse_decode_list_heading_level(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<HierarchicalBlock> sse_decode_list_hierarchical_block(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ImageMetadataType> sse_decode_list_image_metadata_type(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<InlineElement> sse_decode_list_inline_element(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Keyword> sse_decode_list_keyword(SseDeserializer deserializer);
 
   @protected
   List<LayoutDetection> sse_decode_list_layout_detection(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<LayoutRegion> sse_decode_list_layout_region(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<LinkMetadata> sse_decode_list_link_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<List<String>> sse_decode_list_list_String(SseDeserializer deserializer);
 
   @protected
   List<Float64List> sse_decode_list_list_prim_f_64_strict(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<LlmUsage> sse_decode_list_llm_usage(SseDeserializer deserializer);
 
   @protected
   List<ManifestEntryResponse> sse_decode_list_manifest_entry_response(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<OcrElement> sse_decode_list_ocr_element(SseDeserializer deserializer);
 
   @protected
   List<OcrPipelineStage> sse_decode_list_ocr_pipeline_stage(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<OcrTable> sse_decode_list_ocr_table(SseDeserializer deserializer);
 
   @protected
   List<PageBoundary> sse_decode_list_page_boundary(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<PageContent> sse_decode_list_page_content(SseDeserializer deserializer);
@@ -2651,7 +2689,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<PdfAnnotation> sse_decode_list_pdf_annotation(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
@@ -2667,34 +2706,41 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ProcessingWarning> sse_decode_list_processing_warning(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<(String, PlatformInt64)> sse_decode_list_record_string_i_64(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<(String, Uint8List)> sse_decode_list_record_string_list_prim_u_8_strict(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<(String, List<String>)> sse_decode_list_record_string_list_string(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<(String, String)> sse_decode_list_record_string_string(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<StructuredData> sse_decode_list_structured_data(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Table> sse_decode_list_table(SseDeserializer deserializer);
 
   @protected
   List<TextAnnotation> sse_decode_list_text_annotation(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Uri> sse_decode_list_uri(SseDeserializer deserializer);
@@ -2707,7 +2753,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ManifestEntryResponse sse_decode_manifest_entry_response(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ManifestResponse sse_decode_manifest_response(SseDeserializer deserializer);
@@ -2723,7 +2770,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrBoundingGeometry sse_decode_ocr_bounding_geometry(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrConfidence sse_decode_ocr_confidence(SseDeserializer deserializer);
@@ -2742,21 +2790,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrExtractionResult sse_decode_ocr_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrMetadata sse_decode_ocr_metadata(SseDeserializer deserializer);
 
   @protected
   OcrPipelineConfig sse_decode_ocr_pipeline_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrPipelineStage sse_decode_ocr_pipeline_stage(SseDeserializer deserializer);
 
   @protected
   OcrQualityThresholds sse_decode_ocr_quality_thresholds(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrRotation sse_decode_ocr_rotation(SseDeserializer deserializer);
@@ -2766,241 +2817,296 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrTableBoundingBox sse_decode_ocr_table_bounding_box(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OpenWebDocumentResponse sse_decode_open_web_document_response(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, String>? sse_decode_opt_Map_String_String_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, PlatformInt64>? sse_decode_opt_Map_String_i_64_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, List<String>>? sse_decode_opt_Map_String_list_String_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<String, Uint8List>? sse_decode_opt_Map_String_list_prim_u_8_strict_None(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
   AccelerationConfig? sse_decode_opt_box_autoadd_acceleration_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   ChunkingConfig? sse_decode_opt_box_autoadd_chunking_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ContentFilterConfig? sse_decode_opt_box_autoadd_content_filter_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   CoreProperties? sse_decode_opt_box_autoadd_core_properties(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DjotContent? sse_decode_opt_box_autoadd_djot_content(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocumentStructure? sse_decode_opt_box_autoadd_document_structure(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocxAppProperties? sse_decode_opt_box_autoadd_docx_app_properties(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmailConfig? sse_decode_opt_box_autoadd_email_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingConfig? sse_decode_opt_box_autoadd_embedding_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   EmbeddingPreset? sse_decode_opt_box_autoadd_embedding_preset(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ErrorMetadata? sse_decode_opt_box_autoadd_error_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractionMethod? sse_decode_opt_box_autoadd_extraction_method(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ExtractionResult? sse_decode_opt_box_autoadd_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
   FileExtractionConfig? sse_decode_opt_box_autoadd_file_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   FormatMetadata? sse_decode_opt_box_autoadd_format_metadata(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HeadingContext? sse_decode_opt_box_autoadd_heading_context(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HierarchyConfig? sse_decode_opt_box_autoadd_hierarchy_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   HtmlOutputConfig? sse_decode_opt_box_autoadd_html_output_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   ImageExtractionConfig? sse_decode_opt_box_autoadd_image_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImageKind? sse_decode_opt_box_autoadd_image_kind(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImagePreprocessingConfig?
-      sse_decode_opt_box_autoadd_image_preprocessing_config(
-          SseDeserializer deserializer);
+  sse_decode_opt_box_autoadd_image_preprocessing_config(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ImagePreprocessingMetadata?
-      sse_decode_opt_box_autoadd_image_preprocessing_metadata(
-          SseDeserializer deserializer);
+  sse_decode_opt_box_autoadd_image_preprocessing_metadata(
+    SseDeserializer deserializer,
+  );
 
   @protected
   KeywordConfig? sse_decode_opt_box_autoadd_keyword_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LanguageDetectionConfig? sse_decode_opt_box_autoadd_language_detection_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LayoutDetectionConfig? sse_decode_opt_box_autoadd_layout_detection_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   LlmConfig? sse_decode_opt_box_autoadd_llm_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrConfig? sse_decode_opt_box_autoadd_ocr_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrElementConfig? sse_decode_opt_box_autoadd_ocr_element_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrPipelineConfig? sse_decode_opt_box_autoadd_ocr_pipeline_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrQualityThresholds? sse_decode_opt_box_autoadd_ocr_quality_thresholds(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrRotation? sse_decode_opt_box_autoadd_ocr_rotation(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OcrTableBoundingBox? sse_decode_opt_box_autoadd_ocr_table_bounding_box(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   OutputFormat? sse_decode_opt_box_autoadd_output_format(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PageConfig? sse_decode_opt_box_autoadd_page_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PageHierarchy? sse_decode_opt_box_autoadd_page_hierarchy(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PageStructure? sse_decode_opt_box_autoadd_page_structure(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PdfConfig? sse_decode_opt_box_autoadd_pdf_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PostProcessorConfig? sse_decode_opt_box_autoadd_post_processor_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   RakeParams? sse_decode_opt_box_autoadd_rake_params(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ResultFormat? sse_decode_opt_box_autoadd_result_format(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SecurityLimits? sse_decode_opt_box_autoadd_security_limits(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   StructuredExtractionConfig?
-      sse_decode_opt_box_autoadd_structured_extraction_config(
-          SseDeserializer deserializer);
+  sse_decode_opt_box_autoadd_structured_extraction_config(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TesseractConfig? sse_decode_opt_box_autoadd_tesseract_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TextDirection? sse_decode_opt_box_autoadd_text_direction(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TokenReductionOptions? sse_decode_opt_box_autoadd_token_reduction_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TreeSitterConfig? sse_decode_opt_box_autoadd_tree_sitter_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   YakeParams? sse_decode_opt_box_autoadd_yake_params(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   YearRange? sse_decode_opt_box_autoadd_year_range(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
   List<ArchiveEntry>? sse_decode_opt_list_archive_entry(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Chunk>? sse_decode_opt_list_chunk(SseDeserializer deserializer);
@@ -3010,44 +3116,52 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ExtractedImage>? sse_decode_opt_list_extracted_image(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<Keyword>? sse_decode_opt_list_keyword(SseDeserializer deserializer);
 
   @protected
   List<LayoutRegion>? sse_decode_opt_list_layout_region(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<List<String>>? sse_decode_opt_list_list_String(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<LlmUsage>? sse_decode_opt_list_llm_usage(SseDeserializer deserializer);
 
   @protected
   List<OcrElement>? sse_decode_opt_list_ocr_element(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<PageBoundary>? sse_decode_opt_list_page_boundary(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<PageContent>? sse_decode_opt_list_page_content(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<PageInfo>? sse_decode_opt_list_page_info(SseDeserializer deserializer);
 
   @protected
   List<PdfAnnotation>? sse_decode_opt_list_pdf_annotation(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Float64List? sse_decode_opt_list_prim_f_64_strict(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   Int64List? sse_decode_opt_list_prim_i_64_strict(SseDeserializer deserializer);
@@ -3093,7 +3207,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PdfAnnotationType sse_decode_pdf_annotation_type(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PdfConfig sse_decode_pdf_config(SseDeserializer deserializer);
@@ -3103,15 +3218,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PostProcessorConfig sse_decode_post_processor_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PptxAppProperties sse_decode_pptx_app_properties(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PptxExtractionResult sse_decode_pptx_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   PptxMetadata sse_decode_pptx_metadata(SseDeserializer deserializer);
@@ -3130,19 +3248,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, PlatformInt64) sse_decode_record_string_i_64(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   (String, Uint8List) sse_decode_record_string_list_prim_u_8_strict(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   (String, List<String>) sse_decode_record_string_list_string(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   (String, String) sse_decode_record_string_string(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   ReductionLevel sse_decode_reduction_level(SseDeserializer deserializer);
@@ -3164,19 +3286,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StructuredDataResult sse_decode_structured_data_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   StructuredDataType sse_decode_structured_data_type(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   StructuredExtractionConfig sse_decode_structured_extraction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   StructuredExtractionResponse sse_decode_structured_extraction_response(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   SupportedFormat sse_decode_supported_format(SseDeserializer deserializer);
@@ -3207,25 +3333,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TextExtractionResult sse_decode_text_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TextMetadata sse_decode_text_metadata(SseDeserializer deserializer);
 
   @protected
   TokenReductionConfig sse_decode_token_reduction_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TokenReductionOptions sse_decode_token_reduction_options(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   TreeSitterConfig sse_decode_tree_sitter_config(SseDeserializer deserializer);
 
   @protected
   TreeSitterProcessConfig sse_decode_tree_sitter_process_config(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -3247,11 +3377,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   XlsxAppProperties sse_decode_xlsx_app_properties(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   XmlExtractionResult sse_decode_xml_extraction_result(
-      SseDeserializer deserializer);
+    SseDeserializer deserializer,
+  );
 
   @protected
   XmlMetadata sse_decode_xml_metadata(SseDeserializer deserializer);
@@ -3264,329 +3396,341 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          BoxFnDartFnFutureOcrBackendType self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    BoxFnDartFnFutureOcrBackendType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          BoxFnDartFnFutureOptionSyncExtractor self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    BoxFnDartFnFutureProcessingStage self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          BoxFnDartFnFutureProcessingStage self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    BoxFnDartFnFutureVecString self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          BoxFnDartFnFutureVecString self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    BoxFnDartFnFutureI64 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          BoxFnDartFnFutureBool self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    BoxFnExtractionResultExtractionConfigDartFnFuture self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          BoxFnDartFnFutureI64 self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    BoxFnInternalDocumentDartFnFutureString self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          BoxFnExtractionResultDartFnFutureI64 self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    BoxFnStringDartFnFutureBool self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          BoxFnExtractionResultExtractionConfigDartFnFuture self,
-          SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    BoxFnVecStringDartFnFutureVecVecF64 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          BoxFnExtractionResultExtractionConfigDartFnFutureBool self,
-          SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    BoxFnVecU8OcrConfigDartFnFutureExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          BoxFnInternalDocumentDartFnFutureString self,
-          SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          BoxFnStringDartFnFutureBool self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    DocumentExtractorDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          BoxFnStringOcrConfigDartFnFutureExtractionResult self,
-          SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    EmbeddingBackendDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          BoxFnStringStringDartFnFutureBool self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    HwpxExtractor self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          BoxFnStringStringExtractionConfigDartFnFutureInternalDocument self,
-          SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    OcrBackendDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          BoxFnVecStringDartFnFutureVecVecF64 self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    PostProcessorDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          BoxFnVecU8OcrConfigDartFnFutureExtractionResult self,
-          SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    RendererDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument self,
-          SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    TessdataManager self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          DocumentExtractorDartImpl self, SseSerializer serializer);
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    ValidatorDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          EmbeddingBackendDartImpl self, SseSerializer serializer);
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    HwpxExtractor self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          HwpxExtractor self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          OcrBackendDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          PostProcessorDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          RendererDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          TessdataManager self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          ValidatorDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          HwpxExtractor self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          TessdataManager self, SseSerializer serializer);
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    TessdataManager self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_Map_String_String_None(
-      Map<String, String> self, SseSerializer serializer);
+    Map<String, String> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_Map_String_i_64_None(
-      Map<String, PlatformInt64> self, SseSerializer serializer);
+    Map<String, PlatformInt64> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_Map_String_list_String_None(
-      Map<String, List<String>> self, SseSerializer serializer);
+    Map<String, List<String>> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_Map_String_list_prim_u_8_strict_None(
-      Map<String, Uint8List> self, SseSerializer serializer);
+    Map<String, Uint8List> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          BoxFnDartFnFutureOcrBackendType self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    BoxFnDartFnFutureOcrBackendType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          BoxFnDartFnFutureOptionSyncExtractor self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    BoxFnDartFnFutureProcessingStage self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          BoxFnDartFnFutureProcessingStage self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    BoxFnDartFnFutureVecString self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          BoxFnDartFnFutureVecString self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    BoxFnDartFnFutureI64 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          BoxFnDartFnFutureBool self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    BoxFnExtractionResultExtractionConfigDartFnFuture self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          BoxFnDartFnFutureI64 self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    BoxFnInternalDocumentDartFnFutureString self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          BoxFnExtractionResultDartFnFutureI64 self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    BoxFnStringDartFnFutureBool self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          BoxFnExtractionResultExtractionConfigDartFnFuture self,
-          SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    BoxFnVecStringDartFnFutureVecVecF64 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          BoxFnExtractionResultExtractionConfigDartFnFutureBool self,
-          SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    BoxFnVecU8OcrConfigDartFnFutureExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          BoxFnInternalDocumentDartFnFutureString self,
-          SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          BoxFnStringDartFnFutureBool self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    DocumentExtractorDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          BoxFnStringOcrConfigDartFnFutureExtractionResult self,
-          SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    EmbeddingBackendDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          BoxFnStringStringDartFnFutureBool self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    HwpxExtractor self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          BoxFnStringStringExtractionConfigDartFnFutureInternalDocument self,
-          SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    OcrBackendDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          BoxFnVecStringDartFnFutureVecVecF64 self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    PostProcessorDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          BoxFnVecU8OcrConfigDartFnFutureExtractionResult self,
-          SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    RendererDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument self,
-          SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    TessdataManager self,
+    SseSerializer serializer,
+  );
 
   @protected
   void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          DocumentExtractorDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          EmbeddingBackendDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          HwpxExtractor self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          OcrBackendDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          PostProcessorDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          RendererDartImpl self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          TessdataManager self, SseSerializer serializer);
-
-  @protected
-  void
-      sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          ValidatorDartImpl self, SseSerializer serializer);
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    ValidatorDartImpl self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
   void sse_encode_acceleration_config(
-      AccelerationConfig self, SseSerializer serializer);
+    AccelerationConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_anchor_properties(
-      AnchorProperties self, SseSerializer serializer);
+    AnchorProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_annotation_kind(
-      AnnotationKind self, SseSerializer serializer);
+    AnnotationKind self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_archive_entry(ArchiveEntry self, SseSerializer serializer);
 
   @protected
   void sse_encode_archive_metadata(
-      ArchiveMetadata self, SseSerializer serializer);
+    ArchiveMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_b_box(BBox self, SseSerializer serializer);
 
   @protected
   void sse_encode_batch_bytes_item(
-      BatchBytesItem self, SseSerializer serializer);
+    BatchBytesItem self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_batch_file_item(BatchFileItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_bibtex_metadata(
-      BibtexMetadata self, SseSerializer serializer);
+    BibtexMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_block_type(BlockType self, SseSerializer serializer);
@@ -3596,293 +3740,435 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_acceleration_config(
-      AccelerationConfig self, SseSerializer serializer);
+    AccelerationConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_archive_metadata(
-      ArchiveMetadata self, SseSerializer serializer);
+    ArchiveMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_bibtex_metadata(
-      BibtexMetadata self, SseSerializer serializer);
+    BibtexMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_chunking_config(
-      ChunkingConfig self, SseSerializer serializer);
+    ChunkingConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_citation_metadata(
-      CitationMetadata self, SseSerializer serializer);
+    CitationMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_content_filter_config(
-      ContentFilterConfig self, SseSerializer serializer);
+    ContentFilterConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_core_properties(
-      CoreProperties self, SseSerializer serializer);
+    CoreProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_csv_metadata(
-      CsvMetadata self, SseSerializer serializer);
+    CsvMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_dbf_metadata(
-      DbfMetadata self, SseSerializer serializer);
+    DbfMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_djot_content(
-      DjotContent self, SseSerializer serializer);
+    DjotContent self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_document_structure(
-      DocumentStructure self, SseSerializer serializer);
+    DocumentStructure self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_docx_app_properties(
-      DocxAppProperties self, SseSerializer serializer);
+    DocxAppProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_docx_metadata(
-      DocxMetadata self, SseSerializer serializer);
+    DocxMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_email_config(
-      EmailConfig self, SseSerializer serializer);
+    EmailConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_email_metadata(
-      EmailMetadata self, SseSerializer serializer);
+    EmailMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_embedding_config(
-      EmbeddingConfig self, SseSerializer serializer);
+    EmbeddingConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_embedding_preset(
-      EmbeddingPreset self, SseSerializer serializer);
+    EmbeddingPreset self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_epub_metadata(
-      EpubMetadata self, SseSerializer serializer);
+    EpubMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_error_metadata(
-      ErrorMetadata self, SseSerializer serializer);
+    ErrorMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_excel_metadata(
-      ExcelMetadata self, SseSerializer serializer);
+    ExcelMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_extraction_config(
-      ExtractionConfig self, SseSerializer serializer);
+    ExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_extraction_method(
-      ExtractionMethod self, SseSerializer serializer);
+    ExtractionMethod self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_extraction_result(
-      ExtractionResult self, SseSerializer serializer);
+    ExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_fiction_book_metadata(
-      FictionBookMetadata self, SseSerializer serializer);
+    FictionBookMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_file_extraction_config(
-      FileExtractionConfig self, SseSerializer serializer);
+    FileExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_format_metadata(
-      FormatMetadata self, SseSerializer serializer);
+    FormatMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_heading_context(
-      HeadingContext self, SseSerializer serializer);
+    HeadingContext self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_hierarchy_config(
-      HierarchyConfig self, SseSerializer serializer);
+    HierarchyConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_html_metadata(
-      HtmlMetadata self, SseSerializer serializer);
+    HtmlMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_html_output_config(
-      HtmlOutputConfig self, SseSerializer serializer);
+    HtmlOutputConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_i_64(
-      PlatformInt64 self, SseSerializer serializer);
+    PlatformInt64 self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_image_extraction_config(
-      ImageExtractionConfig self, SseSerializer serializer);
+    ImageExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_image_kind(
-      ImageKind self, SseSerializer serializer);
+    ImageKind self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_image_metadata(
-      ImageMetadata self, SseSerializer serializer);
+    ImageMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_image_preprocessing_config(
-      ImagePreprocessingConfig self, SseSerializer serializer);
+    ImagePreprocessingConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_image_preprocessing_metadata(
-      ImagePreprocessingMetadata self, SseSerializer serializer);
+    ImagePreprocessingMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_jats_metadata(
-      JatsMetadata self, SseSerializer serializer);
+    JatsMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_keyword_config(
-      KeywordConfig self, SseSerializer serializer);
+    KeywordConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_language_detection_config(
-      LanguageDetectionConfig self, SseSerializer serializer);
+    LanguageDetectionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_layout_detection_config(
-      LayoutDetectionConfig self, SseSerializer serializer);
+    LayoutDetectionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_llm_config(
-      LlmConfig self, SseSerializer serializer);
+    LlmConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ocr_config(
-      OcrConfig self, SseSerializer serializer);
+    OcrConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ocr_element_config(
-      OcrElementConfig self, SseSerializer serializer);
+    OcrElementConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ocr_metadata(
-      OcrMetadata self, SseSerializer serializer);
+    OcrMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ocr_pipeline_config(
-      OcrPipelineConfig self, SseSerializer serializer);
+    OcrPipelineConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ocr_quality_thresholds(
-      OcrQualityThresholds self, SseSerializer serializer);
+    OcrQualityThresholds self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ocr_rotation(
-      OcrRotation self, SseSerializer serializer);
+    OcrRotation self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ocr_table_bounding_box(
-      OcrTableBoundingBox self, SseSerializer serializer);
+    OcrTableBoundingBox self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_output_format(
-      OutputFormat self, SseSerializer serializer);
+    OutputFormat self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_page_config(
-      PageConfig self, SseSerializer serializer);
+    PageConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_page_hierarchy(
-      PageHierarchy self, SseSerializer serializer);
+    PageHierarchy self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_page_structure(
-      PageStructure self, SseSerializer serializer);
+    PageStructure self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_pdf_config(
-      PdfConfig self, SseSerializer serializer);
+    PdfConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_pdf_metadata(
-      PdfMetadata self, SseSerializer serializer);
+    PdfMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_post_processor_config(
-      PostProcessorConfig self, SseSerializer serializer);
+    PostProcessorConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_pptx_metadata(
-      PptxMetadata self, SseSerializer serializer);
+    PptxMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_pst_metadata(
-      PstMetadata self, SseSerializer serializer);
+    PstMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_rake_params(
-      RakeParams self, SseSerializer serializer);
+    RakeParams self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_result_format(
-      ResultFormat self, SseSerializer serializer);
+    ResultFormat self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_security_limits(
-      SecurityLimits self, SseSerializer serializer);
+    SecurityLimits self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_structured_extraction_config(
-      StructuredExtractionConfig self, SseSerializer serializer);
+    StructuredExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_table_grid(
-      TableGrid self, SseSerializer serializer);
+    TableGrid self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_tesseract_config(
-      TesseractConfig self, SseSerializer serializer);
+    TesseractConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_text_direction(
-      TextDirection self, SseSerializer serializer);
+    TextDirection self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_text_metadata(
-      TextMetadata self, SseSerializer serializer);
+    TextMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_token_reduction_options(
-      TokenReductionOptions self, SseSerializer serializer);
+    TokenReductionOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_tree_sitter_config(
-      TreeSitterConfig self, SseSerializer serializer);
+    TreeSitterConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_xml_metadata(
-      XmlMetadata self, SseSerializer serializer);
+    XmlMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_yake_params(
-      YakeParams self, SseSerializer serializer);
+    YakeParams self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_year_range(
-      YearRange self, SseSerializer serializer);
+    YearRange self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_cache_warm_params(
-      CacheWarmParams self, SseSerializer serializer);
+    CacheWarmParams self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chunk(Chunk self, SseSerializer serializer);
@@ -3901,7 +4187,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_chunk_text_params(
-      ChunkTextParams self, SseSerializer serializer);
+    ChunkTextParams self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chunk_type(ChunkType self, SseSerializer serializer);
@@ -3911,34 +4199,48 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_chunking_config(
-      ChunkingConfig self, SseSerializer serializer);
+    ChunkingConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chunking_result(
-      ChunkingResult self, SseSerializer serializer);
+    ChunkingResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_citation_metadata(
-      CitationMetadata self, SseSerializer serializer);
+    CitationMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_code_content_mode(
-      CodeContentMode self, SseSerializer serializer);
+    CodeContentMode self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_content_filter_config(
-      ContentFilterConfig self, SseSerializer serializer);
+    ContentFilterConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_content_layer(ContentLayer self, SseSerializer serializer);
 
   @protected
   void sse_encode_contributor_role(
-      ContributorRole self, SseSerializer serializer);
+    ContributorRole self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_core_properties(
-      CoreProperties self, SseSerializer serializer);
+    CoreProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_csv_metadata(CsvMetadata self, SseSerializer serializer);
@@ -3951,19 +4253,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_detect_mime_type_params(
-      DetectMimeTypeParams self, SseSerializer serializer);
+    DetectMimeTypeParams self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_detect_response(
-      DetectResponse self, SseSerializer serializer);
+    DetectResponse self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_detected_boundary(
-      DetectedBoundary self, SseSerializer serializer);
+    DetectedBoundary self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_detection_result(
-      DetectionResult self, SseSerializer serializer);
+    DetectionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_djot_content(DjotContent self, SseSerializer serializer);
@@ -3976,22 +4286,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_docling_compat_response(
-      DoclingCompatResponse self, SseSerializer serializer);
+    DoclingCompatResponse self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_document_node(DocumentNode self, SseSerializer serializer);
 
   @protected
   void sse_encode_document_relationship(
-      DocumentRelationship self, SseSerializer serializer);
+    DocumentRelationship self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_document_structure(
-      DocumentStructure self, SseSerializer serializer);
+    DocumentStructure self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_docx_app_properties(
-      DocxAppProperties self, SseSerializer serializer);
+    DocxAppProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_docx_metadata(DocxMetadata self, SseSerializer serializer);
@@ -4004,21 +4322,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_element_metadata(
-      ElementMetadata self, SseSerializer serializer);
+    ElementMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_element_type(ElementType self, SseSerializer serializer);
 
   @protected
   void sse_encode_email_attachment(
-      EmailAttachment self, SseSerializer serializer);
+    EmailAttachment self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_email_config(EmailConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_email_extraction_result(
-      EmailExtractionResult self, SseSerializer serializer);
+    EmailExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_email_metadata(EmailMetadata self, SseSerializer serializer);
@@ -4031,22 +4355,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_embed_text_params(
-      EmbedTextParams self, SseSerializer serializer);
+    EmbedTextParams self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_embedded_file(EmbeddedFile self, SseSerializer serializer);
 
   @protected
   void sse_encode_embedding_config(
-      EmbeddingConfig self, SseSerializer serializer);
+    EmbeddingConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_embedding_model_type(
-      EmbeddingModelType self, SseSerializer serializer);
+    EmbeddingModelType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_embedding_preset(
-      EmbeddingPreset self, SseSerializer serializer);
+    EmbeddingPreset self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_epub_metadata(EpubMetadata self, SseSerializer serializer);
@@ -4065,86 +4397,120 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_execution_provider_type(
-      ExecutionProviderType self, SseSerializer serializer);
+    ExecutionProviderType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_extract_structured_params(
-      ExtractStructuredParams self, SseSerializer serializer);
+    ExtractStructuredParams self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_extracted_image(
-      ExtractedImage self, SseSerializer serializer);
+    ExtractedImage self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_extracted_inline_image(
-      ExtractedInlineImage self, SseSerializer serializer);
+    ExtractedInlineImage self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_extraction_config(
-      ExtractionConfig self, SseSerializer serializer);
+    ExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_extraction_method(
-      ExtractionMethod self, SseSerializer serializer);
+    ExtractionMethod self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_extraction_result(
-      ExtractionResult self, SseSerializer serializer);
+    ExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_fiction_book_metadata(
-      FictionBookMetadata self, SseSerializer serializer);
+    FictionBookMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_file_extraction_config(
-      FileExtractionConfig self, SseSerializer serializer);
+    FileExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_footnote(Footnote self, SseSerializer serializer);
 
   @protected
   void sse_encode_format_metadata(
-      FormatMetadata self, SseSerializer serializer);
+    FormatMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_formatted_block(
-      FormattedBlock self, SseSerializer serializer);
+    FormattedBlock self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_grid_cell(GridCell self, SseSerializer serializer);
 
   @protected
   void sse_encode_header_metadata(
-      HeaderMetadata self, SseSerializer serializer);
+    HeaderMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_heading_context(
-      HeadingContext self, SseSerializer serializer);
+    HeadingContext self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_heading_level(HeadingLevel self, SseSerializer serializer);
 
   @protected
   void sse_encode_hierarchical_block(
-      HierarchicalBlock self, SseSerializer serializer);
+    HierarchicalBlock self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_hierarchy_config(
-      HierarchyConfig self, SseSerializer serializer);
+    HierarchyConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_html_extraction_result(
-      HtmlExtractionResult self, SseSerializer serializer);
+    HtmlExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_html_metadata(HtmlMetadata self, SseSerializer serializer);
 
   @protected
   void sse_encode_html_output_config(
-      HtmlOutputConfig self, SseSerializer serializer);
+    HtmlOutputConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_html_theme(HtmlTheme self, SseSerializer serializer);
@@ -4157,7 +4523,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_image_extraction_config(
-      ImageExtractionConfig self, SseSerializer serializer);
+    ImageExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_image_kind(ImageKind self, SseSerializer serializer);
@@ -4167,15 +4535,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_image_metadata_type(
-      ImageMetadataType self, SseSerializer serializer);
+    ImageMetadataType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_image_preprocessing_config(
-      ImagePreprocessingConfig self, SseSerializer serializer);
+    ImagePreprocessingConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_image_preprocessing_metadata(
-      ImagePreprocessingMetadata self, SseSerializer serializer);
+    ImagePreprocessingMetadata self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_image_type(ImageType self, SseSerializer serializer);
@@ -4197,25 +4571,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_keyword_algorithm(
-      KeywordAlgorithm self, SseSerializer serializer);
+    KeywordAlgorithm self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_keyword_config(KeywordConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_language_detection_config(
-      LanguageDetectionConfig self, SseSerializer serializer);
+    LanguageDetectionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_layout_class(LayoutClass self, SseSerializer serializer);
 
   @protected
   void sse_encode_layout_detection(
-      LayoutDetection self, SseSerializer serializer);
+    LayoutDetection self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_layout_detection_config(
-      LayoutDetectionConfig self, SseSerializer serializer);
+    LayoutDetectionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_layout_region(LayoutRegion self, SseSerializer serializer);
@@ -4231,196 +4613,276 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_archive_entry(
-      List<ArchiveEntry> self, SseSerializer serializer);
+    List<ArchiveEntry> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_batch_bytes_item(
-      List<BatchBytesItem> self, SseSerializer serializer);
+    List<BatchBytesItem> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_batch_file_item(
-      List<BatchFileItem> self, SseSerializer serializer);
+    List<BatchFileItem> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chunk(List<Chunk> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_contributor_role(
-      List<ContributorRole> self, SseSerializer serializer);
+    List<ContributorRole> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_dbf_field_info(
-      List<DbfFieldInfo> self, SseSerializer serializer);
+    List<DbfFieldInfo> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_djot_image(
-      List<DjotImage> self, SseSerializer serializer);
+    List<DjotImage> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_djot_link(List<DjotLink> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_document_node(
-      List<DocumentNode> self, SseSerializer serializer);
+    List<DocumentNode> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_document_relationship(
-      List<DocumentRelationship> self, SseSerializer serializer);
+    List<DocumentRelationship> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_element(List<Element> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_email_attachment(
-      List<EmailAttachment> self, SseSerializer serializer);
+    List<EmailAttachment> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_excel_sheet(
-      List<ExcelSheet> self, SseSerializer serializer);
+    List<ExcelSheet> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_extracted_image(
-      List<ExtractedImage> self, SseSerializer serializer);
+    List<ExtractedImage> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_extracted_inline_image(
-      List<ExtractedInlineImage> self, SseSerializer serializer);
+    List<ExtractedInlineImage> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_extraction_result(
-      List<ExtractionResult> self, SseSerializer serializer);
+    List<ExtractionResult> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_footnote(List<Footnote> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_formatted_block(
-      List<FormattedBlock> self, SseSerializer serializer);
+    List<FormattedBlock> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_grid_cell(List<GridCell> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_header_metadata(
-      List<HeaderMetadata> self, SseSerializer serializer);
+    List<HeaderMetadata> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_heading_level(
-      List<HeadingLevel> self, SseSerializer serializer);
+    List<HeadingLevel> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_hierarchical_block(
-      List<HierarchicalBlock> self, SseSerializer serializer);
+    List<HierarchicalBlock> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_image_metadata_type(
-      List<ImageMetadataType> self, SseSerializer serializer);
+    List<ImageMetadataType> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_inline_element(
-      List<InlineElement> self, SseSerializer serializer);
+    List<InlineElement> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_keyword(List<Keyword> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_layout_detection(
-      List<LayoutDetection> self, SseSerializer serializer);
+    List<LayoutDetection> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_layout_region(
-      List<LayoutRegion> self, SseSerializer serializer);
+    List<LayoutRegion> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_link_metadata(
-      List<LinkMetadata> self, SseSerializer serializer);
+    List<LinkMetadata> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_list_String(
-      List<List<String>> self, SseSerializer serializer);
+    List<List<String>> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_list_prim_f_64_strict(
-      List<Float64List> self, SseSerializer serializer);
+    List<Float64List> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_llm_usage(List<LlmUsage> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_manifest_entry_response(
-      List<ManifestEntryResponse> self, SseSerializer serializer);
+    List<ManifestEntryResponse> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_ocr_element(
-      List<OcrElement> self, SseSerializer serializer);
+    List<OcrElement> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_ocr_pipeline_stage(
-      List<OcrPipelineStage> self, SseSerializer serializer);
+    List<OcrPipelineStage> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_ocr_table(List<OcrTable> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_page_boundary(
-      List<PageBoundary> self, SseSerializer serializer);
+    List<PageBoundary> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_page_content(
-      List<PageContent> self, SseSerializer serializer);
+    List<PageContent> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_page_info(List<PageInfo> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_pdf_annotation(
-      List<PdfAnnotation> self, SseSerializer serializer);
+    List<PdfAnnotation> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_f_64_strict(
-      Float64List self, SseSerializer serializer);
+    Float64List self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_i_64_strict(
-      Int64List self, SseSerializer serializer);
+    Int64List self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
-      Uint8List self, SseSerializer serializer);
+    Uint8List self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_processing_warning(
-      List<ProcessingWarning> self, SseSerializer serializer);
+    List<ProcessingWarning> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_record_string_i_64(
-      List<(String, PlatformInt64)> self, SseSerializer serializer);
+    List<(String, PlatformInt64)> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_record_string_list_prim_u_8_strict(
-      List<(String, Uint8List)> self, SseSerializer serializer);
+    List<(String, Uint8List)> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_record_string_list_string(
-      List<(String, List<String>)> self, SseSerializer serializer);
+    List<(String, List<String>)> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_record_string_string(
-      List<(String, String)> self, SseSerializer serializer);
+    List<(String, String)> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_structured_data(
-      List<StructuredData> self, SseSerializer serializer);
+    List<StructuredData> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_table(List<Table> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_text_annotation(
-      List<TextAnnotation> self, SseSerializer serializer);
+    List<TextAnnotation> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_uri(List<Uri> self, SseSerializer serializer);
@@ -4433,11 +4895,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_manifest_entry_response(
-      ManifestEntryResponse self, SseSerializer serializer);
+    ManifestEntryResponse self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_manifest_response(
-      ManifestResponse self, SseSerializer serializer);
+    ManifestResponse self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_metadata(Metadata self, SseSerializer serializer);
@@ -4450,7 +4916,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ocr_bounding_geometry(
-      OcrBoundingGeometry self, SseSerializer serializer);
+    OcrBoundingGeometry self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_confidence(OcrConfidence self, SseSerializer serializer);
@@ -4463,30 +4931,42 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ocr_element_config(
-      OcrElementConfig self, SseSerializer serializer);
+    OcrElementConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_element_level(
-      OcrElementLevel self, SseSerializer serializer);
+    OcrElementLevel self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_extraction_result(
-      OcrExtractionResult self, SseSerializer serializer);
+    OcrExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_metadata(OcrMetadata self, SseSerializer serializer);
 
   @protected
   void sse_encode_ocr_pipeline_config(
-      OcrPipelineConfig self, SseSerializer serializer);
+    OcrPipelineConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_pipeline_stage(
-      OcrPipelineStage self, SseSerializer serializer);
+    OcrPipelineStage self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_quality_thresholds(
-      OcrQualityThresholds self, SseSerializer serializer);
+    OcrQualityThresholds self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ocr_rotation(OcrRotation self, SseSerializer serializer);
@@ -4496,312 +4976,456 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ocr_table_bounding_box(
-      OcrTableBoundingBox self, SseSerializer serializer);
+    OcrTableBoundingBox self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_open_web_document_response(
-      OpenWebDocumentResponse self, SseSerializer serializer);
+    OpenWebDocumentResponse self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_Map_String_String_None(
-      Map<String, String>? self, SseSerializer serializer);
+    Map<String, String>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_Map_String_i_64_None(
-      Map<String, PlatformInt64>? self, SseSerializer serializer);
+    Map<String, PlatformInt64>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_Map_String_list_String_None(
-      Map<String, List<String>>? self, SseSerializer serializer);
+    Map<String, List<String>>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_Map_String_list_prim_u_8_strict_None(
-      Map<String, Uint8List>? self, SseSerializer serializer);
+    Map<String, Uint8List>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_acceleration_config(
-      AccelerationConfig? self, SseSerializer serializer);
+    AccelerationConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_chunking_config(
-      ChunkingConfig? self, SseSerializer serializer);
+    ChunkingConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_content_filter_config(
-      ContentFilterConfig? self, SseSerializer serializer);
+    ContentFilterConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_core_properties(
-      CoreProperties? self, SseSerializer serializer);
+    CoreProperties? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_djot_content(
-      DjotContent? self, SseSerializer serializer);
+    DjotContent? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_document_structure(
-      DocumentStructure? self, SseSerializer serializer);
+    DocumentStructure? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_docx_app_properties(
-      DocxAppProperties? self, SseSerializer serializer);
+    DocxAppProperties? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_email_config(
-      EmailConfig? self, SseSerializer serializer);
+    EmailConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_embedding_config(
-      EmbeddingConfig? self, SseSerializer serializer);
+    EmbeddingConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_embedding_preset(
-      EmbeddingPreset? self, SseSerializer serializer);
+    EmbeddingPreset? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_error_metadata(
-      ErrorMetadata? self, SseSerializer serializer);
+    ErrorMetadata? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_extraction_method(
-      ExtractionMethod? self, SseSerializer serializer);
+    ExtractionMethod? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_extraction_result(
-      ExtractionResult? self, SseSerializer serializer);
+    ExtractionResult? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_file_extraction_config(
-      FileExtractionConfig? self, SseSerializer serializer);
+    FileExtractionConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_format_metadata(
-      FormatMetadata? self, SseSerializer serializer);
+    FormatMetadata? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_heading_context(
-      HeadingContext? self, SseSerializer serializer);
+    HeadingContext? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_hierarchy_config(
-      HierarchyConfig? self, SseSerializer serializer);
+    HierarchyConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_html_output_config(
-      HtmlOutputConfig? self, SseSerializer serializer);
+    HtmlOutputConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_i_64(
-      PlatformInt64? self, SseSerializer serializer);
+    PlatformInt64? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_image_extraction_config(
-      ImageExtractionConfig? self, SseSerializer serializer);
+    ImageExtractionConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_image_kind(
-      ImageKind? self, SseSerializer serializer);
+    ImageKind? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_image_preprocessing_config(
-      ImagePreprocessingConfig? self, SseSerializer serializer);
+    ImagePreprocessingConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_image_preprocessing_metadata(
-      ImagePreprocessingMetadata? self, SseSerializer serializer);
+    ImagePreprocessingMetadata? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_keyword_config(
-      KeywordConfig? self, SseSerializer serializer);
+    KeywordConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_language_detection_config(
-      LanguageDetectionConfig? self, SseSerializer serializer);
+    LanguageDetectionConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_layout_detection_config(
-      LayoutDetectionConfig? self, SseSerializer serializer);
+    LayoutDetectionConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_llm_config(
-      LlmConfig? self, SseSerializer serializer);
+    LlmConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ocr_config(
-      OcrConfig? self, SseSerializer serializer);
+    OcrConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ocr_element_config(
-      OcrElementConfig? self, SseSerializer serializer);
+    OcrElementConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ocr_pipeline_config(
-      OcrPipelineConfig? self, SseSerializer serializer);
+    OcrPipelineConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ocr_quality_thresholds(
-      OcrQualityThresholds? self, SseSerializer serializer);
+    OcrQualityThresholds? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ocr_rotation(
-      OcrRotation? self, SseSerializer serializer);
+    OcrRotation? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_ocr_table_bounding_box(
-      OcrTableBoundingBox? self, SseSerializer serializer);
+    OcrTableBoundingBox? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_output_format(
-      OutputFormat? self, SseSerializer serializer);
+    OutputFormat? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_page_config(
-      PageConfig? self, SseSerializer serializer);
+    PageConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_page_hierarchy(
-      PageHierarchy? self, SseSerializer serializer);
+    PageHierarchy? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_page_structure(
-      PageStructure? self, SseSerializer serializer);
+    PageStructure? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_pdf_config(
-      PdfConfig? self, SseSerializer serializer);
+    PdfConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_post_processor_config(
-      PostProcessorConfig? self, SseSerializer serializer);
+    PostProcessorConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_rake_params(
-      RakeParams? self, SseSerializer serializer);
+    RakeParams? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_result_format(
-      ResultFormat? self, SseSerializer serializer);
+    ResultFormat? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_security_limits(
-      SecurityLimits? self, SseSerializer serializer);
+    SecurityLimits? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_structured_extraction_config(
-      StructuredExtractionConfig? self, SseSerializer serializer);
+    StructuredExtractionConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_tesseract_config(
-      TesseractConfig? self, SseSerializer serializer);
+    TesseractConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_text_direction(
-      TextDirection? self, SseSerializer serializer);
+    TextDirection? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_token_reduction_options(
-      TokenReductionOptions? self, SseSerializer serializer);
+    TokenReductionOptions? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_tree_sitter_config(
-      TreeSitterConfig? self, SseSerializer serializer);
+    TreeSitterConfig? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_yake_params(
-      YakeParams? self, SseSerializer serializer);
+    YakeParams? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_year_range(
-      YearRange? self, SseSerializer serializer);
+    YearRange? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_archive_entry(
-      List<ArchiveEntry>? self, SseSerializer serializer);
+    List<ArchiveEntry>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_chunk(List<Chunk>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_element(
-      List<Element>? self, SseSerializer serializer);
+    List<Element>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_extracted_image(
-      List<ExtractedImage>? self, SseSerializer serializer);
+    List<ExtractedImage>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_keyword(
-      List<Keyword>? self, SseSerializer serializer);
+    List<Keyword>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_layout_region(
-      List<LayoutRegion>? self, SseSerializer serializer);
+    List<LayoutRegion>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_list_String(
-      List<List<String>>? self, SseSerializer serializer);
+    List<List<String>>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_llm_usage(
-      List<LlmUsage>? self, SseSerializer serializer);
+    List<LlmUsage>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_ocr_element(
-      List<OcrElement>? self, SseSerializer serializer);
+    List<OcrElement>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_page_boundary(
-      List<PageBoundary>? self, SseSerializer serializer);
+    List<PageBoundary>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_page_content(
-      List<PageContent>? self, SseSerializer serializer);
+    List<PageContent>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_page_info(
-      List<PageInfo>? self, SseSerializer serializer);
+    List<PageInfo>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_pdf_annotation(
-      List<PdfAnnotation>? self, SseSerializer serializer);
+    List<PdfAnnotation>? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_prim_f_64_strict(
-      Float64List? self, SseSerializer serializer);
+    Float64List? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_prim_i_64_strict(
-      Int64List? self, SseSerializer serializer);
+    Int64List? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
-      Uint8List? self, SseSerializer serializer);
+    Uint8List? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_list_uri(List<Uri>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_orientation_result(
-      OrientationResult self, SseSerializer serializer);
+    OrientationResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_output_format(OutputFormat self, SseSerializer serializer);
 
   @protected
   void sse_encode_paddle_ocr_config(
-      PaddleOcrConfig self, SseSerializer serializer);
+    PaddleOcrConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_page_boundary(PageBoundary self, SseSerializer serializer);
@@ -4829,7 +5453,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_pdf_annotation_type(
-      PdfAnnotationType self, SseSerializer serializer);
+    PdfAnnotationType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_pdf_config(PdfConfig self, SseSerializer serializer);
@@ -4839,22 +5465,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_post_processor_config(
-      PostProcessorConfig self, SseSerializer serializer);
+    PostProcessorConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_pptx_app_properties(
-      PptxAppProperties self, SseSerializer serializer);
+    PptxAppProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_pptx_extraction_result(
-      PptxExtractionResult self, SseSerializer serializer);
+    PptxExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_pptx_metadata(PptxMetadata self, SseSerializer serializer);
 
   @protected
   void sse_encode_processing_warning(
-      ProcessingWarning self, SseSerializer serializer);
+    ProcessingWarning self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_pst_metadata(PstMetadata self, SseSerializer serializer);
@@ -4864,65 +5498,93 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_recognized_table(
-      RecognizedTable self, SseSerializer serializer);
+    RecognizedTable self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_record_string_i_64(
-      (String, PlatformInt64) self, SseSerializer serializer);
+    (String, PlatformInt64) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_record_string_list_prim_u_8_strict(
-      (String, Uint8List) self, SseSerializer serializer);
+    (String, Uint8List) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_record_string_list_string(
-      (String, List<String>) self, SseSerializer serializer);
+    (String, List<String>) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_record_string_string(
-      (String, String) self, SseSerializer serializer);
+    (String, String) self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_reduction_level(
-      ReductionLevel self, SseSerializer serializer);
+    ReductionLevel self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_relationship_kind(
-      RelationshipKind self, SseSerializer serializer);
+    RelationshipKind self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_result_format(ResultFormat self, SseSerializer serializer);
 
   @protected
   void sse_encode_security_limits(
-      SecurityLimits self, SseSerializer serializer);
+    SecurityLimits self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_server_config(ServerConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_structured_data(
-      StructuredData self, SseSerializer serializer);
+    StructuredData self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_structured_data_result(
-      StructuredDataResult self, SseSerializer serializer);
+    StructuredDataResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_structured_data_type(
-      StructuredDataType self, SseSerializer serializer);
+    StructuredDataType self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_structured_extraction_config(
-      StructuredExtractionConfig self, SseSerializer serializer);
+    StructuredExtractionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_structured_extraction_response(
-      StructuredExtractionResponse self, SseSerializer serializer);
+    StructuredExtractionResponse self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_supported_format(
-      SupportedFormat self, SseSerializer serializer);
+    SupportedFormat self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_table(Table self, SseSerializer serializer);
@@ -4938,41 +5600,57 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_table_properties(
-      TableProperties self, SseSerializer serializer);
+    TableProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_tesseract_config(
-      TesseractConfig self, SseSerializer serializer);
+    TesseractConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_text_annotation(
-      TextAnnotation self, SseSerializer serializer);
+    TextAnnotation self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_text_direction(TextDirection self, SseSerializer serializer);
 
   @protected
   void sse_encode_text_extraction_result(
-      TextExtractionResult self, SseSerializer serializer);
+    TextExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_text_metadata(TextMetadata self, SseSerializer serializer);
 
   @protected
   void sse_encode_token_reduction_config(
-      TokenReductionConfig self, SseSerializer serializer);
+    TokenReductionConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_token_reduction_options(
-      TokenReductionOptions self, SseSerializer serializer);
+    TokenReductionOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_tree_sitter_config(
-      TreeSitterConfig self, SseSerializer serializer);
+    TreeSitterConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_tree_sitter_process_config(
-      TreeSitterProcessConfig self, SseSerializer serializer);
+    TreeSitterProcessConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
@@ -4994,11 +5672,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_xlsx_app_properties(
-      XlsxAppProperties self, SseSerializer serializer);
+    XlsxAppProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_xml_extraction_result(
-      XmlExtractionResult self, SseSerializer serializer);
+    XmlExtractionResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_xml_metadata(XmlMetadata self, SseSerializer serializer);
@@ -5015,305 +5697,293 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 class RustLibWire implements BaseWire {
   RustLibWire.fromExternalLibrary(ExternalLibrary lib);
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+        ptr,
+      );
 
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-              ptr);
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+        ptr,
+      );
 
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-              ptr);
-
-  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-              ptr);
-
-  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          int ptr) =>
-      wasmModule
-          .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-              ptr);
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+        ptr,
+      );
 }
 
 @JS('wasm_bindgen')
@@ -5323,202 +5993,182 @@ external RustLibWasmModule get wasmModule;
 @anonymous
 extension type RustLibWasmModule._(JSObject _) implements JSObject {
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOcrBackendTypeSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureOptionSyncExtractorSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureProcessingStageSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureVecStringSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnDartFnFuturei64SendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultDartFnFuturei64SendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnExtractionResultExtractionConfigDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnInternalDocumentDartFnFutureStringSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringOcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringDartFnFutureboolSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnStringStringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecStringDartFnFutureVecVecf64SendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8OcrConfigDartFnFutureExtractionResultSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBoxdynFnVecu8StringExtractionConfigDartFnFutureInternalDocumentSendSync(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
+    int ptr,
+  );
 
   external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          int ptr);
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    int ptr,
+  );
 
   external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDocumentExtractorDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerEmbeddingBackendDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerHwpxExtractor(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOcrBackendDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPostProcessorDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRendererDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTessdataManager(
-          int ptr);
-
-  external void
-      rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          int ptr);
-
-  external void
-      rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
-          int ptr);
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerValidatorDartImpl(
+    int ptr,
+  );
 }

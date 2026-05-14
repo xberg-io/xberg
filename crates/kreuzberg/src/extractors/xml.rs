@@ -207,7 +207,7 @@ impl SyncExtractor for XmlExtractor {
 
         doc.metadata = Metadata {
             format: Some(crate::types::FormatMetadata::Xml(crate::types::XmlMetadata {
-                element_count: xml_result.element_count,
+                element_count: xml_result.element_count as u32,
                 unique_elements: xml_result.unique_elements,
             })),
             ..Default::default()

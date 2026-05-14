@@ -15,7 +15,7 @@ pub struct Table {
     /// Markdown representation of the table
     pub markdown: String,
     /// Page number where the table was found (1-indexed)
-    pub page_number: usize,
+    pub page_number: u32,
     /// Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
     /// Only populated for PDF-extracted tables when position data is available.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,16 +33,16 @@ pub struct TableCell {
     pub content: String,
     /// Row span (number of rows this cell spans)
     #[serde(default = "default_span")]
-    pub row_span: usize,
+    pub row_span: u32,
     /// Column span (number of columns this cell spans)
     #[serde(default = "default_span")]
-    pub col_span: usize,
+    pub col_span: u32,
     /// Whether this is a header cell
     #[serde(default)]
     pub is_header: bool,
 }
 
-fn default_span() -> usize {
+fn default_span() -> u32 {
     1
 }
 

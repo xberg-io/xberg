@@ -11,11 +11,11 @@ use jotdown::{Container, Event};
 /// converting each table to markdown representation for storage.
 pub(crate) fn extract_tables_from_events(events: &[Event]) -> Vec<Table> {
     let mut tables = Vec::new();
-    let mut current_table: Option<(Vec<Vec<String>>, usize)> = None;
+    let mut current_table: Option<(Vec<Vec<String>>, u32)> = None;
     let mut current_row: Vec<String> = Vec::new();
     let mut current_cell = String::new();
     let mut in_table_cell = false;
-    let mut table_index = 0;
+    let mut table_index = 0u32;
 
     for event in events {
         match event {

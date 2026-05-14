@@ -49,7 +49,7 @@ fn heading_level_to_element_type(level: u8) -> ElementType {
 fn add_paragraphs_with_classification(
     elements: &mut Vec<Element>,
     text: &str,
-    page_number: usize,
+    page_number: u32,
     title: &Option<String>,
 ) {
     if text.is_empty() {
@@ -143,7 +143,7 @@ fn snap_to_char_boundary(s: &str, offset: usize) -> usize {
 }
 
 /// Process page content to extract paragraphs and list items.
-pub(super) fn process_content(elements: &mut Vec<Element>, content: &str, page_number: usize, title: &Option<String>) {
+pub(super) fn process_content(elements: &mut Vec<Element>, content: &str, page_number: u32, title: &Option<String>) {
     let list_items = detect_list_items(content);
     let mut current_byte_offset = 0;
 
@@ -220,7 +220,7 @@ pub(super) fn format_table_as_text(table: &crate::types::Table) -> String {
 pub(super) fn process_hierarchy(
     elements: &mut Vec<Element>,
     hierarchy: &crate::types::PageHierarchy,
-    page_number: usize,
+    page_number: u32,
     title: &Option<String>,
 ) -> bool {
     let mut has_any_body_blocks = false;
@@ -293,7 +293,7 @@ pub(super) fn process_hierarchy(
 pub(super) fn process_tables(
     elements: &mut Vec<Element>,
     tables: &[std::sync::Arc<crate::types::Table>],
-    page_number: usize,
+    page_number: u32,
     title: &Option<String>,
 ) {
     for table_arc in tables {
@@ -319,13 +319,15 @@ pub(super) fn process_tables(
 /// Process images on a page into Image elements.
 pub(super) fn process_images(
     elements: &mut Vec<Element>,
-    image_indices: &[usize],
+    image_indices: &[u32],
     all_images: &[crate::types::ExtractedImage],
-    page_number: usize,
+    page_number: u32,
     title: &Option<String>,
 ) {
     for &idx in image_indices {
-        let Some(image) = all_images.get(idx) else { continue };
+        let Some(image) = all_images.get(idx as usize) else {
+            continue;
+        };
         let image_text = format!(
             "Image: {} ({}x{})",
             image.format,
@@ -361,12 +363,7 @@ pub(super) fn process_images(
 }
 
 /// Add a PageBreak element between pages.
-pub(super) fn add_page_break(
-    elements: &mut Vec<Element>,
-    current_page: usize,
-    next_page: usize,
-    title: &Option<String>,
-) {
+pub(super) fn add_page_break(elements: &mut Vec<Element>, current_page: u32, next_page: u32, title: &Option<String>) {
     let page_break_text = format!("--- PAGE BREAK (page {} → {}) ---", current_page, next_page);
     let element_id = generate_element_id(&page_break_text, ElementType::PageBreak, Some(current_page));
     elements.push(Element {

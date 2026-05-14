@@ -2,9 +2,11 @@
 title: "C API Reference"
 ---
 ## C API Reference <span class="version-badge">v5.0.0-rc.1</span>
+
 ### Functions
 
 #### kreuzberg_extract_bytes()
+
 Extract content from a byte array.
 
 This is the main entry point for in-memory extraction. It performs the following steps:
@@ -42,6 +44,7 @@ KreuzbergExtractionResult* kreuzberg_extract_bytes(const uint8_t* content, const
 ---
 
 #### kreuzberg_extract_file()
+
 Extract content from a file.
 
 This is the main entry point for file-based extraction. It performs the following steps:
@@ -80,6 +83,7 @@ KreuzbergExtractionResult* kreuzberg_extract_file(const char* path, const char* 
 ---
 
 #### kreuzberg_extract_file_sync()
+
 Synchronous wrapper for `extract_file`.
 
 This is a convenience function that blocks the current thread until extraction completes.
@@ -110,6 +114,7 @@ KreuzbergExtractionResult* kreuzberg_extract_file_sync(const char* path, const c
 ---
 
 #### kreuzberg_extract_bytes_sync()
+
 Synchronous wrapper for `extract_bytes`.
 
 Uses the global Tokio runtime for 100x+ performance improvement over creating
@@ -137,6 +142,7 @@ KreuzbergExtractionResult* kreuzberg_extract_bytes_sync(const uint8_t* content, 
 ---
 
 #### kreuzberg_batch_extract_files_sync()
+
 Synchronous wrapper for `batch_extract_files`.
 
 Uses the global Tokio runtime for optimal performance.
@@ -160,6 +166,7 @@ KreuzbergExtractionResult* kreuzberg_batch_extract_files_sync(KreuzbergBatchFile
 ---
 
 #### kreuzberg_batch_extract_bytes_sync()
+
 Synchronous wrapper for `batch_extract_bytes`.
 
 Uses the global Tokio runtime for optimal performance.
@@ -185,6 +192,7 @@ KreuzbergExtractionResult* kreuzberg_batch_extract_bytes_sync(KreuzbergBatchByte
 ---
 
 #### kreuzberg_batch_extract_files()
+
 Extract content from multiple files concurrently.
 
 This function processes multiple files in parallel, automatically managing
@@ -232,6 +240,7 @@ KreuzbergExtractionResult* kreuzberg_batch_extract_files(KreuzbergBatchFileItem*
 ---
 
 #### kreuzberg_batch_extract_bytes()
+
 Extract content from multiple byte arrays concurrently.
 
 This function processes multiple byte arrays in parallel, automatically managing
@@ -273,6 +282,7 @@ KreuzbergExtractionResult* kreuzberg_batch_extract_bytes(KreuzbergBatchBytesItem
 ---
 
 #### kreuzberg_detect_mime_type_from_bytes()
+
 Detect MIME type from raw file bytes.
 
 Uses magic byte signatures to detect file type from content.
@@ -306,6 +316,7 @@ const char* kreuzberg_detect_mime_type_from_bytes(const uint8_t* content);
 ---
 
 #### kreuzberg_get_extensions_for_mime()
+
 Get file extensions for a given MIME type.
 
 Returns all known file extensions that map to the specified MIME type.
@@ -331,6 +342,7 @@ const char** kreuzberg_get_extensions_for_mime(const char* mime_type);
 ---
 
 #### kreuzberg_list_embedding_backends()
+
 List the names of all registered embedding backends.
 
 Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
@@ -347,6 +359,7 @@ const char** kreuzberg_list_embedding_backends();
 ---
 
 #### kreuzberg_list_document_extractors()
+
 List names of all registered document extractors.
 
 **Signature:**
@@ -360,6 +373,7 @@ const char** kreuzberg_list_document_extractors();
 ---
 
 #### kreuzberg_list_ocr_backends()
+
 List all registered OCR backends.
 
 Returns the names of all OCR backends currently registered in the global registry.
@@ -379,6 +393,7 @@ const char** kreuzberg_list_ocr_backends();
 ---
 
 #### kreuzberg_list_post_processors()
+
 List all registered post-processor names.
 
 Returns a vector of all post-processor names currently registered in the
@@ -400,6 +415,7 @@ const char** kreuzberg_list_post_processors();
 ---
 
 #### kreuzberg_list_renderers()
+
 List names of all registered renderers.
 
 **Errors:**
@@ -417,6 +433,7 @@ const char** kreuzberg_list_renderers();
 ---
 
 #### kreuzberg_list_validators()
+
 List names of all registered validators.
 
 **Signature:**
@@ -430,6 +447,7 @@ const char** kreuzberg_list_validators();
 ---
 
 #### kreuzberg_embed_texts_async()
+
 Generate embeddings asynchronously for a list of text strings.
 
 This is the async counterpart to `embed_texts`. It offloads the blocking
@@ -462,6 +480,7 @@ float** kreuzberg_embed_texts_async(const char** texts, KreuzbergEmbeddingConfig
 ---
 
 #### kreuzberg_render_pdf_page_to_png()
+
 Render a single PDF page to PNG bytes.
 
 Returns raw PNG-encoded bytes for the specified page at the given DPI.
@@ -492,6 +511,7 @@ const uint8_t* kreuzberg_render_pdf_page_to_png(const uint8_t* pdf_bytes, uintpt
 ---
 
 #### kreuzberg_detect_mime_type()
+
 Detect the MIME type of a file at the given path.
 
 Uses the file extension and optionally the file content to determine the MIME type.
@@ -515,6 +535,7 @@ const char* kreuzberg_detect_mime_type(const char* path, bool check_exists);
 ---
 
 #### kreuzberg_embed_texts()
+
 Embed a list of texts using the configured embedding model.
 
 Returns a 2D vector where each inner vector is the embedding for the corresponding text.
@@ -537,6 +558,7 @@ float** kreuzberg_embed_texts(const char** texts, KreuzbergEmbeddingConfig confi
 ---
 
 #### kreuzberg_get_embedding_preset()
+
 Get an embedding preset by name.
 
 Returns `NULL` if no preset with the given name exists. Returns an owned
@@ -558,6 +580,7 @@ KreuzbergEmbeddingPreset* kreuzberg_get_embedding_preset(const char* name);
 ---
 
 #### kreuzberg_list_embedding_presets()
+
 List the names of all available embedding presets.
 
 Returns owned `String`s so the values are safe to pass across FFI boundaries.
@@ -574,6 +597,7 @@ const char** kreuzberg_list_embedding_presets();
 ### Types
 
 #### KreuzbergAccelerationConfig
+
 Hardware acceleration configuration for ONNX Runtime models.
 
 Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
@@ -588,6 +612,7 @@ for inference in layout detection and embedding generation.
 ---
 
 #### KreuzbergAnchorProperties
+
 Properties for anchored drawings.
 
 | Field | Type | Default | Description |
@@ -603,6 +628,7 @@ Properties for anchored drawings.
 ---
 
 #### KreuzbergApiDoc
+
 OpenAPI documentation structure.
 
 Defines all endpoints, request/response schemas, and examples
@@ -612,6 +638,7 @@ for the Kreuzberg document extraction API.
 ---
 
 #### KreuzbergArchiveEntry
+
 A single file extracted from an archive.
 
 When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
@@ -627,6 +654,7 @@ enabled, each processable file produces its own full `ExtractionResult`.
 ---
 
 #### KreuzbergArchiveMetadata
+
 Archive (ZIP/TAR/7Z) metadata.
 
 Extracted from compressed archive files containing file lists and size information.
@@ -634,15 +662,16 @@ Extracted from compressed archive files containing file lists and size informati
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `format` | `const char*` | — | Archive format ("ZIP", "TAR", "7Z", etc.) |
-| `file_count` | `uintptr_t` | — | Total number of files in the archive |
+| `file_count` | `uint32_t` | — | Total number of files in the archive |
 | `file_list` | `const char**` | `NULL` | List of file paths within the archive |
-| `total_size` | `uintptr_t` | — | Total uncompressed size in bytes |
-| `compressed_size` | `uintptr_t*` | `NULL` | Compressed size in bytes (if available) |
+| `total_size` | `uint64_t` | — | Total uncompressed size in bytes |
+| `compressed_size` | `uint64_t*` | `NULL` | Compressed size in bytes (if available) |
 
 
 ---
 
 #### KreuzbergBBox
+
 Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
 
 | Field | Type | Default | Description |
@@ -656,6 +685,7 @@ Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-ri
 ---
 
 #### KreuzbergBatchBytesItem
+
 Batch item for byte array extraction.
 
 Used with `batch_extract_bytes` and `batch_extract_bytes_sync`
@@ -671,6 +701,7 @@ to represent a single item in a batch extraction job.
 ---
 
 #### KreuzbergBatchFileItem
+
 Batch item for file extraction.
 
 Used with `batch_extract_files` and `batch_extract_files_sync`
@@ -685,6 +716,7 @@ to represent a single file in a batch extraction job.
 ---
 
 #### KreuzbergBibtexMetadata
+
 BibTeX bibliography metadata.
 
 | Field | Type | Default | Description |
@@ -699,12 +731,14 @@ BibTeX bibliography metadata.
 ---
 
 #### KreuzbergByteBufferPool
+
 Convenience type alias for a pooled Vec<u8>.
 
 
 ---
 
 #### KreuzbergCacheWarmParams
+
 Request parameters for cache warm (model download).
 
 | Field | Type | Default | Description |
@@ -716,6 +750,7 @@ Request parameters for cache warm (model download).
 ---
 
 #### KreuzbergCharShape
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `bold` | `bool` | — | Bold |
@@ -726,6 +761,7 @@ Request parameters for cache warm (model download).
 ---
 
 #### KreuzbergChunk
+
 A text chunk with optional embedding and metadata.
 
 Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
@@ -743,6 +779,7 @@ is configured), and metadata about its position in the document.
 ---
 
 #### KreuzbergChunkMetadata
+
 Metadata about a chunk's position in the original document.
 
 | Field | Type | Default | Description |
@@ -752,14 +789,16 @@ Metadata about a chunk's position in the original document.
 | `token_count` | `uintptr_t*` | `NULL` | Number of tokens in this chunk (if available). This is calculated by the embedding model's tokenizer if embeddings are enabled. |
 | `chunk_index` | `uintptr_t` | — | Zero-based index of this chunk in the document. |
 | `total_chunks` | `uintptr_t` | — | Total number of chunks in the document. |
-| `first_page` | `uintptr_t*` | `NULL` | First page number this chunk spans (1-indexed). Only populated when page tracking is enabled in extraction configuration. |
-| `last_page` | `uintptr_t*` | `NULL` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
+| `first_page` | `uint32_t*` | `NULL` | First page number this chunk spans (1-indexed). Only populated when page tracking is enabled in extraction configuration. |
+| `last_page` | `uint32_t*` | `NULL` | Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks). Only populated when page tracking is enabled in extraction configuration. |
 | `heading_context` | `KreuzbergHeadingContext*` | `NULL` | Heading context when using Markdown chunker. Contains the heading hierarchy this chunk falls under. Only populated when `ChunkerType.Markdown` is used. |
+| `image_indices` | `uint32_t*` | — | Indices into `ExtractionResult.images` for images on pages covered by this chunk. Contains zero-based indices into the top-level `images` collection for every image whose `page_number` falls within `[first_page, last_page]`. Empty when image extraction is disabled or the chunk spans no pages with images. |
 
 
 ---
 
 #### KreuzbergChunkRequest
+
 Chunk request with text and configuration.
 
 | Field | Type | Default | Description |
@@ -772,6 +811,7 @@ Chunk request with text and configuration.
 ---
 
 #### KreuzbergChunkResponse
+
 Chunk response with chunks and metadata.
 
 | Field | Type | Default | Description |
@@ -786,6 +826,7 @@ Chunk response with chunks and metadata.
 ---
 
 #### KreuzbergChunkTextParams
+
 Request parameters for text chunking.
 
 | Field | Type | Default | Description |
@@ -800,6 +841,7 @@ Request parameters for text chunking.
 ---
 
 #### KreuzbergChunkingConfig
+
 Chunking configuration.
 
 Configures text chunking for document content, including chunk size,
@@ -820,7 +862,9 @@ Use `..the default constructor` when constructing to allow for future field addi
 | `topic_threshold` | `float*` | `NULL` | Optional cosine similarity threshold for semantic topic boundary detection. Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is provided. You almost never need to set this. When omitted, defaults to `0.75` which works well for most documents. Lower values detect more topic boundaries (more, smaller chunks); higher values detect fewer. Range: `0.0..=1.0`. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -830,6 +874,7 @@ KreuzbergChunkingConfig kreuzberg_default();
 ---
 
 #### KreuzbergChunkingResult
+
 Result of a text chunking operation.
 
 Contains the generated chunks and metadata about the chunking.
@@ -843,6 +888,7 @@ Contains the generated chunks and metadata about the chunking.
 ---
 
 #### KreuzbergCitationMetadata
+
 Citation file metadata (RIS, PubMed, EndNote).
 
 | Field | Type | Default | Description |
@@ -858,6 +904,7 @@ Citation file metadata (RIS, PubMed, EndNote).
 ---
 
 #### KreuzbergContentFilterConfig
+
 Cross-extractor content filtering configuration.
 
 Controls whether "furniture" content (headers, footers, page numbers,
@@ -876,7 +923,9 @@ default behavior unchanged.
 | `include_watermarks` | `bool` | `false` | Include watermark text in extraction output. - PDF: Keeps watermark artifacts and arXiv identifiers. - Other formats: No effect currently. Default: `false` (watermarks are stripped). |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -886,6 +935,7 @@ KreuzbergContentFilterConfig kreuzberg_default();
 ---
 
 #### KreuzbergContributorRole
+
 JATS contributor with role.
 
 | Field | Type | Default | Description |
@@ -897,6 +947,7 @@ JATS contributor with role.
 ---
 
 #### KreuzbergCoreProperties
+
 Dublin Core metadata from docProps/core.xml
 
 Contains standard metadata fields defined by the Dublin Core standard
@@ -924,12 +975,13 @@ and Office-specific extensions.
 ---
 
 #### KreuzbergCsvMetadata
+
 CSV/TSV file metadata.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `row_count` | `uintptr_t` | — | Number of rows |
-| `column_count` | `uintptr_t` | — | Number of columns |
+| `row_count` | `uint32_t` | — | Number of rows |
+| `column_count` | `uint32_t` | — | Number of columns |
 | `delimiter` | `const char**` | `NULL` | Delimiter |
 | `has_header` | `bool` | — | Whether header |
 | `column_types` | `const char***` | `NULL` | Column types |
@@ -938,6 +990,7 @@ CSV/TSV file metadata.
 ---
 
 #### KreuzbergCustomProperties
+
 Custom properties from docProps/custom.xml
 
 Maps property names to their values. Values are converted to JSON types
@@ -947,6 +1000,7 @@ based on the VT (Variant Type) specified in the XML.
 ---
 
 #### KreuzbergDbfFieldInfo
+
 dBASE field information.
 
 | Field | Type | Default | Description |
@@ -958,6 +1012,7 @@ dBASE field information.
 ---
 
 #### KreuzbergDbfMetadata
+
 dBASE (DBF) file metadata.
 
 | Field | Type | Default | Description |
@@ -970,6 +1025,7 @@ dBASE (DBF) file metadata.
 ---
 
 #### KreuzbergDetectMimeTypeParams
+
 Request parameters for MIME type detection.
 
 | Field | Type | Default | Description |
@@ -981,6 +1037,7 @@ Request parameters for MIME type detection.
 ---
 
 #### KreuzbergDetectResponse
+
 MIME type detection response.
 
 | Field | Type | Default | Description |
@@ -992,6 +1049,7 @@ MIME type detection response.
 ---
 
 #### KreuzbergDetectedBoundary
+
 A detected structural boundary in the text.
 
 | Field | Type | Default | Description |
@@ -1003,6 +1061,7 @@ A detected structural boundary in the text.
 ---
 
 #### KreuzbergDetectionResult
+
 Page-level detection result containing all detections and page metadata.
 
 | Field | Type | Default | Description |
@@ -1015,6 +1074,7 @@ Page-level detection result containing all detections and page metadata.
 ---
 
 #### KreuzbergDjotContent
+
 Comprehensive Djot document structure with semantic preservation.
 
 This type captures the full richness of Djot markup, including:
@@ -1042,6 +1102,7 @@ Available when the `djot` feature is enabled.
 ---
 
 #### KreuzbergDjotImage
+
 Image element in Djot.
 
 | Field | Type | Default | Description |
@@ -1055,6 +1116,7 @@ Image element in Djot.
 ---
 
 #### KreuzbergDjotLink
+
 Link element in Djot.
 
 | Field | Type | Default | Description |
@@ -1068,6 +1130,7 @@ Link element in Djot.
 ---
 
 #### KreuzbergDoclingCompatResponse
+
 OpenWebUI "Docling" engine response format.
 
 Returned by `POST /v1/convert/file` for docling-serve compatibility.
@@ -1081,6 +1144,7 @@ Returned by `POST /v1/convert/file` for docling-serve compatibility.
 ---
 
 #### KreuzbergDocumentExtractor
+
 Trait for document extractor plugins.
 
 Implement this trait to add support for new document formats or to override
@@ -1107,7 +1171,9 @@ Default priority is 50.
 Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
 
 ##### Methods
+
 ###### kreuzberg_extract_bytes()
+
 Extract content from a byte array.
 
 This is the core extraction method that processes in-memory document data.
@@ -1130,6 +1196,7 @@ The pipeline will convert this into the public `ExtractionResult`.
 KreuzbergInternalDocument kreuzberg_extract_bytes(const uint8_t* content, const char* mime_type, KreuzbergExtractionConfig config);
 ```
 ###### kreuzberg_extract_file()
+
 Extract content from a file.
 
 Default implementation reads the file and calls `extract_bytes`.
@@ -1149,6 +1216,7 @@ Same as `extract_bytes`, plus file I/O errors.
 KreuzbergInternalDocument kreuzberg_extract_file(const char* path, const char* mime_type, KreuzbergExtractionConfig config);
 ```
 ###### kreuzberg_supported_mime_types()
+
 Get the list of MIME types supported by this extractor.
 
 Can include exact MIME types and prefix patterns:
@@ -1165,6 +1233,7 @@ A slice of MIME type strings.
 const char** kreuzberg_supported_mime_types();
 ```
 ###### kreuzberg_priority()
+
 Get the priority of this extractor.
 
 Higher priority extractors are preferred when multiple extractors
@@ -1188,6 +1257,7 @@ Priority value (default: 50)
 int32_t kreuzberg_priority();
 ```
 ###### kreuzberg_can_handle()
+
 Optional: Check if this extractor can handle a specific file.
 
 Allows for more sophisticated detection beyond MIME types.
@@ -1203,6 +1273,7 @@ Defaults to `true` (rely on MIME type matching).
 bool kreuzberg_can_handle(const char* path, const char* mime_type);
 ```
 ###### kreuzberg_as_sync_extractor()
+
 Attempt to get a reference to this extractor as a SyncExtractor.
 
 Returns None if the extractor doesn't support synchronous extraction.
@@ -1217,6 +1288,7 @@ KreuzbergSyncExtractor* kreuzberg_as_sync_extractor();
 ---
 
 #### KreuzbergDocumentNode
+
 A single node in the document tree.
 
 Each node has deterministic `id`, typed `content`, optional `parent`/`children`
@@ -1239,6 +1311,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 ---
 
 #### KreuzbergDocumentRelationship
+
 A resolved relationship between two nodes in the document tree.
 
 | Field | Type | Default | Description |
@@ -1251,6 +1324,7 @@ A resolved relationship between two nodes in the document tree.
 ---
 
 #### KreuzbergDocumentStructure
+
 Top-level structured document representation.
 
 A flat array of nodes with index-based parent/child references forming a tree.
@@ -1270,7 +1344,9 @@ and parent-child relationships are bidirectionally consistent.
 | `node_types` | `const char**` | `NULL` | Sorted, deduplicated list of node type names present in this document. Each value is the snake_case `node_type` tag of the corresponding `NodeContent` variant (e.g. `"paragraph"`, `"heading"`, `"table"`, …). Computed from `nodes` via `DocumentStructure.finalize_node_types`. Empty until that method is called (internal construction paths call it at the end of derivation). |
 
 ##### Methods
+
 ###### kreuzberg_finalize_node_types()
+
 Compute and populate the `node_types` field from the current `nodes`.
 
 Call this after all nodes have been added to the structure. Internal
@@ -1282,6 +1358,7 @@ construction paths (builder, derivation) call this automatically.
 void kreuzberg_finalize_node_types();
 ```
 ###### kreuzberg_is_empty()
+
 Check if the document structure is empty.
 
 **Signature:**
@@ -1290,6 +1367,7 @@ Check if the document structure is empty.
 bool kreuzberg_is_empty();
 ```
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -1299,6 +1377,7 @@ KreuzbergDocumentStructure kreuzberg_default();
 ---
 
 #### KreuzbergDocxAppProperties
+
 Application properties from docProps/app.xml for DOCX
 
 Contains Word-specific document statistics and metadata.
@@ -1326,6 +1405,7 @@ Contains Word-specific document statistics and metadata.
 ---
 
 #### KreuzbergDocxMetadata
+
 Word document metadata.
 
 Extracted from DOCX files using shared Office Open XML metadata extraction.
@@ -1341,6 +1421,7 @@ Integrates with `office_metadata` module for core/app/custom properties.
 ---
 
 #### KreuzbergDrawing
+
 A drawing object extracted from `<w:drawing>`.
 
 | Field | Type | Default | Description |
@@ -1354,6 +1435,7 @@ A drawing object extracted from `<w:drawing>`.
 ---
 
 #### KreuzbergElement
+
 Semantic element extracted from document.
 
 Represents a logical unit of content with semantic classification,
@@ -1370,11 +1452,12 @@ unique identifier, and metadata for tracking origin and position.
 ---
 
 #### KreuzbergElementMetadata
+
 Metadata for a semantic element.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `page_number` | `uintptr_t*` | `NULL` | Page number (1-indexed) |
+| `page_number` | `uint32_t*` | `NULL` | Page number (1-indexed) |
 | `filename` | `const char**` | `NULL` | Source filename or document name |
 | `coordinates` | `const char**` | `NULL` | Bounding box coordinates if available |
 | `element_index` | `uintptr_t*` | `NULL` | Position index in the element sequence |
@@ -1384,6 +1467,7 @@ Metadata for a semantic element.
 ---
 
 #### KreuzbergEmailAttachment
+
 Email attachment representation.
 
 Contains metadata and optionally the content of an email attachment.
@@ -1401,6 +1485,7 @@ Contains metadata and optionally the content of an email attachment.
 ---
 
 #### KreuzbergEmailConfig
+
 Configuration for email extraction.
 
 | Field | Type | Default | Description |
@@ -1411,6 +1496,7 @@ Configuration for email extraction.
 ---
 
 #### KreuzbergEmailExtractionResult
+
 Email extraction result.
 
 Complete representation of an extracted email message (.eml or .msg)
@@ -1435,6 +1521,7 @@ including headers, body content, and attachments.
 ---
 
 #### KreuzbergEmailMetadata
+
 Email metadata extracted from .eml and .msg files.
 
 Includes sender/recipient information, message ID, and attachment list.
@@ -1453,6 +1540,7 @@ Includes sender/recipient information, message ID, and attachment list.
 ---
 
 #### KreuzbergEmbedRequest
+
 Embedding request for generating embeddings from text.
 
 | Field | Type | Default | Description |
@@ -1464,6 +1552,7 @@ Embedding request for generating embeddings from text.
 ---
 
 #### KreuzbergEmbedResponse
+
 Embedding response containing generated embeddings.
 
 | Field | Type | Default | Description |
@@ -1477,6 +1566,7 @@ Embedding response containing generated embeddings.
 ---
 
 #### KreuzbergEmbedTextParams
+
 Request parameters for embedding generation.
 
 | Field | Type | Default | Description |
@@ -1491,6 +1581,7 @@ Request parameters for embedding generation.
 ---
 
 #### KreuzbergEmbeddedFile
+
 Embedded file descriptor extracted from the PDF name tree.
 
 | Field | Type | Default | Description |
@@ -1503,6 +1594,7 @@ Embedded file descriptor extracted from the PDF name tree.
 ---
 
 #### KreuzbergEmbeddingBackend
+
 Trait for in-process embedding backend plugins.
 
 Async to match the convention used by `OcrBackend`,
@@ -1550,7 +1642,9 @@ or `tokio.runtime.Builder.new_current_thread()`) must use
 `block_in_place`.
 
 ##### Methods
+
 ###### kreuzberg_dimensions()
+
 Embedding vector dimension. Must be `> 0` and must match the length of
 every vector returned by `embed`.
 
@@ -1560,6 +1654,7 @@ every vector returned by `embed`.
 uintptr_t kreuzberg_dimensions();
 ```
 ###### kreuzberg_embed()
+
 Embed a batch of texts, returning one vector per input in order.
 
 **Errors:**
@@ -1577,6 +1672,7 @@ float** kreuzberg_embed(const char** texts);
 ---
 
 #### KreuzbergEmbeddingConfig
+
 Embedding configuration for text chunks.
 
 Configures embedding generation using ONNX models via the vendored embedding engine.
@@ -1593,7 +1689,9 @@ Requires the `embeddings` feature to be enabled.
 | `max_embed_duration_secs` | `uint64_t*` | `NULL` | Maximum wall-clock duration (in seconds) for a single `embed()` call when using `EmbeddingModelType.Plugin`. Applies only to the in-process plugin path — protects against hung host-language backends (e.g. a Python callback deadlocked on the GIL, a model stuck on CUDA OOM retries, etc.). On timeout, the dispatcher returns `Plugin` instead of blocking forever. `NULL` disables the timeout. The default (60 seconds) is conservative for common in-process inference; increase for large batches on slow hardware. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -1603,6 +1701,7 @@ KreuzbergEmbeddingConfig kreuzberg_default();
 ---
 
 #### KreuzbergEmbeddingPreset
+
 Preset configurations for common RAG use cases.
 
 Each preset combines chunk size, overlap, and embedding model
@@ -1626,6 +1725,7 @@ are safe to clone and pass across language boundaries.
 ---
 
 #### KreuzbergEpubMetadata
+
 EPUB metadata (Dublin Core extensions).
 
 | Field | Type | Default | Description |
@@ -1641,6 +1741,7 @@ EPUB metadata (Dublin Core extensions).
 ---
 
 #### KreuzbergErrorMetadata
+
 Error metadata (for batch operations).
 
 | Field | Type | Default | Description |
@@ -1652,6 +1753,7 @@ Error metadata (for batch operations).
 ---
 
 #### KreuzbergExcelMetadata
+
 Excel/spreadsheet format metadata.
 
 Identifies the document as a spreadsheet source via the `FormatMetadata.Excel`
@@ -1659,13 +1761,14 @@ discriminant. Sheet count and sheet names are stored inside this struct.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `sheet_count` | `uintptr_t*` | `NULL` | Number of sheets in the workbook. |
+| `sheet_count` | `uint32_t*` | `NULL` | Number of sheets in the workbook. |
 | `sheet_names` | `const char***` | `NULL` | Names of all sheets in the workbook. |
 
 
 ---
 
 #### KreuzbergExcelSheet
+
 Single Excel worksheet.
 
 Represents one sheet from an Excel workbook with its content
@@ -1684,6 +1787,7 @@ converted to Markdown format and dimensional statistics.
 ---
 
 #### KreuzbergExcelWorkbook
+
 Excel workbook representation.
 
 Contains all sheets from an Excel file (.xlsx, .xls, etc.) with
@@ -1698,12 +1802,14 @@ extracted content and metadata.
 ---
 
 #### KreuzbergExtractResponse
+
 Extraction response (list of results).
 
 
 ---
 
 #### KreuzbergExtractStructuredParams
+
 Request parameters for LLM-based structured extraction.
 
 | Field | Type | Default | Description |
@@ -1721,6 +1827,7 @@ Request parameters for LLM-based structured extraction.
 ---
 
 #### KreuzbergExtractedImage
+
 Extracted image from a document.
 
 Contains raw image data, metadata, and optional nested OCR results.
@@ -1731,8 +1838,8 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 |-------|------|---------|-------------|
 | `data` | `const uint8_t*` | — | Raw image data (PNG, JPEG, WebP, etc. bytes). Uses `bytes.Bytes` for cheap cloning of large buffers. |
 | `format` | `const char*` | — | Image format (e.g., "jpeg", "png", "webp") Uses Cow<'static, str> to avoid allocation for static literals. |
-| `image_index` | `uintptr_t` | — | Zero-indexed position of this image in the document/page |
-| `page_number` | `uintptr_t*` | `NULL` | Page/slide number where image was found (1-indexed) |
+| `image_index` | `uint32_t` | — | Zero-indexed position of this image in the document/page |
+| `page_number` | `uint32_t*` | `NULL` | Page/slide number where image was found (1-indexed) |
 | `width` | `uint32_t*` | `NULL` | Image width in pixels |
 | `height` | `uint32_t*` | `NULL` | Image height in pixels |
 | `colorspace` | `const char**` | `NULL` | Colorspace information (e.g., "RGB", "CMYK", "Gray") |
@@ -1750,6 +1857,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 ---
 
 #### KreuzbergExtractedInlineImage
+
 Extracted inline image with metadata.
 
 | Field | Type | Default | Description |
@@ -1765,6 +1873,7 @@ Extracted inline image with metadata.
 ---
 
 #### KreuzbergExtractionConfig
+
 Main extraction configuration.
 
 This struct contains all configuration options for the extraction process.
@@ -1776,7 +1885,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `enable_quality_processing` | `bool` | `true` | Enable quality post-processing |
 | `ocr` | `KreuzbergOcrConfig*` | `NULL` | OCR configuration (None = OCR disabled) |
 | `force_ocr` | `bool` | `false` | Force OCR even for searchable PDFs |
-| `force_ocr_pages` | `uintptr_t**` | `NULL` | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent. |
+| `force_ocr_pages` | `uint32_t**` | `NULL` | Force OCR on specific pages only (1-indexed page numbers, must be >= 1). When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for backend/language selection; defaults are used if absent. |
 | `disable_ocr` | `bool` | `false` | Disable OCR entirely, even for images. When `true`, OCR is skipped for all document types. Images return metadata only (dimensions, format, EXIF) without text extraction. PDFs use only native text extraction without OCR fallback. Cannot be `true` simultaneously with `force_ocr`. *Added in v4.7.0.* |
 | `chunking` | `KreuzbergChunkingConfig*` | `NULL` | Text chunking configuration (None = chunking disabled) |
 | `content_filter` | `KreuzbergContentFilterConfig*` | `NULL` | Content filtering configuration (None = use extractor defaults). Controls whether document "furniture" (headers, footers, watermarks, repeating text) is included in or stripped from extraction results. See `ContentFilterConfig` for per-field documentation. |
@@ -1794,7 +1903,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `result_format` | `KreuzbergResultFormat` | `KREUZBERG_KREUZBERG_UNIFIED` | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output). |
 | `security_limits` | `KreuzbergSecurityLimits*` | `NULL` | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `NULL`, default limits are used. |
 | `output_format` | `KreuzbergOutputFormat` | `KREUZBERG_KREUZBERG_PLAIN` | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied. |
-| `layout` | `KreuzbergLayoutDetectionConfig*` | `NULL` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature. |
+| `layout` | `KreuzbergLayoutDetectionConfig*` | `NULL` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
 | `use_layout_for_markdown` | `bool` | `false` | Run layout detection on the non-OCR PDF markdown path. When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Substantially improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection` feature. |
 | `include_document_structure` | `bool` | `false` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `acceleration` | `KreuzbergAccelerationConfig*` | `NULL` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `NULL`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
@@ -1808,13 +1917,16 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `cancel_token` | `const char**` | `NULL` | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
 KreuzbergExtractionConfig kreuzberg_default();
 ```
 ###### kreuzberg_needs_image_processing()
+
 Check if image processing is needed by examining OCR and image extraction settings.
 
 Returns `true` if either OCR is enabled or image extraction is configured,
@@ -1836,6 +1948,7 @@ bool kreuzberg_needs_image_processing();
 ---
 
 #### KreuzbergExtractionResult
+
 General extraction result used by the core extraction API.
 
 This is the main result type returned by all extraction functions.
@@ -1867,10 +1980,22 @@ This is the main result type returned by all extraction functions.
 | `formatted_content` | `const char**` | `NULL` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
 | `ocr_internal_document` | `const char**` | `NULL` | Structured hOCR document for the OCR+layout pipeline. When tesseract produces hOCR output, the parsed `InternalDocument` carries paragraph structure with bounding boxes and confidence scores. The layout classification step enriches these elements before final rendering. |
 
+##### Methods
+
+###### kreuzberg_from_ocr()
+
+Convert from an OCR result.
+
+**Signature:**
+
+```c
+KreuzbergExtractionResult kreuzberg_from_ocr(KreuzbergOcrExtractionResult ocr);
+```
 
 ---
 
 #### KreuzbergFictionBookMetadata
+
 FictionBook (FB2) metadata.
 
 | Field | Type | Default | Description |
@@ -1883,6 +2008,7 @@ FictionBook (FB2) metadata.
 ---
 
 #### KreuzbergFileExtractionConfig
+
 Per-file extraction configuration overrides for batch processing.
 
 All fields are `Option<T>` — `NULL` means "use the batch-level default."
@@ -1904,7 +2030,7 @@ cannot be overridden per file:
 | `enable_quality_processing` | `bool*` | `NULL` | Override quality post-processing for this file. |
 | `ocr` | `KreuzbergOcrConfig*` | `NULL` | Override OCR configuration for this file (None in the Option = use batch default). |
 | `force_ocr` | `bool*` | `NULL` | Override force OCR for this file. |
-| `force_ocr_pages` | `uintptr_t**` | `NULL` | Override force OCR pages for this file (1-indexed page numbers). |
+| `force_ocr_pages` | `uint32_t**` | `NULL` | Override force OCR pages for this file (1-indexed page numbers). |
 | `disable_ocr` | `bool*` | `NULL` | Override disable OCR for this file. |
 | `chunking` | `KreuzbergChunkingConfig*` | `NULL` | Override chunking configuration for this file. |
 | `content_filter` | `KreuzbergContentFilterConfig*` | `NULL` | Override content filtering configuration for this file. |
@@ -1928,6 +2054,7 @@ cannot be overridden per file:
 ---
 
 #### KreuzbergFootnote
+
 Footnote in Djot.
 
 | Field | Type | Default | Description |
@@ -1939,6 +2066,7 @@ Footnote in Djot.
 ---
 
 #### KreuzbergFormattedBlock
+
 Block-level element in a Djot document.
 
 Represents structural elements like headings, paragraphs, lists, code blocks, etc.
@@ -1957,6 +2085,7 @@ Represents structural elements like headings, paragraphs, lists, code blocks, et
 ---
 
 #### KreuzbergGridCell
+
 Individual grid cell with position and span metadata.
 
 | Field | Type | Default | Description |
@@ -1973,6 +2102,7 @@ Individual grid cell with position and span metadata.
 ---
 
 #### KreuzbergHeaderMetadata
+
 Header/heading element metadata.
 
 | Field | Type | Default | Description |
@@ -1980,13 +2110,14 @@ Header/heading element metadata.
 | `level` | `uint8_t` | — | Header level: 1 (h1) through 6 (h6) |
 | `text` | `const char*` | — | Normalized text content of the header |
 | `id` | `const char**` | `NULL` | HTML id attribute if present |
-| `depth` | `uintptr_t` | — | Document tree depth at the header element |
-| `html_offset` | `uintptr_t` | — | Byte offset in original HTML document |
+| `depth` | `uint32_t` | — | Document tree depth at the header element |
+| `html_offset` | `uint32_t` | — | Byte offset in original HTML document |
 
 
 ---
 
 #### KreuzbergHeadingContext
+
 Heading context for a chunk within a Markdown document.
 
 Contains the heading hierarchy from document root to this chunk's section.
@@ -1999,6 +2130,7 @@ Contains the heading hierarchy from document root to this chunk's section.
 ---
 
 #### KreuzbergHeadingLevel
+
 A single heading in the hierarchy.
 
 | Field | Type | Default | Description |
@@ -2010,6 +2142,7 @@ A single heading in the hierarchy.
 ---
 
 #### KreuzbergHierarchicalBlock
+
 A text block with hierarchy level assignment.
 
 Represents a block of text with semantic heading information extracted from
@@ -2026,6 +2159,7 @@ font size clustering and hierarchical analysis.
 ---
 
 #### KreuzbergHierarchyConfig
+
 Hierarchy extraction configuration for PDF text structure analysis.
 
 Enables extraction of document hierarchy levels (H1-H6) based on font size
@@ -2040,7 +2174,9 @@ included in page content.
 | `ocr_coverage_threshold` | `float*` | `NULL` | OCR coverage threshold for smart OCR triggering (0.0-1.0) Determines when OCR should be triggered based on text block coverage. OCR is triggered when text blocks cover less than this fraction of the page. Default: 0.5 (trigger OCR if less than 50% of page has text) |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2050,6 +2186,7 @@ KreuzbergHierarchyConfig kreuzberg_default();
 ---
 
 #### KreuzbergHtmlExtractionResult
+
 Result of HTML extraction with optional images and warnings.
 
 | Field | Type | Default | Description |
@@ -2062,6 +2199,7 @@ Result of HTML extraction with optional images and warnings.
 ---
 
 #### KreuzbergHtmlMetadata
+
 HTML metadata extracted from HTML documents.
 
 Includes document-level metadata, Open Graph data, Twitter Card metadata,
@@ -2086,7 +2224,9 @@ and extracted structural elements (headers, links, images, structured data).
 | `structured_data` | `KreuzbergStructuredData*` | `NULL` | Extracted structured data blocks |
 
 ##### Methods
+
 ###### kreuzberg_from()
+
 **Signature:**
 
 ```c
@@ -2096,6 +2236,7 @@ KreuzbergHtmlMetadata kreuzberg_from(KreuzbergHtmlMetadata metadata);
 ---
 
 #### KreuzbergHtmlOutputConfig
+
 Configuration for styled HTML output.
 
 When set on `ExtractionConfig.html_output` alongside
@@ -2112,7 +2253,9 @@ the plain comrak-based renderer.
 | `embed_css` | `bool` | `true` | When `true` (default), write the resolved CSS into a `<style>` block immediately after the opening `<div class="{prefix}doc">`. Set to `false` to emit only the structural markup and wire up your own stylesheet targeting the `kb-*` class names. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2122,6 +2265,7 @@ KreuzbergHtmlOutputConfig kreuzberg_default();
 ---
 
 #### KreuzbergHwpImage
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | `const char*` | — | The name |
@@ -2131,66 +2275,78 @@ KreuzbergHtmlOutputConfig kreuzberg_default();
 ---
 
 #### KreuzbergHwpxExtractor
+
 Extractor for Hangul Word Processor XML (.hwpx) files.
 
 Supports HWPX (Open HWPML), the ZIP-based XML successor to the binary HWP 5.0 format.
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
 KreuzbergHwpxExtractor kreuzberg_default();
 ```
 ###### kreuzberg_name()
+
 **Signature:**
 
 ```c
 const char* kreuzberg_name();
 ```
 ###### kreuzberg_version()
+
 **Signature:**
 
 ```c
 const char* kreuzberg_version();
 ```
 ###### kreuzberg_initialize()
+
 **Signature:**
 
 ```c
 void kreuzberg_initialize();
 ```
 ###### kreuzberg_shutdown()
+
 **Signature:**
 
 ```c
 void kreuzberg_shutdown();
 ```
 ###### kreuzberg_description()
+
 **Signature:**
 
 ```c
 const char* kreuzberg_description();
 ```
 ###### kreuzberg_author()
+
 **Signature:**
 
 ```c
 const char* kreuzberg_author();
 ```
 ###### kreuzberg_extract_bytes()
+
 **Signature:**
 
 ```c
 const char* kreuzberg_extract_bytes(const uint8_t* content, const char* mime_type, KreuzbergExtractionConfig config);
 ```
 ###### kreuzberg_supported_mime_types()
+
 **Signature:**
 
 ```c
 const char** kreuzberg_supported_mime_types();
 ```
 ###### kreuzberg_priority()
+
 **Signature:**
 
 ```c
@@ -2200,6 +2356,7 @@ int32_t kreuzberg_priority();
 ---
 
 #### KreuzbergImageExtractionConfig
+
 Image extraction configuration.
 
 | Field | Type | Default | Description |
@@ -2215,7 +2372,9 @@ Image extraction configuration.
 | `classify` | `bool` | `true` | When `true` (default), extracted images are classified by kind and grouped into clusters where they appear to belong to one figure. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2225,6 +2384,7 @@ KreuzbergImageExtractionConfig kreuzberg_default();
 ---
 
 #### KreuzbergImageMetadata
+
 Image metadata extracted from image files.
 
 Includes dimensions, format, and EXIF data.
@@ -2240,6 +2400,7 @@ Includes dimensions, format, and EXIF data.
 ---
 
 #### KreuzbergImageMetadataType
+
 Image element metadata.
 
 | Field | Type | Default | Description |
@@ -2255,6 +2416,7 @@ Image element metadata.
 ---
 
 #### KreuzbergImageOcrResult
+
 Result of OCR extraction from an image with optional page tracking.
 
 | Field | Type | Default | Description |
@@ -2267,6 +2429,7 @@ Result of OCR extraction from an image with optional page tracking.
 ---
 
 #### KreuzbergImagePreprocessingConfig
+
 Image preprocessing configuration for OCR.
 
 These settings control how images are preprocessed before OCR to improve
@@ -2284,7 +2447,9 @@ for different document types.
 | `invert_colors` | `bool` | `false` | Invert colors (white text on black → black on white). |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2294,6 +2459,7 @@ KreuzbergImagePreprocessingConfig kreuzberg_default();
 ---
 
 #### KreuzbergImagePreprocessingMetadata
+
 Image preprocessing metadata.
 
 Tracks the transformations applied to an image during OCR preprocessing,
@@ -2318,6 +2484,7 @@ including DPI normalization, resizing, and resampling.
 ---
 
 #### KreuzbergInfoResponse
+
 Server information response.
 
 | Field | Type | Default | Description |
@@ -2329,6 +2496,7 @@ Server information response.
 ---
 
 #### KreuzbergInlineElement
+
 Inline element within a block.
 
 Represents text with formatting, links, images, etc.
@@ -2344,6 +2512,7 @@ Represents text with formatting, links, images, etc.
 ---
 
 #### KreuzbergJatsMetadata
+
 JATS (Journal Article Tag Suite) metadata.
 
 | Field | Type | Default | Description |
@@ -2357,6 +2526,7 @@ JATS (Journal Article Tag Suite) metadata.
 ---
 
 #### KreuzbergKeyword
+
 Extracted keyword with metadata.
 
 | Field | Type | Default | Description |
@@ -2370,6 +2540,7 @@ Extracted keyword with metadata.
 ---
 
 #### KreuzbergKeywordConfig
+
 Keyword extraction configuration.
 
 | Field | Type | Default | Description |
@@ -2383,7 +2554,9 @@ Keyword extraction configuration.
 | `rake_params` | `KreuzbergRakeParams*` | `NULL` | RAKE-specific tuning parameters. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2393,6 +2566,7 @@ KreuzbergKeywordConfig kreuzberg_default();
 ---
 
 #### KreuzbergLanguageDetectionConfig
+
 Language detection configuration.
 
 | Field | Type | Default | Description |
@@ -2402,7 +2576,9 @@ Language detection configuration.
 | `detect_multiple` | `bool` | `false` | Detect multiple languages in the document |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2412,6 +2588,7 @@ KreuzbergLanguageDetectionConfig kreuzberg_default();
 ---
 
 #### KreuzbergLayoutDetection
+
 A single layout detection result.
 
 | Field | Type | Default | Description |
@@ -2424,6 +2601,7 @@ A single layout detection result.
 ---
 
 #### KreuzbergLayoutDetectionConfig
+
 Layout detection configuration.
 
 Controls layout detection behavior in the extraction pipeline.
@@ -2438,7 +2616,9 @@ is enabled for PDF extraction.
 | `acceleration` | `KreuzbergAccelerationConfig*` | `NULL` | Hardware acceleration for ONNX models (layout detection + table structure). When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for inference. Defaults to `NULL` (auto-select per platform). |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2448,6 +2628,7 @@ KreuzbergLayoutDetectionConfig kreuzberg_default();
 ---
 
 #### KreuzbergLayoutRegion
+
 A detected layout region on a page.
 
 When layout detection is enabled, each page may have layout regions
@@ -2465,6 +2646,7 @@ with confidence scores and spatial positions.
 ---
 
 #### KreuzbergLinkMetadata
+
 Link element metadata.
 
 | Field | Type | Default | Description |
@@ -2480,6 +2662,7 @@ Link element metadata.
 ---
 
 #### KreuzbergLlmConfig
+
 Configuration for an LLM provider/model via liter-llm.
 
 Each feature (VLM OCR, VLM embeddings, structured extraction) carries
@@ -2499,6 +2682,7 @@ its own `LlmConfig`, allowing different providers per feature.
 ---
 
 #### KreuzbergLlmUsage
+
 Token usage and cost data for a single LLM call made during extraction.
 
 Populated when VLM OCR, structured extraction, or LLM-based embeddings
@@ -2519,6 +2703,7 @@ within one extraction (e.g. VLM OCR + structured extraction).
 ---
 
 #### KreuzbergManifestEntryResponse
+
 Model manifest entry for cache management.
 
 | Field | Type | Default | Description |
@@ -2532,6 +2717,7 @@ Model manifest entry for cache management.
 ---
 
 #### KreuzbergManifestResponse
+
 Model manifest response.
 
 | Field | Type | Default | Description |
@@ -2545,6 +2731,7 @@ Model manifest response.
 ---
 
 #### KreuzbergMergedChunk
+
 A merged chunk produced by `merge_segments`.
 
 | Field | Type | Default | Description |
@@ -2557,6 +2744,7 @@ A merged chunk produced by `merge_segments`.
 ---
 
 #### KreuzbergMetadata
+
 Extraction result metadata.
 
 Contains common fields applicable to all formats, format-specific metadata
@@ -2588,7 +2776,9 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `additional` | `void*` | `NULL` | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation. |
 
 ##### Methods
+
 ###### kreuzberg_is_empty()
+
 Returns `true` when no metadata fields, format-specific metadata, or
 additional postprocessor fields are populated.
 
@@ -2601,6 +2791,7 @@ bool kreuzberg_is_empty();
 ---
 
 #### KreuzbergModelPaths
+
 Combined paths to all models needed for OCR (backward compatibility).
 
 | Field | Type | Default | Description |
@@ -2614,6 +2805,7 @@ Combined paths to all models needed for OCR (backward compatibility).
 ---
 
 #### KreuzbergOcrBackend
+
 Trait for OCR backend plugins.
 
 Implement this trait to add custom OCR capabilities. OCR backends can be:
@@ -2626,7 +2818,9 @@ Implement this trait to add custom OCR capabilities. OCR backends can be:
 OCR backends must be thread-safe (`Send + Sync`) to support concurrent processing.
 
 ##### Methods
+
 ###### kreuzberg_process_image()
+
 Process an image and extract text via OCR.
 
 **Returns:**
@@ -2645,6 +2839,7 @@ An `ExtractionResult` containing the extracted text and metadata.
 KreuzbergExtractionResult kreuzberg_process_image(const uint8_t* image_bytes, KreuzbergOcrConfig config);
 ```
 ###### kreuzberg_process_image_file()
+
 Process a file and extract text via OCR.
 
 Default implementation reads the file and calls `process_image`.
@@ -2660,6 +2855,7 @@ Same as `process_image`, plus file I/O errors.
 KreuzbergExtractionResult kreuzberg_process_image_file(const char* path, KreuzbergOcrConfig config);
 ```
 ###### kreuzberg_supports_language()
+
 Check if this backend supports a given language code.
 
 **Returns:**
@@ -2672,6 +2868,7 @@ Check if this backend supports a given language code.
 bool kreuzberg_supports_language(const char* lang);
 ```
 ###### kreuzberg_backend_type()
+
 Get the backend type identifier.
 
 **Returns:**
@@ -2684,6 +2881,7 @@ The backend type enum value.
 KreuzbergOcrBackendType kreuzberg_backend_type();
 ```
 ###### kreuzberg_supported_languages()
+
 Optional: Get a list of all supported languages.
 
 Defaults to empty list. Override to provide comprehensive language support info.
@@ -2694,6 +2892,7 @@ Defaults to empty list. Override to provide comprehensive language support info.
 const char** kreuzberg_supported_languages();
 ```
 ###### kreuzberg_supports_table_detection()
+
 Optional: Check if the backend supports table detection.
 
 Defaults to `false`. Override if your backend can detect and extract tables.
@@ -2704,6 +2903,7 @@ Defaults to `false`. Override if your backend can detect and extract tables.
 bool kreuzberg_supports_table_detection();
 ```
 ###### kreuzberg_supports_document_processing()
+
 Check if the backend supports direct document-level processing (e.g. for PDFs).
 
 Defaults to `false`. Override if the backend has optimized document processing.
@@ -2714,6 +2914,7 @@ Defaults to `false`. Override if the backend has optimized document processing.
 bool kreuzberg_supports_document_processing();
 ```
 ###### kreuzberg_process_document()
+
 Process a document file directly via OCR.
 
 Only called if `supports_document_processing` returns `true`.
@@ -2727,6 +2928,7 @@ KreuzbergExtractionResult kreuzberg_process_document(const char* path, Kreuzberg
 ---
 
 #### KreuzbergOcrCacheStats
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `total_files` | `uintptr_t` | — | Total files |
@@ -2736,6 +2938,7 @@ KreuzbergExtractionResult kreuzberg_process_document(const char* path, Kreuzberg
 ---
 
 #### KreuzbergOcrConfidence
+
 Confidence scores for an OCR element.
 
 Separates detection confidence (how confident that text exists at this location)
@@ -2750,6 +2953,7 @@ from recognition confidence (how confident about the actual text content).
 ---
 
 #### KreuzbergOcrConfig
+
 OCR configuration.
 
 | Field | Type | Default | Description |
@@ -2770,7 +2974,9 @@ OCR configuration.
 | `tessdata_bytes` | `void**` | `NULL` | Caller-supplied Tesseract `traineddata` bytes per language code. Primary use case is the WASM build, which has no filesystem and cannot download tessdata at runtime. Native builds typically rely on `TessdataManager` and ignore this field. When present, the WASM Tesseract backend prefers these bytes over its compile-time-bundled English data. Skipped by serde to keep config files small — supply via the typed API at runtime. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2780,6 +2986,7 @@ KreuzbergOcrConfig kreuzberg_default();
 ---
 
 #### KreuzbergOcrElement
+
 A unified OCR element representing detected text with full metadata.
 
 This is the primary type for structured OCR output, preserving all information
@@ -2792,7 +2999,7 @@ from both Tesseract and PaddleOCR backends.
 | `confidence` | `KreuzbergOcrConfidence` | — | Confidence scores for detection and recognition. |
 | `level` | `KreuzbergOcrElementLevel` | `KREUZBERG_KREUZBERG_LINE` | Hierarchical level (word, line, block, page). |
 | `rotation` | `KreuzbergOcrRotation*` | `NULL` | Rotation information (if detected). |
-| `page_number` | `uintptr_t` | — | Page number (1-indexed). |
+| `page_number` | `uint32_t` | — | Page number (1-indexed). |
 | `parent_id` | `const char**` | `NULL` | Parent element ID for hierarchical relationships. Only used for Tesseract output which has word -> line -> block hierarchy. |
 | `backend_metadata` | `void*` | `NULL` | Backend-specific metadata that doesn't fit the unified schema. |
 
@@ -2800,6 +3007,7 @@ from both Tesseract and PaddleOCR backends.
 ---
 
 #### KreuzbergOcrElementConfig
+
 Configuration for OCR element extraction.
 
 Controls how OCR elements are extracted and filtered.
@@ -2815,6 +3023,7 @@ Controls how OCR elements are extracted and filtered.
 ---
 
 #### KreuzbergOcrExtractionResult
+
 OCR extraction result.
 
 Result of performing OCR on an image or scanned document,
@@ -2833,6 +3042,7 @@ including recognized text and detected tables.
 ---
 
 #### KreuzbergOcrMetadata
+
 OCR processing metadata.
 
 Captures information about OCR processing configuration and results.
@@ -2842,14 +3052,15 @@ Captures information about OCR processing configuration and results.
 | `language` | `const char*` | — | OCR language code(s) used |
 | `psm` | `int32_t` | — | Tesseract Page Segmentation Mode (PSM) |
 | `output_format` | `const char*` | — | Output format (e.g., "text", "hocr") |
-| `table_count` | `uintptr_t` | — | Number of tables detected |
-| `table_rows` | `uintptr_t*` | `NULL` | Table rows |
-| `table_cols` | `uintptr_t*` | `NULL` | Table cols |
+| `table_count` | `uint32_t` | — | Number of tables detected |
+| `table_rows` | `uint32_t*` | `NULL` | Table rows |
+| `table_cols` | `uint32_t*` | `NULL` | Table cols |
 
 
 ---
 
 #### KreuzbergOcrPipelineConfig
+
 Multi-backend OCR pipeline with quality-based fallback.
 
 Backends are tried in priority order (highest first). After each backend
@@ -2865,6 +3076,7 @@ the result is accepted. Otherwise the next backend is tried.
 ---
 
 #### KreuzbergOcrPipelineStage
+
 A single backend stage in the OCR pipeline.
 
 | Field | Type | Default | Description |
@@ -2880,6 +3092,7 @@ A single backend stage in the OCR pipeline.
 ---
 
 #### KreuzbergOcrQualityThresholds
+
 Quality thresholds for OCR fallback decisions and pipeline quality gating.
 
 All fields default to the values that match the previous hardcoded behavior,
@@ -2905,7 +3118,9 @@ so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 | `pipeline_min_quality` | `double` | `0.5` | Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted. If the result from a backend scores below this, try the next backend. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -2915,6 +3130,7 @@ KreuzbergOcrQualityThresholds kreuzberg_default();
 ---
 
 #### KreuzbergOcrRotation
+
 Rotation information for an OCR element.
 
 | Field | Type | Default | Description |
@@ -2926,6 +3142,7 @@ Rotation information for an OCR element.
 ---
 
 #### KreuzbergOcrTable
+
 Table detected via OCR.
 
 Represents a table structure recognized during OCR processing.
@@ -2934,13 +3151,14 @@ Represents a table structure recognized during OCR processing.
 |-------|------|---------|-------------|
 | `cells` | `const char***` | — | Table cells as a 2D vector (rows × columns) |
 | `markdown` | `const char*` | — | Markdown representation of the table |
-| `page_number` | `uintptr_t` | — | Page number where the table was found (1-indexed) |
+| `page_number` | `uint32_t` | — | Page number where the table was found (1-indexed) |
 | `bounding_box` | `KreuzbergOcrTableBoundingBox*` | `NULL` | Bounding box of the table in pixel coordinates (from OCR word positions). |
 
 
 ---
 
 #### KreuzbergOcrTableBoundingBox
+
 Bounding box for an OCR-detected table in pixel coordinates.
 
 | Field | Type | Default | Description |
@@ -2954,6 +3172,7 @@ Bounding box for an OCR-detected table in pixel coordinates.
 ---
 
 #### KreuzbergOdtProperties
+
 OpenDocument metadata from meta.xml
 
 Contains metadata fields defined by the OASIS OpenDocument Format standard.
@@ -2984,6 +3203,7 @@ Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
 ---
 
 #### KreuzbergOpenWebDocumentResponse
+
 OpenWebUI "External" engine response format.
 
 Returned by `PUT /process` for the OpenWebUI external document loader.
@@ -2997,6 +3217,7 @@ Returned by `PUT /process` for the OpenWebUI external document loader.
 ---
 
 #### KreuzbergOrientationResult
+
 Document orientation detection result.
 
 | Field | Type | Default | Description |
@@ -3008,6 +3229,7 @@ Document orientation detection result.
 ---
 
 #### KreuzbergPaddleOcrConfig
+
 Configuration for PaddleOCR backend.
 
 Configures PaddleOCR text detection and recognition with multi-language support.
@@ -3029,7 +3251,9 @@ Uses a builder pattern for convenient configuration.
 | `model_tier` | `const char*` | — | Model tier controlling detection/recognition model size and accuracy trade-off. - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents |
 
 ##### Methods
+
 ###### kreuzberg_with_cache_dir()
+
 Sets a custom cache directory for model files.
 
 **Signature:**
@@ -3038,6 +3262,7 @@ Sets a custom cache directory for model files.
 KreuzbergPaddleOcrConfig kreuzberg_with_cache_dir(const char* path);
 ```
 ###### kreuzberg_with_table_detection()
+
 Enables or disables table structure detection.
 
 **Signature:**
@@ -3046,6 +3271,7 @@ Enables or disables table structure detection.
 KreuzbergPaddleOcrConfig kreuzberg_with_table_detection(bool enable);
 ```
 ###### kreuzberg_with_angle_cls()
+
 Enables or disables angle classification for rotated text.
 
 **Signature:**
@@ -3054,6 +3280,7 @@ Enables or disables angle classification for rotated text.
 KreuzbergPaddleOcrConfig kreuzberg_with_angle_cls(bool enable);
 ```
 ###### kreuzberg_with_det_db_thresh()
+
 Sets the database threshold for text detection.
 
 **Signature:**
@@ -3062,6 +3289,7 @@ Sets the database threshold for text detection.
 KreuzbergPaddleOcrConfig kreuzberg_with_det_db_thresh(float threshold);
 ```
 ###### kreuzberg_with_det_db_box_thresh()
+
 Sets the box threshold for text bounding box refinement.
 
 **Signature:**
@@ -3070,6 +3298,7 @@ Sets the box threshold for text bounding box refinement.
 KreuzbergPaddleOcrConfig kreuzberg_with_det_db_box_thresh(float threshold);
 ```
 ###### kreuzberg_with_det_db_unclip_ratio()
+
 Sets the unclip ratio for expanding text bounding boxes.
 
 **Signature:**
@@ -3078,6 +3307,7 @@ Sets the unclip ratio for expanding text bounding boxes.
 KreuzbergPaddleOcrConfig kreuzberg_with_det_db_unclip_ratio(float ratio);
 ```
 ###### kreuzberg_with_det_limit_side_len()
+
 Sets the maximum side length for detection images.
 
 **Signature:**
@@ -3086,6 +3316,7 @@ Sets the maximum side length for detection images.
 KreuzbergPaddleOcrConfig kreuzberg_with_det_limit_side_len(uint32_t length);
 ```
 ###### kreuzberg_with_rec_batch_num()
+
 Sets the batch size for recognition inference.
 
 **Signature:**
@@ -3094,6 +3325,7 @@ Sets the batch size for recognition inference.
 KreuzbergPaddleOcrConfig kreuzberg_with_rec_batch_num(uint32_t batch_size);
 ```
 ###### kreuzberg_with_drop_score()
+
 Sets the minimum recognition confidence threshold.
 
 **Signature:**
@@ -3102,6 +3334,7 @@ Sets the minimum recognition confidence threshold.
 KreuzbergPaddleOcrConfig kreuzberg_with_drop_score(float score);
 ```
 ###### kreuzberg_with_padding()
+
 Sets padding in pixels added around images before detection.
 
 **Signature:**
@@ -3110,6 +3343,7 @@ Sets padding in pixels added around images before detection.
 KreuzbergPaddleOcrConfig kreuzberg_with_padding(uint32_t padding);
 ```
 ###### kreuzberg_with_model_tier()
+
 Sets the model tier controlling detection/recognition model size.
 
 **Signature:**
@@ -3118,6 +3352,7 @@ Sets the model tier controlling detection/recognition model size.
 KreuzbergPaddleOcrConfig kreuzberg_with_model_tier(const char* tier);
 ```
 ###### kreuzberg_default()
+
 Creates a default configuration with English language support.
 
 **Signature:**
@@ -3129,6 +3364,7 @@ KreuzbergPaddleOcrConfig kreuzberg_default();
 ---
 
 #### KreuzbergPageBoundary
+
 Byte offset boundary for a page.
 
 Tracks where a specific page's content starts and ends in the main content string,
@@ -3139,12 +3375,13 @@ at valid UTF-8 character boundaries when using standard String methods (push_str
 |-------|------|---------|-------------|
 | `byte_start` | `uintptr_t` | — | Byte offset where this page starts in the content string (UTF-8 valid boundary, inclusive) |
 | `byte_end` | `uintptr_t` | — | Byte offset where this page ends in the content string (UTF-8 valid boundary, exclusive) |
-| `page_number` | `uintptr_t` | — | Page number (1-indexed) |
+| `page_number` | `uint32_t` | — | Page number (1-indexed) |
 
 
 ---
 
 #### KreuzbergPageConfig
+
 Page extraction and tracking configuration.
 
 Controls how pages are extracted, tracked, and represented in the extraction results.
@@ -3164,7 +3401,9 @@ when page boundaries are available and chunking is configured.
 "` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -3174,6 +3413,7 @@ KreuzbergPageConfig kreuzberg_default();
 ---
 
 #### KreuzbergPageContent
+
 Content for a single page/slide.
 
 When page extraction is enabled, documents are split into per-page content
@@ -3191,10 +3431,10 @@ by avoiding redundant copies during serialization.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `page_number` | `uintptr_t` | — | Page number (1-indexed) |
+| `page_number` | `uint32_t` | — | Page number (1-indexed) |
 | `content` | `const char*` | — | Text content for this page |
 | `tables` | `KreuzbergTable*` | — | Tables found on this page (uses Arc for memory efficiency) Serializes as Vec<Table> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
-| `images` | `KreuzbergExtractedImage*` | — | Images found on this page (uses Arc for memory efficiency) Serializes as Vec<ExtractedImage> for JSON compatibility while maintaining Arc semantics in-memory for zero-copy sharing. |
+| `image_indices` | `uint32_t*` | — | Indices into `ExtractionResult.images` for images found on this page. Each value is a zero-based index into the top-level `images` collection. Only populated when `extract_images = true` in the extraction config. |
 | `hierarchy` | `KreuzbergPageHierarchy*` | `NULL` | Hierarchy information for the page (when hierarchy extraction is enabled) Contains text hierarchy levels (H1-H6) extracted from the page content. |
 | `is_blank` | `bool*` | `NULL` | Whether this page is blank (no meaningful text content) Determined during extraction based on text content analysis. A page is blank if it has fewer than 3 non-whitespace characters and contains no tables or images. |
 | `layout_regions` | `KreuzbergLayoutRegion**` | `NULL` | Layout detection regions for this page (when layout detection is enabled). Contains detected layout regions with class, confidence, bounding box, and area fraction. Only populated when layout detection is configured. |
@@ -3203,6 +3443,7 @@ by avoiding redundant copies during serialization.
 ---
 
 #### KreuzbergPageHierarchy
+
 Page hierarchy structure containing heading levels and block information.
 
 Used when PDF text hierarchy extraction is enabled. Contains hierarchical
@@ -3210,13 +3451,14 @@ blocks with heading levels (H1-H6) for semantic document structure.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `block_count` | `uintptr_t` | — | Number of hierarchy blocks on this page |
+| `block_count` | `uint32_t` | — | Number of hierarchy blocks on this page |
 | `blocks` | `KreuzbergHierarchicalBlock*` | — | Hierarchical blocks with heading levels |
 
 
 ---
 
 #### KreuzbergPageInfo
+
 Metadata for individual page/slide/sheet.
 
 Captures per-page information including dimensions, content counts,
@@ -3224,11 +3466,11 @@ and visibility state (for presentations).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `number` | `uintptr_t` | — | Page number (1-indexed) |
+| `number` | `uint32_t` | — | Page number (1-indexed) |
 | `title` | `const char**` | `NULL` | Page title (usually for presentations) |
 | `dimensions` | `double**` | `NULL` | Dimensions in points (PDF) or pixels (images): (width, height) |
-| `image_count` | `uintptr_t*` | `NULL` | Number of images on this page |
-| `table_count` | `uintptr_t*` | `NULL` | Number of tables on this page |
+| `image_count` | `uint32_t*` | `NULL` | Number of images on this page |
+| `table_count` | `uint32_t*` | `NULL` | Number of tables on this page |
 | `hidden` | `bool*` | `NULL` | Whether this page is hidden (e.g., in presentations) |
 | `is_blank` | `bool*` | `NULL` | Whether this page is blank (no meaningful text, no images, no tables) A page is considered blank if it has fewer than 3 non-whitespace characters and contains no tables or images. This is useful for filtering out empty pages in scanned documents or PDFs with blank separator pages. |
 | `has_vector_graphics` | `bool` | — | Whether this page contains non-trivial vector graphics (paths, shapes, curves) Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images` since they are not embedded as raster XObjects. Set to `true` when path count exceeds a heuristic threshold, signaling that downstream consumers may want to rasterize the page to capture this content. Only populated for PDFs; `NULL` for other document types. |
@@ -3237,6 +3479,7 @@ and visibility state (for presentations).
 ---
 
 #### KreuzbergPageMarginsPoints
+
 Page margins converted to points (1/72 inch).
 
 | Field | Type | Default | Description |
@@ -3253,6 +3496,7 @@ Page margins converted to points (1/72 inch).
 ---
 
 #### KreuzbergPageStructure
+
 Unified page structure for documents.
 
 Supports different page types (PDF pages, PPTX slides, Excel sheets)
@@ -3260,7 +3504,7 @@ with character offset boundaries for chunk-to-page mapping.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `total_count` | `uintptr_t` | — | Total number of pages/slides/sheets |
+| `total_count` | `uint32_t` | — | Total number of pages/slides/sheets |
 | `unit_type` | `KreuzbergPageUnitType` | — | Type of paginated unit |
 | `boundaries` | `KreuzbergPageBoundary**` | `NULL` | Character offset boundaries for each page Maps character ranges in the extracted content to page numbers. Used for chunk page range calculation. |
 | `pages` | `KreuzbergPageInfo**` | `NULL` | Detailed per-page metadata (optional, only when needed) |
@@ -3269,19 +3513,21 @@ with character offset boundaries for chunk-to-page mapping.
 ---
 
 #### KreuzbergPdfAnnotation
+
 A PDF annotation extracted from a document page.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `annotation_type` | `KreuzbergPdfAnnotationType` | — | The type of annotation. |
 | `content` | `const char**` | `NULL` | Text content of the annotation (e.g., comment text, link URL). |
-| `page_number` | `uintptr_t` | — | Page number where the annotation appears (1-indexed). |
+| `page_number` | `uint32_t` | — | Page number where the annotation appears (1-indexed). |
 | `bounding_box` | `const char**` | `NULL` | Bounding box of the annotation on the page. |
 
 
 ---
 
 #### KreuzbergPdfConfig
+
 PDF-specific configuration.
 
 | Field | Type | Default | Description |
@@ -3295,9 +3541,12 @@ PDF-specific configuration.
 | `top_margin_fraction` | `float*` | `NULL` | Top margin fraction (0.0–1.0) of page height to exclude headers/running heads. Default: 0.06 (6%) |
 | `bottom_margin_fraction` | `float*` | `NULL` | Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default: 0.05 (5%) |
 | `allow_single_column_tables` | `bool` | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply. |
+| `ocr_inline_images` | `bool` | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `NULL` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -3307,6 +3556,7 @@ KreuzbergPdfConfig kreuzberg_default();
 ---
 
 #### KreuzbergPdfMetadata
+
 PDF-specific metadata.
 
 Contains metadata fields specific to PDF documents that are not in the common
@@ -3320,12 +3570,13 @@ are at the `Metadata` level.
 | `is_encrypted` | `bool*` | `NULL` | Whether the PDF is encrypted/password-protected |
 | `width` | `int64_t*` | `NULL` | First page width in points (1/72 inch) |
 | `height` | `int64_t*` | `NULL` | First page height in points (1/72 inch) |
-| `page_count` | `uintptr_t*` | `NULL` | Total number of pages in the PDF document |
+| `page_count` | `uint32_t*` | `NULL` | Total number of pages in the PDF document |
 
 
 ---
 
 #### KreuzbergPlugin
+
 Base trait that all plugins must implement.
 
 This trait provides common functionality for plugin lifecycle management,
@@ -3336,7 +3587,9 @@ identification, and metadata.
 All plugins must be `Send + Sync` to support concurrent usage across threads.
 
 ##### Methods
+
 ###### kreuzberg_name()
+
 Returns the unique name/identifier for this plugin.
 
 The name should be:
@@ -3350,6 +3603,7 @@ The name should be:
 const char* kreuzberg_name();
 ```
 ###### kreuzberg_version()
+
 Returns the semantic version of this plugin.
 
 Should follow semver format: `MAJOR.MINOR.PATCH`
@@ -3362,6 +3616,7 @@ Defaults to the kreuzberg crate version.
 const char* kreuzberg_version();
 ```
 ###### kreuzberg_initialize()
+
 Initialize the plugin.
 
 Called once when the plugin is registered. Use this to:
@@ -3388,6 +3643,7 @@ Defaults to a no-op for stateless plugins.
 void kreuzberg_initialize();
 ```
 ###### kreuzberg_shutdown()
+
 Shutdown the plugin.
 
 Called when the plugin is being unregistered or the application is shutting down.
@@ -3414,6 +3670,7 @@ Defaults to a no-op for stateless plugins.
 void kreuzberg_shutdown();
 ```
 ###### kreuzberg_description()
+
 Optional plugin description for debugging and logging.
 
 Defaults to empty string if not overridden.
@@ -3424,6 +3681,7 @@ Defaults to empty string if not overridden.
 const char* kreuzberg_description();
 ```
 ###### kreuzberg_author()
+
 Optional plugin author information.
 
 Defaults to empty string if not overridden.
@@ -3437,6 +3695,7 @@ const char* kreuzberg_author();
 ---
 
 #### KreuzbergPostProcessor
+
 Trait for post-processor plugins.
 
 Post-processors transform or enrich extraction results after the initial
@@ -3466,7 +3725,9 @@ and execution continues. To make errors fatal, return an error from `process()`.
 Post-processors must be thread-safe (`Send + Sync`).
 
 ##### Methods
+
 ###### kreuzberg_process()
+
 Process an extraction result.
 
 Transform or enrich the extraction result. Can modify:
@@ -3514,6 +3775,7 @@ async fn process(&self, result: &mut ExtractionResult, config: &ExtractionConfig
 void kreuzberg_process(KreuzbergExtractionResult result, KreuzbergExtractionConfig config);
 ```
 ###### kreuzberg_processing_stage()
+
 Get the processing stage for this post-processor.
 
 Determines when this processor runs in the pipeline.
@@ -3528,6 +3790,7 @@ The `ProcessingStage` (Early, Middle, or Late).
 KreuzbergProcessingStage kreuzberg_processing_stage();
 ```
 ###### kreuzberg_should_process()
+
 Optional: Check if this processor should run for a given result.
 
 Allows conditional processing based on MIME type, metadata, or content.
@@ -3543,6 +3806,7 @@ Defaults to `true` (always run).
 bool kreuzberg_should_process(KreuzbergExtractionResult result, KreuzbergExtractionConfig config);
 ```
 ###### kreuzberg_estimated_duration_ms()
+
 Optional: Estimate processing time in milliseconds.
 
 Used for logging and debugging. Defaults to 0 (unknown).
@@ -3557,6 +3821,7 @@ Estimated processing time in milliseconds.
 uint64_t kreuzberg_estimated_duration_ms(KreuzbergExtractionResult result);
 ```
 ###### kreuzberg_priority()
+
 Execution priority within the processing stage.
 
 Higher values run first within the same `ProcessingStage`. Defaults to 50.
@@ -3572,6 +3837,7 @@ int32_t kreuzberg_priority();
 ---
 
 #### KreuzbergPostProcessorConfig
+
 Post-processor configuration.
 
 | Field | Type | Default | Description |
@@ -3583,7 +3849,9 @@ Post-processor configuration.
 | `disabled_set` | `const char**` | `NULL` | Pre-computed AHashSet for O(1) disabled processor lookup |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -3593,6 +3861,7 @@ KreuzbergPostProcessorConfig kreuzberg_default();
 ---
 
 #### KreuzbergPptxAppProperties
+
 Application properties from docProps/app.xml for PPTX
 
 Contains PowerPoint-specific document metadata.
@@ -3619,6 +3888,7 @@ Contains PowerPoint-specific document metadata.
 ---
 
 #### KreuzbergPptxExtractionResult
+
 PowerPoint (PPTX) extraction result.
 
 Contains extracted slide content, metadata, and embedded images/tables.
@@ -3641,21 +3911,23 @@ Contains extracted slide content, metadata, and embedded images/tables.
 ---
 
 #### KreuzbergPptxMetadata
+
 PowerPoint presentation metadata.
 
 Extracted from PPTX files containing slide counts and presentation details.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `slide_count` | `uintptr_t` | — | Total number of slides in the presentation |
+| `slide_count` | `uint32_t` | — | Total number of slides in the presentation |
 | `slide_names` | `const char**` | `NULL` | Names of slides (if available) |
-| `image_count` | `uintptr_t*` | `NULL` | Number of embedded images |
-| `table_count` | `uintptr_t*` | `NULL` | Number of tables |
+| `image_count` | `uint32_t*` | `NULL` | Number of embedded images |
+| `table_count` | `uint32_t*` | `NULL` | Number of tables |
 
 
 ---
 
 #### KreuzbergProcessingWarning
+
 A non-fatal warning from a processing pipeline stage.
 
 Captures errors from optional features that don't prevent extraction
@@ -3670,6 +3942,7 @@ but may indicate degraded results.
 ---
 
 #### KreuzbergPstMetadata
+
 Outlook PST archive metadata.
 
 | Field | Type | Default | Description |
@@ -3680,6 +3953,7 @@ Outlook PST archive metadata.
 ---
 
 #### KreuzbergRakeParams
+
 RAKE-specific parameters.
 
 | Field | Type | Default | Description |
@@ -3688,7 +3962,9 @@ RAKE-specific parameters.
 | `max_words_per_phrase` | `uintptr_t` | `3` | Maximum words in a keyword phrase (default: 3). |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -3698,25 +3974,34 @@ KreuzbergRakeParams kreuzberg_default();
 ---
 
 #### KreuzbergRecognizedTable
+
 Pre-computed table markdown for a table detection region.
+
+Produced by the TATR-based table structure recognizer and surfaced as part of
+layout-aware OCR results.  The struct lives here (under `layout-types`, pure-Rust)
+so that consumers who do not enable `layout-detection` (ORT) can still reference
+the type in their own code.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `detection_bbox` | `KreuzbergBBox` | — | Detection bbox that this table corresponds to (for matching). |
-| `cells` | `const char***` | — | Table cells as a 2D vector (rows x columns). |
+| `cells` | `const char***` | — | Table cells as a 2D vector (rows × columns). |
 | `markdown` | `const char*` | — | Rendered markdown table. |
 
 
 ---
 
 #### KreuzbergRecyclable
+
 Trait for types that can be pooled and reused.
 
 Implementing this trait allows a type to be used with `Pool<T>`.
 The `reset()` method should clear the object's state for reuse.
 
 ##### Methods
+
 ###### kreuzberg_reset()
+
 Reset the object to a reusable state.
 
 This is called when returning an object to the pool.
@@ -3731,6 +4016,7 @@ void kreuzberg_reset();
 ---
 
 #### KreuzbergRenderer
+
 Trait for document renderers that convert `InternalDocument` to output strings.
 
 Renderers are typically stateless converters that transform the internal
@@ -3748,7 +4034,9 @@ take no-op defaults and need not be overridden.
 Renderers must be `Send + Sync` (inherited from `Plugin`).
 
 ##### Methods
+
 ###### kreuzberg_render()
+
 Render an `InternalDocument` to the output format.
 
 **Returns:**
@@ -3768,6 +4056,7 @@ const char* kreuzberg_render(KreuzbergInternalDocument doc);
 ---
 
 #### KreuzbergResolvedStyle
+
 Fully resolved (flattened) style after walking the inheritance chain.
 
 | Field | Type | Default | Description |
@@ -3779,6 +4068,7 @@ Fully resolved (flattened) style after walking the inheritance chain.
 ---
 
 #### KreuzbergSecurityLimits
+
 Configuration for security limits across extractors.
 
 All limits are intentionally conservative to prevent DoS attacks
@@ -3797,7 +4087,9 @@ while still supporting legitimate documents.
 | `max_table_cells` | `uintptr_t` | `100000` | Maximum cells per table (100,000) |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -3807,6 +4099,7 @@ KreuzbergSecurityLimits kreuzberg_default();
 ---
 
 #### KreuzbergServerConfig
+
 API server configuration.
 
 This struct holds all configuration options for the Kreuzberg API server,
@@ -3829,13 +4122,16 @@ including host/port settings, CORS configuration, and upload limits.
 | `max_multipart_field_bytes` | `uintptr_t` | — | Maximum size of multipart fields in bytes (default: 100 MB) |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
 KreuzbergServerConfig kreuzberg_default();
 ```
 ###### kreuzberg_listen_addr()
+
 Get the server listen address (host:port).
 
 **Signature:**
@@ -3844,6 +4140,7 @@ Get the server listen address (host:port).
 const char* kreuzberg_listen_addr();
 ```
 ###### kreuzberg_cors_allows_all()
+
 Check if CORS allows all origins.
 
 Returns `true` if the `cors_origins` vector is empty, meaning all origins
@@ -3855,6 +4152,7 @@ are allowed. Returns `false` if specific origins are configured.
 bool kreuzberg_cors_allows_all();
 ```
 ###### kreuzberg_is_origin_allowed()
+
 Check if a given origin is allowed by CORS configuration.
 
 Returns `true` if:
@@ -3867,6 +4165,7 @@ Returns `true` if:
 bool kreuzberg_is_origin_allowed(const char* origin);
 ```
 ###### kreuzberg_max_request_body_mb()
+
 Get maximum request body size in megabytes (rounded up).
 
 **Signature:**
@@ -3875,6 +4174,7 @@ Get maximum request body size in megabytes (rounded up).
 uintptr_t kreuzberg_max_request_body_mb();
 ```
 ###### kreuzberg_max_multipart_field_mb()
+
 Get maximum multipart field size in megabytes (rounded up).
 
 **Signature:**
@@ -3887,15 +4187,18 @@ uintptr_t kreuzberg_max_multipart_field_mb();
 
 #### KreuzbergStreamReader
 
+
 ---
 
 #### KreuzbergStringBufferPool
+
 Convenience type alias for a pooled String.
 
 
 ---
 
 #### KreuzbergStructuredData
+
 Structured data (Schema.org, microdata, RDFa) block.
 
 | Field | Type | Default | Description |
@@ -3908,6 +4211,7 @@ Structured data (Schema.org, microdata, RDFa) block.
 ---
 
 #### KreuzbergStructuredDataResult
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `content` | `const char*` | — | The extracted text content |
@@ -3919,6 +4223,7 @@ Structured data (Schema.org, microdata, RDFa) block.
 ---
 
 #### KreuzbergStructuredExtractionConfig
+
 Configuration for LLM-based structured data extraction.
 
 Sends extracted document content to a VLM with a JSON schema,
@@ -3937,6 +4242,7 @@ returning structured data that conforms to the schema.
 ---
 
 #### KreuzbergStructuredExtractionResponse
+
 Response from structured extraction endpoint.
 
 | Field | Type | Default | Description |
@@ -3949,6 +4255,7 @@ Response from structured extraction endpoint.
 ---
 
 #### KreuzbergStyleDefinition
+
 A single style definition parsed from `<w:style>` in `word/styles.xml`.
 
 | Field | Type | Default | Description |
@@ -3966,6 +4273,7 @@ A single style definition parsed from `<w:style>` in `word/styles.xml`.
 ---
 
 #### KreuzbergSupportedFormat
+
 A supported document format entry.
 
 Represents a file extension and its corresponding MIME type that Kreuzberg can process.
@@ -3979,6 +4287,7 @@ Represents a file extension and its corresponding MIME type that Kreuzberg can p
 ---
 
 #### KreuzbergSyncExtractor
+
 Trait for extractors that can work synchronously (WASM-compatible).
 
 This trait defines the synchronous extraction interface for WASM targets and other
@@ -3995,7 +4304,9 @@ environments by delegating to the sync implementation.
 The `mime_type` parameter is guaranteed to be already validated.
 
 ##### Methods
+
 ###### kreuzberg_extract_sync()
+
 Extract content from a byte array synchronously.
 
 This method performs extraction without requiring an async runtime.
@@ -4014,6 +4325,7 @@ KreuzbergInternalDocument kreuzberg_extract_sync(const uint8_t* content, const c
 ---
 
 #### KreuzbergTable
+
 Extracted table structure.
 
 Represents a table detected and extracted from a document (PDF, image, etc.).
@@ -4023,13 +4335,14 @@ Tables are converted to both structured cell data and Markdown format.
 |-------|------|---------|-------------|
 | `cells` | `const char***` | `NULL` | Table cells as a 2D vector (rows × columns) |
 | `markdown` | `const char*` | — | Markdown representation of the table |
-| `page_number` | `uintptr_t` | — | Page number where the table was found (1-indexed) |
+| `page_number` | `uint32_t` | — | Page number where the table was found (1-indexed) |
 | `bounding_box` | `const char**` | `NULL` | Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted tables when position data is available. |
 
 
 ---
 
 #### KreuzbergTableCell
+
 Individual table cell with content and optional styling.
 
 Future extension point for rich table support with cell-level metadata.
@@ -4037,14 +4350,15 @@ Future extension point for rich table support with cell-level metadata.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `content` | `const char*` | — | Cell content as text |
-| `row_span` | `uintptr_t` | — | Row span (number of rows this cell spans) |
-| `col_span` | `uintptr_t` | — | Column span (number of columns this cell spans) |
+| `row_span` | `uint32_t` | — | Row span (number of rows this cell spans) |
+| `col_span` | `uint32_t` | — | Column span (number of columns this cell spans) |
 | `is_header` | `bool` | — | Whether this is a header cell |
 
 
 ---
 
 #### KreuzbergTableGrid
+
 Structured table grid with cell-level metadata.
 
 Stores row/column dimensions and a flat list of cells with position info.
@@ -4059,6 +4373,7 @@ Stores row/column dimensions and a flat list of cells with position info.
 ---
 
 #### KreuzbergTableProperties
+
 Table-level properties from `<w:tblPr>`.
 
 | Field | Type | Default | Description |
@@ -4077,10 +4392,13 @@ Table-level properties from `<w:tblPr>`.
 ---
 
 #### KreuzbergTessdataManager
+
 Manages tessdata file downloading, caching, and manifest generation.
 
 ##### Methods
+
 ###### kreuzberg_cache_dir()
+
 Get the cache directory path.
 
 **Signature:**
@@ -4089,6 +4407,7 @@ Get the cache directory path.
 const char* kreuzberg_cache_dir();
 ```
 ###### kreuzberg_is_language_cached()
+
 Check if a specific language traineddata file is cached.
 
 **Signature:**
@@ -4097,11 +4416,13 @@ Check if a specific language traineddata file is cached.
 bool kreuzberg_is_language_cached(const char* lang);
 ```
 ###### kreuzberg_ensure_all_languages()
+
 Downloads all tessdata_fast traineddata files to the cache directory.
 
 Skips files that already exist. Returns the count of newly downloaded files.
 
-Requires the `paddle-ocr` feature for HTTP download support (ureq).
+When the `paddle-ocr` feature is not enabled, no download URLs are available
+and this method always returns `Ok(0)`.
 
 **Signature:**
 
@@ -4112,6 +4433,7 @@ uintptr_t kreuzberg_ensure_all_languages();
 ---
 
 #### KreuzbergTesseractConfig
+
 Tesseract OCR configuration.
 
 Provides fine-grained control over Tesseract OCR engine parameters.
@@ -4143,7 +4465,9 @@ for specific document types (invoices, handwriting, etc.).
 | `thresholding_method` | `bool` | `false` | Use adaptive thresholding method |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -4153,6 +4477,7 @@ KreuzbergTesseractConfig kreuzberg_default();
 ---
 
 #### KreuzbergTextAnnotation
+
 Inline text annotation — byte-range based formatting and links.
 
 Annotations reference byte offsets into the node's text content,
@@ -4168,6 +4493,7 @@ enabling precise identification of formatted regions.
 ---
 
 #### KreuzbergTextExtractionResult
+
 Plain text and Markdown extraction result.
 
 Contains the extracted text along with statistics and,
@@ -4187,6 +4513,7 @@ for Markdown files, structural elements like headers and links.
 ---
 
 #### KreuzbergTextMetadata
+
 Text/Markdown metadata.
 
 Extracted from plain text and Markdown files. Includes word counts and,
@@ -4194,9 +4521,9 @@ for Markdown, structural elements like headers and links.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `line_count` | `uintptr_t` | — | Number of lines in the document |
-| `word_count` | `uintptr_t` | — | Number of words |
-| `character_count` | `uintptr_t` | — | Number of characters |
+| `line_count` | `uint32_t` | — | Number of lines in the document |
+| `word_count` | `uint32_t` | — | Number of words |
+| `character_count` | `uint32_t` | — | Number of characters |
 | `headers` | `const char***` | `NULL` | Markdown headers (headings text only, for Markdown files) |
 | `links` | `const char***` | `NULL` | Markdown links as (text, url) tuples (for Markdown files) |
 | `code_blocks` | `const char***` | `NULL` | Code blocks as (language, code) tuples (for Markdown files) |
@@ -4205,6 +4532,7 @@ for Markdown, structural elements like headers and links.
 ---
 
 #### KreuzbergTokenReductionConfig
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `level` | `KreuzbergReductionLevel` | `KREUZBERG_KREUZBERG_MODERATE` | Level (reduction level) |
@@ -4220,7 +4548,9 @@ for Markdown, structural elements like headers and links.
 | `enable_semantic_clustering` | `bool` | `false` | Enable semantic clustering |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -4230,6 +4560,7 @@ KreuzbergTokenReductionConfig kreuzberg_default();
 ---
 
 #### KreuzbergTokenReductionOptions
+
 Token reduction configuration.
 
 | Field | Type | Default | Description |
@@ -4238,7 +4569,9 @@ Token reduction configuration.
 | `preserve_important_words` | `bool` | `true` | Preserve important words (capitalized, technical terms) |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -4248,12 +4581,14 @@ KreuzbergTokenReductionOptions kreuzberg_default();
 ---
 
 #### KreuzbergTracingLayer
+
 A `tower.Layer` that wraps each extraction in a semantic tracing span.
 
 
 ---
 
 #### KreuzbergTreeSitterConfig
+
 Configuration for tree-sitter language pack integration.
 
 Controls grammar download behavior and code analysis options.
@@ -4280,7 +4615,9 @@ docstrings = true
 | `process` | `KreuzbergTreeSitterProcessConfig` | — | Processing options for code analysis. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -4290,6 +4627,7 @@ KreuzbergTreeSitterConfig kreuzberg_default();
 ---
 
 #### KreuzbergTreeSitterProcessConfig
+
 Processing options for tree-sitter code analysis.
 
 Controls which analysis features are enabled when extracting code files.
@@ -4307,7 +4645,9 @@ Controls which analysis features are enabled when extracting code files.
 | `content_mode` | `KreuzbergCodeContentMode` | `KREUZBERG_KREUZBERG_CHUNKS` | Content rendering mode for code extraction. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -4317,6 +4657,7 @@ KreuzbergTreeSitterProcessConfig kreuzberg_default();
 ---
 
 #### KreuzbergUri
+
 A URI extracted from a document.
 
 Represents any link, reference, or resource pointer found during extraction.
@@ -4334,6 +4675,7 @@ optional human-readable display text.
 ---
 
 #### KreuzbergValidator
+
 Trait for validator plugins.
 
 Validators check extraction results for quality, completeness, or correctness.
@@ -4360,7 +4702,9 @@ For non-fatal checks, use post-processors instead.
 Validators must be thread-safe (`Send + Sync`).
 
 ##### Methods
+
 ###### kreuzberg_validate()
+
 Validate an extraction result.
 
 Check the extraction result and return `Ok(())` if valid, or an error
@@ -4449,6 +4793,7 @@ async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
 void kreuzberg_validate(KreuzbergExtractionResult result, KreuzbergExtractionConfig config);
 ```
 ###### kreuzberg_should_validate()
+
 Optional: Check if this validator should run for a given result.
 
 Allows conditional validation based on MIME type, metadata, or content.
@@ -4464,6 +4809,7 @@ Defaults to `true` (always run).
 bool kreuzberg_should_validate(KreuzbergExtractionResult result, KreuzbergExtractionConfig config);
 ```
 ###### kreuzberg_priority()
+
 Optional: Get the validation priority.
 
 Higher priority validators run first. Useful for ordering validation checks
@@ -4484,6 +4830,7 @@ int32_t kreuzberg_priority();
 ---
 
 #### KreuzbergWarmResponse
+
 Cache warm response.
 
 | Field | Type | Default | Description |
@@ -4496,6 +4843,7 @@ Cache warm response.
 ---
 
 #### KreuzbergXlsxAppProperties
+
 Application properties from docProps/app.xml for XLSX
 
 Contains Excel-specific document metadata.
@@ -4516,6 +4864,7 @@ Contains Excel-specific document metadata.
 ---
 
 #### KreuzbergXmlExtractionResult
+
 XML extraction result.
 
 Contains extracted text content from XML files along with
@@ -4531,19 +4880,21 @@ structural statistics about the XML document.
 ---
 
 #### KreuzbergXmlMetadata
+
 XML metadata extracted during XML parsing.
 
 Provides statistics about XML document structure.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `element_count` | `uintptr_t` | — | Total number of XML elements processed |
+| `element_count` | `uint32_t` | — | Total number of XML elements processed |
 | `unique_elements` | `const char**` | `NULL` | List of unique element tag names (sorted) |
 
 
 ---
 
 #### KreuzbergYakeParams
+
 YAKE-specific parameters.
 
 | Field | Type | Default | Description |
@@ -4551,7 +4902,9 @@ YAKE-specific parameters.
 | `window_size` | `uintptr_t` | `2` | Window size for co-occurrence analysis (default: 2). Controls the context window for computing co-occurrence statistics. |
 
 ##### Methods
+
 ###### kreuzberg_default()
+
 **Signature:**
 
 ```c
@@ -4561,6 +4914,7 @@ KreuzbergYakeParams kreuzberg_default();
 ---
 
 #### KreuzbergYearRange
+
 Year range for bibliographic metadata.
 
 | Field | Type | Default | Description |
@@ -4573,6 +4927,7 @@ Year range for bibliographic metadata.
 ---
 
 #### KreuzbergZipBombValidator
+
 Helper struct for validating ZIP archives for security issues.
 
 
@@ -4581,6 +4936,7 @@ Helper struct for validating ZIP archives for security issues.
 ### Enums
 
 #### KreuzbergExecutionProviderType
+
 ONNX Runtime execution provider type.
 
 Determines which hardware backend is used for model inference.
@@ -4598,6 +4954,7 @@ Determines which hardware backend is used for model inference.
 ---
 
 #### KreuzbergOutputFormat
+
 Output format for extraction results.
 
 Controls the format of the `content` field in `ExtractionResult`.
@@ -4620,6 +4977,7 @@ boxes and confidence scores.
 ---
 
 #### KreuzbergHtmlTheme
+
 Built-in HTML theme selection.
 
 | Value | Description |
@@ -4634,6 +4992,7 @@ Built-in HTML theme selection.
 ---
 
 #### KreuzbergTableModel
+
 Which table structure recognition model to use.
 
 Controls the model used for table cell detection within layout-detected
@@ -4653,6 +5012,7 @@ YAML).
 ---
 
 #### KreuzbergChunkerType
+
 Type of text chunker to use.
 
 # Variants
@@ -4679,6 +5039,7 @@ Type of text chunker to use.
 ---
 
 #### KreuzbergChunkSizing
+
 How chunk size is measured.
 
 Defaults to `Characters` (Unicode character count). When using token-based sizing,
@@ -4697,6 +5058,7 @@ available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 ---
 
 #### KreuzbergEmbeddingModelType
+
 Embedding model types supported by Kreuzberg.
 
 | Value | Description |
@@ -4710,6 +5072,7 @@ Embedding model types supported by Kreuzberg.
 ---
 
 #### KreuzbergCodeContentMode
+
 Content rendering mode for code extraction.
 
 Controls how extracted code content is represented in the `content` field
@@ -4725,6 +5088,7 @@ of `ExtractionResult`.
 ---
 
 #### KreuzbergFracType
+
 | Value | Description |
 |-------|-------------|
 | `KREUZBERG_BAR` | Bar |
@@ -4736,6 +5100,7 @@ of `ExtractionResult`.
 ---
 
 #### KreuzbergOcrBackendType
+
 OCR backend types.
 
 | Value | Description |
@@ -4749,6 +5114,7 @@ OCR backend types.
 ---
 
 #### KreuzbergProcessingStage
+
 Processing stages for post-processors.
 
 Post-processors are executed in stage order (Early → Middle → Late).
@@ -4764,6 +5130,7 @@ Use stages to control the order of post-processing operations.
 ---
 
 #### KreuzbergReductionLevel
+
 | Value | Description |
 |-------|-------------|
 | `KREUZBERG_OFF` | Off |
@@ -4776,6 +5143,7 @@ Use stages to control the order of post-processing operations.
 ---
 
 #### KreuzbergPdfAnnotationType
+
 Type of PDF annotation.
 
 | Value | Description |
@@ -4792,6 +5160,7 @@ Type of PDF annotation.
 ---
 
 #### KreuzbergBlockType
+
 Types of block-level elements in Djot.
 
 | Value | Description |
@@ -4817,6 +5186,7 @@ Types of block-level elements in Djot.
 ---
 
 #### KreuzbergInlineType
+
 Types of inline elements in Djot.
 
 | Value | Description |
@@ -4842,6 +5212,7 @@ Types of inline elements in Djot.
 ---
 
 #### KreuzbergRelationshipKind
+
 Semantic kind of a relationship between document elements.
 
 | Value | Description |
@@ -4858,6 +5229,7 @@ Semantic kind of a relationship between document elements.
 ---
 
 #### KreuzbergContentLayer
+
 Content layer classification for document nodes.
 
 Replaces separate body/furniture arrays with per-node granularity.
@@ -4873,6 +5245,7 @@ Replaces separate body/furniture arrays with per-node granularity.
 ---
 
 #### KreuzbergNodeContent
+
 Tagged enum for node content. Each variant carries only type-specific data.
 
 Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
@@ -4905,6 +5278,7 @@ Go/Java/TypeScript bindings.
 ---
 
 #### KreuzbergAnnotationKind
+
 Types of inline text annotations.
 
 | Value | Description |
@@ -4926,6 +5300,7 @@ Types of inline text annotations.
 ---
 
 #### KreuzbergExtractionMethod
+
 How the extracted text was produced.
 
 | Value | Description |
@@ -4938,6 +5313,7 @@ How the extracted text was produced.
 ---
 
 #### KreuzbergChunkType
+
 Semantic structural classification of a text chunk.
 
 Assigned by the heuristic classifier in `chunking.classifier`.
@@ -4964,6 +5340,7 @@ Designed to be extended in future versions without breaking changes.
 ---
 
 #### KreuzbergImageKind
+
 Heuristic classification of what an image likely depicts.
 
 | Value | Description |
@@ -4984,6 +5361,7 @@ Heuristic classification of what an image likely depicts.
 ---
 
 #### KreuzbergResultFormat
+
 Result-shape selection for extraction results.
 
 Distinct from `OutputFormat` (which controls rendering — Plain, Markdown,
@@ -4999,6 +5377,7 @@ blob vs. an element-based decomposition.
 ---
 
 #### KreuzbergElementType
+
 Semantic element type classification.
 
 Categorizes text content into semantic units for downstream processing.
@@ -5022,6 +5401,7 @@ Supports the element types commonly found in Unstructured documents.
 ---
 
 #### KreuzbergFormatMetadata
+
 Format-specific metadata (discriminated union).
 
 Only one format type can exist per extraction result. This provides
@@ -5054,6 +5434,7 @@ type-safe, clean metadata without nested optionals.
 ---
 
 #### KreuzbergTextDirection
+
 Text direction enumeration for HTML documents.
 
 | Value | Description |
@@ -5066,6 +5447,7 @@ Text direction enumeration for HTML documents.
 ---
 
 #### KreuzbergLinkType
+
 Link type classification.
 
 | Value | Description |
@@ -5081,6 +5463,7 @@ Link type classification.
 ---
 
 #### KreuzbergImageType
+
 Image type classification.
 
 | Value | Description |
@@ -5094,6 +5477,7 @@ Image type classification.
 ---
 
 #### KreuzbergStructuredDataType
+
 Structured data type classification.
 
 | Value | Description |
@@ -5106,6 +5490,7 @@ Structured data type classification.
 ---
 
 #### KreuzbergOcrBoundingGeometry
+
 Bounding geometry for an OCR element.
 
 Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
@@ -5120,6 +5505,7 @@ Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilateral
 ---
 
 #### KreuzbergOcrElementLevel
+
 Hierarchical level of an OCR element.
 
 Maps to Tesseract's page segmentation hierarchy and provides
@@ -5136,6 +5522,7 @@ equivalent semantics for PaddleOCR.
 ---
 
 #### KreuzbergPageUnitType
+
 Type of paginated unit in a document.
 
 Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet sheets).
@@ -5150,6 +5537,7 @@ Distinguishes between different types of "pages" (PDF pages, presentation slides
 ---
 
 #### KreuzbergUriKind
+
 Semantic classification of an extracted URI.
 
 | Value | Description |
@@ -5165,6 +5553,7 @@ Semantic classification of an extracted URI.
 ---
 
 #### KreuzbergPoolError
+
 Error type for pool operations.
 
 | Value | Description |
@@ -5175,6 +5564,7 @@ Error type for pool operations.
 ---
 
 #### KreuzbergKeywordAlgorithm
+
 Keyword algorithm selection.
 
 | Value | Description |
@@ -5186,6 +5576,7 @@ Keyword algorithm selection.
 ---
 
 #### KreuzbergPsmMode
+
 Page Segmentation Mode for Tesseract OCR
 
 | Value | Description |
@@ -5206,6 +5597,7 @@ Page Segmentation Mode for Tesseract OCR
 ---
 
 #### KreuzbergPaddleLanguage
+
 Supported languages in PaddleOCR.
 
 Maps user-friendly language codes to paddle-ocr-rs language identifiers.
@@ -5233,6 +5625,7 @@ Maps user-friendly language codes to paddle-ocr-rs language identifiers.
 ---
 
 #### KreuzbergLayoutClass
+
 The 17 canonical document layout classes.
 
 All model backends (RT-DETR, YOLO, etc.) map their native class IDs
@@ -5267,6 +5660,7 @@ Wire format is snake_case in all serializers (JSON, TOML, YAML).
 ### Errors
 
 #### KreuzbergKreuzbergError
+
 Main error type for all Kreuzberg operations.
 
 All errors in Kreuzberg use this enum, which preserves error chains

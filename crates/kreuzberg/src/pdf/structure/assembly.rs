@@ -18,7 +18,7 @@ pub(crate) fn assemble_internal_document(
     pages: Vec<Vec<PdfParagraph>>,
     tables: &[crate::types::Table],
     images: Option<&[crate::types::ExtractedImage]>,
-    image_positions: &[(usize, usize)], // (page_idx, image_index) for image placeholders
+    image_positions: &[(u32, u32)], // (page_idx, image_index) for image placeholders
 ) -> InternalDocument {
     tracing::debug!(
         page_count = pages.len(),
@@ -30,19 +30,14 @@ pub(crate) fn assemble_internal_document(
     let mut builder = InternalDocumentBuilder::new("pdf");
 
     // Group tables by page number (1-indexed → 0-indexed)
-    let mut tables_by_page: std::collections::BTreeMap<usize, Vec<&crate::types::Table>> =
+    let mut tables_by_page: std::collections::BTreeMap<u32, Vec<&crate::types::Table>> =
         std::collections::BTreeMap::new();
     for table in tables {
-        let page_idx = if table.page_number > 0 {
-            table.page_number - 1
-        } else {
-            0
-        };
-        tables_by_page.entry(page_idx).or_default().push(table);
+        tables_by_page.entry(table.page_number).or_default().push(table);
     }
 
     // Group image positions by page
-    let mut images_by_page: std::collections::BTreeMap<usize, Vec<usize>> = std::collections::BTreeMap::new();
+    let mut images_by_page: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
     for &(page_idx, image_index) in image_positions {
         images_by_page.entry(page_idx).or_default().push(image_index);
     }
@@ -50,14 +45,14 @@ pub(crate) fn assemble_internal_document(
     let mut has_emitted_content = false;
     for (page_idx, paragraphs) in pages.iter().enumerate() {
         let page_num = Some((page_idx + 1) as u32);
-        let page_tables = tables_by_page.remove(&page_idx);
+        let page_tables = tables_by_page.remove(&((page_idx + 1) as u32));
 
         // Check whether this page has any content (paragraphs, tables, or images).
         let page_has_content = !paragraphs.is_empty()
             || page_tables
                 .as_ref()
                 .is_some_and(|t| t.iter().any(|tb| !tb.markdown.trim().is_empty()))
-            || images_by_page.contains_key(&(page_idx + 1));
+            || images_by_page.contains_key(&((page_idx + 1) as u32));
 
         // Insert page break only between pages that both have content, so that
         // blank leading/trailing pages do not produce spurious thematic breaks.
@@ -85,23 +80,18 @@ pub(crate) fn assemble_internal_document(
         }
 
         // Inject image placeholders for this page
-        if let Some(image_indices) = images_by_page.get(&(page_idx + 1)) {
+        if let Some(image_indices) = images_by_page.get(&((page_idx + 1) as u32)) {
             for &image_index in image_indices {
                 // Determine text content from OCR result if available
                 let ocr_text = images
-                    .and_then(|imgs| imgs.get(image_index))
+                    .and_then(|imgs| imgs.get(image_index as usize))
                     .and_then(|img| img.ocr_result.as_ref())
                     .map(|res| res.content.as_str())
                     .unwrap_or("");
 
-                let elem = crate::types::internal::InternalElement::text(
-                    ElementKind::Image {
-                        image_index: image_index as u32,
-                    },
-                    ocr_text,
-                    0,
-                )
-                .with_page((page_idx + 1) as u32);
+                let elem =
+                    crate::types::internal::InternalElement::text(ElementKind::Image { image_index }, ocr_text, 0)
+                        .with_page((page_idx + 1) as u32);
                 builder.push_element(elem);
             }
         }
@@ -109,7 +99,7 @@ pub(crate) fn assemble_internal_document(
 
     // Append tables for pages beyond what we have paragraphs for
     for (&page_idx, page_tables) in &tables_by_page {
-        let page_num = Some((page_idx + 1) as u32);
+        let page_num = Some(page_idx + 1);
         for &table in page_tables {
             if !table.markdown.trim().is_empty() {
                 let bbox = table.bounding_box.map(|bb| BoundingBox {
@@ -126,13 +116,7 @@ pub(crate) fn assemble_internal_document(
     // Inject image placeholders for page 0 (unknown page)
     if let Some(image_indices) = images_by_page.get(&0) {
         for &image_index in image_indices {
-            let elem = crate::types::internal::InternalElement::text(
-                ElementKind::Image {
-                    image_index: image_index as u32,
-                },
-                "",
-                0,
-            );
+            let elem = crate::types::internal::InternalElement::text(ElementKind::Image { image_index }, "", 0);
             builder.push_element(elem);
         }
     }

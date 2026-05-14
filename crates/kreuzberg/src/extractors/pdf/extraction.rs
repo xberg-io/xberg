@@ -73,7 +73,7 @@ pub(crate) fn extract_all_from_oxide_document(
         .is_some_and(|o| o.allow_single_column_tables);
     let tables = if extract_tables_flag {
         let mut combined = crate::pdf::oxide::table::extract_tables_native(&mut doc).unwrap_or_default();
-        let native_pages: std::collections::HashSet<usize> = combined.iter().map(|t| t.page_number).collect();
+        let native_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
         let heuristic =
             crate::pdf::oxide::table::extract_tables_heuristic(&mut doc, allow_single_column, &native_pages)
                 .unwrap_or_default();

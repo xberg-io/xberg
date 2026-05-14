@@ -786,7 +786,7 @@ pub(crate) struct SegmentStructureConfig<'a> {
     pub include_headers: bool,
     pub include_footers: bool,
     pub used_structure_tree: bool,
-    pub image_positions: &'a [(usize, usize)],
+    pub image_positions: &'a [(u32, u32)],
     pub images: Option<&'a [crate::types::ExtractedImage]>,
     pub inject_placeholders: bool,
     pub layout_hints: Option<&'a [Vec<LayoutHint>]>,
@@ -1237,7 +1237,9 @@ pub(crate) fn extract_document_structure_from_segments(
         let mut map: ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> = ahash::AHashMap::new();
         for table in tables.iter().chain(layout_tables.iter()) {
             if let Some(ref bb) = table.bounding_box {
-                map.entry(table.page_number.saturating_sub(1)).or_default().push(*bb);
+                map.entry(table.page_number.saturating_sub(1) as usize)
+                    .or_default()
+                    .push(*bb);
             }
         }
         tracing::debug!(

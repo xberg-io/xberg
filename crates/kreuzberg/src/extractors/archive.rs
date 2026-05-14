@@ -36,9 +36,9 @@ fn build_archive_doc_inner(
 
     let archive_metadata = ArchiveMetadata {
         format: Cow::Borrowed(format_name),
-        file_count: extraction_metadata.file_count,
+        file_count: extraction_metadata.file_count as u32,
         file_list: file_names,
-        total_size: extraction_metadata.total_size as usize,
+        total_size: extraction_metadata.total_size,
         compressed_size: None,
     };
 

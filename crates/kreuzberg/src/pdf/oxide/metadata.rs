@@ -80,7 +80,7 @@ fn extract_pdf_specific_metadata(doc: &mut OxideDocument) -> Result<PdfMetadata>
         is_encrypted,
         width,
         height,
-        page_count: Some(page_count),
+        page_count: Some(page_count as u32),
     })
 }
 
@@ -242,7 +242,7 @@ fn build_page_structure(doc: &mut OxideDocument, boundaries: &[PageBoundary], co
     }
 
     Ok(PageStructure {
-        total_count,
+        total_count: total_count as u32,
         unit_type: PageUnitType::Page,
         boundaries: Some(boundaries.to_vec()),
         pages: if pages.is_empty() { None } else { Some(pages) },

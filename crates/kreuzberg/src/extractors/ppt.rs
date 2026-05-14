@@ -182,13 +182,13 @@ impl DocumentExtractor for PptExtractor {
 
         let page_structure = if result.slide_count > 0 {
             Some(PageStructure {
-                total_count: result.slide_count,
+                total_count: result.slide_count as u32,
                 unit_type: PageUnitType::Slide,
                 boundaries: None,
                 pages: Some(
                     (1..=result.slide_count)
                         .map(|num| PageInfo {
-                            number: num,
+                            number: num as u32,
                             title: None,
                             dimensions: None,
                             image_count: None,

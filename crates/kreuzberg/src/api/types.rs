@@ -369,10 +369,10 @@ pub struct ChunkItem {
     pub total_chunks: usize,
     /// First page number (optional, for PDF chunking)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub first_page: Option<usize>,
+    pub first_page: Option<u32>,
     /// Last page number (optional, for PDF chunking)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_page: Option<usize>,
+    pub last_page: Option<u32>,
 }
 
 /// Version response.

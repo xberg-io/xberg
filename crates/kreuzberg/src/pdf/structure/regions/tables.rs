@@ -247,7 +247,7 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
         tables.push(Table {
             cells: table_cells,
             markdown,
-            page_number: page_index + 1,
+            page_number: (page_index + 1) as u32,
             bounding_box,
         });
     }

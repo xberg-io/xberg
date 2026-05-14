@@ -237,7 +237,7 @@ pub fn cluster_tiles(images: &mut [ExtractedImage]) {
     }
 
     // Group by page
-    let mut by_page: HashMap<Option<usize>, Vec<usize>> = HashMap::new();
+    let mut by_page: HashMap<Option<u32>, Vec<usize>> = HashMap::new();
     for (idx, img) in images.iter().enumerate() {
         by_page.entry(img.page_number).or_default().push(idx);
     }

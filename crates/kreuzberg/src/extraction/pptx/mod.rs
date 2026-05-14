@@ -234,8 +234,8 @@ fn extract_pptx_from_container<R: std::io::Read + std::io::Seek>(
                 extracted_images.push(ExtractedImage {
                     data: Bytes::from(data.clone()),
                     format,
-                    image_index,
-                    page_number: Some(slide.slide_number as usize),
+                    image_index: image_index as u32,
+                    page_number: Some(slide.slide_number),
                     width,
                     height,
                     colorspace: None,
@@ -271,7 +271,7 @@ fn extract_pptx_from_container<R: std::io::Read + std::io::Seek>(
     }
 
     let page_structure = boundaries.as_ref().map(|bounds| crate::types::PageStructure {
-        total_count: slide_count,
+        total_count: slide_count as u32,
         unit_type: crate::types::PageUnitType::Slide,
         boundaries: Some(bounds.clone()),
         pages: page_contents.as_ref().map(|pcs| {

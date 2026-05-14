@@ -56,7 +56,7 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
             }
         };
 
-        let page_number = page_idx + 1; // Kreuzberg uses 1-indexed page numbers
+        let page_number = (page_idx + 1) as u32; // Kreuzberg uses 1-indexed page numbers
 
         for extracted_table in extracted {
             if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
@@ -136,7 +136,7 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
 pub(crate) fn extract_tables_heuristic(
     doc: &mut OxideDocument,
     allow_single_column: bool,
-    skip_pages: &HashSet<usize>,
+    skip_pages: &HashSet<u32>,
 ) -> Result<Vec<Table>> {
     use crate::pdf::table_reconstruct::{HocrWord, segments_to_words};
 
@@ -155,7 +155,7 @@ pub(crate) fn extract_tables_heuristic(
     let mut tables = Vec::new();
 
     for page_idx in 0..page_count {
-        let page_number = page_idx + 1;
+        let page_number = (page_idx + 1) as u32;
         if skip_pages.contains(&page_number) {
             continue;
         }
@@ -278,7 +278,7 @@ fn cluster_words_into_vertical_regions(
 fn reconstruct_region_table(
     region: &[crate::pdf::table_reconstruct::HocrWord],
     page_height: f32,
-    page_number: usize,
+    page_number: u32,
     allow_single_column: bool,
 ) -> Option<Table> {
     use crate::pdf::table_reconstruct::{
@@ -726,7 +726,7 @@ mod tests {
         if baseline.is_empty() {
             return; // fixture didn't produce anything to skip — see prior test
         }
-        let pages_baseline_touched: HashSet<usize> = baseline.iter().map(|t| t.page_number).collect();
+        let pages_baseline_touched: HashSet<u32> = baseline.iter().map(|t| t.page_number).collect();
 
         let skip = pages_baseline_touched.clone();
         let suppressed = extract_tables_heuristic(&mut doc, false, &skip).expect("skip-pages heuristic");

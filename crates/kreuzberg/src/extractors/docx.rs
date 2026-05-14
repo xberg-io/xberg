@@ -869,7 +869,7 @@ fn parse_docx_core(
         .iter()
         .enumerate()
         .map(|(idx, table)| {
-            let page_number = table_page_nums.get(idx).copied().unwrap_or(1);
+            let page_number = table_page_nums.get(idx).copied().unwrap_or(1) as u32;
             convert_docx_table_to_table(table, page_number)
         })
         .collect();
@@ -933,7 +933,7 @@ impl Plugin for DocxExtractor {
 ///
 /// # Returns
 /// * `Table` - Converted table with cells and markdown representation
-fn convert_docx_table_to_table(docx_table: &crate::extraction::docx::parser::Table, page_number: usize) -> Table {
+fn convert_docx_table_to_table(docx_table: &crate::extraction::docx::parser::Table, page_number: u32) -> Table {
     // Build grid with merged cell content repeated across spans.
     let mut cells: Vec<Vec<String>> = Vec::new();
     for row in &docx_table.rows {
@@ -1198,13 +1198,13 @@ impl DocumentExtractor for DocxExtractor {
         let page_structure = if let Some(boundaries) = page_boundaries {
             let total_count = boundaries.len();
             Some(PageStructure {
-                total_count,
+                total_count: total_count as u32,
                 unit_type: PageUnitType::Page,
                 boundaries: Some(boundaries),
                 pages: Some(
                     (1..=total_count)
                         .map(|page_num| PageInfo {
-                            number: page_num,
+                            number: page_num as u32,
                             title: None,
                             dimensions: None,
                             image_count: None,
@@ -1310,7 +1310,7 @@ impl DocumentExtractor for DocxExtractor {
             extracted_images.push(ExtractedImage {
                 data,
                 format,
-                image_index: idx,
+                image_index: idx as u32,
                 page_number,
                 width,
                 height,
@@ -1331,7 +1331,6 @@ impl DocumentExtractor for DocxExtractor {
         // derive_extraction_result can populate ExtractionResult.pages.
         let page_contents = {
             let arc_tables: Vec<Arc<Table>> = tables.iter().map(|t| Arc::new(t.clone())).collect();
-            let arc_images: Vec<Arc<ExtractedImage>> = extracted_images.iter().map(|i| Arc::new(i.clone())).collect();
 
             if let Some(ref ps) = page_structure
                 && let Some(ref boundaries) = ps.boundaries
@@ -1362,22 +1361,23 @@ impl DocumentExtractor for DocxExtractor {
                         .cloned()
                         .collect();
 
-                    // Filter images for this page
-                    let page_images: Vec<Arc<ExtractedImage>> = arc_images
+                    // Collect indices of images on this page
+                    let page_image_indices: Vec<u32> = extracted_images
                         .iter()
-                        .filter(|i| i.page_number == Some(page_num))
-                        .cloned()
+                        .enumerate()
+                        .filter(|(_, i)| i.page_number == Some(page_num))
+                        .map(|(i, _)| i as u32)
                         .collect();
 
                     let is_blank = page_text.chars().filter(|c| !c.is_whitespace()).count() < 3
                         && page_tables.is_empty()
-                        && page_images.is_empty();
+                        && page_image_indices.is_empty();
 
                     pages.push(PageContent {
                         page_number: page_num,
                         content: page_text,
                         tables: page_tables,
-                        images: page_images,
+                        image_indices: page_image_indices,
                         hierarchy: None,
                         is_blank: Some(is_blank),
                         layout_regions: None,
@@ -1390,7 +1390,7 @@ impl DocumentExtractor for DocxExtractor {
                     page_number: 1,
                     content: text.clone(),
                     tables: arc_tables,
-                    images: arc_images,
+                    image_indices: (0..extracted_images.len() as u32).collect(),
                     hierarchy: None,
                     is_blank: Some(text.chars().filter(|c| !c.is_whitespace()).count() < 3),
                     layout_regions: None,

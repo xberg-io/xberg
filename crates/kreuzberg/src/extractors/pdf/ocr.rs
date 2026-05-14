@@ -175,7 +175,7 @@ impl NativeTextStats {
 #[cfg(feature = "ocr")]
 pub(crate) fn evaluate_native_text_for_ocr(
     native_text: &str,
-    page_count: Option<usize>,
+    page_count: Option<u32>,
     thresholds: &OcrQualityThresholds,
 ) -> OcrFallbackDecision {
     let trimmed = native_text.trim();
@@ -290,7 +290,7 @@ pub(crate) fn compute_quality_score(text: &str, thresholds: &OcrQualityThreshold
 pub(crate) fn evaluate_per_page_ocr(
     native_text: &str,
     boundaries: Option<&[crate::types::PageBoundary]>,
-    page_count: Option<usize>,
+    page_count: Option<u32>,
     thresholds: &OcrQualityThresholds,
 ) -> OcrFallbackDecision {
     let boundaries = match boundaries {
@@ -377,15 +377,13 @@ pub(crate) fn render_selected_pages_for_ocr(
 pub(crate) async fn extract_mixed_ocr_native(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
-    ocr_page_numbers: &[usize],
+    ocr_page_numbers: &[u32],
     content: &[u8],
     config: &ExtractionConfig,
     _path: Option<&std::path::Path>,
-) -> crate::Result<(String, ahash::AHashMap<usize, String>, Vec<crate::types::LlmUsage>)> {
-    use std::collections::HashSet;
-
+) -> crate::Result<(String, ahash::AHashMap<u32, String>, Vec<crate::types::LlmUsage>)> {
     // Deduplicate and validate page numbers (must be >= 1)
-    let ocr_set: HashSet<usize> = ocr_page_numbers
+    let ocr_set: std::collections::HashSet<u32> = ocr_page_numbers
         .iter()
         .copied()
         .filter(|&p| {
@@ -403,7 +401,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     }
 
     // Convert 1-indexed page numbers to 0-indexed for rendering (sorted + deduplicated)
-    let mut page_indices: Vec<usize> = ocr_set.iter().map(|&p| p - 1).collect();
+    let mut page_indices: Vec<usize> = ocr_set.iter().map(|&p| (p - 1) as usize).collect();
     page_indices.sort_unstable();
     let page_images = render_selected_pages_for_ocr(content, &page_indices)?;
 
@@ -435,7 +433,7 @@ pub(crate) async fn extract_mixed_ocr_native(
 
     let ocr_config_owned = ocr_config_resolved;
     let total = page_images.len();
-    let mut ocr_results: ahash::AHashMap<usize, String> = ahash::AHashMap::with_capacity(total);
+    let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
 
     // Process in batches to bound peak memory (PNG buffers freed between batches)
@@ -483,7 +481,7 @@ pub(crate) async fn extract_mixed_ocr_native(
             if let Some(usage) = extraction_result.llm_usage.take() {
                 accumulated_llm_usage.extend(usage);
             }
-            ocr_results.insert(page_idx + 1, extraction_result.content); // 1-indexed
+            ocr_results.insert((page_idx + 1) as u32, extraction_result.content); // 1-indexed
         }
         // encoded PNGs dropped here — memory freed before next batch
     }
@@ -812,7 +810,7 @@ pub(crate) async fn extract_with_ocr(
             // Accumulate OCR elements from this page.
             if let Some(ref mut elems) = ocr_result.ocr_elements {
                 for elem in elems.iter_mut() {
-                    elem.page_number = page_idx + 1;
+                    elem.page_number = (page_idx + 1) as u32;
                 }
                 all_ocr_elements.extend(elems.iter().cloned());
             }
@@ -872,7 +870,7 @@ pub(crate) async fn extract_with_ocr(
                         collected_tables.push(crate::types::Table {
                             cells: rt.cells.clone(),
                             markdown: rt.markdown.clone(),
-                            page_number: page_idx + 1,
+                            page_number: (page_idx + 1) as u32,
                             bounding_box: None,
                         });
                     }

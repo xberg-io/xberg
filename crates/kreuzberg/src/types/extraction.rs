@@ -424,13 +424,13 @@ pub struct ChunkMetadata {
     ///
     /// Only populated when page tracking is enabled in extraction configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub first_page: Option<usize>,
+    pub first_page: Option<u32>,
 
     /// Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks).
     ///
     /// Only populated when page tracking is enabled in extraction configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_page: Option<usize>,
+    pub last_page: Option<u32>,
 
     /// Heading context when using Markdown chunker.
     ///
@@ -446,7 +446,7 @@ pub struct ChunkMetadata {
     /// image whose `page_number` falls within `[first_page, last_page]`.
     /// Empty when image extraction is disabled or the chunk spans no pages with images.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub image_indices: Vec<usize>,
+    pub image_indices: Vec<u32>,
 }
 
 /// Heuristic classification of what an image likely depicts.
@@ -497,11 +497,11 @@ pub struct ExtractedImage {
     pub format: Cow<'static, str>,
 
     /// Zero-indexed position of this image in the document/page
-    pub image_index: usize,
+    pub image_index: u32,
 
     /// Page/slide number where image was found (1-indexed)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_number: Option<usize>,
+    pub page_number: Option<u32>,
 
     /// Image width in pixels
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -669,7 +669,7 @@ pub struct BoundingBox {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct ElementMetadata {
     /// Page number (1-indexed)
-    pub page_number: Option<usize>,
+    pub page_number: Option<u32>,
     /// Source filename or document name
     pub filename: Option<String>,
     /// Bounding box coordinates if available

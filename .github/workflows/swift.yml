@@ -1,0 +1,35 @@
+name: Swift
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Show Swift version
+        run: swift --version
+      - name: Build kreuzberg-swift Rust crate
+        run: cargo build -p kreuzberg-swift
+      - name: Copy swift-bridge generated sources
+        run: |
+          # shellcheck disable=SC2012
+          OUT=$(ls -dt target/debug/build/kreuzberg-swift-*/out 2>/dev/null | head -1)
+          cat "$OUT/SwiftBridgeCore.h" "$OUT/kreuzberg-swift/kreuzberg-swift.h" \
+              > packages/swift/Sources/RustBridgeC/RustBridgeC.h
+          { echo "import RustBridgeC"; cat "$OUT/SwiftBridgeCore.swift"; } \
+              > packages/swift/Sources/RustBridge/SwiftBridgeCore.swift
+          { echo "import RustBridgeC"; cat "$OUT/kreuzberg-swift/kreuzberg-swift.swift"; } \
+              > packages/swift/Sources/RustBridge/kreuzberg-swift.swift
+      - name: Build Swift package
+        working-directory: packages/swift
+        run: swift build
+      - name: Run tests
+        working-directory: packages/swift
+        run: swift test

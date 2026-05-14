@@ -22,44 +22,10 @@ default = []
 
 [dependencies]
 async-trait = "0.1"
+futures-util = "0.3"
+kreuzberg = { path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-
-# x86_64-linux-android (emulator) lacks an ORT prebuilt and there is no path to
-# get one short of compiling ORT from source for that triple, so we ship the
-# no-ORT android-target feature group instead.
-[target.'cfg(all(target_os = "android", target_arch = "x86_64"))'.dependencies]
-kreuzberg = { path = "../kreuzberg", default-features = false, features = [
-  "android-target",
-] }
-
-# Non-android (incl. arm64 Android phones via pyke prebuilts) — full feature set with ORT.
-# pyke's ort ships aarch64-linux-android prebuilts, so real Android devices keep ORT.
-[target.'cfg(not(all(target_os = "android", target_arch = "x86_64")))'.dependencies]
-kreuzberg = { path = "../kreuzberg", features = [
-  "full",
-  "pdf",
-  "ocr",
-  "paddle-ocr",
-  "layout-detection",
-  "embeddings",
-  "chunking",
-  "keywords-yake",
-  "keywords-rake",
-  "language-detection",
-  "html",
-  "tree-sitter",
-  "office",
-  "email",
-  "archives",
-  "stopwords",
-  "auto-rotate",
-  "tokio-runtime",
-  "api",
-  "mcp",
-  "liter-llm",
-  "quality",
-] }
 
 [build-dependencies]
 cbindgen = "0.29"

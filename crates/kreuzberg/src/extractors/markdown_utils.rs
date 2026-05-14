@@ -72,7 +72,7 @@ pub(crate) fn extract_text_from_events(events: &[Event], images: &mut Vec<Extrac
                 text.push(']');
                 // Extract image from data URIs
                 if dest_url.starts_with("data:image/")
-                    && let Some(image) = decode_data_uri_image(dest_url, images.len())
+                    && let Some(image) = decode_data_uri_image(dest_url, images.len() as u32)
                 {
                     images.push(image);
                 }
@@ -129,7 +129,7 @@ pub(crate) fn extract_text_from_events(events: &[Event], images: &mut Vec<Extrac
 ///
 /// * `uri` - The full `data:image/...;base64,...` URI string
 /// * `index` - The zero-based image index within the document
-pub(crate) fn decode_data_uri_image(uri: &str, index: usize) -> Option<ExtractedImage> {
+pub(crate) fn decode_data_uri_image(uri: &str, index: u32) -> Option<ExtractedImage> {
     let after_data = uri.strip_prefix("data:")?;
     let (mime_and_encoding, data) = after_data.split_once(',')?;
 

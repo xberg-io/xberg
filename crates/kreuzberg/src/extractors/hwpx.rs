@@ -133,7 +133,7 @@ fn build_hwpx_internal_document(doc: unhwp::model::Document, mime_type: &str) ->
                             let image = ExtractedImage {
                                 data: Bytes::from(resource.data.clone()),
                                 format: mime_to_format(resource.mime_type.as_deref().unwrap_or("")),
-                                image_index,
+                                image_index: image_index as u32,
                                 page_number: None,
                                 width: img_ref.width,
                                 height: img_ref.height,

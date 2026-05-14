@@ -5,7 +5,8 @@ import java.util.List;
 /**
  * Bridge interface for the EmbeddingBackend plugin system.
  *
- * Implementations are wrapped by EmbeddingBackendBridge and exposed to the native runtime through Panama FFM upcall stubs.
+ * Implementations are wrapped by EmbeddingBackendBridge and exposed to the native
+ * runtime through Panama FFM upcall stubs.
  */
 public interface IEmbeddingBackend {
 
@@ -16,16 +17,12 @@ public interface IEmbeddingBackend {
     String version();
 
     /** Initialize the plugin. */
-    default void initialize() throws Exception {
-    }
+    default void initialize() throws Exception {}
 
     /** Shut down the plugin. */
-    default void shutdown() throws Exception {
-    }
+    default void shutdown() throws Exception {}
 
-    /** dimensions. */
-    long dimensions() throws Exception;
+/** dimensions. */    long dimensions() throws Exception;
 
-    /** embed. */
-    List<List<Float>> embed(List<String> texts) throws Exception;
+/** embed. */    List<List<Float>> embed(List<String> texts) throws Exception;
 }

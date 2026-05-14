@@ -13,12 +13,11 @@ use crate::types::{HierarchicalBlock, PageContent, PageHierarchy};
 /// Only processes ElementKind::Heading elements and ignores other element types.
 pub(crate) fn assign_hierarchy_to_pages(pages: &mut [PageContent], doc: &InternalDocument) {
     // Group heading/block elements by page number
-    let mut page_hierarchies: std::collections::HashMap<usize, Vec<HierarchicalBlock>> =
-        std::collections::HashMap::new();
+    let mut page_hierarchies: std::collections::HashMap<u32, Vec<HierarchicalBlock>> = std::collections::HashMap::new();
 
     for element in &doc.elements {
         let page_num = match element.page {
-            Some(p) => p as usize,
+            Some(p) => p,
             None => continue,
         };
 
@@ -52,7 +51,7 @@ pub(crate) fn assign_hierarchy_to_pages(pages: &mut [PageContent], doc: &Interna
     // Assign hierarchy to each page
     for page in pages.iter_mut() {
         if let Some(blocks) = page_hierarchies.remove(&page.page_number) {
-            let block_count = blocks.len();
+            let block_count = blocks.len() as u32;
             page.hierarchy = Some(PageHierarchy { block_count, blocks });
         }
     }
@@ -97,7 +96,7 @@ pub(crate) fn assign_tables_and_images_to_pages(
         if let Some(page_num) = image.page_number
             && let Some(page) = updated_pages.iter_mut().find(|p| p.page_number == page_num)
         {
-            page.image_indices.push(idx);
+            page.image_indices.push(idx as u32);
         }
     }
 

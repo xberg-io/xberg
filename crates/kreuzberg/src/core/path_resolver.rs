@@ -69,7 +69,7 @@ pub(crate) fn resolve_image_path(base_dir: &Path, image_ref: &str) -> Option<Pat
 ///
 /// Returns `None` if the file does not exist, is not a regular file,
 /// exceeds the size limit, or has an unrecognised extension.
-pub(crate) fn read_image_file(path: &Path, image_index: usize) -> Option<ExtractedImage> {
+pub(crate) fn read_image_file(path: &Path, image_index: u32) -> Option<ExtractedImage> {
     let meta = std::fs::metadata(path).ok()?;
     if !meta.is_file() {
         return None;
@@ -130,7 +130,7 @@ pub(crate) fn resolve_image_uris(doc: &mut InternalDocument, base_dir: &Path, co
         return;
     }
 
-    let mut image_index = doc.images.len();
+    let mut image_index = doc.images.len() as u32;
 
     // Collect URI indices first to avoid borrow conflict (doc.uris vs doc.images).
     let image_uri_indices: Vec<usize> = doc

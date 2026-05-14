@@ -94,7 +94,7 @@ fn build_hwp_internal_document(hwp_doc: &HwpDocument) -> InternalDocument {
         let extracted = ExtractedImage {
             data: Bytes::from(image.data.clone()),
             format,
-            image_index: idx,
+            image_index: idx as u32,
             page_number: None,
             width: None,
             height: None,

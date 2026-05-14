@@ -54,7 +54,7 @@ use super::table::HocrWord;
 ///
 /// Returns `Ok(None)` if the detection is filtered out due to low `box_score`.
 #[cfg(feature = "paddle-ocr")]
-pub(crate) fn text_block_to_element(block: &TextBlock, page_number: usize) -> Result<Option<OcrElement>> {
+pub(crate) fn text_block_to_element(block: &TextBlock, page_number: u32) -> Result<Option<OcrElement>> {
     // Filter ghost detections: box_score below 0.3 indicates unreliable detection
     if block.box_score < 0.3 {
         return Ok(None);
@@ -176,7 +176,7 @@ pub(crate) fn tsv_row_to_element(row: &TsvRow) -> OcrElement {
 
     let mut element = OcrElement::new(row.text.clone(), geometry, confidence)
         .with_level(level)
-        .with_page_number(row.page_num as usize)
+        .with_page_number(row.page_num as u32)
         .with_metadata("backend", serde_json::json!("tesseract"))
         .with_metadata("block_num", serde_json::json!(row.block_num))
         .with_metadata("par_num", serde_json::json!(row.par_num))
@@ -211,7 +211,7 @@ pub(crate) fn iterator_word_to_element(
     word: &kreuzberg_tesseract::WordData,
     block_type: Option<kreuzberg_tesseract::TessPolyBlockType>,
     para_info: Option<&kreuzberg_tesseract::ParaInfo>,
-    page_number: usize,
+    page_number: u32,
 ) -> OcrElement {
     // Compute width/height from right/bottom - left/top, clamping to zero if inverted.
     let left = word.left.max(0) as u32;

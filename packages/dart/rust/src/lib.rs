@@ -818,6 +818,7 @@ pub struct ChunkMetadata {
     pub first_page: Option<i64>,
     pub last_page: Option<i64>,
     pub heading_context: Option<HeadingContext>,
+    pub image_indices: Vec<i64>,
 }
 
 #[frb(mirror(ExtractedImage))]
@@ -1320,7 +1321,7 @@ pub struct PageContent {
     pub page_number: i64,
     pub content: String,
     pub tables: Vec<Table>,
-    pub images: Vec<ExtractedImage>,
+    pub image_indices: Vec<i64>,
     pub hierarchy: Option<PageHierarchy>,
     pub is_blank: Option<bool>,
     pub layout_regions: Option<Vec<LayoutRegion>>,
@@ -3237,6 +3238,7 @@ impl From<kreuzberg::ChunkMetadata> for ChunkMetadata {
             first_page: v.first_page.map(|x| x as _),
             last_page: v.last_page.map(|x| x as _),
             heading_context: v.heading_context.map(HeadingContext::from),
+            image_indices: v.image_indices.into_iter().map(|x| x as _).collect(),
         }
     }
 }
@@ -3914,11 +3916,7 @@ impl From<kreuzberg::PageContent> for PageContent {
             page_number: v.page_number as _,
             content: v.content,
             tables: v.tables.into_iter().map(|a| Table::from((*a).clone())).collect(),
-            images: v
-                .images
-                .into_iter()
-                .map(|a| ExtractedImage::from((*a).clone()))
-                .collect(),
+            image_indices: v.image_indices.into_iter().map(|x| x as _).collect(),
             hierarchy: v.hierarchy.map(PageHierarchy::from),
             is_blank: v.is_blank.map(|x| x as _),
             layout_regions: v

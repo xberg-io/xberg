@@ -226,7 +226,7 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
         tables.push(Table {
             cells: grid,
             markdown,
-            page_number: page_index + 1,
+            page_number: (page_index + 1) as u32,
             bounding_box,
         });
     }
@@ -625,7 +625,7 @@ pub(in crate::pdf::structure) fn recognize_tables_slanet(
         tables.push(Table {
             cells: grid,
             markdown,
-            page_number: page_index + 1,
+            page_number: (page_index + 1) as u32,
             bounding_box,
         });
     }

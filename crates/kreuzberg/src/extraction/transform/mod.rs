@@ -67,7 +67,13 @@ pub fn transform_extraction_result_to_elements(result: &ExtractionResult) -> Vec
 
             // 3. Process images on this page
             let all_images = result.images.as_deref().unwrap_or(&[]);
-            process_images(&mut elements, &page.image_indices, all_images, page_number, &result.metadata.title);
+            process_images(
+                &mut elements,
+                &page.image_indices,
+                all_images,
+                page_number,
+                &result.metadata.title,
+            );
 
             // 4. Process page content (body text, list items, paragraphs).
             // Skipped when hierarchy already emitted body elements with coordinates
@@ -77,7 +83,7 @@ pub fn transform_extraction_result_to_elements(result: &ExtractionResult) -> Vec
             }
 
             // 5. Add PageBreak after each page (except the last)
-            if page_number < pages.len() {
+            if page_number < pages.len() as u32 {
                 add_page_break(&mut elements, page_number, page_number + 1, &result.metadata.title);
             }
         }
