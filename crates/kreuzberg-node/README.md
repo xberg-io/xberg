@@ -91,7 +91,6 @@ pnpm add @kreuzberg/node
 ### Platform Support
 
 Pre-built binaries available for:
-
 - macOS (arm64, x64)
 - Linux (x64)
 - Windows (x64)
@@ -241,14 +240,12 @@ try {
 ```
 
 **Performance Benefits:**
-
 - **Parallel Processing**: Multiple documents extracted simultaneously
 - **CPU Utilization**: Maximizes multi-core CPU usage for large batches
 - **Queue Management**: Automatically distributes work across available workers
 - **Resource Control**: Prevents thread exhaustion with configurable pool size
 
 **Best Practices:**
-
 - Use worker pools for batches of 10+ documents
 - Set pool size to number of CPU cores (default behavior)
 - Always close pools with `closeWorkerPool()` to prevent resource leaks

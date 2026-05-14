@@ -1,4 +1,4 @@
-# C
+# C#
 
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 20px 0;">
   <!-- Built with -->
@@ -85,7 +85,7 @@ dotnet add package Kreuzberg
 
 Or via NuGet Package Manager:
 
-```text
+```
 Install-Package Kreuzberg
 ```
 

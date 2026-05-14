@@ -1337,13 +1337,6 @@ KREUZBERGSecurityLimits *kreuzberg_extraction_config_security_limits(const KREUZ
 KREUZBERGOutputFormat *kreuzberg_extraction_config_output_format(const KREUZBERGExtractionConfig *ptr);
 
 /**
- * Get the `layout` field from a `ExtractionConfig`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-KREUZBERGLayoutDetectionConfig *kreuzberg_extraction_config_layout(const KREUZBERGExtractionConfig *ptr);
-
-/**
  * Get the `use_layout_for_markdown` field from a `ExtractionConfig`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -1572,13 +1565,6 @@ KREUZBERGOutputFormat *kreuzberg_file_extraction_config_output_format(const KREU
  * Pointer must be a valid handle returned by this library.
  */
 int32_t kreuzberg_file_extraction_config_include_document_structure(const KREUZBERGFileExtractionConfig *ptr);
-
-/**
- * Get the `layout` field from a `FileExtractionConfig`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-KREUZBERGLayoutDetectionConfig *kreuzberg_file_extraction_config_layout(const KREUZBERGFileExtractionConfig *ptr);
 
 /**
  * Get the `timeout_secs` field from a `FileExtractionConfig`.
@@ -10569,50 +10555,6 @@ uintptr_t kreuzberg_ocr_cache_stats_total_files(const KREUZBERGOcrCacheStats *pt
 double kreuzberg_ocr_cache_stats_total_size_mb(const KREUZBERGOcrCacheStats *ptr);
 
 /**
- * Create a `RecognizedTable` from a JSON string. Returns null on failure.
- * # Safety
- * JSON string must be valid UTF-8 and null-terminated.
- * Returned handle must be freed with `kreuzberg_recognized_table_free`.
- */
-KREUZBERGRecognizedTable *kreuzberg_recognized_table_from_json(const char *json);
-
-/**
- * Serialize a `RecognizedTable` to a JSON string. Returns null on failure.
- * # Safety
- * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
- * The returned string must be freed with `kreuzberg_free_string`.
- */
-char *kreuzberg_recognized_table_to_json(const KREUZBERGRecognizedTable *ptr);
-
-/**
- * Free a `RecognizedTable` handle.
- * # Safety
- * Pointer must have been returned by this library, or be null.
- */
-void kreuzberg_recognized_table_free(KREUZBERGRecognizedTable *ptr);
-
-/**
- * Get the `detection_bbox` field from a `RecognizedTable`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-KREUZBERGBBox *kreuzberg_recognized_table_detection_bbox(const KREUZBERGRecognizedTable *ptr);
-
-/**
- * Get the `cells` field from a `RecognizedTable`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-char *kreuzberg_recognized_table_cells(const KREUZBERGRecognizedTable *ptr);
-
-/**
- * Get the `markdown` field from a `RecognizedTable`.
- * # Safety
- * Pointer must be a valid handle returned by this library.
- */
-char *kreuzberg_recognized_table_markdown(const KREUZBERGRecognizedTable *ptr);
-
-/**
  * Free a `TessdataManager` handle.
  * # Safety
  * Pointer must have been returned by this library, or be null.
@@ -10641,7 +10583,8 @@ int32_t kreuzberg_tessdata_manager_is_language_cached(const KREUZBERGTessdataMan
  *
  * Skips files that already exist. Returns the count of newly downloaded files.
  *
- * Requires the `paddle-ocr` feature for HTTP download support (ureq).
+ * When the `paddle-ocr` feature is not enabled, no download URLs are available
+ * and this method always returns `Ok(0)`.
  * # Safety
  * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
@@ -11107,6 +11050,50 @@ float kreuzberg_layout_detection_confidence(const KREUZBERGLayoutDetection *ptr)
  * Pointer must be a valid handle returned by this library.
  */
 KREUZBERGBBox *kreuzberg_layout_detection_bbox(const KREUZBERGLayoutDetection *ptr);
+
+/**
+ * Create a `RecognizedTable` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_recognized_table_free`.
+ */
+KREUZBERGRecognizedTable *kreuzberg_recognized_table_from_json(const char *json);
+
+/**
+ * Serialize a `RecognizedTable` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_recognized_table_to_json(const KREUZBERGRecognizedTable *ptr);
+
+/**
+ * Free a `RecognizedTable` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_recognized_table_free(KREUZBERGRecognizedTable *ptr);
+
+/**
+ * Get the `detection_bbox` field from a `RecognizedTable`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBBox *kreuzberg_recognized_table_detection_bbox(const KREUZBERGRecognizedTable *ptr);
+
+/**
+ * Get the `cells` field from a `RecognizedTable`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_recognized_table_cells(const KREUZBERGRecognizedTable *ptr);
+
+/**
+ * Get the `markdown` field from a `RecognizedTable`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_recognized_table_markdown(const KREUZBERGRecognizedTable *ptr);
 
 /**
  * Create a `DetectionResult` from a JSON string. Returns null on failure.

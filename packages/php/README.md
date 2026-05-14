@@ -137,8 +137,7 @@ if (count($result->tables) > 0) {
     }
 }
 ```
-
-```text
+```
 
 ### Common Use Cases
 
@@ -277,8 +276,7 @@ if ($avgCharsPerPage < 100) {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
 ```
-
-```text
+```
 
 
 #### Table Extraction
@@ -445,8 +443,7 @@ foreach ($batches as $index => $batch) {
 
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
-
-```text
+```
 
 
 ### Next Steps
@@ -695,8 +692,7 @@ if ($avgCharsPerPage < 100) {
     echo "Pass: Moderate - Text extracted successfully\n";
 }
 ```
-
-```text
+```
 
 
 ## Plugin System
@@ -872,8 +868,7 @@ foreach ($batches as $index => $batch) {
 
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
-
-```text
+```
 
 
 ## Configuration

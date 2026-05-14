@@ -36,14 +36,6 @@ kreuzberg = { path = "../kreuzberg", default-features = false, features = ["andr
 [features]
 default = []
 
-[lints.rust]
-# alef-backend-ffi's trait-bridge async dispatch emits `let result = result.clone();`
-# on `&[&str]` slices (a no-op since slices don't impl Clone). This is a known
-# codegen quirk in the alef-generated FFI surface; allow it crate-wide so the
-# build does not fail under `-D warnings` until alef emits proper Vec<String>
-# capture there.
-noop_method_call = "allow"
-
 [build-dependencies]
 cbindgen = "0.29"
 
