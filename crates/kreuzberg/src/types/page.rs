@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 // Import serde helper and types from sibling modules
-use super::extraction::{BoundingBox, ExtractedImage};
+use super::extraction::BoundingBox;
 use super::serde_helpers::serde_vec_arc;
 use super::tables::Table;
 
@@ -149,13 +149,12 @@ pub struct PageContent {
     #[cfg_attr(feature = "api", schema(value_type = Vec<Table>))]
     pub tables: Vec<Arc<Table>>,
 
-    /// Images found on this page (uses Arc for memory efficiency)
+    /// Indices into `ExtractionResult.images` for images found on this page.
     ///
-    /// Serializes as Vec<ExtractedImage> for JSON compatibility while maintaining
-    /// Arc semantics in-memory for zero-copy sharing.
-    #[serde(skip_serializing_if = "Vec::is_empty", default, with = "serde_vec_arc")]
-    #[cfg_attr(feature = "api", schema(value_type = Vec<ExtractedImage>))]
-    pub images: Vec<Arc<ExtractedImage>>,
+    /// Each value is a zero-based index into the top-level `images` collection.
+    /// Only populated when `extract_images = true` in the extraction config.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub image_indices: Vec<usize>,
 
     /// Hierarchy information for the page (when hierarchy extraction is enabled)
     ///

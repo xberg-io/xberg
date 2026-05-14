@@ -66,7 +66,8 @@ pub fn transform_extraction_result_to_elements(result: &ExtractionResult) -> Vec
             process_tables(&mut elements, &page.tables, page_number, &result.metadata.title);
 
             // 3. Process images on this page
-            process_images(&mut elements, &page.images, page_number, &result.metadata.title);
+            let all_images = result.images.as_deref().unwrap_or(&[]);
+            process_images(&mut elements, &page.image_indices, all_images, page_number, &result.metadata.title);
 
             // 4. Process page content (body text, list items, paragraphs).
             // Skipped when hierarchy already emitted body elements with coordinates
@@ -267,7 +268,7 @@ mod tests {
                     page_number: 1,
                     content: "This is a test paragraph.\n\nAnother paragraph here.".to_string(),
                     tables: vec![],
-                    images: vec![],
+                    image_indices: vec![],
                     hierarchy: Some(PageHierarchy {
                         block_count: 2,
                         blocks: vec![
@@ -292,7 +293,7 @@ mod tests {
                     page_number: 2,
                     content: "- List item 1\n- List item 2".to_string(),
                     tables: vec![],
-                    images: vec![],
+                    image_indices: vec![],
                     hierarchy: None,
                     is_blank: None,
                     layout_regions: None,
@@ -383,11 +384,12 @@ mod tests {
             content: "Test content".to_string(),
             mime_type: Cow::Borrowed("application/pdf"),
             metadata: test_metadata(Some("Test".to_string())),
+            images: Some(vec![image]),
             pages: Some(vec![PageContent {
                 page_number: 1,
                 content: "Some text".to_string(),
                 tables: vec![Arc::new(table)],
-                images: vec![Arc::new(image)],
+                image_indices: vec![0],
                 hierarchy: None,
                 is_blank: None,
                 layout_regions: None,
@@ -570,7 +572,7 @@ mod tests {
                 page_number: 1,
                 content: "Some body text here.".to_string(),
                 tables: vec![],
-                images: vec![],
+                image_indices: vec![],
                 hierarchy: Some(PageHierarchy {
                     block_count: 2,
                     blocks: vec![
@@ -642,7 +644,7 @@ mod tests {
                 page_number: 1,
                 content: "Paragraph one.\n\nParagraph two.".to_string(),
                 tables: vec![],
-                images: vec![],
+                image_indices: vec![],
                 hierarchy: Some(PageHierarchy {
                     block_count: 1,
                     blocks: vec![HierarchicalBlock {

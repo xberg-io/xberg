@@ -103,6 +103,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: `PageContent.images` replaced by `PageContent.image_indices` (#777)**:
+  `PageContent.images: Vec<Arc<ExtractedImage>>` is removed. Pages now carry
+  `image_indices: Vec<usize>` — zero-based indices into the top-level
+  `ExtractionResult.images` collection. `ChunkMetadata` gains the same
+  `image_indices: Vec<usize>` field (populated post-chunking by matching
+  each image's `page_number` against the chunk's `[first_page, last_page]`
+  range). **Migration:** replace `page.images[i].data` with
+  `result.images.as_ref().unwrap()[page.image_indices[i]].data`. All image
+  data still lives in `ExtractionResult.images`; pages and chunks reference
+  it by index rather than carrying full copies.
+
 - **BREAKING (wire format)**: `LayoutClass` now serializes as snake_case
   in JSON output (e.g. `"list_item"` instead of `"ListItem"`).
   `LayoutDetection.class_name` returned by HTTP/MCP/Python APIs flips

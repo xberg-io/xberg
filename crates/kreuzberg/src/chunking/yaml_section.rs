@@ -172,9 +172,14 @@ fn build_chunks_from_sections(sections: &[Section], config: &ChunkingConfig) -> 
                     token_count: None,
                     chunk_index: 0,
                     total_chunks: 0,
+                    // Section chunker does not track page provenance, so first_page/last_page
+                    // remain None. features.rs skips image_indices population for chunks where
+                    // either bound is None, so YAML-section chunks always have empty image_indices
+                    // regardless of whether images were extracted.
                     first_page: None,
                     last_page: None,
                     heading_context: None,
+                    image_indices: Vec::new(),
                 },
             });
         } else {
@@ -200,6 +205,7 @@ fn build_chunks_from_sections(sections: &[Section], config: &ChunkingConfig) -> 
                         first_page: None,
                         last_page: None,
                         heading_context: None,
+                        image_indices: Vec::new(),
                     },
                 });
             }

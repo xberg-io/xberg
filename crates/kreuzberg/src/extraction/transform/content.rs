@@ -319,12 +319,13 @@ pub(super) fn process_tables(
 /// Process images on a page into Image elements.
 pub(super) fn process_images(
     elements: &mut Vec<Element>,
-    images: &[std::sync::Arc<crate::types::ExtractedImage>],
+    image_indices: &[usize],
+    all_images: &[crate::types::ExtractedImage],
     page_number: usize,
     title: &Option<String>,
 ) {
-    for (image_index, image_arc) in images.iter().enumerate() {
-        let image = image_arc.as_ref();
+    for &idx in image_indices {
+        let Some(image) = all_images.get(idx) else { continue };
         let image_text = format!(
             "Image: {} ({}x{})",
             image.format,
@@ -344,7 +345,7 @@ pub(super) fn process_images(
                 element_index: Some(elements.len()),
                 additional: {
                     let mut m = HashMap::new();
-                    m.insert("image_index".to_string(), image_index.to_string());
+                    m.insert("image_index".to_string(), idx.to_string());
                     m.insert("format".to_string(), image.format.to_string());
                     if let Some(width) = image.width {
                         m.insert("width".to_string(), width.to_string());

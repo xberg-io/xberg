@@ -439,6 +439,14 @@ pub struct ChunkMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub heading_context: Option<HeadingContext>,
+
+    /// Indices into `ExtractionResult.images` for images on pages covered by this chunk.
+    ///
+    /// Contains zero-based indices into the top-level `images` collection for every
+    /// image whose `page_number` falls within `[first_page, last_page]`.
+    /// Empty when image extraction is disabled or the chunk spans no pages with images.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub image_indices: Vec<usize>,
 }
 
 /// Heuristic classification of what an image likely depicts.

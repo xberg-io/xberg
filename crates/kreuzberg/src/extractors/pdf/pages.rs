@@ -93,17 +93,17 @@ pub(crate) fn assign_tables_and_images_to_pages(
         }
     }
 
-    for image in images {
+    for (idx, image) in images.iter().enumerate() {
         if let Some(page_num) = image.page_number
             && let Some(page) = updated_pages.iter_mut().find(|p| p.page_number == page_num)
         {
-            page.images.push(std::sync::Arc::new(image.clone()));
+            page.image_indices.push(idx);
         }
     }
 
     // Refine is_blank: pages that gained tables or images are not blank
     for page in &mut updated_pages {
-        if !page.tables.is_empty() || !page.images.is_empty() {
+        if !page.tables.is_empty() || !page.image_indices.is_empty() {
             page.is_blank = Some(false);
         }
     }

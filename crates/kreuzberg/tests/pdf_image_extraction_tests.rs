@@ -370,3 +370,209 @@ fn test_djot_content_has_no_image_refs_when_disabled_via_pdf_options() {
         "Djot output (pdf_options path) must not contain image refs when extract_images=false"
     );
 }
+
+// ─── Page-level and chunk-level image index references ────────────────────────
+//
+// Pages carry `image_indices: Vec<usize>` — zero-based indices into the
+// top-level `ExtractionResult.images` collection. Chunks carry the same field.
+
+fn extract_with_pages_and_images(relative_path: &str) -> kreuzberg::types::ExtractionResult {
+    use kreuzberg::core::config::{ImageExtractionConfig, PageConfig};
+    let path = test_documents_dir().join(relative_path);
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        images: Some(ImageExtractionConfig {
+            extract_images: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(extract_file(&path, None, &config)).unwrap()
+}
+
+/// Pages that contain images must have non-empty `image_indices` pointing into
+/// `ExtractionResult.images`. Every index must be in-bounds.
+#[test]
+fn test_page_image_indices_are_valid_when_images_extracted() {
+    let result = extract_with_pages_and_images("pdf/embedded_images_tables.pdf");
+
+    let images = result.images.as_ref().expect("images must be Some");
+    assert!(!images.is_empty(), "fixture must have extracted images");
+
+    let pages = result.pages.as_ref().expect("pages must be Some when extract_pages=true");
+    assert!(!pages.is_empty(), "fixture must have pages");
+
+    // At least one page must carry image_indices (not all pages need images).
+    let pages_with_images: Vec<_> = pages.iter().filter(|p| !p.image_indices.is_empty()).collect();
+    assert!(
+        !pages_with_images.is_empty(),
+        "at least one page must have image_indices populated when the PDF contains images"
+    );
+
+    // Every index must be in-bounds and the referenced image must report
+    // belonging to this page (cross-validation: wrong-page bugs would pass a
+    // bounds-only check).
+    for page in pages {
+        for &idx in &page.image_indices {
+            assert!(
+                idx < images.len(),
+                "page {} image_indices[{}] = {} is out of bounds (images.len() = {})",
+                page.page_number,
+                idx,
+                idx,
+                images.len()
+            );
+            let img_page = images[idx].page_number;
+            assert_eq!(
+                img_page,
+                Some(page.page_number),
+                "image at index {} has page_number {:?} but is referenced by page {}",
+                idx,
+                img_page,
+                page.page_number
+            );
+        }
+    }
+}
+
+/// `image_indices` on pages must be empty when image extraction is disabled.
+#[test]
+fn test_page_image_indices_empty_when_images_disabled() {
+    use kreuzberg::core::config::{ImageExtractionConfig, PageConfig};
+    let path = test_documents_dir().join("pdf/embedded_images_tables.pdf");
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        images: Some(ImageExtractionConfig {
+            extract_images: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(extract_file(&path, None, &config)).unwrap();
+
+    if let Some(pages) = result.pages.as_ref() {
+        for page in pages {
+            assert!(
+                page.image_indices.is_empty(),
+                "page {} must have no image_indices when extract_images=false",
+                page.page_number
+            );
+        }
+    }
+}
+
+#[cfg(feature = "chunking")]
+fn extract_with_pages_images_and_chunks(relative_path: &str) -> kreuzberg::types::ExtractionResult {
+    use kreuzberg::core::config::{ChunkingConfig, ImageExtractionConfig, PageConfig};
+    let path = test_documents_dir().join(relative_path);
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        images: Some(ImageExtractionConfig {
+            extract_images: true,
+            ..Default::default()
+        }),
+        chunking: Some(ChunkingConfig {
+            max_characters: 500,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(extract_file(&path, None, &config)).unwrap()
+}
+
+/// Chunks that span pages containing images must have non-empty `image_indices`.
+/// Every index must be in-bounds, and the referenced image's `page_number` must
+/// fall within the chunk's `[first_page, last_page]` range.
+#[cfg(feature = "chunking")]
+#[test]
+fn test_chunk_image_indices_are_valid_when_images_extracted() {
+    let result = extract_with_pages_images_and_chunks("pdf/embedded_images_tables.pdf");
+
+    let images = result.images.as_ref().expect("images must be Some");
+    assert!(!images.is_empty(), "fixture must have extracted images");
+
+    let chunks = result.chunks.as_ref().expect("chunks must be Some when chunking is configured");
+    assert!(!chunks.is_empty(), "fixture must produce chunks");
+
+    // At least one chunk must carry image_indices.
+    let chunks_with_images: Vec<_> = chunks.iter().filter(|c| !c.metadata.image_indices.is_empty()).collect();
+    assert!(
+        !chunks_with_images.is_empty(),
+        "at least one chunk must have image_indices when the PDF contains images"
+    );
+
+    for chunk in chunks {
+        for &idx in &chunk.metadata.image_indices {
+            // In-bounds check.
+            assert!(
+                idx < images.len(),
+                "chunk image_indices[{}] = {} is out of bounds (images.len() = {})",
+                idx,
+                idx,
+                images.len()
+            );
+
+            // Cross-validation: referenced image must belong to a page within
+            // the chunk's page range.
+            if let (Some(first), Some(last)) = (chunk.metadata.first_page, chunk.metadata.last_page) {
+                let img_page = images[idx].page_number.expect(
+                    "image referenced by a chunk must have a page_number set",
+                );
+                assert!(
+                    img_page >= first && img_page <= last,
+                    "image at index {} is on page {} but chunk covers pages [{}, {}]",
+                    idx,
+                    img_page,
+                    first,
+                    last
+                );
+            }
+        }
+    }
+}
+
+/// `image_indices` on chunks must be empty when image extraction is disabled.
+#[cfg(feature = "chunking")]
+#[test]
+fn test_chunk_image_indices_empty_when_images_disabled() {
+    use kreuzberg::core::config::{ChunkingConfig, ImageExtractionConfig};
+    let path = test_documents_dir().join("pdf/embedded_images_tables.pdf");
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        images: Some(ImageExtractionConfig {
+            extract_images: false,
+            ..Default::default()
+        }),
+        chunking: Some(ChunkingConfig {
+            max_characters: 500,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(extract_file(&path, None, &config)).unwrap();
+
+    if let Some(chunks) = result.chunks.as_ref() {
+        for chunk in chunks {
+            assert!(
+                chunk.metadata.image_indices.is_empty(),
+                "chunk must have no image_indices when extract_images=false"
+            );
+        }
+    }
+}

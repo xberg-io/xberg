@@ -711,16 +711,15 @@ fn build_pages(doc: &InternalDocument) -> Option<Vec<PageContent>> {
         return None;
     }
 
-    // Pre-wrap tables and images in Arc once; clone the Arc (cheap) per page reference.
+    // Pre-wrap tables in Arc once; clone the Arc (cheap) per page reference.
     let arc_tables: Vec<Arc<Table>> = doc.tables.iter().map(|t| Arc::new(t.clone())).collect();
-    let arc_images: Vec<Arc<crate::types::ExtractedImage>> = doc.images.iter().map(|i| Arc::new(i.clone())).collect();
 
     let pages: Vec<PageContent> = page_map
         .into_iter()
         .map(|(page_num, elems)| {
             let mut content = String::new();
             let mut tables = Vec::new();
-            let mut images = Vec::new();
+            let mut image_indices = Vec::new();
             for elem in &elems {
                 if elem.kind.is_container_start() || elem.kind.is_container_end() {
                     continue;
@@ -732,8 +731,8 @@ fn build_pages(doc: &InternalDocument) -> Option<Vec<PageContent>> {
                         }
                     }
                     ElementKind::Image { image_index } => {
-                        if let Some(arc_image) = arc_images.get(image_index as usize) {
-                            images.push(Arc::clone(arc_image));
+                        if (image_index as usize) < doc.images.len() {
+                            image_indices.push(image_index as usize);
                         }
                     }
                     _ => {}
@@ -750,7 +749,7 @@ fn build_pages(doc: &InternalDocument) -> Option<Vec<PageContent>> {
                 page_number: page_num as usize,
                 content,
                 tables,
-                images,
+                image_indices,
                 hierarchy: None,
                 is_blank: None,
                 layout_regions: None,

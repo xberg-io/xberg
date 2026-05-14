@@ -165,7 +165,7 @@ mod tests {
                     bounding_box: None,
                 }),
             ],
-            images: Vec::new(),
+            image_indices: Vec::new(),
             hierarchy: None,
             is_blank: None,
             layout_regions: None,
@@ -182,50 +182,12 @@ mod tests {
     }
 
     #[test]
-    fn test_page_content_arc_images_roundtrip() {
-        let image1 = Arc::new(ExtractedImage {
-            data: Bytes::from_static(&[0xFF, 0xD8, 0xFF]),
-            format: Cow::Borrowed("jpeg"),
-            image_index: 0,
-            page_number: Some(1),
-            width: Some(100),
-            height: Some(200),
-            colorspace: Some("RGB".to_string()),
-            bits_per_component: Some(8),
-            is_mask: false,
-            description: Some("Image 1".to_string()),
-            ocr_result: None,
-            bounding_box: None,
-            source_path: None,
-            image_kind: None,
-            kind_confidence: None,
-            cluster_id: None,
-        });
-
-        let image2 = Arc::new(ExtractedImage {
-            data: Bytes::from_static(&[0x89, 0x50, 0x4E]),
-            format: Cow::Borrowed("png"),
-            image_index: 1,
-            page_number: Some(1),
-            width: Some(300),
-            height: Some(400),
-            colorspace: Some("RGBA".to_string()),
-            bits_per_component: Some(8),
-            is_mask: false,
-            description: Some("Image 2".to_string()),
-            ocr_result: None,
-            bounding_box: None,
-            source_path: None,
-            image_kind: None,
-            kind_confidence: None,
-            cluster_id: None,
-        });
-
+    fn test_page_content_image_indices_roundtrip() {
         let page = PageContent {
             page_number: 1,
             content: "Page with images".to_string(),
             tables: Vec::new(),
-            images: vec![image1, image2],
+            image_indices: vec![0, 1],
             hierarchy: None,
             is_blank: None,
             layout_regions: None,
@@ -234,11 +196,12 @@ mod tests {
         let json = serde_json::to_string(&page).unwrap();
         let deserialized: PageContent = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(deserialized.images.len(), 2);
-        assert_eq!(deserialized.images[0].format, "jpeg");
-        assert_eq!(deserialized.images[0].width, Some(100));
-        assert_eq!(deserialized.images[1].format, "png");
-        assert_eq!(deserialized.images[1].height, Some(400));
+        assert_eq!(deserialized.image_indices, vec![0, 1]);
+
+        // Verify JSON shape: image_indices is a plain array of integers.
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["image_indices"][0], 0);
+        assert_eq!(v["image_indices"][1], 1);
     }
 
     #[test]
@@ -254,7 +217,7 @@ mod tests {
             page_number: 1,
             content: "Page 1".to_string(),
             tables: vec![Arc::clone(&shared_table)],
-            images: Vec::new(),
+            image_indices: Vec::new(),
             hierarchy: None,
             is_blank: None,
             layout_regions: None,
@@ -264,7 +227,7 @@ mod tests {
             page_number: 2,
             content: "Page 2".to_string(),
             tables: vec![Arc::clone(&shared_table)],
-            images: Vec::new(),
+            image_indices: Vec::new(),
             hierarchy: None,
             is_blank: None,
             layout_regions: None,
@@ -287,7 +250,7 @@ mod tests {
             page_number: 5,
             content: "No tables or images".to_string(),
             tables: Vec::new(),
-            images: Vec::new(),
+            image_indices: Vec::new(),
             hierarchy: None,
             is_blank: None,
             layout_regions: None,
@@ -298,7 +261,7 @@ mod tests {
 
         assert_eq!(deserialized.page_number, 5);
         assert_eq!(deserialized.tables.len(), 0);
-        assert_eq!(deserialized.images.len(), 0);
+        assert_eq!(deserialized.image_indices.len(), 0);
     }
 
     #[test]

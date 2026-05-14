@@ -90,6 +90,7 @@ where
                 first_page,
                 last_page,
                 heading_context: None,
+                image_indices: Vec::new(),
             },
         });
     }

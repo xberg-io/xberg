@@ -183,7 +183,7 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
                 page_number,
                 content: page_text,
                 tables: Vec::new(),
-                images: Vec::new(),
+                image_indices: Vec::new(),
                 hierarchy: None,
                 is_blank,
                 layout_regions: None,
