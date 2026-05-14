@@ -151,6 +151,14 @@ const KNOWN_THIRD_PARTY_SIZES: &[(&str, u64, u64, u64, &str)] = &[
     // playa-pdf: pure Python PDF library, very lightweight.
     // pip-weigh: ~2.5 MB total (playa-pdf + pdfminer.six dependency).
     ("playa-pdf", 2_500_000, 0, 0, "playa-pdf PDF extraction"),
+    // kreuzberg-cli: single statically-linked Rust binary on Linux x86_64 release build with
+    // --features ocr,paddle-ocr,layout-detection,embeddings. Measured 57.7 MB on the local
+    // dev machine (ARM macOS); CI Linux release build is within ±5 MB. Bundles Tesseract +
+    // Leptonica + ONNX Runtime + tree-sitter language pack — zero system deps required.
+    // Model downloads (on first use of the relevant feature, cached under ~/.cache/kreuzberg):
+    //   RT-DETR v2 layout ~50 MB, PaddleOCR det/rec/cls ~30 MB each, default embedding
+    //   preset (bge-small) ~130 MB, optional auto-rotate PP-LCNet ~10 MB ≈ 250 MB ceiling.
+    ("kreuzberg", 58_000_000, 0, 250_000_000, "Kreuzberg document intelligence (Rust)"),
 ];
 
 /// Look up a hardcoded third-party size entry.
