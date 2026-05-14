@@ -8,8 +8,6 @@ readme = false
 keywords = ["document", "extraction", "pdf", "ocr", "text"]
 categories = ["text-processing"]
 
-[package.metadata.cargo-machete]
-ignored = ["serde"]
 
 [lib]
 crate-type = ["cdylib"]

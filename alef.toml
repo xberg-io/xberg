@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.15.61"
+alef_version = "0.15.62"
 languages = [
   "python",
   "node",
@@ -416,6 +416,15 @@ lib_name = "kreuzberg"
 style = "frb"
 features = ["full"]
 stub_methods = ["batch_extract_bytes", "batch_extract_bytes_sync"]
+
+# x86_64-linux-android (emulator) lacks an ORT prebuilt and there is no path
+# to get one short of compiling ORT from source for that triple. All other
+# targets (incl. arm64 Android phones via pyke prebuilts) keep the full
+# ORT-enabled feature set.
+[[crates.dart.target_dep_overrides]]
+cfg = 'all(target_os = "android", target_arch = "x86_64")'
+features = ["android-target"]
+default_features = false
 
 [crates.kotlin]
 package = "dev.kreuzberg"

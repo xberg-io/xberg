@@ -1,6 +1,10 @@
 name: CI Lint
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -84,17 +88,11 @@ jobs:
       - name: Install alef CLI
         uses: kreuzberg-dev/actions/install-alef@v1
 
-      - name: Run universal prek hooks
+      - name: Run all prek hooks
         uses: j178/prek-action@v2
         with:
           cache: false
-          extra-args: trailing-whitespace end-of-file-fixer check-merge-conflict check-added-large-files detect-private-key check-json check-yaml check-toml check-case-conflict pyproject-fmt cargo-sort shfmt shellcheck actionlint ai-rulez-generate alef-verify alef-sync-versions --all-files
-
-      - name: Run code lint hooks
-        uses: j178/prek-action@v2
-        with:
-          cache: false
-          extra-args: cargo-fmt cargo-clippy typos rumdl-fmt textlint helm-lint kubeconform --all-files
+          extra-args: --all-files
 
       - name: Validate C header
         shell: bash

@@ -16,8 +16,6 @@ readme = "README.md"
 [package.metadata.cargo-machete]
 ignored = [
     "liter-llm",
-    "minijinja",
-    "opentelemetry",
     "opentelemetry_sdk",
     "tracing-opentelemetry",
     "kamadak-exif",
