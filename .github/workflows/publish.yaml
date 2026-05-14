@@ -675,6 +675,7 @@ jobs:
           php-version: ${{ matrix.php }}
           php-ts: nts
           target: ${{ matrix.platform.target }}
+          windows-compiler: ${{ contains(matrix.platform.target, 'windows') && 'vs17' || '' }}
           version: ${{ needs.prepare.outputs.version }}
           output-dir: dist/php-package
 
