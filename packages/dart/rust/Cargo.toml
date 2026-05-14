@@ -27,3 +27,9 @@ kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, feat
 # flutter_rust_bridge uses #[cfg(frb_expand)] internally during macro expansion.
 # Declare it as a known cfg so rustc does not emit unexpected_cfgs warnings.
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+# Alef emits `pub(crate) inner: ...` opaque-mirror fields for every Rust newtype.
+# Some are unread within the dart wrapper itself (their job is to keep ownership
+# and pass through frb). RUSTFLAGS=-D warnings in CI promotes the unused-field
+# warning to an error on Windows; mask it at the crate level since these fields
+# are part of the alef-emitted contract, not dead code we control.
+dead_code = "allow"
