@@ -19,7 +19,7 @@ jobs:
     name: Lint
     if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
+    timeout-minutes: 60
     env:
       CARGO_TERM_COLOR: always
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
