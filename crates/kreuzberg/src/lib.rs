@@ -230,8 +230,33 @@ pub fn embed_texts(texts: Vec<String>, config: &core::config::EmbeddingConfig) -
     embeddings::embed_texts(&texts, config)
 }
 
+/// Stub for builds without the `embeddings` feature — keeps the symbol available
+/// on no-ORT targets (Android x86_64 emulator, WASM) so language bindings that
+/// mirror the public API compile; the runtime call returns an unsupported error.
+#[cfg(all(feature = "embedding-presets", not(feature = "embeddings")))]
+pub fn embed_texts(
+    _texts: Vec<String>,
+    _config: &core::config::EmbeddingConfig,
+) -> crate::Result<Vec<Vec<f32>>> {
+    Err(KreuzbergError::validation(
+        "embed_texts requires the `embeddings` feature, which depends on ONNX Runtime; \
+         not available on this target (Android x86_64 emulator or WASM)",
+    ))
+}
+
 #[cfg(all(feature = "embeddings", feature = "tokio-runtime"))]
 pub use embeddings::embed_texts_async;
+
+#[cfg(all(feature = "embedding-presets", not(feature = "embeddings"), feature = "tokio-runtime"))]
+pub async fn embed_texts_async(
+    _texts: Vec<String>,
+    _config: &core::config::EmbeddingConfig,
+) -> crate::Result<Vec<Vec<f32>>> {
+    Err(KreuzbergError::validation(
+        "embed_texts_async requires the `embeddings` feature, which depends on ONNX Runtime; \
+         not available on this target (Android x86_64 emulator or WASM)",
+    ))
+}
 
 /// Get an embedding preset by name.
 ///
