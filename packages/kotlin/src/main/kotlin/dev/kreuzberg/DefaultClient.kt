@@ -5,52 +5,43 @@ package dev.kreuzberg.kt
 import java.nio.file.Path
 
 /** Coroutine-friendly wrapper around the Java `dev.kreuzberg.HwpxExtractor` facade. */
-class HwpxExtractor internal constructor(internal val inner: dev.kreuzberg.HwpxExtractor) : AutoCloseable {
-    fun name(): String {
-        return inner.name()
-    }
+class HwpxExtractor internal constructor(
+    internal val inner: dev.kreuzberg.HwpxExtractor,
+) : AutoCloseable {
+    fun name(): String = inner.name()
 
-    fun version(): String {
-        return inner.version()
-    }
+    fun version(): String = inner.version()
 
-    fun initialize(): Unit {
+    fun initialize() {
         inner.initialize()
     }
 
-    fun shutdown(): Unit {
+    fun shutdown() {
         inner.shutdown()
     }
 
-    fun description(): String {
-        return inner.description()
-    }
+    fun description(): String = inner.description()
 
-    fun author(): String {
-        return inner.author()
-    }
+    fun author(): String = inner.author()
 
-    fun supportedMimeTypes(): List<String> {
-        return inner.supportedMimeTypes()
-    }
+    fun supportedMimeTypes(): List<String> = inner.supportedMimeTypes()
 
-    fun priority(): Int {
-        return inner.priority()
-    }
+    fun priority(): Int = inner.priority()
 
-    override fun close() { inner.close() }
+    override fun close() {
+        inner.close()
+    }
 }
+
 /** Coroutine-friendly wrapper around the Java `dev.kreuzberg.TessdataManager` facade. */
-class TessdataManager internal constructor(internal val inner: dev.kreuzberg.TessdataManager) : AutoCloseable {
+class TessdataManager internal constructor(
+    internal val inner: dev.kreuzberg.TessdataManager,
+) : AutoCloseable {
     // Get the cache directory path.
-    fun cacheDir(): Path {
-        return inner.cacheDir()
-    }
+    fun cacheDir(): Path = inner.cacheDir()
 
     // Check if a specific language traineddata file is cached.
-    fun isLanguageCached(lang: String): Boolean {
-        return inner.isLanguageCached(lang)
-    }
+    fun isLanguageCached(lang: String): Boolean = inner.isLanguageCached(lang)
 
     // Downloads all tessdata_fast traineddata files to the cache directory.
     //
@@ -58,9 +49,9 @@ class TessdataManager internal constructor(internal val inner: dev.kreuzberg.Tes
     //
     // When the `paddle-ocr` feature is not enabled, no download URLs are available
     // and this method always returns `Ok(0)`.
-    fun ensureAllLanguages(): Long {
-        return inner.ensureAllLanguages()
-    }
+    fun ensureAllLanguages(): Long = inner.ensureAllLanguages()
 
-    override fun close() { inner.close() }
+    override fun close() {
+        inner.close()
+    }
 }

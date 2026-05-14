@@ -5,6 +5,7 @@ plugins {
   kotlin("jvm") version "2.3.21"
   `maven-publish`
   id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+  id("com.github.ben-manes.versions") version "0.52.0"
 }
 
 group = "dev.kreuzberg"

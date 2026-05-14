@@ -12,8 +12,8 @@
 //!
 //! # Thread Safety
 //!
-//! The intern pool uses a `DashMap` for lock-free concurrent access. Multiple threads
-//! can insert and lookup strings simultaneously without contention.
+//! Interned strings are wrapped in `Arc<str>` for cheap cloning and shared ownership
+//! across threads.
 //!
 //! # Example
 //!

@@ -158,7 +158,13 @@ const KNOWN_THIRD_PARTY_SIZES: &[(&str, u64, u64, u64, &str)] = &[
     // Model downloads (on first use of the relevant feature, cached under ~/.cache/kreuzberg):
     //   RT-DETR v2 layout ~50 MB, PaddleOCR det/rec/cls ~30 MB each, default embedding
     //   preset (bge-small) ~130 MB, optional auto-rotate PP-LCNet ~10 MB ≈ 250 MB ceiling.
-    ("kreuzberg", 58_000_000, 0, 250_000_000, "Kreuzberg document intelligence (Rust)"),
+    (
+        "kreuzberg",
+        58_000_000,
+        0,
+        250_000_000,
+        "Kreuzberg document intelligence (Rust)",
+    ),
 ];
 
 /// Look up a hardcoded third-party size entry.

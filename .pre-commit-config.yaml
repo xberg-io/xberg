@@ -43,7 +43,7 @@ repos:
 
   # Markdown: linting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.15.13
     hooks:
       - id: ruff
         args: [--fix]
@@ -51,7 +51,7 @@ repos:
 
   # Node/TS/WASM: oxlint
   - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
-    rev: v1.0.5
+    rev: v1.0.7
     hooks:
       - id: cargo-sort
         # `-w` (workspace) iterates ALL workspace members regardless of which Cargo.toml
@@ -187,7 +187,7 @@ repos:
       - id: cpd
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.15.66
+    rev: v0.15.70
     hooks:
       - id: alef-verify
       - id: alef-sync-versions

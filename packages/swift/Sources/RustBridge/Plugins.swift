@@ -397,17 +397,23 @@ public final class SwiftDocumentExtractorBox {
     } catch { return encodeErrEnvelope("\(error)") }
   }
 
-  public func alef_extract_bytes(content: RustVec<UInt8>, mime_type: RustString, config: RustString) -> RustString {
+  public func alef_extract_bytes(content: RustVec<UInt8>, mime_type: RustString, config: RustString)
+    -> RustString
+  {
     do {
       let bytes = Array(content)
-      let result = try inner.extractBytes(content: bytes, mimeType: mime_type.toString(), config: config.toString())
+      let result = try inner.extractBytes(
+        content: bytes, mimeType: mime_type.toString(), config: config.toString())
       return RustString("{\"ok\":\(result)}")
     } catch { return encodeErrEnvelope("\(error)") }
   }
 
-  public func alef_extract_file(path: RustString, mime_type: RustString, config: RustString) -> RustString {
+  public func alef_extract_file(path: RustString, mime_type: RustString, config: RustString)
+    -> RustString
+  {
     do {
-      let result = try inner.extractFile(path: path.toString(), mimeType: mime_type.toString(), config: config.toString())
+      let result = try inner.extractFile(
+        path: path.toString(), mimeType: mime_type.toString(), config: config.toString())
       return RustString("{\"ok\":\(result)}")
     } catch { return encodeErrEnvelope("\(error)") }
   }

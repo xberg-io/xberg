@@ -11,8 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Allocates Panama FFM upcall stubs for an IRenderer implementation,
- * assembles the C vtable in native memory, and provides static
+ * Allocates Panama FFM upcall stubs for an IRenderer implementation, assembles the C vtable in native memory, and provides static
  * registerRenderer/unregisterRenderer helpers.
  */
 public final class RendererBridge implements AutoCloseable {
@@ -22,8 +21,7 @@ public final class RendererBridge implements AutoCloseable {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** Live registry — keeps Arenas and upcall stubs alive past the register call. */
-    private static final ConcurrentHashMap<String, RendererBridge>
-            RENDERER_BRIDGES = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, RendererBridge> RENDERER_BRIDGES = new ConcurrentHashMap<>();
 
     // C vtable: 6 fields (4 plugin methods + 1 trait methods + free_user_data)
     private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 6L;
@@ -40,44 +38,37 @@ public final class RendererBridge implements AutoCloseable {
         try {
             long offset = 0L;
 
-            var stubName = LINKER.upcallStub(LOOKUP.bind(this, "handleName",
-                MethodType.methodType(MemorySegment.class, MemorySegment.class)),
-                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-                arena);
+            var stubName = LINKER.upcallStub(
+                    LOOKUP.bind(this, "handleName", MethodType.methodType(MemorySegment.class, MemorySegment.class)),
+                    FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS), arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubName);
             offset += ValueLayout.ADDRESS.byteSize();
 
-            var stubVersion = LINKER.upcallStub(LOOKUP.bind(this, "handleVersion",
-                MethodType.methodType(MemorySegment.class, MemorySegment.class)),
-                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-                arena);
+            var stubVersion = LINKER.upcallStub(
+                    LOOKUP.bind(this, "handleVersion", MethodType.methodType(MemorySegment.class, MemorySegment.class)),
+                    FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS), arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubVersion);
             offset += ValueLayout.ADDRESS.byteSize();
 
-            var stubInitialize = LINKER.upcallStub(LOOKUP.bind(this, "handleInitialize",
-                MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-                arena);
+            var stubInitialize = LINKER.upcallStub(
+                    LOOKUP.bind(this, "handleInitialize", MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
+                    FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS), arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubInitialize);
             offset += ValueLayout.ADDRESS.byteSize();
 
-            var stubShutdown = LINKER.upcallStub(LOOKUP.bind(this, "handleShutdown",
-                MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-                arena);
+            var stubShutdown = LINKER.upcallStub(
+                    LOOKUP.bind(this, "handleShutdown", MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class)),
+                    FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS), arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubShutdown);
             offset += ValueLayout.ADDRESS.byteSize();
 
-            var stubRender = LINKER.upcallStub(LOOKUP.bind(this, "handleRender",
-                MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-                FunctionDescriptor.of(
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS
-                ),
-                arena);
+            var stubRender = LINKER.upcallStub(
+                    LOOKUP.bind(this, "handleRender",
+                            MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class,
+                                    MemorySegment.class)),
+                    FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+                            ValueLayout.ADDRESS),
+                    arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubRender);
             offset += ValueLayout.ADDRESS.byteSize();
 
@@ -89,32 +80,42 @@ public final class RendererBridge implements AutoCloseable {
         }
     }
 
-    MemorySegment vtableSegment() { return vtable; }
+    MemorySegment vtableSegment() {
+        return vtable;
+    }
 
     private MemorySegment handleName(MemorySegment userData) {
         try {
             return arena.allocateFrom(impl.name());
-        } catch (Throwable e) { return MemorySegment.NULL; }
+        } catch (Throwable e) {
+            return MemorySegment.NULL;
+        }
     }
 
     private MemorySegment handleVersion(MemorySegment userData) {
         try {
             return arena.allocateFrom(impl.version());
-        } catch (Throwable e) { return MemorySegment.NULL; }
+        } catch (Throwable e) {
+            return MemorySegment.NULL;
+        }
     }
 
     private int handleInitialize(MemorySegment userData, MemorySegment outError) {
         try {
             impl.initialize();
             return 0;
-        } catch (Throwable e) { return 1; }
+        } catch (Throwable e) {
+            return 1;
+        }
     }
 
     private int handleShutdown(MemorySegment userData, MemorySegment outError) {
         try {
             impl.shutdown();
             return 0;
-        } catch (Throwable e) { return 1; }
+        } catch (Throwable e) {
+            return 1;
+        }
     }
 
     private int handleRender(MemorySegment userData, MemorySegment doc_in, MemorySegment outResult, MemorySegment outError) {
@@ -132,12 +133,16 @@ public final class RendererBridge implements AutoCloseable {
     }
 
     private void writeError(MemorySegment outError, Throwable e) {
-        try { outError.set(ValueLayout.ADDRESS, 0, arena.allocateFrom(e.getClass().getSimpleName() + ": " + e.getMessage())); }
-        catch (Throwable ignored) { /* swallow */ }
+        try {
+            outError.set(ValueLayout.ADDRESS, 0, arena.allocateFrom(e.getClass().getSimpleName() + ": " + e.getMessage()));
+        } catch (Throwable ignored) {
+            /* swallow */ }
     }
 
     @Override
-    public void close() { arena.close(); }
+    public void close() {
+        arena.close();
+    }
 
     /** Register a Renderer implementation via Panama FFM upcall stubs. */
     public static void registerRenderer(final IRenderer impl) throws Exception {
@@ -150,8 +155,8 @@ public final class RendererBridge implements AutoCloseable {
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
-                        ? "registration failed (rc=" + rc + ")"
-                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
+                            ? "registration failed (rc=" + rc + ")"
+                            : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("registerRenderer: " + msg);
                 }
             }
@@ -176,8 +181,8 @@ public final class RendererBridge implements AutoCloseable {
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
-                        ? "unregistration failed (rc=" + rc + ")"
-                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
+                            ? "unregistration failed (rc=" + rc + ")"
+                            : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("unregisterRenderer: " + msg);
                 }
             }
@@ -189,7 +194,9 @@ public final class RendererBridge implements AutoCloseable {
             }
         }
         RendererBridge old = RENDERER_BRIDGES.remove(name);
-        if (old != null) { old.close(); }
+        if (old != null) {
+            old.close();
+        }
     }
     /** Clear all registered Renderer implementations. */
     public static void clearAllRenderer() throws Exception {
@@ -200,8 +207,8 @@ public final class RendererBridge implements AutoCloseable {
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
                     String msg = errPtr.equals(MemorySegment.NULL)
-                        ? "clear failed (rc=" + rc + ")"
-                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
+                            ? "clear failed (rc=" + rc + ")"
+                            : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("clearAllRenderer: " + msg);
                 }
             }
