@@ -182,6 +182,21 @@ pub struct OcrPipelineStage {
     /// VLM config override for this pipeline stage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vlm_config: Option<super::llm::LlmConfig>,
+
+    /// Arbitrary per-call options passed through to the backend unchanged.
+    ///
+    /// Backends that support runtime tuning (mode switching, preprocessing
+    /// flags, inference parameters, etc.) read this value and deserialize
+    /// the keys they care about. Keys unknown to the backend are silently
+    /// ignored, so options from different backends can coexist in the same
+    /// config without conflict.
+    ///
+    /// Example (custom backend):
+    /// ```json
+    /// { "mode": "fast", "enable_layout": true }
+    /// ```
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_options: Option<serde_json::Value>,
 }
 
 fn default_priority() -> u32 {
@@ -235,6 +250,29 @@ pub struct OcrConfig {
     /// PaddleOCR-specific configuration (optional, JSON passthrough)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paddle_ocr_config: Option<serde_json::Value>,
+
+    /// Arbitrary per-call options passed through to the backend unchanged.
+    ///
+    /// Custom OCR backends and built-in backends that support runtime tuning
+    /// can read this value and deserialize the keys they care about. Keys
+    /// unknown to the backend are silently ignored.
+    ///
+    /// This is the recommended extension point for per-call parameters that
+    /// are not covered by the typed fields above (e.g. mode switching,
+    /// preprocessing flags, inference batch size).
+    ///
+    /// **Scope:** when `pipeline` is `None`, this value is propagated to the
+    /// primary stage of the auto-constructed pipeline. When `pipeline` is
+    /// explicitly set, this field has **no effect** — the caller must set
+    /// `OcrPipelineStage.backend_options` directly on the relevant stage(s)
+    /// instead.
+    ///
+    /// Example:
+    /// ```json
+    /// { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 }
+    /// ```
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_options: Option<serde_json::Value>,
 
     /// OCR element extraction configuration
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -304,6 +342,7 @@ impl Default for OcrConfig {
             tesseract_config: None,
             output_format: None,
             paddle_ocr_config: None,
+            backend_options: None,
             element_config: None,
             quality_thresholds: None,
             pipeline: None,
@@ -375,6 +414,7 @@ impl OcrConfig {
                     tesseract_config: self.tesseract_config.clone(),
                     paddle_ocr_config: None,
                     vlm_config: self.vlm_config.clone(),
+                    backend_options: self.backend_options.clone(),
                 },
                 OcrPipelineStage {
                     backend: "paddleocr".to_string(),
@@ -383,6 +423,7 @@ impl OcrConfig {
                     tesseract_config: None,
                     paddle_ocr_config: self.paddle_ocr_config.clone(),
                     vlm_config: None,
+                    backend_options: None,
                 },
             ];
             Some(OcrPipelineConfig {
@@ -504,6 +545,7 @@ mod tests {
                 tesseract_config: None,
                 paddle_ocr_config: None,
                 vlm_config: None,
+                backend_options: None,
             }],
             quality_thresholds: OcrQualityThresholds::default(),
         };
@@ -595,6 +637,7 @@ mod tests {
                     tesseract_config: None,
                     paddle_ocr_config: None,
                     vlm_config: None,
+                    backend_options: None,
                 },
                 OcrPipelineStage {
                     backend: "paddleocr".to_string(),
@@ -603,6 +646,7 @@ mod tests {
                     tesseract_config: None,
                     paddle_ocr_config: Some(serde_json::json!({"use_gpu": false})),
                     vlm_config: None,
+                    backend_options: None,
                 },
             ],
             quality_thresholds: OcrQualityThresholds::default(),
@@ -672,6 +716,7 @@ mod tests {
                         tesseract_config: None,
                         paddle_ocr_config: None,
                         vlm_config: None,
+                        backend_options: None,
                     },
                     OcrPipelineStage {
                         backend: "invalid_backend".to_string(),
@@ -680,6 +725,7 @@ mod tests {
                         tesseract_config: None,
                         paddle_ocr_config: None,
                         vlm_config: None,
+                        backend_options: None,
                     },
                 ],
                 quality_thresholds: OcrQualityThresholds::default(),
@@ -690,6 +736,167 @@ mod tests {
         assert!(result.is_err(), "Should catch invalid backend in pipeline stages");
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Invalid OCR backend") || err_msg.contains("invalid_backend"));
+    }
+
+    // ── backend_options tests ──
+
+    #[test]
+    fn test_ocr_config_backend_options_default_is_none() {
+        let config = OcrConfig::default();
+        assert!(config.backend_options.is_none());
+    }
+
+    #[test]
+    fn test_ocr_config_backend_options_serde_roundtrip() {
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({"mode": "fast", "threshold": 0.8, "enable_layout": true})),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: OcrConfig = serde_json::from_str(&json).unwrap();
+        let opts = deserialized.backend_options.unwrap();
+        assert_eq!(opts["mode"], "fast");
+        assert!((opts["threshold"].as_f64().unwrap() - 0.8).abs() < f64::EPSILON);
+        assert_eq!(opts["enable_layout"], true);
+    }
+
+    #[test]
+    fn test_ocr_config_backend_options_omitted_when_none() {
+        let config = OcrConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(
+            !json.contains("backend_options"),
+            "backend_options must be omitted when None"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_stage_backend_options_serde_roundtrip() {
+        let stage = OcrPipelineStage {
+            backend: "custom".to_string(),
+            priority: 80,
+            language: None,
+            tesseract_config: None,
+            paddle_ocr_config: None,
+            vlm_config: None,
+            backend_options: Some(serde_json::json!({"batch_size": 4, "device": "cpu"})),
+        };
+        let json = serde_json::to_string(&stage).unwrap();
+        let deserialized: OcrPipelineStage = serde_json::from_str(&json).unwrap();
+        let opts = deserialized.backend_options.unwrap();
+        assert_eq!(opts["batch_size"], 4);
+        assert_eq!(opts["device"], "cpu");
+    }
+
+    #[test]
+    fn test_pipeline_stage_backend_options_omitted_when_none() {
+        let stage = OcrPipelineStage {
+            backend: "tesseract".to_string(),
+            priority: 100,
+            language: None,
+            tesseract_config: None,
+            paddle_ocr_config: None,
+            vlm_config: None,
+            backend_options: None,
+        };
+        let json = serde_json::to_string(&stage).unwrap();
+        assert!(
+            !json.contains("backend_options"),
+            "backend_options must be omitted when None"
+        );
+    }
+
+    #[cfg(all(feature = "ocr", feature = "paddle-ocr"))]
+    #[test]
+    fn test_effective_pipeline_propagates_backend_options_to_primary_stage() {
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({"mode": "fast"})),
+            ..Default::default()
+        };
+        let pipeline = config
+            .effective_pipeline()
+            .expect("paddle-ocr feature must produce a pipeline");
+        assert_eq!(pipeline.stages.len(), 2);
+
+        let primary = &pipeline.stages[0];
+        assert_eq!(primary.backend, "tesseract");
+        let opts = primary
+            .backend_options
+            .as_ref()
+            .expect("primary stage must carry backend_options");
+        assert_eq!(opts["mode"], "fast");
+
+        // PaddleOCR stage should not inherit backend_options from the top-level config.
+        let fallback = &pipeline.stages[1];
+        assert_eq!(fallback.backend, "paddleocr");
+        assert!(
+            fallback.backend_options.is_none(),
+            "paddleocr stage must not inherit backend_options"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_explicit_pipeline_ignores_top_level_backend_options() {
+        // When the caller provides an explicit pipeline, OcrConfig.backend_options
+        // must NOT be injected into the returned stages — the stage owns its own value.
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({"mode": "fast"})),
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: "tesseract".to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    vlm_config: None,
+                    backend_options: None,
+                }],
+                quality_thresholds: OcrQualityThresholds::default(),
+            }),
+            ..Default::default()
+        };
+        let pipeline = config
+            .effective_pipeline()
+            .expect("explicit pipeline must be returned as-is");
+        assert_eq!(pipeline.stages.len(), 1);
+        assert!(
+            pipeline.stages[0].backend_options.is_none(),
+            "top-level backend_options must not be injected into an explicit pipeline stage"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_stage_level_backend_options_preserved_in_explicit_pipeline() {
+        // Stage-level backend_options in an explicit pipeline are returned unchanged —
+        // neither cleared nor overridden by any top-level value.
+        let stage_opts = serde_json::json!({"device": "gpu", "batch": 8});
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({"mode": "fast"})),
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: "custom".to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    vlm_config: None,
+                    backend_options: Some(stage_opts.clone()),
+                }],
+                quality_thresholds: OcrQualityThresholds::default(),
+            }),
+            ..Default::default()
+        };
+        let pipeline = config
+            .effective_pipeline()
+            .expect("explicit pipeline must be returned as-is");
+        let returned_opts = pipeline.stages[0]
+            .backend_options
+            .as_ref()
+            .expect("stage-level backend_options must be preserved");
+        assert_eq!(returned_opts["device"], "gpu");
+        assert_eq!(returned_opts["batch"], 8);
     }
 
     #[test]
@@ -704,6 +911,7 @@ mod tests {
                         tesseract_config: None,
                         paddle_ocr_config: None,
                         vlm_config: None,
+                        backend_options: None,
                     },
                     OcrPipelineStage {
                         backend: "paddleocr".to_string(),
@@ -712,6 +920,7 @@ mod tests {
                         tesseract_config: None,
                         paddle_ocr_config: None,
                         vlm_config: None,
+                        backend_options: None,
                     },
                 ],
                 quality_thresholds: OcrQualityThresholds::default(),

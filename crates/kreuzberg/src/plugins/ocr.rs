@@ -102,7 +102,11 @@ pub trait OcrBackend: Plugin {
     /// - `KreuzbergError::Validation` - Invalid image format or configuration
     /// - `KreuzbergError::Io` - I/O errors (these always bubble up)
     ///
-    /// # Example
+    /// # Reading `backend_options`
+    ///
+    /// Backends that support runtime tuning can read `config.backend_options` and
+    /// deserialize only the keys they care about. Unknown keys are silently ignored,
+    /// so multiple backends can coexist in a pipeline without key conflicts.
     ///
     /// ```rust
     /// # use kreuzberg::plugins::{Plugin, OcrBackend};
@@ -125,7 +129,14 @@ pub trait OcrBackend: Plugin {
     /// #     fn backend_type(&self) -> OcrBackendType { OcrBackendType::Custom }
     /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
     /// async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
-    ///     // Validate image format
+    ///     // Read backend-specific options; unknown keys are silently ignored.
+    ///     let fast_mode = config.backend_options
+    ///         .as_ref()
+    ///         .and_then(|v| v.get("mode"))
+    ///         .and_then(|v| v.as_str())
+    ///         .map(|s| s == "fast")
+    ///         .unwrap_or(false);
+    ///
     ///     if image_bytes.is_empty() {
     ///         return Err(kreuzberg::KreuzbergError::Validation {
     ///             message: "Empty image data".to_string(),
@@ -133,8 +144,11 @@ pub trait OcrBackend: Plugin {
     ///         });
     ///     }
     ///
-    ///     // Perform OCR processing
-    ///     let text = format!("Extracted text in language: {}", config.language);
+    ///     let text = if fast_mode {
+    ///         "Fast OCR result".to_string()
+    ///     } else {
+    ///         format!("Extracted text in language: {}", config.language)
+    ///     };
     ///
     ///     Ok(ExtractionResult {
     ///         content: text,
@@ -627,5 +641,84 @@ mod tests {
 
         let result = backend.process_image(b"", &config).await;
         assert!(result.is_ok());
+    }
+
+    // A backend that reads backend_options and adjusts its output accordingly.
+    struct OptionAwareBackend;
+
+    impl Plugin for OptionAwareBackend {
+        fn name(&self) -> &str {
+            "option-aware"
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+
+        fn initialize(&self) -> Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl OcrBackend for OptionAwareBackend {
+        async fn process_image(&self, _image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
+            let mode = config
+                .backend_options
+                .as_ref()
+                .and_then(|v| v.get("mode"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("standard");
+
+            Ok(ExtractionResult {
+                content: format!("mode={mode}"),
+                mime_type: Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+
+        fn backend_type(&self) -> OcrBackendType {
+            OcrBackendType::Custom
+        }
+    }
+
+    #[tokio::test]
+    async fn test_backend_reads_backend_options() {
+        let backend = OptionAwareBackend;
+
+        let config_with_options = OcrConfig {
+            backend_options: Some(serde_json::json!({"mode": "fast", "threshold": 0.8})),
+            ..Default::default()
+        };
+        let result = backend.process_image(b"img", &config_with_options).await.unwrap();
+        assert_eq!(result.content, "mode=fast");
+
+        let config_without_options = OcrConfig::default();
+        let result = backend.process_image(b"img", &config_without_options).await.unwrap();
+        assert_eq!(result.content, "mode=standard");
+    }
+
+    #[tokio::test]
+    async fn test_backend_options_unknown_keys_silently_ignored() {
+        let backend = OptionAwareBackend;
+
+        // Keys not used by this backend should not cause any error.
+        let config = OcrConfig {
+            backend_options: Some(serde_json::json!({
+                "unknown_key": "value",
+                "another_unknown": 42
+            })),
+            ..Default::default()
+        };
+        let result = backend.process_image(b"img", &config).await;
+        assert!(result.is_ok(), "unknown backend_options keys must not cause errors");
     }
 }

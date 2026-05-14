@@ -11,7 +11,7 @@ categories = ["text-processing"]
 [package.metadata.cargo-machete]
 # serde_bytes is used via `#[serde(with = "serde_bytes")]` attribute, which
 # cargo-machete cannot detect statically.
-ignored = ["serde_bytes"]
+ignored = ["serde", "serde_bytes"]
 
 [lib]
 crate-type = ["cdylib"]
