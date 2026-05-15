@@ -28,12 +28,15 @@ part 'lib.freezed.dart';
 ///
 /// Returns `KreuzbergError.Validation` if MIME type is invalid.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
-Future<ExtractionResult> extractBytes(
-        {required List<int> content,
-        required String mimeType,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api.crateExtractBytes(
-        content: content, mimeType: mimeType, config: config);
+Future<ExtractionResult> extractBytes({
+  required List<int> content,
+  required String mimeType,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateExtractBytes(
+  content: content,
+  mimeType: mimeType,
+  config: config,
+);
 
 /// Extract content from a file.
 ///
@@ -53,12 +56,15 @@ Future<ExtractionResult> extractBytes(
 ///
 /// Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
-Future<ExtractionResult> extractFile(
-        {required String path,
-        String? mimeType,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api
-        .crateExtractFile(path: path, mimeType: mimeType, config: config);
+Future<ExtractionResult> extractFile({
+  required String path,
+  String? mimeType,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateExtractFile(
+  path: path,
+  mimeType: mimeType,
+  config: config,
+);
 
 /// Synchronous wrapper for `extract_file`.
 ///
@@ -70,12 +76,15 @@ Future<ExtractionResult> extractFile(
 ///
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
-Future<ExtractionResult> extractFileSync(
-        {required String path,
-        String? mimeType,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api
-        .crateExtractFileSync(path: path, mimeType: mimeType, config: config);
+Future<ExtractionResult> extractFileSync({
+  required String path,
+  String? mimeType,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateExtractFileSync(
+  path: path,
+  mimeType: mimeType,
+  config: config,
+);
 
 /// Synchronous wrapper for `extract_bytes`.
 ///
@@ -84,22 +93,27 @@ Future<ExtractionResult> extractFileSync(
 ///
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
-Future<ExtractionResult> extractBytesSync(
-        {required List<int> content,
-        required String mimeType,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api.crateExtractBytesSync(
-        content: content, mimeType: mimeType, config: config);
+Future<ExtractionResult> extractBytesSync({
+  required List<int> content,
+  required String mimeType,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateExtractBytesSync(
+  content: content,
+  mimeType: mimeType,
+  config: config,
+);
 
 /// Synchronous wrapper for `batch_extract_files`.
 ///
 /// Uses the global Tokio runtime for optimal performance.
 /// Only available with `tokio-runtime` (WASM has no filesystem).
-Future<List<ExtractionResult>> batchExtractFilesSync(
-        {required List<BatchFileItem> items,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api
-        .crateBatchExtractFilesSync(items: items, config: config);
+Future<List<ExtractionResult>> batchExtractFilesSync({
+  required List<BatchFileItem> items,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateBatchExtractFilesSync(
+  items: items,
+  config: config,
+);
 
 /// Synchronous wrapper for `batch_extract_bytes`.
 ///
@@ -107,11 +121,13 @@ Future<List<ExtractionResult>> batchExtractFilesSync(
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
 /// that iterates through items and calls `extract_bytes_sync()`.
-Future<List<ExtractionResult>> batchExtractBytesSync(
-        {required List<BatchBytesItem> items,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api
-        .crateBatchExtractBytesSync(items: items, config: config);
+Future<List<ExtractionResult>> batchExtractBytesSync({
+  required List<BatchBytesItem> items,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateBatchExtractBytesSync(
+  items: items,
+  config: config,
+);
 
 /// Extract content from multiple files concurrently.
 ///
@@ -141,10 +157,10 @@ Future<List<ExtractionResult>> batchExtractBytesSync(
 ///
 ///
 /// Per-file configuration overrides:
-Future<List<ExtractionResult>> batchExtractFiles(
-        {required List<BatchFileItem> items,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api.crateBatchExtractFiles(items: items, config: config);
+Future<List<ExtractionResult>> batchExtractFiles({
+  required List<BatchFileItem> items,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateBatchExtractFiles(items: items, config: config);
 
 /// Extract content from multiple byte arrays concurrently.
 ///
@@ -168,10 +184,10 @@ Future<List<ExtractionResult>> batchExtractFiles(
 ///
 ///
 /// Per-item configuration overrides:
-Future<List<ExtractionResult>> batchExtractBytes(
-        {required List<BatchBytesItem> items,
-        required ExtractionConfig config}) =>
-    RustLib.instance.api.crateBatchExtractBytes(items: items, config: config);
+Future<List<ExtractionResult>> batchExtractBytes({
+  required List<BatchBytesItem> items,
+  required ExtractionConfig config,
+}) => RustLib.instance.api.crateBatchExtractBytes(items: items, config: config);
 
 /// Detect MIME type from raw file bytes.
 ///
@@ -259,9 +275,10 @@ Future<List<String>> listValidators() =>
 /// - `KreuzbergError.MissingDependency` if ONNX Runtime is not installed
 /// - `KreuzbergError.Embedding` if the preset name is unknown, model download fails,
 ///   or the blocking inference task panics
-Future<List<Float64List>> embedTextsAsync(
-        {required List<String> texts, required EmbeddingConfig config}) =>
-    RustLib.instance.api.crateEmbedTextsAsync(texts: texts, config: config);
+Future<List<Float64List>> embedTextsAsync({
+  required List<String> texts,
+  required EmbeddingConfig config,
+}) => RustLib.instance.api.crateEmbedTextsAsync(texts: texts, config: config);
 
 /// Render a single PDF page to PNG bytes.
 ///
@@ -272,29 +289,37 @@ Future<List<Float64List>> embedTextsAsync(
 ///
 /// Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
 /// or rendered, or if `page_index` is out of range.
-Future<Uint8List> renderPdfPageToPng(
-        {required List<int> pdfBytes,
-        required PlatformInt64 pageIndex,
-        PlatformInt64? dpi,
-        String? password}) =>
-    RustLib.instance.api.crateRenderPdfPageToPng(
-        pdfBytes: pdfBytes, pageIndex: pageIndex, dpi: dpi, password: password);
+Future<Uint8List> renderPdfPageToPng({
+  required List<int> pdfBytes,
+  required PlatformInt64 pageIndex,
+  PlatformInt64? dpi,
+  String? password,
+}) => RustLib.instance.api.crateRenderPdfPageToPng(
+  pdfBytes: pdfBytes,
+  pageIndex: pageIndex,
+  dpi: dpi,
+  password: password,
+);
 
 /// Detect the MIME type of a file at the given path.
 ///
 /// Uses the file extension and optionally the file content to determine the MIME type.
 /// Set `check_exists` to `true` to verify the file exists before detection.
-Future<String> detectMimeType(
-        {required String path, required bool checkExists}) =>
-    RustLib.instance.api
-        .crateDetectMimeType(path: path, checkExists: checkExists);
+Future<String> detectMimeType({
+  required String path,
+  required bool checkExists,
+}) => RustLib.instance.api.crateDetectMimeType(
+  path: path,
+  checkExists: checkExists,
+);
 
 /// Embed a list of texts using the configured embedding model.
 ///
 /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
-Future<List<Float64List>> embedTexts(
-        {required List<String> texts, required EmbeddingConfig config}) =>
-    RustLib.instance.api.crateEmbedTexts(texts: texts, config: config);
+Future<List<Float64List>> embedTexts({
+  required List<String> texts,
+  required EmbeddingConfig config,
+}) => RustLib.instance.api.crateEmbedTexts(texts: texts, config: config);
 
 /// Get an embedding preset by name.
 ///
@@ -309,24 +334,24 @@ Future<EmbeddingPreset?> getEmbeddingPreset({required String name}) =>
 Future<List<String>> listEmbeddingPresets() =>
     RustLib.instance.api.crateListEmbeddingPresets();
 
-Future<AccelerationConfig> createAccelerationConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateAccelerationConfigFromJson(json: json);
+Future<AccelerationConfig> createAccelerationConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateAccelerationConfigFromJson(json: json);
 
-Future<ContentFilterConfig> createContentFilterConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateContentFilterConfigFromJson(json: json);
+Future<ContentFilterConfig> createContentFilterConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateContentFilterConfigFromJson(json: json);
 
 Future<EmailConfig> createEmailConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateEmailConfigFromJson(json: json);
 
-Future<ExtractionConfig> createExtractionConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateExtractionConfigFromJson(json: json);
+Future<ExtractionConfig> createExtractionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateExtractionConfigFromJson(json: json);
 
-Future<FileExtractionConfig> createFileExtractionConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateFileExtractionConfigFromJson(json: json);
+Future<FileExtractionConfig> createFileExtractionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateFileExtractionConfigFromJson(json: json);
 
 Future<BatchBytesItem> createBatchBytesItemFromJson({required String json}) =>
     RustLib.instance.api.crateCreateBatchBytesItemFromJson(json: json);
@@ -334,45 +359,47 @@ Future<BatchBytesItem> createBatchBytesItemFromJson({required String json}) =>
 Future<BatchFileItem> createBatchFileItemFromJson({required String json}) =>
     RustLib.instance.api.crateCreateBatchFileItemFromJson(json: json);
 
-Future<ImageExtractionConfig> createImageExtractionConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateImageExtractionConfigFromJson(json: json);
+Future<ImageExtractionConfig> createImageExtractionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateImageExtractionConfigFromJson(json: json);
 
-Future<TokenReductionOptions> createTokenReductionOptionsFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateTokenReductionOptionsFromJson(json: json);
+Future<TokenReductionOptions> createTokenReductionOptionsFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateTokenReductionOptionsFromJson(json: json);
 
-Future<LanguageDetectionConfig> createLanguageDetectionConfigFromJson(
-        {required String json}) =>
+Future<LanguageDetectionConfig> createLanguageDetectionConfigFromJson({
+  required String json,
+}) =>
     RustLib.instance.api.crateCreateLanguageDetectionConfigFromJson(json: json);
 
-Future<HtmlOutputConfig> createHtmlOutputConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateHtmlOutputConfigFromJson(json: json);
+Future<HtmlOutputConfig> createHtmlOutputConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateHtmlOutputConfigFromJson(json: json);
 
-Future<LayoutDetectionConfig> createLayoutDetectionConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateLayoutDetectionConfigFromJson(json: json);
+Future<LayoutDetectionConfig> createLayoutDetectionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateLayoutDetectionConfigFromJson(json: json);
 
 Future<LlmConfig> createLlmConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateLlmConfigFromJson(json: json);
 
-Future<StructuredExtractionConfig> createStructuredExtractionConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api
-        .crateCreateStructuredExtractionConfigFromJson(json: json);
+Future<StructuredExtractionConfig> createStructuredExtractionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateStructuredExtractionConfigFromJson(
+  json: json,
+);
 
-Future<OcrQualityThresholds> createOcrQualityThresholdsFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateOcrQualityThresholdsFromJson(json: json);
+Future<OcrQualityThresholds> createOcrQualityThresholdsFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOcrQualityThresholdsFromJson(json: json);
 
-Future<OcrPipelineStage> createOcrPipelineStageFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateOcrPipelineStageFromJson(json: json);
+Future<OcrPipelineStage> createOcrPipelineStageFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOcrPipelineStageFromJson(json: json);
 
-Future<OcrPipelineConfig> createOcrPipelineConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateOcrPipelineConfigFromJson(json: json);
+Future<OcrPipelineConfig> createOcrPipelineConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOcrPipelineConfigFromJson(json: json);
 
 Future<OcrConfig> createOcrConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateOcrConfigFromJson(json: json);
@@ -386,9 +413,9 @@ Future<PdfConfig> createPdfConfigFromJson({required String json}) =>
 Future<HierarchyConfig> createHierarchyConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateHierarchyConfigFromJson(json: json);
 
-Future<PostProcessorConfig> createPostProcessorConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreatePostProcessorConfigFromJson(json: json);
+Future<PostProcessorConfig> createPostProcessorConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreatePostProcessorConfigFromJson(json: json);
 
 Future<ChunkingConfig> createChunkingConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateChunkingConfigFromJson(json: json);
@@ -396,12 +423,13 @@ Future<ChunkingConfig> createChunkingConfigFromJson({required String json}) =>
 Future<EmbeddingConfig> createEmbeddingConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateEmbeddingConfigFromJson(json: json);
 
-Future<TreeSitterConfig> createTreeSitterConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateTreeSitterConfigFromJson(json: json);
+Future<TreeSitterConfig> createTreeSitterConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateTreeSitterConfigFromJson(json: json);
 
-Future<TreeSitterProcessConfig> createTreeSitterProcessConfigFromJson(
-        {required String json}) =>
+Future<TreeSitterProcessConfig> createTreeSitterProcessConfigFromJson({
+  required String json,
+}) =>
     RustLib.instance.api.crateCreateTreeSitterProcessConfigFromJson(json: json);
 
 Future<SupportedFormat> createSupportedFormatFromJson({required String json}) =>
@@ -410,39 +438,39 @@ Future<SupportedFormat> createSupportedFormatFromJson({required String json}) =>
 Future<ServerConfig> createServerConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateServerConfigFromJson(json: json);
 
-Future<StructuredDataResult> createStructuredDataResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
+Future<StructuredDataResult> createStructuredDataResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
 
-Future<HtmlExtractionResult> createHtmlExtractionResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateHtmlExtractionResultFromJson(json: json);
+Future<HtmlExtractionResult> createHtmlExtractionResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateHtmlExtractionResultFromJson(json: json);
 
-Future<ExtractedInlineImage> createExtractedInlineImageFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateExtractedInlineImageFromJson(json: json);
+Future<ExtractedInlineImage> createExtractedInlineImageFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateExtractedInlineImageFromJson(json: json);
 
 Future<Drawing> createDrawingFromJson({required String json}) =>
     RustLib.instance.api.crateCreateDrawingFromJson(json: json);
 
-Future<AnchorProperties> createAnchorPropertiesFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateAnchorPropertiesFromJson(json: json);
+Future<AnchorProperties> createAnchorPropertiesFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateAnchorPropertiesFromJson(json: json);
 
 Future<TableProperties> createTablePropertiesFromJson({required String json}) =>
     RustLib.instance.api.crateCreateTablePropertiesFromJson(json: json);
 
-Future<DocxAppProperties> createDocxAppPropertiesFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateDocxAppPropertiesFromJson(json: json);
+Future<DocxAppProperties> createDocxAppPropertiesFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateDocxAppPropertiesFromJson(json: json);
 
-Future<XlsxAppProperties> createXlsxAppPropertiesFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateXlsxAppPropertiesFromJson(json: json);
+Future<XlsxAppProperties> createXlsxAppPropertiesFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateXlsxAppPropertiesFromJson(json: json);
 
-Future<PptxAppProperties> createPptxAppPropertiesFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreatePptxAppPropertiesFromJson(json: json);
+Future<PptxAppProperties> createPptxAppPropertiesFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreatePptxAppPropertiesFromJson(json: json);
 
 Future<CoreProperties> createCorePropertiesFromJson({required String json}) =>
     RustLib.instance.api.crateCreateCorePropertiesFromJson(json: json);
@@ -450,9 +478,9 @@ Future<CoreProperties> createCorePropertiesFromJson({required String json}) =>
 Future<SecurityLimits> createSecurityLimitsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateSecurityLimitsFromJson(json: json);
 
-Future<TokenReductionConfig> createTokenReductionConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateTokenReductionConfigFromJson(json: json);
+Future<TokenReductionConfig> createTokenReductionConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateTokenReductionConfigFromJson(json: json);
 
 Future<PdfAnnotation> createPdfAnnotationFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePdfAnnotationFromJson(json: json);
@@ -475,13 +503,13 @@ Future<DjotLink> createDjotLinkFromJson({required String json}) =>
 Future<Footnote> createFootnoteFromJson({required String json}) =>
     RustLib.instance.api.crateCreateFootnoteFromJson(json: json);
 
-Future<DocumentStructure> createDocumentStructureFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateDocumentStructureFromJson(json: json);
+Future<DocumentStructure> createDocumentStructureFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateDocumentStructureFromJson(json: json);
 
-Future<DocumentRelationship> createDocumentRelationshipFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateDocumentRelationshipFromJson(json: json);
+Future<DocumentRelationship> createDocumentRelationshipFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateDocumentRelationshipFromJson(json: json);
 
 Future<DocumentNode> createDocumentNodeFromJson({required String json}) =>
     RustLib.instance.api.crateCreateDocumentNodeFromJson(json: json);
@@ -495,16 +523,16 @@ Future<GridCell> createGridCellFromJson({required String json}) =>
 Future<TextAnnotation> createTextAnnotationFromJson({required String json}) =>
     RustLib.instance.api.crateCreateTextAnnotationFromJson(json: json);
 
-Future<ExtractionResult> createExtractionResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateExtractionResultFromJson(json: json);
+Future<ExtractionResult> createExtractionResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateExtractionResultFromJson(json: json);
 
 Future<ArchiveEntry> createArchiveEntryFromJson({required String json}) =>
     RustLib.instance.api.crateCreateArchiveEntryFromJson(json: json);
 
-Future<ProcessingWarning> createProcessingWarningFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateProcessingWarningFromJson(json: json);
+Future<ProcessingWarning> createProcessingWarningFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateProcessingWarningFromJson(json: json);
 
 Future<LlmUsage> createLlmUsageFromJson({required String json}) =>
     RustLib.instance.api.crateCreateLlmUsageFromJson(json: json);
@@ -536,48 +564,50 @@ Future<ExcelWorkbook> createExcelWorkbookFromJson({required String json}) =>
 Future<ExcelSheet> createExcelSheetFromJson({required String json}) =>
     RustLib.instance.api.crateCreateExcelSheetFromJson(json: json);
 
-Future<XmlExtractionResult> createXmlExtractionResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateXmlExtractionResultFromJson(json: json);
+Future<XmlExtractionResult> createXmlExtractionResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateXmlExtractionResultFromJson(json: json);
 
-Future<TextExtractionResult> createTextExtractionResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateTextExtractionResultFromJson(json: json);
+Future<TextExtractionResult> createTextExtractionResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateTextExtractionResultFromJson(json: json);
 
-Future<PptxExtractionResult> createPptxExtractionResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreatePptxExtractionResultFromJson(json: json);
+Future<PptxExtractionResult> createPptxExtractionResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreatePptxExtractionResultFromJson(json: json);
 
-Future<EmailExtractionResult> createEmailExtractionResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateEmailExtractionResultFromJson(json: json);
+Future<EmailExtractionResult> createEmailExtractionResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateEmailExtractionResultFromJson(json: json);
 
 Future<EmailAttachment> createEmailAttachmentFromJson({required String json}) =>
     RustLib.instance.api.crateCreateEmailAttachmentFromJson(json: json);
 
-Future<OcrExtractionResult> createOcrExtractionResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateOcrExtractionResultFromJson(json: json);
+Future<OcrExtractionResult> createOcrExtractionResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOcrExtractionResultFromJson(json: json);
 
 Future<OcrTable> createOcrTableFromJson({required String json}) =>
     RustLib.instance.api.crateCreateOcrTableFromJson(json: json);
 
-Future<OcrTableBoundingBox> createOcrTableBoundingBoxFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateOcrTableBoundingBoxFromJson(json: json);
+Future<OcrTableBoundingBox> createOcrTableBoundingBoxFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOcrTableBoundingBoxFromJson(json: json);
 
-Future<ImagePreprocessingConfig> createImagePreprocessingConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api
-        .crateCreateImagePreprocessingConfigFromJson(json: json);
+Future<ImagePreprocessingConfig> createImagePreprocessingConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateImagePreprocessingConfigFromJson(
+  json: json,
+);
 
 Future<TesseractConfig> createTesseractConfigFromJson({required String json}) =>
     RustLib.instance.api.crateCreateTesseractConfigFromJson(json: json);
 
-Future<ImagePreprocessingMetadata> createImagePreprocessingMetadataFromJson(
-        {required String json}) =>
-    RustLib.instance.api
-        .crateCreateImagePreprocessingMetadataFromJson(json: json);
+Future<ImagePreprocessingMetadata> createImagePreprocessingMetadataFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateImagePreprocessingMetadataFromJson(
+  json: json,
+);
 
 Future<Metadata> createMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateMetadataFromJson(json: json);
@@ -606,9 +636,9 @@ Future<HeaderMetadata> createHeaderMetadataFromJson({required String json}) =>
 Future<LinkMetadata> createLinkMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateLinkMetadataFromJson(json: json);
 
-Future<ImageMetadataType> createImageMetadataTypeFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateImageMetadataTypeFromJson(json: json);
+Future<ImageMetadataType> createImageMetadataTypeFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateImageMetadataTypeFromJson(json: json);
 
 Future<StructuredData> createStructuredDataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateStructuredDataFromJson(json: json);
@@ -634,16 +664,16 @@ Future<CsvMetadata> createCsvMetadataFromJson({required String json}) =>
 Future<BibtexMetadata> createBibtexMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateBibtexMetadataFromJson(json: json);
 
-Future<CitationMetadata> createCitationMetadataFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateCitationMetadataFromJson(json: json);
+Future<CitationMetadata> createCitationMetadataFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateCitationMetadataFromJson(json: json);
 
 Future<YearRange> createYearRangeFromJson({required String json}) =>
     RustLib.instance.api.crateCreateYearRangeFromJson(json: json);
 
-Future<FictionBookMetadata> createFictionBookMetadataFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateFictionBookMetadataFromJson(json: json);
+Future<FictionBookMetadata> createFictionBookMetadataFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateFictionBookMetadataFromJson(json: json);
 
 Future<DbfMetadata> createDbfMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateDbfMetadataFromJson(json: json);
@@ -672,9 +702,9 @@ Future<OcrRotation> createOcrRotationFromJson({required String json}) =>
 Future<OcrElement> createOcrElementFromJson({required String json}) =>
     RustLib.instance.api.crateCreateOcrElementFromJson(json: json);
 
-Future<OcrElementConfig> createOcrElementConfigFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateOcrElementConfigFromJson(json: json);
+Future<OcrElementConfig> createOcrElementConfigFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOcrElementConfigFromJson(json: json);
 
 Future<PageStructure> createPageStructureFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePageStructureFromJson(json: json);
@@ -694,9 +724,9 @@ Future<LayoutRegion> createLayoutRegionFromJson({required String json}) =>
 Future<PageHierarchy> createPageHierarchyFromJson({required String json}) =>
     RustLib.instance.api.crateCreatePageHierarchyFromJson(json: json);
 
-Future<HierarchicalBlock> createHierarchicalBlockFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateHierarchicalBlockFromJson(json: json);
+Future<HierarchicalBlock> createHierarchicalBlockFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateHierarchicalBlockFromJson(json: json);
 
 Future<Table> createTableFromJson({required String json}) =>
     RustLib.instance.api.crateCreateTableFromJson(json: json);
@@ -725,33 +755,35 @@ Future<ChunkResponse> createChunkResponseFromJson({required String json}) =>
 Future<DetectResponse> createDetectResponseFromJson({required String json}) =>
     RustLib.instance.api.crateCreateDetectResponseFromJson(json: json);
 
-Future<ManifestEntryResponse> createManifestEntryResponseFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateManifestEntryResponseFromJson(json: json);
+Future<ManifestEntryResponse> createManifestEntryResponseFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateManifestEntryResponseFromJson(json: json);
 
-Future<ManifestResponse> createManifestResponseFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateManifestResponseFromJson(json: json);
+Future<ManifestResponse> createManifestResponseFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateManifestResponseFromJson(json: json);
 
 Future<WarmResponse> createWarmResponseFromJson({required String json}) =>
     RustLib.instance.api.crateCreateWarmResponseFromJson(json: json);
 
-Future<StructuredExtractionResponse> createStructuredExtractionResponseFromJson(
-        {required String json}) =>
-    RustLib.instance.api
-        .crateCreateStructuredExtractionResponseFromJson(json: json);
+Future<StructuredExtractionResponse>
+createStructuredExtractionResponseFromJson({required String json}) => RustLib
+    .instance
+    .api
+    .crateCreateStructuredExtractionResponseFromJson(json: json);
 
-Future<OpenWebDocumentResponse> createOpenWebDocumentResponseFromJson(
-        {required String json}) =>
+Future<OpenWebDocumentResponse> createOpenWebDocumentResponseFromJson({
+  required String json,
+}) =>
     RustLib.instance.api.crateCreateOpenWebDocumentResponseFromJson(json: json);
 
-Future<DoclingCompatResponse> createDoclingCompatResponseFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateDoclingCompatResponseFromJson(json: json);
+Future<DoclingCompatResponse> createDoclingCompatResponseFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateDoclingCompatResponseFromJson(json: json);
 
-Future<DetectMimeTypeParams> createDetectMimeTypeParamsFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateDetectMimeTypeParamsFromJson(json: json);
+Future<DetectMimeTypeParams> createDetectMimeTypeParamsFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateDetectMimeTypeParamsFromJson(json: json);
 
 Future<CacheWarmParams> createCacheWarmParamsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateCacheWarmParamsFromJson(json: json);
@@ -759,16 +791,17 @@ Future<CacheWarmParams> createCacheWarmParamsFromJson({required String json}) =>
 Future<EmbedTextParams> createEmbedTextParamsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateEmbedTextParamsFromJson(json: json);
 
-Future<ExtractStructuredParams> createExtractStructuredParamsFromJson(
-        {required String json}) =>
+Future<ExtractStructuredParams> createExtractStructuredParamsFromJson({
+  required String json,
+}) =>
     RustLib.instance.api.crateCreateExtractStructuredParamsFromJson(json: json);
 
 Future<ChunkTextParams> createChunkTextParamsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateChunkTextParamsFromJson(json: json);
 
-Future<DetectedBoundary> createDetectedBoundaryFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateDetectedBoundaryFromJson(json: json);
+Future<DetectedBoundary> createDetectedBoundaryFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateDetectedBoundaryFromJson(json: json);
 
 Future<ChunkingResult> createChunkingResultFromJson({required String json}) =>
     RustLib.instance.api.crateCreateChunkingResultFromJson(json: json);
@@ -794,9 +827,9 @@ Future<PaddleOcrConfig> createPaddleOcrConfigFromJson({required String json}) =>
 Future<ModelPaths> createModelPathsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateModelPathsFromJson(json: json);
 
-Future<OrientationResult> createOrientationResultFromJson(
-        {required String json}) =>
-    RustLib.instance.api.crateCreateOrientationResultFromJson(json: json);
+Future<OrientationResult> createOrientationResultFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateOrientationResultFromJson(json: json);
 
 Future<BBox> createBBoxFromJson({required String json}) =>
     RustLib.instance.api.crateCreateBBoxFromJson(json: json);
@@ -818,30 +851,29 @@ Future<PdfMetadata> createPdfMetadataFromJson({required String json}) =>
 
 /// Create a `OcrBackendDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<OcrBackendDartImpl> createOcrBackendDartImpl(
-        {required String pluginName,
-        required String pluginVersion,
-        required BoxFnVecU8OcrConfigDartFnFutureExtractionResult processImage,
-        required BoxFnStringOcrConfigDartFnFutureExtractionResult
-            processImageFile,
-        required BoxFnStringDartFnFutureBool supportsLanguage,
-        required BoxFnDartFnFutureOcrBackendType backendType,
-        required BoxFnDartFnFutureVecString supportedLanguages,
-        required BoxFnDartFnFutureBool supportsTableDetection,
-        required BoxFnDartFnFutureBool supportsDocumentProcessing,
-        required BoxFnStringOcrConfigDartFnFutureExtractionResult
-            processDocument}) =>
-    RustLib.instance.api.crateCreateOcrBackendDartImpl(
-        pluginName: pluginName,
-        pluginVersion: pluginVersion,
-        processImage: processImage,
-        processImageFile: processImageFile,
-        supportsLanguage: supportsLanguage,
-        backendType: backendType,
-        supportedLanguages: supportedLanguages,
-        supportsTableDetection: supportsTableDetection,
-        supportsDocumentProcessing: supportsDocumentProcessing,
-        processDocument: processDocument);
+Future<OcrBackendDartImpl> createOcrBackendDartImpl({
+  required String pluginName,
+  required String pluginVersion,
+  required BoxFnVecU8OcrConfigDartFnFutureExtractionResult processImage,
+  required BoxFnStringOcrConfigDartFnFutureExtractionResult processImageFile,
+  required BoxFnStringDartFnFutureBool supportsLanguage,
+  required BoxFnDartFnFutureOcrBackendType backendType,
+  required BoxFnDartFnFutureVecString supportedLanguages,
+  required BoxFnDartFnFutureBool supportsTableDetection,
+  required BoxFnDartFnFutureBool supportsDocumentProcessing,
+  required BoxFnStringOcrConfigDartFnFutureExtractionResult processDocument,
+}) => RustLib.instance.api.crateCreateOcrBackendDartImpl(
+  pluginName: pluginName,
+  pluginVersion: pluginVersion,
+  processImage: processImage,
+  processImageFile: processImageFile,
+  supportsLanguage: supportsLanguage,
+  backendType: backendType,
+  supportedLanguages: supportedLanguages,
+  supportsTableDetection: supportsTableDetection,
+  supportsDocumentProcessing: supportsDocumentProcessing,
+  processDocument: processDocument,
+);
 
 /// Register a Dart implementation as a `OcrBackend` plugin.
 ///
@@ -861,23 +893,23 @@ Future<void> clearOcrBackends() => RustLib.instance.api.crateClearOcrBackends();
 
 /// Create a `PostProcessorDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<PostProcessorDartImpl> createPostProcessorDartImpl(
-        {required String pluginName,
-        required String pluginVersion,
-        required BoxFnExtractionResultExtractionConfigDartFnFuture process,
-        required BoxFnDartFnFutureProcessingStage processingStage,
-        required BoxFnExtractionResultExtractionConfigDartFnFutureBool
-            shouldProcess,
-        required BoxFnExtractionResultDartFnFutureI64 estimatedDurationMs,
-        required BoxFnDartFnFutureI64 priority}) =>
-    RustLib.instance.api.crateCreatePostProcessorDartImpl(
-        pluginName: pluginName,
-        pluginVersion: pluginVersion,
-        process: process,
-        processingStage: processingStage,
-        shouldProcess: shouldProcess,
-        estimatedDurationMs: estimatedDurationMs,
-        priority: priority);
+Future<PostProcessorDartImpl> createPostProcessorDartImpl({
+  required String pluginName,
+  required String pluginVersion,
+  required BoxFnExtractionResultExtractionConfigDartFnFuture process,
+  required BoxFnDartFnFutureProcessingStage processingStage,
+  required BoxFnExtractionResultExtractionConfigDartFnFutureBool shouldProcess,
+  required BoxFnExtractionResultDartFnFutureI64 estimatedDurationMs,
+  required BoxFnDartFnFutureI64 priority,
+}) => RustLib.instance.api.crateCreatePostProcessorDartImpl(
+  pluginName: pluginName,
+  pluginVersion: pluginVersion,
+  process: process,
+  processingStage: processingStage,
+  shouldProcess: shouldProcess,
+  estimatedDurationMs: estimatedDurationMs,
+  priority: priority,
+);
 
 /// Register a Dart implementation as a `PostProcessor` plugin.
 ///
@@ -898,19 +930,19 @@ Future<void> clearPostProcessors() =>
 
 /// Create a `ValidatorDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<ValidatorDartImpl> createValidatorDartImpl(
-        {required String pluginName,
-        required String pluginVersion,
-        required BoxFnExtractionResultExtractionConfigDartFnFuture validate,
-        required BoxFnExtractionResultExtractionConfigDartFnFutureBool
-            shouldValidate,
-        required BoxFnDartFnFutureI64 priority}) =>
-    RustLib.instance.api.crateCreateValidatorDartImpl(
-        pluginName: pluginName,
-        pluginVersion: pluginVersion,
-        validate: validate,
-        shouldValidate: shouldValidate,
-        priority: priority);
+Future<ValidatorDartImpl> createValidatorDartImpl({
+  required String pluginName,
+  required String pluginVersion,
+  required BoxFnExtractionResultExtractionConfigDartFnFuture validate,
+  required BoxFnExtractionResultExtractionConfigDartFnFutureBool shouldValidate,
+  required BoxFnDartFnFutureI64 priority,
+}) => RustLib.instance.api.crateCreateValidatorDartImpl(
+  pluginName: pluginName,
+  pluginVersion: pluginVersion,
+  validate: validate,
+  shouldValidate: shouldValidate,
+  priority: priority,
+);
 
 /// Register a Dart implementation as a `Validator` plugin.
 ///
@@ -930,24 +962,25 @@ Future<void> clearValidators() => RustLib.instance.api.crateClearValidators();
 
 /// Create a `EmbeddingBackendDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<EmbeddingBackendDartImpl> createEmbeddingBackendDartImpl(
-        {required String pluginName,
-        required String pluginVersion,
-        required BoxFnDartFnFutureI64 dimensions,
-        required BoxFnVecStringDartFnFutureVecVecF64 embed}) =>
-    RustLib.instance.api.crateCreateEmbeddingBackendDartImpl(
-        pluginName: pluginName,
-        pluginVersion: pluginVersion,
-        dimensions: dimensions,
-        embed: embed);
+Future<EmbeddingBackendDartImpl> createEmbeddingBackendDartImpl({
+  required String pluginName,
+  required String pluginVersion,
+  required BoxFnDartFnFutureI64 dimensions,
+  required BoxFnVecStringDartFnFutureVecVecF64 embed,
+}) => RustLib.instance.api.crateCreateEmbeddingBackendDartImpl(
+  pluginName: pluginName,
+  pluginVersion: pluginVersion,
+  dimensions: dimensions,
+  embed: embed,
+);
 
 /// Register a Dart implementation as a `EmbeddingBackend` plugin.
 ///
 /// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_embedding_backend_registry()`.
 /// Errors from the host registry are stringified for FRB transport.
-Future<void> registerEmbeddingBackend(
-        {required EmbeddingBackendDartImpl impl}) =>
-    RustLib.instance.api.crateRegisterEmbeddingBackend(impl: impl);
+Future<void> registerEmbeddingBackend({
+  required EmbeddingBackendDartImpl impl,
+}) => RustLib.instance.api.crateRegisterEmbeddingBackend(impl: impl);
 
 /// Unregister a previously-registered `EmbeddingBackend` plugin by name.
 /// Removes the plugin from `kreuzberg::plugins::registry::get_embedding_backend_registry()` and stringifies any host error.
@@ -961,32 +994,33 @@ Future<void> clearEmbeddingBackends() =>
 
 /// Create a `DocumentExtractorDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<DocumentExtractorDartImpl> createDocumentExtractorDartImpl(
-        {required String pluginName,
-        required String pluginVersion,
-        required BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument
-            extractBytes,
-        required BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
-            extractFile,
-        required BoxFnDartFnFutureVecString supportedMimeTypes,
-        required BoxFnDartFnFutureI64 priority,
-        required BoxFnStringStringDartFnFutureBool canHandle}) =>
-    RustLib.instance.api.crateCreateDocumentExtractorDartImpl(
-        pluginName: pluginName,
-        pluginVersion: pluginVersion,
-        extractBytes: extractBytes,
-        extractFile: extractFile,
-        supportedMimeTypes: supportedMimeTypes,
-        priority: priority,
-        canHandle: canHandle);
+Future<DocumentExtractorDartImpl> createDocumentExtractorDartImpl({
+  required String pluginName,
+  required String pluginVersion,
+  required BoxFnVecU8StringExtractionConfigDartFnFutureInternalDocument
+  extractBytes,
+  required BoxFnStringStringExtractionConfigDartFnFutureInternalDocument
+  extractFile,
+  required BoxFnDartFnFutureVecString supportedMimeTypes,
+  required BoxFnDartFnFutureI64 priority,
+  required BoxFnStringStringDartFnFutureBool canHandle,
+}) => RustLib.instance.api.crateCreateDocumentExtractorDartImpl(
+  pluginName: pluginName,
+  pluginVersion: pluginVersion,
+  extractBytes: extractBytes,
+  extractFile: extractFile,
+  supportedMimeTypes: supportedMimeTypes,
+  priority: priority,
+  canHandle: canHandle,
+);
 
 /// Register a Dart implementation as a `DocumentExtractor` plugin.
 ///
 /// Wraps `impl_` in an `Arc` and inserts it into `kreuzberg::plugins::registry::get_document_extractor_registry()`.
 /// Errors from the host registry are stringified for FRB transport.
-Future<void> registerDocumentExtractor(
-        {required DocumentExtractorDartImpl impl}) =>
-    RustLib.instance.api.crateRegisterDocumentExtractor(impl: impl);
+Future<void> registerDocumentExtractor({
+  required DocumentExtractorDartImpl impl,
+}) => RustLib.instance.api.crateRegisterDocumentExtractor(impl: impl);
 
 /// Unregister a previously-registered `DocumentExtractor` plugin by name.
 /// Removes the plugin from `kreuzberg::plugins::registry::get_document_extractor_registry()` and stringifies any host error.
@@ -1000,12 +1034,15 @@ Future<void> clearDocumentExtractors() =>
 
 /// Create a `RendererDartImpl` from Dart callback closures.
 /// `plugin_name` and `plugin_version` are required for the Plugin super-trait.
-Future<RendererDartImpl> createRendererDartImpl(
-        {required String pluginName,
-        required String pluginVersion,
-        required BoxFnInternalDocumentDartFnFutureString render}) =>
-    RustLib.instance.api.crateCreateRendererDartImpl(
-        pluginName: pluginName, pluginVersion: pluginVersion, render: render);
+Future<RendererDartImpl> createRendererDartImpl({
+  required String pluginName,
+  required String pluginVersion,
+  required BoxFnInternalDocumentDartFnFutureString render,
+}) => RustLib.instance.api.crateCreateRendererDartImpl(
+  pluginName: pluginName,
+  pluginVersion: pluginVersion,
+  render: render,
+);
 
 /// Register a Dart implementation as a `Renderer` plugin.
 ///
@@ -1132,10 +1169,7 @@ class AccelerationConfig {
   final ExecutionProviderType provider;
   final PlatformInt64 deviceId;
 
-  const AccelerationConfig({
-    required this.provider,
-    required this.deviceId,
-  });
+  const AccelerationConfig({required this.provider, required this.deviceId});
 
   @override
   int get hashCode => provider.hashCode ^ deviceId.hashCode;
@@ -1204,12 +1238,10 @@ sealed class AnnotationKind with _$AnnotationKind {
     required String title,
   }) = AnnotationKind_Link;
   const factory AnnotationKind.highlight() = AnnotationKind_Highlight;
-  const factory AnnotationKind.color({
-    required String value,
-  }) = AnnotationKind_Color;
-  const factory AnnotationKind.fontSize({
-    required String value,
-  }) = AnnotationKind_FontSize;
+  const factory AnnotationKind.color({required String value}) =
+      AnnotationKind_Color;
+  const factory AnnotationKind.fontSize({required String value}) =
+      AnnotationKind_FontSize;
   const factory AnnotationKind.custom({
     required String name,
     required String value,
@@ -1330,10 +1362,7 @@ class BatchFileItem {
   final String path;
   final FileExtractionConfig? config;
 
-  const BatchFileItem({
-    required this.path,
-    this.config,
-  });
+  const BatchFileItem({required this.path, this.config});
 
   @override
   int get hashCode => path.hashCode ^ config.hashCode;
@@ -1399,17 +1428,13 @@ enum BlockType {
   thematicBreak,
   rawBlock,
   mathDisplay,
-  ;
 }
 
 class CacheWarmParams {
   final bool allEmbeddings;
   final String? embeddingModel;
 
-  const CacheWarmParams({
-    required this.allEmbeddings,
-    this.embeddingModel,
-  });
+  const CacheWarmParams({required this.allEmbeddings, this.embeddingModel});
 
   @override
   int get hashCode => allEmbeddings.hashCode ^ embeddingModel.hashCode;
@@ -1624,16 +1649,9 @@ enum ChunkType {
   orgChart,
   diagram,
   unknown,
-  ;
 }
 
-enum ChunkerType {
-  text,
-  markdown,
-  yaml,
-  semantic,
-  ;
-}
+enum ChunkerType { text, markdown, yaml, semantic }
 
 class ChunkingConfig {
   final PlatformInt64 maxCharacters;
@@ -1690,10 +1708,7 @@ class ChunkingResult {
   final List<Chunk> chunks;
   final PlatformInt64 chunkCount;
 
-  const ChunkingResult({
-    required this.chunks,
-    required this.chunkCount,
-  });
+  const ChunkingResult({required this.chunks, required this.chunkCount});
 
   @override
   int get hashCode => chunks.hashCode ^ chunkCount.hashCode;
@@ -1746,12 +1761,7 @@ class CitationMetadata {
           keywords == other.keywords;
 }
 
-enum CodeContentMode {
-  chunks,
-  raw,
-  structure,
-  ;
-}
+enum CodeContentMode { chunks, raw, structure }
 
 class ContentFilterConfig {
   final bool includeHeaders;
@@ -1784,22 +1794,13 @@ class ContentFilterConfig {
           includeWatermarks == other.includeWatermarks;
 }
 
-enum ContentLayer {
-  body,
-  header,
-  footer,
-  footnote,
-  ;
-}
+enum ContentLayer { body, header, footer, footnote }
 
 class ContributorRole {
   final String name;
   final String? role;
 
-  const ContributorRole({
-    required this.name,
-    this.role,
-  });
+  const ContributorRole({required this.name, this.role});
 
   @override
   int get hashCode => name.hashCode ^ role.hashCode;
@@ -1927,10 +1928,7 @@ class DbfFieldInfo {
   final String name;
   final String fieldType;
 
-  const DbfFieldInfo({
-    required this.name,
-    required this.fieldType,
-  });
+  const DbfFieldInfo({required this.name, required this.fieldType});
 
   @override
   int get hashCode => name.hashCode ^ fieldType.hashCode;
@@ -1973,10 +1971,7 @@ class DetectMimeTypeParams {
   final String path;
   final bool useContent;
 
-  const DetectMimeTypeParams({
-    required this.path,
-    required this.useContent,
-  });
+  const DetectMimeTypeParams({required this.path, required this.useContent});
 
   @override
   int get hashCode => path.hashCode ^ useContent.hashCode;
@@ -1994,10 +1989,7 @@ class DetectResponse {
   final String mimeType;
   final String? filename;
 
-  const DetectResponse({
-    required this.mimeType,
-    this.filename,
-  });
+  const DetectResponse({required this.mimeType, this.filename});
 
   @override
   int get hashCode => mimeType.hashCode ^ filename.hashCode;
@@ -2015,10 +2007,7 @@ class DetectedBoundary {
   final PlatformInt64 byteOffset;
   final bool isHeader;
 
-  const DetectedBoundary({
-    required this.byteOffset,
-    required this.isHeader,
-  });
+  const DetectedBoundary({required this.byteOffset, required this.isHeader});
 
   @override
   int get hashCode => byteOffset.hashCode ^ isHeader.hashCode;
@@ -2164,10 +2153,7 @@ class DoclingCompatResponse {
   final String document;
   final String status;
 
-  const DoclingCompatResponse({
-    required this.document,
-    required this.status,
-  });
+  const DoclingCompatResponse({required this.document, required this.status});
 
   @override
   int get hashCode => document.hashCode ^ status.hashCode;
@@ -2506,7 +2492,6 @@ enum ElementType {
   blockQuote,
   footer,
   header,
-  ;
 }
 
 class EmailAttachment {
@@ -2551,9 +2536,7 @@ class EmailAttachment {
 class EmailConfig {
   final PlatformInt64? msgFallbackCodepage;
 
-  const EmailConfig({
-    this.msgFallbackCodepage,
-  });
+  const EmailConfig({this.msgFallbackCodepage});
 
   @override
   int get hashCode => msgFallbackCodepage.hashCode;
@@ -2676,10 +2659,7 @@ class EmbedRequest {
   final List<String> texts;
   final EmbeddingConfig? config;
 
-  const EmbedRequest({
-    required this.texts,
-    this.config,
-  });
+  const EmbedRequest({required this.texts, this.config});
 
   @override
   int get hashCode => texts.hashCode ^ config.hashCode;
@@ -2764,11 +2744,7 @@ class EmbeddedFile {
   final Uint8List data;
   final String? mimeType;
 
-  const EmbeddedFile({
-    required this.name,
-    required this.data,
-    this.mimeType,
-  });
+  const EmbeddedFile({required this.name, required this.data, this.mimeType});
 
   @override
   int get hashCode => name.hashCode ^ data.hashCode ^ mimeType.hashCode;
@@ -2830,19 +2806,16 @@ class EmbeddingConfig {
 sealed class EmbeddingModelType with _$EmbeddingModelType {
   const EmbeddingModelType._();
 
-  const factory EmbeddingModelType.preset({
-    required String name,
-  }) = EmbeddingModelType_Preset;
+  const factory EmbeddingModelType.preset({required String name}) =
+      EmbeddingModelType_Preset;
   const factory EmbeddingModelType.custom({
     required String modelId,
     required PlatformInt64 dimensions,
   }) = EmbeddingModelType_Custom;
-  const factory EmbeddingModelType.llm({
-    required LlmConfig llm,
-  }) = EmbeddingModelType_Llm;
-  const factory EmbeddingModelType.plugin({
-    required String name,
-  }) = EmbeddingModelType_Plugin;
+  const factory EmbeddingModelType.llm({required LlmConfig llm}) =
+      EmbeddingModelType_Llm;
+  const factory EmbeddingModelType.plugin({required String name}) =
+      EmbeddingModelType_Plugin;
 }
 
 class EmbeddingPreset {
@@ -2935,10 +2908,7 @@ class ErrorMetadata {
   final String errorType;
   final String message;
 
-  const ErrorMetadata({
-    required this.errorType,
-    required this.message,
-  });
+  const ErrorMetadata({required this.errorType, required this.message});
 
   @override
   int get hashCode => errorType.hashCode ^ message.hashCode;
@@ -2956,10 +2926,7 @@ class ExcelMetadata {
   final PlatformInt64? sheetCount;
   final List<String>? sheetNames;
 
-  const ExcelMetadata({
-    this.sheetCount,
-    this.sheetNames,
-  });
+  const ExcelMetadata({this.sheetCount, this.sheetNames});
 
   @override
   int get hashCode => sheetCount.hashCode ^ sheetNames.hashCode;
@@ -3016,10 +2983,7 @@ class ExcelWorkbook {
   final List<ExcelSheet> sheets;
   final Map<String, String> metadata;
 
-  const ExcelWorkbook({
-    required this.sheets,
-    required this.metadata,
-  });
+  const ExcelWorkbook({required this.sheets, required this.metadata});
 
   @override
   int get hashCode => sheets.hashCode ^ metadata.hashCode;
@@ -3033,14 +2997,7 @@ class ExcelWorkbook {
           metadata == other.metadata;
 }
 
-enum ExecutionProviderType {
-  auto,
-  cpu,
-  coreMl,
-  cuda,
-  tensorRt,
-  ;
-}
+enum ExecutionProviderType { auto, cpu, coreMl, cuda, tensorRt }
 
 class ExtractStructuredParams {
   final String path;
@@ -3358,12 +3315,7 @@ class ExtractionConfig {
           cancelToken == other.cancelToken;
 }
 
-enum ExtractionMethod {
-  native,
-  ocr,
-  mixed,
-  ;
-}
+enum ExtractionMethod { native, ocr, mixed }
 
 class ExtractionResult {
   final String content;
@@ -3608,10 +3560,7 @@ class Footnote {
   final String label;
   final List<FormattedBlock> content;
 
-  const Footnote({
-    required this.label,
-    required this.content,
-  });
+  const Footnote({required this.label, required this.content});
 
   @override
   int get hashCode => label.hashCode ^ content.hashCode;
@@ -3629,66 +3578,47 @@ class Footnote {
 sealed class FormatMetadata with _$FormatMetadata {
   const FormatMetadata._();
 
-  const factory FormatMetadata.pdf({
-    required PdfMetadata field0,
-  }) = FormatMetadata_Pdf;
-  const factory FormatMetadata.docx({
-    required DocxMetadata field0,
-  }) = FormatMetadata_Docx;
-  const factory FormatMetadata.excel({
-    required ExcelMetadata field0,
-  }) = FormatMetadata_Excel;
-  const factory FormatMetadata.email({
-    required EmailMetadata field0,
-  }) = FormatMetadata_Email;
-  const factory FormatMetadata.pptx({
-    required PptxMetadata field0,
-  }) = FormatMetadata_Pptx;
-  const factory FormatMetadata.archive({
-    required ArchiveMetadata field0,
-  }) = FormatMetadata_Archive;
-  const factory FormatMetadata.image({
-    required ImageMetadata field0,
-  }) = FormatMetadata_Image;
-  const factory FormatMetadata.xml({
-    required XmlMetadata field0,
-  }) = FormatMetadata_Xml;
-  const factory FormatMetadata.text({
-    required TextMetadata field0,
-  }) = FormatMetadata_Text;
-  const factory FormatMetadata.html({
-    required HtmlMetadata field0,
-  }) = FormatMetadata_Html;
-  const factory FormatMetadata.ocr({
-    required OcrMetadata field0,
-  }) = FormatMetadata_Ocr;
-  const factory FormatMetadata.csv({
-    required CsvMetadata field0,
-  }) = FormatMetadata_Csv;
-  const factory FormatMetadata.bibtex({
-    required BibtexMetadata field0,
-  }) = FormatMetadata_Bibtex;
-  const factory FormatMetadata.citation({
-    required CitationMetadata field0,
-  }) = FormatMetadata_Citation;
+  const factory FormatMetadata.pdf({required PdfMetadata field0}) =
+      FormatMetadata_Pdf;
+  const factory FormatMetadata.docx({required DocxMetadata field0}) =
+      FormatMetadata_Docx;
+  const factory FormatMetadata.excel({required ExcelMetadata field0}) =
+      FormatMetadata_Excel;
+  const factory FormatMetadata.email({required EmailMetadata field0}) =
+      FormatMetadata_Email;
+  const factory FormatMetadata.pptx({required PptxMetadata field0}) =
+      FormatMetadata_Pptx;
+  const factory FormatMetadata.archive({required ArchiveMetadata field0}) =
+      FormatMetadata_Archive;
+  const factory FormatMetadata.image({required ImageMetadata field0}) =
+      FormatMetadata_Image;
+  const factory FormatMetadata.xml({required XmlMetadata field0}) =
+      FormatMetadata_Xml;
+  const factory FormatMetadata.text({required TextMetadata field0}) =
+      FormatMetadata_Text;
+  const factory FormatMetadata.html({required HtmlMetadata field0}) =
+      FormatMetadata_Html;
+  const factory FormatMetadata.ocr({required OcrMetadata field0}) =
+      FormatMetadata_Ocr;
+  const factory FormatMetadata.csv({required CsvMetadata field0}) =
+      FormatMetadata_Csv;
+  const factory FormatMetadata.bibtex({required BibtexMetadata field0}) =
+      FormatMetadata_Bibtex;
+  const factory FormatMetadata.citation({required CitationMetadata field0}) =
+      FormatMetadata_Citation;
   const factory FormatMetadata.fictionBook({
     required FictionBookMetadata field0,
   }) = FormatMetadata_FictionBook;
-  const factory FormatMetadata.dbf({
-    required DbfMetadata field0,
-  }) = FormatMetadata_Dbf;
-  const factory FormatMetadata.jats({
-    required JatsMetadata field0,
-  }) = FormatMetadata_Jats;
-  const factory FormatMetadata.epub({
-    required EpubMetadata field0,
-  }) = FormatMetadata_Epub;
-  const factory FormatMetadata.pst({
-    required PstMetadata field0,
-  }) = FormatMetadata_Pst;
-  const factory FormatMetadata.code({
-    required String field0,
-  }) = FormatMetadata_Code;
+  const factory FormatMetadata.dbf({required DbfMetadata field0}) =
+      FormatMetadata_Dbf;
+  const factory FormatMetadata.jats({required JatsMetadata field0}) =
+      FormatMetadata_Jats;
+  const factory FormatMetadata.epub({required EpubMetadata field0}) =
+      FormatMetadata_Epub;
+  const factory FormatMetadata.pst({required PstMetadata field0}) =
+      FormatMetadata_Pst;
+  const factory FormatMetadata.code({required String field0}) =
+      FormatMetadata_Code;
 }
 
 class FormattedBlock {
@@ -3815,9 +3745,7 @@ class HeaderMetadata {
 class HeadingContext {
   final List<HeadingLevel> headings;
 
-  const HeadingContext({
-    required this.headings,
-  });
+  const HeadingContext({required this.headings});
 
   @override
   int get hashCode => headings.hashCode;
@@ -3834,10 +3762,7 @@ class HeadingLevel {
   final PlatformInt64 level;
   final String text;
 
-  const HeadingLevel({
-    required this.level,
-    required this.text,
-  });
+  const HeadingLevel({required this.level, required this.text});
 
   @override
   int get hashCode => level.hashCode ^ text.hashCode;
@@ -4044,14 +3969,7 @@ class HtmlOutputConfig {
           embedCss == other.embedCss;
 }
 
-enum HtmlTheme {
-  default_,
-  gitHub,
-  dark,
-  light,
-  unstyled,
-  ;
-}
+enum HtmlTheme { default_, gitHub, dark, light, unstyled }
 
 class ImageExtractionConfig {
   final bool extractImages;
@@ -4116,7 +4034,6 @@ enum ImageKind {
   tileFragment,
   mask,
   unknown,
-  ;
 }
 
 class ImageMetadata {
@@ -4292,22 +4209,13 @@ class ImagePreprocessingMetadata {
           resizeError == other.resizeError;
 }
 
-enum ImageType {
-  dataUri,
-  inlineSvg,
-  external_,
-  relative,
-  ;
-}
+enum ImageType { dataUri, inlineSvg, external_, relative }
 
 class InfoResponse {
   final String version;
   final bool rustBackend;
 
-  const InfoResponse({
-    required this.version,
-    required this.rustBackend,
-  });
+  const InfoResponse({required this.version, required this.rustBackend});
 
   @override
   int get hashCode => version.hashCode ^ rustBackend.hashCode;
@@ -4369,7 +4277,6 @@ enum InlineType {
   rawInline,
   footnoteRef,
   symbol,
-  ;
 }
 
 class JatsMetadata {
@@ -4431,11 +4338,7 @@ class Keyword {
           positions == other.positions;
 }
 
-enum KeywordAlgorithm {
-  yake,
-  rake,
-  ;
-}
+enum KeywordAlgorithm { yake, rake }
 
 class KeywordConfig {
   final KeywordAlgorithm algorithm;
@@ -4523,7 +4426,6 @@ enum LayoutClass {
   checkboxUnselected,
   form,
   keyValueRegion,
-  ;
 }
 
 class LayoutDetection {
@@ -4651,15 +4553,7 @@ class LinkMetadata {
           attributes == other.attributes;
 }
 
-enum LinkType {
-  anchor,
-  internal,
-  external_,
-  email,
-  phone,
-  other,
-  ;
-}
+enum LinkType { anchor, internal, external_, email, phone, other }
 
 class LlmConfig {
   final String model;
@@ -4947,25 +4841,18 @@ class ModelPaths {
 sealed class NodeContent with _$NodeContent {
   const NodeContent._();
 
-  const factory NodeContent.title({
-    required String text,
-  }) = NodeContent_Title;
+  const factory NodeContent.title({required String text}) = NodeContent_Title;
   const factory NodeContent.heading({
     required PlatformInt64 level,
     required String text,
   }) = NodeContent_Heading;
-  const factory NodeContent.paragraph({
-    required String text,
-  }) = NodeContent_Paragraph;
-  const factory NodeContent.list({
-    required bool ordered,
-  }) = NodeContent_List;
-  const factory NodeContent.listItem({
-    required String text,
-  }) = NodeContent_ListItem;
-  const factory NodeContent.table({
-    required TableGrid grid,
-  }) = NodeContent_Table;
+  const factory NodeContent.paragraph({required String text}) =
+      NodeContent_Paragraph;
+  const factory NodeContent.list({required bool ordered}) = NodeContent_List;
+  const factory NodeContent.listItem({required String text}) =
+      NodeContent_ListItem;
+  const factory NodeContent.table({required TableGrid grid}) =
+      NodeContent_Table;
   const factory NodeContent.image({
     required String description,
     required PlatformInt64 imageIndex,
@@ -4976,12 +4863,10 @@ sealed class NodeContent with _$NodeContent {
     required String language,
   }) = NodeContent_Code;
   const factory NodeContent.quote() = NodeContent_Quote;
-  const factory NodeContent.formula({
-    required String text,
-  }) = NodeContent_Formula;
-  const factory NodeContent.footnote({
-    required String text,
-  }) = NodeContent_Footnote;
+  const factory NodeContent.formula({required String text}) =
+      NodeContent_Formula;
+  const factory NodeContent.footnote({required String text}) =
+      NodeContent_Footnote;
   const factory NodeContent.group({
     required String label,
     required PlatformInt64 headingLevel,
@@ -5009,9 +4894,8 @@ sealed class NodeContent with _$NodeContent {
     required String format,
     required String content,
   }) = NodeContent_RawBlock;
-  const factory NodeContent.metadataBlock({
-    required List<String> entries,
-  }) = NodeContent_MetadataBlock;
+  const factory NodeContent.metadataBlock({required List<String> entries}) =
+      NodeContent_MetadataBlock;
 }
 
 @freezed
@@ -5024,19 +4908,15 @@ sealed class OcrBoundingGeometry with _$OcrBoundingGeometry {
     required PlatformInt64 width,
     required PlatformInt64 height,
   }) = OcrBoundingGeometry_Rectangle;
-  const factory OcrBoundingGeometry.quadrilateral({
-    required String points,
-  }) = OcrBoundingGeometry_Quadrilateral;
+  const factory OcrBoundingGeometry.quadrilateral({required String points}) =
+      OcrBoundingGeometry_Quadrilateral;
 }
 
 class OcrConfidence {
   final double? detection;
   final double recognition;
 
-  const OcrConfidence({
-    this.detection,
-    required this.recognition,
-  });
+  const OcrConfidence({this.detection, required this.recognition});
 
   @override
   int get hashCode => detection.hashCode ^ recognition.hashCode;
@@ -5203,13 +5083,7 @@ class OcrElementConfig {
           buildHierarchy == other.buildHierarchy;
 }
 
-enum OcrElementLevel {
-  word,
-  line,
-  block,
-  page,
-  ;
-}
+enum OcrElementLevel { word, line, block, page }
 
 class OcrExtractionResult {
   final String content;
@@ -5436,10 +5310,7 @@ class OcrRotation {
   final double angleDegrees;
   final double? confidence;
 
-  const OcrRotation({
-    required this.angleDegrees,
-    this.confidence,
-  });
+  const OcrRotation({required this.angleDegrees, this.confidence});
 
   @override
   int get hashCode => angleDegrees.hashCode ^ confidence.hashCode;
@@ -5537,10 +5408,7 @@ class OrientationResult {
   final PlatformInt64 degrees;
   final double confidence;
 
-  const OrientationResult({
-    required this.degrees,
-    required this.confidence,
-  });
+  const OrientationResult({required this.degrees, required this.confidence});
 
   @override
   int get hashCode => degrees.hashCode ^ confidence.hashCode;
@@ -5564,9 +5432,8 @@ sealed class OutputFormat with _$OutputFormat {
   const factory OutputFormat.html() = OutputFormat_Html;
   const factory OutputFormat.json() = OutputFormat_Json;
   const factory OutputFormat.structured() = OutputFormat_Structured;
-  const factory OutputFormat.custom({
-    required String field0,
-  }) = OutputFormat_Custom;
+  const factory OutputFormat.custom({required String field0}) =
+      OutputFormat_Custom;
 }
 
 class PaddleOcrConfig {
@@ -5731,10 +5598,7 @@ class PageHierarchy {
   final PlatformInt64 blockCount;
   final List<HierarchicalBlock> blocks;
 
-  const PageHierarchy({
-    required this.blockCount,
-    required this.blocks,
-  });
+  const PageHierarchy({required this.blockCount, required this.blocks});
 
   @override
   int get hashCode => blockCount.hashCode ^ blocks.hashCode;
@@ -5826,12 +5690,7 @@ class PageStructure {
           pages == other.pages;
 }
 
-enum PageUnitType {
-  page,
-  slide,
-  sheet,
-  ;
-}
+enum PageUnitType { page, slide, sheet }
 
 class PdfAnnotation {
   final PdfAnnotationType annotationType;
@@ -5872,7 +5731,6 @@ enum PdfAnnotationType {
   underline,
   strikeOut,
   other,
-  ;
 }
 
 class PdfConfig {
@@ -6173,10 +6031,7 @@ class ProcessingWarning {
   final String source;
   final String message;
 
-  const ProcessingWarning({
-    required this.source,
-    required this.message,
-  });
+  const ProcessingWarning({required this.source, required this.message});
 
   @override
   int get hashCode => source.hashCode ^ message.hashCode;
@@ -6193,9 +6048,7 @@ class ProcessingWarning {
 class PstMetadata {
   final PlatformInt64 messageCount;
 
-  const PstMetadata({
-    required this.messageCount,
-  });
+  const PstMetadata({required this.messageCount});
 
   @override
   int get hashCode => messageCount.hashCode;
@@ -6254,14 +6107,7 @@ class RecognizedTable {
           markdown == other.markdown;
 }
 
-enum ReductionLevel {
-  off,
-  light,
-  moderate,
-  aggressive,
-  maximum,
-  ;
-}
+enum ReductionLevel { off, light, moderate, aggressive, maximum }
 
 enum RelationshipKind {
   footnoteReference,
@@ -6271,14 +6117,9 @@ enum RelationshipKind {
   label,
   tocEntry,
   crossReference,
-  ;
 }
 
-enum ResultFormat {
-  unified,
-  elementBased,
-  ;
-}
+enum ResultFormat { unified, elementBased }
 
 class SecurityLimits {
   final PlatformInt64 maxArchiveSize;
@@ -6422,12 +6263,7 @@ class StructuredDataResult {
           textFields == other.textFields;
 }
 
-enum StructuredDataType {
-  jsonLd,
-  microdata,
-  rdFa,
-  ;
-}
+enum StructuredDataType { jsonLd, microdata, rdFa }
 
 class StructuredExtractionConfig {
   final String schema;
@@ -6497,10 +6333,7 @@ class SupportedFormat {
   final String extension_;
   final String mimeType;
 
-  const SupportedFormat({
-    required this.extension_,
-    required this.mimeType,
-  });
+  const SupportedFormat({required this.extension_, required this.mimeType});
 
   @override
   int get hashCode => extension_.hashCode ^ mimeType.hashCode;
@@ -6607,7 +6440,6 @@ enum TableModel {
   slanetPlus,
   slanetAuto,
   disabled,
-  ;
 }
 
 class TableProperties {
@@ -6786,12 +6618,7 @@ class TextAnnotation {
           kind == other.kind;
 }
 
-enum TextDirection {
-  leftToRight,
-  rightToLeft,
-  auto,
-  ;
-}
+enum TextDirection { leftToRight, rightToLeft, auto }
 
 class TextExtractionResult {
   final String content;
@@ -7047,12 +6874,7 @@ class Uri {
   final PlatformInt64? page;
   final UriKind kind;
 
-  const Uri({
-    required this.url,
-    this.label,
-    this.page,
-    required this.kind,
-  });
+  const Uri({required this.url, this.label, this.page, required this.kind});
 
   @override
   int get hashCode =>
@@ -7069,15 +6891,7 @@ class Uri {
           kind == other.kind;
 }
 
-enum UriKind {
-  hyperlink,
-  image,
-  anchor,
-  citation,
-  reference,
-  email,
-  ;
-}
+enum UriKind { hyperlink, image, anchor, citation, reference, email }
 
 class WarmResponse {
   final String cacheDir;
@@ -7184,10 +6998,7 @@ class XmlMetadata {
   final PlatformInt64 elementCount;
   final List<String> uniqueElements;
 
-  const XmlMetadata({
-    required this.elementCount,
-    required this.uniqueElements,
-  });
+  const XmlMetadata({required this.elementCount, required this.uniqueElements});
 
   @override
   int get hashCode => elementCount.hashCode ^ uniqueElements.hashCode;
@@ -7204,9 +7015,7 @@ class XmlMetadata {
 class YakeParams {
   final PlatformInt64 windowSize;
 
-  const YakeParams({
-    required this.windowSize,
-  });
+  const YakeParams({required this.windowSize});
 
   @override
   int get hashCode => windowSize.hashCode;
@@ -7224,11 +7033,7 @@ class YearRange {
   final PlatformInt64? max;
   final Int64List years;
 
-  const YearRange({
-    this.min,
-    this.max,
-    required this.years,
-  });
+  const YearRange({this.min, this.max, required this.years});
 
   @override
   int get hashCode => min.hashCode ^ max.hashCode ^ years.hashCode;
