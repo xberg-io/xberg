@@ -201,6 +201,88 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
     Ok((content, Some(boundaries), page_contents))
 }
 
+/// Minimum consecutive single-char zero-height spans that triggers the glyph-fragmentation
+/// repair path. Must match FRAG_MIN_RUN in tests.
+const FRAG_MIN_RUN: usize = 5;
+
+/// y-proximity threshold (pt) for coalescing glyph-jitter spans onto one text line.
+/// Word's BT-per-glyph sinusoidal jitter (6-glyph period) produces consecutive-pair
+/// y-gaps ≤ ~3.03 pt; 4.0 pt covers this while staying below normal line spacing (~14 pt).
+const COALESCE_THRESHOLD: f32 = 4.0;
+
+/// Returns true when `spans` exhibits the glyph-fragmentation signature: ≥ FRAG_MIN_RUN
+/// consecutive single-character spans each with near-zero bbox height.
+///
+/// This pattern occurs when a PDF (e.g. Word-exported) positions every glyph via its
+/// own BT…ET block with an absolute Tm matrix that includes a y-coordinate jitter
+/// exceeding the backend's internal line-break threshold. The result is one span per
+/// character instead of one span per word or line. (issue #962)
+fn is_fragmented_span_list(spans: &[pdf_oxide::layout::TextSpan]) -> bool {
+    let mut run = 0usize;
+    for span in spans {
+        if span.text.chars().count() == 1 && span.bbox.height < 1.0 {
+            run += 1;
+            if run >= FRAG_MIN_RUN {
+                return true;
+            }
+        } else {
+            run = 0;
+        }
+    }
+    false
+}
+
+/// Rebuild readable text from a glyph-fragmented span list (issue #962).
+///
+/// Algorithm:
+/// 1. Sort spans by y-descending (top-of-page first in PDF coordinates).
+/// 2. Group by chained y-proximity: consecutive spans within COALESCE_THRESHOLD pt
+///    of the previous span belong to the same visual line.
+/// 3. Within each group sort by x-ascending (left-to-right reading order).
+/// 4. Concatenate, inserting a space wherever the x-gap between adjacent spans
+///    exceeds font_size * 0.25.
+fn rebuild_text_from_fragmented_spans(spans: &[pdf_oxide::layout::TextSpan]) -> String {
+    if spans.is_empty() {
+        return String::new();
+    }
+
+    let mut sorted: Vec<&pdf_oxide::layout::TextSpan> = spans.iter().collect();
+    sorted.sort_by(|a, b| b.bbox.y.partial_cmp(&a.bbox.y).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Group by chained y-proximity.
+    let mut groups: Vec<Vec<&pdf_oxide::layout::TextSpan>> = Vec::new();
+    for span in sorted {
+        let belongs = groups.last().map_or(false, |g| {
+            let prev_y = g.last().unwrap().bbox.y;
+            (span.bbox.y - prev_y).abs() <= COALESCE_THRESHOLD
+        });
+        if belongs {
+            groups.last_mut().unwrap().push(span);
+        } else {
+            groups.push(vec![span]);
+        }
+    }
+
+    let mut result = String::new();
+    for (gi, group) in groups.iter_mut().enumerate() {
+        group.sort_by(|a, b| a.bbox.x.partial_cmp(&b.bbox.x).unwrap_or(std::cmp::Ordering::Equal));
+        if gi > 0 {
+            result.push('\n');
+        }
+        let font_size = group.iter().map(|s| s.font_size).fold(0.0_f32, f32::max);
+        let space_threshold = (font_size * 0.25).max(1.0);
+        let mut prev_end_x = f32::NEG_INFINITY;
+        for span in group.iter() {
+            if prev_end_x.is_finite() && span.bbox.x - prev_end_x > space_threshold {
+                result.push(' ');
+            }
+            result.push_str(&span.text);
+            prev_end_x = span.bbox.x + span.bbox.width;
+        }
+    }
+    result
+}
+
 /// Extract text from a single page using column-aware reading order.
 ///
 /// Uses `extract_page_text_with_options` with `ReadingOrder::ColumnAware` to
@@ -209,12 +291,29 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
 ///
 /// Detects paragraph breaks via vertical gap heuristics: when the gap between
 /// lines exceeds 1.5x the median line height, inserts a paragraph break (\n\n).
+///
+/// Applies a fragmentation repair pass for PDFs that position each glyph via its
+/// own BT…ET block (issue #962): detected by FRAG_MIN_RUN consecutive single-char
+/// spans with near-zero height; repaired by re-sorting on position rather than
+/// relying on the per-span same-line heuristic.
 fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: usize) -> Result<String> {
     let page_text_data = doc
         .extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
         .map_err(|e| {
             PdfError::TextExtractionFailed(format!("Page {} text extraction failed: {}", page_index + 1, e))
         })?;
+
+    // Issue #962: Word-exported PDFs sometimes place each glyph in its own BT…ET block
+    // with a sinusoidal y-jitter up to ~3.5 pt. pdf_oxide emits these as single-char spans
+    // with near-zero bbox.height; the same-line heuristic below then fails (threshold = 0)
+    // and every glyph becomes its own line. Detect and repair before normal processing.
+    if is_fragmented_span_list(&page_text_data.spans) {
+        tracing::debug!(
+            span_count = page_text_data.spans.len(),
+            "glyph fragmentation detected — rebuilding text from span positions (#962)"
+        );
+        return Ok(rebuild_text_from_fragmented_spans(&page_text_data.spans));
+    }
 
     // Compute median line height for paragraph break detection.
     let mut heights: Vec<f32> = page_text_data.spans.iter().map(|s| s.bbox.height).collect();
@@ -242,7 +341,10 @@ fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: 
         if let Some(prev) = prev_span {
             let prev_end_x = prev.bbox.x + prev.bbox.width;
             let y_gap = (prev.bbox.y - span.bbox.y).abs();
-            let same_line = y_gap < span.bbox.height.max(prev.bbox.height) * 0.5;
+            // Use font_size as fallback when bbox.height is near-zero (defense in depth
+            // for spans that don't form a long enough run to trigger is_fragmented_span_list).
+            let eff_height = span.bbox.height.max(prev.bbox.height).max(span.font_size * 0.5);
+            let same_line = y_gap < eff_height * 0.5;
 
             if same_line {
                 let x_gap = span.bbox.x - prev_end_x;
