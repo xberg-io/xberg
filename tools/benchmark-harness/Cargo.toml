@@ -35,8 +35,8 @@ kreuzberg = { path = "../../crates/kreuzberg", features = ["full"] }
 num_cpus = { workspace = true }
 
 pprof = { version = "0.15", features = [
-  "flamegraph",
-  "criterion",
+    "flamegraph",
+    "criterion",
 ], optional = true }
 pulldown-cmark = "0.13"
 rayon = { workspace = true }
