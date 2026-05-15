@@ -1689,21 +1689,16 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: java-natives-*
-          path: java-natives
+          path: artifacts/java-natives
           merge-multiple: true
 
-      - name: Stage natives into resources
-        # Inline: copy classifier-bucketed libs from artifact tree into
-        # packages/java/src/main/resources/natives/<classifier>/. Tightly
-        # coupled to the Maven resource layout — no shared action covers it.
-        run: |
-          mkdir -p packages/java/src/main/resources/natives
-          for dir in java-natives/native/*/; do
-            classifier="$(basename "$dir")"
-            mkdir -p "packages/java/src/main/resources/natives/${classifier}"
-            cp -v "${dir}"/* "packages/java/src/main/resources/natives/${classifier}/"
-          done
-        shell: bash
+      - uses: kreuzberg-dev/actions/stage-java-natives@v1
+        with:
+          resources-dir: packages/java/src/main/resources/natives
+          required-classifiers: >-
+            linux-x86_64 linux-aarch64 macos-arm64 windows-x86_64
+            linux-musl-x86_64 linux-musl-aarch64
+          lib-name: kreuzberg_ffi
 
       - uses: actions/setup-java@v5
         with:
@@ -1743,19 +1738,16 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: java-natives-*
-          path: java-natives
+          path: artifacts/java-natives
           merge-multiple: true
 
-      - name: Stage natives into Kotlin resources
-        # Inline: same layout as Maven (Kotlin reuses the Java JNA-loaded bridge).
-        run: |
-          mkdir -p packages/kotlin/src/main/resources/natives
-          for dir in java-natives/native/*/; do
-            classifier="$(basename "$dir")"
-            mkdir -p "packages/kotlin/src/main/resources/natives/${classifier}"
-            cp -v "${dir}"/* "packages/kotlin/src/main/resources/natives/${classifier}/"
-          done
-        shell: bash
+      - uses: kreuzberg-dev/actions/stage-java-natives@v1
+        with:
+          resources-dir: packages/kotlin/src/main/resources/natives
+          required-classifiers: >-
+            linux-x86_64 linux-aarch64 macos-arm64 windows-x86_64
+            linux-musl-x86_64 linux-musl-aarch64
+          lib-name: kreuzberg_ffi
 
       - uses: kreuzberg-dev/actions/publish-maven-gradle@v1
         with:
