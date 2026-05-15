@@ -28,6 +28,7 @@
       "java",
       "csharp",
       "kotlin",
+      "kotlin_android",
       "swift",
       "dart",
       "wasm",
