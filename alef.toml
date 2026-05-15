@@ -1019,9 +1019,14 @@ update = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly
 upgrade = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::update_packages(ask = FALSE)\""
 
 [crates.update.kotlin_android]
+# kotlin-android has no managed lockfile — dependency versions are pinned
+# directly in the alef-generated build.gradle.kts. Updating means running
+# alef regen with bumped versions in the upstream alef-backend-kotlin-android,
+# not a gradle command. The `dependencyUpdates` task would require applying
+# the ben-manes versions plugin which is not part of the generated template.
 precondition = "command -v gradle >/dev/null 2>&1"
-update = "cd packages/kotlin-android && gradle dependencyUpdates --no-daemon"
-upgrade = "cd packages/kotlin-android && gradle dependencyUpdates --refresh-dependencies --no-daemon"
+update = "echo 'kotlin-android: no-op (versions pinned by alef regen)'"
+upgrade = "echo 'kotlin-android: no-op (versions pinned by alef regen)'"
 
 [crates.update.swift]
 precondition = "command -v swift >/dev/null 2>&1"

@@ -1249,16 +1249,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "13.1.9",
+            "version": "13.1.10",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "506033fd7d6855fea1e2973767d65844412b4574"
+                "reference": "38959098d3c10660a189afaa35a94290c1de67bb"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/506033fd7d6855fea1e2973767d65844412b4574",
-                "reference": "506033fd7d6855fea1e2973767d65844412b4574",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/38959098d3c10660a189afaa35a94290c1de67bb",
+                "reference": "38959098d3c10660a189afaa35a94290c1de67bb",
                 "shasum": ""
             },
             "require": {
@@ -1278,8 +1278,8 @@
                 "phpunit/php-text-template": "^6.0.0",
                 "phpunit/php-timer": "^9.0.0",
                 "sebastian/cli-parser": "^5.0.0",
-                "sebastian/comparator": "^8.1.2",
-                "sebastian/diff": "^8.1.0",
+                "sebastian/comparator": "^8.1.3",
+                "sebastian/diff": "^8.3.0",
                 "sebastian/environment": "^9.3.0",
                 "sebastian/exporter": "^8.0.2",
                 "sebastian/git-state": "^1.0",
@@ -1328,7 +1328,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/13.1.9"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/13.1.10"
             },
             "funding": [
                 {
@@ -1336,7 +1336,7 @@
                     "type": "other"
                 }
             ],
-            "time": "2026-05-13T04:00:53+00:00"
+            "time": "2026-05-15T08:03:56+00:00"
         },
         {
             "name": "psr/container",
@@ -2088,23 +2088,23 @@
         },
         {
             "name": "sebastian/comparator",
-            "version": "8.1.2",
+            "version": "8.1.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/comparator.git",
-                "reference": "b3d09f4360ad97dcad8f82d1c047ad16ff38b7e1"
+                "reference": "b8354ddf58f87d2eb7239d419256c7cffb3dcce2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/comparator/zipball/b3d09f4360ad97dcad8f82d1c047ad16ff38b7e1",
-                "reference": "b3d09f4360ad97dcad8f82d1c047ad16ff38b7e1",
+                "url": "https://api.github.com/repos/sebastianbergmann/comparator/zipball/b8354ddf58f87d2eb7239d419256c7cffb3dcce2",
+                "reference": "b8354ddf58f87d2eb7239d419256c7cffb3dcce2",
                 "shasum": ""
             },
             "require": {
                 "ext-dom": "*",
                 "ext-mbstring": "*",
                 "php": ">=8.4",
-                "sebastian/diff": "^8.1",
+                "sebastian/diff": "^8.3",
                 "sebastian/exporter": "^8.0"
             },
             "require-dev": {
@@ -2156,7 +2156,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/comparator/issues",
                 "security": "https://github.com/sebastianbergmann/comparator/security/policy",
-                "source": "https://github.com/sebastianbergmann/comparator/tree/8.1.2"
+                "source": "https://github.com/sebastianbergmann/comparator/tree/8.1.3"
             },
             "funding": [
                 {
@@ -2176,7 +2176,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-04-14T08:24:42+00:00"
+            "time": "2026-05-15T05:47:50+00:00"
         },
         {
             "name": "sebastian/complexity",
@@ -2250,16 +2250,16 @@
         },
         {
             "name": "sebastian/diff",
-            "version": "8.2.1",
+            "version": "8.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/diff.git",
-                "reference": "cce1bb200e0062e72f9b85ccfe54d3fd38bbd044"
+                "reference": "b36d33b6e796513de7cb7df053afb3f55eefcd47"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/diff/zipball/cce1bb200e0062e72f9b85ccfe54d3fd38bbd044",
-                "reference": "cce1bb200e0062e72f9b85ccfe54d3fd38bbd044",
+                "url": "https://api.github.com/repos/sebastianbergmann/diff/zipball/b36d33b6e796513de7cb7df053afb3f55eefcd47",
+                "reference": "b36d33b6e796513de7cb7df053afb3f55eefcd47",
                 "shasum": ""
             },
             "require": {
@@ -2272,7 +2272,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-main": "8.2-dev"
+                    "dev-main": "8.3-dev"
                 }
             },
             "autoload": {
@@ -2305,7 +2305,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/diff/issues",
                 "security": "https://github.com/sebastianbergmann/diff/security/policy",
-                "source": "https://github.com/sebastianbergmann/diff/tree/8.2.1"
+                "source": "https://github.com/sebastianbergmann/diff/tree/8.3.0"
             },
             "funding": [
                 {
@@ -2325,7 +2325,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-05-14T05:24:37+00:00"
+            "time": "2026-05-15T04:58:09+00:00"
         },
         {
             "name": "sebastian/environment",

@@ -102,7 +102,7 @@ tokio = { version = "1.52.3", features = [
 ] }
 toml = "1.1.2"
 tracing = "0.1"
-tree-sitter-language-pack = { version = "1.8.0", default-features = false, features = [
+tree-sitter-language-pack = { version = "1.8.1", default-features = false, features = [
   "serde",
 ] }
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }

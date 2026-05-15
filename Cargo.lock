@@ -3740,7 +3740,6 @@ version = "5.0.0-rc.1"
 dependencies = [
  "async-trait",
  "cbindgen",
- "futures-util",
  "kreuzberg",
  "serde_json",
  "tempfile",
@@ -3752,7 +3751,6 @@ name = "kreuzberg-node"
 version = "5.0.0-rc.1"
 dependencies = [
  "async-trait",
- "futures-util",
  "kreuzberg",
  "napi",
  "napi-build",
@@ -3831,7 +3829,7 @@ version = "5.0.0-rc.1"
 dependencies = [
  "async-trait",
  "futures-util",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "js-sys",
  "kreuzberg",
  "serde-wasm-bindgen",
@@ -7406,9 +7404,9 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-language-pack"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91d653d458e2a8ec41cac1e980d258c39c07cbb36b6e72059b9dc272329310d5"
+checksum = "208658b27011901bb099b638e9ba25ad0a2063d5d6b7fcc6c07af0dcc94ffe10"
 dependencies = [
  "ahash",
  "cc",
