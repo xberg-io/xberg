@@ -2,6 +2,17 @@
 
 All notable changes to kreuzberg-surrealdb will be documented in this file.
 
+## [0.2.0] — 2026-05-15
+
+> **Migration required** — records ingested with `0.1.x` have different field shapes in SurrealDB. Drop and re-ingest your document and chunk tables after upgrading to ensure consistent data.
+
+### Fixed
+
+- **`authors` field** — stored as a comma-separated string instead of a raw list, matching the kreuzberg `metadata.authors: list[str]` type.
+- **`detected_languages` field** — now always a list (empty list instead of `None` when no languages were detected). SurrealQL queries checking `IF detected_languages = NONE` should be updated to check `array::len(detected_languages) = 0`.
+- **`keywords` field** — now a `list[str]` of keyword text values instead of raw `ExtractedKeyword` objects. Application code that accessed `.text` on keyword items should use the string directly.
+- **Chunk `char_start` / `char_end`** — these fields are always `None` (kreuzberg does not expose character offsets). `page_number` on a chunk now maps to the chunk's `first_page` value.
+
 ## [0.1.1] — 2026-03-13
 
 ### Changed

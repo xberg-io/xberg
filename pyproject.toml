@@ -4,7 +4,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "kreuzberg-surrealdb"
-version = "0.1.1"
+version = "0.2.0"
 description = """\
   Kreuzberg-to-SurrealDB connector for document ingestion pipelines — schema management, content deduplication, \
   chunk storage, and index configuration\

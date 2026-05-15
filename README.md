@@ -342,11 +342,11 @@ erDiagram
         datetime ingested_at "DEFAULT time::now()"
         float quality_score "optional"
         string title "optional"
-        array authors "optional, array of string"
+        string authors "optional, comma-separated"
         datetime created_at "optional"
         object metadata "FLEXIBLE"
-        array detected_languages "optional, array of object"
-        array keywords "optional, array of object"
+        array detected_languages "array of string"
+        array keywords "array of string"
     }
 ```
 
@@ -366,11 +366,11 @@ erDiagram
         datetime ingested_at "DEFAULT time::now()"
         float quality_score "optional"
         string title "optional"
-        array authors "optional, array of string"
+        string authors "optional, comma-separated"
         datetime created_at "optional"
         object metadata "FLEXIBLE"
-        array detected_languages "optional, array of object"
-        array keywords "optional, array of object"
+        array detected_languages "array of string"
+        array keywords "array of string"
     }
     chunks {
         RecordID id "hash_chunkIndex"
@@ -379,9 +379,7 @@ erDiagram
         int chunk_index
         array embedding "optional, HNSW vector index"
         int word_count "optional"
-        int page_number "optional"
-        int char_start "optional"
-        int char_end "optional"
+        int page_number "optional, same as first_page"
         int first_page "optional"
         int last_page "optional"
     }
