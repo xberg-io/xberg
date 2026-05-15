@@ -16,6 +16,7 @@
       "csharp",
       "elixir",
       "kotlin",
+      "kotlin_android",
       "swift",
       "zig",
       "java",
