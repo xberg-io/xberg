@@ -141,10 +141,10 @@ jobs:
           - lang: elixir
             elixir-version: "1.19"
             otp-version: "28"
-            test-cmd: "cd e2e/elixir && RUSTLER_PRECOMPILATION_FORCE_BUILD=true mix deps.get && RUSTLER_PRECOMPILATION_FORCE_BUILD=true mix test"
+            test-cmd: "cd e2e/elixir && KREUZBERG_BUILD=true mix deps.get && KREUZBERG_BUILD=true mix test"
           - lang: wasm
             node-version: "24"
-            test-cmd: "cd crates/kreuzberg-wasm && wasm-pack build --release --target web --out-dir ../../packages/wasm/pkg && cd ../../e2e/wasm && npm install && npm test"
+            test-cmd: "curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && export PATH=\"$HOME/.cargo/bin:$PATH\" && cd crates/kreuzberg-wasm && wasm-pack build --release --target web --out-dir ../../packages/wasm/pkg && cd ../../e2e/wasm && npm install && npm test"
           - lang: rust
             test-cmd: "cd e2e/rust && cargo test"
           - lang: r
@@ -152,7 +152,7 @@ jobs:
             test-cmd: "cd e2e/r && Rscript run_tests.R"
           - lang: dart
             dart-version: "3.11"
-            test-cmd: "cd packages/dart && dart pub get && cd ../../e2e/dart && dart pub get && dart test"
+            test-cmd: "cargo build --release -p kreuzberg-dart && mkdir -p packages/dart/rust/target/release && cp target/release/libkreuzberg_dart.* packages/dart/rust/target/release/ 2>/dev/null || true && cd packages/dart && dart pub get && cd ../../e2e/dart && dart pub get && dart test"
           - lang: kotlin_android
             java-version: "25"
             test-cmd: "cd e2e/kotlin_android && gradle test --no-daemon"
@@ -181,9 +181,19 @@ jobs:
       - name: Stage FFI artifacts
         shell: bash
         run: |
-          mkdir -p target/release
-          cp ffi-artifacts/libkreuzberg_ffi.* target/release/ 2>/dev/null || true
-          cp ffi-artifacts/kreuzberg_ffi.* target/release/ 2>/dev/null || true
+          mkdir -p target/release crates/kreuzberg-ffi/include crates/kreuzberg-ffi/cmake
+          if [ -d ffi-artifacts/target/release ]; then
+            cp -r ffi-artifacts/target/release/. target/release/
+          fi
+          if [ -d ffi-artifacts/crates/kreuzberg-ffi/include ]; then
+            cp -r ffi-artifacts/crates/kreuzberg-ffi/include/. crates/kreuzberg-ffi/include/
+          fi
+          if [ -d ffi-artifacts/crates/kreuzberg-ffi/cmake ]; then
+            cp -r ffi-artifacts/crates/kreuzberg-ffi/cmake/. crates/kreuzberg-ffi/cmake/
+          fi
+          if [ -f ffi-artifacts/crates/kreuzberg-ffi/kreuzberg-ffi.pc ]; then
+            cp ffi-artifacts/crates/kreuzberg-ffi/kreuzberg-ffi.pc crates/kreuzberg-ffi/
+          fi
           chmod +x target/release/libkreuzberg_ffi.so 2>/dev/null || true
           ls -la target/release/
           if [ -f target/release/libkreuzberg_ffi.so ]; then
@@ -239,6 +249,10 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java-version }}
 
+      - name: Setup Gradle
+        if: matrix.lang == 'kotlin_android'
+        uses: kreuzberg-dev/actions/setup-gradle@v1
+
       - name: Setup .NET
         if: matrix.dotnet-version
         uses: actions/setup-dotnet@v5
@@ -267,7 +281,7 @@ jobs:
 
       - name: Install R test packages
         if: matrix.lang == 'r'
-        run: R -e 'install.packages(c("testthat","jsonlite"), repos="https://cloud.r-project.org")'
+        run: R -e 'install.packages(c("testthat","jsonlite","devtools"), repos="https://cloud.r-project.org")'
 
       - name: Setup Dart
         if: matrix.dart-version
