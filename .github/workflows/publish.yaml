@@ -1753,7 +1753,7 @@ jobs:
             fi
           done
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
           packages: "platforms;android-36 build-tools;36.0.0"
 
