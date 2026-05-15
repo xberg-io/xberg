@@ -202,7 +202,7 @@ jobs:
           package: "dev.kreuzberg:kreuzberg"
           version: ${{ needs.prepare.outputs.version }}
           extra-packages: |
-            kotlin_exists=dev.kreuzberg:kreuzberg-kotlin
+            kotlin_exists=dev.kreuzberg:kreuzberg-android
 
   check-nuget:
     name: Check NuGet for existing version
@@ -1724,42 +1724,6 @@ jobs:
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
-  publish-kotlin:
-    name: Publish Kotlin (Maven Central via Gradle)
-    needs: [prepare, java-natives, java-natives-musl, check-maven]
-    if: ${{ needs.prepare.outputs.release_kotlin == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.ref }}
-
-          submodules: recursive
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: java-natives-*
-          path: artifacts/java-natives
-          merge-multiple: true
-
-      - uses: kreuzberg-dev/actions/stage-java-natives@v1
-        with:
-          resources-dir: packages/kotlin/src/main/resources/natives
-          required-classifiers: >-
-            linux-x86_64 linux-aarch64 macos-arm64 windows-x86_64
-            linux-musl-x86_64 linux-musl-aarch64
-          lib-name: kreuzberg_ffi
-
-      - uses: kreuzberg-dev/actions/publish-maven-gradle@v1
-        with:
-          working-directory: packages/kotlin
-          gradle-task: publishAndReleaseToMavenCentral
-          dry-run: ${{ needs.prepare.outputs.dry_run }}
-        env:
-          MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-
   publish-kotlin-android:
     name: Publish Kotlin Android (Maven Central via Gradle)
     needs: [prepare, kotlin-android-natives, check-maven]
@@ -1788,6 +1752,10 @@ jobs:
               cp -v "$src" "$dest/"
             fi
           done
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-36 build-tools;36.0.0"
 
       - uses: kreuzberg-dev/actions/publish-maven-gradle@v1
         with:
@@ -2173,7 +2141,6 @@ jobs:
       - publish-wasm
       - publish-packagist
       - publish-maven
-      - publish-kotlin
       - publish-kotlin-android
       - publish-nuget
       - publish-hex
@@ -2211,7 +2178,6 @@ jobs:
       - publish-wasm
       - publish-packagist
       - publish-maven
-      - publish-kotlin
       - publish-kotlin-android
       - publish-nuget
       - publish-hex

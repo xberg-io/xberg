@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.15.70"
+alef_version = "0.16.0"
 languages = [
   "python",
   "node",
@@ -13,7 +13,7 @@ languages = [
   "wasm",
   "r",
   "dart",
-  "kotlin",
+  "kotlin_android",
   "swift",
   "zig",
 ]
@@ -426,9 +426,17 @@ cfg = 'all(target_os = "android", target_arch = "x86_64")'
 features = ["android-target"]
 default_features = false
 
-[crates.kotlin]
+[crates.kotlin_android]
+# Self-contained Android library project at packages/kotlin-android/. Server-
+# side Kotlin/JVM consumers use the Java binding directly (Kotlin interops
+# with Java records natively); the Android AAR ships jniLibs/arm64-v8a/ +
+# jniLibs/x86_64/ so Gradle embeds the kreuzberg-ffi cdylib into app builds
+# without manual setup. Emitted by alef-backend-kotlin-android (alef ≥ 0.16).
 package = "dev.kreuzberg"
-target = "jvm"
+namespace = "dev.kreuzberg"
+artifact_id = "kreuzberg-android"
+group_id = "dev.kreuzberg"
+abis = ["arm64-v8a", "x86_64"]
 
 [crates.swift]
 module_name = "Kreuzberg"
@@ -464,7 +472,7 @@ wasm = "crates/kreuzberg-wasm/src/"
 java = "packages/java/src/main/java/"
 csharp = "packages/csharp/src/"
 r = "packages/r/src/rust/src/"
-kotlin = "packages/kotlin/src/main/kotlin/dev/kreuzberg/"
+kotlin_android = "packages/kotlin-android/"
 swift = "packages/swift/Sources/Kreuzberg/"
 dart = "packages/dart/lib/src/"
 zig = "packages/zig/src/"
@@ -982,10 +990,10 @@ precondition = "test -d e2e/c"
 format = "find e2e/c -name '*.c' -o -name '*.h' | xargs clang-format -i"
 check = "find crates/kreuzberg-ffi/include -name '*.h' | xargs clang-format --dry-run --Werror"
 
-[crates.lint.kotlin]
+[crates.lint.kotlin_android]
 precondition = "command -v gradle >/dev/null 2>&1"
-format = "cd packages/kotlin && gradle ktlintFormat --no-daemon"
-check = "cd packages/kotlin && gradle ktlintCheck --no-daemon"
+format = "cd packages/kotlin-android && gradle ktlintFormat --no-daemon"
+check = "cd packages/kotlin-android && gradle ktlintCheck --no-daemon"
 
 [crates.lint.swift]
 precondition = "command -v swift >/dev/null 2>&1"
@@ -1007,10 +1015,10 @@ precondition = "command -v Rscript >/dev/null"
 update = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::update_packages(ask = FALSE)\""
 upgrade = "cd packages/r && Rscript -e \"if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::update_packages(ask = FALSE)\""
 
-[crates.update.kotlin]
+[crates.update.kotlin_android]
 precondition = "command -v gradle >/dev/null 2>&1"
-update = "cd packages/kotlin && gradle dependencyUpdates --no-daemon"
-upgrade = "cd packages/kotlin && gradle dependencyUpdates --refresh-dependencies --no-daemon"
+update = "cd packages/kotlin-android && gradle dependencyUpdates --no-daemon"
+upgrade = "cd packages/kotlin-android && gradle dependencyUpdates --refresh-dependencies --no-daemon"
 
 [crates.update.swift]
 precondition = "command -v swift >/dev/null 2>&1"
@@ -1087,11 +1095,11 @@ e2e = "cd e2e/wasm && pnpm test"
 precondition = "command -v cargo >/dev/null 2>&1"
 e2e = "cd e2e/rust && cargo test"
 
-[crates.test.kotlin]
+[crates.test.kotlin_android]
 precondition = "command -v gradle >/dev/null 2>&1"
 before = "cargo build --release -p kreuzberg-ffi"
-command = "cd packages/kotlin && gradle test --no-daemon"
-e2e = "cd e2e/kotlin && gradle test --no-daemon"
+command = "cd packages/kotlin-android && gradle test --no-daemon"
+e2e = "cd e2e/kotlin_android && gradle test --no-daemon"
 
 [crates.test.swift]
 precondition = "command -v swift >/dev/null 2>&1"
@@ -1137,7 +1145,7 @@ cmake_config = true
 [crates.e2e]
 fixtures = "fixtures"
 output = "e2e"
-languages = ["python", "rust", "node", "go", "ruby", "elixir", "wasm", "java", "csharp", "php", "r", "dart", "kotlin", "swift", "zig"]
+languages = ["python", "rust", "node", "go", "ruby", "elixir", "wasm", "java", "csharp", "php", "r", "dart", "kotlin_android", "swift", "zig"]
 fields_optional = [
   "metadata.format",
   "metadata.format.excel",
@@ -2048,9 +2056,9 @@ path = "../../packages/r"
 [crates.e2e.packages.dart]
 path = "../../packages/dart"
 
-[crates.e2e.packages.kotlin]
+[crates.e2e.packages.kotlin_android]
 module = "dev.kreuzberg"
-path = "../../packages/kotlin"
+path = "../../packages/kotlin-android"
 
 [crates.e2e.packages.swift]
 path = "../../packages/swift"
@@ -2251,13 +2259,13 @@ description = "Extract text, tables, images, and metadata from 91+ file formats 
 package_manager = ["cargo"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 
-[crates.readme.languages.kotlin]
+[crates.readme.languages.kotlin_android]
 template = "language_package.md"
-name = "Kotlin"
-package_name = "dev.kreuzberg:kreuzberg-kotlin"
-badge_url = "https://img.shields.io/badge/Kotlin-kreuzberg-007ec6"
+name = "Kotlin (Android)"
+package_name = "dev.kreuzberg:kreuzberg-android"
+badge_url = "https://img.shields.io/badge/Android-kreuzberg-3DDC84"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Kotlin/JVM bindings consuming the Java FFM facade, with idiomatic data classes, sealed-class enums, and coroutine-based async."
+description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Android library (AAR) with bundled jniLibs/arm64-v8a and jniLibs/x86_64 — Gradle automatically picks up the native cdylib for emulator and device builds. Server-side Kotlin/JVM consumers can use the Java binding directly via standard Kotlin/Java interop."
 package_manager = ["gradle", "maven"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]

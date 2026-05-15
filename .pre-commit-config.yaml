@@ -152,10 +152,10 @@ repos:
         files: ^packages/r/.*\.[Rr]$
       - id: ktfmt
         args: ["--kotlinlang-style"]
-        files: ^packages/kotlin/.*\.kts?$
+        files: ^packages/kotlin-android/.*\.kts?$
       - id: detekt
         args: ["--build-upon-default-config"]
-        files: ^packages/kotlin/.*\.kts?$
+        files: ^packages/kotlin-android/.*\.kts?$
       - id: swift-format
         files: ^packages/swift/.*\.swift$
       - id: swiftlint
@@ -187,7 +187,7 @@ repos:
       - id: cpd
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.15.70
+    rev: v0.16.0
     hooks:
       - id: alef-verify
       - id: alef-sync-versions
