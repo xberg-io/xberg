@@ -73,6 +73,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Renderer lifecycle. Foreign-language plugin authors can now implement
   arbitrary document extractors and renderers in their host language.
 - **#619 follow-up**: `POST /extract-async` now returns HTTP 429 when more than 100 jobs are active simultaneously, preventing unbounded memory growth under load.
+- **`backend_options` passthrough on `OcrConfig` and `OcrPipelineStage`**: both
+  types now carry an `Option<serde_json::Value>` field `backend_options`. Custom
+  and built-in backends that support runtime tuning (mode switching,
+  preprocessing flags, inference parameters, etc.) can read this value via
+  `config.backend_options` inside `OcrBackend::process_image` and deserialize
+  only the keys they care about — unknown keys are silently ignored, so options
+  from different backends coexist in the same config without conflict. When
+  `OcrConfig` auto-constructs a two-stage pipeline (tesseract + paddleocr),
+  `backend_options` is propagated to the primary (tesseract) stage only; the
+  paddleocr fallback stage continues to use `paddle_ocr_config`.
 - **WASM OCR backend**: `TesseractWasmBackend` registered for the
   `ocr-wasm` feature set, exposing OCR on the WASM target via
   `tesseract-wasm` while the native path continues to use leptess.

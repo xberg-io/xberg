@@ -453,6 +453,7 @@ impl ExtractionOverrides {
                     vlm_prompt: None,
                     acceleration: None,
                     tessdata_bytes: None,
+                    backend_options: None,
                 });
             } else {
                 config.ocr = None;
@@ -514,6 +515,7 @@ impl ExtractionOverrides {
                 vlm_prompt: None,
                 acceleration: None,
                 tessdata_bytes: None,
+                backend_options: None,
             });
 
             ocr.backend = "vlm".to_string();
@@ -903,6 +905,7 @@ mod tests {
                 vlm_prompt: None,
                 acceleration: None,
                 tessdata_bytes: None,
+                backend_options: None,
             }),
             ..Default::default()
         };
