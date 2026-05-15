@@ -10,6 +10,6 @@
     "kreuzberg": "file:../../crates/kreuzberg-wasm/pkg/nodejs/nodejs",
     "rollup": "^4.60.4",
     "vite-plugin-wasm": "^3.4.0",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.6"
   }
 }
