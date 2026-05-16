@@ -51,7 +51,7 @@ repos:
 
   # Node/TS/WASM: oxlint
   - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
-    rev: v1.0.10
+    rev: v1.1.2
     hooks:
       - id: cargo-sort
         # `-w` (workspace) iterates ALL workspace members regardless of which Cargo.toml
@@ -101,6 +101,7 @@ repos:
       - id: cargo-machete
         args: ["crates/", "packages/", "tools/"]
         exclude: ^e2e/
+      - id: alef-docs-fresh
       - id: cargo-deny
         args: ["check"]
       - id: shfmt
@@ -115,11 +116,16 @@ repos:
       - id: checkstyle
         args: ["-c", "packages/java/checkstyle.xml", "-p", "packages/java/checkstyle.properties"]
         exclude: ^(\.mvn/wrapper/|e2e/|tools/e2e-generator/e2e/|crates/kreuzberg-wasm/e2e/|packages/java/src/)
+      - id: javadoc-lint
+        files: ^packages/java/src/main/.*\.java$
       - id: java-verify
         files: ^packages/java/
       - id: mypy
         files: ^(lib|src|kreuzberg|tools)/.*\.py$
         exclude: "e2e/|tests/|scripts/"
+      - id: pydocstyle
+        files: ^packages/python/.*\.py$
+        exclude: ^packages/python/(tests/|.*_native\.py$)
       - id: go-fmt
         exclude: ^(e2e/|test_apps/|tools/)
       - id: golangci-lint
@@ -136,14 +142,20 @@ repos:
         files: ^packages/csharp/.*\.cs$
       - id: dotnet-format-check
         files: ^packages/csharp/.*\.cs$
+      - id: cs-xmldoc-lint
+        files: ^packages/csharp/Kreuzberg/.*\.cs$
       - id: php-cs-fixer
         files: ^packages/php/.*\.php$
       - id: phpstan
         files: ^packages/php/.*\.php$
+      - id: phpdoc-lint
+        files: ^packages/php/src/.*\.php$
       - id: mix-format
         files: ^packages/elixir/
       - id: mix-credo
         files: ^packages/elixir/
+      - id: roxygen2-check
+        files: ^packages/r/R/.*\.R$
       - id: air-format
         files: ^packages/r/.*\.[Rr]$
       - id: air-check
@@ -156,6 +168,8 @@ repos:
       - id: detekt
         args: ["--build-upon-default-config"]
         files: ^packages/kotlin-android/.*\.kts?$
+      - id: ktlint
+        files: ^packages/kotlin-android/.*\.kts?$
       - id: swift-format
         files: ^packages/swift/.*\.swift$
       - id: swiftlint
@@ -164,6 +178,9 @@ repos:
         files: ^packages/dart/.*\.dart$
       - id: dart-analyze
         files: ^packages/dart/.*\.dart$
+      - id: dart-doc-lint
+        files: ^packages/dart/lib/.*\.dart$
+        exclude: ^packages/dart/lib/src/rust/
       - id: zig-fmt
         files: ^packages/zig/.*\.zig$
       - id: zig-build-check
@@ -183,11 +200,11 @@ repos:
       - id: oxfmt
       - id: cppcheck
       - id: rumdl-fmt
-        exclude: ^templates/  # Handlebars {{}} syntax confuses rumdl-fmt
+        exclude: ^templates/ # Handlebars {{}} syntax confuses rumdl-fmt
       - id: cpd
   # Alef: verify bindings and sync versions
   - repo: https://github.com/kreuzberg-dev/alef
-    rev: v0.16.16
+    rev: v0.16.22
     hooks:
       - id: alef-verify
       - id: alef-sync-versions
