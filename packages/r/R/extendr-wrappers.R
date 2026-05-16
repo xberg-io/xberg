@@ -827,143 +827,6 @@ StructuredDataResult <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.StructuredDataResult` <- `$.StructuredDataResult`
-CharShape <- new.env(parent = emptyenv())
-#' @export
-`$.CharShape` <- function(self, name) {
-  func <- CharShape[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.CharShape` <- `$.CharShape`
-HwpImage <- new.env(parent = emptyenv())
-#' @export
-`$.HwpImage` <- function(self, name) {
-  func <- HwpImage[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.HwpImage` <- `$.HwpImage`
-StreamReader <- new.env(parent = emptyenv())
-#' @export
-`$.StreamReader` <- function(self, name) {
-  func <- StreamReader[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.StreamReader` <- `$.StreamReader`
-ExtractedInlineImage <- new.env(parent = emptyenv())
-#' @export
-`$.ExtractedInlineImage` <- function(self, name) {
-  func <- ExtractedInlineImage[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.ExtractedInlineImage` <- `$.ExtractedInlineImage`
-Drawing <- new.env(parent = emptyenv())
-#' @export
-`$.Drawing` <- function(self, name) {
-  func <- Drawing[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.Drawing` <- `$.Drawing`
-AnchorProperties <- new.env(parent = emptyenv())
-#' @export
-`$.AnchorProperties` <- function(self, name) {
-  func <- AnchorProperties[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.AnchorProperties` <- `$.AnchorProperties`
-PageMarginsPoints <- new.env(parent = emptyenv())
-#' @export
-`$.PageMarginsPoints` <- function(self, name) {
-  func <- PageMarginsPoints[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.PageMarginsPoints` <- `$.PageMarginsPoints`
-StyleDefinition <- new.env(parent = emptyenv())
-#' @export
-`$.StyleDefinition` <- function(self, name) {
-  func <- StyleDefinition[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.StyleDefinition` <- `$.StyleDefinition`
-ResolvedStyle <- new.env(parent = emptyenv())
-#' @export
-`$.ResolvedStyle` <- function(self, name) {
-  func <- ResolvedStyle[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.ResolvedStyle` <- `$.ResolvedStyle`
-DocxAppProperties <- new.env(parent = emptyenv())
-DocxAppProperties$from_json <- function(json) .Call("wrap__DocxAppProperties__from_json", json, PACKAGE = "kreuzberg")
-#' @export
-`$.DocxAppProperties` <- function(self, name) {
-  func <- DocxAppProperties[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.DocxAppProperties` <- `$.DocxAppProperties`
-XlsxAppProperties <- new.env(parent = emptyenv())
-#' @export
-`$.XlsxAppProperties` <- function(self, name) {
-  func <- XlsxAppProperties[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.XlsxAppProperties` <- `$.XlsxAppProperties`
-PptxAppProperties <- new.env(parent = emptyenv())
-#' @export
-`$.PptxAppProperties` <- function(self, name) {
-  func <- PptxAppProperties[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.PptxAppProperties` <- `$.PptxAppProperties`
-CoreProperties <- new.env(parent = emptyenv())
-CoreProperties$from_json <- function(json) .Call("wrap__CoreProperties__from_json", json, PACKAGE = "kreuzberg")
-#' @export
-`$.CoreProperties` <- function(self, name) {
-  func <- CoreProperties[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.CoreProperties` <- `$.CoreProperties`
-CustomProperties <- new.env(parent = emptyenv())
-#' @export
-`$.CustomProperties` <- function(self, name) {
-  func <- CustomProperties[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.CustomProperties` <- `$.CustomProperties`
-OdtProperties <- new.env(parent = emptyenv())
-#' @export
-`$.OdtProperties` <- function(self, name) {
-  func <- OdtProperties[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.OdtProperties` <- `$.OdtProperties`
 SecurityLimits <- new.env(parent = emptyenv())
 SecurityLimits$default <- function() .Call("wrap__SecurityLimits__default", PACKAGE = "kreuzberg")
 SecurityLimits$from_json <- function(json) .Call("wrap__SecurityLimits__from_json", json, PACKAGE = "kreuzberg")
@@ -1525,42 +1388,6 @@ Uri <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.Uri` <- `$.Uri`
-InfoResponse <- new.env(parent = emptyenv())
-#' @export
-`$.InfoResponse` <- function(self, name) {
-  func <- InfoResponse[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.InfoResponse` <- `$.InfoResponse`
-EmbedRequest <- new.env(parent = emptyenv())
-#' @export
-`$.EmbedRequest` <- function(self, name) {
-  func <- EmbedRequest[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.EmbedRequest` <- `$.EmbedRequest`
-ChunkRequest <- new.env(parent = emptyenv())
-#' @export
-`$.ChunkRequest` <- function(self, name) {
-  func <- ChunkRequest[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.ChunkRequest` <- `$.ChunkRequest`
-ChunkResponse <- new.env(parent = emptyenv())
-#' @export
-`$.ChunkResponse` <- function(self, name) {
-  func <- ChunkResponse[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.ChunkResponse` <- `$.ChunkResponse`
 DetectResponse <- new.env(parent = emptyenv())
 #' @export
 `$.DetectResponse` <- function(self, name) {
@@ -1570,114 +1397,6 @@ DetectResponse <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.DetectResponse` <- `$.DetectResponse`
-ManifestEntryResponse <- new.env(parent = emptyenv())
-#' @export
-`$.ManifestEntryResponse` <- function(self, name) {
-  func <- ManifestEntryResponse[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.ManifestEntryResponse` <- `$.ManifestEntryResponse`
-WarmResponse <- new.env(parent = emptyenv())
-#' @export
-`$.WarmResponse` <- function(self, name) {
-  func <- WarmResponse[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.WarmResponse` <- `$.WarmResponse`
-StructuredExtractionResponse <- new.env(parent = emptyenv())
-#' @export
-`$.StructuredExtractionResponse` <- function(self, name) {
-  func <- StructuredExtractionResponse[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.StructuredExtractionResponse` <- `$.StructuredExtractionResponse`
-OpenWebDocumentResponse <- new.env(parent = emptyenv())
-#' @export
-`$.OpenWebDocumentResponse` <- function(self, name) {
-  func <- OpenWebDocumentResponse[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.OpenWebDocumentResponse` <- `$.OpenWebDocumentResponse`
-DoclingCompatResponse <- new.env(parent = emptyenv())
-#' @export
-`$.DoclingCompatResponse` <- function(self, name) {
-  func <- DoclingCompatResponse[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.DoclingCompatResponse` <- `$.DoclingCompatResponse`
-DetectMimeTypeParams <- new.env(parent = emptyenv())
-#' @export
-`$.DetectMimeTypeParams` <- function(self, name) {
-  func <- DetectMimeTypeParams[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.DetectMimeTypeParams` <- `$.DetectMimeTypeParams`
-CacheWarmParams <- new.env(parent = emptyenv())
-#' @export
-`$.CacheWarmParams` <- function(self, name) {
-  func <- CacheWarmParams[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.CacheWarmParams` <- `$.CacheWarmParams`
-EmbedTextParams <- new.env(parent = emptyenv())
-#' @export
-`$.EmbedTextParams` <- function(self, name) {
-  func <- EmbedTextParams[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.EmbedTextParams` <- `$.EmbedTextParams`
-ExtractStructuredParams <- new.env(parent = emptyenv())
-#' @export
-`$.ExtractStructuredParams` <- function(self, name) {
-  func <- ExtractStructuredParams[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.ExtractStructuredParams` <- `$.ExtractStructuredParams`
-ChunkTextParams <- new.env(parent = emptyenv())
-#' @export
-`$.ChunkTextParams` <- function(self, name) {
-  func <- ChunkTextParams[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.ChunkTextParams` <- `$.ChunkTextParams`
-DetectedBoundary <- new.env(parent = emptyenv())
-#' @export
-`$.DetectedBoundary` <- function(self, name) {
-  func <- DetectedBoundary[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.DetectedBoundary` <- `$.DetectedBoundary`
-MergedChunk <- new.env(parent = emptyenv())
-#' @export
-`$.MergedChunk` <- function(self, name) {
-  func <- MergedChunk[[name]]
-  environment(func) <- environment()
-  func
-}
-#' @export
-`[[.MergedChunk` <- `$.MergedChunk`
 EmbeddingPreset <- new.env(parent = emptyenv())
 #' @export
 `$.EmbeddingPreset` <- function(self, name) {
@@ -1824,6 +1543,15 @@ OutputFormat <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.OutputFormat` <- `$.OutputFormat`
+DrawingType <- new.env(parent = emptyenv())
+#' @export
+`$.DrawingType` <- function(self, name) {
+  func <- DrawingType[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.DrawingType` <- `$.DrawingType`
 FormatMetadata <- new.env(parent = emptyenv())
 #' @export
 `$.FormatMetadata` <- function(self, name) {

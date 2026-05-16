@@ -495,121 +495,6 @@ pub const StructuredDataResult = struct {
     text_fields: []const [:0]const u8,
 };
 
-/// Result of HTML extraction with optional images and warnings.
-pub const HtmlExtractionResult = struct {
-    markdown: [:0]const u8,
-    images: []const ExtractedInlineImage,
-    warnings: []const [:0]const u8,
-};
-
-/// Extracted inline image with metadata.
-pub const ExtractedInlineImage = struct {
-    data: []const u8,
-    format: [:0]const u8,
-    filename: ?[:0]const u8,
-    description: ?[:0]const u8,
-    dimensions: ?[]const u32,
-    attributes: []const [:0]const u8,
-};
-
-/// A drawing object extracted from `<w:drawing>`.
-pub const Drawing = struct {
-    drawing_type: [:0]const u8,
-    extent: ?[:0]const u8,
-    doc_properties: ?[:0]const u8,
-    image_ref: ?[:0]const u8,
-};
-
-/// Properties for anchored drawings.
-pub const AnchorProperties = struct {
-    behind_doc: bool,
-    layout_in_cell: bool,
-    relative_height: ?i64,
-    position_h: ?[:0]const u8,
-    position_v: ?[:0]const u8,
-    wrap_type: [:0]const u8,
-};
-
-/// Application properties from docProps/app.xml for DOCX
-///
-/// Contains Word-specific document statistics and metadata.
-pub const DocxAppProperties = struct {
-    application: ?[:0]const u8,
-    app_version: ?[:0]const u8,
-    template: ?[:0]const u8,
-    total_time: ?i32,
-    pages: ?i32,
-    words: ?i32,
-    characters: ?i32,
-    characters_with_spaces: ?i32,
-    lines: ?i32,
-    paragraphs: ?i32,
-    company: ?[:0]const u8,
-    doc_security: ?i32,
-    scale_crop: ?bool,
-    links_up_to_date: ?bool,
-    shared_doc: ?bool,
-    hyperlinks_changed: ?bool,
-};
-
-/// Application properties from docProps/app.xml for XLSX
-///
-/// Contains Excel-specific document metadata.
-pub const XlsxAppProperties = struct {
-    application: ?[:0]const u8,
-    app_version: ?[:0]const u8,
-    doc_security: ?i32,
-    scale_crop: ?bool,
-    links_up_to_date: ?bool,
-    shared_doc: ?bool,
-    hyperlinks_changed: ?bool,
-    company: ?[:0]const u8,
-    worksheet_names: []const [:0]const u8,
-};
-
-/// Application properties from docProps/app.xml for PPTX
-///
-/// Contains PowerPoint-specific document metadata.
-pub const PptxAppProperties = struct {
-    application: ?[:0]const u8,
-    app_version: ?[:0]const u8,
-    total_time: ?i32,
-    company: ?[:0]const u8,
-    doc_security: ?i32,
-    scale_crop: ?bool,
-    links_up_to_date: ?bool,
-    shared_doc: ?bool,
-    hyperlinks_changed: ?bool,
-    slides: ?i32,
-    notes: ?i32,
-    hidden_slides: ?i32,
-    multimedia_clips: ?i32,
-    presentation_format: ?[:0]const u8,
-    slide_titles: []const [:0]const u8,
-};
-
-/// Dublin Core metadata from docProps/core.xml
-///
-/// Contains standard metadata fields defined by the Dublin Core standard
-/// and Office-specific extensions.
-pub const CoreProperties = struct {
-    title: ?[:0]const u8,
-    subject: ?[:0]const u8,
-    creator: ?[:0]const u8,
-    keywords: ?[:0]const u8,
-    description: ?[:0]const u8,
-    last_modified_by: ?[:0]const u8,
-    revision: ?[:0]const u8,
-    created: ?[:0]const u8,
-    modified: ?[:0]const u8,
-    category: ?[:0]const u8,
-    content_status: ?[:0]const u8,
-    language: ?[:0]const u8,
-    identifier: ?[:0]const u8,
-    version: ?[:0]const u8,
-    last_printed: ?[:0]const u8,
-};
-
 /// Configuration for security limits across extractors.
 ///
 /// All limits are intentionally conservative to prevent DoS attacks
@@ -1304,8 +1189,8 @@ pub const PptxMetadata = struct {
 /// Extracted from DOCX files using shared Office Open XML metadata extraction.
 /// Integrates with `office_metadata` module for core/app/custom properties.
 pub const DocxMetadata = struct {
-    core_properties: ?CoreProperties,
-    app_properties: ?DocxAppProperties,
+    core_properties: ?[:0]const u8,
+    app_properties: ?[:0]const u8,
     custom_properties: ?std.StringHashMap([:0]const u8),
 };
 
@@ -1559,148 +1444,10 @@ pub const Uri = struct {
     kind: UriKind,
 };
 
-/// Server information response.
-pub const InfoResponse = struct {
-    version: [:0]const u8,
-    rust_backend: bool,
-};
-
-/// Embedding request for generating embeddings from text.
-pub const EmbedRequest = struct {
-    texts: []const [:0]const u8,
-    config: ?EmbeddingConfig,
-};
-
-/// Embedding response containing generated embeddings.
-pub const EmbedResponse = struct {
-    embeddings: []const []const f32,
-    model: [:0]const u8,
-    dimensions: u64,
-    count: u64,
-};
-
-/// Chunk request with text and configuration.
-pub const ChunkRequest = struct {
-    text: [:0]const u8,
-    config: ?[:0]const u8,
-    chunker_type: [:0]const u8,
-};
-
-/// Chunk response with chunks and metadata.
-pub const ChunkResponse = struct {
-    chunks: []const [:0]const u8,
-    chunk_count: u64,
-    config: [:0]const u8,
-    input_size_bytes: u64,
-    chunker_type: [:0]const u8,
-};
-
 /// MIME type detection response.
 pub const DetectResponse = struct {
     mime_type: [:0]const u8,
     filename: ?[:0]const u8,
-};
-
-/// Model manifest entry for cache management.
-pub const ManifestEntryResponse = struct {
-    relative_path: [:0]const u8,
-    sha256: [:0]const u8,
-    size_bytes: u64,
-    source_url: [:0]const u8,
-};
-
-/// Model manifest response.
-pub const ManifestResponse = struct {
-    kreuzberg_version: [:0]const u8,
-    total_size_bytes: u64,
-    model_count: u64,
-    models: []const ManifestEntryResponse,
-};
-
-/// Cache warm response.
-pub const WarmResponse = struct {
-    cache_dir: [:0]const u8,
-    downloaded: []const [:0]const u8,
-    already_cached: []const [:0]const u8,
-};
-
-/// Response from structured extraction endpoint.
-pub const StructuredExtractionResponse = struct {
-    structured_output: [:0]const u8,
-    content: [:0]const u8,
-    mime_type: [:0]const u8,
-};
-
-/// OpenWebUI "External" engine response format.
-///
-/// Returned by `PUT /process` for the OpenWebUI external document loader.
-pub const OpenWebDocumentResponse = struct {
-    page_content: [:0]const u8,
-    metadata: [:0]const u8,
-};
-
-/// OpenWebUI "Docling" engine response format.
-///
-/// Returned by `POST /v1/convert/file` for docling-serve compatibility.
-pub const DoclingCompatResponse = struct {
-    document: [:0]const u8,
-    status: [:0]const u8,
-};
-
-/// Request parameters for MIME type detection.
-pub const DetectMimeTypeParams = struct {
-    path: [:0]const u8,
-    use_content: bool,
-};
-
-/// Request parameters for cache warm (model download).
-pub const CacheWarmParams = struct {
-    all_embeddings: bool,
-    embedding_model: ?[:0]const u8,
-};
-
-/// Request parameters for embedding generation.
-pub const EmbedTextParams = struct {
-    texts: []const [:0]const u8,
-    preset: ?[:0]const u8,
-    model: ?[:0]const u8,
-    api_key: ?[:0]const u8,
-    embedding_plugin: ?[:0]const u8,
-};
-
-/// Request parameters for LLM-based structured extraction.
-pub const ExtractStructuredParams = struct {
-    path: [:0]const u8,
-    schema: [:0]const u8,
-    model: [:0]const u8,
-    schema_name: [:0]const u8,
-    schema_description: ?[:0]const u8,
-    prompt: ?[:0]const u8,
-    api_key: ?[:0]const u8,
-    strict: bool,
-};
-
-/// Request parameters for text chunking.
-pub const ChunkTextParams = struct {
-    text: [:0]const u8,
-    max_characters: ?u64,
-    overlap: ?u64,
-    chunker_type: ?[:0]const u8,
-    topic_threshold: ?f32,
-};
-
-/// A detected structural boundary in the text.
-pub const DetectedBoundary = struct {
-    byte_offset: u64,
-    is_header: bool,
-};
-
-/// Result of a text chunking operation.
-///
-/// Contains the generated chunks and metadata about the chunking.
-pub const ChunkingResult = struct {
-    chunks: []const Chunk,
-    chunk_count: u64,
 };
 
 /// Preset configurations for common RAG use cases.
@@ -1947,6 +1694,20 @@ pub const CodeContentMode = enum {
     chunks,
     raw,
     structure,
+};
+
+/// Type of list detection.
+pub const ListType = enum {
+    bullet,
+    numbered,
+    lettered,
+    indented,
+};
+
+/// Whether the drawing is inline or anchored.
+pub const DrawingType = union(enum) {
+    inline_: void,
+    anchored: [:0]const u8,
 };
 
 pub const FracType = enum {
@@ -4232,142 +3993,6 @@ pub fn make_renderer_vtable(comptime T: type, instance: *T) IRenderer {
         }.thunk,
     };
 }
-
-pub const CharShape = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *CharShape) void {
-        c.kreuzberg_char_shape_free(@as(*c.KREUZBERGCharShape, @ptrCast(self._handle)));
-    }
-};
-
-pub const HwpImage = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *HwpImage) void {
-        c.kreuzberg_hwp_image_free(@as(*c.KREUZBERGHwpImage, @ptrCast(self._handle)));
-    }
-};
-
-pub const StreamReader = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *StreamReader) void {
-        c.kreuzberg_stream_reader_free(@as(*c.KREUZBERGStreamReader, @ptrCast(self._handle)));
-    }
-};
-
-/// Result of OCR extraction from an image with optional page tracking.
-pub const ImageOcrResult = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *ImageOcrResult) void {
-        c.kreuzberg_image_ocr_result_free(@as(*c.KREUZBERGImageOcrResult, @ptrCast(self._handle)));
-    }
-};
-
-/// Page margins converted to points (1/72 inch).
-pub const PageMarginsPoints = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *PageMarginsPoints) void {
-        c.kreuzberg_page_margins_points_free(@as(*c.KREUZBERGPageMarginsPoints, @ptrCast(self._handle)));
-    }
-};
-
-/// A single style definition parsed from `<w:style>` in `word/styles.xml`.
-pub const StyleDefinition = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *StyleDefinition) void {
-        c.kreuzberg_style_definition_free(@as(*c.KREUZBERGStyleDefinition, @ptrCast(self._handle)));
-    }
-};
-
-/// Fully resolved (flattened) style after walking the inheritance chain.
-pub const ResolvedStyle = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *ResolvedStyle) void {
-        c.kreuzberg_resolved_style_free(@as(*c.KREUZBERGResolvedStyle, @ptrCast(self._handle)));
-    }
-};
-
-/// Custom properties from docProps/custom.xml
-///
-/// Maps property names to their values. Values are converted to JSON types
-/// based on the VT (Variant Type) specified in the XML.
-pub const CustomProperties = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *CustomProperties) void {
-        c.kreuzberg_custom_properties_free(@as(*c.KREUZBERGCustomProperties, @ptrCast(self._handle)));
-    }
-};
-
-/// OpenDocument metadata from meta.xml
-///
-/// Contains metadata fields defined by the OASIS OpenDocument Format standard.
-/// Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
-pub const OdtProperties = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *OdtProperties) void {
-        c.kreuzberg_odt_properties_free(@as(*c.KREUZBERGOdtProperties, @ptrCast(self._handle)));
-    }
-};
-
-/// A `tower.Layer` that wraps each extraction in a semantic tracing span.
-pub const TracingLayer = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *TracingLayer) void {
-        c.kreuzberg_tracing_layer_free(@as(*c.KREUZBERGTracingLayer, @ptrCast(self._handle)));
-    }
-};
-
-/// OpenAPI documentation structure.
-///
-/// Defines all endpoints, request/response schemas, and examples
-/// for the Kreuzberg document extraction API.
-pub const ApiDoc = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *ApiDoc) void {
-        c.kreuzberg_api_doc_free(@as(*c.KREUZBERGApiDoc, @ptrCast(self._handle)));
-    }
-};
-
-/// Extraction response (list of results).
-pub const ExtractResponse = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *ExtractResponse) void {
-        c.kreuzberg_extract_response_free(@as(*c.KREUZBERGExtractResponse, @ptrCast(self._handle)));
-    }
-};
-
-/// A merged chunk produced by `merge_segments`.
-pub const MergedChunk = struct {
-    _handle: *anyopaque,
-
-    /// Release the underlying FFI handle. Safe to call once per instance.
-    pub fn free(self: *MergedChunk) void {
-        c.kreuzberg_merged_chunk_free(@as(*c.KREUZBERGMergedChunk, @ptrCast(self._handle)));
-    }
-};
 
 pub const OcrCacheStats = struct {
     _handle: *anyopaque,

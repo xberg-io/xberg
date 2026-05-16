@@ -14,6 +14,8 @@ mod frb_generated;
 pub use flutter_rust_bridge::DartFnFuture;
 use flutter_rust_bridge::frb;
 #[allow(unused_imports)]
+pub use kreuzberg::extractors::SyncExtractor;
+#[allow(unused_imports)]
 pub use kreuzberg::internal::InternalDocument;
 
 #[frb(mirror(AccelerationConfig))]
@@ -337,217 +339,6 @@ pub struct StructuredDataResult {
     pub format: String,
     pub metadata: std::collections::HashMap<String, String>,
     pub text_fields: Vec<String>,
-}
-
-#[frb(mirror(CharShape))]
-pub struct CharShape {
-    pub bold: bool,
-    pub italic: bool,
-    pub underline: bool,
-}
-
-#[frb(mirror(HwpImage))]
-pub struct HwpImage {
-    pub name: String,
-    pub data: Vec<u8>,
-}
-
-#[frb(opaque)]
-pub struct StreamReader {
-    pub(crate) inner: kreuzberg::extraction::hwp::reader::StreamReader,
-}
-
-impl From<kreuzberg::extraction::hwp::reader::StreamReader> for StreamReader {
-    fn from(inner: kreuzberg::extraction::hwp::reader::StreamReader) -> Self {
-        Self { inner }
-    }
-}
-
-impl From<StreamReader> for kreuzberg::extraction::hwp::reader::StreamReader {
-    fn from(value: StreamReader) -> Self {
-        value.inner
-    }
-}
-
-#[frb(mirror(ImageOcrResult))]
-pub struct ImageOcrResult {
-    pub content: String,
-    pub boundaries: Option<Vec<PageBoundary>>,
-    pub page_contents: Option<Vec<PageContent>>,
-}
-
-#[frb(mirror(HtmlExtractionResult))]
-pub struct HtmlExtractionResult {
-    pub markdown: String,
-    pub images: Vec<ExtractedInlineImage>,
-    pub warnings: Vec<String>,
-}
-
-#[frb(mirror(ExtractedInlineImage))]
-pub struct ExtractedInlineImage {
-    pub data: Vec<u8>,
-    pub format: String,
-    pub filename: Option<String>,
-    pub description: Option<String>,
-    pub dimensions: Option<Vec<i64>>,
-    pub attributes: Vec<String>,
-}
-
-#[frb(mirror(Drawing))]
-pub struct Drawing {
-    pub drawing_type: String,
-    pub extent: Option<String>,
-    pub doc_properties: Option<String>,
-    pub image_ref: Option<String>,
-}
-
-#[frb(mirror(AnchorProperties))]
-pub struct AnchorProperties {
-    pub behind_doc: bool,
-    pub layout_in_cell: bool,
-    pub relative_height: Option<i64>,
-    pub position_h: Option<String>,
-    pub position_v: Option<String>,
-    pub wrap_type: String,
-}
-
-#[frb(mirror(PageMarginsPoints))]
-pub struct PageMarginsPoints {
-    pub top: Option<f64>,
-    pub right: Option<f64>,
-    pub bottom: Option<f64>,
-    pub left: Option<f64>,
-    pub header: Option<f64>,
-    pub footer: Option<f64>,
-    pub gutter: Option<f64>,
-}
-
-#[frb(mirror(StyleDefinition))]
-pub struct StyleDefinition {
-    pub id: String,
-    pub name: Option<String>,
-    pub style_type: String,
-    pub based_on: Option<String>,
-    pub next_style: Option<String>,
-    pub is_default: bool,
-    pub paragraph_properties: String,
-    pub run_properties: String,
-}
-
-#[frb(mirror(ResolvedStyle))]
-pub struct ResolvedStyle {
-    pub paragraph_properties: String,
-    pub run_properties: String,
-}
-
-#[frb(mirror(DocxAppProperties))]
-pub struct DocxAppProperties {
-    pub application: Option<String>,
-    pub app_version: Option<String>,
-    pub template: Option<String>,
-    pub total_time: Option<i64>,
-    pub pages: Option<i64>,
-    pub words: Option<i64>,
-    pub characters: Option<i64>,
-    pub characters_with_spaces: Option<i64>,
-    pub lines: Option<i64>,
-    pub paragraphs: Option<i64>,
-    pub company: Option<String>,
-    pub doc_security: Option<i64>,
-    pub scale_crop: Option<bool>,
-    pub links_up_to_date: Option<bool>,
-    pub shared_doc: Option<bool>,
-    pub hyperlinks_changed: Option<bool>,
-}
-
-#[frb(mirror(XlsxAppProperties))]
-pub struct XlsxAppProperties {
-    pub application: Option<String>,
-    pub app_version: Option<String>,
-    pub doc_security: Option<i64>,
-    pub scale_crop: Option<bool>,
-    pub links_up_to_date: Option<bool>,
-    pub shared_doc: Option<bool>,
-    pub hyperlinks_changed: Option<bool>,
-    pub company: Option<String>,
-    pub worksheet_names: Vec<String>,
-}
-
-#[frb(mirror(PptxAppProperties))]
-pub struct PptxAppProperties {
-    pub application: Option<String>,
-    pub app_version: Option<String>,
-    pub total_time: Option<i64>,
-    pub company: Option<String>,
-    pub doc_security: Option<i64>,
-    pub scale_crop: Option<bool>,
-    pub links_up_to_date: Option<bool>,
-    pub shared_doc: Option<bool>,
-    pub hyperlinks_changed: Option<bool>,
-    pub slides: Option<i64>,
-    pub notes: Option<i64>,
-    pub hidden_slides: Option<i64>,
-    pub multimedia_clips: Option<i64>,
-    pub presentation_format: Option<String>,
-    pub slide_titles: Vec<String>,
-}
-
-#[frb(mirror(CoreProperties))]
-pub struct CoreProperties {
-    pub title: Option<String>,
-    pub subject: Option<String>,
-    pub creator: Option<String>,
-    pub keywords: Option<String>,
-    pub description: Option<String>,
-    pub last_modified_by: Option<String>,
-    pub revision: Option<String>,
-    pub created: Option<String>,
-    pub modified: Option<String>,
-    pub category: Option<String>,
-    pub content_status: Option<String>,
-    pub language: Option<String>,
-    pub identifier: Option<String>,
-    pub version: Option<String>,
-    pub last_printed: Option<String>,
-}
-
-#[frb(opaque)]
-pub struct CustomProperties {
-    pub(crate) inner: kreuzberg::extraction::office_metadata::CustomProperties,
-}
-
-impl From<kreuzberg::extraction::office_metadata::CustomProperties> for CustomProperties {
-    fn from(inner: kreuzberg::extraction::office_metadata::CustomProperties) -> Self {
-        Self { inner }
-    }
-}
-
-impl From<CustomProperties> for kreuzberg::extraction::office_metadata::CustomProperties {
-    fn from(value: CustomProperties) -> Self {
-        value.inner
-    }
-}
-
-#[frb(mirror(OdtProperties))]
-pub struct OdtProperties {
-    pub title: Option<String>,
-    pub subject: Option<String>,
-    pub creator: Option<String>,
-    pub initial_creator: Option<String>,
-    pub keywords: Option<String>,
-    pub description: Option<String>,
-    pub date: Option<String>,
-    pub creation_date: Option<String>,
-    pub language: Option<String>,
-    pub generator: Option<String>,
-    pub editing_duration: Option<String>,
-    pub editing_cycles: Option<String>,
-    pub page_count: Option<i64>,
-    pub word_count: Option<i64>,
-    pub character_count: Option<i64>,
-    pub paragraph_count: Option<i64>,
-    pub table_count: Option<i64>,
-    pub image_count: Option<i64>,
 }
 
 #[frb(mirror(SecurityLimits))]
@@ -1124,8 +915,8 @@ pub struct PptxMetadata {
 
 #[frb(mirror(DocxMetadata))]
 pub struct DocxMetadata {
-    pub core_properties: Option<CoreProperties>,
-    pub app_properties: Option<DocxAppProperties>,
+    pub core_properties: Option<String>,
+    pub app_properties: Option<String>,
     pub custom_properties: Option<std::collections::HashMap<String, String>>,
 }
 
@@ -1329,200 +1120,10 @@ pub struct Uri {
     pub kind: UriKind,
 }
 
-#[frb(opaque)]
-pub struct TracingLayer {
-    pub(crate) inner: kreuzberg::service::layers::tracing::TracingLayer,
-}
-
-impl From<kreuzberg::service::layers::tracing::TracingLayer> for TracingLayer {
-    fn from(inner: kreuzberg::service::layers::tracing::TracingLayer) -> Self {
-        Self { inner }
-    }
-}
-
-impl From<TracingLayer> for kreuzberg::service::layers::tracing::TracingLayer {
-    fn from(value: TracingLayer) -> Self {
-        value.inner
-    }
-}
-
-#[frb(opaque)]
-pub struct ApiDoc {
-    pub(crate) inner: kreuzberg::api::openapi::ApiDoc,
-}
-
-impl From<kreuzberg::api::openapi::ApiDoc> for ApiDoc {
-    fn from(inner: kreuzberg::api::openapi::ApiDoc) -> Self {
-        Self { inner }
-    }
-}
-
-impl From<ApiDoc> for kreuzberg::api::openapi::ApiDoc {
-    fn from(value: ApiDoc) -> Self {
-        value.inner
-    }
-}
-
-#[frb(mirror(InfoResponse))]
-pub struct InfoResponse {
-    pub version: String,
-    pub rust_backend: bool,
-}
-
-#[frb(opaque)]
-pub struct ExtractResponse {
-    pub(crate) inner: kreuzberg::api::ExtractResponse,
-}
-
-impl From<kreuzberg::api::ExtractResponse> for ExtractResponse {
-    fn from(inner: kreuzberg::api::ExtractResponse) -> Self {
-        Self { inner }
-    }
-}
-
-impl From<ExtractResponse> for kreuzberg::api::ExtractResponse {
-    fn from(value: ExtractResponse) -> Self {
-        value.inner
-    }
-}
-
-#[frb(mirror(EmbedRequest))]
-pub struct EmbedRequest {
-    pub texts: Vec<String>,
-    pub config: Option<EmbeddingConfig>,
-}
-
-#[frb(mirror(EmbedResponse))]
-pub struct EmbedResponse {
-    pub embeddings: Vec<Vec<f64>>,
-    pub model: String,
-    pub dimensions: i64,
-    pub count: i64,
-}
-
-#[frb(mirror(ChunkRequest))]
-pub struct ChunkRequest {
-    pub text: String,
-    pub config: Option<String>,
-    pub chunker_type: String,
-}
-
-#[frb(mirror(ChunkResponse))]
-pub struct ChunkResponse {
-    pub chunks: Vec<String>,
-    pub chunk_count: i64,
-    pub config: String,
-    pub input_size_bytes: i64,
-    pub chunker_type: String,
-}
-
 #[frb(mirror(DetectResponse))]
 pub struct DetectResponse {
     pub mime_type: String,
     pub filename: Option<String>,
-}
-
-#[frb(mirror(ManifestEntryResponse))]
-pub struct ManifestEntryResponse {
-    pub relative_path: String,
-    pub sha256: String,
-    pub size_bytes: i64,
-    pub source_url: String,
-}
-
-#[frb(mirror(ManifestResponse))]
-pub struct ManifestResponse {
-    pub kreuzberg_version: String,
-    pub total_size_bytes: i64,
-    pub model_count: i64,
-    pub models: Vec<ManifestEntryResponse>,
-}
-
-#[frb(mirror(WarmResponse))]
-pub struct WarmResponse {
-    pub cache_dir: String,
-    pub downloaded: Vec<String>,
-    pub already_cached: Vec<String>,
-}
-
-#[frb(mirror(StructuredExtractionResponse))]
-pub struct StructuredExtractionResponse {
-    pub structured_output: String,
-    pub content: String,
-    pub mime_type: String,
-}
-
-#[frb(mirror(OpenWebDocumentResponse))]
-pub struct OpenWebDocumentResponse {
-    pub page_content: String,
-    pub metadata: String,
-}
-
-#[frb(mirror(DoclingCompatResponse))]
-pub struct DoclingCompatResponse {
-    pub document: String,
-    pub status: String,
-}
-
-#[frb(mirror(DetectMimeTypeParams))]
-pub struct DetectMimeTypeParams {
-    pub path: String,
-    pub use_content: bool,
-}
-
-#[frb(mirror(CacheWarmParams))]
-pub struct CacheWarmParams {
-    pub all_embeddings: bool,
-    pub embedding_model: Option<String>,
-}
-
-#[frb(mirror(EmbedTextParams))]
-pub struct EmbedTextParams {
-    pub texts: Vec<String>,
-    pub preset: Option<String>,
-    pub model: Option<String>,
-    pub api_key: Option<String>,
-    pub embedding_plugin: Option<String>,
-}
-
-#[frb(mirror(ExtractStructuredParams))]
-pub struct ExtractStructuredParams {
-    pub path: String,
-    pub schema: String,
-    pub model: String,
-    pub schema_name: String,
-    pub schema_description: Option<String>,
-    pub prompt: Option<String>,
-    pub api_key: Option<String>,
-    pub strict: bool,
-}
-
-#[frb(mirror(ChunkTextParams))]
-pub struct ChunkTextParams {
-    pub text: String,
-    pub max_characters: Option<i64>,
-    pub overlap: Option<i64>,
-    pub chunker_type: Option<String>,
-    pub topic_threshold: Option<f64>,
-}
-
-#[frb(mirror(DetectedBoundary))]
-pub struct DetectedBoundary {
-    pub byte_offset: i64,
-    pub is_header: bool,
-}
-
-#[frb(mirror(ChunkingResult))]
-pub struct ChunkingResult {
-    pub chunks: Vec<Chunk>,
-    pub chunk_count: i64,
-}
-
-#[frb(mirror(MergedChunk))]
-pub struct MergedChunk {
-    pub text: String,
-    pub byte_start: i64,
-    pub byte_end: i64,
 }
 
 #[frb(mirror(EmbeddingPreset))]
@@ -1715,6 +1316,20 @@ pub enum CodeContentMode {
     Chunks,
     Raw,
     Structure,
+}
+
+#[frb(mirror(ListType))]
+pub enum ListType {
+    Bullet,
+    Numbered,
+    Lettered,
+    Indented,
+}
+
+#[frb(mirror(DrawingType))]
+pub enum DrawingType {
+    Inline,
+    Anchored { field0: String },
 }
 
 #[frb(mirror(FracType))]
@@ -2542,232 +2157,6 @@ impl From<kreuzberg::extraction::structured::StructuredDataResult> for Structure
     }
 }
 
-impl From<kreuzberg::extraction::hwp::model::CharShape> for CharShape {
-    fn from(v: kreuzberg::extraction::hwp::model::CharShape) -> Self {
-        CharShape {
-            bold: v.bold as _,
-            italic: v.italic as _,
-            underline: v.underline as _,
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::hwp::model::HwpImage> for HwpImage {
-    fn from(v: kreuzberg::extraction::hwp::model::HwpImage) -> Self {
-        HwpImage {
-            name: v.name.into(),
-            data: v.data.into(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::image::ImageOcrResult> for ImageOcrResult {
-    fn from(v: kreuzberg::extraction::image::ImageOcrResult) -> Self {
-        ImageOcrResult {
-            content: v.content.into(),
-            boundaries: v
-                .boundaries
-                .map(|vec| vec.into_iter().map(PageBoundary::from).collect()),
-            page_contents: v
-                .page_contents
-                .map(|vec| vec.into_iter().map(PageContent::from).collect()),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::html::HtmlExtractionResult> for HtmlExtractionResult {
-    fn from(v: kreuzberg::extraction::html::HtmlExtractionResult) -> Self {
-        HtmlExtractionResult {
-            markdown: v.markdown.into(),
-            images: v.images.into_iter().map(ExtractedInlineImage::from).collect(),
-            warnings: v.warnings.into_iter().map(|s| s.into()).collect(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::html::ExtractedInlineImage> for ExtractedInlineImage {
-    fn from(v: kreuzberg::extraction::html::ExtractedInlineImage) -> Self {
-        ExtractedInlineImage {
-            data: v.data.into(),
-            format: v.format.into(),
-            filename: v.filename.map(|s| s.into()),
-            description: v.description.map(|s| s.into()),
-            dimensions: Default::default(),
-            attributes: Default::default(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::docx::drawing::Drawing> for Drawing {
-    fn from(v: kreuzberg::extraction::docx::drawing::Drawing) -> Self {
-        Drawing {
-            drawing_type: Default::default(),
-            extent: Default::default(),
-            doc_properties: Default::default(),
-            image_ref: v.image_ref.map(|s| s.into()),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::docx::drawing::AnchorProperties> for AnchorProperties {
-    fn from(v: kreuzberg::extraction::docx::drawing::AnchorProperties) -> Self {
-        AnchorProperties {
-            behind_doc: v.behind_doc as _,
-            layout_in_cell: v.layout_in_cell as _,
-            relative_height: v.relative_height.map(|x| x as _),
-            position_h: Default::default(),
-            position_v: Default::default(),
-            wrap_type: Default::default(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::docx::section::PageMarginsPoints> for PageMarginsPoints {
-    fn from(v: kreuzberg::extraction::docx::section::PageMarginsPoints) -> Self {
-        PageMarginsPoints {
-            top: v.top.map(|x| x as _),
-            right: v.right.map(|x| x as _),
-            bottom: v.bottom.map(|x| x as _),
-            left: v.left.map(|x| x as _),
-            header: v.header.map(|x| x as _),
-            footer: v.footer.map(|x| x as _),
-            gutter: v.gutter.map(|x| x as _),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::docx::styles::StyleDefinition> for StyleDefinition {
-    fn from(v: kreuzberg::extraction::docx::styles::StyleDefinition) -> Self {
-        StyleDefinition {
-            id: v.id.into(),
-            name: v.name.map(|s| s.into()),
-            style_type: Default::default(),
-            based_on: v.based_on.map(|s| s.into()),
-            next_style: v.next_style.map(|s| s.into()),
-            is_default: v.is_default as _,
-            paragraph_properties: Default::default(),
-            run_properties: Default::default(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::docx::styles::ResolvedStyle> for ResolvedStyle {
-    fn from(v: kreuzberg::extraction::docx::styles::ResolvedStyle) -> Self {
-        ResolvedStyle {
-            paragraph_properties: Default::default(),
-            run_properties: Default::default(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::office_metadata::DocxAppProperties> for DocxAppProperties {
-    fn from(v: kreuzberg::extraction::office_metadata::DocxAppProperties) -> Self {
-        DocxAppProperties {
-            application: v.application.map(|s| s.into()),
-            app_version: v.app_version.map(|s| s.into()),
-            template: v.template.map(|s| s.into()),
-            total_time: v.total_time.map(|x| x as _),
-            pages: v.pages.map(|x| x as _),
-            words: v.words.map(|x| x as _),
-            characters: v.characters.map(|x| x as _),
-            characters_with_spaces: v.characters_with_spaces.map(|x| x as _),
-            lines: v.lines.map(|x| x as _),
-            paragraphs: v.paragraphs.map(|x| x as _),
-            company: v.company.map(|s| s.into()),
-            doc_security: v.doc_security.map(|x| x as _),
-            scale_crop: v.scale_crop.map(|x| x as _),
-            links_up_to_date: v.links_up_to_date.map(|x| x as _),
-            shared_doc: v.shared_doc.map(|x| x as _),
-            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties> for XlsxAppProperties {
-    fn from(v: kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties) -> Self {
-        XlsxAppProperties {
-            application: v.application.map(|s| s.into()),
-            app_version: v.app_version.map(|s| s.into()),
-            doc_security: v.doc_security.map(|x| x as _),
-            scale_crop: v.scale_crop.map(|x| x as _),
-            links_up_to_date: v.links_up_to_date.map(|x| x as _),
-            shared_doc: v.shared_doc.map(|x| x as _),
-            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
-            company: v.company.map(|s| s.into()),
-            worksheet_names: v.worksheet_names.into_iter().map(|s| s.into()).collect(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties> for PptxAppProperties {
-    fn from(v: kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties) -> Self {
-        PptxAppProperties {
-            application: v.application.map(|s| s.into()),
-            app_version: v.app_version.map(|s| s.into()),
-            total_time: v.total_time.map(|x| x as _),
-            company: v.company.map(|s| s.into()),
-            doc_security: v.doc_security.map(|x| x as _),
-            scale_crop: v.scale_crop.map(|x| x as _),
-            links_up_to_date: v.links_up_to_date.map(|x| x as _),
-            shared_doc: v.shared_doc.map(|x| x as _),
-            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
-            slides: v.slides.map(|x| x as _),
-            notes: v.notes.map(|x| x as _),
-            hidden_slides: v.hidden_slides.map(|x| x as _),
-            multimedia_clips: v.multimedia_clips.map(|x| x as _),
-            presentation_format: v.presentation_format.map(|s| s.into()),
-            slide_titles: v.slide_titles.into_iter().map(|s| s.into()).collect(),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::office_metadata::CoreProperties> for CoreProperties {
-    fn from(v: kreuzberg::extraction::office_metadata::CoreProperties) -> Self {
-        CoreProperties {
-            title: v.title.map(|s| s.into()),
-            subject: v.subject.map(|s| s.into()),
-            creator: v.creator.map(|s| s.into()),
-            keywords: v.keywords.map(|s| s.into()),
-            description: v.description.map(|s| s.into()),
-            last_modified_by: v.last_modified_by.map(|s| s.into()),
-            revision: v.revision.map(|s| s.into()),
-            created: v.created.map(|s| s.into()),
-            modified: v.modified.map(|s| s.into()),
-            category: v.category.map(|s| s.into()),
-            content_status: v.content_status.map(|s| s.into()),
-            language: v.language.map(|s| s.into()),
-            identifier: v.identifier.map(|s| s.into()),
-            version: v.version.map(|s| s.into()),
-            last_printed: v.last_printed.map(|s| s.into()),
-        }
-    }
-}
-
-impl From<kreuzberg::extraction::office_metadata::OdtProperties> for OdtProperties {
-    fn from(v: kreuzberg::extraction::office_metadata::OdtProperties) -> Self {
-        OdtProperties {
-            title: v.title.map(|s| s.into()),
-            subject: v.subject.map(|s| s.into()),
-            creator: v.creator.map(|s| s.into()),
-            initial_creator: v.initial_creator.map(|s| s.into()),
-            keywords: v.keywords.map(|s| s.into()),
-            description: v.description.map(|s| s.into()),
-            date: v.date.map(|s| s.into()),
-            creation_date: v.creation_date.map(|s| s.into()),
-            language: v.language.map(|s| s.into()),
-            generator: v.generator.map(|s| s.into()),
-            editing_duration: v.editing_duration.map(|s| s.into()),
-            editing_cycles: v.editing_cycles.map(|s| s.into()),
-            page_count: v.page_count.map(|x| x as _),
-            word_count: v.word_count.map(|x| x as _),
-            character_count: v.character_count.map(|x| x as _),
-            paragraph_count: v.paragraph_count.map(|x| x as _),
-            table_count: v.table_count.map(|x| x as _),
-            image_count: v.image_count.map(|x| x as _),
-        }
-    }
-}
-
 impl From<kreuzberg::SecurityLimits> for SecurityLimits {
     fn from(v: kreuzberg::SecurityLimits) -> Self {
         SecurityLimits {
@@ -3537,8 +2926,8 @@ impl From<kreuzberg::PptxMetadata> for PptxMetadata {
 impl From<kreuzberg::DocxMetadata> for DocxMetadata {
     fn from(v: kreuzberg::DocxMetadata) -> Self {
         DocxMetadata {
-            core_properties: v.core_properties.map(CoreProperties::from),
-            app_properties: v.app_properties.map(DocxAppProperties::from),
+            core_properties: Default::default(),
+            app_properties: Default::default(),
             custom_properties: v.custom_properties.map(|m| {
                 m.into_iter()
                     .map(|(k, v)| (k.into(), serde_json::to_string(&v).unwrap_or_default()))
@@ -3833,211 +3222,11 @@ impl From<kreuzberg::Uri> for Uri {
     }
 }
 
-impl From<kreuzberg::api::InfoResponse> for InfoResponse {
-    fn from(v: kreuzberg::api::InfoResponse) -> Self {
-        InfoResponse {
-            version: v.version.into(),
-            rust_backend: v.rust_backend as _,
-        }
-    }
-}
-
-impl From<kreuzberg::api::EmbedRequest> for EmbedRequest {
-    fn from(v: kreuzberg::api::EmbedRequest) -> Self {
-        EmbedRequest {
-            texts: v.texts.into_iter().map(|s| s.into()).collect(),
-            config: v.config.map(EmbeddingConfig::from),
-        }
-    }
-}
-
-impl From<kreuzberg::api::EmbedResponse> for EmbedResponse {
-    fn from(v: kreuzberg::api::EmbedResponse) -> Self {
-        EmbedResponse {
-            embeddings: v
-                .embeddings
-                .into_iter()
-                .map(|inner| inner.into_iter().map(|x| x as _).collect())
-                .collect(),
-            model: v.model.into(),
-            dimensions: v.dimensions as _,
-            count: v.count as _,
-        }
-    }
-}
-
-impl From<kreuzberg::api::ChunkRequest> for ChunkRequest {
-    fn from(v: kreuzberg::api::ChunkRequest) -> Self {
-        ChunkRequest {
-            text: v.text.into(),
-            config: Default::default(),
-            chunker_type: v.chunker_type.into(),
-        }
-    }
-}
-
-impl From<kreuzberg::api::ChunkResponse> for ChunkResponse {
-    fn from(v: kreuzberg::api::ChunkResponse) -> Self {
-        ChunkResponse {
-            chunks: Default::default(),
-            chunk_count: v.chunk_count as _,
-            config: Default::default(),
-            input_size_bytes: v.input_size_bytes as _,
-            chunker_type: v.chunker_type.into(),
-        }
-    }
-}
-
 impl From<kreuzberg::api::DetectResponse> for DetectResponse {
     fn from(v: kreuzberg::api::DetectResponse) -> Self {
         DetectResponse {
             mime_type: v.mime_type.into(),
             filename: v.filename.map(|s| s.into()),
-        }
-    }
-}
-
-impl From<kreuzberg::api::ManifestEntryResponse> for ManifestEntryResponse {
-    fn from(v: kreuzberg::api::ManifestEntryResponse) -> Self {
-        ManifestEntryResponse {
-            relative_path: v.relative_path.into(),
-            sha256: v.sha256.into(),
-            size_bytes: v.size_bytes as _,
-            source_url: v.source_url.into(),
-        }
-    }
-}
-
-impl From<kreuzberg::api::ManifestResponse> for ManifestResponse {
-    fn from(v: kreuzberg::api::ManifestResponse) -> Self {
-        ManifestResponse {
-            kreuzberg_version: v.kreuzberg_version.into(),
-            total_size_bytes: v.total_size_bytes as _,
-            model_count: v.model_count as _,
-            models: v.models.into_iter().map(ManifestEntryResponse::from).collect(),
-        }
-    }
-}
-
-impl From<kreuzberg::api::WarmResponse> for WarmResponse {
-    fn from(v: kreuzberg::api::WarmResponse) -> Self {
-        WarmResponse {
-            cache_dir: v.cache_dir.into(),
-            downloaded: v.downloaded.into_iter().map(|s| s.into()).collect(),
-            already_cached: v.already_cached.into_iter().map(|s| s.into()).collect(),
-        }
-    }
-}
-
-impl From<kreuzberg::api::StructuredExtractionResponse> for StructuredExtractionResponse {
-    fn from(v: kreuzberg::api::StructuredExtractionResponse) -> Self {
-        StructuredExtractionResponse {
-            structured_output: serde_json::to_string(&v.structured_output).unwrap_or_default(),
-            content: v.content.into(),
-            mime_type: v.mime_type.into(),
-        }
-    }
-}
-
-impl From<kreuzberg::api::OpenWebDocumentResponse> for OpenWebDocumentResponse {
-    fn from(v: kreuzberg::api::OpenWebDocumentResponse) -> Self {
-        OpenWebDocumentResponse {
-            page_content: v.page_content.into(),
-            metadata: Default::default(),
-        }
-    }
-}
-
-impl From<kreuzberg::api::DoclingCompatResponse> for DoclingCompatResponse {
-    fn from(v: kreuzberg::api::DoclingCompatResponse) -> Self {
-        DoclingCompatResponse {
-            document: Default::default(),
-            status: v.status.into(),
-        }
-    }
-}
-
-impl From<kreuzberg::mcp::DetectMimeTypeParams> for DetectMimeTypeParams {
-    fn from(v: kreuzberg::mcp::DetectMimeTypeParams) -> Self {
-        DetectMimeTypeParams {
-            path: v.path.into(),
-            use_content: v.use_content as _,
-        }
-    }
-}
-
-impl From<kreuzberg::mcp::CacheWarmParams> for CacheWarmParams {
-    fn from(v: kreuzberg::mcp::CacheWarmParams) -> Self {
-        CacheWarmParams {
-            all_embeddings: v.all_embeddings as _,
-            embedding_model: v.embedding_model.map(|s| s.into()),
-        }
-    }
-}
-
-impl From<kreuzberg::mcp::EmbedTextParams> for EmbedTextParams {
-    fn from(v: kreuzberg::mcp::EmbedTextParams) -> Self {
-        EmbedTextParams {
-            texts: v.texts.into_iter().map(|s| s.into()).collect(),
-            preset: v.preset.map(|s| s.into()),
-            model: v.model.map(|s| s.into()),
-            api_key: v.api_key.map(|s| s.into()),
-            embedding_plugin: v.embedding_plugin.map(|s| s.into()),
-        }
-    }
-}
-
-impl From<kreuzberg::mcp::ExtractStructuredParams> for ExtractStructuredParams {
-    fn from(v: kreuzberg::mcp::ExtractStructuredParams) -> Self {
-        ExtractStructuredParams {
-            path: v.path.into(),
-            schema: serde_json::to_string(&v.schema).unwrap_or_default(),
-            model: v.model.into(),
-            schema_name: v.schema_name.into(),
-            schema_description: v.schema_description.map(|s| s.into()),
-            prompt: v.prompt.map(|s| s.into()),
-            api_key: v.api_key.map(|s| s.into()),
-            strict: v.strict as _,
-        }
-    }
-}
-
-impl From<kreuzberg::mcp::ChunkTextParams> for ChunkTextParams {
-    fn from(v: kreuzberg::mcp::ChunkTextParams) -> Self {
-        ChunkTextParams {
-            text: v.text.into(),
-            max_characters: v.max_characters.map(|x| x as _),
-            overlap: v.overlap.map(|x| x as _),
-            chunker_type: v.chunker_type.map(|s| s.into()),
-            topic_threshold: v.topic_threshold.map(|x| x as _),
-        }
-    }
-}
-
-impl From<kreuzberg::chunking::boundary_detection::DetectedBoundary> for DetectedBoundary {
-    fn from(v: kreuzberg::chunking::boundary_detection::DetectedBoundary) -> Self {
-        DetectedBoundary {
-            byte_offset: v.byte_offset as _,
-            is_header: v.is_header as _,
-        }
-    }
-}
-
-impl From<kreuzberg::chunking::ChunkingResult> for ChunkingResult {
-    fn from(v: kreuzberg::chunking::ChunkingResult) -> Self {
-        ChunkingResult {
-            chunks: v.chunks.into_iter().map(Chunk::from).collect(),
-            chunk_count: v.chunk_count as _,
-        }
-    }
-}
-
-impl From<kreuzberg::chunking::semantic::merge::MergedChunk> for MergedChunk {
-    fn from(v: kreuzberg::chunking::semantic::merge::MergedChunk) -> Self {
-        MergedChunk {
-            text: v.text.into(),
-            byte_start: v.byte_start as _,
-            byte_end: v.byte_end as _,
         }
     }
 }
@@ -4307,6 +3496,28 @@ impl From<kreuzberg::CodeContentMode> for CodeContentMode {
             kreuzberg::CodeContentMode::Chunks => CodeContentMode::Chunks,
             kreuzberg::CodeContentMode::Raw => CodeContentMode::Raw,
             kreuzberg::CodeContentMode::Structure => CodeContentMode::Structure,
+        }
+    }
+}
+
+impl From<kreuzberg::extraction::transform::ListType> for ListType {
+    fn from(v: kreuzberg::extraction::transform::ListType) -> Self {
+        match v {
+            kreuzberg::extraction::transform::ListType::Bullet => ListType::Bullet,
+            kreuzberg::extraction::transform::ListType::Numbered => ListType::Numbered,
+            kreuzberg::extraction::transform::ListType::Lettered => ListType::Lettered,
+            kreuzberg::extraction::transform::ListType::Indented => ListType::Indented,
+        }
+    }
+}
+
+impl From<kreuzberg::extraction::docx::drawing::DrawingType> for DrawingType {
+    fn from(v: kreuzberg::extraction::docx::drawing::DrawingType) -> Self {
+        match v {
+            kreuzberg::extraction::docx::drawing::DrawingType::Inline => DrawingType::Inline,
+            kreuzberg::extraction::docx::drawing::DrawingType::Anchored(f0) => DrawingType::Anchored {
+                field0: serde_json::to_string(&f0).unwrap_or_default(),
+            },
         }
     }
 }
@@ -5242,51 +4453,6 @@ impl From<TreeSitterProcessConfig> for kreuzberg::TreeSitterProcessConfig {
     }
 }
 
-impl From<DocxAppProperties> for kreuzberg::extraction::office_metadata::DocxAppProperties {
-    fn from(v: DocxAppProperties) -> Self {
-        kreuzberg::extraction::office_metadata::DocxAppProperties {
-            application: v.application.map(Into::into),
-            app_version: v.app_version.map(Into::into),
-            template: v.template.map(Into::into),
-            total_time: v.total_time.map(|x| x as _),
-            pages: v.pages.map(|x| x as _),
-            words: v.words.map(|x| x as _),
-            characters: v.characters.map(|x| x as _),
-            characters_with_spaces: v.characters_with_spaces.map(|x| x as _),
-            lines: v.lines.map(|x| x as _),
-            paragraphs: v.paragraphs.map(|x| x as _),
-            company: v.company.map(Into::into),
-            doc_security: v.doc_security.map(|x| x as _),
-            scale_crop: v.scale_crop.map(|x| x as _),
-            links_up_to_date: v.links_up_to_date.map(|x| x as _),
-            shared_doc: v.shared_doc.map(|x| x as _),
-            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
-        }
-    }
-}
-
-impl From<CoreProperties> for kreuzberg::extraction::office_metadata::CoreProperties {
-    fn from(v: CoreProperties) -> Self {
-        kreuzberg::extraction::office_metadata::CoreProperties {
-            title: v.title.map(Into::into),
-            subject: v.subject.map(Into::into),
-            creator: v.creator.map(Into::into),
-            keywords: v.keywords.map(Into::into),
-            description: v.description.map(Into::into),
-            last_modified_by: v.last_modified_by.map(Into::into),
-            revision: v.revision.map(Into::into),
-            created: v.created.map(Into::into),
-            modified: v.modified.map(Into::into),
-            category: v.category.map(Into::into),
-            content_status: v.content_status.map(Into::into),
-            language: v.language.map(Into::into),
-            identifier: v.identifier.map(Into::into),
-            version: v.version.map(Into::into),
-            last_printed: v.last_printed.map(Into::into),
-        }
-    }
-}
-
 impl From<SecurityLimits> for kreuzberg::SecurityLimits {
     fn from(v: SecurityLimits) -> Self {
         kreuzberg::SecurityLimits {
@@ -5888,8 +5054,8 @@ impl From<PptxMetadata> for kreuzberg::PptxMetadata {
 impl From<DocxMetadata> for kreuzberg::DocxMetadata {
     fn from(v: DocxMetadata) -> Self {
         kreuzberg::DocxMetadata {
-            core_properties: v.core_properties.map(Into::into),
-            app_properties: v.app_properties.map(Into::into),
+            core_properties: Default::default(),
+            app_properties: Default::default(),
             custom_properties: v
                 .custom_properties
                 .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
@@ -7342,62 +6508,6 @@ pub fn create_structured_data_result_from_json(json: String) -> Result<Structure
 }
 
 #[frb]
-pub fn create_html_extraction_result_from_json(json: String) -> Result<HtmlExtractionResult, String> {
-    serde_json::from_str::<kreuzberg::extraction::html::HtmlExtractionResult>(&json)
-        .map(HtmlExtractionResult::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_extracted_inline_image_from_json(json: String) -> Result<ExtractedInlineImage, String> {
-    serde_json::from_str::<kreuzberg::extraction::html::ExtractedInlineImage>(&json)
-        .map(ExtractedInlineImage::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_drawing_from_json(json: String) -> Result<Drawing, String> {
-    serde_json::from_str::<kreuzberg::extraction::docx::drawing::Drawing>(&json)
-        .map(Drawing::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_anchor_properties_from_json(json: String) -> Result<AnchorProperties, String> {
-    serde_json::from_str::<kreuzberg::extraction::docx::drawing::AnchorProperties>(&json)
-        .map(AnchorProperties::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_docx_app_properties_from_json(json: String) -> Result<DocxAppProperties, String> {
-    serde_json::from_str::<kreuzberg::extraction::office_metadata::DocxAppProperties>(&json)
-        .map(DocxAppProperties::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_xlsx_app_properties_from_json(json: String) -> Result<XlsxAppProperties, String> {
-    serde_json::from_str::<kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties>(&json)
-        .map(XlsxAppProperties::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_pptx_app_properties_from_json(json: String) -> Result<PptxAppProperties, String> {
-    serde_json::from_str::<kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties>(&json)
-        .map(PptxAppProperties::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_core_properties_from_json(json: String) -> Result<CoreProperties, String> {
-    serde_json::from_str::<kreuzberg::extraction::office_metadata::CoreProperties>(&json)
-        .map(CoreProperties::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
 pub fn create_security_limits_from_json(json: String) -> Result<SecurityLimits, String> {
     serde_json::from_str::<kreuzberg::SecurityLimits>(&json)
         .map(SecurityLimits::from)
@@ -7958,135 +7068,9 @@ pub fn create_uri_from_json(json: String) -> Result<Uri, String> {
 }
 
 #[frb]
-pub fn create_info_response_from_json(json: String) -> Result<InfoResponse, String> {
-    serde_json::from_str::<kreuzberg::api::InfoResponse>(&json)
-        .map(InfoResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_embed_request_from_json(json: String) -> Result<EmbedRequest, String> {
-    serde_json::from_str::<kreuzberg::api::EmbedRequest>(&json)
-        .map(EmbedRequest::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_embed_response_from_json(json: String) -> Result<EmbedResponse, String> {
-    serde_json::from_str::<kreuzberg::api::EmbedResponse>(&json)
-        .map(EmbedResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_chunk_request_from_json(json: String) -> Result<ChunkRequest, String> {
-    serde_json::from_str::<kreuzberg::api::ChunkRequest>(&json)
-        .map(ChunkRequest::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_chunk_response_from_json(json: String) -> Result<ChunkResponse, String> {
-    serde_json::from_str::<kreuzberg::api::ChunkResponse>(&json)
-        .map(ChunkResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
 pub fn create_detect_response_from_json(json: String) -> Result<DetectResponse, String> {
     serde_json::from_str::<kreuzberg::api::DetectResponse>(&json)
         .map(DetectResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_manifest_entry_response_from_json(json: String) -> Result<ManifestEntryResponse, String> {
-    serde_json::from_str::<kreuzberg::api::ManifestEntryResponse>(&json)
-        .map(ManifestEntryResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_manifest_response_from_json(json: String) -> Result<ManifestResponse, String> {
-    serde_json::from_str::<kreuzberg::api::ManifestResponse>(&json)
-        .map(ManifestResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_warm_response_from_json(json: String) -> Result<WarmResponse, String> {
-    serde_json::from_str::<kreuzberg::api::WarmResponse>(&json)
-        .map(WarmResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_structured_extraction_response_from_json(json: String) -> Result<StructuredExtractionResponse, String> {
-    serde_json::from_str::<kreuzberg::api::StructuredExtractionResponse>(&json)
-        .map(StructuredExtractionResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_open_web_document_response_from_json(json: String) -> Result<OpenWebDocumentResponse, String> {
-    serde_json::from_str::<kreuzberg::api::OpenWebDocumentResponse>(&json)
-        .map(OpenWebDocumentResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_docling_compat_response_from_json(json: String) -> Result<DoclingCompatResponse, String> {
-    serde_json::from_str::<kreuzberg::api::DoclingCompatResponse>(&json)
-        .map(DoclingCompatResponse::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_detect_mime_type_params_from_json(json: String) -> Result<DetectMimeTypeParams, String> {
-    serde_json::from_str::<kreuzberg::mcp::DetectMimeTypeParams>(&json)
-        .map(DetectMimeTypeParams::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_cache_warm_params_from_json(json: String) -> Result<CacheWarmParams, String> {
-    serde_json::from_str::<kreuzberg::mcp::CacheWarmParams>(&json)
-        .map(CacheWarmParams::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_embed_text_params_from_json(json: String) -> Result<EmbedTextParams, String> {
-    serde_json::from_str::<kreuzberg::mcp::EmbedTextParams>(&json)
-        .map(EmbedTextParams::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_extract_structured_params_from_json(json: String) -> Result<ExtractStructuredParams, String> {
-    serde_json::from_str::<kreuzberg::mcp::ExtractStructuredParams>(&json)
-        .map(ExtractStructuredParams::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_chunk_text_params_from_json(json: String) -> Result<ChunkTextParams, String> {
-    serde_json::from_str::<kreuzberg::mcp::ChunkTextParams>(&json)
-        .map(ChunkTextParams::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_detected_boundary_from_json(json: String) -> Result<DetectedBoundary, String> {
-    serde_json::from_str::<kreuzberg::chunking::boundary_detection::DetectedBoundary>(&json)
-        .map(DetectedBoundary::from)
-        .map_err(|e| e.to_string())
-}
-
-#[frb]
-pub fn create_chunking_result_from_json(json: String) -> Result<ChunkingResult, String> {
-    serde_json::from_str::<kreuzberg::chunking::ChunkingResult>(&json)
-        .map(ChunkingResult::from)
         .map_err(|e| e.to_string())
 }
 
@@ -8743,6 +7727,8 @@ pub struct DocumentExtractorDartImpl {
     supported_mime_types: Box<dyn Fn() -> flutter_rust_bridge::DartFnFuture<Vec<String>> + Send + Sync>,
     priority: Box<dyn Fn() -> flutter_rust_bridge::DartFnFuture<i64> + Send + Sync>,
     can_handle: Box<dyn Fn(String, String) -> flutter_rust_bridge::DartFnFuture<bool> + Send + Sync>,
+    as_sync_extractor:
+        Box<dyn Fn() -> flutter_rust_bridge::DartFnFuture<Option<kreuzberg::extractors::SyncExtractor>> + Send + Sync>,
 }
 impl ::std::fmt::Debug for DocumentExtractorDartImpl {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -8823,6 +7809,14 @@ impl kreuzberg::plugins::DocumentExtractor for DocumentExtractorDartImpl {
             .block_on(async { (self.can_handle)(_path, _mime_type).await });
         __result
     }
+
+    fn as_sync_extractor(&self) -> Option<kreuzberg::extractors::SyncExtractor> {
+        let __result = ::tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("build alef visitor tokio runtime")
+            .block_on(async { (self.as_sync_extractor)().await });
+        __result
+    }
 }
 
 /// Create a `DocumentExtractorDartImpl` from Dart callback closures.
@@ -8851,6 +7845,9 @@ pub fn create_document_extractor_dart_impl(
     supported_mime_types: Box<dyn Fn() -> flutter_rust_bridge::DartFnFuture<Vec<String>> + Send + Sync>,
     priority: Box<dyn Fn() -> flutter_rust_bridge::DartFnFuture<i64> + Send + Sync>,
     can_handle: Box<dyn Fn(String, String) -> flutter_rust_bridge::DartFnFuture<bool> + Send + Sync>,
+    as_sync_extractor: Box<
+        dyn Fn() -> flutter_rust_bridge::DartFnFuture<Option<kreuzberg::extractors::SyncExtractor>> + Send + Sync,
+    >,
 ) -> DocumentExtractorDartImpl {
     DocumentExtractorDartImpl {
         plugin_name,
@@ -8860,6 +7857,7 @@ pub fn create_document_extractor_dart_impl(
         supported_mime_types,
         priority,
         can_handle,
+        as_sync_extractor,
     }
 }
 

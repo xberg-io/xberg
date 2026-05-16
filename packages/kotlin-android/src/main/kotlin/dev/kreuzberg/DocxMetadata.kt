@@ -9,7 +9,7 @@ package dev.kreuzberg
  * Integrates with `office_metadata` module for core/app/custom properties.
  */
 data class DocxMetadata(
-    val coreProperties: CoreProperties?,
-    val appProperties: DocxAppProperties?,
+    val coreProperties: String?,
+    val appProperties: String?,
     val customProperties: Map<String, String>?
 )
