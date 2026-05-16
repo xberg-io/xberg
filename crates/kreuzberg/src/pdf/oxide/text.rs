@@ -201,32 +201,42 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
     Ok((content, Some(boundaries), page_contents))
 }
 
-/// Minimum consecutive single-char zero-height spans that triggers the glyph-fragmentation
-/// repair path. Must match FRAG_MIN_RUN in tests.
-const FRAG_MIN_RUN: usize = 5;
+/// Minimum number of x-disorder events required to classify the span list as glyph-fragmented.
+///
+/// Two events avoid false positives: a single x-reset can occur naturally in right-to-left
+/// or wrapped text, but ≥ 2 resets in "same-line" transitions reliably indicate that
+/// pdf_oxide's ColumnAware ordering has shuffled glyph-level spans by y-group.
+const MIN_DISORDER_COUNT: usize = 2;
 
 /// y-proximity threshold (pt) for coalescing glyph-jitter spans onto one text line.
 /// Word's BT-per-glyph sinusoidal jitter (6-glyph period) produces consecutive-pair
 /// y-gaps ≤ ~3.03 pt; 4.0 pt covers this while staying below normal line spacing (~14 pt).
 const COALESCE_THRESHOLD: f32 = 4.0;
 
-/// Returns true when `spans` exhibits the glyph-fragmentation signature: ≥ FRAG_MIN_RUN
-/// consecutive single-character spans each with near-zero bbox height.
+/// Returns true when `spans` exhibits the glyph-fragmentation signature.
 ///
-/// This pattern occurs when a PDF (e.g. Word-exported) positions every glyph via its
-/// own BT…ET block with an absolute Tm matrix that includes a y-coordinate jitter
-/// exceeding the backend's internal line-break threshold. The result is one span per
-/// character instead of one span per word or line. (issue #962)
+/// pdf_oxide's ColumnAware reading order groups all spans at one y-level before moving to the
+/// next. For Word-exported PDFs where each glyph has its own BT…ET block with a sinusoidal
+/// y-jitter, this produces groups ordered by y-level rather than by reading order: "et" (y=703)
+/// appears before "H" (y=700) even though "H" comes first in the text. The signature is
+/// consecutive "same-line" span transitions where the current span's x-coordinate resets
+/// significantly to the left — indicating a new y-group started. ≥ MIN_DISORDER_COUNT such
+/// events means position-based reconstruction is needed. (issue #962)
 fn is_fragmented_span_list(spans: &[pdf_oxide::layout::TextSpan]) -> bool {
-    let mut run = 0usize;
-    for span in spans {
-        if span.text.chars().count() == 1 && span.bbox.height < 1.0 {
-            run += 1;
-            if run >= FRAG_MIN_RUN {
-                return true;
+    let mut disorder_count = 0;
+    for window in spans.windows(2) {
+        let prev = &window[0];
+        let cur = &window[1];
+        let y_gap = (prev.bbox.y - cur.bbox.y).abs();
+        let eff_height = prev.bbox.height.max(cur.bbox.height).max(prev.font_size * 0.5);
+        if y_gap < eff_height * 0.5 {
+            // Same-line transition: a significant x-reset means the ordering is wrong.
+            if cur.bbox.x < prev.bbox.x - prev.font_size {
+                disorder_count += 1;
+                if disorder_count >= MIN_DISORDER_COUNT {
+                    return true;
+                }
             }
-        } else {
-            run = 0;
         }
     }
     false
@@ -240,7 +250,7 @@ fn is_fragmented_span_list(spans: &[pdf_oxide::layout::TextSpan]) -> bool {
 ///    of the previous span belong to the same visual line.
 /// 3. Within each group sort by x-ascending (left-to-right reading order).
 /// 4. Concatenate, inserting a space wherever the x-gap between adjacent spans
-///    exceeds font_size * 0.25.
+///    exceeds font_size * 0.5.
 fn rebuild_text_from_fragmented_spans(spans: &[pdf_oxide::layout::TextSpan]) -> String {
     if spans.is_empty() {
         return String::new();
@@ -270,7 +280,7 @@ fn rebuild_text_from_fragmented_spans(spans: &[pdf_oxide::layout::TextSpan]) -> 
             result.push('\n');
         }
         let font_size = group.iter().map(|s| s.font_size).fold(0.0_f32, f32::max);
-        let space_threshold = (font_size * 0.25).max(1.0);
+        let space_threshold = font_size * 0.5;
         let mut prev_end_x = f32::NEG_INFINITY;
         for span in group.iter() {
             if prev_end_x.is_finite() && span.bbox.x - prev_end_x > space_threshold {
@@ -293,9 +303,9 @@ fn rebuild_text_from_fragmented_spans(spans: &[pdf_oxide::layout::TextSpan]) -> 
 /// lines exceeds 1.5x the median line height, inserts a paragraph break (\n\n).
 ///
 /// Applies a fragmentation repair pass for PDFs that position each glyph via its
-/// own BT…ET block (issue #962): detected by FRAG_MIN_RUN consecutive single-char
-/// spans with near-zero height; repaired by re-sorting on position rather than
-/// relying on the per-span same-line heuristic.
+/// own BT…ET block (issue #962): detected by ≥ MIN_DISORDER_COUNT same-line x-reset
+/// events, which occur when ColumnAware ordering groups spans by y-level rather than
+/// reading order; repaired by re-sorting on position rather than relying on stream order.
 fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: usize) -> Result<String> {
     let page_text_data = doc
         .extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
@@ -303,10 +313,9 @@ fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: 
             PdfError::TextExtractionFailed(format!("Page {} text extraction failed: {}", page_index + 1, e))
         })?;
 
-    // Issue #962: Word-exported PDFs sometimes place each glyph in its own BT…ET block
-    // with a sinusoidal y-jitter up to ~3.5 pt. pdf_oxide emits these as single-char spans
-    // with near-zero bbox.height; the same-line heuristic below then fails (threshold = 0)
-    // and every glyph becomes its own line. Detect and repair before normal processing.
+    // Issue #962: Word-exported PDFs position each glyph in its own BT…ET block with a
+    // sinusoidal y-jitter. pdf_oxide's ColumnAware ordering groups spans by y-level, so
+    // glyph-level spans appear out of reading order. Detect via x-resets and rebuild.
     if is_fragmented_span_list(&page_text_data.spans) {
         tracing::debug!(
             span_count = page_text_data.spans.len(),

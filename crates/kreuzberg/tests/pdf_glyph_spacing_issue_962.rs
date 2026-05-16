@@ -162,21 +162,22 @@ fn assemble_single_page_pdf(stream: &str) -> Vec<u8> {
 ///
 /// Line 1 at y=700: "FirstLine"
 /// Line 2 at y=670: "SecondLine"
-/// No jitter — normal rendering via a single BT block per line.
+/// No jitter — normal rendering via a single BT block per line using absolute Tm positioning.
 fn make_two_line_pdf() -> Vec<u8> {
-    let stream = "BT /F1 12 Tf 1 0 0 1 72.00 700.00 Td (FirstLine) Tj ET\n\
-                  BT /F1 12 Tf 1 0 0 1 72.00 670.00 Td (SecondLine) Tj ET\n";
+    let stream = "BT /F1 12 Tf 1 0 0 1 72.00 700.00 Tm (FirstLine) Tj ET\n\
+                  BT /F1 12 Tf 1 0 0 1 72.00 670.00 Tm (SecondLine) Tj ET\n";
     assemble_single_page_pdf(stream)
 }
 
-/// A PDF with two words on the same line separated by a large x-gap (> font_size * 0.25).
+/// A PDF with two words on the same line separated by a large x-gap (> font_size * 0.5).
 /// Used to verify space insertion between words.
 ///
 /// "Hello" starting at x=72, "World" starting at x=300.
-/// All chars at same y, no jitter.
+/// All chars at same y, no jitter. Uses absolute Tm positioning so pdf_oxide can
+/// correctly determine each span's position.
 fn make_word_gap_pdf() -> Vec<u8> {
-    let stream = "BT /F1 12 Tf 1 0 0 1 72.00 700.00 Td (Hello) Tj ET\n\
-                  BT /F1 12 Tf 1 0 0 1 300.00 700.00 Td (World) Tj ET\n";
+    let stream = "BT /F1 12 Tf 1 0 0 1 72.00 700.00 Tm (Hello) Tj ET\n\
+                  BT /F1 12 Tf 1 0 0 1 300.00 700.00 Tm (World) Tj ET\n";
     assemble_single_page_pdf(stream)
 }
 
