@@ -1,0 +1,216 @@
+COMMON: Bloodroot
+BOTANICAL: Sanguinaria canadensis
+ZONE: 4
+LIGHT: Mostly Shady
+PRICE: $2.44
+AVAILABILITY: 031599
+COMMON: Columbine
+BOTANICAL: Aquilegia canadensis
+ZONE: 3
+LIGHT: Mostly Shady
+PRICE: $9.37
+AVAILABILITY: 030699
+COMMON: Marsh Marigold
+BOTANICAL: Caltha palustris
+ZONE: 4
+LIGHT: Mostly Sunny
+PRICE: $6.81
+AVAILABILITY: 051799
+COMMON: Cowslip
+BOTANICAL: Caltha palustris
+ZONE: 4
+LIGHT: Mostly Shady
+PRICE: $9.90
+AVAILABILITY: 030699
+COMMON: Dutchman's-Breeches
+BOTANICAL: Dicentra cucullaria
+ZONE: 3
+LIGHT: Mostly Shady
+PRICE: $6.44
+AVAILABILITY: 012099
+COMMON: Ginger, Wild
+BOTANICAL: Asarum canadense
+ZONE: 3
+LIGHT: Mostly Shady
+PRICE: $9.03
+AVAILABILITY: 041899
+COMMON: Hepatica
+BOTANICAL: Hepatica americana
+ZONE: 4
+LIGHT: Mostly Shady
+PRICE: $4.45
+AVAILABILITY: 012699
+COMMON: Liverleaf
+BOTANICAL: Hepatica americana
+ZONE: 4
+LIGHT: Mostly Shady
+PRICE: $3.99
+AVAILABILITY: 010299
+COMMON: Jack-In-The-Pulpit
+BOTANICAL: Arisaema triphyllum
+ZONE: 4
+LIGHT: Mostly Shady
+PRICE: $3.23
+AVAILABILITY: 020199
+COMMON: Mayapple
+BOTANICAL: Podophyllum peltatum
+ZONE: 3
+LIGHT: Mostly Shady
+PRICE: $2.98
+AVAILABILITY: 060599
+COMMON: Phlox, Woodland
+BOTANICAL: Phlox divaricata
+ZONE: 3
+LIGHT: Sun or Shade
+PRICE: $2.80
+AVAILABILITY: 012299
+COMMON: Phlox, Blue
+BOTANICAL: Phlox divaricata
+ZONE: 3
+LIGHT: Sun or Shade
+PRICE: $5.59
+AVAILABILITY: 021699
+COMMON: Spring-Beauty
+BOTANICAL: Claytonia Virginica
+ZONE: 7
+LIGHT: Mostly Shady
+PRICE: $6.59
+AVAILABILITY: 020199
+COMMON: Trillium
+BOTANICAL: Trillium grandiflorum
+ZONE: 5
+LIGHT: Sun or Shade
+PRICE: $3.90
+AVAILABILITY: 042999
+COMMON: Wake Robin
+BOTANICAL: Trillium grandiflorum
+ZONE: 5
+LIGHT: Sun or Shade
+PRICE: $3.20
+AVAILABILITY: 022199
+COMMON: Violet, Dog-Tooth
+BOTANICAL: Erythronium americanum
+ZONE: 4
+LIGHT: Shade
+PRICE: $9.04
+AVAILABILITY: 020199
+COMMON: Trout Lily
+BOTANICAL: Erythronium americanum
+ZONE: 4
+LIGHT: Shade
+PRICE: $6.94
+AVAILABILITY: 032499
+COMMON: Adder's-Tongue
+BOTANICAL: Erythronium americanum
+ZONE: 4
+LIGHT: Shade
+PRICE: $9.58
+AVAILABILITY: 041399
+COMMON: Anemone
+BOTANICAL: Anemone blanda
+ZONE: 6
+LIGHT: Mostly Shady
+PRICE: $8.86
+AVAILABILITY: 122698
+COMMON: Grecian Windflower
+BOTANICAL: Anemone blanda
+ZONE: 6
+LIGHT: Mostly Shady
+PRICE: $9.16
+AVAILABILITY: 071099
+COMMON: Bee Balm
+BOTANICAL: Monarda didyma
+ZONE: 4
+LIGHT: Shade
+PRICE: $4.59
+AVAILABILITY: 050399
+COMMON: Bergamot
+BOTANICAL: Monarda didyma
+ZONE: 4
+LIGHT: Shade
+PRICE: $7.16
+AVAILABILITY: 042799
+COMMON: Black-Eyed Susan
+BOTANICAL: Rudbeckia hirta
+ZONE: Annual
+LIGHT: Sunny
+PRICE: $9.80
+AVAILABILITY: 061899
+COMMON: Buttercup
+BOTANICAL: Ranunculus
+ZONE: 4
+LIGHT: Shade
+PRICE: $2.57
+AVAILABILITY: 061099
+COMMON: Crowfoot
+BOTANICAL: Ranunculus
+ZONE: 4
+LIGHT: Shade
+PRICE: $9.34
+AVAILABILITY: 040399
+COMMON: Butterfly Weed
+BOTANICAL: Asclepias tuberosa
+ZONE: Annual
+LIGHT: Sunny
+PRICE: $2.78
+AVAILABILITY: 063099
+COMMON: Cinquefoil
+BOTANICAL: Potentilla
+ZONE: Annual
+LIGHT: Shade
+PRICE: $7.06
+AVAILABILITY: 052599
+COMMON: Primrose
+BOTANICAL: Oenothera
+ZONE: 3 - 5
+LIGHT: Sunny
+PRICE: $6.56
+AVAILABILITY: 013099
+COMMON: Gentian
+BOTANICAL: Gentiana
+ZONE: 4
+LIGHT: Sun or Shade
+PRICE: $7.81
+AVAILABILITY: 051899
+COMMON: Blue Gentian
+BOTANICAL: Gentiana
+ZONE: 4
+LIGHT: Sun or Shade
+PRICE: $8.56
+AVAILABILITY: 050299
+COMMON: Jacob's Ladder
+BOTANICAL: Polemonium caeruleum
+ZONE: Annual
+LIGHT: Shade
+PRICE: $9.26
+AVAILABILITY: 022199
+COMMON: Greek Valerian
+BOTANICAL: Polemonium caeruleum
+ZONE: Annual
+LIGHT: Shade
+PRICE: $4.36
+AVAILABILITY: 071499
+COMMON: California Poppy
+BOTANICAL: Eschscholzia californica
+ZONE: Annual
+LIGHT: Sun
+PRICE: $7.89
+AVAILABILITY: 032799
+COMMON: Shooting Star
+BOTANICAL: Dodecatheon
+ZONE: Annual
+LIGHT: Mostly Shady
+PRICE: $8.60
+AVAILABILITY: 051399
+COMMON: Snakeroot
+BOTANICAL: Cimicifuga
+ZONE: Annual
+LIGHT: Shade
+PRICE: $5.63
+AVAILABILITY: 071199
+COMMON: Cardinal Flower
+BOTANICAL: Lobelia cardinalis
+ZONE: 2
+LIGHT: Shade
+PRICE: $3.02
+AVAILABILITY: 022299

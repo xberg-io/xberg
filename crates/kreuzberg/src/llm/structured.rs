@@ -92,23 +92,28 @@ pub async fn extract_structured(
     let sanitized_schema = sanitize_schema_for_provider(&config.schema, &config.llm.model);
 
     // Build chat request with JSON schema response format.
-    // Use field assignment because `stream` is pub(crate) in liter-llm.
-    let mut request = liter_llm::ChatCompletionRequest::default();
-    request.model = config.llm.model.clone();
-    request.messages = vec![liter_llm::Message::User(liter_llm::UserMessage {
-        content: liter_llm::UserContent::Text(prompt),
-        name: None,
-    })];
-    request.temperature = config.llm.temperature;
-    request.max_tokens = config.llm.max_tokens;
-    request.response_format = Some(liter_llm::ResponseFormat::JsonSchema {
-        json_schema: liter_llm::JsonSchemaFormat {
-            name: config.schema_name.clone(),
-            description: config.schema_description.clone(),
-            schema: sanitized_schema,
-            strict: Some(config.strict),
-        },
-    });
+    // Use field assignment because `stream` is pub(crate) in liter-llm; struct-init
+    // syntax with `..Default::default()` won't compile across the crate boundary.
+    #[allow(clippy::field_reassign_with_default)]
+    let request = {
+        let mut req = liter_llm::ChatCompletionRequest::default();
+        req.model = config.llm.model.clone();
+        req.messages = vec![liter_llm::Message::User(liter_llm::UserMessage {
+            content: liter_llm::UserContent::Text(prompt),
+            name: None,
+        })];
+        req.temperature = config.llm.temperature;
+        req.max_tokens = config.llm.max_tokens;
+        req.response_format = Some(liter_llm::ResponseFormat::JsonSchema {
+            json_schema: liter_llm::JsonSchemaFormat {
+                name: config.schema_name.clone(),
+                description: config.schema_description.clone(),
+                schema: sanitized_schema,
+                strict: Some(config.strict),
+            },
+        });
+        req
+    };
 
     let response = client
         .chat(request)

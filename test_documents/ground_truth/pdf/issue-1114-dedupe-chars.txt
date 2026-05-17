@@ -1,0 +1,20 @@
+Simple
+
+Duplicated
+
+Font
+
+
+Size
+Italic
+
+Weight
+
+Horizontal
+Horizontalshift
+           shift
+
+Vertical
+Vertical shift
+         shift
+

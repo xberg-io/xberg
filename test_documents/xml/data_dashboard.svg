@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="450" viewBox="0 0 700 450">
+  <title>Quarterly Revenue Dashboard</title>
+  <desc>Bar chart showing quarterly revenue figures for fiscal year 2023</desc>
+
+  <!-- Background -->
+  <rect width="700" height="450" fill="#f8f9fa"/>
+
+  <!-- Title -->
+  <text x="350" y="35" text-anchor="middle" font-family="Arial" font-size="18" font-weight="bold" fill="#2c3e50">Quarterly Revenue Report FY2023</text>
+  <text x="350" y="55" text-anchor="middle" font-family="Arial" font-size="12" fill="#7f8c8d">All figures in millions USD</text>
+
+  <!-- Y-axis labels -->
+  <text x="60" y="105" text-anchor="end" font-family="Arial" font-size="11" fill="#555">50M</text>
+  <text x="60" y="175" text-anchor="end" font-family="Arial" font-size="11" fill="#555">40M</text>
+  <text x="60" y="245" text-anchor="end" font-family="Arial" font-size="11" fill="#555">30M</text>
+  <text x="60" y="315" text-anchor="end" font-family="Arial" font-size="11" fill="#555">20M</text>
+  <text x="60" y="385" text-anchor="end" font-family="Arial" font-size="11" fill="#555">10M</text>
+
+  <!-- Grid lines -->
+  <line x1="70" y1="100" x2="650" y2="100" stroke="#e0e0e0" stroke-width="1"/>
+  <line x1="70" y1="170" x2="650" y2="170" stroke="#e0e0e0" stroke-width="1"/>
+  <line x1="70" y1="240" x2="650" y2="240" stroke="#e0e0e0" stroke-width="1"/>
+  <line x1="70" y1="310" x2="650" y2="310" stroke="#e0e0e0" stroke-width="1"/>
+  <line x1="70" y1="380" x2="650" y2="380" stroke="#e0e0e0" stroke-width="1"/>
+
+  <!-- Q1 Bar -->
+  <rect x="120" y="170" width="100" height="210" fill="#3498db" rx="4"/>
+  <text x="170" y="160" text-anchor="middle" font-family="Arial" font-size="13" font-weight="bold" fill="#2c3e50">42.3M</text>
+  <text x="170" y="410" text-anchor="middle" font-family="Arial" font-size="12" fill="#333">Q1</text>
+
+  <!-- Q2 Bar -->
+  <rect x="260" y="130" width="100" height="250" fill="#2ecc71" rx="4"/>
+  <text x="310" y="120" text-anchor="middle" font-family="Arial" font-size="13" font-weight="bold" fill="#2c3e50">45.7M</text>
+  <text x="310" y="410" text-anchor="middle" font-family="Arial" font-size="12" fill="#333">Q2</text>
+
+  <!-- Q3 Bar -->
+  <rect x="400" y="200" width="100" height="180" fill="#e74c3c" rx="4"/>
+  <text x="450" y="190" text-anchor="middle" font-family="Arial" font-size="13" font-weight="bold" fill="#2c3e50">38.1M</text>
+  <text x="450" y="410" text-anchor="middle" font-family="Arial" font-size="12" fill="#333">Q3</text>
+
+  <!-- Q4 Bar -->
+  <rect x="540" y="100" width="100" height="280" fill="#f39c12" rx="4"/>
+  <text x="590" y="90" text-anchor="middle" font-family="Arial" font-size="13" font-weight="bold" fill="#2c3e50">51.2M</text>
+  <text x="590" y="410" text-anchor="middle" font-family="Arial" font-size="12" fill="#333">Q4</text>
+
+  <!-- Summary -->
+  <text x="350" y="440" text-anchor="middle" font-family="Arial" font-size="13" fill="#2c3e50">Total Annual Revenue: 177.3M | Year-over-Year Growth: 12.4%</text>
+</svg>

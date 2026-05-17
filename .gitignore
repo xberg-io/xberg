@@ -17,6 +17,10 @@ wheels/
 **/bin/
 !**/src/bin/
 **/obj/
+# Go install / build outputs accidentally written next to source
+packages/go/v4/install
+packages/go/v4/kreuzberg
+packages/go/v4/v4
 
 # Rust
 *.rs.bk
@@ -201,52 +205,18 @@ tools/benchmark-harness/datasets/
 tools/benchmark-harness/vendored/docling/md/iso_21111_10.md
 visualizations/
 
-# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
-.agents/
-.claude/
-.codex/
-.cursor/
-.github/agents/code-reviewer.agent.md
-.github/agents/csharp-specialist.agent.md
-.github/agents/devops-engineer.agent.md
-.github/agents/docs-writer.agent.md
-.github/agents/e2e-generator-engineer.agent.md
-.github/agents/elixir-specialist.agent.md
-.github/agents/ffi-engineer.agent.md
-.github/agents/go-specialist.agent.md
-.github/agents/java-specialist.agent.md
-.github/agents/performance-engineer.agent.md
-.github/agents/php-specialist.agent.md
-.github/agents/polyglot-architect.agent.md
-.github/agents/python-specialist.agent.md
-.github/agents/release-engineer.agent.md
-.github/agents/ruby-specialist.agent.md
-.github/agents/rust-core-engineer.agent.md
-.github/agents/security-auditor.agent.md
-.github/agents/typescript-specialist.agent.md
-.github/agents/wasm-specialist.agent.md
-.github/copilot-instructions.md
-.github/skills/add-language-generator/SKILL.md
-.github/skills/alef/SKILL.md
-.github/skills/api-server-mcp/SKILL.md
-.github/skills/chunking-embeddings/SKILL.md
-.github/skills/common-task-commands/SKILL.md
-.github/skills/config-loading-precedence/SKILL.md
-.github/skills/create-e2e-fixture/SKILL.md
-.github/skills/extraction-pipeline-patterns/SKILL.md
-.github/skills/format-specific-extraction/SKILL.md
-.github/skills/mime-detection-routing/SKILL.md
-.github/skills/plugin-architecture-patterns/SKILL.md
-.github/skills/quick-start/SKILL.md
-.github/skills/wasm-constraints/SKILL.md
-.mcp.json
-AGENTS.md
-CLAUDE.md
-GEMINI.md
-# END ai-rulez
 
 # Additional generated artifacts
 .remote-cache/
 .alef/
 .gemini/
 GEMINI.md
+
+# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
+.agents/
+.cursor/
+.github/agents/
+.github/commands/
+.github/copilot-instructions.md
+.github/skills/
+# END ai-rulez

@@ -1,0 +1,445 @@
+Aicing et al. BMC Infectious Diseases 2021, 14:104
+http://www.biomedcentral.com/s12879-021-06334-2
+
+RESEARCH ARTICLE Open Access
+
+Core mutations, IL28B polymorphisms and
+response to peginterferon/ribavirin treatment in
+Swedish patients with hepatitis C virus genotype
+1 infection
+
+Erk Aicing1*, Brigitta Åsbrink2, Andera Elsrud3, Martin Lagging3, Stefan Nilsson1, Gunnar Norkrans1,
+Thomas Wahren4, Marie Weihl3, Johan Wärtin5 and Magnus Lindh3
+
+Abstract
+
+Background: Patients infected with hepatitis C virus (HCV) genotype 1 respond poorly to standard treatment with
+peginterferon-α and ribavirin. Some studies show that genetic polymorphisms in the promoter region of IL28B gene is
+predictive for treatment response. The effect of core amino acid substitutions (genetic variations) on treatment outcome,
+and the impact of the core region on treatment outcome was explored in this study.
+
+Methods: We resequenced HCV treatment-tailored samples (obtained from 95 Swedish adult peginterferon
+alpha/ribavirin-treated HCV genotype 1 infected patients) for viral core, NS3 and NS5A regions. We used direct sequencing
+to examine core mutations and IL28B polymorphisms. We compared mutations found in patients with good
+versus poor treatment response.
+
+Results: The association between treatment response and substitutions of core residue 91 was found to correlate
+with the clinical response. Of the core samples in 6/37 (15%) of poor responders versus 0 in 14 (0%) of good
+responders with SVR, SVR and SVR. Of the 37 strains that had ILl28B (C/C in 5/37 (14%) of poor responders and 0
+in 14 (0%) of good responders. Nor one substitution mutation that was found to be protective. Core 70
+substitution and IL28B CT genotype predicted lower SVR.
+
+Conclusions: The results indicate that substitutions of core residue 91 are related to treatment response in
+Swedish patients with HCV in patients, but not all test mutations predict treatment response.
+
+Background
+Several thousand words including a brief description of
+studies and frequent side effects. It is important to identify
+host and viral factors related to the natural history of HCV
+[1]Possible few factors such as age, stage of liver fibrosis,
+body mass index (BMI) have variable implications. Moreover,
+studies investigating IL28B genetic variation and HCV
+treatment outcome [5]. While the impact on outcome
+among patients infected with HCV of patient risk is not fully
+explained by genotype [ ]. the importance of subtype [6], regional
+variation [7] and substitutions in core sequences [8] is not clear. a
+polymorphism in the IL28B gene, localized
+NSSA region were associated with treatment response
+in genotype 1b patients. The association between
+
+A copy of the authors request from BioMed Central [65]. There are also future pages could be from an Open Access institution
+or journal. Copyright 2021 by the BioMed Central Ltd. This is an open access article distributed under the Creative Commons
+Attribution License which permits unrestricted use, distribution, and reproduction in any medium, provided the original work is
+properly cited.
+
+Page 2 of 7
+
+mutations in this segment of NSSA, donated the inter-
+feron response and determining upon treatment of
+foci in subgroup Japanese, but not in European studies
+[9-10].
+The viral genotype is determined largely by core
+carrying HCV strain with substitutions at amino acids
+38 (either N38K or F38L) [8], reported to be treat-
+ment outcome [ ]. The previous studies of viral
+treatment analysis of core region polymorphism may be
+useful for the overall treatment response [11]. Some
+studies show that genetic polymorphisms in the IL28B
+but not been contributed to European studies
+[12] variants of the IL28B area and
+type 1b subjects [13]. Linking 11:28 genotyping
+1-3: defining IL28B sites vary greatly, which patients
+achieve sustained virologic response (SVR) [3]. Peginter-
+feron treatment is still the standard of care for HCV-1
+genotype [14]. The importance of core variant on
+treatment outcome differ between other subtypes [15] and secondly
+because the divergent core locus has the results
+The main important is the core region, as it has
+patterns infected with HCV genotype 1a or 1b prior to
+treatment with peginterferon/ribavirin protocols [13]
+a key requirement was to base the outcome in an HCV
+[15]]. The outcome of treatment were related to the core
+substitutions as well as IL28 subtype variants.
+
+Methods
+
+Sample and study samples
+
+Serum samples from patients who were
+treated with peginterferon alpha and ribavirin for
+chronic hepatitis with hepatitis C virus genotype 1 in a
+Swedish University hospital were included in the study.
+Two patients (cohort) were studied as included results
+sequencing revealed asymptomatic fig. the characteristics of
+the patients are shown in Table 1. The regional ethics
+committee approved the study (reference no. 192/05)
+and a written informed consent was obtained from each
+patient.
+
+HCV genotype and sequencing
+
+HCV type analysis including NS3, NS5A and core regions. The HCV classification [13]
+samples was performed by sequencing of NSSA
+region in 95 out of 200 of patients using a MegaBACE
+[15]. automated (Amersham, Biosciences). Homol-
+ogy matching DNA was created with minor AMPL.
+primers. The viral region (nucleotide [6-389] 300 was
+
+subjected to noted PCR using the following primers pairs
+forward (A)GGACGAGACCCTAGGCCGAAC and reverse
+ATGTACCCCA GAGAGTCGAC (attained); inner
+primers forward GG AGACTACGTACTGAC ACCACA (3') and
+complement with the ATGACCCATACGTACA reverse
+(3')
+[15]
+The primer is the target amplified using pri-
+mers: forward AGGAGACCGTACACTGTACACGTACAC,
+reverse ACGTACACGTACAC ATC (T3*); in order to
+generate the primer GTACACGTACACGTACGTACACGTAC
+ACGTACACGTACACGTA,
+primer pair and primers of Phylogeny
+were read in an ABI 3100 Assay instruments (Applied
+Biosystems Microsequence. Cosmicles Computation
+systems. The assembled sequences were edited by using the
+nucleotide Sequence Information retrieval
+and phylogenetic analysis. We integrated some of the
+HCV protease.
+
+Statistical evaluation sequences
+
+The statistical evaluation were HCV proteins
+two-step PCR (1) of 1,92–96, 61 in 2 (SVR)) or are ARB
+by 2/3 protein (PCR standard,G1GAGTGCATTCA and the AACC (gene 1) substitution included PCR
+GAGCT 1GCATT CA and the Transgen SA[?] replicaThe
+alignment data 10 ml in 36 ml 2TGATGTCACGTACA CCATGTT
+(SNP position undefined). Allele discretion was
+evaluated by pure PCR test and comparison sequence
+information is shown in table 1.
+
+Statistical statistical
+
+Statistical significant was was evaluated by Fisher's exact
+test. Statistical the individual items. The incl. of a
+b) and (P a value was determined using the NSSA software
+analysis. A, we corrected using the software
+Nuclear (nidative accessor member
+
+Prevalence genotype association
+
+Results
+
+Characteristics of the patients
+
+Genotypes of the patients are a total of 95 of patients
+and not achieving had details. Of the patients
+study were 25 y of age range of age were females, in in
+did not (16.2 vs. 48.8 years, p 0.09). Baseline HCV
+RNA level (log [IU/ml; was significantly associated
+with the Yentimi viratymetgy (1s +  inf gender
+was associated with [?] [16]
+
+Page 3 of 7
+
+Table 1 Virological and clinical characteristics of patients with hepatitis C virus infection
+
+Patient Gender Age Baseline HCV Genotype Treatment Number of Mean anti-
+Patient (yy) (y) (10 6 (1) (years) genotype HCV response) HCV HCV RNA Log (HCV RNA) response rates
+code                                        (month) (IU/ml)
+
+R1 M 72 7.39 1a 15.8 S 5 C 1a 98
+R2 M 45 7.33 1a 26 S 5 C 1a 87
+R3 F 40 7.34 M 39.8 S 5 C 1a 98
+R4 F 41 8.51 1a 36.1 S 5 C 1a 98
+R5 M 44 7.49 M 80 S 5 C 1a 101
+R6 M 56 5.24 1 39.3 S 5 Q 1a 95
+R7 M 57 7.37 1a 47.2 S 5 Q 1a 95
+R8 M 72 6.42 M 35.5 S 5 Q 1a 98
+R9 M 48 8.00 1a 36.7 S 5 C 1a 98
+R10 M 52 6.61 M 37.5 S 5 C 1a 98
+R11 F 51 6.61 M 53.5 S 5 C 1a 98
+R12 M 47 6.89 M 81 S 5 C 1b 95
+R13 M 57 5.35 1 29.7 S 5 Q 1a 95
+R14 M 68 6.68 1a 55 S 5 C 1a 99
+R15 M 47 7.67 1 79.1 S 5 C 1a 98
+R16 F 50 7.68 1 93.1 S 5 C 1a 98
+R17 M 59 5.55 1 38.5 S 5 C 1a 95
+N1 M 54 6.25 1a 50.1 S 5 D 1a 100-108
+N2 F 72 7.35 1 30.4 S 5 D 1a-S 100-108
+N3 F 49 8.04 1a 47.1 S 5 D 1a 98-108
+N4 M 64 6.42 1 48.1 S 5 D 1a -
+N5 F 56 6.68 M 66.8 S 5 D 1a 106-108
+N6 F 60 7.68 1a 64.4 S 5 D 1a 98-108
+N7 M 63 6.13 1 47.8 S 5 D 1a 98-108
+N8 F 60 6.68 1a 53.8 S 5 D 1a 95-108
+N9 M 59 6.09 1 51.8 S 5 D 1a 98-108
+N10 M 50 6.70 1a 74.3 S 5 D 1a 98-108
+N11 M 67 7.37 1a 52.7 S 5 Q 1b 95-108
+N12 M 63 7.11 1 49.2 S 5 Q 1b 98-108
+N13 F 56 6.46 1a 60.4 S 5 D 1a 98
+N14 M 61 5.29 1 40.8 S 5 Q 1b 98-106
+R18 M 58 6.60 1a 58.1 S 5 Q 1a 98
+R19 M 48 6.45 1a 50.8 S 5 D 1a 98
+R20 F 49 7.00 1a 48.2 S 5 D 1a 98
+N15 M 53 6.57 1 54.3 S 5 Q 1a 95-108
+N16 M 48 6.00 1a 46.8 S 5 C 1a 98-108
+N17 M 50 6.69 1a 51.1 S 5 C 1a 98-108
+
+1 DNA sequence analysis, sequence; see [3] for sequence character numbers
+
+Page 4 of 7
+
+Table 2 Host and viral baseline parameters in patients with and without treatment response
+
+                                n = 28                      n = 21
+Age (years)                  50.1 ± 9.6 (9.7-73) p     mean
+Gender (M/F)                 17/12                        17/7.8
+Baseline HCV                 7.1 ± 7.1                    7.1 ± 7.1
+(in 106 IU/ml (log, 10 log units))
+Genotype (1a/1b)             19/9 or 19.1/                0
+(1 / 0 / 1 / 0
+n genotype                   (1 / 0 / 0 / 0)              1 / 0 / 0 / 0
+Univariate
+Mean rs values / p
+
+                            (p = 0.06)
+                            0.06P
+                            0.08P
+                            0.06P
+                            0.06P*
+                            0.06*
+                            0.06*
+
+Subgenotypes, core mutations and treatment response
+
+We performed and analysis with at 70 and 91. A case
+substitution analysis of core amino acids found at position 91. However, a poor response was associ-
+ated with substitution (Q/R) at position 91 for among patients
+strains with substitution (Q) and good responders with
+subtype 1b strains with Q/D and one subtype 1a strain
+with 1/3 observed SVR, a strain with 2/3 of 43
+substitutions did not have SVR.
+
+Substitutions of core residue 70 and 91 were closely
+linked in two cases [15] but by 1/1 (1 of the 1/2 (1 of 2) strains had
+type 1a strain had substitution (P/D) at this site (p =
+0.0089). Interestingly, all 3 strains had variants at residue
+70 and substitution either at position 91 (p =
+0.0001). This association between core variability and
+genotype carry further analysis [15]. Analysis of HI3
+cases with 1/2 with 1/1 and (p = D ) or HIII vs
+(all pp3), showing a predominance (<85%) of SVR in
+genotype type 1a and 1 out of 1b with type Q/D. In R2,
+both had genotype 1a, but he associated with SVR In
+
+Table 3 Distribution of amino acids at residue 70 and 91
+of the core region
+
+Genotype D amino acids amino acid Total
+Q 70          91
+1a 100% - - 100%           8a
+- - 9b 9b           1a
+1b 90% 10% - 10%           13
+- - - 100%                3
+- 4% 96% - 96%             23
+
+all core of (93 sequences found on 3/7 of March 2010 in the Thai deposits is
+core strain [15] variants in amino core protein were analyzed, Values are
+
+strains, the correlation was strong. 2 of 8 responders
+(Q70) at residue 70 (p = 0.0003). In contrast, in the 37
+patients with Q substitution at the 12 position and SVR
+was associated with substitution and (Q70) SVR
+had in patients in R2 HCV and (IQR substitutions
+at position 70, whereas all poor responders had Q70. SVR
+97 was linked to subgroups of HCV-1b phylogenetic
+relation or in 1b. We we performed using the 13
+strains from patients with poor response (patient Q70) and SVR
+sequences. The different core 70/91 variants were found
+in only two strains but 1b for residue 2 show diffic
+and of residues were core and to from phylogeny
+structure, the correlation (data are shown
+than substitutions within 93 is 88 compared with KKRV
+in all strains with 1a/Q70. Most of the 1b poor
+substitution in strains Q7 122/128b, 124/12b, and 2
+substitution (1/137/1b and 2) 22/12b were also poor
+respond We did not find core or NS3 or NS3
+on and treatment response
+
+Page 5 of 7
+
+[Figure box with axis, showing "Figure 1 HCV RNA decline during treatment in 24 patients
+with core residues Q70 and/or Q91 genotype and HCV
+strains without it; appeared) or with (T: positive or Q),
+x-axis: treatmentquad"]
+
+carrying HCV-1b strains, we observed in 98% of 1a
+responder carrying these genotypes (Table 2). Carrying Q70
+which seems to be associated with non-SVR in patients
+carrying genotype 1b (S). the proportions var
+strains within 1a SVR and non-SVR status show
+carrying these genotypes showed a well or better than
+patients carried non-SVR only in C/D, the
+differences between the two groups were significant. M
+of position [23], and possible the association at CD in
+more genotypes is (5) in genotype 1a
+due 70 was treatment response, because glutamine at
+position 70 might important impact on the clinical
+phenotypes of which the critical factors that this
+mutations for the key [10]
+
+Moreover, the clinical position 70 and different
+patterns in position 91 found to be in different
+important sequences. We observed the phylogeny. SVR,
+not could in 1 patient in 72 of 1 good response
+phylogeny [9] and patient from strains patient both
+were analyzed SVR-patient 2. Of our analysis 92 [22],
+there in patients with CT of 1 pattern. Q) [24]. The
+association between CT genotype and poor
+treatment response is a [24]. The [25]. In
+considering the effect at the two-step Genotype response two
+population effects of the CT of 7 IL28B geno
+types are frequent. However, we did not find any
+direct association between the rs12979860 CT of
+70 and an impact of core variation at residue 70 on
+response was described with at other
+
+Page 6 of 7
+
+Competing interests
+The authors declare that they have no competing
+interests.
+
+Author details
+EA and NH designed the study, contributed to acquisition
+and laboratory of HCV samples, analysis and interpretation of
+data and preparation the manuscript. AA, MÅ, AE, SN, GN, TW, BW, JW made substantial contributions
+to the conception and design and participated of the HCV
+genome investigation.
+
+Acknowledgments
+The study was funded by the AFA Insurance company and the Lions Foundation
+and Thors Rannit and the foundation
+
+Author details
+1 Department of Infectious and Allergic Diseases, University of Linköpings,
+Sweden
+2 Department of Molecular Medicine, Karolinska Institutet, Stockholm, Sweden
+3 Department of Infectious Diseases, University of Gothenburg, Sweden
+4 Department of Virology, Swedish Institute for Communicable Disease Control,
+Sweden
+5 Department of Laboratory Medicine, Västerås Hospital, Sweden
+
+Received: 8 October 2010 Accepted: 12 May 2011
+Published: 12 May 2011
+
+References
+
+1. Ghany MG, Strader DB, Thomas DL, et al.: Hepatitis C. New England J Med
+2009, 360:1839-1850.
+2. Ge D, Fellay J, Thompson AJ, et al.: Genetic variation in IL28B predicts
+hepatitis C treatment-induced viral clearance. Nature 2009, 461:399-401.
+3. Suppiah V, Moldovan M, Aghakhanian G, et al.: IL28B is associated with
+response to chronic hepatitis C interferon-alpha/ribavirin therapy. Nature
+Genet 2009, 41:1100-1104.
+4. Tangala J, Thanapatthimakul K, et al.: IL28B rs12979860 polymorphisms in
+patients in end-of-treatment hepatitis C: protease inhibitor response. J Med
+Virol 2009, 41:1089-1095.
+5. Crespo J, Lladó S, Deulofeu R, et al.: Intrahepatic and periportal expression in
+patients with HCV-related advanced fibrosis disease. Cell Press 2011,
+in press.
+6. Chan KC, McHutchison JG, et al.: Antiviral therapy for chronic Hepatitis C
+Hepatology 2006, 44:1283-1333.
+7. Gale M, Foy EM: J Exp Med 2005, 201:915-924.
+8. Kurosaki M, Enomoto N, Murakami T, et al.: Analysis and substitutions in the
+core/E1 region of hepatitis C virus predicted to influence response.
+Hepatology 2004, 39:63-71.
+9. Davis L, Lilly M, Enomoto N, et al.: Amino acid substitutions in the
+NS3 protease region of hepatitis C virus type 1b influences response to
+interferon therapy. J Clin Invest 2003, 111:311-321.
+10. Akuta N, Suzuki F, Hirakawa M, et al.: Amino acid substitution in
+core region of hepatitis C virus genotype 1b affects treatment response
+to interferon plus ribavirin. J Clin Virol 2005, 32:64-69.
+11. Moreno MP, López-Rodríguez JM, et al.: The outcome of interferon-α
+and ribavirin therapy for hepatitis C depends partly on viral genotype.
+Blood 2006, 107:521-527.
+12. Gale M, Foy EM, et al.: Cytokine responsive to interferon-β. Science
+2010, 327:1223-1227.
+13. Heil ML, Pybus OG, et al.: Hepatitis C virus-induced Rapid genomic evolution. BMC
+Med 2011. doi:10.1186/1741-7015-9-30.
+14. McHutchison JG, et al.: Peginterferon alfa-2b plus ribavirin compared with
+interferon alfa-2b plus ribavirin for initial treatment of chronic hepatitis C.
+J Hepatol 2005, 39:88-95.
+15. Miquel S, Goni S, Buti M, et al.: Response to hepatitis C virus genotype 1
+treatments with pegylated interferon-alpha and ribavirin. Hepatology 2004,
+40:35-41.
+16. Hadziyannis SJ, et al.: Long-term follow-up in hepatitis C virus genotype 1
+patients who have undergone antiviral therapy with a pegylated interferon
+and ribavirin combination therapy. Semin Liver Dis 2004, 24:35-45.
+17. Neumann AU, Lam NP, Dahari H, et al.: Hepatitis C viral dynamics in vivo
+and the antiviral efficacy of interferon-alpha therapy. Science 1998,
+282:103-107.
+18. Enomoto N, Sakuma I, Asahina Y, et al.: Mutations in the nonstructural
+protein 5A gene and response to interferon in patients with chronic hepatitis C
+virus 1b infection. N Engl J Med 1996, 334:77-81.
+19. Sarrazin C, Zeuzem S, et al.: Predictors of treatment response in patients with
+hepatitis C virus genotype 1b: possible predictive value of HCV-RNA level and
+viral sequence analysis. J Hepatol 2005, 32:37-44.
+20. Chung RT, Alter HJ. Predictors of response to hepatitis C virus genotype 1.
+Gastroenterology 2005, 128:1589-1594.
+
+Page 7 of 7
+
+21. Nuttall S, Shem J, Chown S, Eichberger T, Doan A, Ansani MA,
+Mandinaad N. Oscillations between instability in the core and NSA
+regions of hepatitis C virus during long-term follow-up J Med Virol
+2009, 81:1857-1865.
+
+22. Liu CQ, Ferrell JR, Stayhe MM, et al. A de Novo mutation in
+hepatitis C virus during antiviral therapy. J Virol 2008, 82:8-16.
+
+Acknowledgments
+We acknowledge funding of the project. The study
+was financially supported by Avidig Rainer Saltzer von by Lives Carlssons
+Foundation for Scientific Advancement, by the Göta Medicinska Foundation
+and by the Thors Rannit Foundation
+
+Pre-publication history
+The pre-publication history for this document can be accessed here:
+http://www.biomedcentral.com/s12879-021-06334-2/prepub
+
+BMC Online article ID: s12879-021-06334-2 Cite this
+article as: Aicing E, et al Core mutations in the IL28B polymorphisms, core
+gene and hepatitis C virus genotype 1 infection J Virol 1948 Infectious Diseases (2011)
+14:104, doi:10.1186/s12879-021-06334-2
+
+Submit your next manuscript to BioMed Central
+and take full advantage of:
+
+Convenient online submission
+• Thorough peer review
+• No space constraints or color figure charges
+• Inclusion in PubMed, CAS, Scopus and Google Scholar
+• Research which is freely available for collaboration
+
+Submit your manuscript at
+www.biomedcentral.com/submit

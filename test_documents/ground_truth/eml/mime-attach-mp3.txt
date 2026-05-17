@@ -1,0 +1,4 @@
+Subject: Email with MP3 Attachment
+From: sender@example.com
+To: recipient@example.com
+This is an email with an MP3 attachment.

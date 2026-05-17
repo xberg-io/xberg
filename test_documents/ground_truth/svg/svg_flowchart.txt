@@ -1,0 +1,1 @@
+Software Development Lifecycle A flowchart showing the stages of software development Requirements Design Implementation Testing Gather user needs and constraints Architecture and interface planning Write and review source code Verify correctness and performance Software Development Lifecycle v2.0

@@ -1,0 +1,136 @@
+# CommonMark Sample Document
+
+This is a comprehensive CommonMark document showcasing standard markdown elements for testing and benchmarking purposes.
+
+## Introduction
+
+CommonMark is a **standardized specification** of Markdown. This document demonstrates *all* the core elements that should be properly parsed and extracted.
+
+### About Markdown
+
+Markdown is a lightweight markup language with plain-text formatting syntax. It's designed to be *easy to read* and **easy to write**.
+
+## Text Formatting
+
+You can use various text formatting options:
+
+- **Bold text** using double asterisks or underscores
+- *Italic text* using single asterisks or underscores
+- ***Bold and italic*** combined
+- `inline code` for short snippets
+
+## Lists
+
+### Unordered Lists
+
+- First item
+- Second item
+  - Nested item 1.1
+  - Nested item 1.2
+- Third item
+  - Nested item 3.1
+    - Double nested 3.1.1
+    - Double nested 3.1.2
+
+### Ordered Lists
+
+1. First step
+2. Second step
+   1. Sub-step 2.1
+   2. Sub-step 2.2
+3. Third step
+   1. Sub-step 3.1
+4. Fourth step
+
+## Code Blocks
+
+### Inline Code
+
+Use the `function_name()` method to process data.
+
+### Code Blocks
+
+```rust
+fn hello_world() {
+    println!("Hello, World!");
+}
+```
+
+```python
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+```
+
+```javascript
+const greeting = (name) => {
+    return `Hello, ${name}!`;
+};
+```
+
+## Links and References
+
+Visit the [CommonMark specification](https://spec.commonmark.org/) for complete documentation.
+
+You can also use [reference-style links][commonmark-spec] if preferred.
+
+[commonmark-spec]: https://spec.commonmark.org/
+
+## Blockquotes
+
+> This is a blockquote. It's useful for highlighting important information or quotes from other sources.
+
+> Blockquotes can contain **bold text** and *italic text*.
+>
+> They can also span multiple paragraphs.
+
+## Horizontal Rule
+
+---
+
+## Tables
+
+| Language | Type | Package Manager |
+|----------|------|-----------------|
+| Python | Dynamic | pip |
+| Rust | Compiled | cargo |
+| JavaScript | Dynamic | npm |
+| Java | Compiled | Maven |
+
+## Images
+
+![Alt text for image](https://example.com/image.png)
+
+## Mixed Content
+
+Here's a paragraph with multiple types of formatting. It contains **bold**, *italic*, `code`, and [links](https://example.com).
+
+### Complex Nested List
+
+1. First item with **bold** and *italic*
+   - Sub-item with `code`
+   - Another sub-item with [link](https://example.com)
+2. Second item
+   - Multiple levels
+     - Level 3 item 1
+     - Level 3 item 2 with **formatting**
+   - Back to level 2
+3. Third item
+
+## Conclusion
+
+This CommonMark document includes all standard elements:
+- Headers at multiple levels
+- Paragraphs with inline formatting
+- Unordered and ordered lists
+- Nested lists
+- Code blocks with syntax highlighting
+- Inline code
+- Links and reference-style links
+- Blockquotes
+- Horizontal rules
+- Tables
+- Mixed formatting and content
+
+The document is structured for comprehensive testing of markdown parsing and extraction capabilities.

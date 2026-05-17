@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg_rustler"
-version = "4.9.7"
+version = "4.9.8"
 edition = "2024"
 license = "Elastic-2.0"
 description = "Elixir bindings for Kreuzberg document intelligence library"

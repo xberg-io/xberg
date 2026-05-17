@@ -1,0 +1,4 @@
+Subject: Image Only Email
+From: sender@example.com
+To: recipient@example.com
+Date: Tue, 01 Oct 2024 12:34:56 -0500

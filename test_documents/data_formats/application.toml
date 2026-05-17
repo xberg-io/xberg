@@ -1,0 +1,196 @@
+# Kreuzberg Application Configuration
+# This file demonstrates complex TOML structures with nested tables, arrays, and various data types
+
+[application]
+name = "Kreuzberg Document Processing Service"
+version = "4.2.10"
+environment = "production"
+debug = false
+log_level = "info"
+startup_timeout = 30
+
+[application.metadata]
+maintainer = "Platform Engineering"
+created_date = 2025-02-05
+last_updated = 2025-02-04
+repository = "https://github.com/kreuzberg/kreuzberg"
+
+[server]
+host = "0.0.0.0"
+port = 8080
+tls_enabled = true
+tls_cert_path = "/etc/certs/server.pem"
+tls_key_path = "/etc/certs/server.key"
+max_concurrent_connections = 1000
+request_timeout = 60
+keepalive_timeout = 45
+
+[server.http]
+enable_compression = true
+compression_level = 9
+compression_types = ["gzip", "deflate", "br"]
+
+[database]
+engine = "postgresql"
+host = "db.internal"
+port = 5432
+name = "kreuzberg_prod"
+user = "kreuzberg_service"
+password = "${DB_PASSWORD}"
+pool_size = 50
+max_overflow = 10
+connection_timeout = 10
+query_timeout = 300
+ssl_mode = "require"
+application_name = "kreuzberg"
+
+[database.replication]
+enabled = true
+replica_host = "db-replica.internal"
+replica_port = 5432
+
+[[cache]]
+type = "redis"
+host = "cache-1.internal"
+port = 6379
+db = 0
+ttl = 3600
+password = "${REDIS_PASSWORD}"
+
+[[cache]]
+type = "redis"
+host = "cache-2.internal"
+port = 6379
+db = 1
+ttl = 7200
+password = "${REDIS_PASSWORD}"
+
+[extraction]
+default_timeout = 120
+max_document_size = 104857600
+supported_formats = ["html", "pdf", "docx", "xlsx", "txt", "markdown", "json", "xml"]
+enable_ocr = true
+ocr_language_codes = ["en", "es", "fr", "de", "zh", "ja"]
+
+[extraction.performance]
+max_threads = 16
+enable_simd = true
+chunk_size = 1048576
+buffer_size = 8388608
+
+[extraction.pdf]
+enable_text_extraction = true
+enable_image_extraction = true
+max_images_per_document = 100
+image_compression_ratio = 0.7
+extract_metadata = true
+
+[[extraction.processors]]
+name = "html_processor"
+enabled = true
+priority = 100
+timeout = 60
+features = ["links", "images", "metadata", "styling"]
+
+[[extraction.processors]]
+name = "pdf_processor"
+enabled = true
+priority = 90
+timeout = 120
+features = ["text", "images", "forms", "metadata"]
+
+[[extraction.processors]]
+name = "office_processor"
+enabled = true
+priority = 85
+timeout = 90
+features = ["content", "metadata", "revision_history"]
+
+[plugins]
+directory = "/opt/kreuzberg/plugins"
+auto_load = true
+enable_sandboxing = true
+
+[[plugins.registry]]
+name = "custom-extractor"
+version = "1.2.0"
+enabled = true
+author = "Platform Team"
+
+[[plugins.registry]]
+name = "nlp-processor"
+version = "2.1.0"
+enabled = false
+author = "Data Science Team"
+
+[monitoring]
+enabled = true
+metrics_port = 9090
+health_check_interval = 30
+trace_enabled = true
+trace_sampling_rate = 0.1
+
+[monitoring.alerts]
+cpu_threshold = 80.0
+memory_threshold = 85.0
+disk_threshold = 90.0
+error_rate_threshold = 0.05
+response_time_p99_threshold = 5000
+
+[security]
+enable_authentication = true
+auth_method = "oauth2"
+oauth2_provider = "https://auth.kreuzberg.dev"
+client_id = "${OAUTH2_CLIENT_ID}"
+client_secret = "${OAUTH2_CLIENT_SECRET}"
+jwt_algorithm = "RS256"
+jwt_audience = "kreuzberg-api"
+rate_limit_enabled = true
+rate_limit_requests_per_second = 1000
+
+[[security.cors]]
+allowed_origins = ["https://app.kreuzberg.dev", "https://dashboard.kreuzberg.dev"]
+allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+allowed_headers = ["Content-Type", "Authorization", "X-Request-ID"]
+expose_headers = ["X-Total-Count", "X-Page-Number"]
+max_age = 3600
+allow_credentials = true
+
+[storage]
+backend = "s3"
+bucket = "kreuzberg-documents"
+region = "us-east-1"
+access_key_id = "${AWS_ACCESS_KEY_ID}"
+secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
+endpoint = "https://s3.amazonaws.com"
+signature_version = "s4"
+use_ssl = true
+
+[storage.retention]
+days = 30
+archive_days = 90
+delete_after_archive_days = 365
+
+[logging]
+format = "json"
+level = "info"
+outputs = ["stdout", "file"]
+file_path = "/var/log/kreuzberg/app.log"
+max_file_size = 104857600
+max_backups = 10
+max_age_days = 30
+
+[[logging.fields]]
+name = "service"
+value = "kreuzberg"
+
+[[logging.fields]]
+name = "environment"
+value = "production"
+
+[telemetry]
+enabled = true
+otlp_endpoint = "http://otel-collector.internal:4317"
+service_name = "kreuzberg"
+service_version = "4.2.10"
+sample_rate = 0.1

@@ -1,0 +1,12 @@
+%0 Journal Article
+%A Smith, John
+%A Doe, Jane
+%D 2024
+%T A comprehensive study of document extraction techniques
+%J Journal of Information Processing
+%V 42
+%N 3
+%P 125-140
+%K document extraction
+%K text mining
+%K natural language processing

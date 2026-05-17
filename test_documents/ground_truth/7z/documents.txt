@@ -1,0 +1,14 @@
+7Z Archive (2 files, 30 bytes)
+
+Files:
+- text/multilingual.txt (13 bytes)
+- text/simple.txt (17 bytes)
+
+
+Text File Contents:
+
+=== text/multilingual.txt ===
+fake_text.txt
+
+=== text/simple.txt ===
+contract_test.txt

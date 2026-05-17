@@ -1,0 +1,18 @@
+45° Blue Reflective Dichroic Color Filter Coating Performance
+FOR REFERENCE ONLY
+100
+Average Polarization
+90 S-Polarization
+P-Polarization
+80
+70
+60 %
+50
+40
+Reflectance
+30
+20
+10
+0
+400 450 500 550 600 650 700 750 800
+Wavelength (nm)

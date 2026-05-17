@@ -1,0 +1,73 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\title{LaTeX Test Document}
+\author{Dr. Carol White \and Prof. David Brown}
+\date{September 2025}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This is a LaTeX document for testing pandoc extraction.
+It includes mathematical equations and special formatting.
+\end{abstract}
+
+\section{Introduction}
+
+LaTeX is widely used for academic and scientific documents.
+This document tests pandoc's ability to extract content and metadata from LaTeX sources.
+
+\section{Mathematical Content}
+
+The quadratic formula is given by:
+\begin{equation}
+x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
+\end{equation}
+
+Inline math also works: $E = mc^2$.
+
+\section{Lists and Formatting}
+
+\subsection{Enumerated List}
+\begin{enumerate}
+    \item First item
+    \item Second item with \textbf{bold text}
+    \item Third item with \textit{italic text}
+\end{enumerate}
+
+\subsection{Itemized List}
+\begin{itemize}
+    \item Bullet point one
+    \item Bullet point two
+    \item Nested items:
+    \begin{itemize}
+        \item Sub-item A
+        \item Sub-item B
+    \end{itemize}
+\end{itemize}
+
+\section{Tables}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|r|}
+\hline
+Left & Center & Right \\
+\hline
+A1 & B1 & C1 \\
+A2 & B2 & C2 \\
+\hline
+\end{tabular}
+\caption{Sample Table}
+\end{table}
+
+\section{Conclusion}
+
+This document demonstrates LaTeX features for pandoc extraction testing.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

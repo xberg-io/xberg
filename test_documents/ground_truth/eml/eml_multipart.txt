@@ -1,0 +1,9 @@
+Subject: Multipart Email Test
+From: sender@example.com
+To: recipient@example.com
+Date: Wed, 15 Mar 2024 14:30:00 +0000
+This is the plain text version of the email.
+It has multiple lines and some formatting.
+
+Best regards,
+Sender

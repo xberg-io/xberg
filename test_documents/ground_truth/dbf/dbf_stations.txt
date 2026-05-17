@@ -1,0 +1,89 @@
+| name | marker-col | marker-sym | line |
+| --- | --- | --- | --- |
+| blue | rail-metro | Van Dorn Street | #0000ff |
+| blue | Franconia-Springfield | rail-metro | #0000ff |
+| #0000ff | blue | rail-metro | Federal Center SW |
+| rail-metro | red | #ff0000 | Judiciary Sq |
+| Capitol South | rail-metro | blue | #0000ff |
+| #ff0000 | red | Metro Center | rail-metro |
+| rail-metro | Gallery Pl-Chinatown | #ff0000 | red |
+| Mt Vernon Sq - 7th St Convention Center | rail-metro | green | #008000 |
+| rail-metro | #008000 | U St/African-Amer Civil War Memorial/Cardozo | green |
+| Union Station | rail-metro | red | #ff0000 |
+| #008000 | rail-metro | Congress Heights | green |
+| green | Naylor Road | #008000 | rail-metro |
+| rail-metro | Suitland | #008000 | green |
+| green | Branch Ave | rail-metro | #008000 |
+| Braddock Road | blue | rail-metro | #0000ff |
+| King St - Old Town | #0000ff | rail-metro | blue |
+| Eisenhower Ave | yellow | #ffff00 | rail-metro |
+| Huntington | yellow | rail-metro | #ffff00 |
+| rail-metro | green | Anacostia | #008000 |
+| rail-metro | blue | Eastern Market | #0000ff |
+| blue | rail-metro | Potomac Ave | #0000ff |
+| blue | #0000ff | rail-metro | Stadium Armory |
+| rail-metro | Rhode Island Ave | red | #ff0000 |
+| #ffa500 | orange | Minnesota Ave | rail-metro |
+| Van Ness-UDC | rail-metro | red | #ff0000 |
+| Cleveland Park | red | rail-metro | #ff0000 |
+| Columbia Heights | #008000 | rail-metro | green |
+| #008000 | rail-metro | green | College Park-U of Md |
+| blue | rail-metro | Capitol Heights | #0000ff |
+| blue | rail-metro | Morgan Boulevard | #0000ff |
+| #008000 | rail-metro | Georgia Ave Petworth | green |
+| rail-metro | #ff0000 | red | Takoma |
+| Glenmont | rail-metro | #ff0000 | red |
+| Wheaton | rail-metro | red | #ff0000 |
+| rail-metro | Forest Glen | #ff0000 | red |
+| Silver Spring | rail-metro | #ff0000 | red |
+| rail-metro | #ff0000 | red | Brookland-CUA |
+| #ff0000 | red | rail-metro | Fort Totten |
+| rail-metro | Prince George's Plaza | #008000 | green |
+| West Hyattsville | green | rail-metro | #008000 |
+| rail-metro | Benning Road | #0000ff | blue |
+| Addison Road Seat Pleasant | #0000ff | blue | rail-metro |
+| orange | Deanwood | rail-metro | #ffa500 |
+| New Carrollton | orange | rail-metro | #ffa500 |
+| #ffa500 | Landover | rail-metro | orange |
+| orange | #ffa500 | Cheverly | rail-metro |
+| blue | Largo Town Center | rail-metro | #0000ff |
+| rail-metro | NoMa - Gallaudet U | red | #ff0000 |
+| rail-metro | blue | #0000ff | Rosslyn |
+| Arlington|Cemetery | rail-metro | blue | #0000ff |
+| rail-metro | #ff0000 | Dupont Circle | red |
+| Pentagon | #0000ff | rail-metro | blue |
+| rail-metro | Crystal City | #0000ff | blue |
+| rail-metro | green | #008000 | Navy Yard - Ballpark |
+| McPherson Sq | blue | #0000ff | rail-metro |
+| #008000 | rail-metro | green | Shaw-Howard Univ |
+| Southern Ave | rail-metro | green | #008000 |
+| rail-metro | Greenbelt | green | #008000 |
+| red | Tenleytown-AU | rail-metro | #ff0000 |
+| West Falls Church VT/UVA | orange | #ffa500 | rail-metro |
+| Dunn Loring Merrifield | rail-metro | orange | #ffa500 |
+| #ffa500 | rail-metro | orange | Vienna Fairfax-GMU |
+| #ff0000 | Friendship Heights | red | rail-metro |
+| rail-metro | #ff0000 | red | Shady Grove |
+| rail-metro | #ff0000 | Rockville | red |
+| red | rail-metro | #ff0000 | Twinbrook |
+| red | #ff0000 | rail-metro | White Flint |
+| #ff0000 | red | Grosvenor-Strathmore | rail-metro |
+| rail-metro | #ff0000 | red | Medical Center |
+| rail-metro | #ff0000 | Bethesda | red |
+| rail-metro | Foggy Bottom GWU | blue | #0000ff |
+| rail-metro | #ffa500 | orange | Court House |
+| Clarendon | #ffa500 | rail-metro | orange |
+| East Falls Church | rail-metro | orange | #ffa500 |
+| Virginia Square-GMU | rail-metro | #ffa500 | orange |
+| orange | Ballston-MU | #ffa500 | rail-metro |
+| #0000ff | blue | Farragut West | rail-metro |
+| rail-metro | red | Farragut North | #ff0000 |
+| #ff0000 | rail-metro | red | Woodley Park-Zoo Adams Morgan |
+| rail-metro | L'Enfant Plaza | green | #008000 |
+| blue | #0000ff | Smithsonian | rail-metro |
+| Pentagon City | rail-metro | blue | #0000ff |
+| Federal Triangle | blue | rail-metro | #0000ff |
+| green | rail-metro | #008000 | Archives-Navy Mem'l |
+| rail-metro | green | Waterfront | #008000 |
+| #0000ff | rail-metro | Ronald Reagan Washington National Airport | blue |
+

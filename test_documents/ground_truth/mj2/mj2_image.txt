@@ -1,0 +1,23 @@
+Nasdaq & AMEX
+
+Stocks in bold rose or fell 5% or more
+
+USA TODAY  Track your investments with our continuously
+updated stocks. Visit us on the web at
+money.usatoday.com
+
+| 52-week | | | | 52-week | | | |
+| High | Low | Stock | Last Change | High | Low | Stock | Last Change |
+| — A — | | | | | | | |
+| 38.88 | 2.49 | AAL Airln | 7.52 | -0.10 | 23.00 | 3.20 | Biogena | 5.05 | -0.13 |
+| 39.25 | 2.65 | ABX Air n | 19.38 | +1.27 | 5.88 | 1.08 | BioShp | 4.95 | +0.34 |
+| 27.14 | 12.88 | ADC Tel rs | 23.21 | +0.13 | 49.88 | 30.65 | BioIte | 50.05 | -4.57 |
+| 18.43 | 8.06 | AERI | 27.19 | +0.23 | 16.99 | 10.13 | BioLinH | 20.46 | -0.84 |
+| 8.37 | 3.49 | AEE Ent s | 15.40 | -2.14 | 18.21 | 10.73 | Biclsud | 17.90 | +0.70 |
+| 19.25 | 10.42 | AEF | 7.76 | +0.60 | 10.00 | 3.25 | BioTech | 41.20 | +1.39 |
+| 20.92 | 13.64 | ASML Hld | 21.24 | -0.46 | 5.01 | 1.56 | BioWIn | 40.30 | -1.10 |
+| 19.78 | 14.39 | ANN Irs | 32.36 | +0.14 | 6.21 | 1.56 | BioNrm | 5.94 | +0.06 |
+| 4.24 | 1.59 | AVI Bio | 3.62 | -0.02 | 6.90 | 4.99 | BioFood | 10.13 | +0.23 |
+| 31.62 | 20.53 | ATMI Inc | | | 18.62 | 10.01 | BioMr1 s | 31.13 | -0.07 |
+| 39.90 | 14.78 | ATP Inc | | | 16.88 | 7.10 | BioEm1 | 19.70 | +0.30 |
+| | | | | | 46.72 | 26.65 | BrightFr s | 38.90 | -0.80 |

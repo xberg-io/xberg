@@ -1,0 +1,943 @@
+UNITED STATES
+SECURITIES AND EXCHANGE COMMISSION
+Washington, D.C. 20549
+SCHEDULE 14A
+PROXY STATEMENT PURSUANT TO SECTION 14(a) OF THE SECURITIES EXCHANGE ACT OF 1934
+Filed by the Registrant
+Filed by a Party other than the Registrant
+Check the appropriate box:
+Preliminary Proxy Statement ☐
+Confidential, for Use of the Commission Only (as permitted by Rule 14a‑6(e)(2))
+Definitive Proxy Statement ☒
+Definitive Additional Materials
+Soliciting Material Pursuant to §240.14a‑11(c) or §240.14a‑2
+ARTELO BIOSCIENCES, INC.
+(Name of Registrant as Specified In Its Charter)
+______________________________________________________
+(Name of Person(s) Filing Proxy Statement, if other than the Registrant)
+Payment of Filing Fee (Check the appropriate box):
+No fee required.
+Fee computed on table below per Exchange Act Rules 14a‑6(i)(4) and 0‑11.
+(1) Title of each class of securities to which transaction applies:
+(2) Aggregate number of securities to which transaction applies:
+(3) Per unit price or other underlying value of transaction computed pursuant to Exchange Act Rule 0‑11
+(Set forth the amount on which the filing fee is calculated and state how it was determined):
+(4) Proposed maximum aggregate value of transaction:
+(5) Total fee paid:
+Fee paid previously with preliminary materials.
+Check box if any part of the fee is offset as provided by Exchange Act Rule 0‑11(a)(2) and identify the filing for which the offsetting fee was paid
+previously. Identify the previous filing by registration statement number, or the Form or Schedule and the date of its filing.
+(1) Amount Previously Paid:
+(2) Form, Schedule or Registration Statement No.:
+(3) Filing Party:
+(4) Date Filed:
+888 Prospect Street, Suite 210
+La Jolla, CA 92037
+NOTICE OF 2021 ANNUAL MEETING OF STOCKHOLDERS
+To the Stockholders of Artelo Biosciences, Inc.:
+Notice is hereby given that the 2021 Annual Meeting of Stockholders (the “Annual Meeting”) of Artelo Biosciences, Inc., a Nevada corporation,
+will be held on Friday, June 18, 2021 at 8:00 a.m., Pacific Time, via internet webcast, for the following purposes:
+1. To elect eight (8) directors, Gregory D. Gorgas, Connie Matsui, Steven Kelly, John W. Beck, R. Martin Emanuele, Ph.D., Douglas Blayney,
+M.D., Gregory R. Reyes, M.D., Ph.D., and Tamara A. Seymour, for a one-year term to expire at the 2022 Annual Meeting of Stockholders, or
+until their successors are duly elected and qualified or until their earlier resignation or removal;
+2. To ratify the appointment of MaloneBailey, LLP as our independent registered public accounting firm for the fiscal year ending August 31,
+2021 and for the stub period between September 1, 2021 and December 31, 2021; and
+3. To transact such other business as may be properly brought before the Annual Meeting or any adjournments or postponements thereof.
+The Annual Meeting will be a completely virtual meeting of stockholders. To participate, vote or submit questions during the Annual Meeting
+via live webcast, please visit www.virtualshareholdermeeting.com/ARTL2021.
+You will not be able to attend the Annual Meeting in person.
+We have also elected to provide access to our proxy materials over the internet under the Securities and Exchange Commission’s (the “SEC”)
+“notice and access” rules. We believe these rules allow us to provide you with the information you need while reducing our delivery costs and the
+environmental impact of the Annual Meeting. Our Board of Directors has fixed the close of business on April 22, 2021 as the record date for the
+determination of stockholders entitled to notice of, and to vote at, the Annual Meeting and at any adjournment or postponement thereof. Our proxy
+materials were first sent or made available on May 7, 2021 to all stockholders as of the record date.
+Whether or not you expect to attend the Annual Meeting via live webcast, please vote at your earliest convenience. You may vote over the
+internet, by telephone or, if you request to receive printed proxy materials, by mailing a proxy or voting instruction card. You may also vote your shares
+during the Annual Meeting. Submitting your proxy in advance of the Annual Meeting will not prevent you from voting your shares during the Annual
+Meeting, as your proxy is revocable at your option as described in the proxy statement accompanying this notice. Please review the instructions regarding
+each of your voting options described in the proxy statement, as well as in the Notice of Internet Availability of Proxy Materials or proxy card you
+received by mail.
+Important Notice Regarding the Availability of Proxy Materials for the Annual Meeting: The proxy statement, the accompanying materials
+and our 2020 Annual Report and any amendments thereto are being mailed on or about May 7, 2021 to all stockholders entitled to vote at the annual
+meeting. A copy of our proxy statement and our 2020 annual report and any amendments thereto are also posted on www.proxyvote.com and are
+available from the SEC on its website at www.sec.gov.
+By Order of the Board of Directors,
+By: /s/ Gregory D. Gorgas
+Gregory D. Gorgas
+President and Chief Executive Officer
+La Jolla, California
+May 7, 2021
+ARTELO BIOSCIENCES, INC
+Table of Contents
+General Information
+Security Ownership of Certain Beneficial Owners and Management
+Corporate Governance
+Executive Officers
+Executive Compensation
+Proposal 1 – Election of Directors
+Proposal 2 – Ratification Of Independent Registered Public Accounting Firm
+Report of the Audit Committee
+Certain Relationships and Related Transactions
+Equity Compensation Plan Information
+Other Matters
+Page
+1
+6
+7
+12
+13
+15
+18
+19
+20
+22
+23
+888 Prospect Street, Suite 210
+La Jolla, CA 92037
+2021 PROXY STATEMENT
+General Information
+The Board of Directors (the “Board”) of Artelo Biosciences, Inc., a Nevada corporation (“Artelo,” “Artelo Biosciences,” “the company,” “we,”
+“us” or “our”), has made these proxy materials available to you on the internet or, upon your request, has delivered these proxy materials to you in
+connection with the solicitation of proxies for use at the 2021 Annual Meeting of Stockholders (the “Annual Meeting”). The Annual Meeting will be held
+live via internet webcast on Friday, June 18, 2021 at 8:00 a.m., Pacific Time, or at any adjournment or postponement thereof, for the purposes stated
+herein. These proxy materials were first sent or given on May 7, 2021 to all stockholders as of the record date.
+Internet Availability of Proxy Materials
+Under rules adopted by the Securities and Exchange Commission (the “SEC”), we may furnish proxy materials, including this proxy statement
+and our Annual Report on Form 10-K for the year ended August 31, 2020 filed with the SEC on November 4, 2020 (the “2020 Annual Report”), to our
+stockholders by providing access to such documents on the internet instead of mailing printed copies. Most of you will not receive printed copies of the
+proxy materials unless you request them. Instead, the Notice of Internet Availability of Proxy Materials (the “Notice”), which was mailed to most of you,
+will instruct you as to how you may access and review all of the proxy materials on the internet. The Notice also instructs you as to how you may submit
+your proxy on the internet. If you would like to receive printed copies of our proxy materials by mail, please follow the instructions in the Notice for
+requesting such materials. If you request printed copies of the proxy materials by mail, the materials you receive will include the proxy card or voting
+instruction form for the Annual Meeting. The proxy materials are available to view and download at www.proxyvote.com. We also encourage you to
+review our 2020 Annual Report available on our website at https://ir.artelobio.com/.
+Virtual Annual Meeting
+We are embracing technology to provide expanded access, improved communication, reduced environmental impact and cost savings for our
+stockholders and the Company. Hosting a virtual meeting enables increased stockholder attendance and participation since stockholders can participate
+and ask questions from any location around the world, and provides us an opportunity to give thoughtful responses. In addition, we intend that the virtual
+meeting format provide stockholders a similar level of transparency to the traditional in-person meeting format, and we take steps to ensure such an
+experience. Our stockholders will be afforded the same opportunities to participate at the virtual Annual Meeting as they would at an in-person annual
+meeting of stockholders.
+-1-
+Table of Contents
+Participating in the Annual Meeting
+We will host the Annual Meeting live via internet webcast. You will not be able to attend the Annual Meeting in person. A summary of the
+information you need in order to attend the Annual Meeting online is provided below:
+· Any stockholder may listen to the Annual Meeting and participate live via the internet at www.virtualshareholdermeeting.com/ARTL2021.
+The live internet webcast will begin on Friday, June 18, 2021 at 8:00 a.m., Pacific Time.
+· Stockholders may vote and submit questions during the Annual Meeting live via the internet.
+· To enter the meeting, please have your 16-digit control number, which is available on the Notice or, if you received a printed copy of the
+proxy materials, your proxy card. If you do not have your 16-digit control number, you will be able to listen to the meeting only. You will
+not be able to vote or submit questions during the meeting.
+· We will have technicians ready to assist you with any technical difficulties you may have accessing the virtual meeting or submitting
+questions. If you encounter any difficulties accessing the virtual meeting during the check-in or meeting time, please call the technical support
+number that will be posted on the Annual Meeting log-in page.
+· Instructions regarding how to connect and participate live via the internet, including how to demonstrate proof of stock ownership, are posted
+at www.virtualshareholdermeeting.com/ARTL2021.
+Voting Rights and Outstanding Shares
+Only stockholders that owned our common stock at the close of business on April 22, 2020, the record date for the Annual Meeting, are entitled
+to notice of, and to vote at, the Annual Meeting. On the record date, 23,149,112 shares of our common stock were outstanding. Each share of our common
+stock that you own entitles you to one vote on each matter to be voted upon at the Annual Meeting. We will have a quorum to conduct the business of the
+Annual Meeting if the holders of a majority of the outstanding shares of our common stock entitled to vote are present, in person via the internet webcast
+or by proxy. Abstentions and broker non-votes (i.e., shares of common stock held by a broker, bank or other agent that are represented at the meeting, but
+which the broker, bank or other agent is not empowered to vote on a particular proposal) will be counted for purposes of determining whether a quorum is
+present at the Annual Meeting.
+Proposals for the Annual Meeting
+There are two (2) proposals scheduled to be voted on at the Annual Meeting:
+· Elect eight (8) directors, Gregory D. Gorgas, Connie Matsui, Steven Kelly, John W. Beck, R. Martin Emanuele, Ph.D., Douglas Blayney,
+M.D., Gregory R. Reyes, M.D., Ph.D., and Tamara A. Seymour, for a one-year term to expire at the 2022 Annual Meeting of Stockholders, or
+until their successors are duly elected and qualified or until their earlier resignation or removal; and
+· Ratify the appointment of MaloneBailey, LLP as our independent registered public accounting firm for the fiscal year ending August 31,
+2021.
+-2-
+Table of Contents
+Voting Requirements to Approve Each Proposal
+Proposal 1 – Election of Directors. Directors are elected by a majority of the votes present in person via the internet webcast or represented by
+proxy and entitled to vote at a meeting at which a quorum is present. If a quorum is present, each nominee for director may be approved by the
+affirmative vote of a majority of the shares present in person or by proxy and entitled to vote at a meeting at which a quorum is present. You may vote
+“FOR,” “AGAINST,” or “ABSTAIN” on each individual nominee in this proposal. Abstentions are deemed to be votes cast and have the same effect as a
+vote against the proposal. Broker non-votes are not deemed to be votes cast, are not included in the tabulation of voting results on this proposal, and will
+not affect the outcome of voting on this proposal.
+Proposal 2 – Ratification of the Appointment of MaloneBailey, LLP. The proposal to ratify the appointment of MaloneBailey, LLP as our
+independent registered public accounting firm for the fiscal year ending August 31, 2021, may be approved by the affirmative vote of a majority of the
+shares present in person or by proxy and entitled to vote at a meeting at which a quorum is present. Abstentions are deemed to be votes cast and have the
+same effect as votes “AGAINST” the proposal. This proposal is considered a routine or “discretionary” matter on which your broker, bank or other agent
+will be able to vote on your behalf even if it does not receive instructions from you; therefore, no broker non-votes are expected to exist in connection with
+this proposal.
+Voting Shares Registered in Your Name
+If you are a stockholder of record, you may vote in one of four ways:
+· Vote via the internet. You may submit a proxy over the Internet at www.proxyvote.com 24 hours a day, seven days a week. You will need the
+16-digit control number included on your Notice of Internet Availability or your proxy card (if you received a printed copy of the proxy
+materials);
+· Vote by telephone. You may submit a proxy using a touch-tone telephone by calling 1‑800‑690‑6903, 24 hours a day, seven days a week. You
+will need the 16-digit control number included on your Notice of Internet Availability or your proxy card (if you received a printed copy of
+the proxy materials);
+· Vote by Mail. If you received printed proxy materials, you may direct how your shares are voted at the Annual Meeting by completing,
+signing, and dating each proxy card received and returning it in the prepaid envelope. Sign your name exactly as it appears on the proxy card.
+Your completed, signed and dated proxy card must be received prior to the Annual Meeting; or
+· Vote during the Annual Meeting live via the internet by following the instructions posted at www.virtualshareholdermeeting.com/ARTL2021.
+Votes submitted via the internet or by telephone must be received by 11:59 p.m., Eastern Time, on June 17, 2021. Submitting your proxy via the
+internet, by telephone or by mail will not affect your right to vote during the Annual Meeting live via the internet. For additional information, please see
+“Revocability of Proxies” below.
+-3-
+Table of Contents
+Voting Shares Registered in the Name of a Broker, Bank or Other Agent
+Most beneficial owners holding stock in “street name” will receive instructions for voting their shares from their broker, bank or other agent. A
+number of brokers and banks participate in a program provided through Broadridge Financial Solutions, Inc. (“Broadridge”) that allows stockholders to
+grant their proxy to vote shares by means of the telephone or internet. If your shares are held in an account with a broker or bank participating in the
+Broadridge program, you may vote by telephone by calling the number shown on the voting instruction form received from your broker or bank, or you
+may vote via the internet at Broadridge’s website at http://www.proxyvote.com and use your control number and other information as requested.
+However, since you are not the stockholder of record, you may not vote your shares live via the internet by following the instructions posted at
+www.virtualshareholdermeeting.com/ARTL2021 unless you obtain a valid proxy from your broker, bank or other nominee.
+Revocability of Proxies
+If you are a stockholder of record, once you have submitted your proxy by mail, telephone or internet, you may revoke it at any time before it is
+voted at the Annual Meeting. You may revoke your proxy in any one of the following three ways:
+· You may submit another proxy marked with a later date (which automatically revokes your earlier proxy) by mail or telephone or via the
+internet by the applicable deadline as described above;
+· You may provide written notice that you wish to revoke your proxy to our Secretary at Artelo Biosciences, Inc., Attn: Secretary, 888 Prospect
+Street, Suite 210, La Jolla, California 92037 by no later than the close of business on Thursday, June 17, 2021; or
+· You may attend the Annual Meeting and submit your vote live via the internet. Attendance at the Annual Meeting live via the internet will
+not, by itself, cause your previously granted proxy to be revoked.
+If you are a beneficial owner holding shares in “street name,” you may change your vote by submitting new voting instructions to your broker,
+bank or other agent in accordance with the instructions they provided (see “Voting Shares Registered in the Name of a Broker, Bank or Other Agent”
+above).
+Tabulation of Votes
+A representative from Broadridge will act as inspector of elections and tabulate the votes at the Annual Meeting. All shares represented by valid
+proxies received before the Annual Meeting will be voted. If you submit a valid proxy containing instructions regarding how to vote with respect to any
+matter to be acted upon, your shares will be voted in accordance with those instructions. If you submit a valid proxy with no instructions, then your shares
+will be voted by the individuals we have designated as proxies for the Annual Meeting in the following manner:
+· “FOR” the election of each of the eight (8) nominees for director named in this proxy statement; and
+· “FOR” the ratification of the appointment of MaloneBailey, LLP as our independent registered public accounting firm for our fiscal year
+ending August 31, 2021.
+In addition, the individuals that we have designated as proxies for the Annual Meeting will have discretionary authority to vote your shares with
+respect to any other business that may properly come before the Annual Meeting or any adjournment or postponement thereof.
+-4-
+Table of Contents
+Voting Results
+Preliminary voting results are expected to be announced at the Annual Meeting. Voting results will be tallied by the inspector of elections and
+reported in a Current Report on Form 8-K (the “Form 8-K”) that we will file with the SEC within four business days of the Annual Meeting. If the voting
+results reported in the Form 8-K are preliminary, we will subsequently file an amendment to the Form 8-K to report the final voting results within four
+business days of the date on which the final voting results are known.
+Proxy Solicitation
+This proxy solicitation is made by the Board and we will bear the entire cost of soliciting proxies for the Annual Meeting, including costs
+associated with the preparation, assembly, printing and mailing of the proxy materials and any additional information furnished to stockholders. We will
+provide copies of the proxy materials to brokers, banks and other agents holding shares of our common stock in their name for the benefit of others for
+forwarding to the beneficial owners. We may reimburse such brokers, banks or other agents for their costs associated with forwarding the proxy materials
+to the beneficial owners. We have retained Broadridge to assist with the solicitation of proxies and provide related advice and informational support, for a
+services fee, plus customary disbursements, which are not expected to exceed $20,000 in total. Proxy solicitations will be made primarily through the
+mail, but may be supplemented by telephone, email, or other electronic means by Broadridge, or by our directors, executive officers, employees or other
+agents without additional compensation to such individuals.
+Householding of Proxy Materials
+The SEC has adopted rules that permit brokers, banks and other agents to satisfy the delivery requirements for proxy statements and annual
+reports, or notice of their availability, by delivering a single proxy statement and annual report to two or more stockholders sharing the same address. This
+process, which is commonly referred to as “householding,” can provide added convenience for our stockholders and additional cost savings for us.
+This year, a number of brokers, banks and other agents with account holders who are our stockholders will be “householding” our proxy
+materials. A single proxy statement and annual report will be delivered to multiple stockholders sharing an address unless contrary instructions have been
+received from the affected stockholders. Once you have received notice from your broker, bank or other agent that they will be householding
+communications to your address, householding will continue until you are notified otherwise or until you revoke your consent to the householding of
+communications. If at any time you no longer wish to participate in householding and would prefer to receive a separate proxy statement and annual report
+or notice of availability, please either (i) notify your broker, bank or other agent, (ii) direct your written request to Artelo Biosciences, Inc., Attn: Investor
+Relations, 888 Prospect Street, Suite 210, La Jolla, California 92037, or (iii) contact us by phone at (760) 943-1689. Upon receipt of any such written or
+oral request, we undertake to promptly deliver free of charge a separate copy of the proxy statement, annual report and/or notice of availability, as
+applicable, to a stockholder at a shared address to which a single copy of these documents was delivered. Stockholders who currently receive multiple
+copies of the proxy statement and annual report, or notices of availability, at their address and would like to request householding of their communications
+should notify their broker, bank or other agent.
+Stockholder Proposals for the 2022 Annual Meeting of Stockholders
+Stockholders may present proper proposals for inclusion in our proxy statement and for consideration at our next annual meeting of stockholders
+by submitting their proposals in writing to our Secretary in a timely manner, as described below.
+For a stockholder proposal, other than a proposal for the nomination of directors, to be considered for inclusion in our proxy statement for the
+2022 Annual Meeting of Stockholders, our Secretary must receive the written proposal at our principal executive offices no later than January 8, 2021;
+provided, however, that in the event we hold the 2022 Annual Meeting of Stockholders more than 30 days before or after the one-year anniversary of the
+Annual Meeting, we will disclose the new deadline by which stockholder proposals must be received in our earliest possible Quarterly Report on Form
+10-Q or, if impracticable, by any means reasonably calculated to inform stockholders. In addition to being timely submitted, stockholder proposals must
+otherwise comply with the requirements of Rule 14a-8 of the Securities Exchange Act of 1934, as amended (the “Exchange Act”). Proposals should be
+addressed to: Artelo Biosciences, Inc., Attn: Secretary, 888 Prospect Street, Suite 210, La Jolla, California 92037.
+While the Board will consider stockholder proposals, including proposals for the nomination of directors, we reserve the right to omit from our
+proxy statement for the 2022 Annual Meeting of Stockholders proposals that we are not required to include under the Exchange Act, including Rule 14a-8
+thereunder. Stockholders are advised to review our bylaws for additional information regarding other matters, and procedures related to such matters, that
+may be considered at an annual meeting of stockholders.
+-5-
+Table of Contents
+SECURITY OWNERSHIP OF CERTAIN BENEFICIAL OWNERS AND MANAGEMENT
+The following table presents certain information with respect to the beneficial ownership of our common stock as of April 22, 2021 by (i) each
+person we know to be the beneficial owner of 5% or more of our outstanding shares of common stock, (ii) each named executive officer and director and
+(iii) all executive officers and directors as a group. Information with respect to beneficial ownership is based on a review of our stock transfer records and
+on the Schedules 13D and 13G that have been filed with the SEC by or on behalf of the stockholders listed below. Except as indicated by the footnotes
+below, we believe, based on the information available to us, that the persons named in the table below have sole voting and investment power with respect
+to all shares of common stock that they beneficially own, subject to applicable community property laws.
+Percentage of beneficial ownership is calculated based on 23,149,112 shares of common stock outstanding on April 22, 2021. We have
+determined beneficial ownership in accordance with SEC rules. In computing the number of shares of common stock beneficially owned by a person and
+the percentage ownership of that person, we deemed as outstanding shares of common stock subject to stock options held by that person that are currently
+exercisable or exercisable within 60 days of April 22, 2021. We did not deem these shares outstanding, however, for the purpose of computing the
+percentage ownership of any other person. Except otherwise indicated in the footnotes below, the address of each beneficial owner listed in the table is
+Artelo Biosciences, Inc., 888 Prospect Street, Suite 210, La Jolla, California 92037.
+Number of
+Shares
+Subject to Total Shares
+Options
+Number of Exercisable Beneficially Owned
+within 60
+Name and Address of Beneficial Owner Shares Held Days Number %
+Directors and Named Executive Officers
+Gregory D. Gorgas(1) 270,676 52,933 323,609 1.40%
+* Connie Matsui(2) 56,667 26,500 83,167
+* Steven Kelly(3) 12,500 22,250 34,750
+(4) * Douglas Blayney, M.D. 12,500 18,000 30,500
+* R. Martin Emanuele, Ph.D.(5) 12,500 27,060 39,560
+(6) * John W. Beck - 15,000 15,000
+(7) * Gregory R. Reyes, M.D., Ph.D. - 15,000 15,000
+(8) Tamara A. Seymour - - -
+All Current Directors and Executive Officers as a Group 364,843 176,743 541,586 2.34%
+5% Stockholders
+Parian Global Management LP 1,199,738 - 1,199,738 5.18%
+________________
+* Less than one percent.
+(1) Consists of 270,676 shares held by Gregory Gorgas, options to purchase 32,823 shares of common stock that are exercisable within 60 days of April
+22, 2021 and warrants to purchase 20,110 shares of common stock that are exercisable within 60 days of April 22, 2021.
+(2) Consists of 56,667 shares held by Connie Matsui and options to purchase 26,500 shares of common stock that are exercisable within 60 days of April
+22, 2021.
+(3) Consists of 12,500 shares held by Steven Kelly and options to purchase 22,250 shares of common stock that are exercisable within 60 days of April
+22, 2021.
+(4) Consists of 12,500 shares held by Douglas Blayney, M.D. and options to purchase 18,000 shares of common stock that are exercisable within 60 days
+of April 22, 2021.
+(5) Consists of 12,500 shares held by R. Marty Emanuele, Ph.D. and options to purchase 27,060 shares of common stock that are exercisable within 60
+days of April 22, 2021.
+(6) Consists of options to purchase 15,000 shares of common stock that are exercisable within 60 days of April 22, 2021 held by John W. Beck.
+(7) Consists of options to purchase 15,000 shares of common stock that are exercisable within 60 days of April 22, 2021 held by Gregory R. Reyes,
+M.D., Ph.D.
+(8) Consists of options to purchase 0 shares of common stock that are exercisable within 60 days of April 22, 2021 held by Tamara A. Seymour.
+-6-
+Table of Contents
+CORPORATE GOVERNANCE
+Director Independence
+Our Board has undertaken a review of the independence of the directors and considered whether any director has a material relationship with us
+that could compromise his or her ability to exercise independent judgment in carrying out his or her responsibilities. As a result of this review, our Board
+has determined that Ms. Matsui, Dr. Blayney, Mr. Kelly, Dr. Emanuele, Mr. Beck, Dr. Reyes, and Ms. Seymour representing seven of our eight directors,
+are “independent directors” as defined under the rules of the Nasdaq Capital Market (the “Nasdaq”). Mr. Gorgas is not considered independent due to his
+service as an executive officer of the Company.
+In determining whether directors were independent under Nasdaq rules, the Board considered the matters discussed in the section entitled
+“Certain Relationships and Related Transactions” below. There are no family relationships between any of our directors and executive officers. There are
+currently no legal proceedings, and during the past ten years there have been no legal proceedings, that are material to the evaluation or the ability or
+integrity of any of our directors or director nominees.
+Leadership Structure of the Board of Directors
+The Board has the following general leadership structure:
+· The positions of Chief Executive Officer and Chair of the Board are separate but may be held by the same individual. The positions of Chief
+Executive Officer and Chair of the Board are currently held by Mr. Gorgas and Ms. Matsui, respectively.
+· The Chair of the Board presides at meetings of the Board and, so long as the Chair of the Board is an independent director, also presides at
+executive sessions of the non-management and/or independent directors.
+· If the Chair of the Board is not an independent director, the independent directors will appoint one independent director to serve as “lead
+independent director.” In that scenario, the lead independent director will preside at executive sessions of the non-management and/or
+independent directors, preside at meetings of the Board in the absence of the Chair of the Board, review agendas for meetings of the Board
+with the Chief Executive Officer and Chair of the Board, and assume such other functions as the Board may deem appropriate.
+· The Chief Executive Officer and the Chair of the Board jointly establish the agenda for each meeting of the Board, though any director may
+request the inclusion of items on the agenda.
+Ms. Matsui currently serves as Chair of the Board and is an independent director, thus, the Board does not currently have a lead independent
+director. The Board has determined that this leadership structure, specifically the separation of the Chief Executive Officer and Chair of the Board
+positions, is appropriate for our company because, in the judgment of the Board, an independent Chair of the Board (or lead independent director, if the
+Chair of the Board is not an independent director) is best positioned to express to management the views of the Board (and, particularly, the independent
+directors) and to provide constructive feedback to the Chief Executive Officer regarding management’s performance.
+-7-
+Table of Contents
+Board Committees
+The Board has an Audit Committee, a Compensation Committee, and a Corporate Governance and Nominating Committee. These committees
+operate under written charters, which are available on our website at http://www.artelobio.com under “Investors—Governance.” The Board has
+determined that all members of these committees satisfy the applicable independence requirements under Nasdaq rules. The current members of the
+committees are identified in the table below.
+Corporate
+Governance
+and
+Audit Compensation Nominating
+Director Committee Committee Committee
+Gregory D. Gorgas — — —
+Connie Matsui — — Member
+Steven Kelly Member Chair —
+John W. Beck Chair Member —
+R. M. Emanuele, Ph.D. — — Member
+Douglas Blayney, M.D. — — Chair
+Gregory R. Reyes, M.D., Ph.D. — Member —
+Tamara A. Seymour Member — —
+The Audit Committee is responsible primarily for overseeing (i) the services provided by our independent registered public accounting firm, (ii)
+the integrity of our financial statements and internal control over financial reporting, and (iii) risk management, internal audit and our compliance with
+legal and regulatory requirements. Mr. Beck, the Chair of the Audit Committee, has been determined by the Board to be an audit committee financial
+expert. For fiscal year ending August 31, 2020, the Audit Committee held six (6) meetings.
+The Compensation Committee is responsible primarily for evaluating and approving all compensation plans, policies and programs as they affect
+our executive officers, administering our equity compensation plans, and reviewing the compensation of the Board. For fiscal year ending August 31,
+2020, the Compensation Committee held three (3) meetings.
+The Corporate Governance and Nominating Committee is responsible primarily for identifying, evaluating and recommending to the Board
+nominees for election or appointment to the Board and committees of the Board, evaluating the performance and independence of the Board and of
+individual directors, and evaluating the adequacy of our corporate governance practices. For fiscal year ending August 31, 2020, the Corporate
+Governance and Nominating Committee held three (3) meetings.
+Meetings of the Board of Directors and Board Committees
+The Board has regularly scheduled meetings at least quarterly. Our independent directors hold executive sessions without management present at
+least once per quarter. For fiscal year ending August 31, 2020, the Board held five (5) meetings. Each director attended at least 75% of the aggregate
+number of meetings held by the Board and all applicable committees of the Board during the period that he or she served. It is our policy to encourage
+members of the Board to attend our annual meetings of stockholders.
+Role of the Board of Directors in Risk Oversight
+Management is responsible for day-to-day risk management at our company. The role of the Board is to provide oversight of the processes
+designed to identify, assess and monitor key risks and risk mitigation activities. The Board fulfills its risk oversight responsibilities through (i) the receipt
+of reports directly from management and (ii) the receipt of reports from each committee chair regarding such committee’s oversight of specific risk
+topics.
+Delegation of Risk Oversight
+The Board has delegated oversight of specific risk areas to its committees. For example, the Audit Committee is tasked with overseeing risk
+management at our company with respect to financial matters and the adequacy of our internal control over financial reporting. Pursuant to its charter, the
+Audit Committee is required, among other things, to discuss with management our policies with respect to risk assessment and risk management,
+including guidelines and procedures to govern the process by which risk assessment and risk management are handled, and to review our major risk
+exposures and the steps management has taken to monitor, control and report such exposures. The Audit Committee typically has these discussions with
+management at least once per quarter, and the Chair of the Audit Committee subsequently reports on these discussions to the full Board. Similarly, the
+Compensation Committee assists the Board in overseeing risks arising from our compensation policies and practices, and the Corporate Governance and
+Nominating Committee assists the Board in overseeing risks associated with corporate governance, director and executive officer succession planning,
+board membership and board structure. The Board then discusses significant risk management issues with the Chief Executive Officer and recommends
+appropriate action.
+-8-
+Table of Contents
+Communications with the Board of Directors
+The Company’s contact information is available on our website at https://artelobio.com/ under the “Investors” tab. Interested parties may send
+communications to the non-management members of the Board. Communications to the Board must be in writing and sent care of the Secretary by mail to
+our offices 888 Prospect Street, Suite 210, La Jolla California 92037. This centralized process will assist the Board in reviewing and responding to
+stockholder and interested party communications in an appropriate manner. The name of any specific intended recipient should be noted in the
+communication. All communications must be accompanied by the following information:
+· if the person submitting the communication is a security holder, a statement of the type and amount of securities of our company the person
+holds;
+· if the person submitting the communication is not a security holder and is submitting the communication to the non-management directors as
+an interested party, the nature of the person’s interest in our company;
+· any special interest, meaning an interest not in the capacity of a stockholder of our company, of the person in the subject matter of the
+communication; and
+· the address, telephone number and e-mail address, if any, of the person submitting the communication.
+Communications should be addressed to the attention of the Secretary and should not exceed 500 words in length, excluding the information
+required to accompany the communication as described above. The Board has instructed the Secretary to forward such correspondence to the Board.
+Consideration of Director Nominees
+Director Qualifications
+The Corporate Governance and Nominating Committee evaluates all incumbent, replacement or additional nominees for election as directors,
+taking into account (i) all factors the committee considers appropriate, which may include career specialization, relevant technical skills or financial
+acumen, diversity of viewpoint and industry knowledge, and (ii) the following minimum qualifications:
+· Each director nominee must have displayed the highest personal and professional ethics, integrity and values, and sound business judgment;
+· Each director must be highly accomplished in his or her respective field, with superior credentials and recognition and broad experience at the
+administrative and/or policy making level in business, government, education, technology or public interest;
+· Each director must have relevant expertise and experience, and be able to offer advice and guidance to the Chief Executive Officer based on
+that expertise and experience;
+· Each director must be able to represent all of our stockholders and be committed to enhancing long-term stockholder value; and
+· Each director must have sufficient time available to devote to activities of the Board and to enhance his or her knowledge of our business.
+-9-
+Table of Contents
+In determining whether to recommend a director for re-election to the Board, the Corporate Governance and Nominating Committee also
+considers the director’s past attendance at meetings and participation in and contributions to the activities of the Board and any applicable committees of
+the Board.
+The Nominating and Governance Committee does not have a formal policy governing the consideration of diversity in identifying nominees for
+director.
+Stockholder Recommendations and Nominees
+The Corporate Governance and Nominating Committee has not received director candidate recommendations from our stockholders and does not
+have a formal policy regarding consideration of such recommendations. The Board believes this is appropriate, as any recommendations received from
+stockholders will be evaluated in the same manner as potential nominees suggested by members of the Board or management. Stockholders wishing to
+recommend a candidate for director should write to our Secretary at Artelo Biosciences, Inc., Attn: Secretary, 888 Prospect Street, Suite 210, La Jolla,
+California 92037.
+To be considered, the recommendation of a director candidate must include the following written information: (i) the stockholder’s name and
+contact information; (ii) a statement that the writer is a stockholder and is proposing a candidate for consideration by the Corporate Governance and
+Nominating Committee; (iii) the name of, and contact information for, the candidate and a statement that the candidate is willing to be considered and
+serve as a director, if nominated and elected; (iv) a statement of the candidate’s business, educational experience and qualifications; (v) information
+regarding each of the factors listed under “Director Qualifications” above sufficient to enable the Corporate Governance and Nominating Committee to
+evaluate the candidate; (vi) a statement of the value that the candidate would add to the Board; (vii) a statement detailing any relationship between the
+candidate and any customer, supplier or competitor of our company; (viii) detailed information about any relationship or understanding between the
+proposing stockholder and the candidate; and (ix) a list of three character references, including complete contact information for such references. To give
+the Corporate Governance and Nominating Committee sufficient time to evaluate a recommended director candidate for the 2022 Annual Meeting of
+Stockholders, the recommendation should be received by our Secretary at our principal executive offices no later than January 7, 2022 which is the 120th
+calendar day before the first anniversary of the date our proxy statement was mailed to stockholders in connection with the Annual Meeting.
+Identification and Evaluation of Nominees for Director
+The Corporate Governance and Nominating Committee uses a variety of methods for identifying and evaluating nominees for director. The
+Corporate Governance and Nominating Committee regularly assesses the appropriate size and composition of the Board, the needs of the Board and each
+committee of the Board, and the qualifications of candidates in light of these needs. Candidates may come to the attention of the Corporate Governance
+and Nominating Committee through stockholders, management, current members of the Board or search firms. The evaluation of these candidates may be
+based solely upon information provided to the Corporate Governance and Nominating Committee or may also include discussions with persons familiar
+with the candidate, an interview of the candidate or other actions the Corporate Governance and Nominating Committee deems appropriate, including the
+use of third parties to review candidates.
+Code of Ethics
+We have adopted a written Code of Ethics applicable to the Board and our officers and employees, including our principal executive officer,
+principal financial officer and principal accounting officer, in accordance with the rules of the Nasdaq and the SEC. The Code of Ethics is available on our
+website at http://www.artelobio.com under “Investors —Governance.”
+-10-
+Table of Contents
+Compensation Committee Interlocks and Insider Participation
+During fiscal year 2020, no executive officer of our company (i) served as a member of the compensation committee (or other board committee
+performing equivalent functions or, in the absence of any such committee, the entire board of directors) of another entity, one of whose executive officers
+served on our Compensation Committee, (ii) served as a director of another entity, one of whose executive officers served on our Compensation
+Committee, or (iii) served as a member of the compensation committee (or other board committee performing equivalent functions or, in the absence of
+any such committee, the entire board of directors) of another entity, one of whose executive officers served as a director of our company.
+Director Compensation
+Outside Director Compensation Policy
+In March 2021, the Company adopted the Outside Director Compensation Policy. Moving forward, all non-employee directors are entitled to the
+following cash compensation for their services:
+· $30,000 per year for service as a member of the board of directors;
+· $15,000 per year additionally for service as chairperson of the audit committee;
+· $7,600 per year additionally for service as an audit committee member;
+· $12,000 per year additionally for service as chairperson of the compensation committee;
+· $4,000 per year additionally for service as a compensation committee member;
+· $8,000 per year additionally for service as chairperson of the corporate governance and nominating committee; and
+· $4,000 per year additionally for service as a corporate governance and nominating committee member.
+The terms of our outside director compensation policy also allow for new non-employee directors to receive, upon becoming a non-employee
+director, an initial award of stock options to purchase 30,000 shares of our common stock at a per-share exercise price equal to the fair market value of a
+share of our common stock on the first trading date on or after the date on which such individual first becomes a non-employee director. The initial award
+shall vest in three (3) equal installments on each anniversary of the date the applicable non-employee director’s service commenced, in each case subject
+to the non-employee director continuing to be a service provider through the applicable vesting date.
+Our outside director compensation policy, also provides for an annual award (the “Annual Award”) to continuing non-employee directors who
+have served as a non-employee director for at least six (6) months on the date of each annual meeting of stockholders of stock options to purchase 10,000
+shares of our common stock at a per-share exercise price equal to the fair market value of a share of our common stock on the date of each annual
+meeting; provided, however, that the Board may make exceptions to this requirement of being an outside director for six (6) months to receive an Annual
+Award. The Annual Award shall vest on the earlier of the one-year anniversary of the date the annual award is granted, or the day prior to the date of the
+annual meeting next following the date the annual award is granted, in each case, subject to the non-employee director continuing to be a service provider
+through the applicable vesting date.
+We also reimburse our directors for expenses associated with attending meetings of our board of directors and committees of our board of
+directors. Directors who are also our employees receive no additional compensation for their service as a director.
+Our outside director compensation policy further provides that in any given fiscal year, a non-employee director may not receive cash
+compensation and equity awards with an aggregate value greater than $750,000 (determined in accordance with accounting principles generally accepted
+in the United States of America). Any cash compensation paid or awards granted to an individual for his or her services as an employee or a consultant
+(other than as a non-employee director) will not count for purposes of this limitation.
+Our 2018 Equity Incentive Plan, or the 2018 Plan, provides that in the event of a merger or change in control, as defined in our 2018 Plan, each
+outstanding equity award granted under our 2018 Plan that is held by a non-employee director will fully vest, all restrictions on the shares subject to such
+award will lapse, and with respect to awards with performance-based vesting, all performance goals or other vesting criteria will be deemed achieved at
+100% of target levels, and all of the shares subject to such award will become fully exercisable, if applicable.
+The following table presents compensation information for our non-employee directors for fiscal year 2020.
+Fees
+Earned Non-Equity Nonqualified All
+or Paid Stock Option Incentive Plan Deferred Other
+in Cash Awards Awards Compensation Compensation Compensation Total
+Name ($) ($) ($) ($) Earnings ($) ($) ($)
+John Beck 0 0 122,007 0 0 0 122,007
+___________
+* On December 2, 2019, Georgia Erbez resigned from the Board of Directors and on December 6, 2019, John W. Beck was appointed to the Board of
+Directors.
+The stock options issued in the above table were options granted on August 29, 2019 to purchase shares of the Company’s common stock at an
+exercise price of $1.99 with an expiration date of August 29, 2029. The stock options vest on the earlier of six months after issuance or the date
+immediately preceding the 2020 annual meeting of stockholders.
+-11-
+Table of Contents
+The following table presents the total number of shares subject to either options outstanding or restricted stock awards, as well as the number of
+shares subject to vested exercisable options, for each non-employee director as of August 31, 2020.
+Total Number
+of Options Number of Vested
+Outstanding Exercisable
+or Restricted Options/Restricted
+Director Stock Awards Stock Awards
+Connie Matsui 41,500 3,750
+Steven Kelly 34,750 3,125
+R. Martin Emanuele, Ph.D 42,500 6,250
+Douglas Blayney, M.D 30,500 3,125
+John Beck 50,000 40,000
+_______________
+* On December 2, 2019, Georgia Erbez resigned from the Board of Directors and on December 6, 2019, John W. Beck was appointed to the Board of
+Directors.
+EXECUTIVE OFFICERS
+Our executive officers are appointed by, and serve at the discretion of, the Board. Each executive officer is a full-time employee of Artelo. The
+names of our executive officers and their ages, titles and biographies are set forth below:
+Name Age Position
+Gregory D. Gorgas 58 President, Chief Executive Officer, Chief Financial Officer, Secretary and Director
+Gregory D. Gorgas. Please see biography in “Proposal 1” section below.
+None of our executive officers has any family relationships with any of our other executive officers or directors. There currently are no legal
+proceedings, and during the past ten years there have been no legal proceedings, that are material to the evaluation of the ability or integrity of any of our
+executive officers.
+-12-
+Table of Contents
+EXECUTIVE COMPENSATION
+Summary Compensation Table
+The following table summarizes the total compensation earned by our NEO for 2020 and 2019.
+SUMMARY COMPENSATION TABLE
+Change in
+Pension
+Value and
+Non-Equity Nonqualified All
+Incentive Deferred Other
+Option Plan Compensa- Compensa-
+Name and Stock Awards Compensa- tion Earnings tion
+Principal Position Year Salary ($) Bonus ($) Awards ($) ($) tion ($) ($) ($) Total ($)
+Gregory D. Gorgas
+President, CEO,
+2020
+CFO, 430,961 150,480* - - - - - 581,441
+Secretary, Treasurer
+2019
+and Director 209,369 - - 138,058 - - - 347,427
+_________
+*Bonus was paid in October 2020.
+Outstanding Equity Awards at Fiscal Year End
+As of August 31, 2020, there was an option to purchase 75,000 shares of our common stock held by our named executive officer.
+Option Awards Stock Awards
+Equity
+Incentive
+Equity Plan
+Incentive Awards:
+Equity Plan Market or
+Incentive Awards: Payout
+Plan Market Number of Value of
+Awards: Number Value of Unearned Unearned
+Number of Number of Number of of Shares Shares or Shares, Shares,
+Securities Securities Securities or Units Units of Units or Units or
+Underlying Underlying Underlying of Stock Stock Other Other
+Unexercised Unexercised Unexercised Option Option That That Rights Rights
+Options: Options: Unearned Exercise Expiration Have Not Have Not That Have That Have
+Name Exercisable Unexercisable Options Price Date Vested Vested Not Vested Not Vested
+(1) (2) (3) (4) (5) (6) (7) (8) (9)
+Gregory D.
+Gorgas
+President, CEO,
+CFO, Secretary,
+Treasurer and August 29,
+Director 18,756 56,244 - $ 1.99 2029 - - - -
+Executive Employment Agreements
+On April 3, 2017, our Company entered into an employment agreement with Gregory D. Gorgas. On March 15, 2019, the compensation
+committee of the Board increased Mr. Gorgas’ salary by $10,000 per month, effective immediately.
+On August 30, 2019, and effective as of June 20, 2019, the Company and Mr. Gorgas entered into an amended and restated employment
+agreement (the “Employment Agreement”).
+Pursuant to the Employment Agreement, Mr. Gorgas receives a base salary of $396,000 per year, less applicable withholdings, and he will be
+eligible to earn an annual target bonus of up to 50% of his base salary upon achievement of performance objectives to be determined by the Company’s
+board of directors or its compensation committee. Mr. Gorgas is also eligible to participate in any employee benefit plans sponsored by us.
+-13-
+Table of Contents
+In addition, in connection with his employment, we have granted Mr. Gorgas an option to purchase 75,000 shares of our common stock at $1.99
+per share pursuant to our 2018 Equity Incentive Plan. The shares subject to this option award will vest, subject to Mr. Gorgas’ continued service through
+the applicable vesting date, ratably over 48 months starting on August 29, 2019, such that the option will be fully vested on August 29, 2023. The vesting
+of the option is also subject to certain vesting acceleration provisions pursuant to the Employment Agreement.
+The Employment Agreement also provides that Company shall pay the premiums for a life insurance policy for Mr. Gorgas for coverage of up to
+$1,000,000, and Mr. Gorgas shall be entitled to select personal beneficiaries for 100% of the proceeds of such policy. Mr. Gorgas may also choose to pay
+any additional premiums to increase the coverage of this life insurance policy.
+The Employment Agreement also provides benefits in connection with a termination of employment under specified circumstances. Under the
+terms of the Employment Agreement, if we terminate Mr. Gorgas’ employment other than for cause, death, or disability, or Mr. Gorgas terminates his
+employment for good reason, Mr. Gorgas will be entitled to receive, subject to his timely execution and non-revocation of a release of claims, non-
+disparagement and his continued adherence to the non-solicitation provision of the Employment Agreement the following benefits: (A) if his termination
+of service occurs within the period 3 months prior to and 12 months after a change of control of the Company, (i) a lump sum severance payment equal to
+(x) 12 months of his then-current base salary and (y) his prorated annual bonus at the target level of achievement for the year in which the termination
+occurs, (ii) reimbursements for Mr. Gorgas and his eligible dependents’ COBRA premiums for up to 12 months; and (iii) accelerated vesting as to 100%
+of Mr. Gorgas’ then-outstanding time-based and performance-based equity awards; or (B) if his termination of service occurs outside of the period 3
+months prior to and 12 months after a change of control of the Company, (i) continuing monthly payments of his then-current base salary for 12 months,
+(ii) a lump sum payment equal to a pro-rata portion of his then-current year target bonus, (iii) reimbursements for Mr. Gorgas and his eligible dependents’
+COBRA premiums for up to 12 months; and (iv) accelerated vesting as to (x) 100% of Mr. Gorgas’ then-outstanding time-based equity awards and (y)
+that portion of Mr. Gorgas’ then-outstanding performance based equity awards for the performance goals that had been satisfied at the time of termination
+or are expected to be satisfied.
+If any of the severance and other benefits provided for in the Employment Agreement or otherwise payable to Mr. Gorgas constitute “parachute
+payments” within the meaning of Section 280G of the Internal Revenue Code (the “Code”) and could be subject to excise tax under Section 4999 of the
+Code, then such payments will be delivered in full or delivered as to such lesser extent which would result in no portion of such benefits being subject to
+excise tax, whichever results in the greater amount of after-tax benefits to Mr. Gorgas.
+On February 12, 2021 (the “Grant Date”) the Board granted an option to Mr. Gorgas, to purchase 834,500 shares of our common stock vesting as
+follows: 50% shall vest on the one-year anniversary of the Grant Date and 50% shall vest on the two-year anniversary of the Grant Date, such that 100%
+of the option shall be vested in a two year period, subject to Mr. Gorgas’ continued service to the Company. The option is subject to the terms and
+conditions of the Company’s 2018 Equity Incentive Plan and the related stock option agreement.
+On March 5, 2021, the compensation committee of the Board (the “Compensation Committee”) granted an option to Mr. Gorgas to purchase
+575,100 shares of our common stock, vesting as follows: twenty-five percent (25%) of the shares subject to the option shall vest on the one (1) year
+anniversary of the Vesting Commencement Date (as defined below), and one forty-eighth (1/48th) of the shares subject to the option shall vest each month
+thereafter on the same day of the month as the Vesting Commencement Date (and if there is no corresponding day, on the last day of the month), subject to
+Mr. Gorgas’ continued service to the Company. The Vesting Commencement Date is the March 5, 2021. In the event that the Mr. Gorgas’ continuous
+status as a service provider is terminated by the Company upon or within twelve months after a Change in Control (as defined by the Plan), other than as a
+result of death, Disability or Resignation for Good Reason (as defined in Mr. Gorgas’ Amended and Restated Employment Agreement by and between the
+Mr. Gorgas and the Company, effective as of June 19, 2019), 100% of the total number of shares subject to the option shall vest immediately. The option
+is subject to the terms and conditions of the Company’s 2018 Equity Incentive Plan and the related stock option agreement.
+The Compensation Committee also increased Mr. Gorgas’ base salary to $425,000 per year, effective January 1, 2021. Mr. Gorgas will continue
+to be eligible to earn an annual target bonus of up to 50% of his base salary upon achievement of performance objectives to be determined by the Board or
+its Compensation Committee.
+-14-
+Table of Contents
+PROPOSAL 1
+ELECTION OF DIRECTORS
+Board Composition
+As of the date of this proxy statement, the Board consists of eight (8) members. Our bylaws provide that the number of directors will be fixed
+from time to time by resolution of the Board. All directors hold office until their successors have been elected and qualified or until their earlier death,
+resignation, disqualification or removal.
+The Board consists of Gregory D. Gorgas, Connie Matsui, Steven Kelly, John W. Beck, R. Martin Emanuele, Ph.D., Douglas Blayney, M.D.,
+Gregory R. Reyes, M.D., Ph.D., and Tamara A. Seymour. At each annual meeting of stockholders, the successors to directors whose terms then expire will
+serve from the time of election and qualification until following annual meeting following election and until their successors are duly elected and
+qualified.
+Our bylaws provide for majority voting in the election of directors. Each director nominee will be elected to the Board if the votes cast for such
+nominee’s election exceed the votes cast against such nominee’s election.
+Nominees for Election at the Annual Meeting
+The Corporate Governance and Nominating Committee recommended, and the Board nominated, Gregory D. Gorgas, Connie Matsui, Steven
+Kelly, John W. Beck, R. Martin Emanuele, Ph.D., Douglas Blayney, M.D., Gregory R. Reyes, M.D., Ph.D., and Tamara A. Seymour as nominees for
+election to the Board at the Annual Meeting. If elected, Gregory D. Gorgas, Connie Matsui, Steven Kelly, John W. Beck, R. Martin Emanuele, Ph.D.,
+Douglas Blayney, M.D., Gregory R. Reyes, M.D., Ph.D., and Tamara A. Seymour, will continue as directors and their terms will expire at the 2021
+Annual Meeting of Stockholders. Each director’s term continues until the election and qualification of his or her successor, or such director’s earlier death,
+resignation or removal.
+Information about the Board of Directors
+The names and certain information regarding each member of the Board, including the nominees for election to the Board at the Annual Meeting,
+are set forth below. The following information has been furnished to us by the directors. For more information concerning the nominees, please see the
+section entitled “Corporate Governance” above.
+Gregory D. Gorgas was appointed president, chief executive officer, chief financial officer, treasurer, secretary and director of our Company on
+April 3, 2017. Prior to joining our Company, Mr. Gorgas was Senior Vice President, Commercial, and Corporate Officer at Mast Therapeutics from July
+2011 to January 2017 with commercial leadership accountability and business development responsibilities for the hematology, oncology and
+cardiovascular development programs. In addition, he performed a key role in helping Mast Therapeutics raise over $50M in new capital. From November
+2009 to July 2011, Mr. Gorgas was Managing Director at Theragence, Inc., a privately-held company he co-founded, that applies proprietary
+computational intelligence to mine and analyze clinical data. From November 2008 to July 2011, Mr. Gorgas also served as an independent consultant,
+providing commercial and business development consulting services to pharmaceutical, biotechnology and medical device companies. From 1997 to
+October 2008, Mr. Gorgas held several positions with Biogen Idec Inc., most recently, from March 2006 to October 2008, as Senior Director, Global and
+U.S. Marketing with responsibility for the strategic vision and operational commercialization of the company’s worldwide cancer business. In this role, he
+hired and led the team in marketing, operations, project management, and business development in Europe and the US. Before such time, he had
+increasing responsibilities in marketing, sales, commercial operations, and project team and alliance management. Mr. Gorgas currently serves on the
+advisory board at Klotho Therapeutics. He holds an MBA from the University of Phoenix and a BA in economics from California State University,
+Northridge.
+Connie Matsui was elected to our Board on May 2, 2017. Ms. Matsui brings to her role over 16 years of general management experience in the
+biotechnology industry. Ms. Matsui retired from Biogen Idec in January 2009 as Executive Vice President, Knowledge and Innovation Networks. She
+served as an Executive Committee member at both Biogen Idec and IDEC Pharmaceuticals, a predecessor of Biogen Idec. Among the major roles she
+held after joining IDEC in November 1992 were: Senior Vice President, overseeing investor relations, corporate communications, human resources,
+project management and strategic planning; Collaboration Chair for the late stage development and commercialization of rituximab (tradenames: Rituxan
+® ®, MabThera ®) in partnership with Roche and Genentech; and Project Leader for Zevalin , the first radioimmunotherapy approved by the FDA. Prior to
+entering the biotechnology industry, Ms. Matsui worked for Wells Fargo Bank in general management, marketing and human resources. Ms. Matsui
+currently serves as the Chair of the Board at Halozyme Therapeutics and at Sutro Biopharma and has been active on a number of not-for-profit boards.
+She was National President/Board Chair of the Girl Scouts of the USA from 1999 to 2002. Ms. Matsui earned BA and MBA degrees from Stanford
+University.
+-15-
+Table of Contents
+Steven Kelly was elected to our Board on May 2, 2017. Mr. Kelly brings nearly thirty years of experience in Pharma/Biotech at all phases of the
+business across multiple therapeutic categories. Mr. Kelly is currently CEO at Carisma Therapeutics, a venture backed biotech pioneering the
+development of CAR macrophages, a disruptive approach to immunotherapy in cancer. From 2012 to 2018, Mr. Kelly was the principal of Kelly
+BioConsulting, LLC, and served as an independent consultant providing strategic direction and guidance to a variety of life sciences companies.
+Previously, Mr. Kelly was the founding CEO of Pinteon Therapeutics, an early stage oncology and CNS development company. Prior to this he held a
+number of leadership positions in the biotechnology industry including: CEO, Theracrine; CCO, BioVex; CEO, Innovive Pharmaceuticals; as well as
+various commercial and manufacturing roles at Sanofi, IDEC Pharmaceuticals and Amgen. Mr. Kelly holds a BS from University of Oregon and an MBA
+from Cornell University.
+John W. Beck was elected to our Board on December 6, 2019. Mr. Beck has served as the Senior Vice President and Chief Financial Officer at
+Ritter Pharmaceuticals, Inc., a publicly traded pharmaceutical company, since May 2018. From 2008 until its acquisition by AstraZeneca in 2012, Mr.
+Beck, served first as a board member and later as Chief Financial Officer and Senior Vice President of finance & operations of Ardea Biosciences Inc.
+(“Ardea”). Before joining Ardea, Mr. Beck spent 10 years with Metabasis Thereapeutics Inc., as a Co-Founder and its Chief Financial Officer. Since
+leaving Ardea in 2012, Mr. Beck has been serving as a board member and advisor to August Therapeutics, Inc., a San Diego California-based company
+developing non-systemic therapeutics to treat disordered eating and obesity, and Pinnacle Medical Holdings, LLC, a Denver Colorado-based physician-led
+network of health-care providers, which was acquired by OnPoint Medical Group, LLC in August 2017. Mr. Beck also serves as a financial mentor to
+UCSD’s TRITON Funds. Mr. Beck holds a Bachelor’s degree in Accounting from the University of Washington, Seattle and a Bachelor’s degree in
+Theology from a Seattle-area seminary.
+R. Martin Emanuele, Ph.D. was elected to our Board on September 20, 2017. Dr. Emanuele is currently co-founder and Chief Operating Officer
+of Visgenx. Inc, a private bio-pharmaceutical company. From May 2011 to October 2016, he served as Senior Vice President, Development at Mast
+Therapeutics Inc. From April 2010 to April 2011, Dr. Emanuele was Vice President, Pharmaceutical Strategy at DaVita, Inc., and leading provider of
+dialysis and other healthcare services in the United States. Prior to DaVita, from June 2008 to April 2010, Dr. Emanuele was a co-founder and CEO of
+SynthRx, Inc. a private bio-pharmaceutical company that was acquired by Mast Therapeutics (Savara, Inc) in April 2011. From November 2006 to May
+2008, Dr. Emanuele was Senior Vice President, Business Development at Kemia, Inc., a venture-backed privately-held company focused on discovering
+and developing small molecule therapeutics. From 2002 to 2006, Dr. Emanuele held various senior-level positions with Avanir Pharmaceuticals, Inc.,
+most recently as Vice President, Corporate Development and Portfolio Management, and from 1988 to 2002, Dr. Emanuele held positions of increasing
+responsibility at CytRx Corporation, most recently as Vice President, Research and Development and Business Development. He earned a Ph.D. in
+pharmacology and experimental therapeutics from Loyola University of Chicago, Stritch School of Medicine and a BS in biology from Colorado State
+University. He also holds an MBA with an emphasis in healthcare and pharmaceutical management from the University of Colorado.
+Douglas Blayney, M.D. was elected to our Board on July 31, 2017. Dr. Blayney is a Professor of Medicine at Stanford University and former
+Medical Director of Stanford Cancer Center. Dr. Blayney is a past president of the American Society of Clinical Oncology (ASCO) and a founder of the
+ASCO Quality Symposium. He was previously a Professor of Internal Medicine and Medical Director of the Comprehensive Cancer Center at the
+University of Michigan, and prior to that practiced and led Wilshire Oncology Medical Group, Inc. a physician owned multidisciplinary oncology practice
+in southern California. Dr. Blayney served on the Food and Drug Administration’s Oncologic Drugs Advisory Committee and is Founding Editor-in-Chief
+and Editor-in-Chief Emeritus of ASCO’s Journal of Oncology Practice. He has over 70 scientific publications with expertise on clinical trial development,
+use of oncology drugs in clinical practice, and information technology use. Dr. Blayney earned a degree in electrical engineering from Stanford, is a
+graduate of the University of California, San Diego School of Medicine, and received post graduate training at UCSD and at the National Cancer Institute
+in Bethesda, Maryland.
+Gregory Reyes, M.D., Ph.D., was elected to our Board on November 30, 2021. Dr. Reyes has served as a Pharmaceutical and Biotech Industry
+Advisor and Consultant to various companies from June 2016 to present. Dr. Reyes has also served as the Co-Founder of OROX Biosciences, Inc. from
+June 2017 to present. Prior to that, Dr. Reyes served as the Senior Vice President, Drug Discovery & San Diego Site Head, overseeing drug discovery at
+Celgene from June 2011 to June 2016. Prior to that, Dr. Reyes served as Senior Vice President & San Diego Site Head, leading the oncology franchise at
+Biogen Idec from October 2008 to June 2011. Dr. Reyes currently serves as advisor to Cancer Research UK’s New Agents Committee and previously
+served on NIH’s National Advisory General Medical Sciences Council, and the Standing Review Committee for the Research Centers in Minority
+Institutions, National Center for Research Resources. Dr. Reyes obtained his M.D. and Ph.D. at The Johns Hopkins School of Medicine and trained in
+medicine at Stanford University Hospital. Dr. Reyes received his bachelor’s degree in Biology from the University of California, Santa Cruz.
+Tamara A. Seymour was elected to our Board on March 5, 2021. Ms. Seymour served as a member of the board of directors and Chair of the
+audit committee of Beacon Discovery, Inc., a drug discovery company in San Diego, California, from 2018 until its acquisition by Eurofins Scientific in
+March 2021. Ms. Seymour served as Interim Chief Financial Officer of Immunic, Inc., clinical-stage drug development company in 2019. She was Chief
+Financial Officer of Signal Genetics, Inc., a publicly traded molecular diagnostics company, from 2014 to 2017. She served as Chief Financial Officer of
+HemaQuest Pharmaceuticals, Inc., a venture-backed clinical-stage drug development company, from 2010 to 2014. From 2001 to 2009, she served as
+Chief Financial Officer of Favrille, Inc., a publicly traded clinical-stage drug development company. Ms. Seymour has also served as consulting chief
+financial officer for a number of biotechnology companies, served Director of Finance and Controller of Agouron Pharmaceuticals, Inc. (now Pfizer, Inc.)
+and spent eight years in public accounting with Deloitte & Touche LLP and PricewaterhouseCoopers LLP, including three years as audit manager. Ms.
+Seymour is a Certified Public Accountant (inactive). She received an MBA, emphasis in Finance, from Georgia State University, and a bachelor’s degree
+in Business Administration, emphasis in Accounting, from Valdosta State University. Ms. Seymour also participated in an executive management
+program at Kellogg Graduate School of Management at Northwestern University.
+-16-
+Table of Contents
+Vote Required
+The election of each director requires the affirmative vote of a majority of the shares present in person live via the internet or by proxy and
+entitled to vote at a meeting at which a quorum is present. Abstentions are deemed to be votes cast and have the same effect as a vote “AGAINST” the
+proposal. Abstentions and broker non-votes will be counted as present for purposes of determining the presence of a quorum. The proxy holders may not
+vote the proxies for a greater number of persons than the number of nominees named. If any nominee should be unavailable for election as a result of an
+unexpected occurrence, shares will be voted for the election of such substitute nominee as the Board may propose. Each person nominated for election has
+agreed to serve if elected, and the Board has no reason to believe that any nominee will be unable to serve.
+THE BOARD UNANIMOUSLY RECOMMENDS A VOTE “FOR” THE ELECTION AS A DIRECTOR OF EACH OF THE EIGHT (8)
+NOMINEES LISTED ABOVE.
+-17-
+Table of Contents
+PROPOSAL 2
+RATIFICATION OF INDEPENDENT REGISTERED PUBLIC ACCOUNTING FIRM
+We are asking you to ratify the appointment of MaloneBailey, LLP (“MaloneBailey”), as our independent registered public accounting firm for
+the year ending August 31, 2021 and for the stub period between September 1, 2021 and December 31, 2021. Representatives of MaloneBailey are
+expected to be present live via the internet at the Annual Meeting, will have an opportunity to make a statement should they desire to do so and will be
+available to respond to appropriate questions.
+Although our bylaws do not require that our stockholders approve the appointment of our independent registered public accounting firm, the
+Board is submitting the selection of MaloneBailey to our stockholders for ratification as a matter of good corporate practice. If our stockholders vote
+against the ratification of MaloneBailey, the Audit Committee will reconsider whether to continue to retain the firm. Even if our stockholders ratify the
+appointment of MaloneBailey, the Audit Committee may choose to appoint a different independent registered public accounting firm at any time during
+the year if the Audit Committee determines that such a change would be in the best interests of our company and our stockholders.
+Independent Registered Public Accounting Firm Fees and Services
+The following table presents fees for professional audit and other services rendered by MaloneBailey for the audit of our annual consolidated
+financial statements as of and for the years ended August 31, 2020 and 2019, respectively, and fees billed for other services rendered by MaloneBailey
+during those respective periods.
+2020 2019
+Audit Fees (1) $ 54,000 $ 44,000
+Audit Related Fees (2) 29,102 16,325
+Tax Fees (3) 87,102 4,450
+All Other Fees (4) - -
+Total $ 87,102 $ 64,775
+Our audit committee pre-approves all services provided by our independent auditors. All of the above services and fees were reviewed and
+approved by the audit committee either before or after the respective services were rendered.
+Our Board has considered the nature and amount of fees billed by our independent auditors and believes that the provision of services for
+activities unrelated to the audit is compatible with maintaining our independent auditors’ independence.
+Vote Required
+Ratification of MaloneBailey as our independent registered public accounting firm for the year ending August 31, 2021 and for the stub period
+between September 1, 2021 and December 31, 2021, requires the affirmative vote of a majority of the shares present in person or by proxy and entitled to
+vote at a meeting at which a quorum is present. Abstentions are deemed to be votes cast and have the same effect as a vote “AGAINST” the proposal.
+This proposal is considered a routine or “discretionary” matter on which your broker, bank or other agent will be able to vote on your behalf even if it
+does not receive instructions from you; therefore, no broker non-votes are expected to exist in connection with this proposal.
+THE BOARD RECOMMENDS A VOTE “FOR” RATIFICATION OF MALONEBAILEY, LLP
+AS OUR INDEPENDENT REGISTERED PUBLIC ACCOUNTING FIRM
+-18-
+Table of Contents
+REPORT OF THE AUDIT
+The audit committee is a committee of the board of
+standards and rules and regulations of the SEC. The audit
+available on our corporate web site at www.artelobio.com. The
+of the audit committee, as reflected in its charter, are intended
+committee reviews and assesses the adequacy of its charter and
+With respect to Artelo Biosciences’ financial reporting
+and (2) preparing Artelo’s consolidated financial statements.
+(“MaloneBailey”), is responsible for performing an independent
+standards of the Public Company Accounting Oversight Board
+committee to oversee these activities. It is not the responsibility
+responsibilities of management. In the performance of its oversight
+· reviewed and discussed the audited financial statements
+· discussed with MaloneBailey, Artelo’s independent
+requirements of Auditing Standard No. 1301,
+· received the written disclosures and the letters
+independent registered public accounting firm’s
+MaloneBailey, that firm’s independence.
+The audit committee has also appointed MaloneBailey
+August 31, 2021 and for the stub period between September
+December 31, 2021.
+This report of the audit committee shall not be deemed
+promulgated by the SEC or Section 18 of the Exchange Act,
+Artelo Biosciences under the Securities Act of 1933, as amended,
+specifically requests that the information be treated as “soliciting
+COMMITTEE OF THE BOARD OF DIRECTORS
+directors comprised solely of independent directors as required by the Nasdaq listing
+committee operates under a written charter approved by our board of directors, which is
+composition of the audit committee, the attributes of its members and the responsibilities
+to be in accordance with applicable requirements for corporate audit committees. The audit
+the audit committee’s performance on an annual basis.
+process, management is responsible for (1) establishing and maintaining internal controls
+Artelo’s independent registered public accounting firm, MaloneBailey, LLP
+audit of Artelo’s consolidated financial statements in accordance with the auditing
+(United States), or PCAOB, and to issue a report thereon. It is the responsibility of the audit
+of the audit committee to prepare Artelo’s financial statements. These are the fundamental
+function, the audit committee has:
+for fiscal year 2020 with management;
+registered public accounting firms, the matters required to be discussed by the applicable
+Communications with Audit Committees, as adopted by the PCAOB;
+from MaloneBailey, as required by applicable requirements of the PCAOB regarding the
+communications with the audit committee concerning independence, and has discussed with
+as the company’s independent registered public accounting firm for the year ending
+1, 2021 and December 31, 2021 and for the stub period between September 1, 2021 and
+The Audit Committee
+John W. Beck (Chair)
+Connie Matsui
+Steven Kelly
+to be “soliciting material” or to be “filed” with the SEC or subject to Regulation 14A
+and shall not be deemed incorporated by reference into any prior or subsequent filing by
+or the Securities Act, or the Exchange Act, except to the extent Artelo Biosciences
+material” or specifically incorporates it by reference.
+-19-
+Table of Contents
+CERTAIN RELATIONSHIPS AND RELATED TRANSACTIONS
+Except as disclosed herein, no director, executive officer, shareholder holding at least 5% of shares of our common stock, or any family member
+thereof, had any material interest, direct or indirect, in any transaction, or proposed transaction since the year ended August 31, 2020, in which the amount
+involved in the transaction exceeded or exceeds the lesser of $120,000 or one percent of the average of our total assets at the year-end for the last three
+completed fiscal years:
+The Company has an employment contract with a key employee, Gregory Gorgas, who is an officer of the Company. During the years ended
+August 31, 2020, 2019 and 2018, $446,044, $209,369 and $74,840 were paid as salary to Mr. Gorgas, respectively. See the section titled “ Executive
+Compensation.”
+During the year ended August 31, 2019, Blackrock Ventures, Ltd., an entity owned by the Senior Vice President, European Operations, who is a
+major stockholder of the Company, provided $38,000 worth of consulting services to the Company. On March 15, 2019, the Board approved the issuance
+of 25,000 shares of our common stock valued at $240,000 in exchange for its prior services to the Company.
+Director Independence
+Our Board has undertaken a review of the independence of the directors and considered whether any director has a material relationship with us
+that could compromise his or her ability to exercise independent judgment in carrying out his or her responsibilities. As a result of this review, our Board
+has determined that Ms. Matsui, Dr. Blayney, Mr. Kelly, Dr. Emanuele, Mr. Beck, Dr. Reyes, and Ms. Seymour representing six of our eight directors, are
+“independent directors” as defined under the rules of the Nasdaq Capital Market. Mr. Gorgas is not considered independent due to his service as an
+executive officer of the Company.
+-20-
+Table of Contents
+Indemnification of Directors and Officers
+The Company’s Articles of Incorporation and Bylaws provide that, to the fullest extent permitted by the laws of the State of Nevada, any officer
+or director of the Company, who was or is a party or is threatened to be made a party to any threatened, pending or completed action, suit or proceeding,
+whether civil, criminal, administrative or investigative, by reason of the fact that he/she is or was or has agreed to serve at the request of the Corporation
+as a director, officer, employee or agent of the Corporation, or while serving as a director or officer of the Corporation, is or was serving or has agreed to
+serve at the request of the Corporation as a director, officer, employee or agent (which, for purposes hereof, shall include a trustee, partner or manager or
+similar capacity) of another corporation, partnership, joint venture, trust, employee benefit plan or other enterprise, or by reason of any action alleged to
+have been taken or omitted in such capacity. For the avoidance of doubt, the foregoing indemnification obligation includes, without limitation, claims for
+monetary damages against Indemnitee to the fullest extent permitted under Section 78.7502 of the Nevada Revised Statutes as in existence on the date
+hereof.
+The indemnification provided shall be from and against expenses (including attorneys’ fees), judgments, fines and amounts paid in settlement
+actually and reasonably incurred by Indemnitee or on Indemnitee’s behalf in connection with such action, suit or proceeding and any appeal therefrom,
+but shall only be provided if Indemnitee acted in good faith and in a manner Indemnitee reasonably believed to be in or not opposed to the best interests of
+the Corporation, and, with respect to any criminal action, suit or proceeding, had no reasonable cause to believe Indemnitee’s conduct was unlawful.
+In the case of any threatened, pending or completed action or suit by or in the right of the Corporation to procure a judgment in its favor by reason
+of the fact that he/she is or was a director, officer, employee or agent of the Corporation, or while serving as a director or officer of the Corporation, is or
+was serving or has agreed to serve at the request of the Corporation as a director, officer, employee or agent of another corporation, partnership, joint
+venture, trust, employee benefit plan or other enterprise, no indemnification shall be made in respect of any claim, issue or matter as to which Indemnitee
+shall have been adjudged to be liable to the Corporation unless, and only to the extent that, the Nevada courts or the court in which such action or suit was
+brought shall determine upon application that, despite the adjudication of liability but in view of all the circumstances of the case, Indemnitee is fairly and
+reasonably entitled to indemnity for such expenses which the Nevada courts or such other court shall deem proper.
+The termination of any action, suit or proceeding by judgment, order, settlement, conviction, or upon a plea of nolo contendere or its equivalent,
+shall not, of itself, create a presumption that he/she did not act in good faith and in a manner which Indemnitee reasonably believed to be in or not opposed
+to the best interests of the Corporation, and, with respect to any criminal action or proceeding, had reasonable cause to believe that Indemnitee’s conduct
+was unlawful.
+To the extent that indemnification for liabilities arising under the Securities Act may be permitted to directors, officers or persons controlling our
+company pursuant to the foregoing provisions, we have been informed that, in the opinion of the SEC, such indemnification is against public policy as
+expressed in the Securities Act and is therefore unenforceable. If a claim for indemnification against such liabilities (other than the payment by us of
+expenses incurred or paid by a director, officer or controlling person of our company in the successful defense of any action, suit or proceeding) is
+asserted by any of our directors, officers or controlling persons in connection with the securities being registered, we will, unless in the opinion of our
+counsel the matter has been settled by controlling precedent, submit to a court of appropriate jurisdiction the question whether such indemnification by us
+is against public policy as expressed in the Securities Act and will be governed by the final adjudication of that issue.
+-21-
+Table of Contents
+EQUITY COMPENSATION PLAN
+The following table summarizes the number of outstanding options and rights granted
+number of shares of common stock remaining available for future issuance, under our equity
+Plan Category
+Equity compensation plans approved by security holders(1)
+Equity compensation plans not approved by security holders
+Total
+____________
+(1) Consists of the 2018 Equity Incentive Plan.
+-22-
+INFORMATION
+to our employees, consultants and directors, as well as the
+compensation plans as of August 31, 2020:
+Number of
+securities
+remaining
+available for
+future
+issuance
+under equity
+Number of compensation
+securities to Weighted- plans
+be issued average (excluding
+upon exercise exercise price securities
+of outstanding of outstanding reflected in
+options and options and column (a))
+rights (a) rights (b) (c)
+281,834 $ 3.57 518,166
+— — —
+281,834 $ 3.57 518,166
+Table of Contents
+We know of no other matters to be submitted at the
+the intention of the individuals we have designated as proxies
+For further information about Artelo Biosciences, Inc.,
+with the SEC on November 4, 2020. Our Annual Report on
+or on our website at www.artelobio.com under “Investor – SEC
+Inc., Attn: Investor Relations, 888 Prospect Street, Suite 210,
+Dated: May 7, 2021
+OTHER MATTERS
+Annual Meeting. If any other matters are properly brought before the Annual Meeting, it is
+to vote the shares that they represent on such matters in accordance with their judgment.
+please refer to our Annual Report on Form 10-K for the year ended August 31, 2020, filed
+Form 10-K is publicly available www.proxyvote.com, on the SEC’s website at www.sec.gov
+Filings.” You may also obtain a copy by sending a written request to Artelo Biosciences,
+La Jolla, CA 92037.
+By order of the Board of Directors,
+By: /s/ Gregory D. Gorgas
+Gregory D. Gorgas
+President and Chief Executive Officer
+-23-

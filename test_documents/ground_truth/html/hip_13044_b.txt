@@ -1,0 +1,345 @@
+Toggle the table of contents
+
+HIP 13044
+
+15 languages
+
+- العربية
+- Bosanski
+- Deutsch
+- Español
+- فارسی
+- Français
+- Italiano
+- Latviešu
+- 日本語
+- Polski
+- Русский
+- Svenska
+- ไทย
+- Українська
+- 中文
+
+Edit links
+
+- Article
+- Talk
+
+English
+
+- Read
+- Edit
+- View history
+
+Tools
+
+Tools
+
+move to sidebar
+
+hide
+
+Actions
+
+- Read
+- Edit
+- View history
+
+General
+
+- What links here
+- Related changes
+- Upload file
+- Permanent link
+- Page information
+- Cite this page
+- Get shortened URL
+- Download QR code
+
+Print/export
+
+- Download as PDF
+- Printable version
+
+In other projects
+
+- Wikidata item
+
+Appearance
+
+move to sidebar
+
+hide
+
+Coordinates: [Sky map] 2^(h) 47^(m) 37.4431^(s), −36° 6′ 27.0322″
+
+[This is a good article. Click here for more information.]
+
+From Wikipedia, the free encyclopedia
+
+(Redirected from HIP 13044 b)
+
+Star in the constellation Fornax
+
++:-----------------------------------:+:-----------------------------------:+
+| Observation data                                                          |
+| Epoch J2000.0^([1])      Equinox J2000.0^([1])                            |
++-------------------------------------+-------------------------------------+
+| Constellation                       | Fornax^([2])                        |
++-------------------------------------+-------------------------------------+
+| Right ascension                     | 02^(h) 47^(m) 37.44310^(s)^([1])    |
++-------------------------------------+-------------------------------------+
+| Declination                         | −36° 06′ 27.0322″^([1])             |
++-------------------------------------+-------------------------------------+
+| Apparent magnitude (V)              | +9.94^([2])                         |
++-------------------------------------+-------------------------------------+
+| Characteristics                                                           |
++-------------------------------------+-------------------------------------+
+| Evolutionary stage                  | horizontal branch^([3])             |
++-------------------------------------+-------------------------------------+
+| Spectral type                       | F2^([2])                            |
++-------------------------------------+-------------------------------------+
+| B−V color index                     | +0.466±0.026^([2])                  |
++-------------------------------------+-------------------------------------+
+| Astrometry                                                                |
++---------------------------------------------------------------------------+
+|                                                                           |
++-------------------------------------+-------------------------------------+
+| Radial velocity (R_(v))             | 300^([3]) km/s                      |
++-------------------------------------+-------------------------------------+
+| Proper motion (μ)                   | RA: +3.083^([1]) mas/yr             |
+|                                     | Dec.: −12.573^([1]) mas/yr          |
++-------------------------------------+-------------------------------------+
+| Parallax (π)                        | 1.3705±0.0499 mas^([1])             |
++-------------------------------------+-------------------------------------+
+| Distance                            | 2,380 ± 90 ly                       |
+|                                     | (730 ± 30 pc)                       |
++-------------------------------------+-------------------------------------+
+| Absolute magnitude (M_(V))          | +0.62^([4])                         |
++-------------------------------------+-------------------------------------+
+|                                                                           |
++---------------------------------------------------------------------------+
+| Details^([3])                                                             |
++---------------------------------------------------------------------------+
+|                                                                           |
++-------------------------------------+-------------------------------------+
+| Mass                                | 0.8±0.1 M_(☉)                       |
++-------------------------------------+-------------------------------------+
+| Radius                              | 6.7±0.3 R_(☉)                       |
++-------------------------------------+-------------------------------------+
+| Temperature                         | 6,025±63 K                          |
++-------------------------------------+-------------------------------------+
+| Metallicity [Fe/H]                  | −2.09±0.26 dex                      |
++-------------------------------------+-------------------------------------+
+| Rotation                            | 5.53±0.73 d                         |
++-------------------------------------+-------------------------------------+
+|                                                                           |
++---------------------------------------------------------------------------+
+| Other designations                                                        |
++---------------------------------------------------------------------------+
+| CD−36°1052, HIP 13044, SAO 193917, PPM 278353^([5])                       |
++---------------------------------------------------------------------------+
+| Database references                                                       |
++-------------------------------------+-------------------------------------+
+| SIMBAD                              | data                                |
++-------------------------------------+-------------------------------------+
+
+: HIP 13044 {.infobox style="width: 22em; font-size: 88%; line-height: 1.5em"}
+
+HIP 13044 is a red horizontal-branch star about 2,300 light years (700 pc) from Earth in the constellation Fornax.^([3][6]) The star is part of the Helmi stream, a former dwarf galaxy that merged with the Milky Way between six and nine billion years ago.^([7]) As a result, HIP 13044 circles the Galactic Center at a highly irregular orbit with respect to the galactic plane. HIP 13044 is slightly less massive than the Sun, but is approximately seven times its size. The star, which is estimated to be at least nine billion years old, has passed the red-giant phase. The relatively fast rotation of the star may be due to having engulfed one or more planets during the red-giant phase.^([7])
+
+Observational history
+
+[edit]
+
+A science team from the Max Planck Institute for Astronomy first observed HIP 13044 using Fiber-fed Extended Range Optical Spectrograph (FEROS) at the European Southern Observatory's La Silla Observatory in Chile. The first follow-up led to the collection of 36 radial velocity measurements taken between September 2009 and July 2010.^([7])
+
+The team also used photometric data that had been passively collected by and publicly released into the archive of the SuperWASP collaboration, which had been observing the region where the star was located. In this data, HIP 13044 was found to oscillate; the signal was blocked roughly every sixteen days. Analysis of the SuperWASP and FEROS data led to the supposed discovery of the planet HIP 13044 b,^([7]) although this claim was later refuted.
+
+Characteristics
+
+[edit]
+
+HIP 13044 is an F-type star located approximately 701 parsecs (2,286 light years) from Earth in the Helmi stream^([7])—a group of low-metallicity stars moving with large velocities relative to the Sun. The star follows an eccentric galactic orbit, with a distance from the galactic center ranging from 7 to 16 kiloparsecs.^([8]) The orbit does not lie in the galactic plane, and can reach distances as high as 13 kpc above it. This indicates that it once was part of a satellite galaxy of the Milky Way that was disrupted 6–9 billion years ago.^([3]) The star itself is estimated to be at least nine billion years old.^([8])
+
+HIP 13044 is fairly evolved star fusing helium in its core, and has therefore already passed the red-giant phase of its evolution.^([3]) It lies near the blue end of the red horizontal branch bordering the instability strip.^([3]) Its surface temperature is about 6025 K and its radius is approximately 6.7 solar radii. HIP 13044's mass is estimated to be 0.8 solar masses.^([8]) Having a rotation period of 5–6 days, HIP 13044 is a fast-rotating star for its type. It is possible that this is because it has swallowed planets during its red-giant phase.^([6])
+
+HIP 13044 has an apparent magnitude of 9.94 and cannot be seen with the unaided eye.^([8])
+
+Claims of a planetary system
+
+[edit]
+
+In 2010, it was announced that a giant planet in a 16.2-day orbit had been discovered by the radial velocity measurements. This would have had implications for planet formation in metal-poor systems and survival of planets being engulfed by expanded giant stars.^([7]) Subsequent analysis of the data revealed problems with the detection: for example an erroneous barycentric correction had been applied (the same error had also led to claims of planets around HIP 11952 that were subsequently refuted). After applying the corrections, there is no evidence for a planet orbiting the star.^([9])
+
+References
+
+[edit]
+
+1.  ^ ^(a) ^(b) ^(c) ^(d) ^(e) ^(f) Brown, A. G. A.; et al. (Gaia collaboration) (August 2018). "Gaia Data Release 2: Summary of the contents and survey properties". Astronomy & Astrophysics. 616. A1. arXiv:1804.09365. Bibcode:2018A&A...616A...1G. doi:10.1051/0004-6361/201833051. Gaia DR2 record for this source at VizieR.
+2.  ^ ^(a) ^(b) ^(c) ^(d) Anderson, E.; Francis, Ch. (2012). "XHIP: An extended hipparcos compilation". Astronomy Letters. 38 (5): 331. arXiv:1108.4971. Bibcode:2012AstL...38..331A. doi:10.1134/S1063773712050015. S2CID 119257644.
+3.  ^ ^(a) ^(b) ^(c) ^(d) ^(e) ^(f) ^(g) Setiawan, Johny; et al. (2010). "A Giant Planet Around a Metal-poor Star of Extragalactic Origin". Science. 330 (6011): 1642–1644. arXiv:1011.6376. Bibcode:2010Sci...330.1642S. doi:10.1126/science.1193342. PMID 21097905. S2CID 657925.
+4.  ^ Carney, Bruce W.; Latham, David W.; Stefanik, Robert P.; Laird, John B. (2008). "Line Broadening in Field Metal-Poor Red Giant and Red Horizontal Branch Stars". The Astronomical Journal. 135 (1): 196. arXiv:0710.0392. Bibcode:2008AJ....135..196C. doi:10.1088/0004-6256/135/1/196.
+5.  ^ "HIP 13044". SIMBAD. Centre de données astronomiques de Strasbourg. Retrieved 2010-11-19.
+6.  ^ ^(a) ^(b) Than, Ker (2010-11-18). "New Planet Discovered: First Spotted Outside Our Galaxy". NationalGeographic.com. National Geographic Society. Archived from the original on November 20, 2010. Retrieved 2010-11-19.
+7.  ^ ^(a) ^(b) ^(c) ^(d) ^(e) ^(f) Klement, R.; Setiawan, J.; Thomas Henning; Hans-Walter Rix; Boyke Rochau; Jens Rodmann; Tim Schulze-Hartung; MPIA Heidelberg; ESTEC (2011). "The visitor from an ancient galaxy: A planetary companion around an old, metal-poor red horizontal branch star". The Astrophysics of Planetary Systems: Formation, Structure, and Dynamical Evolution. IAU Symposium. Vol. 276. Proceedings of the International Astronomical Union. pp. 121–125. arXiv:1011.4938. Bibcode:2011IAUS..276..121K. doi:10.1017/S1743921311020059.
+8.  ^ ^(a) ^(b) ^(c) ^(d) "Notes for Planet HIP 13044 b". Extrasolar Planets Encyclopaedia. Retrieved 2010-11-22.
+9.  ^ Jones, M. I.; Jenkins, J. S. (2014). "No evidence of the planet orbiting the extremely metal-poor extragalactic star HIP 13044". Astronomy & Astrophysics. 562: id.A129. arXiv:1401.0517. Bibcode:2014A&A...562A.129J. doi:10.1051/0004-6361/201322132. S2CID 55365608.
+
++:-------------------------------------:+:-------------------------------------------------------------------------:+
+| - v                                                                                                               |
+| - t                                                                                                               |
+| - e                                                                                                               |
+|                                                                                                                   |
+| Constellation of Fornax                                                                                           |
++-------------------------------------------------------------------------------------------------------------------+
+| - List of stars in Fornax                                                                                         |
+| - Fornax in Chinese astronomy                                                                                     |
+| - Chandra Deep Field South                                                                                        |
+| - Hubble Legacy Field                                                                                             |
++---------------------------------------+---------------------------------------------------------------------------+
+| Stars                                 | +-----------------------------------+-----------------------------------+ |
+|                                       | | Bayer                             | - α (Dalim)                       | |
+|                                       | |                                   | - β                               | |
+|                                       | |                                   | - γ¹                              | |
+|                                       | |                                   | - γ²                              | |
+|                                       | |                                   | - δ                               | |
+|                                       | |                                   | - ε                               | |
+|                                       | |                                   | - ζ                               | |
+|                                       | |                                   | - η¹                              | |
+|                                       | |                                   | - η²                              | |
+|                                       | |                                   | - η³                              | |
+|                                       | |                                   | - ι¹                              | |
+|                                       | |                                   | - ι²                              | |
+|                                       | |                                   | - κ                               | |
+|                                       | |                                   | - λ¹                              | |
+|                                       | |                                   | - λ²                              | |
+|                                       | |                                   | - μ                               | |
+|                                       | |                                   | - ν                               | |
+|                                       | |                                   | - π                               | |
+|                                       | |                                   | - ρ                               | |
+|                                       | |                                   | - σ                               | |
+|                                       | |                                   | - τ                               | |
+|                                       | |                                   | - υ                               | |
+|                                       | |                                   | - φ                               | |
+|                                       | |                                   | - χ¹                              | |
+|                                       | |                                   | - χ²                              | |
+|                                       | |                                   | - χ³                              | |
+|                                       | |                                   | - ψ                               | |
+|                                       | |                                   | - ω                               | |
+|                                       | +-----------------------------------+-----------------------------------+ |
+|                                       | | Variable                          | - R                               | |
+|                                       | |                                   | - TZ                              | |
+|                                       | |                                   | - UZ                              | |
+|                                       | +-----------------------------------+-----------------------------------+ |
+|                                       | | HR                                | - 683                             | |
+|                                       | |                                   | - 858                             | |
+|                                       | +-----------------------------------+-----------------------------------+ |
+|                                       | | HD                                | - 15337                           | |
+|                                       | |                                   | - 20781                           | |
+|                                       | |                                   | - 20782                           | |
+|                                       | |                                   | - 20868 (Intan)                   | |
+|                                       | +-----------------------------------+-----------------------------------+ |
+|                                       | | Other                             | - 2MASS J02431371−2453298         | |
+|                                       | |                                   | - HIP 13044                       | |
+|                                       | |                                   | - LP 944-20                       | |
+|                                       | |                                   | - UDF 2457                        | |
+|                                       | |                                   | - WASP-72 (Diya)                  | |
+|                                       | +-----------------------------------+-----------------------------------+ |
++---------------------------------------+---------------------------------------------------------------------------+
+| +-----------------------------------+-----------------------------------+                                         |
+| | Exoplanets                        | - HD 16417 b                      |                                         |
+| |                                   | - HD 20781 b                      |                                         |
+| |                                   | - c                               |                                         |
+| |                                   | - d                               |                                         |
+| |                                   | - e                               |                                         |
+| |                                   | - HD 20782 b                      |                                         |
+| |                                   | - HD 20868 b (Baiduri)            |                                         |
+| |                                   | - TOI-849 b                       |                                         |
+| +-----------------------------------+-----------------------------------+                                         |
++-------------------------------------------------------------------------------------------------------------------+
+| +-----------------------------------+-----------------------------------+                                         |
+| | Star clusters                     | - NGC 1049                        |                                         |
+| +-----------------------------------+-----------------------------------+                                         |
++-------------------------------------------------------------------------------------------------------------------+
+| +-----------------------------------+-----------------------------------+                                         |
+| | Nebulae                           | - NGC 1360                        |                                         |
+| +-----------------------------------+-----------------------------------+                                         |
++---------------------------------------+---------------------------------------------------------------------------+
+| Galaxies                              | +-----------------------------------+-----------------------------------+ |
+|                                       | | NGC                               | - 823                             | |
+|                                       | |                                   | - 824                             | |
+|                                       | |                                   | - 922                             | |
+|                                       | |                                   | - 986                             | |
+|                                       | |                                   | - 1097                            | |
+|                                       | |                                   | - 1210                            | |
+|                                       | |                                   | - 1255                            | |
+|                                       | |                                   | - 1288                            | |
+|                                       | |                                   | - 1310                            | |
+|                                       | |                                   | - 1316                            | |
+|                                       | |                                   | - 1317                            | |
+|                                       | |                                   | - 1318                            | |
+|                                       | |                                   | - 1326                            | |
+|                                       | |                                   | - 1350                            | |
+|                                       | |                                   | - 1365                            | |
+|                                       | |                                   | - 1367                            | |
+|                                       | |                                   | - 1374                            | |
+|                                       | |                                   | - 1375                            | |
+|                                       | |                                   | - 1379                            | |
+|                                       | |                                   | - 1380                            | |
+|                                       | |                                   | - 1381                            | |
+|                                       | |                                   | - 1385                            | |
+|                                       | |                                   | - 1387                            | |
+|                                       | |                                   | - 1398                            | |
+|                                       | |                                   | - 1399                            | |
+|                                       | |                                   | - 1406                            | |
+|                                       | |                                   | - 1425                            | |
+|                                       | |                                   | - 1427                            | |
+|                                       | +-----------------------------------+-----------------------------------+ |
+|                                       | | Other                             | - Fornax Dwarf                    | |
+|                                       | |                                   | - HUDF-JD2                        | |
+|                                       | |                                   | - GS-NDG-9422                     | |
+|                                       | |                                   | - IC 335                          | |
+|                                       | |                                   | - IC 1816                         | |
+|                                       | |                                   | - IC 1993                         | |
+|                                       | |                                   | - JADES-GS-z14-0                  | |
+|                                       | |                                   | - JADES-GS-z7-01-QU               | |
+|                                       | |                                   | - MRC 0316-257                    | |
+|                                       | |                                   | - PGC 13809                       | |
+|                                       | |                                   | - QSO J0305-3150                  | |
+|                                       | |                                   | - UDF 423                         | |
+|                                       | |                                   | - UDFj-39546284                   | |
+|                                       | |                                   | - UDFy-38135539                   | |
+|                                       | +-----------------------------------+-----------------------------------+ |
++---------------------------------------+---------------------------------------------------------------------------+
+| +-----------------------------------+-----------------------------------+                                         |
+| | Galaxy clusters                   | - Fornax Cluster                  |                                         |
+| +-----------------------------------+-----------------------------------+                                         |
++-------------------------------------------------------------------------------------------------------------------+
+| +-----------------------------------+-----------------------------------+                                         |
+| | Astronomical events               | - SN 1992bd                       |                                         |
+| |                                   | - SN 1999eu                       |                                         |
+| |                                   | - SN 2003B                        |                                         |
+| +-----------------------------------+-----------------------------------+                                         |
++-------------------------------------------------------------------------------------------------------------------+
+| [] Category                                                                                                       |
++-------------------------------------------------------------------------------------------------------------------+
+
+[]
+
+Retrieved from "https://en.wikipedia.org/w/index.php?title=HIP_13044&oldid=1287367829#Claims_of_a_planetary_system"
+
+Categories:
+
+- F-type giants
+- Horizontal-branch stars
+- Disproven exoplanets
+- Fornax
+- Durchmusterung objects
+- Hipparcos objects
+
+Hidden categories:
+
+- Articles with short description
+- Short description is different from Wikidata
+- Good articles

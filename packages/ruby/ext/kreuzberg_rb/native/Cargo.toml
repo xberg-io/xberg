@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-rb"
-version = "4.9.7"
+version = "4.9.8"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]
@@ -49,13 +49,13 @@ kreuzberg-ffi = { path = "../../../vendor/kreuzberg-ffi" }
 magnus = { git = "https://github.com/matsadler/magnus", rev = "f6db11769efb517427bf7f121f9c32e18b059b38", features = [
     "rb-sys",
 ] }
-rb-sys = { version = "0.9.126", default-features = false, features = [
+rb-sys = { version = "0.9.128", default-features = false, features = [
     "stable-api-compiled-fallback",
 ] }
 serde_json = "1.0.149"
 toml = "1.1.2"
 serde_yaml_ng = "0.10"
-tokio = { version = "1.52.1", features = [
+tokio = { version = "1.52.3", features = [
     "rt",
     "rt-multi-thread",
     "macros",
@@ -65,7 +65,7 @@ tokio = { version = "1.52.1", features = [
     "time",
     "io-util",
 ] }
-html-to-markdown-rs = { version = "3.3.1", default-features = false }
+html-to-markdown-rs = { version = "3.4.1", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "1.4"

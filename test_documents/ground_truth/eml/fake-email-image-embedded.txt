@@ -1,0 +1,12 @@
+Subject: fake-email-image-embedded
+From: "Mallori Harrell" <mallori@unstructured.io>
+To: "Mallori Harrell" <mallori@unstructured.io>
+Date: Mon, 9 Jan 2023 15:00:43 -0600
+This is a test email to use for unit tests.
+
+Important points:
+
+hello[image: unstructured_logo.png] this is our logo.
+
+   - Roses are red
+   - Violets are blue

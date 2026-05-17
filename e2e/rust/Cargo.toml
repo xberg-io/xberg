@@ -3,7 +3,7 @@
 
 [package]
 name = "e2e-rust"
-version = "4.9.7"
+version = "4.9.8"
 edition = "2024"
 publish = false
 license = "Elastic-2.0"

@@ -1,0 +1,279 @@
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:1 of 13
+Provide the Hospital Owner and Year of Report per Section 130061(e)
+Facility Number: 12460
+St. Mary's Medical Center San Francisco
+Facility Name:
+Address: 450 Stanyan Street
+City: San Francisco
+Hospital Owner/Licensee: St. Mary's Medical Center San Francisco
+Year of Reporting: 2012
+Contact 1 e-mail Address:
+Contact 2 e-mail Address:
+Contact 3 e-mail Address::
+Name of Submitter: Robert Omens
+Submission Date: 1/8/2013 9:03:02 AM
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:2 of 13
+For buildings For buildings which are planned for rebuild, retrofit or replacement this report shall identify; Whether the hospital owner intends
+to rebuild, retrofit or replace the building to SPC2, SPC3, SPC4 or SPC5 per 130061(c)(1)(A). The deadline, as described in Section 130060
+or 130061.5,for rebuild, retrofit or replacement of the building that the hospital owner intends to meet, and the applicable extension for which
+the hospital owner has been approved per Section 130061(c)(1)(B)
+Bldg.
+Extension Anticipated Building Final SPC Rating
+Alternate Building Address Building Name No.
+Date Completion Date Resolution If Required
+BLD- McAuley Wing 450 Stanyan Street Retrofit SPC2
+01/01/2015 02/12/2014
+01073
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:3 of 13
+For each building which is planned for rebuild, retrofit or replacement, provide the project numbers, per Section 130061(c)(1)(C). The
+projected construction start date or dates and projected Completion date or dates per Section 130061(c)(1)(D) and the most recent
+project status and approvals per Section 130061(c)(1)(E).
+Building No: BLD-01073 McAuley Wing Retrofit/Replacement Yes-Submitted
+Project:
+Facility Project Sub Scope Date Plan Approved Proj. Start Proj. Completed Status CEQA
+Number Number Num in Date Date Date Review_
+12460 IS110663-0 0 PPR MCAULEY WING SEISMIC UPGRADE 4/11/2011 12/10/2012 02/12/2014 ACTI No
+FROM SPC-1 TO SPC-2 12:00:00
+AM
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012
+Provide the number of
+Building Number:
+Type of Service Provided
+Nursing
+IntensiveCare
+Pediatric/Adol
+escent
+Psychiatric X
+Nursing
+Obstetrical
+Ante/Postprtum
+Intermediate
+Care
+Skilled Nursing
+Report Status: Data Last
+12460 St. Mary's Medical Center San Francisco San Francisco Page:4 of 13
+inpaient beds and patient days per type of service per building per Section 130061(c)(1)(F)
+Building Name: BLD-01073 McAuley Wing
+Obstetrical
+Surgical Inpatient 0 Inpatient 0
+Recovery
+Beds Days
+Newborn/
+Inpatient 0 Inpatient Days 0 Anesthesia
+WellBaby
+Beds
+Emergency Clinical Lab
+Inpatient 0 Inpatient Days 0 X X
+Beds
+Nuclear
+Radiological/
+Medicine
+Imaging
+Inpatient 22 Inpatient Days 2753
+Beds
+X Pharmaceutical
+Rehabilitation
+Inpatient 0 Inpatient Days 0 X Dietetic Therapy
+Beds
+Renal Dialysis X Administration Inpatient 0 Inpatient Days 0
+Beds
+Support Outpatient
+Services Surgery
+Inpatient 0 Inpatient Days 0
+Beds
+Obstetrical
+Cesarean/Deliv Total Beds this 22
+Central Plant X Building
+Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:5 of 13
+Provide the number of Inpatient beds and patient days per type of unit per building per Section 130061(c)(1)(F)
+BLD-01073 McAuley Wing Building Number: Building Name:
+Medical / Surgical (Include GYN) Acute Respiratory Care Acute Psychiatric
+Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 22 Inpatient 2753
+Bed Days Bed Days Bed Days
+Perinatal (excluse Newborn / GYN) Burn Skilled Nursing
+Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0
+Bed Days Bed Days Bed Days
+Pediatric intensive Care Newborn Intermediate Card
+Nursery
+Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0
+Bed Days Bed Days Bed Days
+Intensive Care Rehabilitation Int. Care / development
+Center Disabled
+Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0
+Bed Days Bed Days Bed Days
+Total Beds this Total Beds this Coronary Care Chemical
+Building Per Building Per Dependency
+Unit Service
+Inpatient 0 Inpatient 0 Inpatient 0 Inpatient 0 22 22
+Bed Days Bed Days
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:6 of 13
+For all buildings at the facility, indicate which ones are scheduled for general acute service removal.
+Building Building to be
+Building
+Removed / Replaced / Rebuilt
+Number
+Name
+BLD-01072 Main Tower Remain
+BLD-01073 McAuley Wing Retrofit
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 01/08/2013 09/17/2012 Print Date:
+Page:7 of 13
+AM
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:8 of 13
+Report any general acute care hospital inpatient service that is provided in any genaral acute care hospital building that is rated
+SPC-1 per Section 130061(c)(4)
+Building Number: BLD-01073 Building Name: McAuley Wing
+Type of Service Provided
+Rehabilitation Surgical Obstetrical
+Therapy Cesarean/Deliv
+Nursing
+Anesthesia
+Renal Dialysis
+Obstetrical
+IntensiveCare
+Recovery
+X Clinical Lab
+Pediatric/Adol Outpatient
+escent Surgery Newborn/
+WellBaby Radiological/
+Imaging
+Psychiatric X
+Nursing
+Emergency Pharmaceutical Central Plant X X X
+Obstetrical
+Nuclear Support
+Ante/Postprtum
+Medicine Services Dietetic X
+Intermediate
+Care
+X Administration
+Skilled Nursing
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:9 of 13
+Report the final configuration of all buildings on the hospital campus showing how each building will comply with the SPC-5/NPC-4 or 5
+requirements whether by retrofit or by replacement and the type of service that will be provided in each general actue care hospital building
+per Section 130061(c)(5)
+Building Number: BLD-01072 Building Name: Main Tower
+Configuration: Remove from GAC service by 1/1/2030
+Type of Service Provided
+X Surgical Rehabilitation Obstetrical X
+X Nursing
+Therapy Cesarean/Deliv
+X IntensiveCare Anesthesia X
+Obstetrical X Renal Dialysis
+Recovery
+Pediatric/Adol
+X Clinical Lab
+escent
+Radiological/ X Newborn/ X Outpatient
+X Psychiatric
+Imaging WellBaby Surgery
+Nursing
+Pharmaceutical X
+Obstetrical
+Ante/Postprtum
+X Emergency X Central Plant
+X Dietetic
+Intermediate
+Care X Nuclear Medicine X Support
+Services
+X Administration
+X Skilled Nursing
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:10 of 13
+Report the final configuration of all buildings on the hospital campus showing how each building will comply with the SPC-5/NPC-4 or 5
+requirements whether by retrofit or by replacement and the type of service that will be provided in each general actue care hospital building
+per Section 130061(c)(5)
+Building Number: BLD-01073 Building Name: McAuley Wing
+Configuration: Remove from GAC service by 1/1/2030
+Type of Service Provided
+Surgical Rehabilitation Obstetrical
+Nursing
+Therapy Cesarean/Deliv
+IntensiveCare Anesthesia
+Obstetrical Renal Dialysis
+Recovery
+Pediatric/Adol
+X Clinical Lab
+escent
+Radiological/ Newborn/ Outpatient
+X Psychiatric
+Imaging WellBaby Surgery
+Nursing
+Pharmaceutical X
+Obstetrical
+Ante/Postprtum
+X Emergency X Central Plant
+X Dietetic
+Intermediate
+Care Nuclear Medicine Support
+Services
+X Administration
+Skilled Nursing
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:11 of 13
+Include information on the number of inpatient beds by type of Service provided by buildings that are classified as SPC-2, SPC-3,
+SPC-4, and SPC-5 per Section 130061(e)
+Building Number: Building Name: BLD-01072 Main Tower
+Type of Service Provided
+Surgical X Rehabilitation X Obstetrical X Nursing Inpatient 299
+Therapy Cesarean/Deliv Beds
+X IntensiveCare Inpatient 37 Anesthesia X
+Beds
+Renal Dialysis Obstetrical X
+Clinical Lab Recovery
+X Pediatric/Adol Inpatient 0
+escent Beds
+Radiological/ X
+Newborn/ Outpatient X Psychiatric Inpatient 13
+Imaging
+WellBaby Surgery
+Nursing Beds X
+Pharmaceutical X
+Obstetrical Inpatient 0 Central Plant
+X X Emergency
+Ante/Postprtum Beds
+X
+Dietetic X Nuclear X Support
+Intermediate Inpatient 0 Medicine Services
+Care Beds
+Administration X Skilled Nursing
+X Inpatient 32
+Beds
+Total Beds this 381
+Building
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco Page:12 of 13
+Include information on the number of inpatient beds by type of unit provided by buildings that are classified as SPC-2, SPC-3,
+SPC-4, and SPC-5 per Section 130061(e)
+BLD-01072 Main Tower Building Number: Building Name:
+Medical / Surgical (Include GYN) Acute Respiratory Care Acute Psychiatric
+Inpatient Inpatient Inpatient Inpatient Inpatient Inpatient 263 0 0 0 18790 13
+Bed Days Bed Days Bed Days
+Perinatal (excluse Newborn / GYN) Burn Skilled Nursing
+Inpatient Inpatient 0 Inpatient Inpatient Inpatient Inpatient 0 0 0 7478 32
+Bed Days Bed Days Bed Days
+Pediatric intensive Care Newborn Intermediate Card
+Nursery
+Inpatient Inpatient 0 Inpatient Inpatient Inpatient Inpatient 0 0 0 0 0
+Bed Days Bed Days Bed Days
+Intensive Care Rehabilitation Int. Care / development
+Center Disabled
+Inpatient Inpatient 3377 Inpatient Inpatient Inpatient Inpatient 0 37 0 36 5173
+Bed Days Bed Days Bed Days
+Coronary Care Chemical Total Beds this Total Beds this
+Dependency Building Per Building Per
+Unit Service
+Inpatient Inpatient 0 Inpatient Inpatient 0 0 0 381 381
+Bed Days Bed Days
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 AM 01/08/2013 09/17/2012 Print Date:
+Report Year: 2012 12460 St. Mary's Medical Center San Francisco San Francisco
+Report Status: Data Last Update: Submission Date: 1/9/2013 6:25 01/08/2013 09/17/2012 Print Date:
+Page:13 of 13
+AM

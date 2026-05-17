@@ -108,7 +108,7 @@ pub use types::*;
 pub use util::{kreuzberg_last_error, kreuzberg_last_error_code, kreuzberg_last_panic_context, kreuzberg_version};
 pub use validation::*;
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn setup_onnx_runtime_path() {
     kreuzberg::ort_discovery::ensure_ort_available();
 }

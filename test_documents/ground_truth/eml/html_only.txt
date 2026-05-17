@@ -1,0 +1,28 @@
+Subject: HTML Only Email
+From: html-sender@example.com
+To: html-recipient@example.com
+Date: Fri, 10 May 2024 16:45:00 +0000
+Welcome to Our Service
+
+This email contains only HTML content.
+
+It includes:
+
+
+
+
+- HTML entities: <, >, &, "
+
+
+- Special characters: €, ©, ®
+
+
+- Formatting: italic, bold
+
+
+
+The Rust implementation should clean this HTML and extract meaningful text.
+
+
+
+© 2024 Example Company

@@ -1,0 +1,11 @@
+Name,Department,Salary,Start Date,Active
+Alice Johnson,Engineering,95000,2020-01-15,true
+Bob Smith,Marketing,75000,2019-06-01,true
+Carol White,Sales,82000,2021-03-10,false
+David Brown,Engineering,105000,2018-11-20,true
+Emily Chen,HR,70000,2022-02-28,true
+Frank Davis,Operations,88000,2020-07-15,false
+Grace Lee,Marketing,79000,2021-09-01,true
+Henry Wilson,Engineering,115000,2017-04-12,true
+Isabella Martinez,Sales,91000,2019-12-05,true
+Jack Thompson,HR,68000,2023-01-10,true

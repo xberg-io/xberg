@@ -72,7 +72,7 @@ use std::ffi::{CStr, c_char};
 
 static KNOWN_FORMAT_FIELDS: Lazy<AHashSet<&'static str>> = Lazy::new(|| KNOWN_FORMATS.iter().copied().collect());
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn setup_onnx_runtime_path() {
     kreuzberg::ort_discovery::ensure_ort_available();
 }

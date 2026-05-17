@@ -1,0 +1,38 @@
+Subject: Google Account password changed
+From: no-reply@accounts.google.com
+To: slatest@gmail.com
+Date: Mon, 17 Mar 2014 11:15:04 +0000 (UTC)
+
+Hi Slava,
+
+The password for your Google Account - slava.Gxyzxyz@gmail.com - was
+recently changed.
+If you made this change, you don't need to do anything more.
+
+If you didn't change your password, your account might have been hijacked.
+To get back into your account, you'll need to reset your password by
+clicking this link:
+https://accounts.google.com/RecoverAccount?fpOnly=1&source=ancpse&Email=slava.Gxyzxyz@gmail.com.
+
+To fix an issue or learn more about your account, visit our help center:
+https://support.google.com/accounts/bin/answer.py?answer=1628875.
+
+Sincerely,
+The Google Accounts team
+
+This email can't receive replies. For more information, visit the Google
+Accounts Help Center
+(https://support.google.com/accounts/bin/answer.py?answer=1628875).
+
+If slava.Gxyzxyz@gmail.com isn't your Google Account, click this link to
+disconnect your email address from this account:
+https://accounts.google.com/AccountDisavow?adt=AOX8kxyzxyzxyzxyzxyzxyzxyzzRctqqns7QTuoScTHJ_5eXxky-CD_vhU6z
+
+
+You have received this mandatory email service announcement to update you
+about important changes to your Google product or account.
+
+  (c) 2014 Google Inc., 1600 Amphitheatre Parkway, Mountain View, CA 94043,
+USA
+
+

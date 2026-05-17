@@ -1,0 +1,21 @@
+Lists
+
+Itemize
+
+First item
+Second item
+Third item with nested list:
+  Nested item 1
+  Nested item 2
+Fourth item
+
+Enumerate
+
+First numbered item
+Second numbered item
+Third numbered item
+
+Description
+
+Term 1 Definition of term 1
+Term 2 Definition of term 2

@@ -1,0 +1,9 @@
+Simple document
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Table 1. Selected Numbers
+
+| Name | Celsius | Fahrenheit |
+|---|---|---|
+| Water Freezing Point | 0 | 32 |
+| Water Boiling Point | 100 | 212 |
+| Body Temperature | 37 | 98.6 |

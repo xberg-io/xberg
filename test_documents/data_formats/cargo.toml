@@ -1,0 +1,86 @@
+[workspace]
+members = ["crates/kreuzberg", "crates/ffi", "packages/python", "packages/typescript"]
+resolver = "2"
+
+[workspace.package]
+version = "4.2.10"
+authors = ["Kreuzberg Contributors"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+html5ever = "0.26"
+ammonia = "4.1"
+regex = "1.10"
+encoding_rs = "0.8"
+lazy_static = "1.4"
+
+[package]
+name = "kreuzberg"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "High-performance document extraction and intelligence library"
+documentation = "https://docs.rs/kreuzberg"
+homepage = "https://kreuzberg.dev"
+repository = "https://github.com/kreuzberg/kreuzberg"
+readme = "README.md"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+html5ever = { workspace = true }
+ammonia = { workspace = true }
+regex = { workspace = true }
+encoding_rs = { workspace = true }
+lazy_static = { workspace = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.4"
+
+[features]
+default = ["html5ever", "unicode"]
+full = ["html5ever", "unicode", "pdf-extract"]
+html5ever = []
+unicode = []
+pdf-extract = ["dep:pdfium-render"]
+experimental = []
+
+[[bench]]
+name = "extraction"
+harness = false
+
+[[example]]
+name = "basic_extraction"
+path = "examples/basic_extraction.rs"
+
+[lib]
+name = "kreuzberg"
+path = "src/lib.rs"
+crate-type = ["rlib"]

@@ -54,7 +54,7 @@ pub(crate) fn worker_runtime() -> PhpResult<&'static tokio::runtime::Runtime> {
     WORKER_RUNTIME.as_ref().map_err(|e| PhpException::from(e.clone()))
 }
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn setup_onnx_runtime_path() {
     kreuzberg::ort_discovery::ensure_ort_available();
 }
@@ -63,7 +63,7 @@ fn setup_onnx_runtime_path() {
 ///
 /// # Returns
 ///
-/// Version string in semver format (e.g., "4.9.7")
+/// Version string in semver format (e.g., "4.9.8")
 ///
 /// # Example
 ///

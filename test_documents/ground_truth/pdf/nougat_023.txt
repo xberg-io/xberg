@@ -1,0 +1,281 @@
+Discussion topics, Linux IPsec Workshop
+Discussion topics, Linux IPsec Workshop
+Steﬀen Klassert
+secunet Security Networks AG
+Dresden
+Linux IPsec Workshop, Dresden, March 26, 2018
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Conﬁgurable system policy default (allow/drop)
+Crypto layer problems
+Hardware GRO
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Future of PFKEY in the kernel
+▶
+PFKEY is buggy
+▶ Google syscall fuzzer reports more and more (security related)
+bugs
+▶ No active development since more that 10 years
+▶ Do we still need to support PFKEY, and if yes how long?
+▶ What do we need to do to be able to remove PKKEY from
+the kernel?
+▶ How do we handle the PFKEY bug reports until we can
+remove it?
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Future of PFKEY in the kernel
+▶
+PFKEY is buggy
+▶ Google syscall fuzzer reports more and more (security related)
+bugs
+▶ No active development since more that 10 years
+▶ Do we still need to support PFKEY, and if yes how long?
+▶ What do we need to do to be able to remove PKKEY from
+the kernel?
+▶ How do we handle the PFKEY bug reports until we can
+remove it?
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Future of PFKEY in the kernel
+▶
+PFKEY is buggy
+▶ Google syscall fuzzer reports more and more (security related)
+bugs
+▶ No active development since more that 10 years
+▶ Do we still need to support PFKEY, and if yes how long?
+▶ What do we need to do to be able to remove PKKEY from
+the kernel?
+▶ How do we handle the PFKEY bug reports until we can
+remove it?
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Future of PFKEY in the kernel
+▶
+PFKEY is buggy
+▶ Google syscall fuzzer reports more and more (security related)
+bugs
+▶ No active development since more that 10 years
+▶ Do we still need to support PFKEY, and if yes how long?
+▶ What do we need to do to be able to remove PKKEY from
+the kernel?
+▶ How do we handle the PFKEY bug reports until we can
+remove it?
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Future of PFKEY in the kernel
+▶
+PFKEY is buggy
+▶ Google syscall fuzzer reports more and more (security related)
+bugs
+▶ No active development since more that 10 years
+▶ Do we still need to support PFKEY, and if yes how long?
+▶ What do we need to do to be able to remove PKKEY from
+the kernel?
+▶ How do we handle the PFKEY bug reports until we can
+remove it?
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Future of PFKEY in the kernel
+▶
+PFKEY is buggy
+▶ Google syscall fuzzer reports more and more (security related)
+bugs
+▶ No active development since more that 10 years
+▶ Do we still need to support PFKEY, and if yes how long?
+▶ What do we need to do to be able to remove PKKEY from
+the kernel?
+▶ How do we handle the PFKEY bug reports until we can
+remove it?
+Discussion topics, Linux IPsec Workshop
+Future of PFKEY in the kernel
+Future of PFKEY in the kernel
+▶
+PFKEY is buggy
+▶ Google syscall fuzzer reports more and more (security related)
+bugs
+▶ No active development since more that 10 years
+▶ Do we still need to support PFKEY, and if yes how long?
+▶ What do we need to do to be able to remove PKKEY from
+the kernel?
+▶ How do we handle the PFKEY bug reports until we can
+remove it?
+Discussion topics, Linux IPsec Workshop
+Conﬁgurable system policy default (allow/drop)
+Conﬁgurable system policy default (allow/drop)
+▶
+The current default behaviour is to allow traﬃc if there is no
+matching policy
+▶ A patch that make the default conﬁgurable (allow/drop) exists
+▶ Each direction can be conﬁgured sepatately
+(input/output/forward)
+▶ When default is block, we need allow policies for all packet
+ﬂows we accept
+▶ Would this be usefull for the userspace?
+Discussion topics, Linux IPsec Workshop
+Conﬁgurable system policy default (allow/drop)
+Conﬁgurable system policy default (allow/drop)
+▶
+The current default behaviour is to allow traﬃc if there is no
+matching policy
+▶ A patch that make the default conﬁgurable (allow/drop) exists
+▶ Each direction can be conﬁgured sepatately
+(input/output/forward)
+▶ When default is block, we need allow policies for all packet
+ﬂows we accept
+▶ Would this be usefull for the userspace?
+Discussion topics, Linux IPsec Workshop
+Conﬁgurable system policy default (allow/drop)
+Conﬁgurable system policy default (allow/drop)
+▶
+The current default behaviour is to allow traﬃc if there is no
+matching policy
+▶ A patch that make the default conﬁgurable (allow/drop) exists
+▶ Each direction can be conﬁgured sepatately
+(input/output/forward)
+▶ When default is block, we need allow policies for all packet
+ﬂows we accept
+▶ Would this be usefull for the userspace?
+Discussion topics, Linux IPsec Workshop
+Conﬁgurable system policy default (allow/drop)
+Conﬁgurable system policy default (allow/drop)
+▶
+The current default behaviour is to allow traﬃc if there is no
+matching policy
+▶ A patch that make the default conﬁgurable (allow/drop) exists
+▶ Each direction can be conﬁgured sepatately
+(input/output/forward)
+▶ When default is block, we need allow policies for all packet
+ﬂows we accept
+▶ Would this be usefull for the userspace?
+Discussion topics, Linux IPsec Workshop
+Conﬁgurable system policy default (allow/drop)
+Conﬁgurable system policy default (allow/drop)
+▶
+The current default behaviour is to allow traﬃc if there is no
+matching policy
+▶ A patch that make the default conﬁgurable (allow/drop) exists
+▶ Each direction can be conﬁgured sepatately
+(input/output/forward)
+▶ When default is block, we need allow policies for all packet
+ﬂows we accept
+▶ Would this be usefull for the userspace?
+Discussion topics, Linux IPsec Workshop
+Conﬁgurable system policy default (allow/drop)
+Conﬁgurable system policy default (allow/drop)
+▶
+The current default behaviour is to allow traﬃc if there is no
+matching policy
+▶ A patch that make the default conﬁgurable (allow/drop) exists
+▶ Each direction can be conﬁgured sepatately
+(input/output/forward)
+▶ When default is block, we need allow policies for all packet
+ﬂows we accept
+▶ Would this be usefull for the userspace?
+Discussion topics, Linux IPsec Workshop
+Crypto layer problems
+Crypto layer problems
+▶
+There is a lot of memcpy in the crypto layer
+▶ IV generators copy if src and dst buﬀer are diﬀerent
+▶ Some algorithm implementations are not able to do SG
+operations
+▶ Might be worth to do some performance optimizations in the
+crypto layer
+▶ IPsec performance optimizations are ’eaten up’ in the crypto
+layer
+Discussion topics, Linux IPsec Workshop
+Crypto layer problems
+Crypto layer problems
+▶
+There is a lot of memcpy in the crypto layer
+▶ IV generators copy if src and dst buﬀer are diﬀerent
+▶ Some algorithm implementations are not able to do SG
+operations
+▶ Might be worth to do some performance optimizations in the
+crypto layer
+▶ IPsec performance optimizations are ’eaten up’ in the crypto
+layer
+Discussion topics, Linux IPsec Workshop
+Crypto layer problems
+Crypto layer problems
+▶
+There is a lot of memcpy in the crypto layer
+▶ IV generators copy if src and dst buﬀer are diﬀerent
+▶ Some algorithm implementations are not able to do SG
+operations
+▶ Might be worth to do some performance optimizations in the
+crypto layer
+▶ IPsec performance optimizations are ’eaten up’ in the crypto
+layer
+Discussion topics, Linux IPsec Workshop
+Crypto layer problems
+Crypto layer problems
+▶
+There is a lot of memcpy in the crypto layer
+▶ IV generators copy if src and dst buﬀer are diﬀerent
+▶ Some algorithm implementations are not able to do SG
+operations
+▶ Might be worth to do some performance optimizations in the
+crypto layer
+▶ IPsec performance optimizations are ’eaten up’ in the crypto
+layer
+Discussion topics, Linux IPsec Workshop
+Crypto layer problems
+Crypto layer problems
+▶
+There is a lot of memcpy in the crypto layer
+▶ IV generators copy if src and dst buﬀer are diﬀerent
+▶ Some algorithm implementations are not able to do SG
+operations
+▶ Might be worth to do some performance optimizations in the
+crypto layer
+▶ IPsec performance optimizations are ’eaten up’ in the crypto
+layer
+Discussion topics, Linux IPsec Workshop
+Crypto layer problems
+Crypto layer problems
+▶
+There is a lot of memcpy in the crypto layer
+▶ IV generators copy if src and dst buﬀer are diﬀerent
+▶ Some algorithm implementations are not able to do SG
+operations
+▶ Might be worth to do some performance optimizations in the
+crypto layer
+▶ IPsec performance optimizations are ’eaten up’ in the crypto
+layer
+Discussion topics, Linux IPsec Workshop
+Hardware GRO
+Hardware GRO
+▶ Hardware GRO: Routeable version of LRO
+▶ Middleboxes could beneﬁt from receive side HW oﬄoad too
+▶ Infrastructure was introduced recently
+▶ Do the NIC vendors plan to support it???
+Discussion topics, Linux IPsec Workshop
+Hardware GRO
+Hardware GRO
+▶ Hardware GRO: Routeable version of LRO
+▶ Middleboxes could beneﬁt from receive side HW oﬄoad too
+▶ Infrastructure was introduced recently
+▶ Do the NIC vendors plan to support it???
+Discussion topics, Linux IPsec Workshop
+Hardware GRO
+Hardware GRO
+▶ Hardware GRO: Routeable version of LRO
+▶ Middleboxes could beneﬁt from receive side HW oﬄoad too
+▶ Infrastructure was introduced recently
+▶ Do the NIC vendors plan to support it???
+Discussion topics, Linux IPsec Workshop
+Hardware GRO
+Hardware GRO
+▶ Hardware GRO: Routeable version of LRO
+▶ Middleboxes could beneﬁt from receive side HW oﬄoad too
+▶ Infrastructure was introduced recently
+▶ Do the NIC vendors plan to support it???
+Discussion topics, Linux IPsec Workshop
+Hardware GRO
+Hardware GRO
+▶ Hardware GRO: Routeable version of LRO
+▶ Middleboxes could beneﬁt from receive side HW oﬄoad too
+▶ Infrastructure was introduced recently
+▶ Do the NIC vendors plan to support it???

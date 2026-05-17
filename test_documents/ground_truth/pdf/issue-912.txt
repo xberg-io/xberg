@@ -1,0 +1,28 @@
+                                                                                                                                                              3549
+                                     XYZ Pvt Ltd
+
+
+Vr.Date      Vr.No     Vr.Type       Particulars                                                     Dr.Amt       Cr.Amt       Balance
+ 01-Apr-16                           Opening Balance                                                               27614207     27614207
+13-May-16            38 BP       R   Chq. No. 085900 BILL NO.133, 132, 139, ,138, 143, 140, 142, 141, 144,
+                                                                                                      26406576
+                                                                                                           156, 155, 154, 0
+                                                                                                                          164, 163,
+                                                                                                                               1207631
+                                                                                                                                    165, Cr.
+                                                                                                                                         166, 167, 176, 175, 179, 178, 186, 185, 187, 192,
+ 25-Jun-16           50 BP       R   Chq. No. 086352 BEING COMMISSION RETURNED TO PARTY                  132696            0     1074935 Cr.
+19-Aug-16             1 BP       R   Chq. No. 086866 Being Payment against bill no.197 dated 29.01.20161074935             0             0 Dr.
+                                                                                                                                                          3222
+                               ABC LTD
+
+
+Vr.Date      Vr.No Vr.Type     Particulars                                                                    Dr.Amt       Cr.Amt       Balance
+ 01-Apr-15                     Opening Balance                                                                              24274200     24274200
+ 17-Aug-15       4 JV        R BEING EXCHANGE RATE DIFF                                                                0      979400     25253600 Cr.
+ 17-Aug-15      16 BP        R BEING TRF                                                                        6530000             0    18723600 Cr.
+ 07-Sep-15      58 BP        C 280000,$,@66.87, B.Ref-, Inv- BEING TRF                                         18723600             0             0 Dr.
+ 07-Sep-15      58 BP        C 0,$,@0, B.Ref-, Inv- BEING INTERST PAID                                                 0            0             0 Dr.
+ 20-Oct-15       3 JV        C 610,$,@65.22, B.Ref-, Inv- Being the amount vide performa no DS03/13/D111161            0       39784        39784 Cr.
+ 20-Oct-15      20 BP        C 610,$,@65.22, B.Ref-, Inv- BEING IMPORT PYMNET FOR LICENSE KEY                     39784             0             0 Dr.
+

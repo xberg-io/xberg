@@ -1,0 +1,18 @@
+Math Formulas
+
+Inline Math
+
+The equation E = mc^2 is famous. Another inline formula: alpha + beta = gamma.
+
+Display Math
+
+int_0^infinity e^{-x^2} dx = sqrt(pi)/2
+
+Equation Environment
+
+f(x) = sum_{n=0}^{infinity} x^n/n!
+
+Align Environment
+
+a + b = c
+d + e = f

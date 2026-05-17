@@ -1,0 +1,373 @@
+Auxiliary Medicinal Products in Clinical Trials
+October 2025
+
+Auxiliary Medicinal Products in Clinical Trials
+
+Recommendations on the use of Auxiliary Medicinal Products in Clinical Trials written and endorsed by the Clinical Trials Coordination and Advisory Group (CTAG)
+
+|  Document history and effective date:  |   |
+| --- | --- |
+|  Date of endorsement by CTAG | 15 October 2025  |
+|  Date of publication: | 30 October 2025  |
+|  Supersedes: | Version 19 February 2024  |
+|  Changes compared to superseded version: | - Updated structure of the recommendations according to classification of authorised AxMP, modified authorised AxMP and unauthorised AxMP
+- Clarifications on the classifications mentioned above, application and safety reporting requirements
+- Clarification if authorised AxMP is sourced outside the EU/EEA
+- Update the examples in Annex I
+- Background treatment Annex I: Standard of care as background treatment is in general considered an AxMP  |
+|  Date come into effect | 1 December 2025 for new clinical trial applications  |
+
+Important notice: This document should be read in combination with the Clinical Trials Regulation (EU) No 536/2014. The information and views expressed in this document may not in any circumstances be regarded as stating an official position of the European Commission or its services. Ultimately, only the European Court of Justice can give an authoritative interpretation of Community law. Additional supportive documents can be retrieved on Eudralex 10: https://health.ec.europa.eu/medicinal-products/eudralex/eudralex-volume-10_en
+
+The revised recommendations on the use of AxMPs in clinical trials will not be enforced retrospectively. If preferred by the sponsor, the new rules can be applied immediately for all trials within a procedure (if timelines allow) or by submitting a substantial modification.
+
+Auxiliary Medicinal Products in Clinical Trials
+October 2025
+
+Table of content
+
+ABBREVIATION LIST...4
+1. INTRODUCTION...5
+2. BACKGROUND...5
+3. AUXILIARY MEDICINAL PRODUCTS (AxMPs)...5
+3.1. What is an AxMP?...5
+3.2. Classification of AxMPs based on regulatory status and corresponding application requirements...7
+3.2.1 Authorised AxMPs...7
+3.2.2 Modified authorised AxMPs...7
+3.2.3 Unauthorised AxMP...8
+3.3. Safety reporting requirements for AxMPs...9
+3.3.1 All AxMPs...10
+3.3.2 Authorised AxMP...10
+3.3.3 Unauthorised AxMP or modified authorised AxMP...11
+Annex 1 – Types of AxMPs with examples...12
+Annex 2 – Flowchart on labelling requirements...16
+
+Auxiliary Medicinal Products in Clinical Trials
+October 2025
+
+ABBREVATION LIST
+
+|  AE | Adverse Event  |
+| --- | --- |
+|  AR | Adverse Reaction  |
+|  ASR | Annual Safety Report  |
+|  ATC | Anatomical Therapeutic Chemical  |
+|  AxMP | Auxiliary Medicinal Product  |
+|  AxMPD | Auxiliary Medicinal Product Dossier  |
+|  CTCG | Clinical Trial Coordination Group  |
+|  CTR | Clinical Trial Regulation EU 536/2014  |
+|  EC | European Commission  |
+|  EEA | European Economic Area  |
+|  EU | European Union  |
+|  XEVMPD | eXtended EudraVigilance Medicinal Product Dictionary  |
+|  GVP | Good Pharmacovigilance Practice  |
+|  GMP | Good Manufacturing Practice  |
+|  ICH | International Council for Harmonisation of Technical Requirements for Pharmaceuticals for Human Use  |
+|  ICSR | Individual Case Safety Report  |
+|  IMP | Investigational Medicinal Product  |
+|  IMPD | Investigational Medicinal Product Dossier  |
+|  MAH | Marketing Authorisation Holder  |
+|  MS | Member State  |
+|  MSC | Member State Concerned  |
+|  RMS | Reporting Member State  |
+|  SAE | Serious Adverse Event  |
+|  SAR | Serious Adverse Reaction  |
+|  SUSAR | Suspected Unexpected Serious Adverse Reaction  |
+
+Auxiliary Medicinal Products in Clinical Trials
+October 2025
+
+1. INTRODUCTION
+
+To facilitate the conduct of clinical trials in the Member States of the European Union¹, especially multi-center clinical trials carried out in more than one Member State, it is necessary to have a common understanding of the definitions and requirements of an investigational medicinal product (IMP) and an auxiliary medicinal product (AxMP) administered to trial participants in clinical trials. These recommendations on the use of Auxiliary Medicinal Products in Clinical Trials should be followed unless otherwise justified. These recommendations are without prejudice to the requirements set by the Clinical Trials Regulation (EU) No 536/2024 (CTR).
+
+2. BACKGROUND
+
+The Clinical Trials Regulation (EU) No 536/2014 Article 2(1) applies the definition for medicinal product set out in Directive 2001/83/EC Article 1(2):
+
+“(a) Any substance or combination of substances presented as having properties for treating or preventing disease in human beings; or
+(b) Any substance or combination of substances which may be used in or administered to human beings either with a view to restoring, correcting or modifying physiological functions by exerting a pharmacological, immunological or metabolic action, or to making a medical diagnosis.”
+
+Directive 2001/83/EC Article 3(3) excludes “medicinal products intended for research and development trials” from its scope of application.
+
+Article 2 (5) of the CTR defines an IMP as “a medicinal product which is being tested or used as a reference, including as a placebo, in a clinical trial”. Further information on IMPs can be found in `Clinical Trials Regulation (EU) No 536/2014 Questions and Answers`².
+
+It follows that, IMPs are governed by the CTR rather than Directive 2001/83/EC. Therefore, medicinal products with a marketing authorisation are also considered as an IMP when used as either a test product or as a reference product in a clinical trial.
+
+3. AUXILIARY MEDICINAL PRODUCTS (AxMPs)
+
+3.1. What is an AxMP?
+
+Article 2 (8) of the CTR defines an AxMP as “a medicinal product used for the needs of a clinical trial as described in the protocol, but not as an investigational medicinal product”. Therefore, AxMPs are medicinal products that fall within Article 3(3) of Directive 2001/83/EC, as they are used for the needs of a clinical trial, while not falling within the
+
+¹ EU or countries that follow the Legislation (i.e. EEA)
+² https://health.ec.europa.eu/document/download/bd165522-8acf-433a-9ab1-d7dceae58112_en?filename=regulation5362014_qa_en.pdf
+
+Auxiliary Medicinal Products in Clinical Trials October 2025
+
+definition of IMPs as defined in Article 2 (5) of the CTR.
+
+Examples of AxMPs are medicinal products used as rescue medication, as challenge agents, to assess endpoints in the clinical trial, or as background treatment as outlined in Annex 1 to this document. Further, the medicinal product should be related to and relevant for the design of the clinical trial; this excludes ‘concomitant medication’. As explained in recital 54 of the CTR concomitant medications are unrelated to the clinical trial and not relevant for the design of the clinical trial. Also, authorised diluents, such as saline, are not considered to be AxMPs if combined with the IMP prior to administration. In that case, they are considered excipients in the finished IMP and should not be separately registered in Clinical Trials Information System (CTIS). For further definition and examples of AxMPs, see Annex 1 to this document.
+
+The recommendations on the regulatory requirements for AxMPs in this paper are structured via the following classifications: authorised AxMPs, modified³ authorised AxMPs and unauthorised AxMPs.
+
+Only authorised AxMPs may be used in a clinical trial unless an authorised AxMP is not available in the European Union/EEA or if the sponsor cannot reasonably be expected to use an authorised AxMP (Article 59, CTR). The price of the authorised AxMP should not be considered as impacting on the availability of such medicinal products (Recital 53, CTR).
+
+The costs for the use of all AxMPs in the clinical trial shall not be borne by the trial participant, unless the law of the Member State provides otherwise, as provided in Article 92 of the CTR. It should be noted that for some Member States, an exemption could be requested, with a justification for not providing AxMPs free of charge for the trial participants (e.g. definition of health policy).
+
+The sponsor is responsible for implementing a system that ensures the trial is conducted and data is generated in accordance with the principles of Good Clinical Practice (GCP). To comply with these principles, irrespective of using an authorised or unauthorised AxMP, a trial should be conducted according to the protocol and all clinical trial information should be recorded, handled and stored in such a way that it can be accurately reported, interpreted and verified. The trial should, at a minimum, include a procedure to record, which patients received, which AxMPs during the trial with an evaluation of the compliance, where necessary. For unauthorised AxMPs, the traceability requirements are identical to those for IMPs, whereby information on the storage, return and destruction of the unauthorised AxMPs should be ensured taking into account the purpose of the trial and trial participants’ safety (Article 51, CTR).
+
+³ CTR, article 65: Where the auxiliary medicinal product is not authorised, or where an authorised auxiliary medicinal product is modified while such modification is not covered by a marketing authorisation, it shall be manufactured according to the good manufacturing practice referred to in Article 63(1) of the CTR or to at least an equivalent standard, in order to ensure appropriate quality. Changes to the labelling of the medicinal product are not considered modifications of the authorised product as per Article 2(10) of the CTR.
+
+Auxiliary Medicinal Products in Clinical Trials October 2025
+
+Labelling requirements for AxMPs are set out in Chapter X and Annex VI to the CTR. The labelling requirements, according to the regulatory status of the AxMP, are further described in Annex 2 to this document.
+
+3.2. Classification of AxMPs based on regulatory status and corresponding application requirements
+
+3.2.1 Authorised AxMPs
+
+Article 2 (10) of the CTR defines authorised AxMP as “a medicinal product authorised in accordance with Regulation (EC) No 726/2004, or in any Member State concerned in accordance with Directive 2001/83/EC, irrespective of changes to the labelling of the medicinal product, which is used as an auxiliary medicinal product”.
+
+An authorised AxMP used outside its marketing authorisation in a clinical trial remains classified as an authorised AxMP under the CTR framework. Additional labelling or re-labelling of an authorised AxMP are not considered modifications, because the quality of the product is not impacted.
+
+If the AxMP to be used in the clinical trial, holds a marketing authorisation outside the EU/EEA, for example in the USA, it is considered unauthorised in the context of CTR, even if there is an EU-authorised product with the same brand name. Refer to section 3.2.3 below.
+
+Application requirements for authorised AxMPs
+
+It is sufficient to list an authorised AxMP in the cover letter of the clinical trial application. Submission of the Summary of Product Characteristics (SmPC) and registration in CTIS is not required.
+
+While authorised AxMPs are generally exempted from registration in CTIS, the Reporting Member State (RMS) or any Concerned Member State (MSC) may request such registration if deemed necessary during the assessment, based on case-specific factors and regulatory oversight.
+
+If an AxMP is authorised in at least one Member State in the EU/EEA but not in the MSC where the trial will be conducted, it is crucial that the investigator in the Member State where the product is unauthorised, receives appropriate product information as they may be unfamiliar with the product. Translated product information should be provided to investigators to ensure they are adequately informed about the product, which is important for safety reasons. The status of the product and translated product information (if applicable) should be addressed in the cover letter.
+
+3.2.2 Modified authorised AxMPs
+
+Authorised AxMPs may be subject to modification depending on the intended use within the trial. As the marketing authorisation holder (MAH) of an authorised product is only
+
+Auxiliary Medicinal Products in Clinical Trials October 2025
+
+responsible for the unchanged product in its designated and authorised packaging, there is a need to ensure that the quality of the modified AxMP is not negatively affected by the modifications performed. Therefore, a modified authorised AxMP, where such modification is not covered by a marketing authorisation, is treated in the same way as an unauthorised AxMP. Examples of such modifications may include changes to product quality (e.g. encapsulation of a tablet) and/or changes to the Good Manufacturing Practice (GMP) requirements (e.g. changes to the primary package), dissolving a tablet in water, juice, or food, splitting a tablet that is not authorised to be divided, or opening a capsule to facilitate administration to a child.
+
+Additional labelling or re-labelling of an authorised AxMP are not considered modifications because the quality of the product is not impacted.
+
+Application requirements for modified authorised AxMPs
+
+Modifications of authorised AxMPs should be listed in the cover letter. The modified authorised AxMP should also be registered in CTIS. As a general rule, the documentation requirements for IMPs also apply to modified authorised AxMPs, as described in Section F (documentation relating to GMP compliance) and G (full or simplified Investigational Medicinal Product Dossier, IMPD) of Annex I to the CTR. In most cases, a simplified Auxiliary Medicinal Product Dossier (AxMPD) describing the modifications in relation to the authorised product will suffice.
+
+Authorised AxMPs that are additionally labelled or re-labelled for use in the clinical trial are not considered modified. However, as labelling/relabelling activities are manufacturing operations, information regarding the responsible organisation for performing the additional labelling or re-labelling activities should be included in the clinical trial application, where appropriate, in a simplified AxMPD.
+
+Documentation requirements relating to GMP-compliance, set out in section F of Annex I to the CTR, apply, unless (re-)labelling or re-packaging is performed in accordance with Article 61.5 (a) of the CTR. Any re-labelling or re-packaging performed according to Article 61.5 (a) should be addressed in the cover letter.
+
+3.2.3 Unauthorised AxMP
+
+Unauthorised AxMPs refer to medicinal products that do not hold a valid marketing authorisation in EU/EEA, as well as those that are authorised in third countries (i.e. outside the EU/EEA). This includes the products that hold a marketing authorisation outside the EU/EEA, for example USA, even if they carry the same brand name, as such products are not considered to be supplied under the EU/EEA marketing authorisation.
+
+In cases where authorised AxMPs are unavailable, the use of unauthorised AxMPs may be acceptable, provided that a well-justified rationale is presented in the cover letter or the protocol of the trial. The price of the authorised AxMP should not be considered as
+
+Auxiliary Medicinal Products in Clinical Trials October 2025
+
+impacting on the availability of such medicinal products (Recital 53, CTR).
+
+Unauthorised AxMPs should be manufactured according to GMP or to at least an equivalent standard (Article 65, CTR), in order to ensure appropriate quality of the AxMP and the safety of trial participants. For preparation of radiopharmaceuticals used as diagnostic AxMPs, refer to Article 61.5(b) of the CTR and applicable guidelines.
+
+For products prepared in accordance with a magistral or official formula, i.e. prepared in a pharmacy in accordance with a medical prescription for an individual patient, refer to Article 61.5 (c) of the CTR.
+
+Application requirements for unauthorised AxMPs
+
+Unauthorised AxMPs should be registered in CTIS, following registration in the eXtended EudraVigilance Medicinal Product Dictionary (XEVMPD) database. For instructions, please refer to the CTR quick guide for sponsors⁴.
+
+Products prepared in accordance with Article 61.5(c) of the CTR are not required to be registered in CTIS, but should be listed in the cover letter (in the same manner as authorised AxMPs) together with a statement that they are manufactured in accordance with the applicable national regulations of the relevant Member State. For the purposes of safety reporting, these products are to be treated in the same way as unauthorised AxMPs. While registration of these products (Article 61.5(c), CTR) is not required in CTIS, they should be registered in XEVMPD for the purpose of safety reporting. This should be done before the start of the clinical trial.
+
+As a general rule, the documentation requirements for IMPs also apply to unauthorised AxMPs. The documentation requirements set out in section F (documentation relating to GMP compliance) and G (full or simplified IMPD) of Annex I to the CTR apply.
+
+For additional information, contact the national contact point of the Member State⁵.
+
+3.3. Safety reporting requirements for AxMPs
+
+This section concerns the safety reporting requirement of adverse events suspected to be related only to the AxMP (= adverse reaction to AxMP). If there is a suspicion of an adverse event involving the IMP, or if an adverse event due to an interaction of AxMP with the IMP cannot be ruled out, the reporting rules for the IMP will apply. In the latter cases both the IMP and AxMP should be entered in the Individual Case Safety Report (ICSR) as suspect or interacting
+
+Article 46 of the CTR states that "Safety reporting with regard to AxMPs shall be made in accordance with Chapter 3 of Title IX of Directive 2001/83/EC". Although Article 46 does
+
+⁴ https://health.ec.europa.eu/document/download/f5ad2a13-4a41-4ada-81a1-2854783c75c0_en?filename=mp_ctr-536-2014_guide_en.pdf
+⁵ List of national contact points: https://health.ec.europa.eu/document/download/da8d6018-ed1c-4847-b17f-a67b8ecd521a_en?filename=contact-points_clinical-trials_reg-536-2014_0.pdf
+
+Auxiliary Medicinal Products in Clinical Trials
+October 2025
+
+not distinguish between authorised and unauthorised AxMPs, Directive 2001/83/EC applies only to authorised medical products.
+
+In order to ensure supervision of clinical trials and the trial participants’ safety, the same requirements as those provided for the IMP in the CTR should apply with regard to the obligations of the investigators and the sponsors for the collection, recording, management and reporting of adverse events for unauthorised AxMPs and modified authorised AxMPs.
+
+3.3.1 All AxMPs
+
+Reduced safety reporting / selective safety data collection may apply with regard to all AxMPs, irrespective of their authorisation status, according to Article 41 of the CTR (safety reporting as of protocol) and ICH E19⁶ provided that this is specified in the protocol (see Q&amp;A on Safety Addendum V2⁷).
+
+As per Article 41 of the CTR, the investigator must record and report to the sponsor all adverse events (including adverse events with a suspected causal association with AxMPs only, irrespective of their authorisation status) unless the protocol provides otherwise. The sponsor is obliged to keep detailed records of all adverse events reported to them by the investigator. In addition, the procedure for reporting adverse events with suspected causal relationship with AxMPs should be clearly defined in the protocol.
+
+Furthermore, irrespective if the AxMP is authorised, in accordance with Article 53(1) of the CTR, the sponsor shall notify Member States of all unexpected events which affect the benefit/risk balance of the clinical trial, but which are not suspected unexpected serious adverse reactions (as referred to in Article 42 of the CTR).
+
+3.3.2 Authorised AxMP
+
+The safety reporting in relation to the authorised AxMPs should comply with the Pharmacovigilance rules provided in Chapter 3 of TITLE IX of Directive 2001/83/EC, irrespective of whether the authorised AxMPs are used in accordance with the terms of the marketing authorisations of those products.
+
+Where an adverse event is suspected to be related only to an authorised AxMP and does not result from a possible interaction with the IMP, the event should be reported to the EudraVigilance Postmarketing Module (EVPM) in line with the guidance provided in GVP Module VI⁸. The EU clinical trial number and protocol code as well as information that the suspected medicinal product has not been used as an IMP in the clinical trial, but as an AxMP, should be added in the narrative section of the ICSR. Since different reporting route
+
+6 ICH E19: https://www.ema.europa.eu/en/documents/scientific-guideline/ich-guideline-e19-selective-approach-safety-data-collection-specific-late-stage-pre-approval-or-post-approval-clinical-trials-step5_en.pdf
+7 CTCG website, key document list, section clinical trial safety: https://www.hma.eu/about-hma/working-groups/clinical-trials-coordination-group.html
+8 https://www.ema.europa.eu/en/human-regulatory-overview/post-authorisation/pharmacovigilance-post-authorisation/good-pharmacovigilance-practices-gvp
+
+Auxiliary Medicinal Products in Clinical Trials October 2025
+
+options are listed in the GVP module the parties responsible for reporting to EVPM and their specific responsibilities should be clarified in the protocol of the clinical trial to avoid double reporting.
+
+A separate Annual Safety Report (ASR) of the authorised AxMPs is not required. However, any information relating to (authorised or unauthorised) AxMPs which are relevant to the IMP should be included in the ASR of the IMP.
+
+3.3.3. Unauthorised AxMP or modified authorised AxMP
+
+The submitted clinical trial application documentation (e.g., the Investigator’s Brochure or SmPC if applicable), should contain reference safety information for the unauthorised AxMP or the modified authorised AxMP.
+
+The reporting of suspected unexpected serious adverse reactions (SUSARS) related to the unauthorised AxMP or modified authorised AxMP follows the same principle as for SUSARs related to the IMP and should be reported to the Eudravigilance Clinical Trial Module (EV- CTM) of the European Medicine Agency (EMA).
+
+All serious adverse reactions (SARs) to the unauthorised AxMP or the modified authorised AxMP should be included in the line listings of SARs in the annual safety report (ASR) of the respective IMP(s) of the clinical trial(s). Any safety issues that arise in the trial should be addressed in the appropriate sections of the ASR, best added to section 10 of the ASR in the format of development safety update report (DSUR) as specified in ICH E2F. As per ICH E2F⁹ guidance, the ASR should also contain all serious adverse events (SAEs) of the clinical trial(s). A separate ASR of the unauthorised AxMP(s) or modified authorised AxMP is not required.
+
+⁹ ICH E2F: Development Safety Update Report: https://database.ich.org/sites/default/files/E2F_Guideline.pdf
+
+Auxiliary Medicinal Products in Clinical Trials - Annex
+
+Annex 1 – Types of AxMPs with examples
+
+This section provides guidance on some categories of medicinal products, which may be used in clinical trials as AxMPs.
+
+(1) Rescue medications
+
+Description:
+
+Rescue medications are medicines identified in the protocol as those that may be administered to patients when the IMP does not adequately control the clinical condition or symptoms, or when symptoms worsen to a predefined level.
+
+Examples:
+
+Rescue medication needed when the medical condition and symptoms are not under control:
+
+- Insulin or metformin when the IMP fails to maintain target blood glucose levels and the patient is at risk of hyperglycaemia;
+- Anti-emetics or growth factors to manage chemotherapy-related side effects (e.g., nausea; neutropenia) that are not sufficiently prevented or mitigated by the study drug;
+- Nonsteroidal anti-inflammatory drugs (NSAIDs) or corticosteroids for flare-ups or when pain/inflammation becomes unmanageable in rheumatoid arthritis.
+
+Rescue medication needed as preventive treatment of anticipated adverse reactions:
+
+Corticosteroids and/or antihistamines administered as premedication for subsequent treatment cycles, following the occurrence of expected infusion-related adverse reactions during immunotherapy, may be considered AxMPs. Although used prophylactically in later cycles, their use is triggered by a prior adverse reaction, and they are not being evaluated for their own safety or efficacy.
+
+Rescue medication needed for anticipated emergency situation:
+
+A clinical trial where a new biotechnology product is to be given for the first time to humans. The protocol requires the availability of appropriate medicinal products needed for the treatment of anaphylactic shock.
+
+(2) Challenge agents
+
+Description:
+
+Challenge agents should be medicinal products¹⁰ that fall within the definition of an AxMP. Challenge agents are usually administered to trial participants to produce a physiological response that is necessary before the pharmacological action of the IMP can be assessed.
+
+¹⁰ A challenge agent may also be a product which is not a medicinal product such as a food product or a medical device. These types of challenge agents fall outside the scope of this recommendation paper. If these challenge agents are used in a clinical trial sufficient information should be provided in the clinical trial application on the quality and safety of the product.
+
+Auxiliary Medicinal Products in Clinical Trials - Annex
+
+The pharmacological action can be a pharmacodynamic as well as a pharmacokinetic action. For challenge agents which are medicinal products the required documentation is specified in section 3.2 of this document and should comply with GMP requirements.
+
+Examples:
+
+Skin prick test – Skin prick tests may be used to identify persons with allergic responses to specific allergens. Dilute solutions are manufactured from extracts of allergens such as pollens, house dust, animal dander and foods. In the skin prick test, a drop of each solution is placed on the person's skin, which is then pricked with a needle. If the person is allergic to one or more substances, he/she has a wheal and flare reaction. This test may be used as part of the inclusion criteria for a clinical trial of a new medicine to control or prevent symptoms from allergic reactions. The skin prick test product is considered to be an AxMP in a clinical trial because it is being administered to modify a physiological function by exerting an immunological action.
+
+Active substance increasing blood pressure – In an open-label sensitivity test of blood pressure response to oral tyramine following treatment with an IMP (new monoamine oxidase inhibitor) in healthy volunteers, tyramine should be considered to be an AxMP as it is administered to modify a physiological function by exerting a pharmacological action.
+
+Drug-drug interaction studies – substrates, inhibitors or modulators of transporters or metabolic enzymes that are used to study the pharmacokinetics of the IMP should be considered AxMPs. For instance, Itraconazole as an inhibitor of CYP3A4 (and P-glycoprotein) impacts on an IMP metabolism or pitavastatin as a substrate of OATP1B transporter to study impacts on IMP distribution/elimination. (See also ICH M12¹¹ section 7.7. list of drugs used in CTs).
+
+(3) Medicinal products used to assess endpoints in the clinical trial
+
+Description:
+
+This type of AxMP is administered to the trial participant as a tool to assess a relevant clinical trial endpoint; it is not being tested or used as a reference in the clinical trial.
+
+Examples:
+
+Organ function radiodiagnostics – PET radiopharmaceuticals are administered to a clinical trial population to measure the function of a certain organ before and after the trial participant has been given an IMP whose effects in this organ are the primary end-point of the clinical trial.
+
+¹¹ https://www.ema.europa.eu/en/ich-m12-drug-interaction-studies-scientific-guideline
+
+Auxiliary Medicinal Products in Clinical Trials - Annex
+
+Active substance testing arterial wall function – Acetylcholine is administered directly in coronary arteries to evaluate coronary endothelium dysfunction. The test is performed at baseline – before the first administration of an IMP – and at the end of the study, after the treatment period.
+
+(4) Background treatment
+
+Description:
+
+This type of medicinal product is administered to each of the clinical trial participants, regardless of randomisation group¹², for example,
+
+a. to treat the indication which is the object of the study or
+b. required in the protocol as part of standard care for a condition which is not the indication under investigation and is relevant for the clinical trial design.
+
+Background treatment is generally considered to be the current standard of care or part thereof for the particular indication.
+
+In trials where the IMP is given in addition to the background treatment and the safety/efficacy of the IMP is assessed, the background treatment is in general regarded as an AxMP. The protocol may require that the IMP plus the background treatment is compared to:
+
+- an active reference product plus background treatment or;
+- placebo plus background treatment or;
+- to the background treatment only.
+
+The current standard of care, or parts thereof, will not be considered background treatment if the clinical trial includes objectives evaluating endpoints on the standard of care alone. For instance, in a clinical trial comparing the safety and/or efficacy of standard of care A with standard of care B, the standard of care is not considered background treatment. In that case the standard of care is considered an IMP and not an AxMP.
+
+The nature of the background medicine(s) will be specified in the protocol, e.g. as the standard treatment given according to local clinical practice, by the name of active substances or medicinal products prescribed depending on patient needs and according to the doctor’s judgement. If a specific treatment regimen for standard of care is mandated in the protocol, it should be clearly specified by active substance, Anatomical Therapeutic Chemical (ATC) group (level 3) or drug product.
+
+The standard of care medicine(s) for a specific indication (recognised standard of care), or a
+
+¹² These examples also apply for trials without randomisation, like single arm trials or complex clinical trials including multiple arms with no randomised allocation to different IMPs.
+
+Auxiliary Medicinal Products in Clinical Trials - Annex
+
+component of the standard of care for a particular medical indication, should be justified in the protocol if there are discrepancies between the clinical practice in Member States concerned, to address potential bias.
+
+Examples:
+
+The development of a new medicinal product for HIV infected subjects already receiving HIV standard of care antiretroviral therapy. The study design would aim to evaluate the added efficacy of the new medicinal product when administered in combination with, or in comparison to, established standard-of-care regimens. In this case, the new medicinal product for HIV infection would be the IMP and the standard antiretroviral treatment would be background treatment.
+
+Given a clinical trial investigating whether adding a new anti-PD1 monoclonal antibody (IMP) to standard platinum-based chemotherapy (e.g., carboplatin + pemetrexed) improves progression-free survival (PFS) in metastatic non-small-cell lung cancer compared to chemotherapy alone, the chemotherapy regimen is not being studied for its own safety or efficacy. Instead, it is considered part of the standard-of-care background therapy and therefore functions as an AxMP to support the assessment of the IMP efficacy.
+
+Testing a non-oncology medication in cancer patients where the objective of the clinical trial is to assess the analgesic effect of a new opiate product. The study design would test the opiate versus an active comparator for pain control, in patients treated for cancer with the (same) anticancer treatment in the two groups, regardless of the trial. Therefore, the opiate and the active comparator would be the IMP and the oncology medication the AxMPs.
+
+Testing a new laxative IMP medication in patients with chronic pain treated with opioids where the objective of the clinical trial is to assess the laxative effect of the new IMP. The study design would test the laxative versus an active comparator, in patients on chronic pain treatment with opioids in the two groups, regardless of the trial. In this case the laxatives would be IMPs and opioids would be AxMP.
+
+15
+
+Auxiliary Medicinal Products in Clinical Trials - Annex
+
+Annex 2 - Flowchart on labelling requirements
+
+Labelling requirements for IMPs and AxMPs are set out in Chapter X and Annex VI to the CTR. A flowchart for labelling under CTR is provided below.
+
+!img-0.jpeg
+
+Additional labelling of authorised IMPs and AxMPs
+
+No additional labelling is needed for authorised IMPs, that are labelled in accordance with Title V Directive 2001/83/EC (i.e. EU/EEA commercial labelling), unless specific circumstances necessitate it to ensure subject safety and maintain the reliability and robustness of the clinical trial data. Any such specific circumstances should be outlined and justified in the protocol.
+
+For example, additional labelling may be required if the product is to be used at home by trial participants outside the approved indication, dosage, or method of administration or when the treatment is not the standard of care. The health authority may also request an additional label, if this is considered necessary. Requirements for additional labelling of authorised IMPs are outlined in section C of Annex VI to the CTR.
+
+Auxiliary Medicinal Products in Clinical Trials - Annex
+
+The language of the information on the label should be in the language(s) used in the Member States where the trial will be conducted. Multiple languages are allowed. English-only labelling may be acceptable (see also annex II to the CTR Q&amp;A¹³).
+
+For authorised IMPs that are provided with EU/EEA commercial labelling that is not in the language of the Member State where the clinical trial is to be conducted, a label in the applicable language may be required. In some cases, a full re-labelling in the applicable language may be appropriate instead.
+
+For authorised AxMPs that are provided with EU/EEA commercial labelling, no additional labelling is required according to Article 67 of the CTR and no additional labelling requirements are described in Annex VI to the CTR either.
+
+However, additional labelling (or re-labelling) may be necessary to comply with language requirements, as described for authorised IMPs above. Moreover, additional labelling could be appropriate e.g. for ensuring the authorised AxMP is dedicated to a specific clinical trial or for subject for safety reasons, as described for authorised IMPs above (i.e. if product is used at home by trial participants outside the approved indication, dosage, or method of administration or when the treatment is not the standard of care).
+
+Diagnostic radiopharmaceuticals
+
+Labelling requirements conforming to CTR are not applicable for radiopharmaceuticals used as diagnostic IMP or as diagnostic AxMP. Diagnostic IMPs and diagnostic AxMPs should be labelled appropriately to ensure subject safety and reliability and robustness of data.
+
+Mock-ups
+
+A mock-up of the label is not required to be submitted as part of the application dossier. Only the text of the label of the IMP or AxMP, as per Chapter X and Annex VI to the CTR, should be included in the application dossier.
+
+¹³ https://health.ec.europa.eu/document/download/bd165522-8acf-433a-9ab1-d7dceae58112_en?filename=regulation5362014_qa_en.pdf

@@ -1,0 +1,9 @@
+Column 1 Column 2
+a 1
+b 2
+c 3
+
+Product Value
+Tomato 1
+Potato 1
+Beetroot 2

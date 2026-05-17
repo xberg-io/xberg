@@ -1,0 +1,14 @@
+# Titre
+
+Lorem ipsum dolor
+- Liste
+- Liste 2
+- Liste 3
+Lorem ipsum dolor sit amet
+1. Liste numérotée
+2. Liste numérotée
+
+| En-tête 1 | En-tête 2 | En-tête 3 |
+|---|---|---|
+| Ligne 1 | Alouette | Farfadet |
+| Linge 2 | Belette | Bibitte |

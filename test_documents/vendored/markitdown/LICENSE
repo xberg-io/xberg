@@ -1,0 +1,5 @@
+Source: https://github.com/microsoft/markitdown
+License: MIT License
+Copyright (c) Microsoft Corporation
+
+Test files copied from the markitdown project's test suite for benchmark validation purposes.

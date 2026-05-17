@@ -1,12 +1,12 @@
 {
-  "name": "kreuzberg-smoke",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "check": "node smoke.mjs"
-  },
-  "dependencies": {
-    "@kreuzberg/node": "workspace:*"
-  },
-  "version": "4.9.7"
+	"name": "kreuzberg-smoke",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check": "node smoke.mjs"
+	},
+	"dependencies": {
+		"@kreuzberg/node": "workspace:*"
+	},
+	"version": "4.9.8"
 }

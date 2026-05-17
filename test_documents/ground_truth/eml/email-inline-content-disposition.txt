@@ -1,0 +1,4 @@
+Subject: Testing Inline
+From: "Test User" <testuser@example.com>
+To: recipient@example.com
+This is a test of inline

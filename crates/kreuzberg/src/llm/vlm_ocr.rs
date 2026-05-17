@@ -136,12 +136,17 @@ pub async fn vlm_ocr(
         name: None,
     });
 
-    // Use mutable default because `stream` is pub(crate) in liter-llm.
-    let mut request = ChatCompletionRequest::default();
-    request.model = config.model.clone();
-    request.messages = vec![message];
-    request.temperature = config.temperature;
-    request.max_tokens = config.max_tokens;
+    // Use mutable default because `stream` is pub(crate) in liter-llm; struct-init
+    // syntax with `..Default::default()` won't compile across the crate boundary.
+    #[allow(clippy::field_reassign_with_default)]
+    let request = {
+        let mut req = ChatCompletionRequest::default();
+        req.model = config.model.clone();
+        req.messages = vec![message];
+        req.temperature = config.temperature;
+        req.max_tokens = config.max_tokens;
+        req
+    };
 
     let response = client.chat(request).await.map_err(|e| {
         crate::KreuzbergError::ocr(format!(

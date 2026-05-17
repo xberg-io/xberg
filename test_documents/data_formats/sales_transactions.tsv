@@ -1,0 +1,26 @@
+Transaction_ID	Date	Time	Customer_ID	Customer_Name	Product_SKU	Product_Name	Quantity	Unit_Price	Total_Amount	Payment_Method	Status	Region	Sales_Rep
+TXN-2025-0001	2025-02-01	09:15:32	CUST-5421	Acme Corp	KREUZ-001	Document Extraction SDK	5	49.99	249.95	Credit Card	Completed	North America	John Smith
+TXN-2025-0002	2025-02-01	10:42:18	CUST-1203	TechStart Inc	KREUZ-005	Enterprise License Pack	2	2999.00	5998.00	Bank Transfer	Completed	Europe	Jane Doe
+TXN-2025-0003	2025-02-01	11:23:45	CUST-8756	Global Solutions	KREUZ-012	Real-time Analytics	1	549.99	549.99	Credit Card	Completed	Asia Pacific	Michael Chen
+TXN-2025-0004	2025-02-01	13:05:11	CUST-3421	Financial Services Ltd	KREUZ-020	Disaster Recovery Solution	1	599.99	599.99	Wire Transfer	Completed	North America	Robert Johnson
+TXN-2025-0005	2025-02-01	14:30:22	CUST-9087	Digital Innovations	KREUZ-009	Machine Learning Plugin	3	349.99	1049.97	Credit Card	Pending	Europe	Sarah Wilson
+TXN-2025-0006	2025-02-01	15:47:03	CUST-2145	Analytics Pro LLC	KREUZ-002	PDF Processing Engine	2	99.99	199.98	Credit Card	Completed	North America	Emily Rodriguez
+TXN-2025-0007	2025-02-01	16:22:55	CUST-7632	Cloud Systems	KREUZ-008	Cloud Integration Kit	4	129.99	519.96	Bank Transfer	Completed	North America	David Thompson
+TXN-2025-0008	2025-02-01	17:15:44	CUST-4289	Enterprise Corp	KREUZ-022	Custom Development Service	1	5000.00	5000.00	Wire Transfer	In Progress	North America	Jessica Lee
+TXN-2025-0002	2025-02-02	08:30:14	CUST-5512	Tech Startup	KREUZ-006	Developer License	10	499.99	4999.90	Credit Card	Completed	Europe	James Anderson
+TXN-2025-0010	2025-02-02	09:45:29	CUST-3876	Data Intelligence	KREUZ-003	OCR Module Advanced	1	149.99	149.99	Credit Card	Completed	Asia Pacific	Amanda Chen
+TXN-2025-0011	2025-02-02	10:18:36	CUST-1428	Business Solutions	KREUZ-015	Compliance Checker Pro	2	299.99	599.98	Bank Transfer	Completed	North America	Christopher Lee
+TXN-2025-0012	2025-02-02	11:52:07	CUST-6789	Media Services	KREUZ-007	API Gateway Module	3	79.99	239.97	Credit Card	Completed	Europe	Nicole Brown
+TXN-2025-0013	2025-02-02	13:22:44	CUST-2211	Insurance Group	KREUZ-023	Technical Support Premium	1	999.99	999.99	Wire Transfer	Completed	North America	Patrick Martinez
+TXN-2025-0014	2025-02-02	14:55:18	CUST-4567	Consulting Firm	KREUZ-011	Batch Processing Service	1	399.99	399.99	Credit Card	Completed	North America	Linda Davis
+TXN-2025-0015	2025-02-02	15:33:42	CUST-8901	Government Agency	KREUZ-024	Training & Onboarding	2	2499.99	4999.98	Wire Transfer	In Progress	North America	Richard Taylor
+TXN-2025-0016	2025-02-02	16:47:11	CUST-3345	Retail Chain	KREUZ-004	Text Analytics Suite	1	199.99	199.99	Credit Card	Completed	North America	Stephanie King
+TXN-2025-0017	2025-02-02	17:19:35	CUST-7654	Logistics Co	KREUZ-013	Data Pipeline Connector	2	179.99	359.98	Bank Transfer	Completed	Europe	Marcus Johnson
+TXN-2025-0018	2025-02-02	18:05:22	CUST-5423	Healthcare Systems	KREUZ-014	Security Audit Module	1	249.99	249.99	Credit Card	Completed	North America	Karen White
+TXN-2025-0019	2025-02-02	18:33:44	CUST-2109	Manufacturing Ltd	KREUZ-025	Consulting Services	1	3500.00	3500.00	Wire Transfer	In Progress	Europe	Thomas Anderson
+TXN-2025-0020	2025-02-03	09:12:33	CUST-9876	Education Institute	KREUZ-016	Advanced Reporting Suite	3	159.99	479.97	Credit Card	Completed	Asia Pacific	Victoria Harris
+TXN-2025-0021	2025-02-03	10:34:11	CUST-1122	Energy Sector	KREUZ-018	Performance Optimization Pack	1	199.99	199.99	Bank Transfer	Completed	North America	Andrew Wilson
+TXN-2025-0022	2025-02-03	11:47:52	CUST-5678	Financial Tech	KREUZ-017	Integration Testing Framework	5	89.99	449.95	Credit Card	Completed	North America	Sophia Martinez
+TXN-2025-0023	2025-02-03	13:15:28	CUST-4321	Telecom Provider	KREUZ-019	Monitoring & Alerting	2	129.99	259.98	Credit Card	Completed	Europe	Jason Brown
+TXN-2025-0024	2025-02-03	14:40:17	CUST-7777	Real Estate Co	KREUZ-021	Multi-language Support Pack	1	249.99	249.99	Bank Transfer	Completed	Asia Pacific	Michelle Green
+TXN-2025-0025	2025-02-03	15:55:44	CUST-3210	Transport Company	KREUZ-010	Document Classification AI	1	449.99	449.99	Credit Card	Completed	North America	Daniel White

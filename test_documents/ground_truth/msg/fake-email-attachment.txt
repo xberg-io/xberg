@@ -1,0 +1,17 @@
+Subject: Fake email with attachment
+From: "Mallori Harrell" <mallori@unstructured.io>
+To: "Mallori Harrell" <mallori@unstructured.io>
+Date: 2023-04-20T21:39:10.475+00:00
+Hello!
+
+Here's the attachments!
+
+It includes:
+
+   - Lots of whitespace
+   - Little to no content
+   - and is a quick read
+
+Best,
+
+Mallori

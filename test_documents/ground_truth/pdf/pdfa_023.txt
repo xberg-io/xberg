@@ -1,0 +1,309 @@
+Ubiquitous Smart Eyewear Interactions using Implicit
+Sensing and Unobtrusive Information Output
+Qiushi Zhou Joshua Newn Benjamin Tag
+The University of Melbourne The University of Melbourne The University of Melbourne
+Melbourne, Australia Melbourne, Australia Melbourne, Australia
+qiushi.zhou@unimelb.edu.au joshua.newn@unimelb.edu.au benjamin.tag@unimelb.edu.au
+Hao-Ping Lee Chaofan Wang Eduardo Velloso
+National Chiao Tung University The University of Melbourne The University of Melbourne
+Hsinchu, Taiwan Melbourne, Australia Melbourne, Australia
+dimension4.cs03@nctu.edu.tw chaofanw@student.unimelb.edu.au eduardo.velloso@unimelb.edu.au
+Interactions using Implicit Sensing and Unobtrusive Information ABSTRACT
+Output. In Adjunct Proceedings of the 2019 ACM International Joint Premature technology, privacy, intrusiveness, power con-
+Conference on Pervasive and Ubiquitous Computing and the 2019 In- sumption, and user habits are all factors potentially con-
+ternational Symposium on Wearable Computers (UbiComp/ISWC ’19 tributing to the lack of social acceptance of smart glasses.
+ACM, New Adjunct), September 9–13, 2019, London, United Kingdom.
+After investigating the recent development of commercial
+York, NY, USA, 6 pages. https://doi.org/10.1145/3341162.3348392
+smart eyewear and its related research, we propose a design
+space for ubiquitous smart eyewear interactions while max-
+1 INTRODUCTION
+imising interactivity with minimal obtrusiveness. We focus
+Humans interact with the world by perceiving it through sen-
+on implicit and explicit interactions enabled by the combina-
+sory input, identifying action affordance and then producing
+tion of miniature sensor technology, low-resolution display
+motor output [7]. As most sensory input are received by the
+and simplistic interaction modalities. Additionally, we are
+organs on human face, it makes the face especially interest-
+presenting example applications outlining future develop-
+ing for collecting physiological data as well as for delivering
+ment directions. Finally, we aim at raising the awareness of
+information for Human-Computer Interaction. Glassses are
+designing for ubiquitous eyewear with implicit sensing and
+among the most common devices that we wear on our faces
+unobtrusive information output abilities.
+daily. They have the natural advantage as potential interac-
+tive devices by always being available within close proximity
+CCS CONCEPTS
+with the main sensory organs, for physiological information
+• → Human-centered computing User interface toolk- input and discrete yet unobtrusive information output.
+Ubiquitous and mobile comput- its; Ubiquitous computing; Since the 13th century, spectacles (prescription glasses)
+ing systems and tools; Mobile devices. have been used primarily to alleviate visual impairments,
+and later developed as a fashion accessory [12]. Glasses with
+KEYWORDS
+computational functionality and sensing abilities, neverthe-
+eyewear, wearable, sensor, context awareness less, have not yet reached that level of acceptance. Smart
+glasses and Head-Mounted-Device (HMD) have been added ACM Reference Format:
+Qiushi Zhou, Joshua Newn, Benjamin Tag, Hao-Ping Lee, Chao- with layers of high-tech functions by ambitious developers
+fan Wang, and Eduardo Velloso. 2019. Ubiquitous Smart Eyewear while only resulting in low social acceptance due to their
+obtrusive appearance, form factor and other issues.
+Permission to make digital or hard copies of all or part of this work for While smart eyewear with high-resolution displays com-
+personal or classroom use is granted without fee provided that copies are not bined with sophisticated input technologies present their
+made or distributed for profit or commercial advantage and that copies bear own set of challenges, sole sensing devices with no displays this notice and the full citation on the first page. Copyrights for components
+of this work owned by others than ACM must be honored. Abstracting with remain limited in their usability beyond specific research
+credit is permitted. To copy otherwise, or republish, to post on servers or to applications. The rich potential of outputting information
+redistribute to lists, requires prior specific permission and/or a fee. Request is hence wasted. An example are the JINS MEME glasses
+permissions from permissions@acm.org. that come equipped with sensors to track physiological sig-
+UbiComp/ISWC ’19 Adjunct, September 9–13, 2019, London, United Kingdom nals but rely on an external device, such as a computer or a © 2019 Association for Computing Machinery. smartphone to process the collected data and to display the ACM ISBN 978-1-4503-6869-8/19/09...$15.00
+https://doi.org/10.1145/3341162.3348392 acquired insights. While these devices are characterised by
+661
+UbiComp/ISWC ’19 Adjunct, September 9–13, 2019, London, United Kingdom Zhou, et al.
+an everyday-use form factor and are able to collect physio- Invisible because of its discrete environmental data collec-
+logical signals, their abilities to utilise the obtained data and tion ability. Other eyewear such as SKUGGA9 and CTRL
+their dependence on external processing devices make them Eyewear10 provide automatic tinting control using ambient
+limited in functionality. light sensors without any interaction functionality.
+Inspired by the evolution from wristwatches to smart- Equipping eyewear with miniature sensing abilities pro-
+watches, we argue that designing for smart eyewear inter- vides opportunities for researchers to explore and expand the
+action should avoid solely stacking advanced technologies application realm of these devices. Zhou et al. [15] presented
+or only focusing on data collection, and fully exploit the the feasibility of measuring mental workload with infrared
+potential of eyewear as ubiquitous interactive devices. We thermal sensors in the lab setting. Tag et al. [13] assessed
+call attention to an intermediate level of ubiquitous smart fatigue levels by capturing participants’ (EOG) signals in-
+[14] used EOG data to measure eyewear design with unobtrusive output, minimal power the-wild. Uema and Inoue
+consumption, intermediate interaction affordance and con- users’ concentration levels in different contexts. Ishimaru
+textual sensing abilities. et al. [4] captured eye blink data using infrared sensors to
+predict users’ high-level on-going activities and Dementyev
+2 RELATED WORK and Holz [3] used IR information to log blink frequencies
+and alleviate dry eyes by triggering blinks through stimuli. As smart wearable devices gain traction from consumers as
+Other than for data collection purposes, researchers also ubiquitous computers, a range of smart eyewear devices has
+exploited sensors to combine with other miniature technolo- emerged in the market. Head-Mounted Displays (HMD) such
+gies for alternative output modalities. Rantala et al. [10] pro- as Microsoft HoloLens1 and Magic Leap2 are equipped with
+posed gaze gestures combined with haptic feedback to enable state-of-the-art holographic projection technology to enable
+reliable input on such devices. Costanza et al. [1] utilized augmented reality applications and interactions. Other de-
+peripheral vision to deliver less obtrusive visual notifications vices provide similar functions at a smaller scale, such as
+using such devices. Olwal and Kress [9] used low-power Google Glass3, Focals4 and Vuzix Blade5. These glasses utilise
+LED on the inner side of the frame for navigation guidance projection technology to achieve high-resolution informa-
+and projected pre-recorded computer-generated holographic tion display with smaller form factor. However, the HMDs
+(CGH) icons for limited in-lens display. and the smart glasses are often costly to purchase and their
+The often bulky form factor induced by excessive func- obtrusive design makes them unsuitable for everyday use,
+tionality in high-end smart glasses and the scarcity of output especially while interacting face-to-face with others.
+channels in eyewear for sensing purposes both contribute to Other commercial smart eyewear abandoned advanced
+the lack of social acceptance of those devices as ubiquitous display technologies for a more compact form factor to suit
+eyewear for everyday use. We propose an intermediate de- everyday use scenarios. Vue6 supports essential functions
+sign space on the functionality-simplicity spectrum for an that require connectivity with a smartphone. It provides
+everyday smart eyewear design. functions such as calling, navigation and a music player im-
+plemented with bone conduction for audio output and an
+3 DESIGN SPACE FORMULATION integrated touchpad for control. It is also equipped with Iner-
+tial Measurement Unit (IMU) and infrared proximity sensors Glasses and wristwatches are two of the most common
+for activity tracking. Other eyewear devices are explicitly functional gadgets found on our bodies in our everyday
+life designed for sensing purposes. JINS MEME7 is equipped [5, 8]. Despite sharing the early inceptions, the two
+with Electrooculography (EOG) and IMU sensors for physio- devices followed distinct digitisation processes. Whereas
+logical data logging in everyday settings. Pupil Invisible8 is analogue watches face steadily decreasing user numbers,
+embedded with miniature infrared eye trackers to provide smartwatches are catching up [2]. During the evolution of
+everyday gaze tracking. Due to the lack of output channels analogue watches to becoming smartwatches, hybrid sys-
+for these devices, their appeal to the general public is lim- tems were developed. The development presented with de-
+ited. Privacy is another concern regarding the use of Pupil vices that displayed limited digital information, with low-
+resolution digital watches utilizing numerical interfaces, and,
+more recently, fitness wristbands with similar displays. These 1https://www.microsoft.com/en-us/hololens
+2https://www.magicleap.com/ low-resolution devices are still popular despite the advent of
+3https://www.google.com/glass/start/ smartwatches because of their simplistic functionality, low
+4https://www.bynorth.com/ cost and often specific use scenarios. 5https://www.vuzix.com/products/blade-smart-glasses
+6https://www.enjoyvue.com/
+9http://skuggaeyewear.com/ 7https://jins-meme.com/en/
+8https://pupil-labs.com/news/2019-01-09/pupil-invisible-beta-launch.html 10http://www.e-tintproducts.com/ctrl-eyewear/
+662
+Ubiquitous Smart Eyewear Interactions using Implicit Sensing and Unobtrusive UbiComp/ISWC Information Output ’19 Adjunct, September 9–13, 2019, London, United Kingdom
+Figure 1: Design Space Formulation.
+In contrast to the gradual evolution of smartwatches, the smart glasses with an intermediate type of eyewear. We
+evolution of smart eyewear has included a discontinuity—it formulate a design space for eyewear with unobtrusive form
+is not as easy to find devices which sit between traditional factor, low-resolution display, simplistic functionality and
+prescription glasses and smart glasses. Smart glasses, such context-awareness through environmental and physiological
+as Google Glass and Focals, share similar functionality with sensing. These devices should be easily incorporated with
+smartwatches as secondary and ubiquitous digital displays prescription frame glasses without structural modification.
+embedded on devices which are already habitually worn Table 1 summarises our design space analysis covering
+by users. Even though there is a larger population wearing different input and output modalities in implicit and explicit
+glasses than that wearing watches, smart glasses are rarely forms. We focus on implicit input and low-resolution output
+seen in everyday life compared to smartwatches [5, 8]. Po- modalities to explore interaction affordance.
+tential reasons for lower social acceptance include obtrusive
+Input Modalities form factor, distraction and privacy concerns and conflict
+with existing prescription glasses. In this work, we use Schmidt’s definition of as implicit input
+Figure 1 illustrates the motivation behind our proposed ”an action, performed by the user that is not primarily aimed
+design space. Inspired by the evolution of smartwatches, we to interact with a computerized system but which such a
+propose to bridge the gap between everyday glasses and system understands as input.” We define as explicit input
+663
+UbiComp/ISWC ’19 Adjunct, September 9–13, 2019, London, United Kingdom Zhou, et al.
+Implicit Output.
+As discussed above, physiological sensors
+Implicit Explicit
+enable passive background data logging. This can be used to
+Gaze direction; Touch; Smooth Input
+monitor vital signs and and other health or fitness-related
+Stress; Workload; Pursuit Modality
+indicators such as the number of steps walked, heart rate,
+Fatigue; Head
+blood oxygen levels, and distance travelled within certain
+Movement; Facial
+time periods1112. Costanza et al. have used LED lights in the
+Expression
+peripheral vision field, which can be attached to the inside
+of eyewear temples to enable implicit notifications without Automatic tinting; Peripheral display; Output
+occupying users’ attention [1]. Subtle self-tinting can provide Background data LED; See-through Modality
+users with a comfortable vision in combination with ambient logging; Peripheral OLED; Symbolic
+light sensors without their notice. notification holograph; Audio;
+Haptic
+Explicit Output. In the context of this work, we focus on the
+Table 1: Design Space
+simplistic presentation of notification and other explicit infor-
+mation which induce users’ immediate awareness but do not
+require their continuous engagement. LEDs can be embedded
+and activated at different locations on the frame to present di- users’ deliberate manipulation of the device for the purposes
+rectional information. Transparent OLED screens with small of interacting with it [11].
+form factor, such as SparkFun Transparent OLED 13, provide
+Implicit Input. The numerous miniaturised environmental
+a simplistic graphical display for necessary information such
+and physiological sensors embedded in existing wearable de-
+as time, temperature, and notification summary that is avail-
+vices enable potential input modalities with implicit context
+able with limited computing power and power consumption.
+detection and data collection without users’ awareness. Gaze
+Symbolic holograph projections are a visual alternative to
+direction can be detected by training algorithms to recognise graphical displays which present symbolic information from
+patterns in EOG signal from users’ eyes. Electrodermal activ- a predefined set, instead of continuously generating new
+ity (EDA), facial temperature and blink rate enable detection patterns. Acoustic, haptic and bone conduction output can
+of users’ cognitive state variations including stress, workload present notifications or as secondary feedback modalities to
+and alertness. Miniature EDA sensors and infrared temper- compensate for other primary output modalities [10].
+ature sensors can be unobtrusively embedded in eyewear
+frames and blink rate can be captured by EOG sensors. Nat- 4 APPLICATIONS
+ural movement from users’ head can be detected by the IMU
+With our enumeration of potential interactions afforded, we
+sensors and used for activity logging and motion-related
+illustrate three applications as examples of implementing
+interaction. Facial expression can be detected by training
+our design space. We focus on practical everyday scenarios
+algorithms to recognise facial skin deformation with photo
+to explore different combinations of contextual sensor input
+reflective sensors [6]. Ambient light sensors can inform the
+and unobtrusive output.
+device when the lighting condition is uncomfortable.
+Context-Aware Information Explicit Input. In the context of ubiquitous smart eyewear
+interaction, we explore simplistic explicit input modalities Combining head movement detection by IMU sensors with
+which do not require complex hardware support. Instead of physical contextual information collected by environmental
+advanced gesture recognition as implemented in HoloLens, sensors, the device can infer users’ underlying intentions
+simple directional touch gestures can be utilised by embed- and provide simple feedback. For example, time, weather and
+ding miniature capacitive touchpads on the outside of the agenda icons can be displayed as a holographic projection
+temples. EOG signals can be used to utilize eye movements or transparent OLED content when users look up at the sky.
+for smooth pursuit interactions and to enable calibration-free
+gaze input. Implicit Assistance
+Implicit assistance contributes to better accessibility in sce-
+Output Modalities narios where users could not reach other devices, such as
+In this work, we define as the presentation of explicit output
+information which leads to users’ immediate awareness. We
+11https://www.apple.com/au/apple-watch-series-4 define as notifications or background data implicit output 12https://buy.garmin.com/en-AU/AU/p/605739 logging which do not require users’ immediate attention or 13https://core-electronics.com.au/sparkfun-transparent-oled-hud-
+breakout-qwiic.html continuous engagement.
+664
+Ubiquitous Smart Eyewear Interactions using Implicit Sensing and Unobtrusive UbiComp/ISWC Information Output ’19 Adjunct, September 9–13, 2019, London, United Kingdom
+for eyewear with intermediate interaction affordance which
+Implicit Input Explicit Output
+utilises miniature sensing, low-resolution displays and other
+Automatic tinting Lifelogging with Implicit
+assistive interaction modalities. Finally, we proposed exam-
+under sunlight; camera. Output
+ple applications utilising different combinations of implicit
+Unobtrusive message
+and explicit interaction modalities to call attention to future
+notification during
+works towards ubiquitous smart eyewear interaction.
+task [1]; Background
+lifelogging (heart
+rate, steps, etc.);
+REFERENCES
+Facial expression
+[1] Enrico Costanza, Samuel A. Inverso, Elan Pavlov, Rebecca Allen, and detection; Stress and
+Pattie Maes. 2006. Eye-q: Eyeglass Peripheral Display for Subtle In-
+fatigue detection.
+timate Notifications. In Proceedings of the 8th Conference on Human-
+computer Interaction with Mobile Devices and Services (MobileHCI ’06). Drowsiness alert; Notification Explicit
+ACM, New York, NY, USA, 211–218. https://doi.org/10.1145/1152215. Attention alert; responding; Output
+1152261 event-place: Helsinki, Finland.
+Emotion regulation; Face-touching input;
+[2] Tony Danova. 2015. THE SMARTWATCH REPORT: The market for
+Stress regulation. Smooth pursuit.
+luxury wristwatches, retail distribution, and Apple WatchâĂŹs big
+opportunity. https://www.businessinsider.com/the-smartwatch- Table 2: Applications
+report-the-market-for-luxury-wristwatches-retail-distribution-and-
+apple-watchs-big-opportunity-2015-2
+[3] Artem Dementyev and Christian Holz. 2017. DualBlink: A Wearable
+Device to Continuously Detect, Track, and Actuate Blinking For Alle-
+phones and computers, while being occupied with demand-
+viating Dry Eyes and Computer Vision Syndrome. Proceedings of the
+ing tasks. For example, symbolic left/right arrows can be
+1, 1 ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies
+(March 2017), 1–19. https://doi.org/10.1145/3053330 displayed during running or cycling to support navigation.
+[4] Shoya Ishimaru, Kai Kunze, Koichi Kise, Jens Weppner, Andreas Den- Symbolic notifications can be displayed to alert users if nega-
+gel, Paul Lukowicz, and Andreas Bulling. 2014. In the Blink of an tive physiological features are detected such as fatigue, stress,
+Eye: Combining Head Motion and Eye Blink Frequency for Activity
+and drowsiness. For example, this feature could be useful in
+Recognition with Google Glass. In Proceedings of the 5th Augmented
+detecting fatigue driving. ACM, New York, NY, USA, Human International Conference (AH ’14).
+15:1–15:4. https://doi.org/10.1145/2582051.2582066 event-place: Kobe,
+Japan. Cross-Device Interaction
+Natasha Lomas. 2014. Global wearables market to grow [5] As everyday wearable devices, smart eyewear has the ad-
+17% in 2017, 310M devices sold, $30.5BN revenue: Gartner.
+vantage of ubiquitous availability. While smartphones can
+http://social.techcrunch.com/2017/08/24/global-wearables-market-
+display sophisticated semantic and graphical information, to-grow-17-in-2017-310m-devices-sold-30-5bn-revenue-gartner/
+Katsutoshi Masai, Yuta Sugiura, Masa Ogata, Kai Kunze, Masahiko [6] users can spend an unnecessarily long time to find the in-
+Inami, and Maki Sugimoto. 2016. Facial Expression Recognition in formation intended through different software due to the
+Daily Life by Embedded Photo Reflective Sensors on Smart Eyewear. overpowering interactivity. This process can be further sim-
+In Proceedings of the 21st International Conference on Intelligent User plified by combining mobile interaction with smart eyewear ACM Press, Sonoma, California, USA, 317–326. Interfaces - IUI ’16.
+while utilizing its sensing abilities. For example, users can https://doi.org/10.1145/2856767.2856770
+[7] Bence Nanay. 2013. Oxford University Between perception and action. receive a notification of an incoming email as an icon dis-
+Press. played on the glasses. Instead of unlocking the phone and
+[8] Statistics Netherlands. 2013. More than 6 in 10 people wear glasses or navigating to the email interface, the new email can auto-
+contact lenses. https://www.cbs.nl/en-gb/news/2013/38/more-than- matically present itself after the phone is unlocked when the 6-in-10-people-wear-glasses-or-contact-lenses
+glasses detect that the user is facing the phone while there [9] Alex Olwal and Bernard Kress. 2018. 1D eyewear: peripheral, hidden
+LEDs and near-eye holographic displays for unobtrusive augmentation. is an incoming email icon displayed.
+In Proceedings of the 2018 ACM International Symposium on Wearable
+ACM Press, Singapore, Singapore, 184–187. Computers - ISWC ’18. 5 CONCLUSION
+https://doi.org/10.1145/3267242.3267288 In this paper, we first identified the problem of the low accep- Jussi Rantala, Jari Kangas, Poika Isokoski, Deepak Akkil, Oleg Åăpakov, [10]
+and Roope Raisamo. 2015. Haptic Feedback of Gaze Gestures with tance of smart glasses by society and discussed its potential
+Glasses: Localization Accuracy and Effectiveness. In Adjunct Proceed- reasons. We summarised previous research works exploring
+ings of the 2015 ACM International Joint Conference on Pervasive and alternative input and output modalities with smart eyewear.
+Ubiquitous Computing and Proceedings of the 2015 ACM International We also investigated state-of-the-art commercial technology- ACM, Symposium on Wearable Computers (UbiComp/ISWC’15 Adjunct). embedded eyewear with novel sensing abilities. Inspired by New York, NY, USA, 855–862. https://doi.org/10.1145/2800835.2804334
+event-place: Osaka, Japan. the evolution of smartwatches, we formulated a design space
+665
+UbiComp/ISWC ’19 Adjunct, September 9–13, 2019, London, United Kingdom
+[11] Albrecht Schmidt. 2005. Interactive context-aware systems interacting [14] Yuji
+with ambient intelligence. 159 (2005). mation
+Ambient intelligence
+[12] E Temple Smith. 1928. THE HISTORY OF SPECTACLES.
+Medical 2017
+2, 19 (1928), 578–587. https://doi.org/10.5694/j.
+Journal of Australia
+1326-5377.1928.tb13682.x
+on
+[13] Benjamin Tag, Andrew W. Vargo, Aman Gupta, George Chernyshov, [15] Qiushi
+Kai Kunze, and Tilman Dingler. 2019. Continuous Alertness Assess-
+ments: Using EOG Glasses to Unobtrusively Monitor Fatigue Levels Based
+In-The-Wild. In
+Proceedings of the 2019 CHI Conference on Human Fac- 2019
+ACM Press, Glasgow, Scotland tors in Computing Systems - CHI
+’19. EA
+Uk, 1–12. https://doi.org/10.1145/3290605.3300694
+666
+Zhou, et al.
+Uema and Kazutaka Inoue. 2017. JINS MEME algorithm for esti-
+and tracking of concentration of users. In
+Proceedings of the
+ACM International Joint Conference on Pervasive and Ubiquitous
+Computing and Proceedings of the 2017 ACM International Symposium
+ACM, 297–300.
+Wearable
+Computers.
+Zhou, Joshua Newn, Namrata Srivastava, Tilman Dingler, Jorge
+Goncalves, and Eduardo Velloso. 2019. Cognitive Aid: Task Assistance
+On Mental Workload Estimation. In
+Extended Abstracts of the
+CHI Conference on Human Factors in Computing Systems (CHI
+ACM, New York, NY, USA, LBW2315:1–LBW2315:6. https: ’19).
+//doi.org/10.1145/3290607.3313010 event-place: Glasgow, Scotland Uk.

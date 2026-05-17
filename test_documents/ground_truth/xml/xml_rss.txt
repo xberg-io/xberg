@@ -1,0 +1,39 @@
+rss[version]: 0.91
+title: Project Gutenberg Recently Posted or Updated EBooks
+link: https://www.gutenberg.org
+description: EBooks posted or updated today on Project Gutenberg.
+       This feed is regenerated every night.
+language: en-us
+webMaster: webmaster2025@pglaf.org
+pubDate: Tue, 30 Sep 2025 05:51:18 -0400
+lastBuildDate: Tue, 30 Sep 2025 05:51:18 -0400
+title: Pericles, Prince of Tyre by William Shakespeare
+link: https://www.gutenberg.org/ebooks/1537
+description: Language: English
+title: Il piccolo Eyolf by Henrik Ibsen
+link: https://www.gutenberg.org/ebooks/76951
+description: Language: Italian
+title: Dawid se reis na Groenland by David Binney Putnam
+link: https://www.gutenberg.org/ebooks/76953
+description: Language: Afrikaans
+title: Silence, and other stories by Mary Eleanor Wilkins Freeman
+link: https://www.gutenberg.org/ebooks/76948
+description: Language: English
+title: The works of John Dryden, now first collected in eighteen volumes. Volume 17 by John Dryden
+link: https://www.gutenberg.org/ebooks/76952
+description: Language: English
+title: Nora's twin sister by Nina Rhoades
+link: https://www.gutenberg.org/ebooks/76955
+description: Language: English
+title: Pharsalia; Dramatic Episodes of the Civil Wars by Lucan
+link: https://www.gutenberg.org/ebooks/602
+description: Language: English
+title: The history of the Norman conquest of England, its causes and its results, Volume 2 (of 6)
+link: https://www.gutenberg.org/ebooks/76954
+description: Language: English
+title: War letters from the living dead man by David Patterson  Hatch
+link: https://www.gutenberg.org/ebooks/76949
+description: Language: English
+title: The ghost of Charlotte Cray and other stories by Florence Marryat
+link: https://www.gutenberg.org/ebooks/76950
+description: Language: English

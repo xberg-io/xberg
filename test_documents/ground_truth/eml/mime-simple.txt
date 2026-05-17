@@ -1,0 +1,4 @@
+Subject: Example Multipart/Alternative Email
+From: sender@example.com
+To: recipient@example.com
+This is a simple email message.

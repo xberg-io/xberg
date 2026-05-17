@@ -1,0 +1,262 @@
+TAR Archive (12 files, 31968 bytes)
+
+Files:
+- text/._book_war_and_peace_1p.txt (163 bytes)
+- text/book_war_and_peace_1p.txt (3045 bytes)
+- text/._german_text.txt (163 bytes)
+- text/german_text.txt (141 bytes)
+- text/._spanish_text.txt (163 bytes)
+- text/spanish_text.txt (138 bytes)
+- html/._complex_table.html (163 bytes)
+- html/complex_table.html (2697 bytes)
+- html/._html.html (163 bytes)
+- html/html.html (1397 bytes)
+- pdf/._tiny.pdf (163 bytes)
+- pdf/tiny.pdf (23572 bytes)
+
+
+Text File Contents:
+
+=== text/book_war_and_peace_1p.txt ===
+CHAPTER I
+
+"Well, Prince, so Genoa and Lucca are now just family estates of the
+Buonapartes. But I warn you, if you don't tell me that this means war,
+if you still try to defend the infamies and horrors perpetrated by that
+Antichrist--I really believe he is Antichrist--I will have nothing more
+to do with you and you are no longer my friend, no longer my 'faithful
+slave,' as you call yourself! But how do you do? I see I have frightened
+you--sit down and tell me all the news."
+
+It was in July, 1805, and the speaker was the well-known Anna Pavlovna
+Scherer, maid of honor and favorite of the Empress Marya Fedorovna. With
+these words she greeted Prince Vasili Kuragin, a man of high rank and
+importance, who was the first to arrive at her reception. Anna Pavlovna
+had had a cough for some days. She was, as she said, suffering from la
+grippe; grippe being then a new word in St. Petersburg, used only by the
+elite.
+
+All her invitations without exception, written in French, and delivered
+by a scarlet-liveried footman that morning, ran as follows:
+
+"If you have nothing better to do, Count (or Prince), and if the
+prospect of spending an evening with a poor invalid is not too terrible,
+I shall be very charmed to see you tonight between 7 and 10--Annette
+Scherer."
+
+"Heavens! what a virulent attack!" replied the prince, not in the least
+disconcerted by this reception. He had just entered, wearing an
+embroidered court uniform, knee breeches, and shoes, and had stars on
+his breast and a serene expression on his flat face. He spoke in that
+refined French in which our grandfathers not only spoke but thought, and
+with the gentle, patronizing intonation natural to a man of importance
+who had grown old in society and at court. He went up to Anna Pavlovna,
+kissed her hand, presenting to her his bald, scented, and shining head,
+and complacently seated himself on the sofa.
+
+"First of all, dear friend, tell me how you are. Set your friend's mind
+at rest," said he without altering his tone, beneath the politeness and
+affected sympathy of which indifference and even irony could be
+discerned.
+
+"Can one be well while suffering morally? Can one be calm in times like
+these if one has any feeling?" said Anna Pavlovna. "You are staying the
+whole evening, I hope?"
+
+"And the fete at the English ambassador's? Today is Wednesday. I must
+put in an appearance there," said the prince. "My daughter is coming for
+me to take me there."
+
+"I thought today's fete had been canceled. I confess all these
+festivities and fireworks are becoming wearisome."
+
+"If they had known that you wished it, the entertainment would have been
+put off," said the prince, who, like a wound-up clock, by force of habit
+said things he did not even wish to be believed.
+
+"Don't tease! Well, and what has been decided about Novosiltsev's
+dispatch? You know everything."
+
+"What can one say about it?" replied the prince in a cold, listless
+tone. "What has been decided? They have decided that Buonaparte has
+burnt his boats, and I believe that we are ready to burn ours."
+
+
+=== text/german_text.txt ===
+Dies ist ein deutscher Text für Tests der Spracherkennung.
+Er enthält deutsche Wörter und Sätze, um die Funktionalität zu überprüfen.
+
+
+=== text/spanish_text.txt ===
+Este es un texto en español para probar la detección de idioma.
+Contiene palabras y frases en español para verificar la funcionalidad.
+
+
+=== html/html.html ===
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Test page for HTML metadata extraction">
+  <meta name="keywords" content="test,extraction,metadata,html">
+  <meta name="author" content="Kreuzberg Test">
+  <meta property="og:title" content="Test Page Title">
+  <meta property="og:description" content="Test description for Open Graph">
+  <meta property="og:image" content="https://example.com/image.jpg">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Test Twitter Title">
+  <meta name="twitter:description" content="Test Twitter description">
+  <title>Test HTML Page for Metadata Extraction</title>
+</head>
+<body>
+  <h1>Main Heading</h1>
+  <h2>Sub Heading</h2>
+  <p>Browsers usually insert quotation marks around the q element.</p>
+  <p>
+    WWF's goal is to:
+    <q>Build a future where people live in harmony with nature.</q>
+  </p>
+  <a href="https://example.com">Example Link</a>
+  <img src="https://example.com/test.jpg" alt="Test Image">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Test Article",
+    "description": "A test article for structured data",
+    "author": {
+      "@type": "Person",
+      "name": "Test Author"
+    }
+  }
+  </script>
+</body>
+</html>
+
+
+=== html/complex_table.html ===
+<!doctype html>
+<html>
+  <head>
+    <title>Complex Table Test</title>
+    <style>
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 10px 0;
+      }
+      th,
+      td {
+        border: 1px solid #333;
+        padding: 10px;
+        text-align: center;
+      }
+      th {
+        background-color: #4caf50;
+        color: white;
+      }
+      .category {
+        background-color: #f9f9f9;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Quarterly Sales Report</h1>
+
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2">Region</th>
+          <th colspan="4">2024 Sales (in thousands)</th>
+          <th rowspan="2">Total</th>
+        </tr>
+        <tr>
+          <th>Q1</th>
+          <th>Q2</th>
+          <th>Q3</th>
+          <th>Q4</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="category">
+          <td colspan="6">North America</td>
+        </tr>
+        <tr>
+          <td>USA</td>
+          <td>$150</td>
+          <td>$180</td>
+          <td>$165</td>
+          <td>$200</td>
+          <td>$695</td>
+        </tr>
+        <tr>
+          <td>Canada</td>
+          <td>$45</td>
+          <td>$52</td>
+          <td>$48</td>
+          <td>$60</td>
+          <td>$205</td>
+        </tr>
+        <tr class="category">
+          <td colspan="6">Europe</td>
+        </tr>
+        <tr>
+          <td>UK</td>
+          <td>$80</td>
+          <td>$95</td>
+          <td>$88</td>
+          <td>$110</td>
+          <td>$373</td>
+        </tr>
+        <tr>
+          <td>Germany</td>
+          <td>$65</td>
+          <td>$75</td>
+          <td>$70</td>
+          <td>$85</td>
+          <td>$295</td>
+        </tr>
+        <tr>
+          <td>France</td>
+          <td>$40</td>
+          <td>$48</td>
+          <td>$45</td>
+          <td>$55</td>
+          <td>$188</td>
+        </tr>
+        <tr class="category">
+          <td><strong>Grand Total</strong></td>
+          <td><strong>$380</strong></td>
+          <td><strong>$450</strong></td>
+          <td><strong>$416</strong></td>
+          <td><strong>$510</strong></td>
+          <td><strong>$1,756</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Performance Metrics</h2>
+    <table>
+      <tr>
+        <th>Metric</th>
+        <th>Target</th>
+        <th>Actual</th>
+        <th>Status</th>
+      </tr>
+      <tr>
+        <td>Annual Revenue</td>
+        <td>$1,500K</td>
+        <td>$1,756K</td>
+        <td style="color: green">✓ Exceeded</td>
+      </tr>
+      <tr>
+        <td>Growth Rate</td>
+        <td>10%</td>
+        <td>17%</td>
+        <td style="color: green">✓ Exceeded</td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -1,0 +1,58 @@
+---
+title: MDX Sample Document
+author: Test Author
+date: 2024-06-15
+description: A sample MDX document for testing extraction
+keywords:
+  - mdx
+  - testing
+  - kreuzberg
+---
+
+import { Chart } from './components/Chart'
+import Alert from './components/Alert'
+
+export const meta = {
+  version: '1.0',
+}
+
+# MDX Sample Document
+
+This is a sample MDX document that combines **Markdown** with JSX components.
+
+## Features
+
+MDX allows you to use JSX components directly in your markdown:
+
+<Alert type="warning">
+  This is an important warning message rendered by a JSX component.
+</Alert>
+
+### Regular Markdown
+
+- List item one
+- List item two
+- List item three
+
+Here is a table:
+
+| Format | Extension | Supported |
+|--------|-----------|-----------|
+| MDX    | .mdx      | Yes       |
+| MD     | .md       | Yes       |
+
+### Code Example
+
+```javascript
+function greet(name) {
+  return `Hello, ${name}!`;
+}
+```
+
+<Chart data={sampleData} />
+
+{/* This is a JSX comment that should be stripped */}
+
+## Conclusion
+
+MDX is a powerful format that bridges content and components.

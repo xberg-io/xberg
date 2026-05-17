@@ -1,0 +1,131 @@
+Toggle the table of contents
+
+Sinthgunt
+
+5 languages
+
+- Deutsch
+- Ελληνικά
+- Español
+- Português
+- Українська
+
+Edit links
+
+- Article
+- Talk
+
+English
+
+- Read
+- Edit
+- View history
+
+Tools
+
+Tools
+
+move to sidebar
+
+hide
+
+Actions
+
+- Read
+- Edit
+- View history
+
+General
+
+- What links here
+- Related changes
+- Upload file
+- Permanent link
+- Page information
+- Cite this page
+- Get shortened URL
+- Download QR code
+
+Print/export
+
+- Download as PDF
+- Printable version
+
+In other projects
+
+- Wikidata item
+
+Appearance
+
+move to sidebar
+
+hide
+
+[This is a good article. Click here for more information.]
+
+From Wikipedia, the free encyclopedia
+
+Figure in Germanic mythology
+
+[]
+
+Sinthgunt^([needs IPA]) is a figure in Germanic mythology, attested solely in the Old High German 9th- or 10th-century Second Merseburg Charm. In the verse charm, Sinthgunt is referred to as the sister of the personified sun, Sunna (whose name is alliterative to Sinthgunt),^([1]) and the two sisters are cited as both producing incantations to heal the horse of Phol, another otherwise unattested figure but possibly the same as Balder, who is named elsewhere in the charm. The two are then followed by Friia and Uolla, also alliterative and stated as sisters.
+
+As Sinthgunt is otherwise unattested, her significance is otherwise unknown, but some scholarly theories exist about her role in Germanic mythology based on proposed etymologies and the potential significance of her placement within the poem.
+
+Etymology
+
+[edit]
+
+The etymology of Sinthgunt is unclear. In the original manuscript, Sinthgunt is spelled Sinhtgunt (emphasis added). In the 19th century, Sophus Bugge stuck strictly to this reading, proposing a complex compound based on Germanic *Sin-naχt-gund, i.e., "the night-walking one".^([2]) As a result of the pairing with Sunna, the personified sun (corresponding to Old Norse Sól), this etymology has been interpreted as a reference to the moon. However, this reading has yielded problems; the moon in Germanic mythology is considered masculine, exemplified in the personification of the moon in Norse mythology, Máni, a male figure. According to Rudolf Simek, the historical record lacks evidence for any cult of personified celestial bodies among the ancient Germanic peoples.^([3])
+
+Stefan Schaffner rejects this etymology, as does Heiner Eichner [de], because the first element Sinht- cannot be based on the presupposed earlier Germanic *sinχt-. Such a Germanic form would have yielded Old High German *sīht by regular sound change.^([4]) The amended Sinthgunt presupposes a Proto-Germanic compound *Senþa-gunþjō, the first element meaning "raid, (military) campaign", the second one "fight". This interpretation corresponds well to other Old High German female names such as Sindhilt (from *Senþa-χilðijō, with its second element also meaning "fight", cf. Old Norse hildr, Old English hild).^([5]) Simek also mentions the interpretation "heavenly body, star".^([6])
+
+Placement
+
+[edit]
+
+The figures Fulla (Uolla) and Frigg (Friia) are attested together in later Old Norse sources (though not as sisters), and theories have been proposed that Fulla may at one time have been an aspect of Frigg. This notion has resulted in a theory that a similar situation may have existed between the figures of Sinthgunt and Sunna/Sól, in that the two may have been understood as aspects of one another rather than entirely separate figures.^([7]) Similarly, Wolfgang Beck [de] analysed her as a subordinate goddess from Sunna's retinue, a kind of "situation goddess", based on her unique appearance in the sources.^([8])
+
+Friedrich Kauffmann classified Sinhtgunt as a valkyrie in the 19th century, because the elements -gund and -hild appear frequently in their names.^([9]) Stefan Schaffner and Heiner Eichner more recently agreed with him, based on Günter Müller's paper on the valkyries' healing powers.^([10])
+
+Karl Helm rejected Kauffmann and grouped Sinhtgunt with the Idisi of the First Merseburg Charm, as a specially defined group of Germanic goddesses.^([11])
+
+Notes
+
+[edit]
+
+1.  ^ Orchard (1997:112).
+2.  ^ Sophus Bugge. Studien über die Entstehung der nordischen Götter- und Heldensagen. München 1889, p. 298. Cf. Rudolf Simek. Lexikon der germanischen Mythologie. Stuttgart: Kröner, 1984, p. 374; trans. Angela Hall, Dictionary of Northern Mythology. Cambridge: Brewer, 1993, pp. 285–86.
+3.  ^ Simek, pp. 392, 397.
+4.  ^ Stefan Schaffner. "Die Götternamen des Zweiten Merseburger Zauberspruchs". Die Sprache 41.2 (1999) p. 169.
+5.  ^ Schaffner, pp. 169–70.
+6.  ^ Simek (2007:285-286).
+7.  ^ Bostock (1976:29).
+8.  ^ Wolfgang Beck. Die Merseburger Zaubersprüche. Eine Einführung. Pertersberg, 2010, pp. 163–171, here p. 171.
+9.  ^ Friedrich Kauffmann. "Der Zweite Merseburger Zauberspruch". Beiträge zur Geschichte der deutschen Sprache und Literatur 15 (1891), pp. 207–210; Friedrich Kauffmann. "Noch einmal der zweite Merseburger Spruch". Zeitschrift für deutsche Philologie 26 (1894), pp. 454–462.
+10. ^ Gunter Müller. "Zur Heilkraft der Walküren. Sondersprachliches der Magie in kontinentalen und skandinavischen Zeugnissen". Frühmittelalterliche Studien 10 (1976), pp. 358 ff.
+11. ^ Karl Helm. Altgermanische Religionsgeschichte, Vol. 2.2, Heidelberg: Winter, 1953, pp. 219, 227.
+
+References
+
+[edit]
+
+- Bostock, John Knight. King, Charles Kenneth. McLintock, D. R. (1976). A Handbook on Old High German Literature. Oxford University Press. ISBN 0-19-815392-9
+- Orchard, Andy (1997). Dictionary of Norse Myth and Legend. Cassell. ISBN 0-304-34520-2
+- Simek, Rudolf (2007) translated by Angela Hall. Dictionary of Northern Mythology. D.S. Brewer. ISBN 0-85991-513-1
+
+[]
+
+Retrieved from "https://en.wikipedia.org/w/index.php?title=Sinthgunt&oldid=1296614947"
+
+Category:
+
+- Germanic goddesses
+
+Hidden categories:
+
+- Articles with short description
+- Short description matches Wikidata
+- Articles needing IPA
+- Good articles

@@ -1,0 +1,901 @@
+                                                           DocLayNet: A Large Human-Annotated Dataset for
+                                                                     Document-Layout Analysis
+                                                         Birgit Pfitzmann                                              Christoph Auer                                                                                                                                                                               Michele Dolfi
+                                                          IBM Research                                                 IBM Research                                                                                                                                                                IBM Research
+                                                     Rueschlikon, Switzerland                                     Rueschlikon, Switzerland                                                                                                                                                    Rueschlikon, Switzerland
+                                                       bpf@zurich.ibm.com                                           cau@zurich.ibm.com                                                                                                                                                          dol@zurich.ibm.com
+
+                                                                                       Ahmed S. Nassar                                                                                                   Peter Staar
+                                                                                        IBM Research                                                         IBM Research
+                                                                                   Rueschlikon, Switzerland                                             Rueschlikon, Switzerland
+
+
+
+
+arXiv:2206.01062v1 [cs.CV] 2 Jun 2022
+                                                                                    ahn@zurich.ibm.com                                                    taa@zurich.ibm.com
+                                        ABSTRACT                                                                                      OPERATION (cont.)                                                                                                      MODEL AY11236
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                 3        signs, signals and road markings
+
+                                                                                                                                                                                                                                                                       Interpupillary Slide Adjustment
+                                                                                                                                      Model AY11230                                                  Model AY11234
+                                                                                                                                                                                                                                                                                                                            Eyepiece
+
+
+
+                                        Accurate document layout analysis is a key requirement for high-                              SELECTING OBJECTIVE
+                                                                                                                                      MAGNIFICATION
+                                                                                                                                      1. There are two objectives. The lower
+                                                                                                                                         magnification objective has a greater
+                                                                                                                                         depth of field and view.
+                                                                                                                                      2. In order to observe the specimen
+                                                                                                                                                                                                     FOCUSING
+                                                                                                                                                                                                     1. Turn the focusing knob away or toward
+                                                                                                                                                                                                        you until a clear image is viewed.
+                                                                                                                                                                                                     2. If the image is unclear, adjust the
+                                                                                                                                                                                                        height of the elevator up or down,
+                                                                                                                                                                                                        then turn the focusing knob again.
+                                                                                                                                                                                                                                                                                 Rotating Head
+
+
+                                                                                                                                                                                                                                                                           Revolving Turret
+                                                                                                                                                                                                                                                                                                                    Stand
+                                                                                                                                                                                                                                                                                                                                                                                                                                            in this chapter
+                                                                                                                                                                                                                                                                                                                                                                                                                                            • Signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          In chapter 2, you and your vehicle, you learned about
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          some of the controls in your vehicle. This chapter is a handy
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          reference section that gives examples of the most common
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          signs, signals and road markings that keep traffic organized
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          and flowing smoothly.
+                                                                                                                                         easily use the lower magnification                                                                                                                                                                                                                                                                   – regulatory signs
+
+
+
+                                        quality PDF document conversion. With the recent availability of                                 objective first. Then, by rotating the
+                                                                                                                                         case, the magnification can be
+                                                                                                                                         changed.
+
+                                                                                                                                      CHANGING THE INTERPUPILLARY
+                                                                                                                                      DISTANCE
+                                                                                                                                                                                                     ZOOM MAGNIFICATION
+                                                                                                                                                                                                     1. Turn the zoom magnification knob to
+                                                                                                                                                                                                        the desired magnification and field f
+                                                                                                                                                                                                        view.
+                                                                                                                                                                                                     2. In most situations, it is recommended
+                                                                                                                                                                                                        that you focus at the lowest
+                                                                                                                                                                                                                                                                   Condenser
+                                                                                                                                                                                                                                                                   Focusing
+                                                                                                                                                                                                                                                                   Knob
+                                                                                                                                                                                                                                                                         Objectives
+
+
+                                                                                                                                                                                                                                                                         Stage                                              Coarse
+                                                                                                                                                                                                                                                                                                                            Adjustment
+                                                                                                                                                                                                                                                                                                                            Knob
+                                                                                                                                                                                                                                                                                                                             Fine
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – school,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                playground and
+                                                                                                                                                                                                                                                                                                                                                                                                                                                crosswalk signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – lane use signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          Signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          There are three ways to read signs: by their shape, colour and
+                                                                                                                                                                                                                                                                            Lamp                                             Adjustment                                                                                                       – turn control signs        the messages printed on them. Understanding these three ways
+                                                                                                                                      1. The distance between the observer's                            magnification, then move to a higher
+
+
+                                        public, large ground-truth datasets such as PubLayNet and DocBank,                               pupils is the interpupillary distance.
+                                                                                                                                      2. To adjust the interpupillary distance
+                                                                                                                                         rotate the prism caps until both eyes
+                                                                                                                                         coincide with the image in the
+                                                                                                                                         eyepiece.
+                                                                                                                                                                                                        magnification and re-focus as
+                                                                                                                                                                                                        necessary.
+                                                                                                                                                                                                     3. If the image is not clear to both eyes
+                                                                                                                                                                                                        at the same time, the diopter ring may
+                                                                                                                                                                                                        need adjustment.
+                                                                                                                                                                                                                                                                            On/Off
+                                                                                                                                                                                                                                                                            Switch
+
+
+
+                                                                                                                                                                                                                                                                                                                        Power
+                                                                                                                                                                                                                                                                                                                        Cord
+                                                                                                                                                                                                                                                                                                                             Knob
+                                                                                                                                                                                                                                                                                                                             Stage Clip
+                                                                                                                                                                                                                                                                                                                             Adjustment
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – parking signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – reserved lane
+                                                                                                                                                                                                                                                                                                                                                                                                                                                signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – warning signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          of classifying signs will help you figure out the meaning of signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          that are new to you.
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – object markers
+                                                                                                                                      FOCUSING                                    DIOPTER RING ADJUSTMENT
+
+
+                                        deep-learning models have proven to be very effective at layout                               1. Remove the lens protective cover.
+                                                                                                                                      2. Place the specimen on the working
+                                                                                                                                         stage.
+                                                                                                                                      3. Focus the specimen with the left eye
+                                                                                                                                         first while turning the focus knob until
+                                                                                                                                                                                  1. To adjust the eyepiece for viewing with
+                                                                                                                                                                                     or without eyeglasses and for
+                                                                                                                                                                                     differences in acuity between the right
+                                                                                                                                                                                     and left eyes, follow the following
+                                                                                                                                                                                     steps:
+                                                                                                                                                                                                                                                                                                 Model AY11236
+                                                                                                                                                                                                                                                                                                                 Lamp
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – construction
+                                                                                                                                                                                                                                                                                                                                                                                                                                                signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – information and
+                                                                                                                                                                                                                                                                                                                                                                                                                                                destination signs                    Stop                           Yield the right-of-way
+                                                                                                                                         the image appears clear and sharp.          a. Observe an image through the left
+                                                                                                                                                                                                                                                             MICROSCOPE USAGE                                                                                                                                                                 – railway signs
+
+
+
+                                        detection and segmentation. While these datasets are of adequate
+                                                                                                                                      4. Rotate the right eyepiece ring until the        eyepiece and bring a specific point
+                                                                                                                                         images in each eyepiece coincide and            into focus using the focus knob.                                                                                                                                                                                                                   • Signals
+                                                                                                                                         are sharp and clear.                        b. By turning the diopter ring                                          BARSKA Model AY11236 is a powerful fixed power compound                                                                                                                          – lane control
+                                                                                                                                                                                         adjustment for the left eyepiece,
+                                                                                                                                      CHANGING THE BULB                                  bring the same point into sharp                                     microscope designed for biological studies such as specimen                                                                                                                        signals
+                                                                                                                                      1. Disconnect the power cord.                      focus.                                                              examination. It can also be used for examining bacteria and                                                                                                                      – traffic lights
+                                                                                                                                      2. When the bulb is cool, remove the            c.Then bring the same point into                                       for general clinical and medical studies and other scientific uses.                                                                                                            • Road markings
+
+                                        size to train such models, they severely lack in layout variability                              oblique illuminator cap and remove
+                                                                                                                                         the halogen bulb ith cap.
+                                                                                                                                      3. Replace with a new halogen bulb.
+                                                                                                                                      4. Open the window in the base plate and
+                                                                                                                                         replace the halogen lamp or
+                                                                                                                                         fluorescent lamp of transmitted
+                                                                                                                                                                                         focus through the right eyepiece
+                                                                                                                                                                                         by turning the right diopter ring.
+                                                                                                                                                                                      d.With more than one viewer, each
+                                                                                                                                                                                         viewer should note their own
+                                                                                                                                                                                         diopter ring position for the left
+                                                                                                                                                                                         and right eyepieces, then before
+                                                                                                                                                                                                                                                             CONSTRUCTION
+                                                                                                                                                                                                                                                             BARSKA Model AY11236 is a fixed power compound microscope.
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – yellow lines
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – white lines
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – reserved lane
+                                                                                                                                                                                                                                                                                                                                                                                                                                                markings
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                               Shows driving
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                               regulations
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       Explains lane use
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               School zone signs
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               are fluorescent
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               yellow-green
+
+
+
+                                                                                                                                         illuminator.                                    viewing set the diopter ring
+                                                                                                                                                                                                                                                             It is constructed with two optical paths at the same angle. It is
+
+                                        since they are sourced from scientific article repositories such as
+                                                                                                                                                                                                                                                                                                                                                                                                                                              – other markings
+                                                                                                                                                                                         adjustments to that setting.
+                                                                                                                                       USING THE VERTICAL TUBE -                                                                                             equipped with transmitted illumination. By using this instrument,
+                                                                                                                                       MODELS AY11230/11234                       CHANGING THE BULB                                                          the user can observe specimens at magnification from 40x to
+                                                                                                                                                                                  1. Disconnect the power cord from the
+                                                                                                                                       1. The vertical tube can be used for          electrical outlet.                                                      1000x by selecting the desired objective lens. Coarse and fine
+                                                                                                                                           instructional viewing or to photograph 2. When the bulb is cool, remove the                                       focus adjustments provide accuracy and image detail. The rotating                                                                                                                                             Tells about motorist      Shows a permitted         Shows an action that
+                                                                                                                                           the image with a digital camera or a      oblique illuminator cap and remove                                      head allows the user to position the eyepieces for maximum                                                                                                                                                                                                        is not permitted
+
+
+                                        PubMed and arXiv only. Consequently, the accuracy of the layout
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                           services                  action
+                                                                                                                                          micro TV unit                              the halogen bulb ith cap.
+                                                                                                                                       2. Loosen the retention screw, then rotate 3. Replace with a new halogen bulb.                                        viewing comfort and easy access to all adjustment knobs.
+                                                                                                                                           the adjustment ring to change the      4. Open the window in the base plate
+                                                                                                                                           length of the vertical tube.
+                                                                                                                                                                                     and replace the halogen lamp or
+                                                                                                                                       3. Make sure that both the images in          fluorescent lamp of transmitted
+                                                                                                                                                                                     illuminator.
+
+
+
+                                        segmentation drops significantly when these models are applied                                 13                                                                                                                                                                                                                                                                       14
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                   Warns of hazards
+                                                                                                                                                                                                                                                                                                                                                                                                                                                   ahead
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Warns of
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                           construction zones
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Railway crossing
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               Shows distance and
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               direction
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                29
+
+
+                                        on more challenging and diverse layouts. In this paper, we present
+                                                                                                                                         AGL Energy Limited ABN 74 115 061 375
+
+
+
+                                        DocLayNet, a new, publicly available, document-layout annotation                                 AGL 2013 Financial Calendar
+                                                                                                                                                                                                                                                                                                                                                                                                         Circling Minimums
+                                                                                                                                         22 August 2012                             2012 full year result and final dividend announced
+                                                                                                                                                                                                                                                                                                                                                                                                         7KHUHZDVDFKDQJHWRWKH7(536FULWHULDLQWKDWDႇHFWVFLUFOLQJDUHDGLPHQVLRQE\H[SDQGLQJWKHDUHDVWRSURYLGH
+
+                                        dataset in COCO format. It contains 80863 manually annotated                                     30 August 2012
+                                                                                                                                         5 September 2012
+                                                                                                                                         27 September 2012
+                                                                                                                                         23 October 2012
+                                                                                                                                                                                    Ex-dividend trading commences
+                                                                                                                                                                                    Record date for 2012 final dividend
+                                                                                                                                                                                    Final dividend payable
+                                                                                                                                                                                    Annual General Meeting
+                                                                                                                                                                                                                                                                                                                                                                                                         improved obstacle protection. To indicate that the new criteria had been applied to a given procedure, a    is placed on
+                                                                                                                                                                                                                                                                                                                                                                                                         the circling line of minimums. The new circling tables and explanatory information is located in the Legend of the TPP.
+
+                                                                                                                                                                                                                                                                                                                                                                                                         7KHDSSURDFKHVXVLQJVWDQGDUGFLUFOLQJDSSURDFKDUHDVFDQEHLGHQWL¿HGE\WKHDEVHQFHRIWKH                      on the circling line of
+
+
+                                        pages from diverse data sources to represent a wide variability in                               27 February 20131
+                                                                                                                                         28 August 20131
+                                                                                                                                                                                    2013 interim result and interim dividend announced
+                                                                                                                                                                                    2013 full year results and final dividend announced
+                                                                                                                                         1 Indicative dates only, subject to change/Board confirmation
+                                                                                                                                                                                                                                                                                                                                                                                                         minima.
+
+
+
+                                                                                                                                         AGL’s Annual General Meeting will be held at the City Recital Hall, Angel Place, Sydney
+
+
+                                        layouts. For each PDF page, the layout annotations provide labelled                              commencing at 10.30am on Tuesday 23 October 2012.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              $SSO\([SDQGHG&LUFOLQJ$SSURDFK0DQHXYHULQJ$LUVSDFH5DGLXV
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              Table
+
+                                                                                                                                                                                                                                                                                                                                                                                                          $SSO\6WDQGDUG&LUFOLQJ$SSURDFK0DQHXYHULQJ5DGLXV7DEOH
+
+
+                                        bounding-boxes with a choice of 11 distinct classes. DocLayNet
+                                                                                                                                         Looking back on
+                                                                                                                                                                                                                                                                                                                                                                                                         AIRPORT SKETCH
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                FAA Chart Users’ Guide - Terminal Procedures Publication (TPP) - Terms
+                                                                                                                                                                                                                                                                                                                                                                                                         The airport sketch is a depiction of the airport with emphasis on runway pattern and related
+
+
+                                        also provides a subset of double- and triple-annotated pages to
+                                                                                                                                                                                                                                                                                                                                                                                                         information, positioned in either the lower left or lower right corner of the chart to aid pi-
+                                                                                                                                                                                                                                                                                                                                                                                                         lot recognition of the airport from the air and to provide some information to aid on ground
+
+
+                                                                                                                                         175 years of
+                                                                                                                                                                                                                                                                                                                                                                                                         navigation of the airport. The runways are drawn to scale and oriented to true north. Runway
+                                                                                                                                                                                                                                                                                                                                                                                                         dimensions (length and width) are shown for all active runways.
+
+
+
+                                        determine the inter-annotator agreement. In multiple experiments,                                                                                                                                                                                                                                                                                                Runway(s) are depicted based on what type and construction of the runway.
+
+
+
+                                                                                                                                         looking forward.                                                                                                                                                                                                                                                 Hard Surface      Other Than
+                                                                                                                                                                                                                                                                                                                                                                                                                            Hard Surface
+                                                                                                                                                                                                                                                                                                                                                                                                                                             Metal Surface           Closed Runway          Under Construction
+
+
+
+
+                                        we provide baseline accuracy scores (in mAP) for a set of popular                                                                                                                                                                                                                                                                                                 Stopways,
+                                                                                                                                                                                                                                                                                                                                                                                                          Taxiways, Park-
+                                                                                                                                                                                                                                                                                                                                                                                                                            Displaced
+                                                                                                                                                                                                                                                                                                                                                                                                                            Threshold
+                                                                                                                                                                                                                                                                                                                                                                                                                                             Closed
+                                                                                                                                                                                                                                                                                                                                                                                                                                             Pavement
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                     Water Runway
+
+                                                                                                                                                                                                                                                                                                                                                                                                          ing Areas
+
+
+                                        object detection models. We also demonstrate that these models                                                                                                     Yesterday
+                                                                                                                                                                                                           Established in Sydney in 1837, and then
+                                                                                                                                                                                                           known as The Australian Gas Light Company,                                                                                                                                                    Taxiways and aprons are shaded grey. Other runway features that may be shown are runway numbers, runway dimen-
+                                                                                                                                                                                                           the AGL business has an established history
+
+                                        fall approximately 10% behind the inter-annotator agreement. Fur-                                                                                                  and reputation for serving the gas and
+                                                                                                                                                                                                           electricity needs of Australian households.
+                                                                                                                                                                                                           In 1841, when AGL supplied the gas to light
+                                                                                                                                                                                                           the first public street lamp, it was reported
+                                                                                                                                                                                                                                                                                                                                                                                                         sions, runway slope, arresting gear, and displaced threshold.
+
+                                                                                                                                                                                                                                                                                                                                                                                                         2WKHULQIRUPDWLRQFRQFHUQLQJOLJKWLQJ¿QDODSSURDFKEHDULQJVDLUSRUWEHDFRQREVWDFOHVFRQWUROWRZHU1$9$,'VKHOL-
+                                                                                                                                                                                                                                                                                                                                                                                                         pads may also be shown.
+                                                                                                                                                                                                           in the Sydney Gazette as a “wonderful
+
+
+                                        thermore, we provide evidence that DocLayNet is of sufficient size.                                                                                                achievement of scientific knowledge, assisted
+                                                                                                                                                                                                           by mechanical ingenuity.” Within two years,
+                                                                                                                                                                                                           165 gas lamps were lighting the City of Sydney.
+                                                                                                                                                                                                                                                                                                                                                                                                         $LUSRUW(OHYDWLRQDQG7RXFKGRZQ=RQH(OHYDWLRQ
+
+                                                                                                                                                                                                                                                                                                                                                                                                         The airport elevation is shown enclosed within a box in the upper left corner of the sketch box and the touchdown zone
+                                                                                                                                                                                                                                                                                                                                                                                                         elevation (TDZE) is shown in the upper right corner of the sketch box. The airport elevation is the highest point of an
+                                                                                                                                                                                                                                                                                                                                                                                                         DLUSRUW¶VXVDEOHUXQZD\VPHDVXUHGLQIHHWIURPPHDQVHDOHYHO7KH7'=(LVWKHKLJKHVWHOHYDWLRQLQWKH¿UVWIHHWRI
+
+                                        Lastly, we compare models trained on PubLayNet, DocBank and                                                                                                                                                                                                                                                                                                      the landing surface. Circling only approaches will not show a TDZE.
+
+
+
+
+                                        DocLayNet, showing that layout predictions of the DocLayNet-
+                                        trained models are more robust and thus the preferred choice for                                                                                                                                                                                                                                                                                                                                                                   114
+
+
+
+
+                                        general-purpose document-layout analysis.
+                                                                                                                                    Figure 1: Four examples of complex page layouts across dif-
+                                        CCS CONCEPTS                                                                                ferent document categories
+                                        • Information systems → Document structure; • Applied com-
+                                        puting → Document analysis; • Computing methodologies
+                                        → Machine learning; Computer vision; Object detection;
+                                                                                                                                    KEYWORDS
+                                                                                                                                    PDF document conversion, layout segmentation, object-detection,
+                                                                                                                                    data set, Machine Learning
+                                        Permission to make digital or hard copies of part or all of this work for personal or
+                                        classroom use is granted without fee provided that copies are not made or distributed       ACM Reference Format:
+                                        for profit or commercial advantage and that copies bear this notice and the full citation   Birgit Pfitzmann, Christoph Auer, Michele Dolfi, Ahmed S. Nassar, and Peter
+                                        on the first page. Copyrights for third-party components of this work must be honored.      Staar. 2022. DocLayNet: A Large Human-Annotated Dataset for Document-
+                                        For all other uses, contact the owner/author(s).
+                                                                                                                                    Layout Analysis. In Proceedings of the 28th ACM SIGKDD Conference on
+                                        KDD ’22, August 14–18, 2022, Washington, DC, USA
+                                        © 2022 Copyright held by the owner/author(s).                                               Knowledge Discovery and Data Mining (KDD ’22), August 14–18, 2022, Wash-
+                                        ACM ISBN 978-1-4503-9385-0/22/08.                                                           ington, DC, USA. ACM, New York, NY, USA, 9 pages. https://doi.org/10.1145/
+                                        https://doi.org/10.1145/3534678.3539043                                                     3534678.3539043
+KDD ’22, August 14–18, 2022, Washington, DC, USA Birgit Pfitzmann, Christoph Auer, Michele Dolfi, Ahmed S. Nassar, and Peter Staar
+
+
+1    INTRODUCTION                                                                This enables experimentation with annotation uncertainty
+                                                                                 and quality control analysis.
+Despite the substantial improvements achieved with machine-learning          (5) Pre-defined Train-, Test- & Validation-set: Like DocBank, we
+(ML) approaches and deep neural networks in recent years, docu-                  provide fixed train-, test- & validation-sets to ensure propor-
+ment conversion remains a challenging problem, as demonstrated                   tional representation of the class-labels. Further, we prevent
+by the numerous public competitions held on this topic [1–4]. The                leakage of unique layouts across sets, which has a large effect
+challenge originates from the huge variability in PDF documents                  on model accuracy scores.
+regarding layout, language and formats (scanned, programmatic               All aspects outlined above are detailed in Section 3. In Section 4,
+or a combination of both). Engineering a single ML model that can        we will elaborate on how we designed and executed this large-scale
+be applied on all types of documents and provides high-quality           human annotation campaign. We will also share key insights and
+layout segmentation remains to this day extremely challenging [5].       lessons learned that might prove helpful for other parties planning
+To highlight the variability in document layouts, we show a few          to set up annotation campaigns.
+example documents from the DocLayNet dataset in Figure 1.                   In Section 5, we will present baseline accuracy numbers for a
+   A key problem in the process of document conversion is to under-      variety of object detection methods (Faster R-CNN, Mask R-CNN
+stand the structure of a single document page, i.e. which segments       and YOLOv5) trained on DocLayNet. We further show how the
+of text should be grouped together in a unit. To train models for this   model performance is impacted by varying the DocLayNet dataset
+task, there are currently two large datasets available to the com-       size, reducing the label set and modifying the train/test-split. Last
+munity, PubLayNet [6] and DocBank [7]. They were introduced              but not least, we compare the performance of models trained on
+in 2019 and 2020 respectively and significantly accelerated the im-      PubLayNet, DocBank and DocLayNet and demonstrate that a model
+plementation of layout detection and segmentation models due to          trained on DocLayNet provides overall more robust layout recovery.
+their sizes of 300K and 500K ground-truth pages. These sizes were
+achieved by leveraging an automation approach. The benefit of au-        2    RELATED WORK
+tomated ground-truth generation is obvious: one can generate large
+ground-truth datasets at virtually no cost. However, the automation
+                                                                         While early approaches in document-layout analysis used rule-
+introduces a constraint on the variability in the dataset, because
+                                                                         based algorithms and heuristics [8], the problem is lately addressed
+corresponding structured source data must be available. PubLayNet
+                                                                         with deep learning methods. The most common approach is to lever-
+and DocBank were both generated from scientific document repos-
+                                                                         age object detection models [9–15]. In the last decade, the accuracy
+itories (PubMed and arXiv), which provide XML or LATEX sources.
+                                                                         and speed of these models has increased dramatically. Furthermore,
+Those scientific documents present a limited variability in their
+                                                                         most state-of-the-art object detection methods can be trained and
+layouts, because they are typeset in uniform templates provided by
+                                                                         applied with very little work, thanks to a standardisation effort
+the publishers. Obviously, documents such as technical manuals,
+                                                                         of the ground-truth data format [16] and common deep-learning
+annual company reports, legal text, government tenders, etc. have
+                                                                         frameworks [17]. Reference data sets such as PubLayNet [6] and
+very different and partially unique layouts. As a consequence, the
+                                                                         DocBank provide their data in the commonly accepted COCO for-
+layout predictions obtained from models trained on PubLayNet or
+                                                                         mat [16].
+DocBank is very reasonable when applied on scientific documents.
+                                                                            Lately, new types of ML models for document-layout analysis
+However, for more artistic or free-style layouts, we see sub-par
+                                                                         have emerged in the community [18–21]. These models do not
+prediction quality from these models, which we demonstrate in
+                                                                         approach the problem of layout analysis purely based on an image
+Section 5.
+                                                                         representation of the page, as computer vision methods do. Instead,
+   In this paper, we present the DocLayNet dataset. It provides page-
+                                                                         they combine the text tokens and image representation of a page
+by-page layout annotation ground-truth using bounding-boxes for
+                                                                         in order to obtain a segmentation. While the reported accuracies
+11 distinct class labels on 80863 unique document pages, of which
+                                                                         appear to be promising, a broadly accepted data format which links
+a fraction carry double- or triple-annotations. DocLayNet is similar
+                                                                         geometric and textual features has yet to establish.
+in spirit to PubLayNet and DocBank and will likewise be made
+available to the public1 in order to stimulate the document-layout
+analysis community. It distinguishes itself in the following aspects:    3    THE DOCLAYNET DATASET
+    (1) Human Annotation: In contrast to PubLayNet and DocBank,
+                                                                         DocLayNet contains 80863 PDF pages. Among these, 7059 carry two
+        we relied on human annotation instead of automation ap-
+                                                                         instances of human annotations, and 1591 carry three. This amounts
+        proaches to generate the data set.
+                                                                         to 91104 total annotation instances. The annotations provide lay-
+    (2) Large Layout Variability: We include diverse and complex
+                                                                         out information in the shape of labeled, rectangular bounding-
+        layouts from a large variety of public sources.
+                                                                         boxes. We define 11 distinct labels for layout features, namely Cap-
+    (3) Detailed Label Set: We define 11 class labels to distinguish
+                                                                         tion, Footnote, Formula, List-item, Page-footer, Page-header, Picture,
+        layout features in high detail. PubLayNet provides 5 labels;
+                                                                         Section-header, Table, Text, and Title. Our reasoning for picking this
+        DocBank provides 13, although not a superset of ours.
+                                                                         particular label set is detailed in Section 4.
+    (4) Redundant Annotations: A fraction of the pages in the Do-
+                                                                            In addition to open intellectual property constraints for the
+        cLayNet data set carry more than one human annotation.
+                                                                         source documents, we required that the documents in DocLayNet
+1 https://developer.ibm.com/exchanges/data/all/doclaynet                 adhere to a few conditions. Firstly, we kept scanned documents
+DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis                 KDD ’22, August 14–18, 2022, Washington, DC, USA
+
+
+                                                                              Table 1 shows the overall frequency and distribution of the labels
+                                                  Scientific              among the different sets. Importantly, we ensure that subsets are
+                                                                          only split on full-document boundaries. This avoids that pages of
+           Financial                       17%                            the same document are spread over train, test and validation set,
+                           32%                             Patents        which can give an undesired evaluation advantage to models and
+                                                  8%                      lead to overestimation of their prediction accuracy. We will show
+                                                                          the impact of this decision in Section 5.
+                                                                              In order to accommodate the different types of models currently
+                            6%                21%                         in use by the community, we provide DocLayNet in an augmented
+             Tenders              16%                                     COCO format [16]. This entails the standard COCO ground-truth
+                                                        Manuals
+                                                                          file (in JSON format) with the associated page images (in PNG
+                                                                          format, 1025×1025 pixels). Furthermore, custom fields have been
+                            Laws
+                                                                          added to each COCO record to specify document category, original
+                                                                          document filename and page number. In addition, we also provide
+Figure 2: Distribution of DocLayNet pages across document
+                                                                          the original PDF pages, as well as sidecar files containing parsed
+categories.
+                                                                          PDF text and text-cell coordinates (in JSON). All additional files are
+                                                                          linked to the primary page images by their matching filenames.
+                                                                              Despite being cost-intense and far less scalable than automation,
+to a minimum, since they introduce difficulties in annotation (see        human annotation has several benefits over automated ground-
+Section 4). As a second condition, we focussed on medium to large         truth generation. The first and most obvious reason to leverage
+documents (> 10 pages) with technical content, dense in complex           human annotations is the freedom to annotate any type of doc-
+tables, figures, plots and captions. Such documents carry a lot of        ument without requiring a programmatic source. For most PDF
+information value, but are often hard to analyse with high accuracy       documents, the original source document is not available. The lat-
+due to their challenging layouts. Counterexamples of documents            ter is not a hard constraint with human annotation, but it is for
+not included in the dataset are receipts, invoices, hand-written          automated methods. A second reason to use human annotations is
+documents or photographs showing “text in the wild".                      that the latter usually provide a more natural interpretation of the
+   The pages in DocLayNet can be grouped into six distinct cate-          page layout. The human-interpreted layout can significantly devi-
+gories, namely Financial Reports, Manuals, Scientific Articles, Laws &    ate from the programmatic layout used in typesetting. For example,
+Regulations, Patents and Government Tenders. Each document cate-          “invisible” tables might be used solely for aligning text paragraphs
+gory was sourced from various repositories. For example, Financial        on columns. Such typesetting tricks might be interpreted by au-
+Reports contain both free-style format annual reports2 which ex-          tomated methods incorrectly as an actual table, while the human
+pose company-specific, artistic layouts as well as the more formal        annotation will interpret it correctly as Text or other styles. The
+SEC filings. The two largest categories (Financial Reports and Man-       same applies to multi-line text elements, when authors decided to
+uals) contain a large amount of free-style layouts in order to obtain     space them as “invisible” list elements without bullet symbols. A
+maximum variability. In the other four categories, we boosted the         third reason to gather ground-truth through human annotation is
+variability by mixing documents from independent providers, such          to estimate a “natural” upper bound on the segmentation accuracy.
+as different government websites or publishers. In Figure 2, we           As we will show in Section 4, certain documents featuring complex
+show the document categories contained in DocLayNet with their            layouts can have different but equally acceptable layout interpre-
+respective sizes.                                                         tations. This natural upper bound for segmentation accuracy can
+   We did not control the document selection with regard to lan-          be found by annotating the same pages multiple times by different
+guage. The vast majority of documents contained in DocLayNet              people and evaluating the inter-annotator agreement. Such a base-
+(close to 95%) are published in English language. However, Do-            line consistency evaluation is very useful to define expectations
+cLayNet also contains a number of documents in other languages            for a good target accuracy in trained deep neural network models
+such as German (2.5%), French (1.0%) and Japanese (1.0%). While           and avoid overfitting (see Table 1). On the flip side, achieving high
+the document language has negligible impact on the performance            annotation consistency proved to be a key challenge in human
+of computer vision methods such as object detection and segmenta-         annotation, as we outline in Section 4.
+tion models, it might prove challenging for layout analysis methods
+which exploit textual features.
+   To ensure that future benchmarks in the document-layout analy-         4    ANNOTATION CAMPAIGN
+sis community can be easily compared, we have split up DocLayNet
+into pre-defined train-, test- and validation-sets. In this way, we can   The annotation campaign was carried out in four phases. In phase
+avoid spurious variations in the evaluation scores due to random          one, we identified and prepared the data sources for annotation.
+splitting in train-, test- and validation-sets. We also ensured that      In phase two, we determined the class labels and how annotations
+less frequent labels are represented in train and test sets in equal      should be done on the documents in order to obtain maximum con-
+proportions.                                                              sistency. The latter was guided by a detailed requirement analysis
+                                                                          and exhaustive experiments. In phase three, we trained the annota-
+2 e.g. AAPL from https://www.annualreports.com/                           tion staff and performed exams for quality assurance. In phase four,
+KDD ’22, August 14–18, 2022, Washington, DC, USA Birgit Pfitzmann, Christoph Auer, Michele Dolfi, Ahmed S. Nassar, and Peter Staar
+
+Table 1: DocLayNet dataset overview. Along with the frequency of each class label, we present the relative occurrence (as %
+of row “Total”) in the train, test and validation sets. The inter-annotator agreement is computed as the mAP@0.5-0.95 metric
+between pairwise annotations from the triple-annotated pages, from which we obtain accuracy ranges.
+
+
+                                                     % of Total                triple inter-annotator mAP @ 0.5-0.95 (%)
+              class label         Count     Train        Test    Val     All       Fin Man           Sci  Law      Pat   Ten
+              Caption             22524       2.04       1.77   2.32   84-89     40-61 86-92       94-99 95-99 69-78     n/a
+              Footnote             6318       0.60       0.31   0.58   83-91       n/a      100    62-88 85-94     n/a 82-97
+              Formula             25027       2.25       1.90   2.96   83-85       n/a      n/a    84-87 86-96     n/a   n/a
+              List-item          185660      17.19      13.34 15.82    87-88     74-83 90-92       97-97 81-85 75-88 93-95
+              Page-footer         70878       6.51       5.58   6.00   93-94     88-90 95-96         100 92-97     100 96-98
+              Page-header         58022       5.10       6.70   5.06   85-89     66-76 90-94 98-100 91-92 97-99 81-86
+              Picture             45976       4.21       2.78   5.31   69-71     56-59 82-86       69-82 80-95 66-71 59-76
+              Section-header     142884      12.60      15.77 12.85    83-84     76-81 90-92       94-95 87-94 69-73 78-86
+              Table               34733       3.20       2.27   3.60   77-81     75-80 83-86       98-99 58-80 79-84 70-85
+              Text               510377      45.82      49.28 45.00    84-86     81-86 88-93       89-93 87-92 71-79 87-95
+              Title                5071       0.47       0.30   0.50   60-72     24-63 50-63 94-100 82-96 68-79 24-56
+              Total             1107470    941123      99816 66531     82-83     71-74 79-81       89-94 86-91 71-76 68-85
+
+
+                                                                          include publication repositories such as arXiv3 , government offices,
+                                                                          company websites as well as data directory services for financial
+                                                                          reports and patents. Scanned documents were excluded wherever
+                                                                          possible because they can be rotated or skewed. This would not
+                                                                          allow us to perform annotation with rectangular bounding-boxes
+                                                                          and therefore complicate the annotation process.
+                                                                             Preparation work included uploading and parsing the sourced
+                                                                          PDF documents in the Corpus Conversion Service (CCS) [22], a
+                                                                          cloud-native platform which provides a visual annotation interface
+                                                                          and allows for dataset inspection and analysis. The annotation in-
+                                                                          terface of CCS is shown in Figure 3. The desired balance of pages
+                                                                          between the different document categories was achieved by se-
+                                                                          lective subsampling of pages with certain desired properties. For
+                                                                          example, we made sure to include the title page of each document
+                                                                          and bias the remaining page selection to those with figures or
+                                                                          tables. The latter was achieved by leveraging pre-trained object
+                                                                          detection models from PubLayNet, which helped us estimate how
+                                                                          many figures and tables a given page contains.
+                                                                             Phase 2: Label selection and guideline. We reviewed the col-
+                                                                          lected documents and identified the most common structural fea-
+                                                                          tures they exhibit. This was achieved by identifying recurrent layout
+                                                                          elements and lead us to the definition of 11 distinct class labels.
+Figure 3: Corpus Conversion Service annotation user inter-                These 11 class labels are Caption, Footnote, Formula, List-item, Page-
+face. The PDF page is shown in the background, with over-                 footer, Page-header, Picture, Section-header, Table, Text, and Title.
+laid text-cells (in darker shades). The annotation boxes can              Critical factors that were considered for the choice of these class
+be drawn by dragging a rectangle over each segment with                   labels were (1) the overall occurrence of the label, (2) the specificity
+the respective label from the palette on the right.                       of the label, (3) recognisability on a single page (i.e. no need for
+                                                                          context from previous or next page) and (4) overall coverage of the
+                                                                          page. Specificity ensures that the choice of label is not ambiguous,
+we distributed the annotation workload and performed continuous           while coverage ensures that all meaningful items on a page can
+quality controls. Phase one and two required a small team of experts      be annotated. We refrained from class labels that are very specific
+only. For phases three and four, a group of 40 dedicated annotators       to a document category, such as Abstract in the Scientific Articles
+were assembled and supervised.                                            category. We also avoided class labels that are tightly linked to the
+   Phase 1: Data selection and preparation. Our inclusion cri-            semantics of the text. Labels such as Author and Affiliation, as seen
+teria for documents were described in Section 3. A large effort went      in DocBank, are often only distinguishable by discriminating on
+into ensuring that all documents are free to use. The data sources        3 https://arxiv.org/
+DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis                             KDD ’22, August 14–18, 2022, Washington, DC, USA
+
+
+the textual content of an element, which goes beyond visual layout             Compliant with guidelines                                                                    Plausible but invalid alternative
+
+recognition, in particular outside the Scientific Articles category.      A
+
+   At first sight, the task of visual document-layout interpretation
+appears intuitive enough to obtain plausible annotations in most
+cases. However, during early trial-runs in the core team, we ob-
+served many cases in which annotators use different annotation
+styles, especially for documents with challenging layouts. For ex-
+ample, if a figure is presented with subfigures, one annotator might
+draw a single figure bounding-box, while another might annotate                1ef23f5e6d7f10d393f9947e8208285dce9ae87250ac483ac4b4a59d51b4e037
+
+
+
+
+each subfigure separately. The same applies for lists, where one          B
+
+might annotate all list items in one block or each list item sep-
+arately. In essence, we observed that challenging layouts would
+be annotated in different but plausible ways. To illustrate this, we
+show in Figure 4 multiple examples of plausible but inconsistent
+annotations on the same pages.                                                 03c31a2ee1ed1b583c28957f475ee545d144e1b5a264dc4dd068c8d2f6a64860
+
+
+
+
+   Obviously, this inconsistency in annotations is not desirable for      C
+
+datasets which are intended to be used for model training. To min-
+imise these inconsistencies, we created a detailed annotation guide-
+line. While perfect consistency across 40 annotation staff members
+is clearly not possible to achieve, we saw a huge improvement in
+annotation consistency after the introduction of our annotation
+guideline. A few selected, non-trivial highlights of the guideline
+are:
+
+   (1) Every list-item is an individual object instance with class
+                                                                               1a5cd524f1844c1260c8e8c073e1f442423c264583212b0d0b6626fc780e6ed4
+
+       label List-item. This definition is different from PubLayNet
+                                                                          D            Borderline case: Two guideline-compliant alternatives
+       and DocBank, where all list-items are grouped together into
+       one List object.
+   (2) A List-item is a paragraph with hanging indentation. Single-
+       line elements can qualify as List-item if the neighbour ele-
+       ments expose hanging indentation. Bullet or enumeration
+       symbols are not a requirement.
+   (3) For every Caption, there must be exactly one corresponding
+       Picture or Table.
+   (4) Connected sub-pictures are grouped together in one Picture                                                                05237a14f2524e3f53c8454b074409d05078038a6a36b770fcc8ec7e540deae0
+
+
+
+
+       object.
+                                                                         Figure 4: Examples of plausible annotation alternatives for
+   (5) Formula numbers are included in a Formula object.
+                                                                         the same page. Criteria in our annotation guideline can re-
+   (6) Emphasised text (e.g. in italic or bold) at the beginning of
+                                                                         solve cases A to C, while the case D remains ambiguous.
+       a paragraph is not considered a Section-header, unless it
+       appears exclusively on its own line.
+                                                                         were carried out over a timeframe of 12 weeks, after which 8 of the
+The complete annotation guideline is over 100 pages long and a           40 initially allocated annotators did not pass the bar.
+detailed description is obviously out of scope for this paper. Never-       Phase 4: Production annotation. The previously selected 80K
+theless, it will be made publicly available alongside with DocLayNet     pages were annotated with the defined 11 class labels by 32 annota-
+for future reference.                                                    tors. This production phase took around three months to complete.
+   Phase 3: Training. After a first trial with a small group of peo-     All annotations were created online through CCS, which visualises
+ple, we realised that providing the annotation guideline and a set of    the programmatic PDF text-cells as an overlay on the page. The page
+random practice pages did not yield the desired quality level for lay-   annotation are obtained by drawing rectangular bounding-boxes,
+out annotation. Therefore we prepared a subset of pages with two         as shown in Figure 3. With regard to the annotation practices, we
+different complexity levels, each with a practice and an exam part.      implemented a few constraints and capabilities on the tooling level.
+974 pages were reference-annotated by one proficient core team           First, we only allow non-overlapping, vertically oriented, rectangu-
+member. Annotation staff were then given the task to annotate the        lar boxes. For the large majority of documents, this constraint was
+same subsets (blinded from the reference). By comparing the an-          sufficient and it speeds up the annotation considerably in compar-
+notations of each staff member with the reference annotations, we        ison with arbitrary segmentation shapes. Second, annotator staff
+could quantify how closely their annotations matched the reference.      were not able to see each other’s annotations. This was enforced by
+Only after passing two exam levels with high annotation quality,         design to avoid any bias in the annotation, which could skew the
+staff were admitted into the production phase. Practice iterations       numbers of the inter-annotator agreement (see Table 1). We wanted
+KDD ’22, August 14–18, 2022, Washington, DC, USA Birgit Pfitzmann, Christoph Auer, Michele Dolfi, Ahmed S. Nassar, and Peter Staar
+
+Table 2: Prediction performance (mAP@0.5-0.95) of object
+detection networks on DocLayNet test set. The MRCNN
+(Mask R-CNN) and FRCNN (Faster R-CNN) models with                                       70
+ResNet-50 or ResNet-101 backbone were trained based on
+the network architectures from the detectron2 model zoo
+(Mask R-CNN R50, R101-FPN 3x, Faster R-CNN R101-FPN                                     65
+
+
+
+                                                                        mAP 0.50:0.95
+3x), with default configurations. The YOLO implementation                                             70
+utilized was YOLOv5x6 [13]. All models were initialised us-                             60            65
+ing pre-trained weights from the COCO 2017 dataset.
+                                                                                                      60
+                                                                                        55
+                      human      MRCNN         FRCNN      YOLO                                        55
+                                R50 R101        R101       v5x6
+                                                                                        50            50
+    Caption            84-89    68.4 71.5       70.1       77.7
+    Footnote           83-91    70.9 71.8       73.7       77.2                                                              101          102
+    Formula            83-85    60.1 63.4       63.5       66.2                              0   20         40            60         80     100
+    List-item          87-88    81.2 80.8       81.0       86.2                                        % of DocLayNet training set
+    Page-footer        93-94    61.6 59.3       58.9       61.1
+    Page-header        85-89    71.9 70.0       72.0       67.9         Figure 5: Prediction performance (mAP@0.5-0.95) of a Mask
+    Picture            69-71    71.7 72.7       72.0       77.1         R-CNN network with ResNet50 backbone trained on increas-
+    Section-header     83-84    67.6 69.3       68.4       74.6         ing fractions of the DocLayNet dataset. The learning curve
+    Table              77-81    82.2 82.9       82.2       86.3         flattens around the 80% mark, indicating that increasing the
+    Text               84-86    84.6 85.8       85.4       88.1         size of the DocLayNet dataset with similar data will not yield
+    Title              60-72    76.7 80.4       79.9       82.7         significantly better predictions.
+    All                82-83    72.4 73.5       73.4       76.8
+
+
+to avoid this at any cost in order to have clear, unbiased baseline
+numbers for human document-layout annotation. Third, we in-             paper and leave the detailed evaluation of more recent methods
+troduced the feature of snapping boxes around text segments to          mentioned in Section 2 for future work.
+obtain a pixel-accurate annotation and again reduce time and effort.       In this section, we will present several aspects related to the
+The CCS annotation tool automatically shrinks every user-drawn          performance of object detection models on DocLayNet. Similarly
+box to the minimum bounding-box around the enclosed text-cells          as in PubLayNet, we will evaluate the quality of their predictions
+for all purely text-based segments, which excludes only Table and       using mean average precision (mAP) with 10 overlaps that range
+Picture. For the latter, we instructed annotation staff to minimise     from 0.5 to 0.95 in steps of 0.05 (mAP@0.5-0.95). These scores are
+inclusion of surrounding whitespace while including all graphical       computed by leveraging the evaluation code provided by the COCO
+lines. A downside of snapping boxes to enclosed text cells is that      API [16].
+some wrongly parsed PDF pages cannot be annotated correctly and
+need to be skipped. Fourth, we established a way to flag pages as
+rejected for cases where no valid annotation according to the label     Baselines for Object Detection
+guidelines could be achieved. Example cases for this would be PDF       In Table 2, we present baseline experiments (given in mAP) on Mask
+pages that render incorrectly or contain layouts that are impossible    R-CNN [12], Faster R-CNN [11], and YOLOv5 [13]. Both training
+to capture with non-overlapping rectangles. Such rejected pages are     and evaluation were performed on RGB images with dimensions of
+not contained in the final dataset. With all these measures in place,   1025×1025 pixels. For training, we only used one annotation in case
+experienced annotation staff managed to annotate a single page in       of redundantly annotated pages. As one can observe, the variation
+a typical timeframe of 20s to 60s, depending on its complexity.         in mAP between the models is rather low, but overall between 6
+                                                                        and 10% lower than the mAP computed from the pairwise human
+5   EXPERIMENTS                                                         annotations on triple-annotated pages. This gives a good indication
+                                                                        that the DocLayNet dataset poses a worthwhile challenge for the
+The primary goal of DocLayNet is to obtain high-quality ML models       research community to close the gap between human recognition
+capable of accurate document-layout analysis on a wide variety          and ML approaches. It is interesting to see that Mask R-CNN and
+of challenging layouts. As discussed in Section 2, object detection     Faster R-CNN produce very comparable mAP scores, indicating
+models are currently the easiest to use, due to the standardisation     that pixel-based image segmentation derived from bounding-boxes
+of ground-truth data in COCO format [16] and the availability of        does not help to obtain better predictions. On the other hand, the
+general frameworks such as detectron2 [17]. Furthermore, baseline       more recent Yolov5x model does very well and even out-performs
+numbers in PubLayNet and DocBank were obtained using standard           humans on selected labels such as Text, Table and Picture. This is
+object detection models such as Mask R-CNN and Faster R-CNN.            not entirely surprising, as Text, Table and Picture are abundant and
+As such, we will relate to these object detection methods in this       the most visually distinctive in a document.
+DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis                  KDD ’22, August 14–18, 2022, Washington, DC, USA
+
+Table 3: Performance of a Mask R-CNN R50 network in                        Table 4: Performance of a Mask R-CNN R50 network with
+mAP@0.5-0.95 scores trained on DocLayNet with different                    document-wise and page-wise split for different label sets.
+class label sets. The reduced label sets were obtained by ei-              Naive page-wise split will result in ~10% point improve-
+ther down-mapping or dropping labels.                                      ment.
+
+
+         Class-count         11     6         5         4                              Class-count              11             5
+         Caption             68    Text      Text      Text                            Split              Doc     Page   Doc       Page
+         Footnote            71    Text      Text      Text                            Caption             68      83
+         Formula             60    Text      Text      Text                            Footnote            71      84
+         List-item           81    Text       82       Text                            Formula             60      66
+         Page-footer         62     62         -         -                             List-item           81      88     82        88
+         Page-header         72     68         -         -                             Page-footer         62      89
+         Picture             72     72        72        72                             Page-header         72      90
+         Section-header      68     67        69        68                             Picture             72      82     72        82
+         Table               82     83        82        82                             Section-header      68      83     69        83
+         Text                85     84        84        84                             Table               82      89     82        90
+         Title               77   Sec.-h.   Sec.-h.   Sec.-h.                          Text                85      91     84        90
+         Overall             72     73        78        77                             Title               77      81
+                                                                                       All                 72      84     78        87
+
+Learning Curve
+One of the fundamental questions related to any dataset is if it is        lists in PubLayNet (grouped list-items) versus DocLayNet (separate
+“large enough”. To answer this question for DocLayNet, we per-             list-items), the label set of size 4 is the closest to PubLayNet, in the
+formed a data ablation study in which we evaluated a Mask R-CNN            assumption that the List is down-mapped to Text in PubLayNet.
+model trained on increasing fractions of the DocLayNet dataset.            The results in Table 3 show that the prediction accuracy on the
+As can be seen in Figure 5, the mAP score rises sharply in the be-         remaining class labels does not change significantly when other
+ginning and eventually levels out. To estimate the error-bar on the        classes are merged into them. The overall macro-average improves
+metrics, we ran the training five times on the entire data-set. This       by around 5%, in particular when Page-footer and Page-header are
+resulted in a 1% error-bar, depicted by the shaded area in Figure 5.       excluded.
+In the inset of Figure 5, we show the exact same data-points, but
+with a logarithmic scale on the x-axis. As is expected, the mAP            Impact of Document Split in Train and Test Set
+score increases linearly as a function of the data-size in the inset.      Many documents in DocLayNet have a unique styling. In order
+The curve ultimately flattens out between the 80% and 100% mark,           to avoid overfitting on a particular style, we have split the train-,
+with the 80% mark falling within the error-bars of the 100% mark.          test- and validation-sets of DocLayNet on document boundaries, i.e.
+This provides a good indication that the model would not improve           every document contributes pages to only one set. To the best of
+significantly by yet increasing the data size. Rather, it would prob-      our knowledge, this was not considered in PubLayNet or DocBank.
+ably benefit more from improved data consistency (as discussed             To quantify how this affects model performance, we trained and
+in Section 3), data augmentation methods [23], or the addition of          evaluated a Mask R-CNN R50 model on a modified dataset version.
+more document categories and styles.                                       Here, the train-, test- and validation-sets were obtained by a ran-
+                                                                           domised draw over the individual pages. As can be seen in Table 4,
+Impact of Class Labels                                                     the difference in model performance is surprisingly large: page-
+The choice and number of labels can have a significant effect on           wise splitting gains 1̃0% in mAP over the document-wise splitting.
+the overall model performance. Since PubLayNet, DocBank and                Thus, random page-wise splitting of DocLayNet can easily lead
+DocLayNet all have different label sets, it is of particular interest to   to accidental overestimation of model performance and should be
+understand and quantify this influence of the label set on the model       avoided.
+performance. We investigate this by either down-mapping labels
+into more common ones (e.g. Caption→Text) or excluding them                Dataset Comparison
+from the annotations entirely. Furthermore, it must be stressed            Throughout this paper, we claim that DocLayNet’s wider variety of
+that all mappings and exclusions were performed on the data be-            document layouts leads to more robust layout detection models. In
+fore model training. In Table 3, we present the mAP scores for a           Table 5, we provide evidence for that. We trained models on each
+Mask R-CNN R50 network on different label sets. Where a label              of the available datasets (PubLayNet, DocBank and DocLayNet)
+is down-mapped, we show its corresponding label, otherwise it              and evaluated them on the test sets of the other datasets. Due to
+was excluded. We present three different label sets, with 6, 5 and 4       the different label sets and annotation styles, a direct comparison
+different labels respectively. The set of 5 labels contains the same       is not possible. Hence, we focussed on the common labels among
+labels as PubLayNet. However, due to the different definition of           the datasets. Between PubLayNet and DocLayNet, these are Picture,
+KDD ’22, August 14–18, 2022, Washington, DC, USA Birgit Pfitzmann, Christoph Auer, Michele Dolfi, Ahmed S. Nassar, and Peter Staar
+
+Table 5: Prediction Performance (mAP@0.5-0.95) of a Mask                 6    CONCLUSION
+R-CNN R50 network across the PubLayNet, DocBank & Do-                    In this paper, we presented the DocLayNet dataset. It provides the
+cLayNet data-sets. By evaluating on common label classes of              document conversion and layout analysis research community a
+each dataset, we observe that the DocLayNet-trained model                new and challenging dataset to improve and fine-tune novel ML
+has much less pronounced variations in performance across                methods on. In contrast to many other datasets, DocLayNet was
+all datasets.                                                            created by human annotation in order to obtain reliable layout
+                                                                         ground-truth on a wide variety of publication- and typesetting-
+                                                                         styles. Including a large proportion of documents outside the scien-
+                                               Testing on                tific publishing domain adds significant value in this respect.
+          Training on        labels        PLN DB DLN                        From the dataset, we have derived on the one hand reference
+                             Figure         96     43     23             metrics for human performance on document-layout annotation
+                             Sec-header     87      -     32             (through double and triple annotations) and on the other hand eval-
+       PubLayNet (PLN)       Table          95     24     49             uated the baseline performance of commonly used object detection
+                             Text           96      -     42             methods. We also illustrated the impact of various dataset-related
+                             total          93     34     30             aspects on model performance through data-ablation experiments,
+                             Figure         77     71     31             both from a size and class-label perspective. Last but not least, we
+       DocBank (DB)          Table          19     65     22             compared the accuracy of models trained on other public datasets
+                             total          48     68     27             and showed that DocLayNet trained models are more robust.
+                             Figure         67     51     72                 To date, there is still a significant gap between human and ML
+                             Sec-header     53      -     68             accuracy on the layout interpretation task, and we hope that this
+       DocLayNet (DLN)       Table          87     43     82             work will inspire the research community to close that gap.
+                             Text           77      -     84
+                             total          59     47     78
+                                                                         REFERENCES
+                                                                          [1] Max Göbel, Tamir Hassan, Ermelinda Oro, and Giorgio Orsi. Icdar 2013 table
+                                                                              competition. In 2013 12th International Conference on Document Analysis and
+                                                                              Recognition, pages 1449–1453, 2013.
+                                                                          [2] Christian Clausner, Apostolos Antonacopoulos, and Stefan Pletschacher. Ic-
+                                                                              dar2017 competition on recognition of documents with complex layouts -
+                                                                              rdcl2017. In 2017 14th IAPR International Conference on Document Analysis and
+Section-header, Table and Text. Before training, we either mapped             Recognition (ICDAR), volume 01, pages 1404–1410, 2017.
+or excluded DocLayNet’s other labels as specified in table 3, and         [3] Hervé Déjean, Jean-Luc Meunier, Liangcai Gao, Yilun Huang, Yu Fang, Florian
+also PubLayNet’s List to Text. Note that the different clustering of          Kleber, and Eva-Maria Lang. ICDAR 2019 Competition on Table Detection and
+                                                                              Recognition (cTDaR), April 2019. http://sac.founderit.com/.
+lists (by list-element vs. whole list objects) naturally decreases the    [4] Antonio Jimeno Yepes, Peter Zhong, and Douglas Burdick. Competition on
+mAP score for Text.                                                           scientific literature parsing. In Proceedings of the International Conference on
+    For comparison of DocBank with DocLayNet, we trained only                 Document Analysis and Recognition, ICDAR, pages 605–617. LNCS 12824, Springer-
+                                                                              Verlag, sep 2021.
+on Picture and Table clusters of each dataset. We had to exclude Text     [5] Logan Markewich, Hao Zhang, Yubin Xing, Navid Lambert-Shirzad, Jiang Zhexin,
+because successive paragraphs are often grouped together into a               Roy Lee, Zhi Li, and Seok-Bum Ko. Segmentation for document layout analysis:
+                                                                              not dead yet. International Journal on Document Analysis and Recognition (IJDAR),
+single object in DocBank. This paragraph grouping is incompatible             pages 1–11, 01 2022.
+with the individual paragraphs of DocLayNet. As can be seen in            [6] Xu Zhong, Jianbin Tang, and Antonio Jimeno-Yepes. Publaynet: Largest dataset
+Table 5, DocLayNet trained models yield better performance com-               ever for document layout analysis. In Proceedings of the International Conference
+                                                                              on Document Analysis and Recognition, ICDAR, pages 1015–1022, sep 2019.
+pared to the previous datasets. It is noteworthy that the models          [7] Minghao Li, Yiheng Xu, Lei Cui, Shaohan Huang, Furu Wei, Zhoujun Li, and
+trained on PubLayNet and DocBank perform very well on their                   Ming Zhou. Docbank: A benchmark dataset for document layout analysis. In
+own test set, but have a much lower performance on the foreign                Proceedings of the 28th International Conference on Computational Linguistics,
+                                                                              COLING, pages 949–960. International Committee on Computational Linguistics,
+datasets. While this also applies to DocLayNet, the difference is             dec 2020.
+far less pronounced. Thus we conclude that DocLayNet trained              [8] Riaz Ahmad, Muhammad Tanvir Afzal, and M. Qadir. Information extraction
+                                                                              from pdf sources based on rule-based system using integrated formats. In SemWe-
+models are overall more robust and will produce better results for            bEval@ESWC, 2016.
+challenging, unseen layouts.                                              [9] Ross B. Girshick, Jeff Donahue, Trevor Darrell, and Jitendra Malik. Rich feature
+                                                                              hierarchies for accurate object detection and semantic segmentation. In IEEE
+                                                                              Conference on Computer Vision and Pattern Recognition, CVPR, pages 580–587.
+                                                                              IEEE Computer Society, jun 2014.
+Example Predictions                                                      [10] Ross B. Girshick. Fast R-CNN. In 2015 IEEE International Conference on Computer
+To conclude this section, we illustrate the quality of layout predic-         Vision, ICCV, pages 1440–1448. IEEE Computer Society, dec 2015.
+                                                                         [11] Shaoqing Ren, Kaiming He, Ross Girshick, and Jian Sun. Faster r-cnn: Towards
+tions one can expect from DocLayNet-trained models by providing               real-time object detection with region proposal networks. IEEE Transactions on
+a selection of examples without any further post-processing ap-               Pattern Analysis and Machine Intelligence, 39(6):1137–1149, 2017.
+plied. Figure 6 shows selected layout predictions on pages from the      [12] Kaiming He, Georgia Gkioxari, Piotr Dollár, and Ross B. Girshick. Mask R-CNN.
+                                                                              In IEEE International Conference on Computer Vision, ICCV, pages 2980–2988.
+test-set of DocLayNet. Results look decent in general across docu-            IEEE Computer Society, Oct 2017.
+ment categories, however one can also observe mistakes such as           [13] Glenn Jocher, Alex Stoken, Ayush Chaurasia, Jirka Borovec, NanoCode012,
+                                                                              TaoXie, Yonghye Kwon, Kalen Michael, Liu Changyu, Jiacong Fang, Abhiram V,
+overlapping clusters of different classes, or entirely missing boxes          Laughing, tkianai, yxNONG, Piotr Skalski, Adam Hogan, Jebastin Nadar, imyhxy,
+due to low confidence.                                                        Lorenzo Mammana, Alex Wang, Cristi Fati, Diego Montes, Jan Hajek, Laurentiu
+DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis                                                                                                                                                                                         KDD ’22, August 14–18, 2022, Washington, DC, USA
+
+
+                                                                   A                                                                                                                           B                                                                                                                               C
+
+
+
+
+2b7b8355a42ebef0cf91583aad9f30f7c9fa63c5b05911730ba15275c024965b                                                                             1b81cf65f47456ad4faa725d1eb09879bd633af16cfe2bf8cea661b87907bfac                                                             2f2a06d08f5ad565d0f5e815f4ddf666365b2cff435cdaeb8850217e8a8efabf
+
+
+
+
+                                                                   D                                                                                                                               E                                                                                                                                    F
+
+
+
+
+7f2fd7293e04bf4f1756ae51f5779764933da1d1d2002e3915356050570fc75b                                                                         4bed2a8aa51ac37058e79605821bbc426d032b0b6ca8bdf3409ed8508ccd8c67                                                                   b60da9d26f488cb133e47d101d35fda1bdca2671ade60764d1cd569590270327
+
+
+
+
+                                                                   Text   Caption   List-Item   Formula   Table   Picture   Section-Header                                                                      Page-Header   Page-Footer   Title
+
+
+
+Figure 6: Example layout predictions on selected pages from the DocLayNet test-set. (A, D) exhibit favourable results on
+coloured backgrounds. (B, C) show accurate list-item and paragraph differentiation despite densely-spaced lines. (E) demon-
+strates good table and figure distinction. (F) shows predictions on a Chinese patent with multiple overlaps, label confusion
+and missing boxes.
+
+
+     Diaconu, Mai Thanh Minh, Marc, albinxavi, fatih, oleg, and wanghao yang. ul-                                                                                                                                                               [20] Shoubin Li, Xuyan Ma, Shuaiqun Pan, Jun Hu, Lin Shi, and Qing Wang. Vtlayout:
+     tralytics/yolov5: v6.0 - yolov5n nano models, roboflow integration, tensorflow                                                                                                                                                                  Fusion of visual and text features for document layout analysis, 2021.
+     export, opencv dnn support, October 2021.                                                                                                                                                                                                  [21] Peng Zhang, Can Li, Liang Qiao, Zhanzhan Cheng, Shiliang Pu, Yi Niu, and Fei
+[14] Nicolas Carion, Francisco Massa, Gabriel Synnaeve, Nicolas Usunier, Alexander                                                                                                                                                                   Wu. Vsr: A unified framework for document layout analysis combining vision,
+     Kirillov, and Sergey Zagoruyko. End-to-end object detection with transformers.                                                                                                                                                                  semantics and relations, 2021.
+     CoRR, abs/2005.12872, 2020.                                                                                                                                                                                                                [22] Peter W J Staar, Michele Dolfi, Christoph Auer, and Costas Bekas. Corpus
+[15] Mingxing Tan, Ruoming Pang, and Quoc V. Le. Efficientdet: Scalable and efficient                                                                                                                                                                conversion service: A machine learning platform to ingest documents at scale.
+     object detection. CoRR, abs/1911.09070, 2019.                                                                                                                                                                                                   In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge
+[16] Tsung-Yi Lin, Michael Maire, Serge J. Belongie, Lubomir D. Bourdev, Ross B. Gir-                                                                                                                                                                Discovery and Data Mining, KDD, pages 774–782. ACM, 2018.
+     shick, James Hays, Pietro Perona, Deva Ramanan, Piotr Dollár, and C. Lawrence                                                                                                                                                              [23] Connor Shorten and Taghi M. Khoshgoftaar. A survey on image data augmenta-
+     Zitnick. Microsoft COCO: common objects in context, 2014.                                                                                                                                                                                       tion for deep learning. Journal of Big Data, 6(1):60, 2019.
+[17] Yuxin Wu, Alexander Kirillov, Francisco Massa, Wan-Yen Lo, and Ross Girshick.
+     Detectron2, 2019.
+[18] Nikolaos Livathinos, Cesar Berrospi, Maksym Lysak, Viktor Kuropiatnyk, Ahmed
+     Nassar, Andre Carvalho, Michele Dolfi, Christoph Auer, Kasper Dinkla, and Peter
+     W. J. Staar. Robust pdf document conversion using recurrent neural networks. In
+     Proceedings of the 35th Conference on Artificial Intelligence, AAAI, pages 15137–
+     15145, feb 2021.
+[19] Yiheng Xu, Minghao Li, Lei Cui, Shaohan Huang, Furu Wei, and Ming Zhou.
+     Layoutlm: Pre-training of text and layout for document image understanding.
+     In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge
+     Discovery and Data Mining, KDD, pages 1192–1200, New York, USA, 2020. Asso-
+     ciation for Computing Machinery.
+

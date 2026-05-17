@@ -1,0 +1,26 @@
+SKU	Product_Name	Category	Manufacturer	Unit_Price	Stock_Quantity	Reorder_Level	Last_Restocked	Supplier	Warranty_Months	Weight_kg	Dimensions_cm
+KREUZ-001	Document Extraction SDK	Software	Kreuzberg	49.99	1500	200	2025-01-28	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-002	PDF Processing Engine	Software	Kreuzberg	99.99	850	100	2025-01-15	Kreuzberg Inc	24	0.0	0.0x0.0x0.0
+KREUZ-003	OCR Module Advanced	Software	Kreuzberg	149.99	420	50	2025-02-01	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-004	Text Analytics Suite	Software	Kreuzberg	199.99	380	75	2025-01-20	Kreuzberg Inc	24	0.0	0.0x0.0x0.0
+KREUZ-005	Enterprise License Pack	License	Kreuzberg	2999.00	45	10	2025-01-10	Kreuzberg Inc	60	0.0	0.0x0.0x0.0
+KREUZ-006	Developer License	License	Kreuzberg	499.99	320	50	2024-12-15	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-007	API Gateway Module	Software	Kreuzberg	79.99	680	100	2025-01-25	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-008	Cloud Integration Kit	Software	Kreuzberg	129.99	550	75	2025-02-02	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-009	Machine Learning Plugin	Software	Kreuzberg	349.99	180	30	2025-01-30	Kreuzberg Inc	24	0.0	0.0x0.0x0.0
+KREUZ-010	Document Classification AI	Software	Kreuzberg	449.99	95	20	2025-02-03	Kreuzberg Inc	24	0.0	0.0x0.0x0.0
+KREUZ-011	Batch Processing Service	Software	Kreuzberg	399.99	125	25	2025-01-22	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-012	Real-time Analytics	Software	Kreuzberg	549.99	60	15	2025-02-01	Kreuzberg Inc	24	0.0	0.0x0.0x0.0
+KREUZ-013	Data Pipeline Connector	Software	Kreuzberg	179.99	280	50	2025-01-18	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-014	Security Audit Module	Software	Kreuzberg	249.99	140	30	2024-12-20	Kreuzberg Inc	24	0.0	0.0x0.0x0.0
+KREUZ-015	Compliance Checker Pro	Software	Kreuzberg	299.99	110	25	2025-01-28	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-016	Advanced Reporting Suite	Software	Kreuzberg	159.99	220	40	2025-02-02	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-017	Integration Testing Framework	Software	Kreuzberg	89.99	450	60	2025-01-31	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-018	Performance Optimization Pack	Software	Kreuzberg	199.99	165	35	2025-01-27	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-019	Monitoring & Alerting	Software	Kreuzberg	129.99	275	50	2025-02-01	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-020	Disaster Recovery Solution	Software	Kreuzberg	599.99	40	10	2025-01-10	Kreuzberg Inc	36	0.0	0.0x0.0x0.0
+KREUZ-021	Multi-language Support Pack	Software	Kreuzberg	249.99	190	40	2025-01-26	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-022	Custom Development Service	Service	Kreuzberg	5000.00	0	0	2025-02-01	Kreuzberg Inc	3	0.0	0.0x0.0x0.0
+KREUZ-023	Technical Support Premium	Service	Kreuzberg	999.99	0	0	2025-01-15	Kreuzberg Inc	12	0.0	0.0x0.0x0.0
+KREUZ-024	Training & Onboarding	Service	Kreuzberg	2499.99	0	0	2025-01-20	Kreuzberg Inc	1	0.0	0.0x0.0x0.0
+KREUZ-025	Consulting Services	Service	Kreuzberg	3500.00	0	0	2025-02-03	Kreuzberg Inc	1	0.0	0.0x0.0x0.0

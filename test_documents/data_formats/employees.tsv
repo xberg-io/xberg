@@ -1,0 +1,26 @@
+Employee_ID	First_Name	Last_Name	Email	Department	Job_Title	Salary	Hire_Date	Performance_Rating	Manager_ID	Status	Location
+E001	James	Anderson	james.anderson@kreuzberg.dev	Engineering	Senior Engineer	125000	2019-03-15	4.8	M001	Active	San Francisco
+E002	Sarah	Mitchell	sarah.mitchell@kreuzberg.dev	Engineering	Software Engineer	95000	2020-06-22	4.5	M001	Active	San Francisco
+E003	Michael	Chen	michael.chen@kreuzberg.dev	Engineering	Staff Engineer	145000	2018-01-10	4.9	M002	Active	San Francisco
+E004	Emily	Rodriguez	emily.rodriguez@kreuzberg.dev	Product	Product Manager	110000	2020-09-01	4.6	M003	Active	New York
+E005	David	Thompson	david.thompson@kreuzberg.dev	Engineering	Junior Engineer	75000	2022-02-14	4.0	M001	Active	San Francisco
+E006	Jessica	Kim	jessica.kim@kreuzberg.dev	Design	Design Lead	105000	2019-11-05	4.7	M004	Active	New York
+E007	Robert	Johnson	robert.johnson@kreuzberg.dev	Operations	DevOps Engineer	100000	2021-05-18	4.4	M005	Active	San Francisco
+E008	Amanda	Lee	amanda.lee@kreuzberg.dev	Sales	Sales Manager	115000	2019-07-22	4.3	M006	Active	Chicago
+E009	Christopher	Williams	chris.williams@kreuzberg.dev	Marketing	Marketing Manager	98000	2020-01-08	4.2	M007	Active	New York
+E010	Rachel	Davis	rachel.davis@kreuzberg.dev	Engineering	QA Engineer	85000	2021-03-30	4.1	M001	Active	San Francisco
+E011	Daniel	Garcia	daniel.garcia@kreuzberg.dev	Finance	Financial Analyst	82000	2021-08-10	4.0	M008	Active	Chicago
+E012	Lisa	Martinez	lisa.martinez@kreuzberg.dev	HR	HR Manager	92000	2020-04-20	4.4	M009	Active	New York
+E013	Kevin	Brown	kevin.brown@kreuzberg.dev	Engineering	Platform Engineer	120000	2019-09-12	4.6	M002	Active	San Francisco
+E014	Megan	Taylor	megan.taylor@kreuzberg.dev	Product	Senior Product Manager	125000	2018-05-01	4.8	M003	On Leave	New York
+E015	Brandon	White	brandon.white@kreuzberg.dev	Engineering	ML Engineer	135000	2020-02-03	4.7	M001	Active	San Francisco
+E016	Nicole	Harris	nicole.harris@kreuzberg.dev	Design	UX Designer	92000	2021-10-15	4.3	M004	Active	New York
+E017	Jason	Clark	jason.clark@kreuzberg.dev	Operations	Infrastructure Engineer	105000	2020-11-09	4.5	M005	Active	San Francisco
+E018	Stephanie	Lewis	stephanie.lewis@kreuzberg.dev	Sales	Sales Development Rep	68000	2022-07-25	4.0	M006	Active	Chicago
+E019	Mark	Walker	mark.walker@kreuzberg.dev	Engineering	Backend Engineer	110000	2021-01-11	4.2	M002	Active	San Francisco
+E020	Heather	Hall	heather.hall@kreuzberg.dev	Finance	Senior Accountant	88000	2019-12-02	4.6	M008	Active	Chicago
+E021	Andrew	Allen	andrew.allen@kreuzberg.dev	Engineering	Frontend Engineer	105000	2020-08-17	4.4	M001	Active	San Francisco
+E022	Karen	Young	karen.young@kreuzberg.dev	Marketing	Content Strategist	85000	2021-04-26	4.1	M007	Active	New York
+E023	Patrick	Hernandez	patrick.hernandez@kreuzberg.dev	Operations	Ops Manager	108000	2019-02-14	4.7	M005	Active	San Francisco
+E024	Donna	King	donna.king@kreuzberg.dev	HR	Recruiter	78000	2022-01-31	4.2	M009	Active	New York
+E025	Paul	Wright	paul.wright@kreuzberg.dev	Product	Associate Product Manager	85000	2022-09-06	3.8	M003	Active	New York

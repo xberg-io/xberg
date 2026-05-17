@@ -71,7 +71,8 @@ impl ExtractionConfig {
         tree_sitter=None,
         structured_extraction=None,
         content_filter=None,
-        html_output=None
+        html_output=None,
+        cancel_token=None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -105,6 +106,7 @@ impl ExtractionConfig {
         structured_extraction: Option<PyStructuredExtractionConfig>,
         content_filter: Option<ContentFilterConfig>,
         html_output: Option<HtmlOutputConfig>,
+        cancel_token: Option<crate::cancellation::PyCancellationToken>,
     ) -> PyResult<Self> {
         let (html_options_inner, html_options_dict) = parse_html_options_dict(html_options)?;
         Ok(Self {
@@ -171,7 +173,7 @@ impl ExtractionConfig {
                 tree_sitter: tree_sitter.map(Into::into),
                 structured_extraction: structured_extraction.map(|s| s.inner),
                 html_output: html_output.map(Into::into),
-                cancel_token: None,
+                cancel_token: cancel_token.map(|t| t.inner),
             },
             html_options_dict,
         })

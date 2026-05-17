@@ -1,0 +1,12 @@
+Welcome to File Extension FYI Center!
+
+ID Type Description
+1 ASP Active Server Pages
+2 JSP JavaServer Pages
+3 PNG Portable Network Graphics
+4 GIF Graphics Interchange Format
+5 WMV Windows Media Video
+
+
+
+

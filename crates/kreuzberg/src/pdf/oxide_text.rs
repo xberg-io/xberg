@@ -36,6 +36,7 @@ pub(crate) fn current_pdf_path() -> Option<PathBuf> {
 /// Returns segments per page (indexed by page number, 0-based).
 /// Returns `None` if pdf_oxide fails to open or extract the document.
 #[cfg(feature = "pdf")]
+#[allow(unused_mut)] // pdf is mutated under feature-gated paths only
 pub(crate) fn extract_segments_with_oxide(page_count: usize) -> Option<Vec<Vec<SegmentData>>> {
     let file_path = match current_pdf_path() {
         Some(p) => {

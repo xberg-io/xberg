@@ -1,0 +1,6 @@
+Subject: Someone has joined your meeting - Someone: 45 Minute Meeting
+From: "Zoom" <email@domain.com>
+To: email@domain.com
+Date: Fri, 28 Oct 2022 08:59:12 +0000 (UTC)
+Hi Someone , Someone has joined your meeting: Topic Someone: 45 Minute Meeting Meeting ID 869 1664 1575 Time Oct 28, 2022 11:00 AM Stockholm   Start Meeting   Thank you for choosing Zoom.
+-The Zoom Team Copyright ©2022 Zoom Video Communications, Inc. All rights reserved. From 1759159613117388594@xxx Wed Mar 01 10:09:01 +0000 2023 X-GM-THRID: 1759159613117388594

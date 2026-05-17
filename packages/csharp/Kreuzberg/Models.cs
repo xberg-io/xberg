@@ -2642,6 +2642,68 @@ public sealed class OcrConfig
     /// </summary>
     [JsonPropertyName("element_config")]
     public OcrElementConfig? ElementConfig { get; init; }
+
+    /// <summary>
+    /// VLM provider/model configuration used when <see cref="Backend"/> is "vlm".
+    /// Each feature (VLM OCR, VLM embeddings, structured extraction) carries its
+    /// own <see cref="LlmConfig"/>, allowing different providers per feature.
+    /// </summary>
+    [JsonPropertyName("vlm_config")]
+    public LlmConfig? VlmConfig { get; init; }
+}
+
+/// <summary>
+/// Configuration for an LLM provider/model via liter-llm.
+///
+/// Each feature (VLM OCR, VLM embeddings, structured extraction) carries
+/// its own <see cref="LlmConfig"/>, allowing different providers per feature.
+/// </summary>
+public sealed class LlmConfig
+{
+    /// <summary>
+    /// Provider/model string using liter-llm routing format.
+    /// Examples: "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514",
+    /// "groq/llama-3.1-70b-versatile".
+    /// </summary>
+    [JsonPropertyName("model")]
+    public string? Model { get; init; }
+
+    /// <summary>
+    /// API key for the provider. When null, liter-llm falls back to the
+    /// provider's standard environment variable (e.g., OPENAI_API_KEY).
+    /// </summary>
+    [JsonPropertyName("api_key")]
+    public string? ApiKey { get; init; }
+
+    /// <summary>
+    /// Custom base URL override for the provider endpoint.
+    /// </summary>
+    [JsonPropertyName("base_url")]
+    public string? BaseUrl { get; init; }
+
+    /// <summary>
+    /// Request timeout in seconds (default: 60).
+    /// </summary>
+    [JsonPropertyName("timeout_secs")]
+    public ulong? TimeoutSecs { get; init; }
+
+    /// <summary>
+    /// Maximum retry attempts (default: 3).
+    /// </summary>
+    [JsonPropertyName("max_retries")]
+    public uint? MaxRetries { get; init; }
+
+    /// <summary>
+    /// Sampling temperature for generation tasks.
+    /// </summary>
+    [JsonPropertyName("temperature")]
+    public double? Temperature { get; init; }
+
+    /// <summary>
+    /// Maximum tokens to generate.
+    /// </summary>
+    [JsonPropertyName("max_tokens")]
+    public ulong? MaxTokens { get; init; }
 }
 
 /// <summary>

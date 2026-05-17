@@ -1,0 +1,22 @@
+Nasdaq & AMEX
+
+Stocks in bold rose or fell 5% or more
+
+USA TODAY Track your investments with our continuously updated stocks. Visit us on the web at money.usatoday.com
+
+52-week                          52-week
+High    Low     Stock    Last Change    High    Low     Stock    Last Change
+
+—— A ——                          —— B ——
+32.50  12.88  ABL Gro  28.75  –0.25    31.13  16.00  Biotal    48.88  +1.88
+39.25  22.69  ABX Air n  7.52  –0.10    2.76   1.20  Biomiro   1.46   +0.03
+8.13   3.50   ACI Corp  13.88  –1.27    19.07  13.13  BiosSrg   48.50  +0.34
+27.14  12.88  ADC Tel rs  23.21  +0.13    18.21  10.73  Blackud   17.90  +0.70
+20.50  14.19  AENX      27.19  +0.23    14.38   8.38  BlackGm   41.25  +1.29
+8.37   3.49   AEP Tel s  15.40  –0.14    36.88  24.50  BlueNile  40.30  –1.10
+19.22  11.50  AES Corp  27.74  +0.60    26.45  19.73  BobEGm   22.09  +0.16
+20.92  13.54  ASML Hld  21.24  +0.46    6.21   1.56  Bookrm   5.94   +0.06
+17.88  16.39  AZF hls   25.74  +0.14    14.99   9.69  BootIsd   1.13   –0.03
+31.62  20.53  ATMI Inc  17.89  +0.68    16.62  10.01  BitrrnT s  1.33   –0.07
+39.90  14.76  ATP hld   10.33  –0.03    14.88   7.10  BritExp   6.43   +0.23
+4.24   1.59   AVI Bio   3.42   –0.02    46.72  24.65  BrightFrs s  38.90  –0.80

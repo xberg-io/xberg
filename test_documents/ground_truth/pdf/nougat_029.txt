@@ -1,0 +1,209 @@
+Bispindle in strongly connected digraphs with large
+chromatic number
+Nathann Cohen, Frédéric Havet, William Lochet, Raul Lopes
+To cite this version:
+Nathann Cohen, Frédéric Havet, William Lochet, Raul Lopes. Bispindle in strongly connected di-
+graphs with large chromatic number. Electronic Notes in Discrete Mathematics, Elsevier, 2017, 62,
+pp.69 - 74. ￿10.1016/j.endm.2017.10.013￿. ￿hal-01634307￿
+HAL Id: hal-01634307
+https://hal.inria.fr/hal-01634307
+Submitted on 13 Nov 2017
+is a multi-disciplinary open access L’archive ouverte pluridisciplinaire est HAL HAL,
+archive for the deposit and dissemination of sci- destinée au dépôt et à la diffusion de documents
+entific research documents, whether they are pub- scientifiques de niveau recherche, publiés ou non,
+lished or not. The documents may come from émanant des établissements d’enseignement et de
+teaching and research institutions in France or recherche français ou étrangers, des laboratoires
+abroad, or from public or private research centers. publics ou privés.
+Bispindle in strongly connected digraphs with
+large chromatic number.
+1 Nathann Cohen
+CNRS, LRI, Univ. Paris Sud, Orsay, France
+2 Fr´ed´eric Havet
+Univ. Cˆote d’Azur, CNRS, I3S, INRIA, France
+3 William Lochet
+Univ. Cˆote d’Azur, CNRS, I3S, INRIA, and LIP, ENS Lyon, France
+4 Raul Lopes
+Departamento de Computa¸cao, Universidade Federal do Cear´a, Fortaleza, Brazil
+Abstract
+A + is the union of (x, y)-dipaths and (y, x)-dipaths, all (k1 k2)-bispindle k1 k2
+these dipaths being pairwise internally disjoint. Recently, Cohen et al. showed that
+k for every (2 + 0)- bispindle B, there exists an integer such that every strongly
+k connected digraph with chromatic number greater than contains a subdivision
+of B. We investigate generalisations of this result by ﬁrst showing constructions
+of strongly connected digraphs with large chromatic number without any (3 + 0)-
+bispindle or (2+2)-bispindle. Then we show that for any k, there exists such that γk
+every strongly connected digraph with chromatic number greater than contains γk
+a (2 + 1)-bispindle with the (y, x)-dipath and one of the (x, y)-dipaths of length at
+least k.
+Keywords: Digraph, chromatic number, subdivision.
+1 Introduction
+chromatic number Throughout this paper, the of a digraph D, denoted by
+χ(D), is the chromatic number of its underlying graph. In a digraph D, a
+directed path, or dipath, is an oriented path where all the arcs are oriented
+k-spindle form the initial vertex towards the terminal vertex. A is the union
+k x x of internally disjoint (x, y)-dipaths for some vertices and y. Vertex is
+tail y said to be the of the spindle and its head. A (k1 + k2)-bispindle is the
+x y internally disjoint union of a k1-spindle with tail and head and a k2-spindle
+y k1 with tail and head x. In other words, it is the union of (x, y)-dipaths and
+k2 (y, x)-dipaths, all of these dipaths being pairwise internally disjoint.
+A classical result due to Gallai, Hasse, Roy and Vitaver is the following.
+Theorem 1.1 (Gallai [8], Hasse [9], Roy [11], Vitaver [12])
+If then contains a dipath of length ≥ k, D k − χ(D) 1.
+This raises the question of which digraphs are subdigraphs of all digraphs
+with large chromatic number.
+H A classical theorem by Erd˝os [6] implies that if is a digraph containing
+a cycle, there exist digraphs with arbitrarily high chromatic number with no
+subdigraph isomorphic to H. Thus the only possible candidates to generalise
+oriented trees 1.1 are the that are orientations of trees. Burr[3] Theorem
+− proved that every (k 1)2-chromatic digraph contains every oriented tree of
+k − order and conjectured an upper bound of 2k 2. The best known upper
+bound, due to Addario-Berry et al. [1], is in (k/2)2.
+However the following celebrated theorem of Bondy shows that the story
+does not stop there.
+Every strongly connected digraph with chromatic Theorem 1.2 (Bondy [2])
+number at least contains a directed cycle of length at least k k.
+1 nathann.cohen@gmail.com
+2 frederic.havet@cnrs.fr
+3 william.lochet@gmail.com
+4 raul.wayne@gmail.com
+The strong connectivity assumption is indeed necessary, as transitive tour-
+naments contain no directed cycle but can have arbitrarily high chromatic
+number.
+k Observe that a directed cycle of length at least can be seen as a sub-
+subdivision division of the directed cycle of length k. Recall that a of a
+⃗Ck,
+F F uv digraph is a digraph that can be obtained from by replacing each arc
+u by a dipath from to v.
+For every cycle there exists a con- C, Conjecture 1.3 (Cohen et al. [5])
+stant such that every strongly connected digraph with chromatic number f(C)
+at least contains a subdivision of C. f(C)
+1.3 The strong connectivity assumption is also necessary in Conjecture
+as shown by Cohen et al. in [5]. In the same paper, Conjecture 1.3 was
+conﬁrmed for cycles with two blocks (i.e. maximal subdipaths of the cycle)
+and the antidirected cycle of length 4. More precisely, denoting by C(k, ℓ) the
+k cycle on two blocks, one of length and the other of length ℓ, Cohen et al.
+[5] proved the following.
+Every strongly connected digraph with chromatic number at Theorem 1.4
+least contains a subdivision of O((k + ℓ)4) C(k, ℓ).
+The bound has recently been improved to O((k + ℓ)2) by Kim et al. [10].
+A subdivision of C(k, ℓ) can be seen as a 2-spindle made of two internally
+k disjoint dipaths, one of length at least and one of length at least ℓ. In this
+paper, we generalize this and study the existence of subdivision of spindles
+and bispindles in strongly connected digraphs with large chromatic number.
+Our ﬁrst result is to give constructions for the following theorem:
+For every integer there exists a strongly connected digraph k, Theorem 1.5
+with that contains no and no D > k χ(D) 3-spindle (2 + 2)-bispindle.
+Therefore, the most we can expect in all strongly connected digraphs with
+large chromatic number are (2 + 1)-bispindle. Let B(k1, k2; k3) denote the
+(2+1)-bispindle formed by three internally disjoint paths between two vertices
+x, y, two (x, y)-dipaths, one of size k1, the other of size k2, and one (y, x)-dipath
+of size k3. We conjecture the following.
+N3 N There is a function such that every strongly g → Conjecture 1.6 :
+connected digraph with chromatic number at least contains a sub- k2, g(k1, k3)
+division of B(k1, k2; k3).
+As an evidence, we prove the following theorem:
+For every positive integer there is a constant such that k, Theorem 1.7 γk
+every strongly connected digraph witch chromatic number greater than con- γk
+tains a subdivsion of B(k, 1; k).
+The value of is the above theorem is huge, and certainly not best pos- γk
+sible. We get a better bound for subdivision of B(k, 1; k).
+Let be an integer and let be a strong digraph. If k ≥ D Theorem 1.8 3
+then contains a subdivision of > − − D χ(D) (2k 2)(2k 3), B(k, 1; 1).
+1.7 2 Proof of Theorem
+D We prove Theorem 1.7 by the contrapositive. We consider a digraph without
+≤ any subdivision of B(k, 1; k). We shall prove that χ(D) γk.
+The general idea is to use the following easy lemma.
+Let be a digraph, be disjoint subdigraphs of and D D1 . . . D D′ Lemma 2.1 Dl
+the digraph obtained by contracting each into one vertex Then ≤ χ(D) Di di.
+· | ≤ i ≤ l}. χ(D′) 1 max{χ(Di)
+The key is to ﬁnd appropriate subdigraphs To do so, we consider some Di.
+C particular collections of directed cycles : a collection of directed cycles is
+k-suitable C if all cycles of have length at least 8k, and any two distinct cycles
+component ∈ C C intersect on a subpath of order at most k. A of is a Ci, Cj �
+C connected component of the underlying graph of the digraph which is the
+union of cycles of C.
+C D′ Consider be a maximal k-suitable collection of cycles in D. Let be �
+S C the digraph obtained by contracting every strong component of (which �
+S S is for some component of C) into one vertex. For each connected
+component we call the new vertex created. To apply Lemma 2.1, we Si si
+S shall prove in the next two lemmas that for every component of C, the �
+D S digraph D[S] induced by on the vertices of has bounded chromatic
+≤ number and that χ(D′) 8k.
+Let be a collection of directed cycles in a C k-suitable Lemma 2.2 B(k, 1; k)-
+free digraph There exists a constant such that, for every component D. S βk
+of we have C, ≤ χ(D[S]) βk.
+�
+S Sketch of proof: We ﬁrst consider which is a subdigraph of D[S]. We
+S prove by induction on the number of cycles in that this digraph admits a
+φ · proper colouring with = 2 (6k2)3k + 14k colours satisfying the following αk
+rainbow property additional property, called : the vertices of each subpath of
+S length at most 7k of each cycle of get diﬀerent colours.
+C0 We then deﬁne a sort of Breadth-First-Search for S. Let be a cycle of
+S L0 S and set = {C0}. We build the levels inductively until all cycles of Li
+�
+are put in a level : consists of every cycle not in such that Li+1 Cl Lj
+j≤i
+∈ there exists a cycle in intersecting For every we choose one Li Cl. Cl Li+1,
+�
+x of the cycles intersecting it to be its father. For a vertex of S, we say Li
+belongs to x i that level if is the smallest integer such that there exists a Li
+cycle in containing x. Li
+A1, We partition the arc set of D[S] in (A0, A2), where
+• A0 is the set of arcs of D[S] which ends belong to the same level, and
+• A1 i j is the set of arcs of D[S] which ends belong to diﬀerent levels and
+|i − j| < with k.
+• A2 i j is the set of arcs of D[S] which ends belong to diﬀerent levels and
+|i − j| ≥ with k.
+i ∈ For {0, 1, 2}, let be the spanning subdigraph of D[S] with arc set Di
+≤ × × It is well-known that χ(D[S]) χ(D0) χ(D1) χ(D2). Ai.
+≤ ≤ Clearly, χ(D1) k, and we show that χ(D2) 4k2+2. To bound χ(D0) we
+�
+φ partition the vertex set according to the above-mention colouring of S.
+D0 Using the rainbow property, we prove that the subdigraph of induced
+c · by the vertices of colour has chromatic number at most 2 (4k)4k + 1 for
+≤ · all colour c. Hence χ(D0) (2 (4k)4k + This gives the result for 1)αk.
+□ · = k(4k2 + 2)(2 (4k)4k + βk 1)αk.
+≤ Lemma 2.3 χ(D′) 8k.
+D Proof. First note that since is strongly connected so is D′.
+> Suppose for a contradiction that χ(D′) 8k. By Theorem 1.2, there exists
+C′ x2, . . . , a directed cycle = (x1, x1) of length at least 8k. For each vertex xl,
+D that corresponds to a in D, the arc corresponds in to an arc xj Si xj−1xj
+whose head is a vertex of and the arc corresponds to an arc whose pi Si xjxj+1 �
+tail is a vertex of Let be the dipath from to in C. Note li Si. Pj pi li
+C that this path intersects the elements of only along a subdipath. Let Si
+C′ be the cycle obtained from where we replace all contracted vertices by xj
+C the path First note that has length at least 8k. Moreover, a cycle of Pj.
+C C can intersect only along one because they all correspond to diﬀerent Pj, �
+C C strong components of C. Thus intersects each cycle of on a subdipath.
+k D Moreover this subdipath has length smaller than for otherwise would
+C contain a subdivision of B(k, 1; k). So is a directed cycle of length at least
+C 8k which intersects every cycle of along a subdipath of length less than k.
+□ This contradicts the maximality of C.
+≤ 2.1 with Claim 2.3 and Lemma 2.2, we get that χ(D) Using Lemma
+· · 8k This proves Theorem 1.7 for = 8k βk. γk βk.
+References
+[1] L. Addario-Berry, F. Havet, C. L. Sales, B. A. Reed, and S. Thomass´e. Oriented
+trees in digraphs. Discrete Mathematics, 313 (8): 967–974, 2013.
+[2] J. A. Bondy, Disconnected orientations and a conjecture of Las Vergnas, J.
+London Math. Soc. (2), 14 (2): 277–282, (1976).
+[3] S. A. Burr. Subtrees of directed graphs and hypergraphs. In Proceedings of the
+11th Southeastern Conference on Combinatorics, Graph theory and Computing,
+pages 227–239, Boca Raton - FL, 1980. Florida Atlantic University.
+[4] S. A. Burr, Antidirected subtrees of directed graphs. Canad. Math. Bull. 25 :
+1982 119–120, 1982
+[5] N. Cohen, F. Havet, W. Lochet, and N. Nisse. Subdivisions of oriented cycles
+in digraphs with large chromatic number. arXiv:1605.07762
+[6] P. Erd˝os. Graph theory and probability. Canad. J. Math., 11:34–38, 1959.
+[7] P. Erd˝os and A. Hajnal. On chromatic number of graphs and set-systems. Acta
+Mathematica Academiae Scientiarum Hungarica, 17(1-2):61–99, 1966.
+[8] T. Gallai. On directed paths and circuits. In Theory of Graphs (Proc. Colloq.
+Titany, 1966), pages 115–118. Academic Press, New York, 1968.
+[9] M. Hasse. Zur algebraischen bergr¨und der graphentheorie I. Math. Nachr., 28:
+275–290, 1964.
+[10] R. Kim, SJ. Kim, J. Ma; B. Park Cycles with two blocks in k-chromatic digraphs
+arXiv:1610.05839
+[11] B. Roy. Nombre chromatique et plus longs chemins d’un graphe. Rev. Francaise
+Informat. Recherche Op´erationnelle, 1 (5): 129–132, 1967.
+[12] L. M. Vitaver. Determination of minimal coloring of vertices of a graph by
+means of boolean powers of the incidence matrix. Doklady Akademii Nauk
+SSSR, 147: 758–759, 1962.

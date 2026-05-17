@@ -277,6 +277,12 @@ tasks:
       - cargo upgrade --incompatible
       - cargo update
       - echo "Updating Rust dependencies (Ruby native crate)..."
+      # The Ruby native crate has `kreuzberg = { path = "../../vendor/kreuzberg" }`
+      # — that directory is generated on demand. `rake compile` runs the vendor
+      # script automatically, but `task update` does not, so cargo aborts with
+      # "No such file or directory" when it tries to resolve the path dep.
+      # Run the vendor script first to populate packages/ruby/vendor/.
+      - python3 scripts/ci/ruby/vendor-kreuzberg-core.py
       - cargo upgrade --incompatible --manifest-path packages/ruby/ext/kreuzberg_rb/native/Cargo.toml
       - cargo update --manifest-path packages/ruby/ext/kreuzberg_rb/native/Cargo.toml
 

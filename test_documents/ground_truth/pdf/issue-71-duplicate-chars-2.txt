@@ -1,0 +1,1168 @@
+                   Chapitre 5
+
+                   Item 265
+
+                   DÉSORDRES
+                   DE L’ÉQUILIBRE ACIDE-BASE
+
+                        UE 8.        Circulation - Métabolismes
+                        N°265. Troubles de l’équilibre acido-basique et désordres hydro-électrolytiques.
+                                     OBJECTIFS
+                                     y Prescrire et interpréter un examen des gaz du sang et un ionogramme sanguin en
+                                       fonction d’une situation clinique donnée.
+                                     y Savoir diagnostiquer et traiter : une acidose métabolique, une acidose ventilatoire.
+
+
+                        Acidoses
+                        Ê Savoir définir l’acidose, son caractère métabolique ou ventilatoire, et son caractère isolé ou mixte,
+                          aigu ou chronique.
+                        Ê Savoir conduire le diagnostic étiologique d’une acidose métabolique.
+                        Ê Connaître les principales causes d’acidose métabolique et respiratoire, leurs caractéristiques
+                          diagnostiques et savoir appliquer la conduite thérapeutique en urgence.
+
+
+                        Alcaloses (non incluses dans le programme de l’ECN mais traitées à titre indicatif)
+                        Ê Savoir définir l’alcalose métabolique et établir son caractère isolé ou mixte.
+                        Ê Savoir conduire le diagnostic étiologique d’une alcalose métabolique.
+                        Ê Connaître les principales causes d’alcalose métabolique et leurs caractéristiques
+                           diagnostiques.
+
+
+
+
+                   I.     GAZ DU SANG ARTÉRIEL ET INTERPRÉTATION
+
+                   A.     Mesure du pH et de la gazométrie circulante sanguine
+                   ¢      Sang prélevé sans air dans une seringue héparinée (seringue à gaz du sang)
+                   ¢      Dans une artère plutôt qu’une veine pour mesurer le pH extracellulaire (le plus commun étant l’artère
+                          radiale au poignet)
+                   ¢      Mesure de la pression partielle en O2 et en CO2 total, à partir duquel est calculée la bicarbonatémie
+                          (HCO3–)
+
+
+
+
+9782340-025998_Nephrologie.indb 71                                                                                                14/09/2018 10:37
+        72                       UE 8.        Circulation - Métabolismes
+
+
+
+                                 Tableau 1 : Valeurs normales des variables de l’équilibre acido-basique
+
+                                                                pH         H+ (nmol/L)        PCO2 (mmHg)          HCO 3 – (mmol/L)
+                                         Artériel           7,38 - 7,42          37 - 43          36 - 44               22 - 26
+
+                                         Veineux            7,32 - 7,38          42 - 48          42 - 50               23 - 27
+
+
+
+
+                                 B.      Interprétation de la gazométrie
+                                 1. Acidose ou alcalose ?
+                                 ¢¢      Sur prélèvement artériel :
+                                         hh   Acidémie (ou acidose décompensée) : pH sanguin < 7,38 (augmentation de [H+]).
+                                         hh   Alcalémie (ou alcalose décompensée) : pH sanguin > 7,42 (baisse de [H+]).
+                                     Les variations de H+ (donc de pH) sont induites par des modification primitives de la PCO2
+                                     (régulée par la ventilation) ou de la concentration plasmatique de HCO3 – (régulée par le rein).
+
+
+
+                                 2. Métabolique ou respiratoire ?
+                                 ¢¢      Anomalies primitives de la PCO2 : acidose (PCO2 élevée) ou alcalose (PCO2 basse)
+                                         dites « respiratoires ».
+                                 ¢¢      Anomalies primitives de HCO3– : acidose ([HCO3–] basse) ou alcalose ([HCO3–] élevée)
+                                         dites « métaboliques ».
+
+                                 3. Réponses compensatrices rénales ou respiratoires
+                                 ¢¢      Le pH dépend du rapport HCO3–/PCO2 : s’il est maintenu constant par la compensa­
+                                         tion, le pH ne varie pas
+                                         hh   baisse de HCO3– si acidose métabolique ¨ hyperventilation compensatrice pour
+                                              diminution parallèle de la PCO2 ;
+                                         hh   augmentation de PCO2 si acidose respiratoire ¨ génération compensatrice de
+                                              HCO3– par le rein ;
+                                         hh   augmentation de HCO3– si alcalose métabolique ¨ hypoventilation compensatrice
+                                              pour augmentation de la PCO2 ;
+                                         hh   diminution de la PCO2 si alcalose respiratoire ¨ diminution compensatrice
+                                              parallèle de HCO3–.
+
+
+                                 Tableau 2 : Désordres acido-basique simples (anomalie primitive en grisé)
+
+                                                                            pH                   HCO 3 –                PCO2
+
+                                        Acidose métabolique                                                             
+
+                                        Alcalose métabolique                                                            
+
+                                         Acidose respiratoire                                                           
+
+                                        Alcalose respiratoire                                                           
+
+
+
+
+9782340-025998_Nephrologie.indb 72                                                                                                      14/09/2018 10:37
+                                                                                                         Chapitre 5 – Item 265      73
+
+
+
+                                 II. ACIDOSES MÉTABOLIQUES
+
+                                 A.   Diagnostic des acidoses métaboliques
+                                 ¢¢   Une acidose métabolique doit être recherchée dans les situations suivantes :
+                                      hh   Contexte évocateur : insuffisance rénale sévère, diarrhée profuse, etc. ;
+                                      hh   Anomalies biochimiques au ionogramme : baisse des bicarbonates plasmatiques ;
+                                           hyperchlorémie…
+                                      hh   Manifestations cliniques (peu spécifiques) :
+                                              yy en cas d’acidose aiguë sévère : polypnée (hyperventilation compensatrice),
+                                                  détresse respiratoire, bas débit cardiaque, coma ;
+                                              yy en cas d’acidose chronique : lithiases et néphrocalcinose, amyotrophie,
+                                                  retard de croissance, ostéomalacie, fractures pathologiques.
+
+                                 1. Première étape : affirmer l’acidose métabolique
+
+                                                   Acidose = pH sanguin artériel < 7,38 (ou veineux < 7,32)
+
+                                               Métabolique = HCO3 – < 22 mmol/L (baisse secondaire de PCO2
+                                                              par compensation ventilatoire)
+
+
+                                 Attention, une anomalie du pH n’est pas nécessaire pour diagnostiquer un trouble acido-
+                                 basique. En effet, une bicarbonatémie basse avec un pH normal peut correspondre à une
+                                 acidose métabolique totalement compensée, ou à une alcalose respiratoire totalement
+                                 compensée (mais la compensation est plus rarement totale).
+                                 La réponse compensatrice peut être prédite :
+                                 ¢¢   En cas d’acidose métabolique simple, la baisse de la [HCO3–] entraîne une baisse
+                                      prévisible de PaCO2 estimée par la formule de Winter.
+
+                                                       PaCO2 (mmHg) attendue = 1,5 x [HCO3 –] + 8 ± 2
+
+
+                                 De façon plus simple mais approximative, en cas d’acidose métabolique avec acidémie, la
+                                 valeur de PCO2 attendue est proche de la valeur des centièmes de pH (PCO2 à 32 mmHg
+                                 pour un pH à 7,32 par exemple).
+                                 ¢¢   Si la PaCO2 est plus basse ou plus élevée que la valeur calculée, il faut suspecter
+                                      un désordre acido-basique complexe, respectivement une alcalose ou une acidose
+                                      respiratoire associée (donc un trouble ventilatoire).
+
+                                 2. Deuxième étape : déterminer le trou anionique plasmatique
+                                 ¢¢   Selon le principe de l’électroneutralité dans le plasma, la somme des concentrations
+                                      des anions est égale à la somme des concentrations des cations.
+                                 ¢¢   Si on considère spécifiquement les concentrations des cations Na+ et K+ et des anions
+                                      HCO3– et Cl–, il existe une différence appelée trou anionique (TA).
+
+                                                          TA = [Na+] – [Cl – + HCO3 –] = 12 ± 4 mmol/L
+                                                            (ou 16 ± 4 si le K+ est pris en compte)
+
+
+                                 Un TA > 16 mmol/L (20mmol/L si prise en compte du K+) est considéré comme élevé.
+                                 ¢¢   Ainsi il existe physiologiquement plus d’anions indosés que de cations indosés. Les
+                                      variations de TA vont permettre d’évaluer si l’anion accompagnant l’H+ en excès
+                                      (donc la perte de HCO3–) est le Chlore (anion dosé) ou des anions indosés (protéines
+                                      plasmatiques, et dans une moindre mesure phosphates, sulfates et autres anions
+                                      organiques).
+
+
+
+
+9782340-025998_Nephrologie.indb 73                                                                                               14/09/2018 10:37
+        74                       UE 8.        Circulation - Métabolismes
+
+
+
+                                         hh   Acidose avec trou anionique normal (gain d’HCl) : perte rénale ou digestive de
+                                              HCO3– ¨ baisse du HCO3– compensée par une augmentation proportionnelle du
+                                              Cl– (gain d’HCl) ¨ acidose métabolique hyperchlorémique.
+                                         hh   Acidose avec trou anionique élevé (gain d’AH) : addition d’H+ associé à un anion
+                                              indosé ¨ baisse de [HCO3–] remplacée par un anion non mesuré (par exemple
+                                              le lactate).
+
+                                                            Normale                             Acidose métabolique
+
+
+                                                                                Trou anionique normal             Trou anionique élevé
+                                                                                  (hyperchlorémique)               (homochlorémique)
+
+
+                                                                A * 10                      A * 10                              A * 30
+
+
+                                                                HCO3–                                   HCO3–
+                                                                                                          4                              HCO3–
+                                                                 24
+                                                                                                                                           4
+
+
+                                                      Na+        Cl–               Na+       Cl–                       Na+       Cl–
+                                                      140        106               140       126                       140       106
+
+
+
+
+                                                   A * = anion indosé (trou anionique)
+
+                                                                       Figure 1. Le trou anionique plasmatique
+
+
+                                 B.      Diagnostic physiopathologique et étiologique des acidoses métaboliques
+
+                                 Tableau 3 : Principales causes d’acidose métabolique selon le mécanisme
+
+                                       Mécanisme                      TA plasmatique augmenté                                TA plasmatique normal
+
+                                                             • Acidose lactique
+
+                                      Accumulation           • Acidocétose                                        • Intoxication aux acides chlorés (Chlorure
+                                      aiguë d’acide          • Intoxication acide exogène                             d’ammonium, HCl)
+                                                               (salicylate, éthylène glycol, méthanol)
+
+                                                                                                                  • Diarrhées
+                                           Perte
+                                                                                                                  • Anastomoses urétéro-intestinales
+                                      de bicarbonate
+                                                                                                                  • Acidose tubulaire proximale (type 2)
+
+
+                                                                                                                  • Acidose tubulaire distale
+                                                                                                                    hyper­kaliémique (type 4) par
+                                     Excrétion rénale                                                               défaut de production de NH4 +
+                                                             • Insuffisance rénale
+                                     d’acide diminuée                                                               (hypoaldostéronime) ;
+                                                                                                                  • Acidose tubulaire distale (type 1) par
+                                                                                                                    défaut de sécrétion distale d’H+
+                                 La principale forme d’élimination rénale des protons (H+) en excès est l’ion ammonium (NH4 +). C’est en outre la forme
+                                 adaptable d’élimination d’acide (autrement dit, en cas de charge acide, la réponse rénale attendue est l’augmentation
+                                 de l’excrétion de NH4 +). En cas d’acidose à TA plasmatique normal, la réponse rénale peut être évaluée par le calcul
+                                 du trou anionique urinaire qui est le reflet (inverse) de l’ammoniurie.
+                                                                             TAu = UNa + UK – UCl (figure 2)
+
+                                 Physiologiquement le TAu est discrètement positif
+                                 En situation d’acidose métabolique à TA plasmatique normal
+                                 Si le TAu est < 0 (= concentration de NH4 + urinaire élevée = réponse rénale adaptée) ¨ origine extrarénale
+                                 de l’acidose
+                                 Si le TAu est > 0 (= concentration de NH4+ urinaire basse = réponse rénale inadaptée) ¨ origine tubulaire rénale
+
+
+
+
+9782340-025998_Nephrologie.indb 74                                                                                                                              14/09/2018 10:37
+                                                                                                                                                  Chapitre 5 – Item 265      75
+
+
+
+
+                                                                               Na+           Cl–           Trou anionique urinaire = [Na]u + [K]u - [Cl]u >0
+                                                                                K+
+                                                                                                          >0
+                                                                              NH4    +
+                                                                                           Anions
+                                                                             Cations Indosés
+                                                                             Indosés
+                                                            <0                                                    >0
+                                                Réponse rénale adaptée                                Réponse rénale inadaptée
+
+                                                  Cations        Anions                                  Cations       Anions
+                                                     Na+                                                                Cl–
+                                                                  Cl–                                       Na+
+                                                      K+
+                                                                                <0                           K+                          >0
+                                                    NH4+
+                                                                                                           NH4+       Anions
+                                                  Cations Anions                                                     Indosés
+                                                  Indosés                                                Cations
+                                                          Indosés
+                                                                                                         Indosés
+                                       Trou anionique urinaire est négatif                         Trou anionique urinaire est positif
+                                          = NH4+ en excés dans l’urine                               = NH4+ diminue dans l’urine
+                                           = Réponse rénale adaptée                                  = Réponse rénale inadaptée
+                                          = Acidose d’origine digestive                               = Acidose d’origine rénale
+
+                                                           Figure 2. Trou anionique urinaire = méthode indirecte
+                                                                       pour évaluer la réponse rénale
+
+                                 La figure 3 résume la démarche diagnostique devant une acidose métabolique.
+
+                                                                                              Acidose métabolique
+                                                                                               (pH et HCO3– bas)
+
+
+
+
+                                                                                 Calculer le trou anionique (TA) plasmatique
+
+
+
+
+                                                                 TA < 16 mmol/L*                                                TA > 16 mmol/L*
+                                                             Acidose hyperchlorémique
+
+
+
+
+                                                               Calculer le TA urinaire                                        - acidose lactique
+                                                                                                                              - acidocétose
+                                                                                                                              - intoxications
+                                                                                                                              - insuffisance rénale
+                                                      TAU < 0                            TAU > 0
+
+
+                                               - dilution                     - acidoses tubulaires
+                                               - charge acide
+                                               - pertes digestives
+                                                 de bicarbonates
+
+                                                                                                                   * le potassium n’est pas pris en compte
+
+                                                                             Figure 3. Démarche diagnostique
+                                                                             devant une acidose métabolique
+
+
+
+
+9782340-025998_Nephrologie.indb 75                                                                                                                                        14/09/2018 10:37
+        76                       UE 8.        Circulation - Métabolismes
+
+
+
+                                 1. Acidoses métaboliques avec trou anionique plasmatique augmenté
+                                 ¢¢      Production endogène ou surcharge exogène aiguë d’H+ avec un anion indosé.
+                                 ¢¢      Défaut d’élimination des H+ : insuffisance rénale chronique avancée
+
+
+                                 Tableau 4 : Acidoses métaboliques avec TA plasmatique augmenté
+
+                                               Type                           Causes                                Anion indosé
+                                                                 • Hypoxie tissulaire (choc)        • Lactate
+                                     Acidose lactique            • Biguanides
+
+                                                                 • Insuffisance hépatocellulaire
+
+                                                                 • Diabète                          • b hydroxy-butyrate
+
+                                     Acidocétoses                • Alcool
+
+                                                                 • Jeûne
+
+                                                                 • Aspirine                         • Salicylates
+
+                                     Intoxications               • Éthylène glycol (antigel)        • Glyoxalate, oxalate
+
+                                                                 • Méthanol                         • Formate
+
+                                     Insuffisance rénale*                                           • Sulfates, phosphates, hippurate
+
+                                 * en cas d’insuffisance rénale, le TA plasmatique n’est que discrètement augmenté, car il y a également défaut
+                                 d’excrétion d’acide par le rein
+
+
+                                 2. Acidoses métaboliques avec trou anionique normal
+                                    (= acidoses hyperchlorémiques)
+                                 ¢¢      Deux types de mécanismes :
+                                         hh   perte de bicarbonate de sodium digestive (diarrhée) ¨ trou anionique urinaire
+                                              négatif ;
+                                         hh   défaut de réabsorption des bicarbonates filtrés (acidose tubulaire proximale) ou
+                                              diminution de l’excrétion acide par le rein (acidose tubulaire distale type 1 ou 4)
+                                              ¨ trou anionique urinaire positif.
+
+
+
+
+9782340-025998_Nephrologie.indb 76                                                                                                                14/09/2018 10:37
+                                                                                                                                      Chapitre 5 – Item 265           77
+
+
+
+                                 Tableau 5 : Mécanismes et causes des acidoses métaboliques à trou anionique normal
+
+                                                          Diarrhée                                  Acidose tubulaire rénale
+                                                                           Proximale                      Distale                    Distale hyperkaliémique
+                                                                            (type 2)                      (type 1)                            (type 4)
+                                                         • Perte      • Perte de HCO 3 –      • Défaut d’acidification distale   • Défaut de production de NH 4 +
+                                                          digestive    par défaut de           lié à une anomalie de la           par hypoaldostéronisme le
+                                     Mécanisme            de HCO3 –    réabsorption            sécrétion d’H+ par la pompe        plus souvent
+
+                                      et défaut
+                                                                       tubulaire proximale     à protons (secretion defect)
+                                                                                               ou par réetrodiffusion des
+                                                                                               H+ (gradient defect)
+
+
+                                        TA     NH4 +
+                                                                                                                                         
+
+
+
+                                     urinaire urinaire
+                                                                            peu modifié
+                                                            << 0                                              >0                                >> 0
+                                                                       ou ­discrètement > 0
+
+                                                                      • Syndrome              • Néphrocalcinose                  Signes d’insuffisance
+                                                                        de Fanconi            • Ostéomalacie lithiase,           minérolocorticoïde
+                                      Signes
+                                                                        (diabète phospho­      certaines formes
+                                     associés                           gluco-aminé)           génétiques (surdité)
+                                                                      • Ostéomalacie
+
+                                                                      • Myélome               • Défaut sécrétion :               • Uropathie obstructive
+                                                                      • Cystinose               –– Sjögren, Lupus                • Hyporéninisme et
+
+                                                                      • Acétazolamide           –– Certaines                      hypoaldostéronisme (diabète)
+                                                                      • Ifosfamide                 hypercalciuries               • IEC/ARA2, AINS
+
+
+                                         Causes
+                                                                      • Ténofovir               –– Drépanocytose                 • Spironolactone, Amiloride
+                                                                                                –– Formes héréditaires           • Insuffisance surrénale
+
+                                                                                                                                 • Héparines
+
+                                                                                              • Déficit gradient :               • Anticalcineurines
+
+                                                                                                –– Amphotéricine B               • Triméthoprime
+
+                                                                                                                                 • Pentamidine
+
+
+
+
+                                      Fréquence
+                                                          Fréquent            Rare                         Rare                             Fréquent
+                                     chez l’adulte
+
+                                                                      • Basse, aggravée       • Basse, corrigée
+
+
+                                         Kaliémie
+                                                           Basse       par l’apport            par l’apport                                    Élevée
+                                                                       d’alcalins              d’alcalins
+
+                                        pH                                                                                                    < 5,5
+                                                           < 5,5            Variable                       > 5,5
+                                     urinaire                                                                                        (particulièrement bas)
+
+
+
+
+                                 C.              Traitement des acidoses métaboliques
+                                 1. Acidoses métaboliques aiguës
+                                 ¢¢              Urgence vitale si pH < 7,10 ou bicarbonatémie < 8 mmol/L : diminution des débits
+                                                 cardiaques et tissulaires, résistance aux catécholamines, arythmies ventriculaires,
+                                                 inhibition du métabolisme cellulaire, et coma.
+                                 ¢¢              Moyens thérapeutiques disponibles :
+                                                 hh      traitement de la cause +++
+                                                 hh      élimination du CO2 : correction d’un bas débit, ventilation artificielle.
+
+
+
+
+9782340-025998_Nephrologie.indb 77                                                                                                                                  14/09/2018 10:37
+        78                       UE 8.        Circulation - Métabolismes
+
+
+
+                                         hh   alcalinisation :
+                                                   yy discutée dans les acidoses lactiques,
+                                                   yy discutée dans les acidocétoses : insuline et réhydratation souvent suffisantes,
+                                                   yy indispensable dans les acidoses hyperchlorémiques ou associées à certaines
+                                                      intoxications : bicarbonate de sodium IV pour remonter rapidement le pH
+                                                      > 7,20 et la bicarbonatémie > 10 mmol/L :
+                                                          –– quantité HCO3– (mmol) = ∆ [HCO3–] x 0,5 x poids (en kg) ;
+                                                          –– l’alcalinisation doit être évitée en cas de surcharge hydro-sodée
+                                                               et/ou d’hypokaliémie.
+                                         hh   épuration extrarénale si insuffisance rénale organique associée (pour éviter une
+                                              surcharge hydrosodée liée à la perfusion de bicarbonate de sodium).
+
+                                 2. Acidoses chroniques d’origine rénale
+                                 Traitement nécessaire pour prévenir la fonte musculaire, la lithiase rénale ou la
+                                 néphrocalcinose, la déminéralisation osseuse et chez l’enfant le retard de croissance.
+                                 ¢¢      Acidose tubulaire proximale et acidose tubulaire distale de type 1 : sels alcalins (sous
+                                         forme de citrate plutôt que bicarbonate, pour prévenir la lithiase) de sodium ou de
+                                         potassium selon l’anomalie prédominante.
+                                 ¢¢      Acidoses tubulaires hyperkaliémiques : résine échangeuse d’ion (Kayexalate®), furo­
+                                         sémide (Lasilix®), et fludrocortisone en cas d’insuffisance surrénale.
+                                 ¢¢      Insuffisance rénale : maintenir le taux de bicarbonates plasmatiques > 22 mmol/L
+                                         par des apports de bicarbonate de sodium (1 à 6 g par jour en gélules).
+
+
+
+                                 III. ACIDOSES RESPIRATOIRES
+
+                                 A.      Diagnostic biologique et clinique des acidoses respiratoires
+                                 ¢¢      Déséquilibre entre ventilation alvéolaire et production de CO2 entraînant une modi­
+                                         fication de PaCO2.
+                                 ¢¢      Acidose respiratoire provoquée par une augmentation de la PaCO2 qui diminue le
+                                         rapport [HCO3–]/PaCO2.
+                                 ¢¢      En situation chronique, il existe une compensation rénale (augmentation des HCO3–)
+                                         mais qui n’est jamais totale (pH légèrement inférieur à 7,38).
+                                 ¢¢      L’hypoventilation alvéolaire associe hypoxémie et hypercapnie.
+                                 ¢¢      Ces deux anomalies ont des effets vasculaires et neurologiques (vasodilatation céré­
+                                         brale avec augmentation des pressions intra-crâniennes secondaire à l’hypercapnie)
+                                         hh   céphalées, asterixis, confusion mentale voire coma (forme aiguë)
+                                         hh   sueurs
+                                         hh   hypertension artérielle
+                                         hh   un ralentissement psychomoteur et une somnolence peuvent accompagner l’hy­
+                                              percapnie chronique
+
+                                 B.      Diagnostic physiopathologique
+                                 L’hypoventilation alvéolaire peut être définie comme un défaut de renouvellement des gaz
+                                 alvéolaires nécessaire au maintien d’une PaCO2 normale : elle aboutit à une élévation de
+                                 la PaCO2 et donc à l’acidose.
+
+                                 C.      Diagnostic étiologique
+                                 Il repose sur l’histoire clinique, l’examen neurologique et l’imagerie (tableau 6).
+
+
+
+
+9782340-025998_Nephrologie.indb 78                                                                                                      14/09/2018 10:37
+                                                                                                                             Chapitre 5 – Item 265      79
+
+
+
+                                 D.       Traitement des acidoses respiratoires
+                                 Le traitement de l’hypoventilation alvéolaire aiguë ou chronique rejoint les questions 199,
+                                 204, 205 et 354. Il repose sur le traitement de la cause et/ou l’assistance respiratoire.
+
+
+                                 Tableau 6 : Diagnostic étiologique
+
+                                                               HYPOVENTILATION ALVÉOLAIRE NON PULMONAIRE
+                                                                     Mécanisme
+                                      Type de défaillance                                                          Étiologies
+                                                                  physiopathologique
+                                                                                             • Infections (encéphalite)
+
+                                                                                             • Traumatismes
+
+                                     Contrôle ventilatoire       Dysfonction cérébrale       • Tumeurs
+
+                                                                                             • AVC (Tronc)
+
+                                                                                             • Sédatifs
+
+                                                                                             • Perte de contrôle
+                                                                                                –– Syndrome d’Ondine
+                                                                                                –– SAS type central
+                                                                                                –– Hypothyroïdie
+                                                                                                –– Alcalose métabolique
+                                                                 Dysfonction                    –– Sédatifs
+                                                                 des centres                    –– Syndrome de Parkinson
+                                                                 respiratoires                  –– Tétanos
+                                                                                             • Lésion des voies afférentes et efférentes
+                                                                                                –– Traumatisme médullaire cervical (> C5)
+                                                                                                –– Myélite transverse
+                                                                                                –– Sclérose en plaques
+                                                                                                –– Parkinson
+                                                                                             • Endartérectomie carotidienne bilatérale
+                                                                 Dysfonction
+                                                                                             • Syringomyélie
+                                                                 des récepteurs
+                                                                                             • Dysautonomie familiale Neuropathie diabétique
+                                                                 périphériques
+                                                                                             • Tétanos
+
+                                                                                             • Corne antérieure médullaire
+                                                                                                –– Poliomyélite
+                                                                                                –– SLA
+                                                                                             • Nerfs périphériques
+                                                                                                –– Syndrome de Guillain-Barré
+                                                                                                –– Porphyrie aiguë intermittente
+                                                                                                –– Toxiques
+                                                                 Altération fonction
+                                     Pompe ventilatoire                                      • Jonction neuromusculaire
+                                                                 neuromusculaire
+                                                                                                –– Myasthénie
+                                                                                                –– Botulisme
+                                                                                             • Muscles respiratoires (diaphragme)
+                                                                                                –– Myopathies et myosites inflammatoires
+                                                                                                –– Poliomyélite
+                                                                                                –– Troubles métaboliques (hypokaliémie,
+                                                                                                   hypophosphatémie, hypermagnésémie)
+                                                                                             • Cyphoscoliose,
+
+                                                                                             • Spondylarthrite ankylosante
+
+                                                                 Pathologie                  • Thoracoplastie
+                                                                 de la cage thoracique       • Fibrose ou calcification pleurale,
+
+                                                                                             • Epanchement pleural liquidien ou gazeux
+
+                                                                                             • Obésité
+
+                                                             HYPOVENTILATION ALVÉOLAIRE D’ORIGINE PULMONAIRE
+                                     • BPCO sévère
+
+                                     • Emphysème pulmonaire sévère
+
+                                     • Réduction parenchymateuse (résection chirurgicale, lésions cicatricielles étendues)
+
+                                     • Pneumopathies inflammatoires avec myosite diaphragmatique (lupus, polymyosite)
+
+
+
+
+9782340-025998_Nephrologie.indb 79                                                                                                                   14/09/2018 10:37
+        80
+
+
+
+
+                                 POUR EN SAVOIR PLUS (ACIDOSES)…
+
+                                     Le maintien de l’équilibre acido-basique est assuré par le rein par deux mécanismes :
+                                 la réabsorption de HCO3– et l’excrétion d’ion H+.
+
+                                 1. Le pH est une fonction du rapport HCO3 –/PCO2 :
+                                    ­équation de ­Henderson-Hasselbach
+                                    Le diagnostic de l’équilibre acide-base est souvent enseigné à partir de l’équation de
+                                 Henderson-Hasselbach qui nécessite le recours au pH (l’anti-logarithme de la concentration
+                                 de H+).
+                                    La concentration de bicarbonate HCO3– peut être calculée à partir de l’équation de
+                                 Henderson-Hasselbalch ou mieux, être mesurée directement par colorimétrie. Cette méthode
+                                 mesure en réalité le CO2 total et inclut ainsi le CO2 dissout (égal à 0,03 x PCO2) ce qui
+                                 ajoute 1 à 2 mmol/L à la concentration de HCO3– dans les concentrations physiologiques.
+                                 Les différences entre les valeurs mesurées et calculées de concentrations plasmatiques de
+                                 bicarbonate sont habituellement modestes.
+
+                                 2. La réponse compensatrice peut être prédite
+                                    Il peut être intéressant en pratique clinique de connaître la valeur de PaCO2 attendue
+                                 devant une acidose métabolique, pour détecter d’éventuels troubles complexes (mixtes)
+                                     Ainsi, en cas d’acidose métabolique simple, la baisse de la [HCO3–] entraîne une baisse
+                                 relativement prévisible de PaCO2, la prédiction pouvant être obtenue par la formule de
+                                 Winter :
+
+                                                       PaCO2 (mmHg) attendue = 1,5 x [HCO3 –] + 8 ± 2
+
+
+                                     Si la valeur de PCO2 observée est supérieure à la PaCO2 théorique, la compensation
+                                 respiratoire doit être considérée comme inadaptée et le trouble acido-basique complexe
+                                 (= acidose mixte).
+                                     Une façon simple d’estimer la PaCO2 attendue est de la considérer comme équivalente
+                                 aux 2 derniers chiffres après la virgule de la valeur du pH. Par exemple, si le pH artériel
+                                 est à 7,30, la valeur attendue de la PaCO2 est de 30 mmHg.
+                                    La compensation respiratoire peut prendre plusieurs heures et la réponse rénale encore
+                                 plus longtemps ce qui nécessite le recours à des formules différentes pour l’adaptation
+                                 aiguë et chronique. La réponse métabolique à une perturbation respiratoire aiguë est très
+                                 minime, rarement plus de 3-4 mmol/L de HCO3–.
+                                     À l’exception de l’alcalose respiratoire chronique, la compensation n’est jamais complète.
+                                     Les relations entre le pH (ou H+), PCO2 et HCO3– peuvent être représentées sous forme
+                                 de graphique avec les intervalles de confiance des compensations appropriées. Lorsque
+                                 la réponse sort de ces intervalles de confiance, il existe un désordre acide-base complexe.
+                                     Par contre, la détermination in vitro du déficit ou excès de base, du pouvoir tampon
+                                 et des bicarbonates « standard » n’apporte aucun élément diagnostique supplémentaire
+                                 et ne sera pas discutée.
+
+
+
+
+9782340-025998_Nephrologie.indb 80                                                                                                14/09/2018 10:37
+                                                                                                                                                                   81
+
+
+
+
+                                                                                                           [H+] sanguin artériel, mmol/L
+                                                                                  150 125    100     80 70 60           50      40         30              20
+
+                                                                                             PaCO2                  120 100 90 80 70            60    50
+                                                                                             mmHg                                                          40
+                                                                            50
+
+
+
+
+                                         [HCO3–] sanguin artériel, mmol/L
+                                                                            40
+                                                                                                                                                           30
+
+                                                                            30
+                                                                                                                              Normal                       20
+
+                                                                            20
+
+                                                                                                                                                           10
+                                                                            10
+
+
+
+                                                                                 6,8   6,9   7,0     7,1      7,2    7,3     7,4       7,5      7,6    7,7
+                                                                                                               pH sanguin artériel
+
+                                                                                 Figure 4. Intervalle de confiance de la compensation
+                                                                                   respiratoire au cours d’une acidose métabolique
+
+
+                                 3. Trou anionique
+                                    Le TA plasmatique doit être ajusté aux valeurs de l’albuminémie (réduction de 4 mmol/L
+                                 du TA pour chaque 10 g/L en moins d’albuminémie).
+                                     Le TA élevé est utile au diagnostic différentiel d’une acidose métabolique mais il n’est
+                                 pas toujours possible de caractériser les anions indosés, en particulier lorsque le TA n’est
+                                 que modérément augmenté (< 20 mmol/L). Un TA normal n’exclut pas non plus totalement
+                                 la présence d’un anion indosé (notamment le lactate).
+
+                                 4. Désordres complexes
+                                   De façon non exceptionnelle, deux ou plusieurs perturbations peuvent coexister et
+                                 améliorer ou aggraver l’équilibre acido-basique.
+                                    Outre l’histoire clinique orientant vers des anomalies acido-basiques multiples, d’autres
+                                 indices orientent vers un désordre acido-basique complexe :
+                                     –– si la réponse compensatrice est en deçà ou au-delà des valeurs attendues (par le
+                                        normogramme ou le calcul) ;
+                                     –– si le pH est normal en présence d’une PCO2 ou [HCO3–] anormales ;
+                                     –– si un trou anionique est présent même si pH, PCO2 ou [HCO3–] sont normaux (trop
+                                        bonne compensation) ;
+                                     –– si la compensation d’un désordre respiratoire aigu se traduit par une [HCO3–] diffé­
+                                        rente de plus de 3-4 mmol/L de la normale.
+                                     Si la compensation ventilatoire est adéquate, la PCO2 diminue d’environ 1,25 mmHg
+                                 (0,16 kPa) pour chaque baisse de 1 mmol/L de la bicarbonatémie. Si la PCO2 est
+                                 significativement plus basse ou plus élevée que cette valeur, il faut alors suspecter un trouble
+                                 acido-basique complexe : respectivement une alcalose ou une acidose respiratoire associée.
+
+
+
+
+9782340-025998_Nephrologie.indb 81                                                                                                                              14/09/2018 10:37
+        82
+
+
+
+                                 5. Le trou anionique urinaire
+                                     Les causes de perte de bicarbonate peuvent être distinguées des causes non rénales
+                                 par la mesure de l’ammoniurie. Au cours de l’acidose hyperchlorémique, une excrétion
+                                 urinaire quotidienne d’ammonium inférieure à 1 mmol/kg est anormale et indique que
+                                 le rein est la cause principale de cette anomalie. Si la mesure de l’ammoniurie n’est pas
+                                 facilement disponible, celle-ci peut être estimée au lit du malade par le calcul du trou
+                                 anionique urinaire :
+
+                                                                      TAu : UNa +UK – UCl
+
+                                          TAu > 0 (= concentration de NH4+ urinaire basse) =origine tubulaire rénale
+
+                                     TAu < 0 (= concentration de NH4+ urinaire élevée) =origine extrarénale de l’acidose.
+
+
+
+                                 6. Épuration extrarénale
+                                     Elle est nécessaire pour le traitement de l’acidose associée à certains cas d’insuffisance
+                                 rénale ou cardiaque ou lors de certaines intoxications. L’épuration extrarénale (hémodialyse)
+                                 permet d’augmenter la concentration plasmatique de bicarbonate sans risque de
+                                 surcompensation ou de surcharge hydrosodée. L’épuration extrarénale permet aussi
+                                 d’éliminer directement la charge acide exogène de certains toxiques ou de leurs métabolites.
+
+                                 7. Controverses quant aux indications de l’alcalinisation
+                                    L’administration de bicarbonate de sodium dans le traitement des acidoses métaboliques
+                                 par excès d’acides organiques (acidoses lactiques, acidocétoses) est controversée. La
+                                 controverse tient au fait que :
+                                     –– l’anion organique accumulé est rapidement oxydé en bicarbonate lorsque la cause
+                                        de l’acidose est corrigée. L’alcalinisation supprime l’inhibition de la 6-phosphofruc­
+                                        tokinase, stimule la glycolyse et la production de lactate et des corps cétoniques ce
+                                        qui peut s’avérer délétère en cas d’acidocétose ou d’acidose lactique ;
+                                     –– le bicarbonate de sodium permet de corriger le pH plasmatique mais tend à augmenter
+                                        la PCO2 tissulaire et veineuse. Le CO2 diffusant plus rapidement que les protons
+                                        entraîne une acidose intracellulaire paradoxale potentiellement délétère ;
+                                     –– les risques d’une « surcorrection » sont la survenue d’une alcalose métabolique
+                                        « rebond », l’hypernatrémie et la surcharge hydrosodée chez des patients avec une
+                                        insuffisance cardiaque ou rénale sous-jacente ;
+                                     –– l’alcalinisation favorise l’installation ou l’aggravation d’une hypokaliémie et ses
+                                        conséquences cardiaques potentielles.
+
+
+
+
+9782340-025998_Nephrologie.indb 82                                                                                                14/09/2018 10:37
+                                                                                                              Chapitre 5 – Item 265     83
+
+
+
+                                 IV. ALCALOSES MÉTABOLIQUES
+                                 (Bien que n’étant pas officiellement au programme, ce chapitre important est traité compte-
+                                 tenu de ses interactions avec d’autres items, potassium, hydratation… et pour la culture
+                                 des futurs médecins.)
+
+                                 A.      Introduction
+                                 ¢¢      Le développement d’une alcalose métabolique nécessite l’association de deux processus :
+                                         hh   l’addition d’alcalins en excès dans le liquide extracellulaire (génération) ;
+                                         hh   une altération de l’excrétion rénale de bicarbonate (entretien ou maintien de
+                                              l’alcalose), correspondant à une augmentation des capacités de réabsorption de
+                                              bicarbonate par le TCP (augmentation du Tm/DFG).
+                                 ¢¢      L’augmentation du Tm/DFG est favorisée par :
+                                         hh   une diminution du débit de filtration glomérulaire sans perte néphronique (insuffi­
+                                              sance rénale fonctionnelle) ;
+                                         hh   l’hypovolémie (absolu par DEC ou efficace) ;
+                                         hh   une déplétion en chlore (++) ou en potassium.
+
+                                     NB : une diminution du DFG par perte de néphron (IR organique) ne modifie pas le Tm/DFG
+
+
+
+                                 B.      Principales causes d’alcalose métabolique
+                                 1. Alcalose métabolique de contraction
+                                    (correspond aux causes d’alcalose métabolique s’accompagnant d’une DEC,
+                                    qui est le facteur de maintien principal), avec hypoTA
+                                 ¢¢      Contraction volémique d’origine extrarénale :
+                                         hh   rare adénome villeux du rectum ou achlorhydrie congénitale.
+                                 ¢¢      Perte en sel d’origine rénale :
+                                         hh   surtout diurétique ;
+                                         hh   tubulopathies congénitales : syndrome de Bartter (qui mime un traitement par
+                                              diurétique de l’anse) et de Gitelman (qui mime un traitement par thiazidique) ;
+                                         hh   hypomagnésémie, hypercalcémie ;
+                                         hh   élimination urinaire d’anions non réabsorbables (hydroxybutyrate, carbenicillate).
+                                 ¢¢      Perte en NaCl d’origine mixte
+                                         hh   pertes digestives hautes (vomissements, aspiration naso-gastrique). La perte
+                                              de Cl est extra-rénale mais la perte de Na est essentiellement rénale (associé au
+                                              bicarbonate)
+
+                                 2. Alcalose métabolique avec expansion volémique,
+                                    hypertension artérielle et excès de minéralocorticoïdes
+                                    (dans ce cas, le facteur de maintien est l’hypokaliémie)
+                                 ¢¢      Hyperaldostéronisme primaire : HTA, hypokaliémie, aldostérone élevée, rénine basse :
+                                         hh   adénome de Conn ;
+                                         hh   hyperplasie bilatérale des surrénales ;
+                                         hh   exceptionnelle hyperplasie sensible à la dexaméthasone (autosomique dominante) ;
+                                         hh   rare cancer des surrénales.
+
+
+
+
+9782340-025998_Nephrologie.indb 83                                                                                                    14/09/2018 10:37
+        84                       UE 8.        Circulation - Métabolismes
+
+
+
+                                 ¢¢      Pseudo hyperaldostéronisme HTA, hypokaliémie avec aldostérone et rénine basses :
+                                         hh   consommation de réglisse (glycyrrhizine inhibant la 11b-hydroxystéroïde déshy­
+                                              drogénase entraînant un excès de cortisol intracellulaire) ;
+                                         hh   déficits en 17a ou 11b-hydroxylase, ou tumeur sécrétant un précurseur (desoxy­
+                                              corticostérone) ;
+                                         hh   syndrome de Liddle : augmentation de l’activité de ENac, autosomique dominante.
+                                 ¢¢      Hyperaldostéronisme secondaire : HTA, hypokaliémie, aldostérone et rénine
+                                         augmentées :
+                                         hh   sténoses uni- ou bilatérales des artères rénales ; coarctation aortique ;
+                                         hh   HTA maligne ;
+                                         hh   tumeur à rénine (exceptionnel).
+
+                                 3. Alcalose post-hypercapnique
+                                 Au cours de l’hypercapnie chronique (acidose respiratoire chronique) la réabsorption des
+                                 bicarbonates est augmentée de façon appropriée limitant ainsi l’élévation du pH artériel.
+                                 Lors de la mise en route d’une ventilation assistée, la PCO2 s’abaisse rapidement mais le
+                                 rein élimine plus lentement le bicarbonate accumulé.
+
+                                 4. Excès d’apports alcalins
+                                 Administration rapide de larges quantités de sels alcalins : bicarbonate de sodium, apports
+                                 importants de citrate (transfusion massive ou anticoagulation par citrate). Ce risque est
+                                 aggravé en cas d’insuffisance rénale (diminution de la capacité à excréter une charge alcaline).
+
+                                 C.      Évaluation du patient ayant une alcalose métabolique
+                                 ¢¢      Une alcalose métabolique peut être suspectée devant :
+                                         hh   Contexte évocateur : diurétique, abus de laxatif, vomissements, etc. ;
+                                         hh   Anomalies biochimiques : élévation des bicarbonates plasmatiques, hypo­kaliémie,
+                                              hypocalcémie, hypomagnésémie, hypophosphatémie ;
+                                         hh   manifestations cliniques (peu spécifiques et rares) : crise de tétanie, faiblesse
+                                              musculaire, hypoventilation, arythmies, comitialité, coma.
+
+                                 Étape 1 : Affirmer l’alcalose métabolique (diagnostic positif)
+
+                                                        Alcalose = pH sanguin artériel > 7,42 (ou veineux 7,38)
+                                          Métabolique = bicarbonate > 27 mmol/L (augmentation secondaire de PCO2,
+                                                                 compensation ventilatoire)
+
+
+                                 La réponse compensatrice peut être prédite, afin de détecter d’éventuelles formes mixtes :
+
+                                                                           ∆PCO2 = 0,75 ∆HCO3 –
+                                      Si la PCO2 est moins élevée que ne le prédit la formule il faut suspecter un trouble
+                                                      complexe avec alcalose respiratoire surajoutée.
+
+
+
+                                 Étape 2 : Rechercher les facteurs d’entretien de l’alcalose
+                                 Ce point est très important au titre de l’orientation diagnostic. Il faut ainsi distinguer les
+                                 alcaloses de contraction des alcaloses avec expansion volémique et HTA. L’évaluation de
+                                 l’état volémique est l’élément discriminant (l’hypokaliémie étant présente dans les deux
+                                 situations). Elle repose sur la mesure de la PA, avec recherche d’hypotension orthostatique,
+                                 la prise du pouls, la recherche de notion de crampes nocturnes.
+
+
+
+
+9782340-025998_Nephrologie.indb 84                                                                                                  14/09/2018 10:37
+                                                                                                                                Chapitre 5 – Item 265     85
+
+
+
+                                      hh   Contraction volémiqu (DEC) : baisse de la pression artérielle, majorée par l’ortho­
+                                           statisme, insuffisance rénale fonctionnelle et diminution des concentrations
+                                           urinaires de chlore et de sodium. Une concentration de chlore urinaire < 25 mmol/L
+                                           est suggestive de contraction volémique.
+                                      hh   HTA : doser rénine et aldostérone plasmatique (à la recherche d’un hyperaldo­
+                                           stéronisme primaire, secondaire ou un pseudohyperaldostéronisme).
+                                           La conduite diagnostique est résumée dans la figure 5.
+
+                                                                                     Évaluer la pression artérielle
+
+
+
+
+                                                                      Basse                                                Élevée
+
+
+
+                                                                   Mesurer UCI                              Mesurer la rénine et l’aldostéronémie
+
+
+
+                                                                                                              - hyperréninisme primitif
+                                                 > 15 mmol/L                      < 15 mmol/L                 - hyperaldostéronisme primitif
+                                                 - diurétiques en cours           Mesurer UNa                 - hyperminéralocorticisme primitif
+                                                 - perte rénale de sel
+
+
+
+
+                                                            > 20 mmol/L                         < 10 mmol/L
+                                                         Mesurer le pH urinaire                 - contraction volémique
+                                                                                                - post-hypercapnique
+
+
+
+                                      > 6,5                                          < 6,5
+                                      - vomissements                       - anions non résorbables
+                                      - aspiration gastrique
+                                      - diarrhées chlorées
+
+
+                                                       Figure 5. Arbre diagnostique d’une alcalose métabolique
+
+
+                                 D.   Traitement de l’alcalose métabolique
+                                 ¢¢   Le traitement est étiologique :
+                                      hh   correction de la contraction du volume extracellulaire (déshydratation extracel­
+                                           lulaire) : administration de chlorure de sodium ;
+                                      hh   correction d’une carence sévère en potassium (par du KCl) et en magnésium le
+                                           cas échéant ;
+                                      hh   suppression de la source de l’excès en minéralocorticoïdes (surrénalectomie
+                                           ou traitement d’un syndrome de Cushing), ou traitement symptomatique par
+                                           spironolactone (Aldactone®) qui bloque de façon compétitive le récepteur aux
+                                           minéralocorticoïdes, ou amiloride (Modamide®) qui bloque le canal sodium
+                                           épithélial dans le tube collecteur cortical ;
+                                      hh   arrêter un traitement diurétique ou une aspiration naso-gastrique.
+
+                                                                 Un pH > 7,60 engage le pronostic vital.
+
+
+
+
+9782340-025998_Nephrologie.indb 85                                                                                                                      14/09/2018 10:37
+        86
+
+
+
+
+                                 POUR EN SAVOIR PLUS (ALCALOSES)…
+
+
+                                 1. Mécanisme de l’alcalose métabolique de contraction
+                                     `` Une contraction du volume artériel efficace entraîne plusieurs conséquences contribuant
+                                        toutes à une alcalose métabolique :
+                                        –– une pression artérielle basse (ou hypotension orthostatique) avec stimulation du
+                                           système rénine-angiotensine ¨ hyperaldostéronisme secondaire ;
+                                        –– une réabsorption accrue de bicarbonate dans le tube proximal.
+
+                                 2. La surcharge en alcalin, une circonstance rare de réanimation
+                                     `` Bicarbonate (ou lactate de sodium) pour corriger une acidose métabolique (alcalose
+                                        de rebond) ou une hyperkaliémie.
+                                     `` Citrate de sodium (transfusions de plus de 8 unités sanguines anti-coagulées avec du
+                                        citrate ; plasma frais congelé citraté utilisé comme liquide de substitution pendant
+                                        des échanges plasmatiques ; anticoagulation « régionale » par citrate au cours d’une
+                                        hémofiltration continue).
+
+                                 3. Alcalose métabolique post-hypercapnique (de reventilation)
+                                     `` Pendant les premiers jours suivant le début de la ventilation assisté d’un patient en
+                                        décompensation d’une insuffisance respiratoire chronique, il peut donc exister une
+                                        alcalose métabolique sanguine et d’autre part une acidose cérébrale aiguë avec parfois
+                                        des désordres neurologiques sévères.
+
+                                 4. Hypovolémie efficace
+                                     `` L’hyperaldostéronisme secondaire à une hypovolémie efficace dans le cadre d’un
+                                        syndrome œdémateux (cirrhose, insuffisance cardiaque et syndrome néphrotique) ne
+                                        s’accompagne généralement pas d’alcalose métabolique en l’absence de diurétique. La
+                                        diminution du débit de filtration glomérulaire est associée à une augmentation de la
+                                        réabsorption proximale de Na+, et la diminution du Na+ délivré au tube distal empêche
+                                        l’excrétion de H+.
+
+                                 5. Désordres complexes
+                                     `` Le caractère « pur » ou « mixte » de l’alcalose métabolique est évalué à partir des valeurs
+                                        attendues de la PCO2 (compensation respiratoire adaptée ou non) [PCO2 (mmHg) qui
+                                        doit normalement augmenter des trois-quarts de la variation des bicarbonates (∆PCO2
+                                        = 0,75 ∆HCO3)].
+                                     `` Si la PCO2 est moins élevée que ne le prédit la formule il faut suspecter un trouble
+                                        complexe avec alcalose respiratoire surajoutée (figure 6). Cette situation fréquente en
+                                        milieu de réanimation est responsable d’une élévation extrême du pH artériel avec
+                                        une mortalité élevée.
+                                     `` En condition stable, les valeurs tombant dans la zone grise sont suggestives d’alcalose
+                                        métabolique pure. Les valeurs en dehors de cette zone témoignent d’une perturbation
+                                        mixte.
+
+
+
+
+9782340-025998_Nephrologie.indb 86                                                                                                    14/09/2018 10:37
+                                                                                                                                                                           87
+
+
+
+
+                                                                                                                   [H+] sanguin artériel, mmol/L
+                                                                                          150 125    100     80 70 60           50     40          30          20
+
+                                                                                                     PaCO2                  120 100 90 80 70            60    50
+                                                                                                     mmHg                                                          40
+                                                                                    50
+
+
+
+
+                                                [HCO3–] sanguin artériel, mmol/L
+                                                                                    40
+                                                                                                                                                                   30
+
+                                                                                    30
+                                                                                                                                     Normal                        20
+
+                                                                                    20
+
+                                                                                                                                                                   10
+                                                                                    10
+
+
+
+                                                                                         6,8   6,9   7,0     7,1      7,2    7,3     7,4      7,5       7,6   7,7
+                                                                                                                       pH sanguin artériel
+
+                                                                                   Figure 6. Intervalle de confiance des variations de la PCO2
+                                                                                           au cours d’une alcalose métabolique pure
+
+
+                                 6. L’interprétation des électrolytes urinaires est très contributive
+                                     Les patients ayant une contraction volémique ont généralement une concentration
+                                 urinaire abaissée de sodium et de chlore. Cependant la bicarbonaturie ou l’excrétion
+                                 d’autres anions non réabsorbables peut augmenter la natriurèse même en présence d’une
+                                 contraction volémique. Dans ce cas, la baisse de la concentration urinaire de chlore (UCl)
+                                 est un indice plus spécifique de contraction volémique.
+                                     `` Lorsque la concentration de sodium est dissociée et élevée, il s’agit probablement
+                                        d’une bicarbonaturie ou de l’excrétion urinaire d’un excès d’anions non réabsorbables :
+                                        –– Un pH urinaire supérieur à 7 suggère une bicarbonaturie significative (génération
+                                           extrarénale de bicarbonate liée à des vomissements, une aspiration naso-gastrique,
+                                           une perte de chlore, une diarrhée chlorée dans un contexte clinique évident).
+                                        –– Un pH urinaire inférieur à 6,5 suggère au contraire la présence d’un anion non
+                                           réabsorbable comme de l’hydroxybutyrate ou un antibiotique (ex : carbénicillate).
+                                     `` Une concentration urinaire de chlore élevée chez un patient ayant une contraction
+                                        volémique suggère :
+                                        –– une prise de diurétique en cours ;
+                                        –– un syndrome de Bartter ou de Gitelman ;
+                                        –– une déplétion en magnésium ;
+                                        –– ou une néphropathie avec perte de sel.
+
+                                 7. Conséquence de l’alcalose métabolique
+                                     `` L’alcalémie, l’hypoxémie, l’hypercapnie, et la baisse du calcium ionisé plasmatique
+                                        contribuent chacune aux manifestations cliniques et au mauvais pronostic.
+                                     `` L’alcalose métabolique est généralement perçue à tort comme une condition bénigne
+                                        alors qu’elle contribue significativement à la mortalité :
+                                        –– l’alcalose déprime la respiration par un effet à la fois central et périphérique sur les
+                                           chémorécepteurs ;
+                                        –– l’alcalose diminue l’oxygénation tissulaire par l’effet Bohr (qui déplace la courbe
+                                           de dissociation en oxygène de l’hémoglobine en diminuant la capacité à relarguer
+                                           l’oxygène dans les tissus périphériques) ;
+                                        –– l’alcalose est un vasoconstricteur puissant, diminuant la perfusion dans de nombreux
+                                           organes (cerveau, rein, cœur, muscles) ;
+                                        –– l’alcalose favorise la survenue d’arythmies cardiaques.
+
+
+
+
+9782340-025998_Nephrologie.indb 87                                                                                                                                      14/09/2018 10:37
+        88
+
+
+
+                                 8. Une alcalose métabolique sévère (pH > 7,60) engage le pronostic vital
+                                     `` Une alcalémie menaçante avec pH sanguin > 7,60 et bicarbonatémie > 45 mmol/L avec
+                                        réponse ventilatoire adaptée nécessite une intervention immédiate ayant pour but
+                                        une correction au moins partielle de l’alcalémie, les cibles étant une bicarbonatémie
+                                        de 35-40 mmol/L. Dans certaines situations, l’administration intraveineuse d’acide
+                                        chlorhydrique en milieu spécialisé peut être proposée.
+                                     `` En cas d’alcalose métabolique sévère associée à des troubles hydroélectrolytique
+                                        complexes il est souvent utile de recourir à des techniques d’épuration extrarénale ;
+                                     `` Chez les patients ayant une insuffisance cardiaque ou rénale ne permettant pas
+                                        l’administration de chlorure de sodium le traitement est particulièrement délicat.
+                                        En cas d’alcalose réfractaire et de surcharge hydrosodée, il peut être nécessaire de
+                                        recourir à des techniques d’épuration extrarénale pour corriger à la fois l’alcalémie
+                                        et la surcharge hydrosodée ;
+                                     `` En cas de bilan sodé positif avec alcalose de contraction (hypovolémie efficace et
+                                        œdèmes sous traitement par diurétique de l’anse), on peut recourir à un inhibiteur
+                                        de l’anhydrase carbonique (acétazolamide, Diamox®). Le risque est l’aggravation de
+                                        l’hypercapnie, en particulier chez des patients ayant une acidose respiratoire chronique.
+
+
+
+
+9782340-025998_Nephrologie.indb 88                                                                                                  14/09/2018 10:37
+                                                                                                            Chapitre 5 – Item 265                         89
+
+
+
+                                 DÉSORDRES DE L’ÉQUILIBRE ACIDE-BASE – ITEM 265
+
+
+                                 `` Q1. Parmi les items suivants, lequel(lesquels) est(sont) exact(s) ?
+                                        A. Un pH sanguin normal exclut un trouble acido-basique
+                                        B. Un pH sanguin abaissé traduit nécessairement une acidose
+                                        C. En cas d’acidose métabolique pure, une pCO2 basse est attendue
+                                        D. Une bicarbonatémie basse est pathognomonique de l’acidose métabolique
+                                        E. En cas d’acidose métabolique, le pH urinaire est le meilleur moyen de définir si la
+                                            réponse rénale est adaptée ou non
+
+                                 `` Q2. Vous analysez la gazométrie artérielle suivante, effectuée en air ambiant pour polypnée :
+                                        pH 7,3 – HCO3 – 10 mmol/L – pCO2 30 mmHg – pO2 90 mmHg. Parmi les propositions
+                                        suivantes, laquelle(lesquelles) est(sont) exacte(s) ?
+                                        A. La polypnée explique l’ensemble des troubles gazométriques
+                                        B. On peut retenir le diagnostic d’acidose métabolique
+                                        C. La valeur de pCO2 traduit la réponse respiratoire au trouble métabolique
+                                        D. La valeur de bicarbonatémie traduit la réponse métabolique au trouble respiratoire
+
+
+
+
+                                                                                                                                    Désordres de l’équilibre acide-base – Item 265
+                                        E. Le trouble acido-basique est mixte
+
+                                 `` Q3. Devant une acidose métabolique d’origine rénale, quel(s) est(sont) le(les) argument(s)
+                                        pour une acidose tubulaire proximale ?
+                                        A. Taux maximal de réabsorption du bicarbonate abaissé
+                                        B. Glycosurie
+                                        C. Hypochlorémie
+                                        D. Hypophosphatémie
+                                        E. Cétonurie
+
+                                 `` Q4. Parmi les situations suivantes laquelle(lesquelles) est(sont) responsable(s) d’une
+                                        acidose métabolique à trou anionique plasmatique augmenté ?
+                                        A. Insuffisance rénale chronique
+                                        B. Acidose lactique
+                                        C. Diarrhée
+                                        D. Syndrome de Fanconi
+                                        E. Obstacle urinaire incomplet avec hyporéninisme-hypoaldostéronisme
+
+                                 `` Q5. Parmi les intoxications suivantes, laquelle(lesquelles) peut(peuvent) s’accompagner
+                                        d’une acidose métabolique à trou anionique plasmatique augmenté ?
+                                        A. Héroïne
+                                        B. Lithium
+                                        C. Ethylène glycol
+                                        D. Biguanides
+                                        E. Monoxyde de carbone
+
+
+
+
+9782340-025998_Nephrologie.indb 89                                                                                                          14/09/2018 10:37
+9782340-025998_Nephrologie.indb 90   14/09/2018 10:37
+

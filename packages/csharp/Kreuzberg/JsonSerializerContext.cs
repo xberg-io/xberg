@@ -28,6 +28,7 @@ namespace Kreuzberg;
 [JsonSerializable(typeof(ExtractionConfig))]
 [JsonSerializable(typeof(FileExtractionConfig))]
 [JsonSerializable(typeof(OcrConfig))]
+[JsonSerializable(typeof(LlmConfig))]
 [JsonSerializable(typeof(TesseractConfig))]
 [JsonSerializable(typeof(ImagePreprocessingConfig))]
 [JsonSerializable(typeof(ChunkingConfig))]

@@ -77,14 +77,62 @@ RUN cargo build --release --package kreuzberg-cli --features all && \
 # Set RPATH so the binary finds shared libs relative to itself
 RUN patchelf --set-rpath '$ORIGIN/lib' /build/kreuzberg
 
-# Collect runtime libraries
-RUN mkdir -p /build/lib && \
-    cp /usr/lib/libstdc++.so.6 /build/lib/ && \
-    cp /usr/lib/libgcc_s.so.1 /build/lib/ && \
-    # Bundle ONNX Runtime for embeddings/layout-detection at runtime
-    cp /usr/lib/libonnxruntime.so* /build/lib/ 2>/dev/null || true && \
-    # Copy the musl dynamic linker/libc
-    cp /lib/ld-musl-*.so.1 /build/lib/ 2>/dev/null || true
+# Collect runtime libraries.
+#
+# The launcher (below) invokes the musl loader with `--library-path lib/`,
+# which REPLACES the loader's search path. The bundle must therefore be
+# self-contained: every transitive dependency of every shipped .so has to
+# live in /build/lib/ too, otherwise the loader prints "Error loading shared
+# library X: No such file or directory" at startup (issue #991).
+#
+# Strategy:
+#   1. Copy the well-known runtime bits (musl loader, libstdc++, libgcc, ORT).
+#   2. Recursively `ldd`-walk every .so in the bundle and copy any host lib
+#      they resolve to that isn't already present.
+#   3. Smoke-test the loader against each shipped .so so the build FAILS if
+#      anything is still missing — better to break the image than to ship a
+#      tarball that crashes on first invocation.
+RUN set -eu; \
+    mkdir -p /build/lib; \
+    cp /usr/lib/libstdc++.so.6 /build/lib/; \
+    cp /usr/lib/libgcc_s.so.1 /build/lib/; \
+    # Bundle ONNX Runtime for embeddings/layout-detection at runtime.
+    cp /usr/lib/libonnxruntime.so* /build/lib/ 2>/dev/null || true; \
+    # Copy the musl dynamic linker/libc.
+    cp /lib/ld-musl-*.so.1 /build/lib/ 2>/dev/null || true; \
+    # Recursively resolve transitive deps of everything in /build/lib via ldd
+    # (alpine's musl ldd resolves against system paths). Re-walk until no new
+    # libraries are pulled in to handle multi-level chains (libonnxruntime →
+    # libprotobuf-lite → libabsl_* → ...).
+    LOADER="$(ls /build/lib/ld-musl-*.so.1 | head -n1)"; \
+    while :; do \
+        before=$(ls /build/lib | wc -l); \
+        for so in /build/lib/*.so*; do \
+            # Skip the loader itself; ldd against it is meaningless.
+            case "$so" in *ld-musl-*) continue ;; esac; \
+            "$LOADER" --list "$so" 2>/dev/null \
+                | awk '/=>/ { print $3 }' \
+                | grep -E '^/' \
+                | while read -r dep; do \
+                    base="$(basename "$dep")"; \
+                    if [ ! -e "/build/lib/$base" ]; then \
+                        cp -L "$dep" /build/lib/; \
+                    fi; \
+                done; \
+        done; \
+        after=$(ls /build/lib | wc -l); \
+        [ "$before" = "$after" ] && break; \
+    done; \
+    # Verify nothing in the bundle has unresolved deps when constrained to lib/.
+    for so in /build/lib/*.so*; do \
+        case "$so" in *ld-musl-*) continue ;; esac; \
+        if "$LOADER" --library-path /build/lib --list "$so" 2>&1 | grep -q 'not found'; then \
+            echo "FAIL: $so has unresolved dependencies inside the bundle:" >&2; \
+            "$LOADER" --library-path /build/lib --list "$so" >&2; \
+            exit 1; \
+        fi; \
+    done; \
+    echo "OK: every bundled library resolves inside /build/lib/"
 
 # Rename the actual binary and create a wrapper script that invokes it
 # via the bundled musl interpreter. This makes the binary work on ANY

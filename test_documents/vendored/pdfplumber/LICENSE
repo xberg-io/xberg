@@ -1,0 +1,5 @@
+Source: https://github.com/jsvine/pdfplumber
+License: MIT License
+Copyright (c) 2015, Jeremy Singer-Vine
+
+Test PDF files copied from the pdfplumber project's test suite for benchmark validation purposes.

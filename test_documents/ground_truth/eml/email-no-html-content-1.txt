@@ -1,0 +1,78 @@
+Subject: [GitHub] Subscribed to 63 nf-core repositories
+From: "GitHub" <email@domain.com>
+To: email@domain.com
+Date: Mon, 10 Oct 2022 05:14:09 -0700
+Hey there, we’re just writing to let you know that you’ve automatically started watching several repositories on GitHub.
+
+You’ll receive notifications for all issues, pull requests, and comments that happen inside the repository. If you would like to stop watching any of these repositories, you can manage your settings here:
+
+  https://github.com/nf-core/cookiecutter/subscription
+  https://github.com/nf-core/tools/subscription
+  https://github.com/nf-core/logos/subscription
+  https://github.com/nf-core/methylseq/subscription
+  https://github.com/nf-core/test-datasets/subscription
+  https://github.com/nf-core/rnaseq/subscription
+  https://github.com/nf-core/exoseq/subscription
+  https://github.com/nf-core/nf-co.re/subscription
+  https://github.com/nf-core/chipseq/subscription
+  https://github.com/nf-core/vipr/subscription
+  https://github.com/nf-core/mag/subscription
+  https://github.com/nf-core/eager/subscription
+  https://github.com/nf-core/hlatyping/subscription
+  https://github.com/nf-core/smrnaseq/subscription
+  https://github.com/nf-core/ampliseq/subscription
+  https://github.com/nf-core/neutronstar/subscription
+  https://github.com/nf-core/rnafusion/subscription
+  https://github.com/nf-core/atacseq/subscription
+  https://github.com/nf-core/nascent/subscription
+  https://github.com/nf-core/configs/subscription
+  https://github.com/nf-core/epitopeprediction/subscription
+  https://github.com/nf-core/airrflow/subscription
+  https://github.com/nf-core/bacass/subscription
+  https://github.com/nf-core/scrnaseq/subscription
+  https://github.com/nf-core/hic/subscription
+  https://github.com/nf-core/proteomicslfq/subscription
+  https://github.com/nf-core/sarek/subscription
+  https://github.com/nf-core/cageseq/subscription
+  https://github.com/nf-core/bactmap/subscription
+  https://github.com/nf-core/mnaseseq/subscription
+  https://github.com/nf-core/kmermaid/subscription
+  https://github.com/nf-core/crisprvar/subscription
+  https://github.com/nf-core/imcyto/subscription
+  https://github.com/nf-core/modules/subscription
+  https://github.com/nf-core/nanoseq/subscription
+  https://github.com/nf-core/demultiplex/subscription
+  https://github.com/nf-core/viralrecon/subscription
+  https://github.com/nf-core/gwas/subscription
+  https://github.com/nf-core/dualrnaseq/subscription
+  https://github.com/nf-core/clipseq/subscription
+  https://github.com/nf-core/cutandrun/subscription
+  https://github.com/nf-core/circrna/subscription
+  https://github.com/nf-core/vscode-extensionpack/subscription
+  https://github.com/nf-core/rnavar/subscription
+  https://github.com/nf-core/fetchngs/subscription
+  https://github.com/nf-core/raredisease/subscription
+  https://github.com/nf-core/hicar/subscription
+  https://github.com/nf-core/circdna/subscription
+  https://github.com/nf-core/funcscan/subscription
+  https://github.com/nf-core/ssds/subscription
+  https://github.com/nf-core/nanostring/subscription
+  https://github.com/nf-core/genomeannotator/subscription
+  https://github.com/nf-core/taxprofiler/subscription
+  https://github.com/nf-core/spatialtranscriptomics/subscription
+  https://github.com/nf-core/proteinfold/subscription
+  https://github.com/nf-core/prettier-plugin-nextflow/subscription
+  https://github.com/nf-core/genomeassembler/subscription
+  https://github.com/nf-core/hgtseq/subscription
+  https://github.com/nf-core/isoseq/subscription
+  https://github.com/nf-core/rnadnavar/subscription
+  https://github.com/nf-core/crisprseq/subscription
+  https://github.com/nf-core/genomeskim/subscription
+  https://github.com/nf-core/fastquorum/subscription
+
+You automatically watched these repositories because you’ve been given access to them.
+
+Thanks!
+
+From 1751394755051884550@xxx Mon Dec 05 17:09:55 +0000 2022
+X-GM-THRID: 1751394755051884550

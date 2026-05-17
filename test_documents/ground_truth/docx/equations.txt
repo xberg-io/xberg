@@ -1,0 +1,9 @@
+For m = 1,
+
+$$sin\theta = \frac{m\lambda}{a} = \frac{(1)\left( 550 \times 10^{- 6}\text{ }mm \right)}{2.5\text{ }mm} = 2.2 \times 10^{- 4}$$
+
+The angle is θ = sin⁻¹(2.2 × 10⁻⁴) = 2.2 × 10⁻⁴rad.
+
+From Eq. 36.1.3,
+
+$$\frac{a}{\lambda} = \frac{m}{sin\theta} = \frac{1}{sin{45.0}^{\circ}} = 1.41.$$
