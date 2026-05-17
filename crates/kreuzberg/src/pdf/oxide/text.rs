@@ -213,12 +213,16 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
 const MAX_GLYPH_JITTER_PT: f32 = 5.0;
 
 /// Minimum number of qualifying x-disorder events before the span list is classified
-/// as glyph-fragmented. Five events require at least 10 short spans to be involved and
-/// produce ≥ 5 consecutive same-line x-resets — a strong signal: normal word-wrapped
-/// paragraphs have long spans (> 3 chars) that are excluded from the count, and single
-/// isolated x-resets (e.g. a centred title followed by left-aligned body) count for zero
-/// because the short-span guard filters them out.
-const MIN_DISORDER_COUNT: usize = 5;
+/// as glyph-fragmented.
+///
+/// Empirically, pdf_oxide groups consecutive same-y chars into multi-char spans, so a
+/// 32-char Word jitter word (period 6, 3 distinct y-levels) produces exactly 4 disorder
+/// events (2 per XY-Cut column at each y-level transition). Requiring ≥ 3 events is
+/// sufficient to detect all jitter amplitudes ≥ 3 pt while remaining robust against
+/// false positives: the short-span guard (≤ 3 chars) and the 5 pt same-line ceiling
+/// together make it essentially impossible for normal multi-column text to accumulate
+/// 3 consecutive qualifying resets.
+const MIN_DISORDER_COUNT: usize = 3;
 
 /// y-proximity threshold (pt) for grouping spans into visual lines during reconstruction.
 /// Must be ≥ MAX_GLYPH_JITTER_PT so every span pair accepted by the detection gate is
