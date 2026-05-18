@@ -76,6 +76,8 @@ formated = "formated"
 specifing = "specifing"
 # English variants / valid words flagged incorrectly
 unparseable = "unparseable"
+# Dutch words in issue #962 test comments ("relatie-id" = relation-id)
+relatie = "relatie"
 # PaddleOCR upstream naming
 substract = "substract"
 charater = "charater"
