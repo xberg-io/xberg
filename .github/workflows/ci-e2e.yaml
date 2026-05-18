@@ -217,6 +217,10 @@ jobs:
         with:
           label: e2e-${{ matrix.lang }}
 
+      - name: Install WASI SDK
+        if: matrix.lang == 'wasm'
+        uses: kreuzberg-dev/actions/install-wasi-sdk@v1.0.0
+
       - name: Setup Python
         if: matrix.python-version
         uses: kreuzberg-dev/actions/setup-python-env@v1.0.0
