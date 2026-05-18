@@ -94,13 +94,19 @@ pub(crate) fn detect_list_items(text: &str) -> Vec<ListItemMetadata> {
         }
 
         // Check for numbered lists (e.g., "1.", "2.", etc.)
+        // Skip when the line is the only list-like line in its \n\n-bounded block AND
+        // starts with an uppercase letter after the dot — that pattern is a chapter
+        // heading ("1. Introduction"), not a list item.  Lowercase-initial lone lines
+        // ("1. go there alone") are real list items and must not be suppressed.
         if let Some(pos) = trimmed.find('.') {
             let prefix = &trimmed[..pos];
+            let uppercase_initial = trimmed[pos + 1..].chars().nth(1).is_some_and(|c| c.is_uppercase());
             if prefix.chars().all(|c| c.is_ascii_digit())
                 && pos > 0
                 && pos < 3
                 && trimmed.len() > pos + 1
                 && trimmed[pos + 1..].starts_with(' ')
+                && !(uppercase_initial && is_lone_numbered_line_in_paragraph(text, line_start_offset))
             {
                 items.push(ListItemMetadata {
                     list_type: ListType::Numbered,
@@ -189,6 +195,37 @@ pub(crate) fn generate_element_id(text: &str, element_type: ElementType, page_nu
         .wrapping_add(page_hash);
 
     ElementId::new(format!("elem-{:x}", combined)).expect("ElementId creation failed")
+}
+
+/// True when `trimmed` matches the numbered-list pattern `\d{1,2}\. `.
+fn is_numbered_list_line(trimmed: &str) -> bool {
+    if let Some(pos) = trimmed.find('.') {
+        let prefix = &trimmed[..pos];
+        prefix.chars().all(|c| c.is_ascii_digit())
+            && pos > 0
+            && pos < 3
+            && trimmed.len() > pos + 1
+            && trimmed[pos + 1..].starts_with(' ')
+    } else {
+        false
+    }
+}
+
+/// True when the `\n\n`-bounded paragraph containing `line_offset` holds exactly
+/// one list-like line (numbered or bulleted).  Chapter headings like
+/// "1. Introduction" are isolated this way; real numbered lists have siblings.
+fn is_lone_numbered_line_in_paragraph(text: &str, line_offset: usize) -> bool {
+    let para_start = text[..line_offset].rfind("\n\n").map_or(0, |p| p + 2);
+    let para_end = text[line_offset..].find("\n\n").map_or(text.len(), |p| line_offset + p);
+    let paragraph = &text[para_start..para_end];
+    let list_line_count = paragraph
+        .lines()
+        .filter(|l| {
+            let t = l.trim_start();
+            is_numbered_list_line(t) || t.starts_with("- ") || t.starts_with("* ") || t.starts_with("• ")
+        })
+        .count();
+    list_line_count == 1
 }
 
 /// Add paragraphs as NarrativeText elements, splitting on double newlines.

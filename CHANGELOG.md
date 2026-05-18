@@ -44,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   impl methods like `From::from` / `Display::fmt` / `Deref::deref` auto-emitted
   by derive).
 
+### Fixed
+
+- **Isolated numbered headings in untagged PDFs (#961)**: Lines matching
+  `\d{1,2}\. [A-Z]` that appear alone in their paragraph block are now promoted
+  to `Heading` elements instead of being misclassified as `ListItem`. Affects the
+  `ElementBased` transform fallback path (e.g. ReportLab-generated PDFs). Real
+  numbered lists with sibling items are unaffected. Lone lowercase-initial lines
+  (`1. go there alone`) remain `ListItem` and are not affected.
+
 ## [5.0.0-rc.1] - 2026-05-16
 
 ### Changed

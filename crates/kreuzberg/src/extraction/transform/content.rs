@@ -34,6 +34,31 @@ fn detect_image_placeholder(line: &str) -> Option<&str> {
     Some(inner)
 }
 
+/// True when `para_text` is a single-line paragraph matching `\d{1,2}\. [A-Z…]`.
+///
+/// Untagged PDF chapter headings ("1. Introduction", "6. Campagne Performance")
+/// arrive here after `detect_list_items` filters them out via the lone-numbered-line
+/// guard.  Promote them to Heading rather than falling through to NarrativeText.
+fn detect_isolated_numbered_heading(para_text: &str) -> bool {
+    if para_text.contains('\n') {
+        return false;
+    }
+    let trimmed = para_text.trim_start();
+    let Some(pos) = trimmed.find('.') else {
+        return false;
+    };
+    let prefix = &trimmed[..pos];
+    if !prefix.chars().all(|c| c.is_ascii_digit()) || pos == 0 || pos >= 3 {
+        return false;
+    }
+    let after_dot = &trimmed[pos + 1..];
+    if !after_dot.starts_with(' ') {
+        return false;
+    }
+    // Require exactly one space (not double-space) followed by an uppercase letter.
+    after_dot.chars().nth(1).is_some_and(|c| c.is_uppercase())
+}
+
 /// Map a markdown heading level to the appropriate ElementType.
 fn heading_level_to_element_type(level: u8) -> ElementType {
     if level == 1 {
@@ -113,6 +138,31 @@ fn add_paragraphs_with_classification(
                     additional: {
                         let mut m = HashMap::new();
                         m.insert("image_description".to_string(), description.to_string());
+                        m
+                    },
+                },
+            });
+            continue;
+        }
+
+        if is_single_line && detect_isolated_numbered_heading(para_text) {
+            if !leftover.is_empty() {
+                add_paragraphs(elements, leftover.trim(), page_number, title);
+                leftover.clear();
+            }
+            let element_id = generate_element_id(para_text, ElementType::Heading, Some(page_number));
+            elements.push(Element {
+                element_id,
+                element_type: ElementType::Heading,
+                text: para_text.to_string(),
+                metadata: ElementMetadata {
+                    page_number: Some(page_number),
+                    filename: title.clone(),
+                    coordinates: None,
+                    element_index: Some(elements.len()),
+                    additional: {
+                        let mut m = HashMap::new();
+                        m.insert("heading_level".to_string(), "1".to_string());
                         m
                     },
                 },
@@ -494,5 +544,212 @@ mod tests_issue_782 {
                 .map(String::as_str),
             Some("Cover")
         );
+    }
+}
+
+#[cfg(test)]
+mod tests_issue_961 {
+    use super::*;
+
+    /// Isolated "N. Title" paragraphs must produce Heading elements, not ListItem.
+    #[test]
+    fn isolated_numbered_heading_becomes_heading_not_list_item() {
+        let mut elements = Vec::new();
+        // Simulate one PDF page: single chapter heading followed by body text.
+        let content = "1. Managementsamenvatting\n\nDit rapport geeft een overzicht van de prestaties.";
+        process_content(&mut elements, content, 1, &None);
+
+        let headings: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::Heading)
+            .collect();
+        let list_items: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::ListItem)
+            .collect();
+
+        assert_eq!(headings.len(), 1, "should produce one Heading element");
+        assert_eq!(headings[0].text, "1. Managementsamenvatting");
+        assert_eq!(
+            headings[0].metadata.additional.get("heading_level").map(String::as_str),
+            Some("1")
+        );
+        assert_eq!(list_items.len(), 0, "should not produce any ListItem");
+    }
+
+    /// Multiple chapter headings across simulated pages — each isolated, each becomes Heading.
+    #[test]
+    fn multiple_chapter_headings_on_separate_pages() {
+        let content = "1. Managementsamenvatting\n\nIntro body.\n\n\
+                       2. Lead Generation per Channel\n\nBody two.\n\n\
+                       3. Key Performance Indicators\n\nBody three.";
+        let mut elements = Vec::new();
+        process_content(&mut elements, content, 1, &None);
+
+        let headings: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::Heading)
+            .collect();
+        assert_eq!(headings.len(), 3, "each chapter heading should be a Heading");
+        assert_eq!(headings[0].text, "1. Managementsamenvatting");
+        assert_eq!(headings[1].text, "2. Lead Generation per Channel");
+        assert_eq!(headings[2].text, "3. Key Performance Indicators");
+
+        let list_items: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::ListItem)
+            .collect();
+        assert_eq!(list_items.len(), 0);
+    }
+
+    /// Real numbered lists (sibling items on consecutive lines) still produce ListItems.
+    #[test]
+    fn real_numbered_list_still_produces_list_items() {
+        let content = "Introduction.\n\n1. First step\n2. Second step\n3. Third step\n\nConclusion.";
+        let mut elements = Vec::new();
+        process_content(&mut elements, content, 1, &None);
+
+        let list_items: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::ListItem)
+            .collect();
+        assert_eq!(list_items.len(), 3, "real numbered list must remain as ListItems");
+        assert!(list_items.iter().all(|e| e.element_type == ElementType::ListItem));
+
+        let headings: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::Heading)
+            .collect();
+        assert_eq!(headings.len(), 0, "real list items must not be promoted to Heading");
+    }
+
+    /// Numbered item following a bullet in the same block stays a ListItem.
+    #[test]
+    fn numbered_item_with_bullet_sibling_stays_list_item() {
+        let content = "Context.\n\n- Bullet point\n1. Numbered item\n- Another bullet\n\nRest.";
+        let mut elements = Vec::new();
+        process_content(&mut elements, content, 1, &None);
+
+        let list_items: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::ListItem)
+            .collect();
+        // Both the bullet and the numbered item share a block — numbered stays a list item.
+        assert!(
+            list_items.iter().any(|e| e.text.contains("Numbered item")),
+            "numbered item with a bullet sibling must remain a ListItem"
+        );
+    }
+
+    /// Lowercase-start numbered line stays NarrativeText, not promoted to Heading.
+    #[test]
+    fn lowercase_numbered_line_not_promoted() {
+        let content = "1. lowercase start\n\nBody text.";
+        let mut elements = Vec::new();
+        process_content(&mut elements, content, 1, &None);
+
+        let headings: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::Heading)
+            .collect();
+        assert_eq!(headings.len(), 0, "lowercase numbered line must not become Heading");
+    }
+
+    /// A lone lowercase-numbered line must NOT be promoted to Heading — it is a
+    /// real list item that happens to have no siblings.  Regression guard for the
+    /// is_lone_numbered_line_in_paragraph suppression scope.
+    #[test]
+    fn lone_lowercase_numbered_line_stays_list_item() {
+        let content = "Context.\n\n1. lowercase alone\n\nTrailing.";
+        let mut elements = Vec::new();
+        process_content(&mut elements, content, 1, &None);
+
+        let list_items: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::ListItem)
+            .collect();
+        assert_eq!(list_items.len(), 1, "lone lowercase numbered line must remain ListItem");
+        assert!(list_items[0].text.contains("lowercase alone"));
+    }
+
+    /// Real list block + isolated chapter headings in the same document must be
+    /// classified independently: list items stay ListItem, lone uppercase-initial
+    /// numbered lines become Heading.
+    #[test]
+    fn mixed_real_list_and_isolated_chapters() {
+        let content = "1. First list item\n2. Second list item\n\n5. Chapter Five\n\n6. Chapter Six\n\nBody.";
+        let mut elements = Vec::new();
+        process_content(&mut elements, content, 1, &None);
+
+        let list_items: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::ListItem)
+            .collect();
+        let headings: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::Heading)
+            .collect();
+
+        assert_eq!(
+            list_items.len(),
+            2,
+            "items 1. and 2. share a block — both stay ListItem"
+        );
+        assert!(list_items.iter().any(|e| e.text.contains("First list item")));
+        assert!(list_items.iter().any(|e| e.text.contains("Second list item")));
+
+        assert_eq!(
+            headings.len(),
+            2,
+            "items 5. and 6. are each isolated — both become Heading"
+        );
+        assert!(headings.iter().any(|e| e.text.contains("Chapter Five")));
+        assert!(headings.iter().any(|e| e.text.contains("Chapter Six")));
+    }
+
+    /// Sub-section notation like "2.1 Title" must not be promoted (not a list pattern).
+    #[test]
+    fn subsection_notation_not_promoted() {
+        let content = "2.1 Tabeloverzicht\n\nBody text.";
+        let mut elements = Vec::new();
+        process_content(&mut elements, content, 1, &None);
+
+        let headings: Vec<_> = elements
+            .iter()
+            .filter(|e| e.element_type == ElementType::Heading)
+            .collect();
+        assert_eq!(
+            headings.len(),
+            0,
+            "sub-section notation must not match the numbered-heading pattern"
+        );
+    }
+
+    /// Detect helper rejects multi-line paragraphs.
+    #[test]
+    fn detect_isolated_numbered_heading_rejects_multi_line() {
+        assert!(!detect_isolated_numbered_heading("1. Title\nSecond line"));
+    }
+
+    /// Detect helper accepts valid patterns.
+    #[test]
+    fn detect_isolated_numbered_heading_accepts_valid_patterns() {
+        assert!(detect_isolated_numbered_heading("1. Introduction"));
+        assert!(detect_isolated_numbered_heading(
+            "6. Campagne Performance per Doelgroep & Kanaal"
+        ));
+        assert!(detect_isolated_numbered_heading("10. Final Chapter"));
+    }
+
+    /// Detect helper rejects edge cases.
+    #[test]
+    fn detect_isolated_numbered_heading_rejects_edge_cases() {
+        assert!(!detect_isolated_numbered_heading("1.  No capital after space"));
+        // Single digit + dot but no space after
+        assert!(!detect_isolated_numbered_heading("1.Introduction"));
+        // Too many digits (>2)
+        assert!(!detect_isolated_numbered_heading("100. Too many digits"));
+        // Empty string
+        assert!(!detect_isolated_numbered_heading(""));
     }
 }
