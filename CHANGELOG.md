@@ -52,6 +52,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **VLM / force_ocr path omitted image placeholders from Markdown output (#987)**:
+  when `force_ocr=true` (e.g., a VLM OCR backend) with `extract_images=true` and
+  `inject_placeholders=true`, the rendered Markdown contained no `![](image_N.ext)`
+  references. Root cause: the structured `pre_rendered_doc` path (which injects
+  `ElementKind::Image` elements via `assemble_internal_document`) is skipped when
+  `force_ocr=true`; the OCR-path document built from raw OCR text carried no image
+  elements. Fixed by injecting image elements — with correct page attribution from
+  `ExtractedImage.page_number` — into the OCR-path document when images are extracted
+  and `inject_placeholders` is enabled.
+
 - **MCID-tagged PDF content dropped in markdown/html output**: two
   independent failure chains in the structured-PDF path caused content loss.
   (1) `mark_cross_page_repeating_text` and `mark_cross_page_repeating_short_text`

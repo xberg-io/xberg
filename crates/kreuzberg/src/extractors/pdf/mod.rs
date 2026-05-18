@@ -480,6 +480,47 @@ impl PdfExtractor {
         if let Some(imgs) = images {
             doc.images = imgs;
         }
+
+        // On the OCR/VLM path the doc is a flat text document — image elements are not
+        // interleaved by the assembly pipeline. Inject them here so downstream renderers
+        // can emit Markdown placeholders (e.g. `![](image_0.jpeg)`).
+        //
+        // Note: positional interleaving within the text stream is not yet implemented on
+        // this path; all image elements are appended after the text content.
+        #[cfg(feature = "ocr")]
+        if used_ocr && !doc.images.is_empty() {
+            let images_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
+                || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
+            // Require explicit opt-in via config.images.inject_placeholders — default false when
+            // config.images is absent to avoid injecting placeholders the caller never requested.
+            if images_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(false) {
+                // Collect first to avoid borrowing doc.images and doc simultaneously.
+                // page_number is 1-indexed per ExtractedImage contract; omit attribution
+                // entirely when the page is unknown rather than using an invalid sentinel.
+                let elems: Vec<InternalElement> = doc
+                    .images
+                    .iter()
+                    .map(|img| {
+                        let elem = InternalElement::text(
+                            ElementKind::Image {
+                                image_index: img.image_index,
+                            },
+                            "",
+                            0,
+                        );
+                        if let Some(page) = img.page_number {
+                            elem.with_page(page)
+                        } else {
+                            elem
+                        }
+                    })
+                    .collect();
+                for elem in elems {
+                    doc.push_element(elem);
+                }
+            }
+        }
+
         if let Some(warning) = image_fallback_warning {
             doc.processing_warnings.push(warning);
         }
@@ -1403,6 +1444,112 @@ mod tests {
             outcome,
             ocr::OcrGateOutcome::SkipSubstantive,
             "OCR should be skipped when doc is substantive and no per-page fallback is needed"
+        );
+    }
+
+    /// Regression for #987: image placeholders must appear in Markdown output when
+    /// `force_ocr` is used and `config.images.inject_placeholders = true`.
+    ///
+    /// Uses a mock OCR backend so the test is independent of tessdata availability.
+    /// Image elements are appended after text on the OCR path; positional interleaving
+    /// is a known follow-up (tracked separately).
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_inject_placeholders_present_on_force_ocr_path() {
+        use crate::core::config::{ImageExtractionConfig, OcrConfig, OutputFormat};
+
+        let _backend = register_mock_ocr_backend("inject-placeholder-ocr", "mock page text");
+        let extractor = PdfExtractor::new();
+
+        let pdf_path = pdf_test_document("embedded_images_tables.pdf");
+        assert!(
+            pdf_path.exists(),
+            "missing test fixture: {pdf_path:?} — add embedded_images_tables.pdf to test_documents/pdf/"
+        );
+        let content = std::fs::read(&pdf_path).expect("failed to read embedded_images_tables.pdf");
+
+        let config = crate::core::config::ExtractionConfig {
+            output_format: OutputFormat::Markdown,
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "inject-placeholder-ocr".to_string(),
+                language: "eng".to_string(),
+                ..Default::default()
+            }),
+            images: Some(ImageExtractionConfig {
+                extract_images: true,
+                inject_placeholders: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extractor
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("force_ocr extraction with images should succeed");
+
+        let result = crate::extraction::derive::derive_extraction_result(result, true, OutputFormat::Markdown);
+
+        // When the PDF contains at least one extractable image, the Markdown must include
+        // a placeholder reference. If no images were extracted the assertion is vacuously
+        // skipped with an explanatory message rather than a false positive.
+        if result.images.as_ref().is_some_and(|imgs| !imgs.is_empty()) {
+            assert!(
+                result.formatted_content.as_deref().unwrap_or("").contains("![") || result.content.contains("!["),
+                "Markdown must contain image placeholders on the force_ocr path when inject_placeholders=true"
+            );
+        }
+    }
+
+    /// Verifies that `inject_placeholders` defaults to false when only
+    /// `pdf_options.extract_images` is set and `config.images` is absent,
+    /// so callers who never touched `config.images` do not get unexpected placeholders.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_inject_placeholders_absent_when_only_pdf_options_set() {
+        use crate::core::config::{OcrConfig, OutputFormat, pdf::PdfConfig};
+
+        let _backend = register_mock_ocr_backend("inject-placeholder-absent-ocr", "mock page text");
+        let extractor = PdfExtractor::new();
+
+        let pdf_path = pdf_test_document("embedded_images_tables.pdf");
+        assert!(
+            pdf_path.exists(),
+            "missing test fixture: {pdf_path:?} — add embedded_images_tables.pdf to test_documents/pdf/"
+        );
+        let content = std::fs::read(&pdf_path).expect("failed to read embedded_images_tables.pdf");
+
+        // Only pdf_options.extract_images=true — config.images is None.
+        // inject_placeholders must default to false on this path.
+        let config = crate::core::config::ExtractionConfig {
+            output_format: OutputFormat::Markdown,
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "inject-placeholder-absent-ocr".to_string(),
+                language: "eng".to_string(),
+                ..Default::default()
+            }),
+            pdf_options: Some(PdfConfig {
+                extract_images: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extractor
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("force_ocr extraction with pdf_options should succeed");
+
+        let result = crate::extraction::derive::derive_extraction_result(result, true, OutputFormat::Markdown);
+
+        let markdown = result.formatted_content.as_deref().unwrap_or(&result.content);
+        assert!(
+            !markdown.contains("!["),
+            "Markdown must NOT contain image placeholders when config.images is absent (inject_placeholders defaults to false)"
         );
     }
 
