@@ -914,6 +914,116 @@ StructuredDataResult <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.StructuredDataResult` <- `$.StructuredDataResult`
+#' Application properties from docProps/app.xml for DOCX
+#'
+#' Contains Word-specific document statistics and metadata.
+#' @field application Application name (e.g., "Microsoft Office Word")
+#' @field app_version Application version
+#' @field template Template filename
+#' @field total_time Total editing time in minutes
+#' @field pages Number of pages
+#' @field words Number of words
+#' @field characters Number of characters (excluding spaces)
+#' @field characters_with_spaces Number of characters (including spaces)
+#' @field lines Number of lines
+#' @field paragraphs Number of paragraphs
+#' @field company Company name
+#' @field doc_security Document security level
+#' @field scale_crop Scale crop flag
+#' @field links_up_to_date Links up to date flag
+#' @field shared_doc Shared document flag
+#' @field hyperlinks_changed Hyperlinks changed flag
+#' @export
+DocxAppProperties <- new.env(parent = emptyenv())
+DocxAppProperties$from_json <- function(json) .Call("wrap__DocxAppProperties__from_json", json, PACKAGE = "kreuzberg")
+#' @export
+`$.DocxAppProperties` <- function(self, name) {
+  func <- DocxAppProperties[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.DocxAppProperties` <- `$.DocxAppProperties`
+#' Application properties from docProps/app.xml for XLSX
+#'
+#' Contains Excel-specific document metadata.
+#' @field application Application name (e.g., "Microsoft Excel")
+#' @field app_version Application version
+#' @field doc_security Document security level
+#' @field scale_crop Scale crop flag
+#' @field links_up_to_date Links up to date flag
+#' @field shared_doc Shared document flag
+#' @field hyperlinks_changed Hyperlinks changed flag
+#' @field company Company name
+#' @field worksheet_names Worksheet names
+#' @export
+XlsxAppProperties <- new.env(parent = emptyenv())
+#' @export
+`$.XlsxAppProperties` <- function(self, name) {
+  func <- XlsxAppProperties[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.XlsxAppProperties` <- `$.XlsxAppProperties`
+#' Application properties from docProps/app.xml for PPTX
+#'
+#' Contains PowerPoint-specific document metadata.
+#' @field application Application name (e.g., "Microsoft Office PowerPoint")
+#' @field app_version Application version
+#' @field total_time Total editing time in minutes
+#' @field company Company name
+#' @field doc_security Document security level
+#' @field scale_crop Scale crop flag
+#' @field links_up_to_date Links up to date flag
+#' @field shared_doc Shared document flag
+#' @field hyperlinks_changed Hyperlinks changed flag
+#' @field slides Number of slides
+#' @field notes Number of notes
+#' @field hidden_slides Number of hidden slides
+#' @field multimedia_clips Number of multimedia clips
+#' @field presentation_format Presentation format (e.g., "Widescreen", "Standard")
+#' @field slide_titles Slide titles
+#' @export
+PptxAppProperties <- new.env(parent = emptyenv())
+#' @export
+`$.PptxAppProperties` <- function(self, name) {
+  func <- PptxAppProperties[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.PptxAppProperties` <- `$.PptxAppProperties`
+#' Dublin Core metadata from docProps/core.xml
+#'
+#' Contains standard metadata fields defined by the Dublin Core standard
+#' and Office-specific extensions.
+#' @field title Document title
+#' @field subject Document subject/topic
+#' @field creator Document creator/author
+#' @field keywords Keywords or tags
+#' @field description Document description/abstract
+#' @field last_modified_by User who last modified the document
+#' @field revision Revision number
+#' @field created Creation timestamp (ISO 8601)
+#' @field modified Last modification timestamp (ISO 8601)
+#' @field category Document category
+#' @field content_status Content status (Draft, Final, etc.)
+#' @field language Document language
+#' @field identifier Unique identifier
+#' @field version Document version
+#' @field last_printed Last print timestamp (ISO 8601)
+#' @export
+CoreProperties <- new.env(parent = emptyenv())
+CoreProperties$from_json <- function(json) .Call("wrap__CoreProperties__from_json", json, PACKAGE = "kreuzberg")
+#' @export
+`$.CoreProperties` <- function(self, name) {
+  func <- CoreProperties[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.CoreProperties` <- `$.CoreProperties`
 #' Configuration for security limits across extractors
 #'
 #' All limits are intentionally conservative to prevent DoS attacks

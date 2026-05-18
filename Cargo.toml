@@ -1,23 +1,23 @@
 [workspace]
 members = [
-  "crates/kreuzberg",
-  "crates/kreuzberg-cli",
-  "crates/kreuzberg-ffi",
-  "crates/kreuzberg-node",
-  "crates/kreuzberg-paddle-ocr",
-  "crates/kreuzberg-php",
-  "crates/kreuzberg-py",
-  "crates/kreuzberg-tesseract",
-  "crates/kreuzberg-wasm",
-  "packages/dart/rust",
-  "packages/swift/rust",
-  "tools/benchmark-harness",
+    "crates/kreuzberg",
+    "crates/kreuzberg-cli",
+    "crates/kreuzberg-ffi",
+    "crates/kreuzberg-node",
+    "crates/kreuzberg-paddle-ocr",
+    "crates/kreuzberg-php",
+    "crates/kreuzberg-py",
+    "crates/kreuzberg-tesseract",
+    "crates/kreuzberg-wasm",
+    "packages/dart/rust",
+    "packages/swift/rust",
+    "tools/benchmark-harness",
 ]
 exclude = [
-  "e2e/rust",
-  "packages/elixir/native/kreuzberg_nif",
-  "packages/r/src/rust",
-  "packages/ruby/ext/kreuzberg_rb",
+    "e2e/rust",
+    "packages/elixir/native/kreuzberg_nif",
+    "packages/r/src/rust",
+    "packages/ruby/ext/kreuzberg_rb",
 ]
 default-members = ["crates/kreuzberg", "crates/kreuzberg-cli"]
 resolver = "2"
@@ -74,8 +74,8 @@ once_cell = "1.21.4"
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-18"] }
 parking_lot = "0.12.5"
 pdf_oxide = { version = "0.3.50", default-features = false, features = [
-  "rendering",
-  "legacy-crypto",
+    "rendering",
+    "legacy-crypto",
 ] }
 rayon = "1.12.0"
 reqwest = { version = "0.13.3", default-features = false }
@@ -86,14 +86,14 @@ serde_toon_format = "0.1"
 tempfile = "3.27.0"
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = [
-  "rt",
-  "rt-multi-thread",
-  "macros",
-  "sync",
-  "process",
-  "fs",
-  "time",
-  "io-util",
+    "rt",
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "process",
+    "fs",
+    "time",
+    "io-util",
 ] }
 toml = "1.1.2"
 tracing = "0.1"
@@ -101,14 +101,14 @@ tree-sitter-language-pack = { version = "1.8.1", default-features = false, featu
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
-  "Blob",
-  "File",
-  "FileReader",
-  "console",
-  "TextDecoder",
-  "ImageData",
-  "Window",
-  "Response",
+    "Blob",
+    "File",
+    "FileReader",
+    "console",
+    "TextDecoder",
+    "ImageData",
+    "Window",
+    "Response",
 ] }
 
 [patch.crates-io]

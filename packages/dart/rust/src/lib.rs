@@ -1106,6 +1106,145 @@ pub struct StructuredDataResult {
     pub text_fields: Vec<String>,
 }
 
+/// Application properties from docProps/app.xml for DOCX
+///
+/// Contains Word-specific document statistics and metadata.
+#[frb(mirror(DocxAppProperties))]
+pub struct DocxAppProperties {
+    /// Application name (e.g., "Microsoft Office Word")
+    pub application: Option<String>,
+    /// Application version
+    pub app_version: Option<String>,
+    /// Template filename
+    pub template: Option<String>,
+    /// Total editing time in minutes
+    pub total_time: Option<i64>,
+    /// Number of pages
+    pub pages: Option<i64>,
+    /// Number of words
+    pub words: Option<i64>,
+    /// Number of characters (excluding spaces)
+    pub characters: Option<i64>,
+    /// Number of characters (including spaces)
+    pub characters_with_spaces: Option<i64>,
+    /// Number of lines
+    pub lines: Option<i64>,
+    /// Number of paragraphs
+    pub paragraphs: Option<i64>,
+    /// Company name
+    pub company: Option<String>,
+    /// Document security level
+    pub doc_security: Option<i64>,
+    /// Scale crop flag
+    pub scale_crop: Option<bool>,
+    /// Links up to date flag
+    pub links_up_to_date: Option<bool>,
+    /// Shared document flag
+    pub shared_doc: Option<bool>,
+    /// Hyperlinks changed flag
+    pub hyperlinks_changed: Option<bool>,
+}
+
+/// Application properties from docProps/app.xml for XLSX
+///
+/// Contains Excel-specific document metadata.
+#[frb(mirror(XlsxAppProperties))]
+pub struct XlsxAppProperties {
+    /// Application name (e.g., "Microsoft Excel")
+    pub application: Option<String>,
+    /// Application version
+    pub app_version: Option<String>,
+    /// Document security level
+    pub doc_security: Option<i64>,
+    /// Scale crop flag
+    pub scale_crop: Option<bool>,
+    /// Links up to date flag
+    pub links_up_to_date: Option<bool>,
+    /// Shared document flag
+    pub shared_doc: Option<bool>,
+    /// Hyperlinks changed flag
+    pub hyperlinks_changed: Option<bool>,
+    /// Company name
+    pub company: Option<String>,
+    /// Worksheet names
+    pub worksheet_names: Vec<String>,
+}
+
+/// Application properties from docProps/app.xml for PPTX
+///
+/// Contains PowerPoint-specific document metadata.
+#[frb(mirror(PptxAppProperties))]
+pub struct PptxAppProperties {
+    /// Application name (e.g., "Microsoft Office PowerPoint")
+    pub application: Option<String>,
+    /// Application version
+    pub app_version: Option<String>,
+    /// Total editing time in minutes
+    pub total_time: Option<i64>,
+    /// Company name
+    pub company: Option<String>,
+    /// Document security level
+    pub doc_security: Option<i64>,
+    /// Scale crop flag
+    pub scale_crop: Option<bool>,
+    /// Links up to date flag
+    pub links_up_to_date: Option<bool>,
+    /// Shared document flag
+    pub shared_doc: Option<bool>,
+    /// Hyperlinks changed flag
+    pub hyperlinks_changed: Option<bool>,
+    /// Number of slides
+    pub slides: Option<i64>,
+    /// Number of notes
+    pub notes: Option<i64>,
+    /// Number of hidden slides
+    pub hidden_slides: Option<i64>,
+    /// Number of multimedia clips
+    pub multimedia_clips: Option<i64>,
+    /// Presentation format (e.g., "Widescreen", "Standard")
+    pub presentation_format: Option<String>,
+    /// Slide titles
+    pub slide_titles: Vec<String>,
+}
+
+/// Dublin Core metadata from docProps/core.xml
+///
+/// Contains standard metadata fields defined by the Dublin Core standard
+/// and Office-specific extensions.
+#[frb(mirror(CoreProperties))]
+pub struct CoreProperties {
+    /// Document title
+    pub title: Option<String>,
+    /// Document subject/topic
+    pub subject: Option<String>,
+    /// Document creator/author
+    pub creator: Option<String>,
+    /// Keywords or tags
+    pub keywords: Option<String>,
+    /// Document description/abstract
+    pub description: Option<String>,
+    /// User who last modified the document
+    pub last_modified_by: Option<String>,
+    /// Revision number
+    pub revision: Option<String>,
+    /// Creation timestamp (ISO 8601)
+    pub created: Option<String>,
+    /// Last modification timestamp (ISO 8601)
+    pub modified: Option<String>,
+    /// Document category
+    pub category: Option<String>,
+    /// Content status (Draft, Final, etc.)
+    pub content_status: Option<String>,
+    /// Document language
+    pub language: Option<String>,
+    /// Unique identifier
+    pub identifier: Option<String>,
+    /// Document version
+    pub version: Option<String>,
+    /// Last print timestamp (ISO 8601)
+    pub last_printed: Option<String>,
+}
+
 /// Configuration for security limits across extractors.
 ///
 /// All limits are intentionally conservative to prevent DoS attacks
@@ -2389,12 +2528,12 @@ pub struct DocxMetadata {
     ///
     /// Contains title, creator, subject, keywords, dates, etc.
     /// Shared format across DOCX/PPTX/XLSX documents.
-    pub core_properties: Option<String>,
+    pub core_properties: Option<CoreProperties>,
     /// Application properties from docProps/app.xml (Word-specific statistics)
     ///
     /// Contains word count, page count, paragraph count, editing time, etc.
     /// DOCX-specific variant of Office application properties.
-    pub app_properties: Option<String>,
+    pub app_properties: Option<DocxAppProperties>,
     /// Custom properties from docProps/custom.xml (user-defined properties)
     ///
     /// Contains key-value pairs defined by users or applications.
@@ -4291,6 +4430,89 @@ impl From<kreuzberg::extraction::structured::StructuredDataResult> for Structure
     }
 }
 
+impl From<kreuzberg::extraction::office_metadata::DocxAppProperties> for DocxAppProperties {
+    fn from(v: kreuzberg::extraction::office_metadata::DocxAppProperties) -> Self {
+        DocxAppProperties {
+            application: v.application.map(|s| s.into()),
+            app_version: v.app_version.map(|s| s.into()),
+            template: v.template.map(|s| s.into()),
+            total_time: v.total_time.map(|x| x as _),
+            pages: v.pages.map(|x| x as _),
+            words: v.words.map(|x| x as _),
+            characters: v.characters.map(|x| x as _),
+            characters_with_spaces: v.characters_with_spaces.map(|x| x as _),
+            lines: v.lines.map(|x| x as _),
+            paragraphs: v.paragraphs.map(|x| x as _),
+            company: v.company.map(|s| s.into()),
+            doc_security: v.doc_security.map(|x| x as _),
+            scale_crop: v.scale_crop.map(|x| x as _),
+            links_up_to_date: v.links_up_to_date.map(|x| x as _),
+            shared_doc: v.shared_doc.map(|x| x as _),
+            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
+        }
+    }
+}
+
+impl From<kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties> for XlsxAppProperties {
+    fn from(v: kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties) -> Self {
+        XlsxAppProperties {
+            application: v.application.map(|s| s.into()),
+            app_version: v.app_version.map(|s| s.into()),
+            doc_security: v.doc_security.map(|x| x as _),
+            scale_crop: v.scale_crop.map(|x| x as _),
+            links_up_to_date: v.links_up_to_date.map(|x| x as _),
+            shared_doc: v.shared_doc.map(|x| x as _),
+            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
+            company: v.company.map(|s| s.into()),
+            worksheet_names: v.worksheet_names.into_iter().map(|s| s.into()).collect(),
+        }
+    }
+}
+
+impl From<kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties> for PptxAppProperties {
+    fn from(v: kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties) -> Self {
+        PptxAppProperties {
+            application: v.application.map(|s| s.into()),
+            app_version: v.app_version.map(|s| s.into()),
+            total_time: v.total_time.map(|x| x as _),
+            company: v.company.map(|s| s.into()),
+            doc_security: v.doc_security.map(|x| x as _),
+            scale_crop: v.scale_crop.map(|x| x as _),
+            links_up_to_date: v.links_up_to_date.map(|x| x as _),
+            shared_doc: v.shared_doc.map(|x| x as _),
+            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
+            slides: v.slides.map(|x| x as _),
+            notes: v.notes.map(|x| x as _),
+            hidden_slides: v.hidden_slides.map(|x| x as _),
+            multimedia_clips: v.multimedia_clips.map(|x| x as _),
+            presentation_format: v.presentation_format.map(|s| s.into()),
+            slide_titles: v.slide_titles.into_iter().map(|s| s.into()).collect(),
+        }
+    }
+}
+
+impl From<kreuzberg::extraction::office_metadata::CoreProperties> for CoreProperties {
+    fn from(v: kreuzberg::extraction::office_metadata::CoreProperties) -> Self {
+        CoreProperties {
+            title: v.title.map(|s| s.into()),
+            subject: v.subject.map(|s| s.into()),
+            creator: v.creator.map(|s| s.into()),
+            keywords: v.keywords.map(|s| s.into()),
+            description: v.description.map(|s| s.into()),
+            last_modified_by: v.last_modified_by.map(|s| s.into()),
+            revision: v.revision.map(|s| s.into()),
+            created: v.created.map(|s| s.into()),
+            modified: v.modified.map(|s| s.into()),
+            category: v.category.map(|s| s.into()),
+            content_status: v.content_status.map(|s| s.into()),
+            language: v.language.map(|s| s.into()),
+            identifier: v.identifier.map(|s| s.into()),
+            version: v.version.map(|s| s.into()),
+            last_printed: v.last_printed.map(|s| s.into()),
+        }
+    }
+}
+
 impl From<kreuzberg::SecurityLimits> for SecurityLimits {
     fn from(v: kreuzberg::SecurityLimits) -> Self {
         SecurityLimits {
@@ -5060,8 +5282,8 @@ impl From<kreuzberg::PptxMetadata> for PptxMetadata {
 impl From<kreuzberg::DocxMetadata> for DocxMetadata {
     fn from(v: kreuzberg::DocxMetadata) -> Self {
         DocxMetadata {
-            core_properties: Default::default(),
-            app_properties: Default::default(),
+            core_properties: v.core_properties.map(CoreProperties::from),
+            app_properties: v.app_properties.map(DocxAppProperties::from),
             custom_properties: v.custom_properties.map(|m| {
                 m.into_iter()
                     .map(|(k, v)| (k.into(), serde_json::to_string(&v).unwrap_or_default()))
@@ -6587,6 +6809,51 @@ impl From<TreeSitterProcessConfig> for kreuzberg::TreeSitterProcessConfig {
     }
 }
 
+impl From<DocxAppProperties> for kreuzberg::extraction::office_metadata::DocxAppProperties {
+    fn from(v: DocxAppProperties) -> Self {
+        kreuzberg::extraction::office_metadata::DocxAppProperties {
+            application: v.application.map(Into::into),
+            app_version: v.app_version.map(Into::into),
+            template: v.template.map(Into::into),
+            total_time: v.total_time.map(|x| x as _),
+            pages: v.pages.map(|x| x as _),
+            words: v.words.map(|x| x as _),
+            characters: v.characters.map(|x| x as _),
+            characters_with_spaces: v.characters_with_spaces.map(|x| x as _),
+            lines: v.lines.map(|x| x as _),
+            paragraphs: v.paragraphs.map(|x| x as _),
+            company: v.company.map(Into::into),
+            doc_security: v.doc_security.map(|x| x as _),
+            scale_crop: v.scale_crop.map(|x| x as _),
+            links_up_to_date: v.links_up_to_date.map(|x| x as _),
+            shared_doc: v.shared_doc.map(|x| x as _),
+            hyperlinks_changed: v.hyperlinks_changed.map(|x| x as _),
+        }
+    }
+}
+
+impl From<CoreProperties> for kreuzberg::extraction::office_metadata::CoreProperties {
+    fn from(v: CoreProperties) -> Self {
+        kreuzberg::extraction::office_metadata::CoreProperties {
+            title: v.title.map(Into::into),
+            subject: v.subject.map(Into::into),
+            creator: v.creator.map(Into::into),
+            keywords: v.keywords.map(Into::into),
+            description: v.description.map(Into::into),
+            last_modified_by: v.last_modified_by.map(Into::into),
+            revision: v.revision.map(Into::into),
+            created: v.created.map(Into::into),
+            modified: v.modified.map(Into::into),
+            category: v.category.map(Into::into),
+            content_status: v.content_status.map(Into::into),
+            language: v.language.map(Into::into),
+            identifier: v.identifier.map(Into::into),
+            version: v.version.map(Into::into),
+            last_printed: v.last_printed.map(Into::into),
+        }
+    }
+}
+
 impl From<SecurityLimits> for kreuzberg::SecurityLimits {
     fn from(v: SecurityLimits) -> Self {
         kreuzberg::SecurityLimits {
@@ -7188,8 +7455,8 @@ impl From<PptxMetadata> for kreuzberg::PptxMetadata {
 impl From<DocxMetadata> for kreuzberg::DocxMetadata {
     fn from(v: DocxMetadata) -> Self {
         kreuzberg::DocxMetadata {
-            core_properties: Default::default(),
-            app_properties: Default::default(),
+            core_properties: v.core_properties.map(Into::into),
+            app_properties: v.app_properties.map(Into::into),
             custom_properties: v
                 .custom_properties
                 .map(|m| m.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
@@ -8638,6 +8905,34 @@ pub fn create_server_config_from_json(json: String) -> Result<ServerConfig, Stri
 pub fn create_structured_data_result_from_json(json: String) -> Result<StructuredDataResult, String> {
     serde_json::from_str::<kreuzberg::extraction::structured::StructuredDataResult>(&json)
         .map(StructuredDataResult::from)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub fn create_docx_app_properties_from_json(json: String) -> Result<DocxAppProperties, String> {
+    serde_json::from_str::<kreuzberg::extraction::office_metadata::DocxAppProperties>(&json)
+        .map(DocxAppProperties::from)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub fn create_xlsx_app_properties_from_json(json: String) -> Result<XlsxAppProperties, String> {
+    serde_json::from_str::<kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties>(&json)
+        .map(XlsxAppProperties::from)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub fn create_pptx_app_properties_from_json(json: String) -> Result<PptxAppProperties, String> {
+    serde_json::from_str::<kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties>(&json)
+        .map(PptxAppProperties::from)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub fn create_core_properties_from_json(json: String) -> Result<CoreProperties, String> {
+    serde_json::from_str::<kreuzberg::extraction::office_metadata::CoreProperties>(&json)
+        .map(CoreProperties::from)
         .map_err(|e| e.to_string())
 }
 

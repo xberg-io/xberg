@@ -158,7 +158,7 @@ jobs:
             test-cmd: "cd e2e/kotlin_android && gradle test --no-daemon"
           - lang: swift
             swift-version: "6.0"
-            test-cmd: "cd e2e/swift && swift test"
+            test-cmd: "cd e2e/swift_e2e && swift test"
           - lang: zig
             zig-version: "0.16.0"
             test-cmd: 'FFI_ABS="$PWD/target/release" && cd e2e/zig && zig build test -Dffi_path="$FFI_ABS"'

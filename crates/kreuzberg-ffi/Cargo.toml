@@ -29,38 +29,38 @@ async-trait = "0.1"
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
-[target.'cfg(not(all(target_os = "android", target_arch = "x86_64")))'.dependencies]
-kreuzberg = { path = "../kreuzberg", features = [
-  "full",
-  "pdf",
-  "ocr",
-  "paddle-ocr",
-  "paddle-ocr-types",
-  "layout-detection",
-  "layout-types",
-  "embeddings",
-  "embedding-presets",
-  "chunking",
-  "keywords-yake",
-  "keywords-rake",
-  "language-detection",
-  "html",
-  "tree-sitter",
-  "office",
-  "email",
-  "archives",
-  "stopwords",
-  "auto-rotate",
-  "auto-rotate-types",
-  "tokio-runtime",
-  "api",
-  "mcp",
-  "liter-llm",
-  "quality",
-] }
-
 [target.'cfg(all(target_os = "android", target_arch = "x86_64"))'.dependencies]
 kreuzberg = { path = "../kreuzberg", default-features = false, features = ["android-target"] }
+
+[target.'cfg(not(all(target_os = "android", target_arch = "x86_64")))'.dependencies]
+kreuzberg = { path = "../kreuzberg", features = [
+    "full",
+    "pdf",
+    "ocr",
+    "paddle-ocr",
+    "paddle-ocr-types",
+    "layout-detection",
+    "layout-types",
+    "embeddings",
+    "embedding-presets",
+    "chunking",
+    "keywords-yake",
+    "keywords-rake",
+    "language-detection",
+    "html",
+    "tree-sitter",
+    "office",
+    "email",
+    "archives",
+    "stopwords",
+    "auto-rotate",
+    "auto-rotate-types",
+    "tokio-runtime",
+    "api",
+    "mcp",
+    "liter-llm",
+    "quality",
+] }
 
 [build-dependencies]
 cbindgen = "0.29"

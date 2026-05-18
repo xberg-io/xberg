@@ -724,6 +724,210 @@ public typealias ServerConfig = RustBridge.ServerConfig
 
 public typealias StructuredDataResult = RustBridge.StructuredDataResult
 
+/// Application properties from docProps/app.xml for DOCX
+///
+/// Contains Word-specific document statistics and metadata.
+public struct DocxAppProperties: Codable, Sendable, Hashable {
+    /// Application name (e.g., "Microsoft Office Word")
+    public let application: String?
+    /// Application version
+    public let appVersion: String?
+    /// Template filename
+    public let template: String?
+    /// Total editing time in minutes
+    public let totalTime: Int32?
+    /// Number of pages
+    public let pages: Int32?
+    /// Number of words
+    public let words: Int32?
+    /// Number of characters (excluding spaces)
+    public let characters: Int32?
+    /// Number of characters (including spaces)
+    public let charactersWithSpaces: Int32?
+    /// Number of lines
+    public let lines: Int32?
+    /// Number of paragraphs
+    public let paragraphs: Int32?
+    /// Company name
+    public let company: String?
+    /// Document security level
+    public let docSecurity: Int32?
+    /// Scale crop flag
+    public let scaleCrop: Bool?
+    /// Links up to date flag
+    public let linksUpToDate: Bool?
+    /// Shared document flag
+    public let sharedDoc: Bool?
+    /// Hyperlinks changed flag
+    public let hyperlinksChanged: Bool?
+    public init(application: String? = nil, appVersion: String? = nil, template: String? = nil, totalTime: Int32? = nil, pages: Int32? = nil, words: Int32? = nil, characters: Int32? = nil, charactersWithSpaces: Int32? = nil, lines: Int32? = nil, paragraphs: Int32? = nil, company: String? = nil, docSecurity: Int32? = nil, scaleCrop: Bool? = nil, linksUpToDate: Bool? = nil, sharedDoc: Bool? = nil, hyperlinksChanged: Bool? = nil) {
+        self.application = application
+        self.appVersion = appVersion
+        self.template = template
+        self.totalTime = totalTime
+        self.pages = pages
+        self.words = words
+        self.characters = characters
+        self.charactersWithSpaces = charactersWithSpaces
+        self.lines = lines
+        self.paragraphs = paragraphs
+        self.company = company
+        self.docSecurity = docSecurity
+        self.scaleCrop = scaleCrop
+        self.linksUpToDate = linksUpToDate
+        self.sharedDoc = sharedDoc
+        self.hyperlinksChanged = hyperlinksChanged
+    }
+    private enum CodingKeys: String, CodingKey {
+        case application = "application"
+        case appVersion = "app_version"
+        case template = "template"
+        case totalTime = "total_time"
+        case pages = "pages"
+        case words = "words"
+        case characters = "characters"
+        case charactersWithSpaces = "characters_with_spaces"
+        case lines = "lines"
+        case paragraphs = "paragraphs"
+        case company = "company"
+        case docSecurity = "doc_security"
+        case scaleCrop = "scale_crop"
+        case linksUpToDate = "links_up_to_date"
+        case sharedDoc = "shared_doc"
+        case hyperlinksChanged = "hyperlinks_changed"
+    }
+}
+
+// MARK: - Internal FFI conversions for DocxAppProperties
+internal extension DocxAppProperties {
+    init(_ rb: RustBridge.DocxAppProperties) throws {
+        self.application = rb.application()?.toString()
+        self.appVersion = rb.app_version()?.toString()
+        self.template = rb.template()?.toString()
+        self.totalTime = rb.total_time()
+        self.pages = rb.pages()
+        self.words = rb.words()
+        self.characters = rb.characters()
+        self.charactersWithSpaces = rb.characters_with_spaces()
+        self.lines = rb.lines()
+        self.paragraphs = rb.paragraphs()
+        self.company = rb.company()?.toString()
+        self.docSecurity = rb.doc_security()
+        self.scaleCrop = rb.scale_crop()
+        self.linksUpToDate = rb.links_up_to_date()
+        self.sharedDoc = rb.shared_doc()
+        self.hyperlinksChanged = rb.hyperlinks_changed()
+    }
+    func intoRust() throws -> RustBridge.DocxAppProperties {
+        return RustBridge.DocxAppProperties(self.application, self.appVersion, self.template, self.totalTime, self.pages, self.words, self.characters, self.charactersWithSpaces, self.lines, self.paragraphs, self.company, self.docSecurity, self.scaleCrop, self.linksUpToDate, self.sharedDoc, self.hyperlinksChanged)
+    }
+}
+
+/// Application properties from docProps/app.xml for XLSX
+///
+/// Contains Excel-specific document metadata.
+public typealias XlsxAppProperties = RustBridge.XlsxAppProperties
+
+/// Application properties from docProps/app.xml for PPTX
+///
+/// Contains PowerPoint-specific document metadata.
+public typealias PptxAppProperties = RustBridge.PptxAppProperties
+
+/// Dublin Core metadata from docProps/core.xml
+///
+/// Contains standard metadata fields defined by the Dublin Core standard
+/// and Office-specific extensions.
+public struct CoreProperties: Codable, Sendable, Hashable {
+    /// Document title
+    public let title: String?
+    /// Document subject/topic
+    public let subject: String?
+    /// Document creator/author
+    public let creator: String?
+    /// Keywords or tags
+    public let keywords: String?
+    /// Document description/abstract
+    public let description: String?
+    /// User who last modified the document
+    public let lastModifiedBy: String?
+    /// Revision number
+    public let revision: String?
+    /// Creation timestamp (ISO 8601)
+    public let created: String?
+    /// Last modification timestamp (ISO 8601)
+    public let modified: String?
+    /// Document category
+    public let category: String?
+    /// Content status (Draft, Final, etc.)
+    public let contentStatus: String?
+    /// Document language
+    public let language: String?
+    /// Unique identifier
+    public let identifier: String?
+    /// Document version
+    public let version: String?
+    /// Last print timestamp (ISO 8601)
+    public let lastPrinted: String?
+    public init(title: String? = nil, subject: String? = nil, creator: String? = nil, keywords: String? = nil, description: String? = nil, lastModifiedBy: String? = nil, revision: String? = nil, created: String? = nil, modified: String? = nil, category: String? = nil, contentStatus: String? = nil, language: String? = nil, identifier: String? = nil, version: String? = nil, lastPrinted: String? = nil) {
+        self.title = title
+        self.subject = subject
+        self.creator = creator
+        self.keywords = keywords
+        self.description = description
+        self.lastModifiedBy = lastModifiedBy
+        self.revision = revision
+        self.created = created
+        self.modified = modified
+        self.category = category
+        self.contentStatus = contentStatus
+        self.language = language
+        self.identifier = identifier
+        self.version = version
+        self.lastPrinted = lastPrinted
+    }
+    private enum CodingKeys: String, CodingKey {
+        case title = "title"
+        case subject = "subject"
+        case creator = "creator"
+        case keywords = "keywords"
+        case description = "description"
+        case lastModifiedBy = "last_modified_by"
+        case revision = "revision"
+        case created = "created"
+        case modified = "modified"
+        case category = "category"
+        case contentStatus = "content_status"
+        case language = "language"
+        case identifier = "identifier"
+        case version = "version"
+        case lastPrinted = "last_printed"
+    }
+}
+
+// MARK: - Internal FFI conversions for CoreProperties
+internal extension CoreProperties {
+    init(_ rb: RustBridge.CoreProperties) throws {
+        self.title = rb.title()?.toString()
+        self.subject = rb.subject()?.toString()
+        self.creator = rb.creator()?.toString()
+        self.keywords = rb.keywords()?.toString()
+        self.description = rb.description()?.toString()
+        self.lastModifiedBy = rb.last_modified_by()?.toString()
+        self.revision = rb.revision()?.toString()
+        self.created = rb.created()?.toString()
+        self.modified = rb.modified()?.toString()
+        self.category = rb.category()?.toString()
+        self.contentStatus = rb.content_status()?.toString()
+        self.language = rb.language()?.toString()
+        self.identifier = rb.identifier()?.toString()
+        self.version = rb.version()?.toString()
+        self.lastPrinted = rb.last_printed()?.toString()
+    }
+    func intoRust() throws -> RustBridge.CoreProperties {
+        return RustBridge.CoreProperties(self.title, self.subject, self.creator, self.keywords, self.description, self.lastModifiedBy, self.revision, self.created, self.modified, self.category, self.contentStatus, self.language, self.identifier, self.version, self.lastPrinted)
+    }
+}
+
 /// Configuration for security limits across extractors.
 ///
 /// All limits are intentionally conservative to prevent DoS attacks

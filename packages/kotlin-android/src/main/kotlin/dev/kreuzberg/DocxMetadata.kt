@@ -6,9 +6,12 @@
     "ktlint:standard:spacing-between-declarations-with-annotations",
     "ktlint:standard:when-entry-bracing",
     "ktlint:standard:blank-line-between-when-conditions",
+    "ktlint:standard:blank-line-before-declaration",
     "ktlint:standard:chain-method-continuation",
     "ktlint:standard:annotation",
     "ktlint:standard:max-line-length",
+    "ktlint:standard:no-semi",
+    "ktlint:standard:statement-wrapping",
     "MaxLineLength",
     "TooManyFunctions",
     "FunctionParameterNaming",
@@ -31,14 +34,14 @@ data class DocxMetadata(
      * Contains title, creator, subject, keywords, dates, etc.
      * Shared format across DOCX/PPTX/XLSX documents.
      */
-    val coreProperties: String?,
+    val coreProperties: CoreProperties?,
     /**
      * Application properties from docProps/app.xml (Word-specific statistics)
      *
      * Contains word count, page count, paragraph count, editing time, etc.
      * DOCX-specific variant of Office application properties.
      */
-    val appProperties: String?,
+    val appProperties: DocxAppProperties?,
     /**
      * Custom properties from docProps/custom.xml (user-defined properties)
      *
