@@ -441,6 +441,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ContentFilterConfig dco_decode_box_autoadd_content_filter_config(dynamic raw);
 
   @protected
+  CoreProperties dco_decode_box_autoadd_core_properties(dynamic raw);
+
+  @protected
   CsvMetadata dco_decode_box_autoadd_csv_metadata(dynamic raw);
 
   @protected
@@ -451,6 +454,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DocumentStructure dco_decode_box_autoadd_document_structure(dynamic raw);
+
+  @protected
+  DocxAppProperties dco_decode_box_autoadd_docx_app_properties(dynamic raw);
 
   @protected
   DocxMetadata dco_decode_box_autoadd_docx_metadata(dynamic raw);
@@ -681,6 +687,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ContributorRole dco_decode_contributor_role(dynamic raw);
 
   @protected
+  CoreProperties dco_decode_core_properties(dynamic raw);
+
+  @protected
   CsvMetadata dco_decode_csv_metadata(dynamic raw);
 
   @protected
@@ -712,6 +721,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DocumentStructure dco_decode_document_structure(dynamic raw);
+
+  @protected
+  DocxAppProperties dco_decode_docx_app_properties(dynamic raw);
 
   @protected
   DocxMetadata dco_decode_docx_metadata(dynamic raw);
@@ -1142,10 +1154,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CoreProperties? dco_decode_opt_box_autoadd_core_properties(dynamic raw);
+
+  @protected
   DjotContent? dco_decode_opt_box_autoadd_djot_content(dynamic raw);
 
   @protected
   DocumentStructure? dco_decode_opt_box_autoadd_document_structure(dynamic raw);
+
+  @protected
+  DocxAppProperties? dco_decode_opt_box_autoadd_docx_app_properties(
+    dynamic raw,
+  );
 
   @protected
   EmailConfig? dco_decode_opt_box_autoadd_email_config(dynamic raw);
@@ -1397,6 +1417,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PostProcessorConfig dco_decode_post_processor_config(dynamic raw);
 
   @protected
+  PptxAppProperties dco_decode_pptx_app_properties(dynamic raw);
+
+  @protected
   PptxExtractionResult dco_decode_pptx_extraction_result(dynamic raw);
 
   @protected
@@ -1513,6 +1536,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  XlsxAppProperties dco_decode_xlsx_app_properties(dynamic raw);
 
   @protected
   XmlExtractionResult dco_decode_xml_extraction_result(dynamic raw);
@@ -1879,6 +1905,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CoreProperties sse_decode_box_autoadd_core_properties(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   CsvMetadata sse_decode_box_autoadd_csv_metadata(SseDeserializer deserializer);
 
   @protected
@@ -1889,6 +1920,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DocumentStructure sse_decode_box_autoadd_document_structure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  DocxAppProperties sse_decode_box_autoadd_docx_app_properties(
     SseDeserializer deserializer,
   );
 
@@ -2191,6 +2227,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ContributorRole sse_decode_contributor_role(SseDeserializer deserializer);
 
   @protected
+  CoreProperties sse_decode_core_properties(SseDeserializer deserializer);
+
+  @protected
   CsvMetadata sse_decode_csv_metadata(SseDeserializer deserializer);
 
   @protected
@@ -2224,6 +2263,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DocumentStructure sse_decode_document_structure(SseDeserializer deserializer);
+
+  @protected
+  DocxAppProperties sse_decode_docx_app_properties(
+    SseDeserializer deserializer,
+  );
 
   @protected
   DocxMetadata sse_decode_docx_metadata(SseDeserializer deserializer);
@@ -2746,12 +2790,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CoreProperties? sse_decode_opt_box_autoadd_core_properties(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   DjotContent? sse_decode_opt_box_autoadd_djot_content(
     SseDeserializer deserializer,
   );
 
   @protected
   DocumentStructure? sse_decode_opt_box_autoadd_document_structure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  DocxAppProperties? sse_decode_opt_box_autoadd_docx_app_properties(
     SseDeserializer deserializer,
   );
 
@@ -3091,6 +3145,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PptxAppProperties sse_decode_pptx_app_properties(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PptxExtractionResult sse_decode_pptx_extraction_result(
     SseDeserializer deserializer,
   );
@@ -3227,6 +3286,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  XlsxAppProperties sse_decode_xlsx_app_properties(
+    SseDeserializer deserializer,
+  );
 
   @protected
   XmlExtractionResult sse_decode_xml_extraction_result(
@@ -3662,6 +3726,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_core_properties(
+    CoreProperties self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_csv_metadata(
     CsvMetadata self,
     SseSerializer serializer,
@@ -3682,6 +3752,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_document_structure(
     DocumentStructure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_docx_app_properties(
+    DocxAppProperties self,
     SseSerializer serializer,
   );
 
@@ -4085,6 +4161,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_core_properties(
+    CoreProperties self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_csv_metadata(CsvMetadata self, SseSerializer serializer);
 
   @protected
@@ -4126,6 +4208,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_document_structure(
     DocumentStructure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_docx_app_properties(
+    DocxAppProperties self,
     SseSerializer serializer,
   );
 
@@ -4787,6 +4875,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_core_properties(
+    CoreProperties? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_djot_content(
     DjotContent? self,
     SseSerializer serializer,
@@ -4795,6 +4889,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_document_structure(
     DocumentStructure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_docx_app_properties(
+    DocxAppProperties? self,
     SseSerializer serializer,
   );
 
@@ -5210,6 +5310,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_pptx_app_properties(
+    PptxAppProperties self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_pptx_extraction_result(
     PptxExtractionResult self,
     SseSerializer serializer,
@@ -5388,6 +5494,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_xlsx_app_properties(
+    XlsxAppProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_xml_extraction_result(

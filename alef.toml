@@ -423,12 +423,18 @@ style = "frb"
 features = ["full"]
 stub_methods = ["batch_extract_bytes", "batch_extract_bytes_sync"]
 
-# x86_64-linux-android (emulator) lacks an ORT prebuilt and there is no path
-# to get one short of compiling ORT from source for that triple. All other
-# targets (incl. arm64 Android phones via pyke prebuilts) keep the full
-# ORT-enabled feature set.
+# x86_64-linux-android (emulator) and x86_64-apple-ios (deprecated intel iOS
+# simulator) both lack a pyke ORT prebuilt and there is no path to one short
+# of compiling ORT from source for those triples. All other targets (incl.
+# arm64 Android phones and arm64 iOS device/sim via pyke prebuilts) keep
+# the full ORT-enabled feature set.
 [[crates.dart.target_dep_overrides]]
 cfg = 'all(target_os = "android", target_arch = "x86_64")'
+features = ["android-target"]
+default_features = false
+
+[[crates.dart.target_dep_overrides]]
+cfg = 'all(target_os = "ios", target_arch = "x86_64")'
 features = ["android-target"]
 default_features = false
 

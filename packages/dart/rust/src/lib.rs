@@ -4430,8 +4430,8 @@ impl From<kreuzberg::extraction::structured::StructuredDataResult> for Structure
     }
 }
 
-impl From<kreuzberg::extraction::office_metadata::DocxAppProperties> for DocxAppProperties {
-    fn from(v: kreuzberg::extraction::office_metadata::DocxAppProperties) -> Self {
+impl From<kreuzberg::DocxAppProperties> for DocxAppProperties {
+    fn from(v: kreuzberg::DocxAppProperties) -> Self {
         DocxAppProperties {
             application: v.application.map(|s| s.into()),
             app_version: v.app_version.map(|s| s.into()),
@@ -4491,8 +4491,8 @@ impl From<kreuzberg::extraction::office_metadata::app_properties::PptxAppPropert
     }
 }
 
-impl From<kreuzberg::extraction::office_metadata::CoreProperties> for CoreProperties {
-    fn from(v: kreuzberg::extraction::office_metadata::CoreProperties) -> Self {
+impl From<kreuzberg::CoreProperties> for CoreProperties {
+    fn from(v: kreuzberg::CoreProperties) -> Self {
         CoreProperties {
             title: v.title.map(|s| s.into()),
             subject: v.subject.map(|s| s.into()),
@@ -6809,9 +6809,9 @@ impl From<TreeSitterProcessConfig> for kreuzberg::TreeSitterProcessConfig {
     }
 }
 
-impl From<DocxAppProperties> for kreuzberg::extraction::office_metadata::DocxAppProperties {
+impl From<DocxAppProperties> for kreuzberg::DocxAppProperties {
     fn from(v: DocxAppProperties) -> Self {
-        kreuzberg::extraction::office_metadata::DocxAppProperties {
+        kreuzberg::DocxAppProperties {
             application: v.application.map(Into::into),
             app_version: v.app_version.map(Into::into),
             template: v.template.map(Into::into),
@@ -6832,9 +6832,9 @@ impl From<DocxAppProperties> for kreuzberg::extraction::office_metadata::DocxApp
     }
 }
 
-impl From<CoreProperties> for kreuzberg::extraction::office_metadata::CoreProperties {
+impl From<CoreProperties> for kreuzberg::CoreProperties {
     fn from(v: CoreProperties) -> Self {
-        kreuzberg::extraction::office_metadata::CoreProperties {
+        kreuzberg::CoreProperties {
             title: v.title.map(Into::into),
             subject: v.subject.map(Into::into),
             creator: v.creator.map(Into::into),
@@ -8910,7 +8910,7 @@ pub fn create_structured_data_result_from_json(json: String) -> Result<Structure
 
 #[frb]
 pub fn create_docx_app_properties_from_json(json: String) -> Result<DocxAppProperties, String> {
-    serde_json::from_str::<kreuzberg::extraction::office_metadata::DocxAppProperties>(&json)
+    serde_json::from_str::<kreuzberg::DocxAppProperties>(&json)
         .map(DocxAppProperties::from)
         .map_err(|e| e.to_string())
 }
@@ -8931,7 +8931,7 @@ pub fn create_pptx_app_properties_from_json(json: String) -> Result<PptxAppPrope
 
 #[frb]
 pub fn create_core_properties_from_json(json: String) -> Result<CoreProperties, String> {
-    serde_json::from_str::<kreuzberg::extraction::office_metadata::CoreProperties>(&json)
+    serde_json::from_str::<kreuzberg::CoreProperties>(&json)
         .map(CoreProperties::from)
         .map_err(|e| e.to_string())
 }

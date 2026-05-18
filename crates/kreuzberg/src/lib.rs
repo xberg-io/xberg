@@ -120,6 +120,14 @@ pub mod pdf;
 pub use error::{KreuzbergError, Result};
 pub use types::*;
 
+// Office metadata types are nested under `extraction::office_metadata::*` but
+// alef-backend-dart's mirror declarations resolve names against the crate
+// root (`#[frb(mirror(CoreProperties))]` → `kreuzberg::CoreProperties`).
+// Re-export at the root for path resolution; the canonical module path
+// remains valid via `extraction::office_metadata`.
+#[cfg(feature = "office")]
+pub use extraction::office_metadata::{CoreProperties, DocxAppProperties};
+
 // ── Extraction — public API (8 functions) ────────────────────────────────────
 #[cfg(feature = "tokio-runtime")]
 pub use core::extractor::{batch_extract_bytes, batch_extract_files};

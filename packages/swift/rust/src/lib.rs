@@ -4325,7 +4325,7 @@ impl StructuredDataResult {
     }
 }
 
-pub struct DocxAppProperties(pub kreuzberg::extraction::office_metadata::DocxAppProperties);
+pub struct DocxAppProperties(pub kreuzberg::DocxAppProperties);
 impl DocxAppProperties {
     pub fn new(
         application: Option<String>,
@@ -4345,8 +4345,7 @@ impl DocxAppProperties {
         shared_doc: Option<bool>,
         hyperlinks_changed: Option<bool>,
     ) -> DocxAppProperties {
-        let mut __target: kreuzberg::extraction::office_metadata::DocxAppProperties =
-            ::std::default::Default::default();
+        let mut __target: kreuzberg::DocxAppProperties = ::std::default::Default::default();
         if let Some(s) = application {
             if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
                 if let Ok(t) = ::serde_json::from_value(v) {
@@ -4743,7 +4742,7 @@ impl PptxAppProperties {
     }
 }
 
-pub struct CoreProperties(pub kreuzberg::extraction::office_metadata::CoreProperties);
+pub struct CoreProperties(pub kreuzberg::CoreProperties);
 impl CoreProperties {
     pub fn new(
         title: Option<String>,
@@ -4762,7 +4761,7 @@ impl CoreProperties {
         version: Option<String>,
         last_printed: Option<String>,
     ) -> CoreProperties {
-        let mut __target: kreuzberg::extraction::office_metadata::CoreProperties = ::std::default::Default::default();
+        let mut __target: kreuzberg::CoreProperties = ::std::default::Default::default();
         if let Some(s) = title {
             if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
                 if let Ok(t) = ::serde_json::from_value(v) {
