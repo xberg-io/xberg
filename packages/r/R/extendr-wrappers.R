@@ -914,6 +914,21 @@ StructuredDataResult <- new.env(parent = emptyenv())
 }
 #' @export
 `[[.StructuredDataResult` <- `$.StructuredDataResult`
+#' Image metadata extracted from an image file
+#' @field width Image width in pixels
+#' @field height Image height in pixels
+#' @field format Image format (e.g., "PNG", "JPEG")
+#' @field exif_data EXIF data if available
+#' @export
+ExtractedImageMetadata <- new.env(parent = emptyenv())
+#' @export
+`$.ExtractedImageMetadata` <- function(self, name) {
+  func <- ExtractedImageMetadata[[name]]
+  environment(func) <- environment()
+  func
+}
+#' @export
+`[[.ExtractedImageMetadata` <- `$.ExtractedImageMetadata`
 #' Application properties from docProps/app.xml for DOCX
 #'
 #' Contains Word-specific document statistics and metadata.

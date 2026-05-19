@@ -724,6 +724,9 @@ public typealias ServerConfig = RustBridge.ServerConfig
 
 public typealias StructuredDataResult = RustBridge.StructuredDataResult
 
+/// Image metadata extracted from an image file.
+public typealias ExtractedImageMetadata = RustBridge.ExtractedImageMetadata
+
 /// Application properties from docProps/app.xml for DOCX
 ///
 /// Contains Word-specific document statistics and metadata.

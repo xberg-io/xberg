@@ -215,7 +215,7 @@ pub(crate) fn extract_all_from_oxide_document(
             let images_extraction_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
                 || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
             let inject_placeholders =
-                images_extraction_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(true);
+                images_extraction_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(false);
 
             match crate::pdf::structure::extract_document_structure_from_segments(
                 segments,

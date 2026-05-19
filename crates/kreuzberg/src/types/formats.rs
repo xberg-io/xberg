@@ -454,22 +454,3 @@ impl Default for ImageDpiConfig {
         }
     }
 }
-
-/// Cache statistics.
-///
-/// Provides information about the extraction result cache,
-/// including size, file count, and age distribution.
-#[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CacheStats {
-    /// Total number of cached files
-    pub total_files: usize,
-    /// Total cache size in megabytes
-    pub total_size_mb: f64,
-    /// Available disk space in megabytes
-    pub available_space_mb: f64,
-    /// Age of the oldest cached file in days
-    pub oldest_file_age_days: f64,
-    /// Age of the newest cached file in days
-    pub newest_file_age_days: f64,
-}

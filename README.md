@@ -340,3 +340,166 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 ## License
 
 Elastic License 2.0 (ELv2) - see [LICENSE](LICENSE) for details. See [https://www.elastic.co/licensing/elastic-license](https://www.elastic.co/licensing/elastic-license) for the full license text.
+## FAQ
+
+### What is Kreuzberg?
+
+Kreuzberg is a polyglot document intelligence framework with a Rust core. It extracts text, metadata, and code intelligence from 91+ file formats and 306 programming languages at native speeds without needing a GPU. It provides native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, and C.
+
+### How does Kreuzberg differ from other document extraction tools?
+
+- **Kreuzberg**: Rust core, 91+ formats, 306 languages, polyglot bindings, code intelligence via tree-sitter, VLM OCR, native speeds, no GPU needed
+- **Apache Tika**: Java-based, broader format support, but slower, no code intelligence, no VLM OCR
+- **pdfplumber**: Python-only, PDF focus, slower, no code intelligence
+- **unstructured**: Python-based, good format coverage, but slower, requires more dependencies
+
+Kreuzberg's Rust core with SIMD optimizations and parallelism delivers 10-100x faster extraction than Python alternatives.
+
+### What are Kreuzberg's key features?
+
+- **Code intelligence** — Extract functions, classes, imports, symbols, docstrings from 306 languages via tree-sitter
+- **Extensible architecture** — Plugin system for custom OCR backends, validators, post-processors, document extractors, renderers
+- **Polyglot bindings** — Native bindings for 14+ languages (Rust, Python, Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, C)
+- **91+ file formats** — PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
+- **LLM intelligence** — VLM OCR (GPT-4o, Claude, Gemini, Ollama), structured JSON extraction, embeddings via 143 LLM providers
+- **OCR support** — Tesseract (all bindings including WASM for browsers), PaddleOCR, EasyOCR, VLM OCR, extensible via plugin API
+- **High performance** — Rust core with pure-Rust PDF, SIMD optimizations, full parallelism
+- **Flexible deployment** — Library, CLI tool, REST API server, or MCP server
+- **TOON wire format** — Token-efficient serialization for LLM/RAG pipelines, ~30-50% fewer tokens than JSON
+- **GFM-quality output** — Comrak-based Markdown rendering with proper fenced code blocks, table nodes
+- **Memory efficient** — Streaming parsers for multi-GB files
+
+### What file formats does Kreuzberg support?
+
+8 categories covering 91+ formats:
+- **Documents** — PDF, DOCX, DOC, ODT, RTF, WPD
+- **Office** — XLSX, XLS, PPTX, PPT, ODS, ODP
+- **Images** — PNG, JPEG, TIFF, BMP, GIF, WebP
+- **Web** — HTML, XML, XHTML, MHTML
+- **Emails** — MSG, EML, PST
+- **Archives** — ZIP, TAR, GZ, RAR, 7Z
+- **Academic** — LaTeX, BibTeX, RIS
+- **Code** — 306 programming languages via tree-sitter
+
+### How do I get started?
+
+Choose your platform:
+
+**Python:**
+```bash
+pip install kreuzberg
+```
+See [Python docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/python)
+
+**Node.js:**
+```bash
+npm install @kreuzberg/node
+```
+See [Node.js docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-node)
+
+**Rust:**
+```bash
+cargo add kreuzberg
+```
+See [Rust docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg)
+
+**Docker:**
+```bash
+docker pull ghcr.io/kreuzberg-dev/kreuzberg:latest
+```
+See [Docker docs](https://docs.kreuzberg.dev/guides/docker/)
+
+### What LLM/VLM providers are supported?
+
+143 providers including:
+- **OpenAI** — GPT-4o (vision), text models
+- **Anthropic** — Claude (vision), Claude 3.5 Sonnet
+- **Google** — Gemini (vision), Gemini 2.0 Flash
+- **Local engines** — Ollama, LM Studio, vLLM, llama.cpp
+- **Cloud providers** — Fireworks, Together, Groq, OpenRouter
+- **All OpenAI-compatible endpoints**
+
+### What OCR backends are available?
+
+- **Tesseract** — All bindings, including Tesseract-WASM for browsers
+- **PaddleOCR** — All native bindings (Python, Node.js, etc.)
+- **EasyOCR** — Python binding
+- **VLM OCR** — 143 vision model providers (GPT-4o, Claude, Gemini, Ollama local)
+- **Custom OCR** — Extensible via plugin API
+
+### What is the TOON wire format?
+
+TOON is Kreuzberg's token-efficient serialization format for LLM/RAG pipelines. It uses ~30-50% fewer tokens than JSON, making it ideal for:
+- Large document processing
+- RAG system integration
+- LLM context window optimization
+- Cost reduction in API calls
+
+### What is code intelligence extraction?
+
+Kreuzberg extracts semantic code information via tree-sitter:
+- **Functions** — Names, parameters, return types, docstrings
+- **Classes** — Names, methods, inheritance, properties
+- **Imports** — Module names, import paths
+- **Symbols** — Variables, constants, type definitions
+- **Docstrings** — Documentation comments
+
+Results in `ExtractionResult.code_intelligence` with semantic chunking.
+
+### Does Kreuzberg work in browsers?
+
+Yes! The WASM package (`@kreuzberg/wasm`) supports browsers, Deno, and Cloudflare Workers with:
+- PDF, Excel, archives, all office formats
+- Real Tesseract OCR via WASI build
+- Only ORT-dependent features excluded (PaddleOCR, layout detection, embeddings, auto-rotate)
+
+### What deployment options are available?
+
+- **Library** — Use as a dependency in your application
+- **CLI** — Cross-platform binary for batch processing
+- **REST API server** — HTTP endpoint for document extraction
+- **MCP server** — Model Context Protocol server for AI assistants
+- **Docker** — Official images with API, CLI, and MCP modes
+
+### What languages have native bindings?
+
+| Language | Package Manager | Status |
+|----------|----------------|--------|
+| Rust | Cargo | ✅ Core library |
+| Python | PyPI | ✅ Full support |
+| Node.js | npm (NAPI-RS) | ✅ Fastest performance |
+| WASM | npm | ✅ Browser/Deno/CF Workers |
+| Ruby | RubyGems | ✅ Native bindings |
+| Go | Go modules | ✅ FFI bindings |
+| Java | Maven Central | ✅ Foreign Function API |
+| Kotlin | Maven Central | ✅ Coroutine-based |
+| C# | NuGet | ✅ .NET 6.0+ |
+| PHP | Composer | ✅ PHP 8.2+ |
+| Elixir | Hex | ✅ OTP integration |
+| R | r-universe | ✅ extendr bindings |
+| Dart/Flutter | pub.dev | ✅ flutter_rust_bridge |
+| Swift | SPM | ✅ macOS 13+/iOS 16+ |
+| Zig | build.zig.zon | ✅ Idiomatic API |
+| C (FFI) | pkg-config/CMake | ✅ Header + shared lib |
+
+### What platforms are supported?
+
+All bindings support:
+- **Linux** — x86_64 and aarch64
+- **macOS** — ARM64
+- **Windows** — x64 (most bindings)
+
+Precompiled binaries included for all architectures.
+
+### What license does Kreuzberg use?
+
+Elastic-2.0 License — open-source with commercial use restrictions. See [LICENSE](https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE) for details.
+
+### Where can I get help?
+
+- **Documentation**: [docs.kreuzberg.dev](https://docs.kreuzberg.dev)
+- **Live Demo**: [docs.kreuzberg.dev/demo.html](https://docs.kreuzberg.dev/demo.html)
+- **Discord**: [discord.gg/xt9WY3GnKR](https://discord.gg/xt9WY3GnKR)
+- **Hugging Face**: [huggingface.co/Kreuzberg](https://huggingface.co/Kreuzberg)
+- **GitHub Issues**: [github.com/kreuzberg-dev/kreuzberg/issues](https://github.com/kreuzberg-dev/kreuzberg/issues)
+

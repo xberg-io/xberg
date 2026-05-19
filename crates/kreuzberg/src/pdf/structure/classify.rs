@@ -1039,7 +1039,10 @@ fn promote_title_heading(all_pages: &mut [Vec<PdfParagraph>]) {
 ///
 /// Split titles (e.g., "KAISUN HOLDINGS" on one line, "LIMITED" on the next)
 /// often produce separate H1 paragraphs. When they share the same font size
-/// they should be a single heading.
+/// and look like grammatical continuations they should be a single heading.
+///
+/// Product model codes ("HR 22", "HR 28") at the same font size are NOT merged —
+/// each is a distinct item, not a split title.
 fn merge_consecutive_h1s(page: &mut Vec<PdfParagraph>) {
     let mut i = 0;
     while i < page.len() {
@@ -1047,26 +1050,114 @@ fn merge_consecutive_h1s(page: &mut Vec<PdfParagraph>) {
             i += 1;
             continue;
         }
-        // Find the run of consecutive H1s at the same font size.
+        // Find the run of consecutive H1s at the same font size that are
+        // grammatical continuations of the previous line.
         let base_fs = page[i].dominant_font_size;
         let mut run_end = i + 1;
         while run_end < page.len()
             && page[run_end].heading_level == Some(1)
             && (page[run_end].dominant_font_size - base_fs).abs() < 0.5
+            && looks_like_title_continuation(&page[run_end - 1], &page[run_end])
         {
             run_end += 1;
         }
         if run_end - i > 1 {
-            // Merge lines from paragraphs [i+1..run_end] into page[i].
+            // Merge lines AND text from paragraphs [i+1..run_end] into page[i].
+            // Both fields must stay in sync: push_paragraph_element uses para.text
+            // when non-empty, so failing to update text silently discards merged content.
             let mut merged_lines = std::mem::take(&mut page[i].lines);
+            let mut merged_text_parts: Vec<String> = if page[i].text.is_empty() {
+                Vec::new()
+            } else {
+                vec![std::mem::take(&mut page[i].text)]
+            };
             for para in &page[i + 1..run_end] {
                 merged_lines.extend(para.lines.clone());
+                if !para.text.is_empty() {
+                    merged_text_parts.push(para.text.clone());
+                }
             }
             page[i].lines = merged_lines;
+            if !merged_text_parts.is_empty() {
+                page[i].text = merged_text_parts.join(" ");
+            }
             page.drain(i + 1..run_end);
         }
         i += 1;
     }
+}
+
+/// True when `next` looks like a grammatical continuation of `prev` (split title).
+///
+/// Returns false for product-code-style lines ("HR 22", "HR 28/24") and numbered
+/// items — those are standalone headings, not continuations of the previous line.
+///
+/// The 4-word limit is conservative by design: real split titles ("KAISUN HOLDINGS" /
+/// "LIMITED", "BANCO CENTRAL" / "DO BRASIL") are invariably short. Longer first lines
+/// are more likely lists or section labels than wrapped titles. Trades occasional
+/// under-merging of unusually long company names for zero false merges on cover-page
+/// model-code lists — the class of bug this function was introduced to fix.
+fn looks_like_title_continuation(prev: &PdfParagraph, next: &PdfParagraph) -> bool {
+    // Use para.text when populated (production path always sets it); fall back to
+    // joining lines only for the empty-text test-helper path.  This mirrors the
+    // preference in push_paragraph_element and avoids a mismatch where the guard
+    // reads lines while the caller mutates text.
+    let next_text = effective_text(next);
+    if looks_like_standalone_heading_text(&next_text) {
+        return false;
+    }
+    let prev_text = effective_text(prev);
+    // Reject when the previous line ends with sentence-terminal punctuation.
+    if prev_text.trim_end().ends_with(['.', '!', '?', ':']) {
+        return false;
+    }
+    // Accept the classic split-title shape: both lines short (≤4 words).
+    let prev_wc = prev_text.split_whitespace().count();
+    let next_wc = next_text.split_whitespace().count();
+    prev_wc <= 4 && next_wc <= 4
+}
+
+/// Return the effective plain text for a paragraph, preferring `para.text` (the
+/// full-text heuristic path) over segment-joined `para.lines` (structure-tree path).
+///
+/// Mirrors the `get_text` closure in `assembly::push_paragraph_element` so that
+/// classification helpers and rendering always agree on what a paragraph says.
+fn effective_text(para: &PdfParagraph) -> String {
+    if !para.text.is_empty() {
+        para.text.clone()
+    } else {
+        paragraph_plain_text(para)
+    }
+}
+
+/// True when text looks like a standalone heading rather than a title continuation.
+///
+/// Matches product model codes ("HR 22", "HR 28/24"), mixed alphanumeric tokens
+/// ("A4", "HR28"), and lines that start with a digit.
+fn looks_like_standalone_heading_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    let mut words = trimmed.splitn(3, ' ');
+    let first = words.next().unwrap_or("");
+    let second = words.next().unwrap_or("");
+
+    // Starts with a digit: numbered items ("1.", "1.2", "22").
+    if first.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    // Mixed letters + digits in the first word alone ("A4", "HR28", "MS-410").
+    let first_has_alpha = first.chars().any(|c| c.is_ascii_alphabetic());
+    let first_has_digit = first.chars().any(|c| c.is_ascii_digit());
+    if first_has_alpha && first_has_digit {
+        return true;
+    }
+    // Letters-only first word + digit-starting second word ("HR 22", "HR 28/24").
+    if !second.is_empty()
+        && first.chars().all(|c| c.is_ascii_alphabetic())
+        && second.chars().next().is_some_and(|c| c.is_ascii_digit())
+    {
+        return true;
+    }
+    false
 }
 
 /// Detect paragraphs in page margins that repeat across pages.
@@ -1607,6 +1698,12 @@ mod tests {
         p
     }
 
+    fn make_h1_with_text(font_size: f32, text: &str) -> PdfParagraph {
+        let mut p = make_h1(font_size, text);
+        p.text = text.to_string();
+        p
+    }
+
     #[test]
     fn test_merge_consecutive_h1s_same_font() {
         let mut page = vec![
@@ -1621,10 +1718,87 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_h1s_text_field_synced() {
+        // When paragraphs carry a non-empty text field (the production path),
+        // merging must keep text in sync with lines so that push_paragraph_element
+        // (which prefers para.text over para.lines) does not silently drop content.
+        let mut page = vec![
+            make_h1_with_text(24.0, "KAISUN HOLDINGS"),
+            make_h1_with_text(24.0, "LIMITED"),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(page.len(), 1);
+        assert!(
+            page[0].text.contains("KAISUN HOLDINGS"),
+            "merged text must include first heading: {:?}",
+            page[0].text
+        );
+        assert!(
+            page[0].text.contains("LIMITED"),
+            "merged text must include second heading: {:?}",
+            page[0].text
+        );
+    }
+
+    #[test]
+    fn test_merge_h1s_model_codes_not_merged() {
+        // Cover-page product codes like "HR 22", "HR 28" must NOT be merged.
+        // Each is a distinct product variant, not a split-title continuation.
+        let mut page = vec![
+            make_h1_with_text(24.0, "HR 22"),
+            make_h1_with_text(24.0, "HR 28"),
+            make_h1_with_text(24.0, "HR 28/24"),
+            make_h1_with_text(24.0, "HR 36/30"),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            4,
+            "product model codes at same font size must stay as separate headings"
+        );
+    }
+
+    #[test]
     fn test_merge_h1s_different_font_no_merge() {
         let mut page = vec![make_h1(24.0, "Title"), make_h1(18.0, "Subtitle")];
         merge_consecutive_h1s(&mut page);
         assert_eq!(page.len(), 2); // Not merged — different font sizes.
+    }
+
+    #[test]
+    fn test_merge_h1s_long_first_line_not_merged() {
+        // A first heading with >4 words exceeds the split-title threshold.
+        // The function must not merge it with the following heading and must
+        // not panic or produce unexpected output.
+        let mut page = vec![
+            make_h1_with_text(24.0, "The Quick Brown Fox Jumped"),
+            make_h1_with_text(24.0, "Over"),
+        ];
+        merge_consecutive_h1s(&mut page);
+        assert_eq!(
+            page.len(),
+            2,
+            "first heading with >4 words must not merge with the next"
+        );
+        assert_eq!(page[0].text, "The Quick Brown Fox Jumped");
+        assert_eq!(page[1].text, "Over");
+    }
+
+    #[test]
+    fn test_merge_h1s_terminal_punctuation_not_merged() {
+        // A heading ending with sentence-terminal punctuation is a complete
+        // statement, not a split title. It must not absorb the following heading.
+        for suffix in [".", "!", "?", ":"] {
+            let first = format!("SECTION ONE{suffix}");
+            let mut page = vec![make_h1_with_text(24.0, &first), make_h1_with_text(24.0, "INTRODUCTION")];
+            merge_consecutive_h1s(&mut page);
+            assert_eq!(
+                page.len(),
+                2,
+                "heading ending with '{suffix}' must not merge: got {:?}",
+                page[0].text
+            );
+        }
     }
 
     /// Create a paragraph with bbox in the top margin of a 792pt page.

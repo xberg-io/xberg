@@ -54,7 +54,7 @@ pub struct Document {
 }
 
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Paragraph {
     pub runs: Vec<Run>,
     pub style: Option<String>,
@@ -63,7 +63,7 @@ pub struct Paragraph {
 }
 
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Run {
     pub text: String,
     pub bold: bool,
@@ -85,7 +85,7 @@ pub struct Run {
 }
 
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Table {
     pub rows: Vec<TableRow>,
     pub properties: Option<super::table::TableProperties>,
@@ -93,14 +93,14 @@ pub struct Table {
 }
 
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TableRow {
     pub cells: Vec<TableCell>,
     pub properties: Option<super::table::RowProperties>,
 }
 
 #[cfg_attr(alef, alef(skip))]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TableCell {
     pub paragraphs: Vec<Paragraph>,
     pub properties: Option<super::table::CellProperties>,
