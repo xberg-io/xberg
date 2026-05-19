@@ -29,6 +29,7 @@ on:
       - "zensical.toml"
       - "pyproject.toml"
       - "alef.toml"
+      - "CHANGELOG.md"
       - ".github/workflows/ci-docs.yaml"
   workflow_dispatch:
 
