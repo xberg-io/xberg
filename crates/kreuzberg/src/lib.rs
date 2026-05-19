@@ -287,3 +287,42 @@ pub fn get_embedding_preset(name: &str) -> Option<embeddings::EmbeddingPreset> {
 pub fn list_embedding_presets() -> Vec<String> {
     embeddings::list_presets()
 }
+
+// ── Embedding-preset stubs for builds without the feature ────────────────────
+// The alef-generated kreuzberg-ffi crate references `kreuzberg::EmbeddingPreset`
+// unconditionally in FFI return-type positions. Without these stubs, any build
+// that omits `embedding-presets` fails to compile kreuzberg-ffi and — if the
+// feature was accidentally dropped from a release build — causes a Java
+// `UnsatisfiedLinkError` at class-load time (issue #998).  Stubs return
+// empty/None so callers degrade gracefully instead of crashing.
+
+/// Stub preset type for builds without the `embedding-presets` feature.
+///
+/// Field names match the real type so JSON round-trips through
+/// `kreuzberg_embedding_preset_from_json` remain schema-compatible. When the
+/// feature is absent, `get_embedding_preset` always returns `None`, so the
+/// stub is never allocated in practice.
+#[cfg(not(feature = "embedding-presets"))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EmbeddingPreset {
+    pub name: String,
+    pub chunk_size: usize,
+    pub overlap: usize,
+    pub model_repo: String,
+    pub pooling: String,
+    pub model_file: String,
+    pub dimensions: usize,
+    pub description: String,
+}
+
+/// Returns `None` for builds without the `embedding-presets` feature.
+#[cfg(not(feature = "embedding-presets"))]
+pub fn get_embedding_preset(_name: &str) -> Option<EmbeddingPreset> {
+    None
+}
+
+/// Returns an empty list for builds without the `embedding-presets` feature.
+#[cfg(not(feature = "embedding-presets"))]
+pub fn list_embedding_presets() -> Vec<String> {
+    Vec::new()
+}

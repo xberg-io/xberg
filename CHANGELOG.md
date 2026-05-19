@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Java `UnsatisfiedLinkError` on `kreuzberg_list_embedding_presets` / `kreuzberg_get_embedding_preset` (#998)**:
+  the alef-generated FFI surface references `kreuzberg::EmbeddingPreset` unconditionally
+  in function return-type positions, so any build of `kreuzberg-ffi` that omitted the
+  `embedding-presets` feature would silently drop these two C symbols — causing the Java
+  static initialiser (which uses `.orElseThrow()`) to crash the entire JVM at class-load
+  time. Added `#[cfg(not(feature = "embedding-presets"))]` stubs in
+  `crates/kreuzberg/src/lib.rs`: a no-op `EmbeddingPreset` struct and empty-return
+  implementations of both functions. The stubs ensure the symbols are always present
+  and callers degrade gracefully (empty list / `null` handle) instead of crashing.
+
 ### Changed
 
 - **API surface lockdown via `#[cfg_attr(alef, alef(skip))]`**: 41 internal types
