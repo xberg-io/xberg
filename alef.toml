@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.16.43"
+alef_version = "0.16.69"
 languages = [
   "python",
   "node",
@@ -254,10 +254,6 @@ exclude_types = [
 
 [crates.wasm]
 exclude_types = [
-  # `hwpx` feature is not enabled for the WASM target (see [crates.wasm] features below),
-  # so `kreuzberg::extractors::HwpxExtractor` is gated out of the core crate. Skip emitting
-  # a WASM wrapper for it.
-  "HwpxExtractor",
   # paddle-ocr / layout-detection / embeddings (ort-dependent)
   "PaddleOcrConfig",
   "PaddleLanguage",
@@ -277,9 +273,6 @@ exclude_types = [
   "OcrProcessor",
   "TesseractConfig",
   "OcrCacheStats",
-  # Multiple CacheStats types exist (cache, paddle_ocr, types); ambiguous across bindings.
-  # Excluded until the public CacheStats is consolidated to a single definition.
-  "CacheStats",
   "TessdataManager",
   "PageLayoutResult",
   "PageTiming",
@@ -351,8 +344,6 @@ exclude_functions = [
   "parse_jotdown_inline",
   # Vec<bool> params not supported by wasm-bindgen
   "merge_segments",
-  # image_ocr module not available in WASM feature set
-  "process_images_with_ocr",
   # MCP server functions (not available in WASM)
   "start_mcp_server_http",
   "start_mcp_server_http_with_config",
@@ -389,18 +380,6 @@ prefix = "kreuzberg"
 header_name = "kreuzberg.h"
 lib_name = "kreuzberg_ffi"
 visitor_callbacks = false
-exclude_functions = [
-  # OcrBackend trait bridge: codegen emits KreuzbergOcrBackendBridge with *const c_void which is
-  # not Send, causing tokio::task::spawn_blocking to reject it. Requires alef source fixes.
-  "register_ocr_backend",
-  "unregister_ocr_backend",
-]
-exclude_types = [
-  # Multiple CacheStats structs exist in kreuzberg (cache, paddle_ocr/ModelManager, types/formats);
-  # alef-extract resolves to one definition while codegen emits accessors for fields of another,
-  # causing E0609 "no field" build errors. Excluded until the public CacheStats is consolidated.
-  "CacheStats",
-]
 # Plugin trait-bridge error construction. The generated FFI plugin shims
 # (`plugin_impl_initialize`, `plugin_impl_shutdown`) need to construct a
 # `KreuzbergError` from a runtime String. KreuzbergError::Plugin is a struct
@@ -423,12 +402,18 @@ style = "frb"
 features = ["full"]
 stub_methods = ["batch_extract_bytes", "batch_extract_bytes_sync"]
 
-# x86_64-linux-android (emulator) lacks an ORT prebuilt and there is no path
-# to get one short of compiling ORT from source for that triple. All other
-# targets (incl. arm64 Android phones via pyke prebuilts) keep the full
-# ORT-enabled feature set.
+# x86_64-linux-android (emulator) and x86_64-apple-ios (deprecated intel iOS
+# simulator) both lack a pyke ORT prebuilt and there is no path to one short
+# of compiling ORT from source for those triples. All other targets (incl.
+# arm64 Android phones and arm64 iOS device/sim via pyke prebuilts) keep
+# the full ORT-enabled feature set.
 [[crates.dart.target_dep_overrides]]
 cfg = 'all(target_os = "android", target_arch = "x86_64")'
+features = ["android-target"]
+default_features = false
+
+[[crates.dart.target_dep_overrides]]
+cfg = 'all(target_os = "ios", target_arch = "x86_64")'
 features = ["android-target"]
 default_features = false
 
@@ -485,50 +470,20 @@ zig = "packages/zig/src/"
 
 [crates.exclude]
 types = [
-  # Fully-qualified path exclusions — cannot use source-level alef(skip) because the
-  # simple name clashes with a public type that must remain in the IR.
-  "kreuzberg::extraction::image::ImageMetadata", # internal; kreuzberg::types::ImageMetadata is the public API type
-  "kreuzberg::core::config::formats::OutputFormat", # internal; kreuzberg::types::OutputFormat is the public API type
-
   # Generic types — alef(skip) source annotation not picked up for generic structs
   # (alef-extract does not propagate cfg_attr through type-parameter bounds).
   "Pool",
 
-  # Internal docx/hwp parser types — missing Serialize/Deserialize derives;
-  # annotating in source would require touching generated/complex parse code.
+  # Internal docx/hwp parser types — kept hidden from bindings (still
+  # alef(skip)-annotated in source); serde derives added in Phase 1 but
+  # binding surface is unchanged. Listed here to defend against future
+  # codegen passes that might re-emit them as transitive container fields.
   "kreuzberg::extraction::docx::parser::Table",
   "kreuzberg::extraction::docx::parser::TableCell",
   "kreuzberg::extraction::docx::parser::TableRow",
   "kreuzberg::extraction::docx::parser::HeaderFooter",
   "kreuzberg::extraction::docx::parser::Note",
   "kreuzberg::extraction::hwp::model::Section",
-]
-functions = [
-  # Trait-bridge `register_*`/`unregister_*` functions — `gen_trait_bridge`
-  # already emits the idiomatic bridge form per language. `gen_function` would
-  # also emit them with the raw opaque-type signature, producing duplicate
-  # definitions and a compile error in the binding crate. Excluding here keeps
-  # only the bridge-generated variant.
-  "register_ocr_backend",
-  "register_post_processor",
-  "register_validator",
-  "register_embedding_backend",
-  "register_renderer",
-  "register_document_extractor",
-  "unregister_ocr_backend",
-  "unregister_post_processor",
-  "unregister_validator",
-  "unregister_embedding_backend",
-  "unregister_renderer",
-  "unregister_document_extractor",
-  # Trait-bridge `clear_*` functions — bridges already emit them where the backend
-  # supports it; raw `gen_function` would produce duplicates with mismatched signatures.
-  "clear_ocr_backends",
-  "clear_post_processors",
-  "clear_validators",
-  "clear_embedding_backends",
-  "clear_renderers",
-  "clear_document_extractors",
 ]
 methods = [
   # From<T> trait impls — auto-emitted by derive/trait-bridge

@@ -1086,4 +1086,108 @@ mod tests {
             );
         }
     }
+
+    // ========================================================================
+    // Regression tests for issue #966 — merged H1 must not drop content
+    // ========================================================================
+
+    /// Build a heading paragraph that mirrors the production pipeline: both `text`
+    /// and `lines` are populated.  `push_paragraph_element` prefers `para.text` when
+    /// non-empty, so this exercises the code path that previously silently discarded
+    /// merged content.
+    fn make_production_h1(text: &str) -> PdfParagraph {
+        let lines = text
+            .split_whitespace()
+            .enumerate()
+            .map(|(i, word)| PdfLine {
+                segments: vec![SegmentData {
+                    text: word.to_string(),
+                    x: i as f32 * 50.0,
+                    y: 700.0,
+                    width: 40.0,
+                    height: 24.0,
+                    font_size: 24.0,
+                    is_bold: false,
+                    is_italic: false,
+                    is_monospace: false,
+                    baseline_y: 700.0,
+                    assigned_role: None,
+                }],
+                baseline_y: 700.0,
+                dominant_font_size: 24.0,
+                is_bold: false,
+                is_monospace: false,
+            })
+            .collect::<Vec<_>>();
+        let word_count = PdfParagraph::compute_word_count(text, &lines);
+        PdfParagraph {
+            text: text.to_string(),
+            lines,
+            dominant_font_size: 24.0,
+            heading_level: Some(1),
+            is_bold: false,
+            is_list_item: false,
+            is_code_block: false,
+            is_formula: false,
+            is_page_furniture: false,
+            layout_class: None,
+            caption_for: None,
+            block_bbox: None,
+            word_count,
+        }
+    }
+
+    #[test]
+    fn test_merged_h1_text_appears_in_assembled_document() {
+        // Regression for issue #966.  Simulates the state after merge_consecutive_h1s
+        // has run and correctly synced para.text to "KAISUN HOLDINGS LIMITED".
+        // Verifies that push_paragraph_element emits both words — not just the first.
+        let merged_para = make_production_h1("KAISUN HOLDINGS LIMITED");
+        let pages = vec![vec![merged_para]];
+        let doc = assemble_internal_document(pages, &[], None, &[]);
+
+        assert_eq!(doc.elements.len(), 1);
+        let heading = &doc.elements[0];
+        assert!(
+            matches!(heading.kind, ElementKind::Heading { level: 1 }),
+            "expected Heading(1), got {:?}",
+            heading.kind
+        );
+        assert!(
+            heading.text.contains("KAISUN HOLDINGS"),
+            "heading must contain first fragment; got: {:?}",
+            heading.text
+        );
+        assert!(
+            heading.text.contains("LIMITED"),
+            "heading must contain second fragment; got: {:?}",
+            heading.text
+        );
+    }
+
+    #[test]
+    fn test_separate_h1s_each_appear_in_assembled_document() {
+        // Verifies that assemble_internal_document emits one heading element per
+        // received paragraph — it never calls merge_consecutive_h1s, so this
+        // tests assembly non-dropping, not the continuation guard itself.
+        let pages = vec![vec![
+            make_production_h1("HR 22"),
+            make_production_h1("HR 28"),
+            make_production_h1("HR 28/24"),
+            make_production_h1("HR 36/30"),
+        ]];
+        let doc = assemble_internal_document(pages, &[], None, &[]);
+
+        let headings: Vec<_> = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e.kind, ElementKind::Heading { level: 1 }))
+            .collect();
+        assert_eq!(headings.len(), 4, "all four model-code headings must be present");
+        let texts: Vec<&str> = headings.iter().map(|h| h.text.as_str()).collect();
+        assert!(texts.contains(&"HR 22"), "HR 22 missing; headings: {texts:?}");
+        assert!(texts.contains(&"HR 28"), "HR 28 missing; headings: {texts:?}");
+        assert!(texts.contains(&"HR 28/24"), "HR 28/24 missing; headings: {texts:?}");
+        assert!(texts.contains(&"HR 36/30"), "HR 36/30 missing; headings: {texts:?}");
+    }
 }

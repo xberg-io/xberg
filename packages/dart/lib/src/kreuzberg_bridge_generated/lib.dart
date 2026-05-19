@@ -9,7 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DrawingType`, `FracType`, `ListType`, `OcrBackendType`, `OcrCacheStats`, `PSMMode`, `PaddleLanguage`, `ProcessingStage`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a byte array.
 ///
@@ -441,6 +441,21 @@ Future<ServerConfig> createServerConfigFromJson({required String json}) =>
 Future<StructuredDataResult> createStructuredDataResultFromJson({
   required String json,
 }) => RustLib.instance.api.crateCreateStructuredDataResultFromJson(json: json);
+
+Future<DocxAppProperties> createDocxAppPropertiesFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateDocxAppPropertiesFromJson(json: json);
+
+Future<XlsxAppProperties> createXlsxAppPropertiesFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateXlsxAppPropertiesFromJson(json: json);
+
+Future<PptxAppProperties> createPptxAppPropertiesFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreatePptxAppPropertiesFromJson(json: json);
+
+Future<CoreProperties> createCorePropertiesFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateCorePropertiesFromJson(json: json);
 
 Future<SecurityLimits> createSecurityLimitsFromJson({required String json}) =>
     RustLib.instance.api.crateCreateSecurityLimitsFromJson(json: json);
@@ -1825,6 +1840,114 @@ class ContributorRole {
           role == other.role;
 }
 
+/// Dublin Core metadata from docProps/core.xml
+///
+/// Contains standard metadata fields defined by the Dublin Core standard
+/// and Office-specific extensions.
+class CoreProperties {
+  /// Document title
+  final String? title;
+
+  /// Document subject/topic
+  final String? subject;
+
+  /// Document creator/author
+  final String? creator;
+
+  /// Keywords or tags
+  final String? keywords;
+
+  /// Document description/abstract
+  final String? description;
+
+  /// User who last modified the document
+  final String? lastModifiedBy;
+
+  /// Revision number
+  final String? revision;
+
+  /// Creation timestamp (ISO 8601)
+  final String? created;
+
+  /// Last modification timestamp (ISO 8601)
+  final String? modified;
+
+  /// Document category
+  final String? category;
+
+  /// Content status (Draft, Final, etc.)
+  final String? contentStatus;
+
+  /// Document language
+  final String? language;
+
+  /// Unique identifier
+  final String? identifier;
+
+  /// Document version
+  final String? version;
+
+  /// Last print timestamp (ISO 8601)
+  final String? lastPrinted;
+
+  const CoreProperties({
+    this.title,
+    this.subject,
+    this.creator,
+    this.keywords,
+    this.description,
+    this.lastModifiedBy,
+    this.revision,
+    this.created,
+    this.modified,
+    this.category,
+    this.contentStatus,
+    this.language,
+    this.identifier,
+    this.version,
+    this.lastPrinted,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      subject.hashCode ^
+      creator.hashCode ^
+      keywords.hashCode ^
+      description.hashCode ^
+      lastModifiedBy.hashCode ^
+      revision.hashCode ^
+      created.hashCode ^
+      modified.hashCode ^
+      category.hashCode ^
+      contentStatus.hashCode ^
+      language.hashCode ^
+      identifier.hashCode ^
+      version.hashCode ^
+      lastPrinted.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CoreProperties &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          subject == other.subject &&
+          creator == other.creator &&
+          keywords == other.keywords &&
+          description == other.description &&
+          lastModifiedBy == other.lastModifiedBy &&
+          revision == other.revision &&
+          created == other.created &&
+          modified == other.modified &&
+          category == other.category &&
+          contentStatus == other.contentStatus &&
+          language == other.language &&
+          identifier == other.identifier &&
+          version == other.version &&
+          lastPrinted == other.lastPrinted;
+}
+
 /// CSV/TSV file metadata.
 class CsvMetadata {
   final PlatformInt64 rowCount;
@@ -2273,6 +2396,119 @@ class DocumentStructure {
           nodeTypes == other.nodeTypes;
 }
 
+/// Application properties from docProps/app.xml for DOCX
+///
+/// Contains Word-specific document statistics and metadata.
+class DocxAppProperties {
+  /// Application name (e.g., "Microsoft Office Word")
+  final String? application;
+
+  /// Application version
+  final String? appVersion;
+
+  /// Template filename
+  final String? template;
+
+  /// Total editing time in minutes
+  final PlatformInt64? totalTime;
+
+  /// Number of pages
+  final PlatformInt64? pages;
+
+  /// Number of words
+  final PlatformInt64? words;
+
+  /// Number of characters (excluding spaces)
+  final PlatformInt64? characters;
+
+  /// Number of characters (including spaces)
+  final PlatformInt64? charactersWithSpaces;
+
+  /// Number of lines
+  final PlatformInt64? lines;
+
+  /// Number of paragraphs
+  final PlatformInt64? paragraphs;
+
+  /// Company name
+  final String? company;
+
+  /// Document security level
+  final PlatformInt64? docSecurity;
+
+  /// Scale crop flag
+  final bool? scaleCrop;
+
+  /// Links up to date flag
+  final bool? linksUpToDate;
+
+  /// Shared document flag
+  final bool? sharedDoc;
+
+  /// Hyperlinks changed flag
+  final bool? hyperlinksChanged;
+
+  const DocxAppProperties({
+    this.application,
+    this.appVersion,
+    this.template,
+    this.totalTime,
+    this.pages,
+    this.words,
+    this.characters,
+    this.charactersWithSpaces,
+    this.lines,
+    this.paragraphs,
+    this.company,
+    this.docSecurity,
+    this.scaleCrop,
+    this.linksUpToDate,
+    this.sharedDoc,
+    this.hyperlinksChanged,
+  });
+
+  @override
+  int get hashCode =>
+      application.hashCode ^
+      appVersion.hashCode ^
+      template.hashCode ^
+      totalTime.hashCode ^
+      pages.hashCode ^
+      words.hashCode ^
+      characters.hashCode ^
+      charactersWithSpaces.hashCode ^
+      lines.hashCode ^
+      paragraphs.hashCode ^
+      company.hashCode ^
+      docSecurity.hashCode ^
+      scaleCrop.hashCode ^
+      linksUpToDate.hashCode ^
+      sharedDoc.hashCode ^
+      hyperlinksChanged.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DocxAppProperties &&
+          runtimeType == other.runtimeType &&
+          application == other.application &&
+          appVersion == other.appVersion &&
+          template == other.template &&
+          totalTime == other.totalTime &&
+          pages == other.pages &&
+          words == other.words &&
+          characters == other.characters &&
+          charactersWithSpaces == other.charactersWithSpaces &&
+          lines == other.lines &&
+          paragraphs == other.paragraphs &&
+          company == other.company &&
+          docSecurity == other.docSecurity &&
+          scaleCrop == other.scaleCrop &&
+          linksUpToDate == other.linksUpToDate &&
+          sharedDoc == other.sharedDoc &&
+          hyperlinksChanged == other.hyperlinksChanged;
+}
+
 /// Word document metadata.
 ///
 /// Extracted from DOCX files using shared Office Open XML metadata extraction.
@@ -2282,13 +2518,13 @@ class DocxMetadata {
   ///
   /// Contains title, creator, subject, keywords, dates, etc.
   /// Shared format across DOCX/PPTX/XLSX documents.
-  final String? coreProperties;
+  final CoreProperties? coreProperties;
 
   /// Application properties from docProps/app.xml (Word-specific statistics)
   ///
   /// Contains word count, page count, paragraph count, editing time, etc.
   /// DOCX-specific variant of Office application properties.
-  final String? appProperties;
+  final DocxAppProperties? appProperties;
 
   /// Custom properties from docProps/custom.xml (user-defined properties)
   ///
@@ -7373,6 +7609,113 @@ class PostProcessorConfig {
           disabledSet == other.disabledSet;
 }
 
+/// Application properties from docProps/app.xml for PPTX
+///
+/// Contains PowerPoint-specific document metadata.
+class PptxAppProperties {
+  /// Application name (e.g., "Microsoft Office PowerPoint")
+  final String? application;
+
+  /// Application version
+  final String? appVersion;
+
+  /// Total editing time in minutes
+  final PlatformInt64? totalTime;
+
+  /// Company name
+  final String? company;
+
+  /// Document security level
+  final PlatformInt64? docSecurity;
+
+  /// Scale crop flag
+  final bool? scaleCrop;
+
+  /// Links up to date flag
+  final bool? linksUpToDate;
+
+  /// Shared document flag
+  final bool? sharedDoc;
+
+  /// Hyperlinks changed flag
+  final bool? hyperlinksChanged;
+
+  /// Number of slides
+  final PlatformInt64? slides;
+
+  /// Number of notes
+  final PlatformInt64? notes;
+
+  /// Number of hidden slides
+  final PlatformInt64? hiddenSlides;
+
+  /// Number of multimedia clips
+  final PlatformInt64? multimediaClips;
+
+  /// Presentation format (e.g., "Widescreen", "Standard")
+  final String? presentationFormat;
+
+  /// Slide titles
+  final List<String> slideTitles;
+
+  const PptxAppProperties({
+    this.application,
+    this.appVersion,
+    this.totalTime,
+    this.company,
+    this.docSecurity,
+    this.scaleCrop,
+    this.linksUpToDate,
+    this.sharedDoc,
+    this.hyperlinksChanged,
+    this.slides,
+    this.notes,
+    this.hiddenSlides,
+    this.multimediaClips,
+    this.presentationFormat,
+    required this.slideTitles,
+  });
+
+  @override
+  int get hashCode =>
+      application.hashCode ^
+      appVersion.hashCode ^
+      totalTime.hashCode ^
+      company.hashCode ^
+      docSecurity.hashCode ^
+      scaleCrop.hashCode ^
+      linksUpToDate.hashCode ^
+      sharedDoc.hashCode ^
+      hyperlinksChanged.hashCode ^
+      slides.hashCode ^
+      notes.hashCode ^
+      hiddenSlides.hashCode ^
+      multimediaClips.hashCode ^
+      presentationFormat.hashCode ^
+      slideTitles.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PptxAppProperties &&
+          runtimeType == other.runtimeType &&
+          application == other.application &&
+          appVersion == other.appVersion &&
+          totalTime == other.totalTime &&
+          company == other.company &&
+          docSecurity == other.docSecurity &&
+          scaleCrop == other.scaleCrop &&
+          linksUpToDate == other.linksUpToDate &&
+          sharedDoc == other.sharedDoc &&
+          hyperlinksChanged == other.hyperlinksChanged &&
+          slides == other.slides &&
+          notes == other.notes &&
+          hiddenSlides == other.hiddenSlides &&
+          multimediaClips == other.multimediaClips &&
+          presentationFormat == other.presentationFormat &&
+          slideTitles == other.slideTitles;
+}
+
 /// PowerPoint (PPTX) extraction result.
 ///
 /// Contains extracted slide content, metadata, and embedded images/tables.
@@ -8691,6 +9034,77 @@ enum UriKind {
 
   /// An email address (`mailto:` link or bare email).
   email,
+}
+
+/// Application properties from docProps/app.xml for XLSX
+///
+/// Contains Excel-specific document metadata.
+class XlsxAppProperties {
+  /// Application name (e.g., "Microsoft Excel")
+  final String? application;
+
+  /// Application version
+  final String? appVersion;
+
+  /// Document security level
+  final PlatformInt64? docSecurity;
+
+  /// Scale crop flag
+  final bool? scaleCrop;
+
+  /// Links up to date flag
+  final bool? linksUpToDate;
+
+  /// Shared document flag
+  final bool? sharedDoc;
+
+  /// Hyperlinks changed flag
+  final bool? hyperlinksChanged;
+
+  /// Company name
+  final String? company;
+
+  /// Worksheet names
+  final List<String> worksheetNames;
+
+  const XlsxAppProperties({
+    this.application,
+    this.appVersion,
+    this.docSecurity,
+    this.scaleCrop,
+    this.linksUpToDate,
+    this.sharedDoc,
+    this.hyperlinksChanged,
+    this.company,
+    required this.worksheetNames,
+  });
+
+  @override
+  int get hashCode =>
+      application.hashCode ^
+      appVersion.hashCode ^
+      docSecurity.hashCode ^
+      scaleCrop.hashCode ^
+      linksUpToDate.hashCode ^
+      sharedDoc.hashCode ^
+      hyperlinksChanged.hashCode ^
+      company.hashCode ^
+      worksheetNames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is XlsxAppProperties &&
+          runtimeType == other.runtimeType &&
+          application == other.application &&
+          appVersion == other.appVersion &&
+          docSecurity == other.docSecurity &&
+          scaleCrop == other.scaleCrop &&
+          linksUpToDate == other.linksUpToDate &&
+          sharedDoc == other.sharedDoc &&
+          hyperlinksChanged == other.hyperlinksChanged &&
+          company == other.company &&
+          worksheetNames == other.worksheetNames;
 }
 
 /// XML extraction result.

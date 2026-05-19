@@ -283,7 +283,7 @@ pub struct ModelManifestEntry {
 /// Statistics about the PaddleOCR model cache.
 #[allow(dead_code)] // constructed by `paddle-ocr`; types crate exposes the public shape only
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CacheStats {
+pub struct ModelCacheStats {
     /// Total size of cached models in bytes.
     pub total_size_bytes: u64,
     /// Number of models currently cached.
@@ -467,7 +467,7 @@ impl ModelManager {
 
     /// Returns statistics about the current cache.
     #[cfg(test)]
-    pub(crate) fn cache_stats(&self) -> Result<CacheStats, KreuzbergError> {
+    pub(crate) fn cache_stats(&self) -> Result<ModelCacheStats, KreuzbergError> {
         let mut total_size = 0u64;
         let mut model_count = 0usize;
 
@@ -486,7 +486,7 @@ impl ModelManager {
             }
         }
 
-        Ok(CacheStats {
+        Ok(ModelCacheStats {
             total_size_bytes: total_size,
             model_count,
             cache_dir: self.cache_dir.clone(),

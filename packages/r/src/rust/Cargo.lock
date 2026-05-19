@@ -250,6 +250,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "atoi_simd"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3cdb3708a128e559a30fb830e8a77a5022ee6902806925c216658652b452a44"
+dependencies = [
+ "debug_unsafe",
+ "rustversion",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -677,7 +687,7 @@ version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8822fe6253ca47aa5ad9a3be09f6fe7cd20c6a74e41b0aa42e8f4e3d523508df"
 dependencies = [
- "atoi_simd",
+ "atoi_simd 0.17.0",
  "byteorder",
  "chrono",
  "codepage",
@@ -1245,20 +1255,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b1e3a325bc115f096c8b77bbf027a7c2592230e70be2d985be950d3d5e60ebe"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "dashmap"
-version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core",
 ]
 
 [[package]]
@@ -2082,12 +2078,6 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.14.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
-
-[[package]]
-name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
@@ -2226,9 +2216,9 @@ dependencies = [
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "3.4.0"
+version = "3.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7385894d43db56c18bc08db0710d9466bfc50cdc3210929e7f55c16442f70884"
+checksum = "42f856d5f5daa55ea8b81bd746f1e49170fe589eccd2f5020d9ea888417983ab"
 dependencies = [
  "ahash",
  "astral-tl",
@@ -2889,7 +2879,6 @@ dependencies = [
  "chardetng",
  "chrono",
  "comrak",
- "dashmap",
  "dbase",
  "dirs",
  "either",
@@ -2934,7 +2923,7 @@ dependencies = [
  "pastey 0.2.2",
  "pdf_oxide",
  "pulldown-cmark 0.13.3",
- "quick-xml 0.40.0",
+ "quick-xml 0.40.1",
  "rake",
  "rayon",
  "regex",
@@ -3682,6 +3671,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
+name = "office_oxide"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "866a8fa5e1a756f8cc9f9f614031ad7e33adc7f6972eab74a35b0c799fe08da5"
+dependencies = [
+ "atoi_simd 0.18.1",
+ "encoding_rs",
+ "fast-float2",
+ "libc",
+ "log",
+ "quick-xml 0.40.1",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "zip 8.6.0",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3881,9 +3888,9 @@ dependencies = [
 
 [[package]]
 name = "pdf_oxide"
-version = "0.3.47"
+version = "0.3.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04717572366df7c9fa002f3c376e58c4d4071d47cf9339b95c0054adb8a0bbb7"
+checksum = "c512f3d7e8feac18e94ee08995d5c12d0fb86375ff4b03f931a11c808276eff4"
 dependencies = [
  "aes 0.9.0",
  "base64 0.22.1",
@@ -3908,6 +3915,7 @@ dependencies = [
  "md-5 0.11.0",
  "memchr",
  "nom 8.0.0",
+ "office_oxide",
  "phf",
  "quick-xml 0.39.4",
  "regex",
@@ -4184,9 +4192,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.40.0"
+version = "0.40.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b7315c86b26aaef0321fba33c9dcc160da659c6a9d278f0f6a5656d6561c03b"
+checksum = "2474bd2e5029e7ccb6abb2ba48cf2383a333851dedf495901544281590c7da7f"
 dependencies = [
  "memchr",
  "serde",
@@ -4593,9 +4601,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e12ca9067b5ebfbd5b3fcdc4acfceb81aa7d5ab2a879dff7cb75d22434276aad"
+checksum = "0810a9f717d9828f475fe1f629f4c305c8464b7f496c3a854b58d29e65f4058e"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4624,9 +4632,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7caa6743cc0888e433105fe1bc551a7f607940b126a37bc97b478e86064627eb"
+checksum = "6aefac48c364756e97f04c0401ba3231e8607882c7c1d92da0437dc16307904d"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -5890,9 +5898,9 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-language-pack"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91d653d458e2a8ec41cac1e980d258c39c07cbb36b6e72059b9dc272329310d5"
+checksum = "208658b27011901bb099b638e9ba25ad0a2063d5d6b7fcc6c07af0dcc94ffe10"
 dependencies = [
  "ahash",
  "cc",
@@ -7069,6 +7077,7 @@ dependencies = [
  "indexmap",
  "memchr",
  "typed-path",
+ "zopfli",
 ]
 
 [[package]]

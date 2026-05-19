@@ -6,7 +6,7 @@ includes:
     internal: true
 
 vars:
-  ALEF_SNIPPETS_TAG: v0.16.32
+  ALEF_SNIPPETS_TAG: v0.16.69
 
 tasks:
   build:

@@ -24,7 +24,7 @@ pub(crate) fn is_j2k(bytes: &[u8]) -> bool {
 
 /// Image metadata extracted from an image file.
 #[derive(Debug, Clone)]
-pub struct ImageMetadata {
+pub struct ExtractedImageMetadata {
     /// Image width in pixels
     pub width: u32,
     /// Image height in pixels
@@ -39,7 +39,7 @@ pub struct ImageMetadata {
 ///
 /// Supports both JP2 container format (ISO 15444-1 Annex I) and raw J2K codestream.
 /// Uses pure Rust header parsing without external dependencies.
-fn decode_jp2_metadata(bytes: &[u8]) -> Result<ImageMetadata> {
+fn decode_jp2_metadata(bytes: &[u8]) -> Result<ExtractedImageMetadata> {
     // Try JP2 box format first (starts with signature box)
     if is_jp2(bytes) {
         return parse_jp2_boxes(bytes);
@@ -54,7 +54,7 @@ fn decode_jp2_metadata(bytes: &[u8]) -> Result<ImageMetadata> {
 }
 
 /// Parse JP2 container boxes to find ihdr (Image Header) box.
-fn parse_jp2_boxes(bytes: &[u8]) -> Result<ImageMetadata> {
+fn parse_jp2_boxes(bytes: &[u8]) -> Result<ExtractedImageMetadata> {
     let mut offset = 0;
     let len = bytes.len();
 
@@ -97,7 +97,7 @@ fn parse_jp2_boxes(bytes: &[u8]) -> Result<ImageMetadata> {
                 bytes[data_start + 6],
                 bytes[data_start + 7],
             ]);
-            return Ok(ImageMetadata {
+            return Ok(ExtractedImageMetadata {
                 width,
                 height,
                 format: "JPEG2000".to_string(),
@@ -133,7 +133,7 @@ fn parse_jp2_boxes(bytes: &[u8]) -> Result<ImageMetadata> {
                         bytes[sub_data + 6],
                         bytes[sub_data + 7],
                     ]);
-                    return Ok(ImageMetadata {
+                    return Ok(ExtractedImageMetadata {
                         width,
                         height,
                         format: "JPEG2000".to_string(),
@@ -158,7 +158,7 @@ fn parse_jp2_boxes(bytes: &[u8]) -> Result<ImageMetadata> {
 }
 
 /// Parse J2K raw codestream SIZ marker for image dimensions.
-fn parse_j2k_siz(bytes: &[u8]) -> Result<ImageMetadata> {
+fn parse_j2k_siz(bytes: &[u8]) -> Result<ExtractedImageMetadata> {
     // Find SIZ marker (0xFF51) - usually right after SOC (0xFF4F)
     if let Some(offset) = memchr::memmem::find(bytes, &[0xFF, 0x51]) {
         // SIZ marker found. Format: marker(2) + Lsiz(2) + Rsiz(2) + Xsiz(4) + Ysiz(4) + XOsiz(4) + YOsiz(4)
@@ -192,7 +192,7 @@ fn parse_j2k_siz(bytes: &[u8]) -> Result<ImageMetadata> {
             let width = xsiz.saturating_sub(xosiz);
             let height = ysiz.saturating_sub(yosiz);
 
-            return Ok(ImageMetadata {
+            return Ok(ExtractedImageMetadata {
                 width,
                 height,
                 format: "JPEG2000".to_string(),
@@ -355,7 +355,7 @@ pub(crate) fn load_image_for_ocr(image_bytes: &[u8]) -> Result<image::DynamicIma
 /// Extracts dimensions, format, and EXIF data from the image.
 /// Attempts to decode using the standard image crate first, then falls back to
 /// pure Rust JP2 box parsing for JPEG 2000 formats if the standard decoder fails.
-pub(crate) fn extract_image_metadata(bytes: &[u8]) -> Result<ImageMetadata> {
+pub(crate) fn extract_image_metadata(bytes: &[u8]) -> Result<ExtractedImageMetadata> {
     // Check for JP2/J2K before attempting standard format detection
     if is_jp2(bytes) || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0x4F) {
         // Try the fallback JP2 parser first for JPEG 2000 files
@@ -379,7 +379,7 @@ pub(crate) fn extract_image_metadata(bytes: &[u8]) -> Result<ImageMetadata> {
             let format_str = format!("{:?}", format).to_uppercase();
             let exif_data = extract_exif_data(bytes);
 
-            Ok(ImageMetadata {
+            Ok(ExtractedImageMetadata {
                 width,
                 height,
                 format: format_str,

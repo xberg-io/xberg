@@ -1,0 +1,37 @@
+[scan]
+include = [
+  ".github/workflows/**/*.yml",
+  ".github/workflows/**/*.yaml",
+  ".github/actions/**/action.yml",
+  ".github/actions/**/action.yaml",
+  "action.yml",
+  "action.yaml",
+]
+exclude = []
+recursive = false
+
+[cache]
+enabled = true
+ttl = "6h"
+
+[update]
+mode = "latest-tag"
+# erlef/setup-beam: publisher exposes the major-minor float tag (e.g. v1.24)
+# but its `dist/index.js` ships only on the patch tag (v1.24.0). The float
+# resolves to a commit with no bundled JS, so the action exits in <1s with
+# `failure` and no log message. Pin to patch tags only.
+exclude = ["erlef/setup-beam"]
+include_prereleases = false
+preserve_major = true
+missing_ref = "warn"
+
+[output]
+format = "human"
+color = "auto"
+
+[github]
+api_url = "https://api.github.com"
+
+[performance]
+# Omit threads to use Rayon\'s available-core default.
+# threads = 8

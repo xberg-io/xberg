@@ -16,6 +16,21 @@
     clippy::inherent_to_string
 )]
 
+/// Process-wide tokio runtime shared across every swift-bridge async wrapper.
+///
+/// alef-emitted; see shims.rs for the rationale (orphaned reqwest connection
+/// pools when each call creates and drops its own current-thread runtime).
+fn __alef_tokio_runtime() -> &'static ::tokio::runtime::Runtime {
+    use std::sync::OnceLock;
+    static RT: OnceLock<::tokio::runtime::Runtime> = OnceLock::new();
+    RT.get_or_init(|| {
+        ::tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("build process-wide alef tokio runtime")
+    })
+}
+
 #[swift_bridge::bridge]
 mod ffi {
     extern "Rust" {
@@ -570,6 +585,14 @@ mod ffi {
         fn format(&self) -> String;
         fn metadata(&self) -> String;
         fn text_fields(&self) -> Vec<String>;
+    }
+
+    extern "Rust" {
+        type ExtractedImageMetadata;
+        fn width(&self) -> u32;
+        fn height(&self) -> u32;
+        fn format(&self) -> String;
+        fn exif_data(&self) -> String;
     }
 
     extern "Rust" {
@@ -4325,7 +4348,23 @@ impl StructuredDataResult {
     }
 }
 
-pub struct DocxAppProperties(pub kreuzberg::extraction::office_metadata::DocxAppProperties);
+pub struct ExtractedImageMetadata(pub kreuzberg::extraction::image::ExtractedImageMetadata);
+impl ExtractedImageMetadata {
+    pub fn width(&self) -> u32 {
+        self.0.width.clone()
+    }
+    pub fn height(&self) -> u32 {
+        self.0.height.clone()
+    }
+    pub fn format(&self) -> String {
+        format!("{:?}", &self.0.format)
+    }
+    pub fn exif_data(&self) -> String {
+        serde_json::to_string(&self.0.exif_data).expect("serializable exif_data")
+    }
+}
+
+pub struct DocxAppProperties(pub kreuzberg::DocxAppProperties);
 impl DocxAppProperties {
     pub fn new(
         application: Option<String>,
@@ -4345,8 +4384,7 @@ impl DocxAppProperties {
         shared_doc: Option<bool>,
         hyperlinks_changed: Option<bool>,
     ) -> DocxAppProperties {
-        let mut __target: kreuzberg::extraction::office_metadata::DocxAppProperties =
-            ::std::default::Default::default();
+        let mut __target: kreuzberg::DocxAppProperties = ::std::default::Default::default();
         if let Some(s) = application {
             if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
                 if let Ok(t) = ::serde_json::from_value(v) {
@@ -4743,7 +4781,7 @@ impl PptxAppProperties {
     }
 }
 
-pub struct CoreProperties(pub kreuzberg::extraction::office_metadata::CoreProperties);
+pub struct CoreProperties(pub kreuzberg::CoreProperties);
 impl CoreProperties {
     pub fn new(
         title: Option<String>,
@@ -4762,7 +4800,7 @@ impl CoreProperties {
         version: Option<String>,
         last_printed: Option<String>,
     ) -> CoreProperties {
-        let mut __target: kreuzberg::extraction::office_metadata::CoreProperties = ::std::default::Default::default();
+        let mut __target: kreuzberg::CoreProperties = ::std::default::Default::default();
         if let Some(s) = title {
             if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
                 if let Ok(t) = ::serde_json::from_value(v) {
@@ -10303,16 +10341,12 @@ pub fn extract_bytes(
     mime_type: String,
     config: ExtractionConfig,
 ) -> Result<ExtractionResult, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            kreuzberg::extract_bytes(&content, &mime_type, &config.0)
-                .await
-                .map_err(|e| e.to_string())
-                .map(ExtractionResult)
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        kreuzberg::extract_bytes(&content, &mime_type, &config.0)
+            .await
+            .map_err(|e| e.to_string())
+            .map(ExtractionResult)
+    })
 }
 
 pub fn extract_file(
@@ -10320,16 +10354,12 @@ pub fn extract_file(
     mime_type: Option<String>,
     config: ExtractionConfig,
 ) -> Result<ExtractionResult, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            kreuzberg::extract_file(std::path::PathBuf::from(path), mime_type.as_deref(), &config.0)
-                .await
-                .map_err(|e| e.to_string())
-                .map(ExtractionResult)
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        kreuzberg::extract_file(std::path::PathBuf::from(path), mime_type.as_deref(), &config.0)
+            .await
+            .map_err(|e| e.to_string())
+            .map(ExtractionResult)
+    })
 }
 
 pub fn extract_file_sync(
@@ -10374,32 +10404,24 @@ pub fn batch_extract_files(
     items: Vec<BatchFileItem>,
     config: ExtractionConfig,
 ) -> Result<Vec<ExtractionResult>, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            kreuzberg::batch_extract_files(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
-                .await
-                .map_err(|e| e.to_string())
-                .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        kreuzberg::batch_extract_files(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
+            .await
+            .map_err(|e| e.to_string())
+            .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
+    })
 }
 
 pub fn batch_extract_bytes(
     items: Vec<BatchBytesItem>,
     config: ExtractionConfig,
 ) -> Result<Vec<ExtractionResult>, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            kreuzberg::batch_extract_bytes(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
-                .await
-                .map_err(|e| e.to_string())
-                .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        kreuzberg::batch_extract_bytes(items.into_iter().map(|w| w.0).collect::<Vec<_>>(), &config.0)
+            .await
+            .map_err(|e| e.to_string())
+            .map(|v| v.into_iter().map(ExtractionResult).collect::<Vec<_>>())
+    })
 }
 
 pub fn detect_mime_type_from_bytes(content: Vec<u8>) -> Result<String, String> {
@@ -10451,16 +10473,12 @@ pub fn list_validators() -> Result<Vec<String>, String> {
 }
 
 pub fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<String, String> {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            kreuzberg::embed_texts_async(texts, &config.0)
-                .await
-                .map_err(|e| e.to_string())
-                .map(|v| serde_json::to_string(&v).expect("serializable return"))
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        kreuzberg::embed_texts_async(texts, &config.0)
+            .await
+            .map_err(|e| e.to_string())
+            .map(|v| serde_json::to_string(&v).expect("serializable return"))
+    })
 }
 
 pub fn render_pdf_page_to_png(
@@ -10501,22 +10519,18 @@ pub fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox> {
     Vec::new()
 }
 pub fn ocr_backend_call_process_image(this: &OcrBackendBox, image_bytes: Vec<u8>, config: OcrConfig) -> String {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            match this.0.process_image(&image_bytes, &config.0).await {
-                Ok(v) => format!(
-                    "{{\"ok\": {}}}",
-                    serde_json::to_string(&v).expect("serializable return")
-                ),
-                Err(e) => format!(
-                    "{{\"err\": {}}}",
-                    serde_json::to_string(&e.to_string()).expect("serializable error")
-                ),
-            }
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        match this.0.process_image(&image_bytes, &config.0).await {
+            Ok(v) => format!(
+                "{{\"ok\": {}}}",
+                serde_json::to_string(&v).expect("serializable return")
+            ),
+            Err(e) => format!(
+                "{{\"err\": {}}}",
+                serde_json::to_string(&e.to_string()).expect("serializable error")
+            ),
+        }
+    })
 }
 pub fn ocr_backend_call_supports_language(this: &OcrBackendBox, lang: String) -> bool {
     this.0.supports_language(&lang)
@@ -10535,19 +10549,15 @@ pub fn post_processor_call_process(
     mut result: ExtractionResult,
     config: ExtractionConfig,
 ) -> String {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            match this.0.process(&mut result.0, &config.0).await {
-                Ok(v) => format!("{{\"ok\": {}}}", "null"),
-                Err(e) => format!(
-                    "{{\"err\": {}}}",
-                    serde_json::to_string(&e.to_string()).expect("serializable error")
-                ),
-            }
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        match this.0.process(&mut result.0, &config.0).await {
+            Ok(v) => format!("{{\"ok\": {}}}", "null"),
+            Err(e) => format!(
+                "{{\"err\": {}}}",
+                serde_json::to_string(&e.to_string()).expect("serializable error")
+            ),
+        }
+    })
 }
 pub fn post_processor_call_processing_stage(this: &PostProcessorBox) -> ProcessingStage {
     ProcessingStage::from(this.0.processing_stage())
@@ -10559,19 +10569,15 @@ pub fn alef_phantom_vec_validator() -> Vec<ValidatorBox> {
     Vec::new()
 }
 pub fn validator_call_validate(this: &ValidatorBox, result: ExtractionResult, config: ExtractionConfig) -> String {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            match this.0.validate(&result.0, &config.0).await {
-                Ok(v) => format!("{{\"ok\": {}}}", "null"),
-                Err(e) => format!(
-                    "{{\"err\": {}}}",
-                    serde_json::to_string(&e.to_string()).expect("serializable error")
-                ),
-            }
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        match this.0.validate(&result.0, &config.0).await {
+            Ok(v) => format!("{{\"ok\": {}}}", "null"),
+            Err(e) => format!(
+                "{{\"err\": {}}}",
+                serde_json::to_string(&e.to_string()).expect("serializable error")
+            ),
+        }
+    })
 }
 
 pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::plugins::EmbeddingBackend + Send + Sync>);
@@ -10583,22 +10589,18 @@ pub fn embedding_backend_call_dimensions(this: &EmbeddingBackendBox) -> usize {
     this.0.dimensions()
 }
 pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<String>) -> String {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            match this.0.embed(texts).await {
-                Ok(v) => format!(
-                    "{{\"ok\": {}}}",
-                    serde_json::to_string(&v).expect("serializable return")
-                ),
-                Err(e) => format!(
-                    "{{\"err\": {}}}",
-                    serde_json::to_string(&e.to_string()).expect("serializable error")
-                ),
-            }
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        match this.0.embed(texts).await {
+            Ok(v) => format!(
+                "{{\"ok\": {}}}",
+                serde_json::to_string(&v).expect("serializable return")
+            ),
+            Err(e) => format!(
+                "{{\"err\": {}}}",
+                serde_json::to_string(&e.to_string()).expect("serializable error")
+            ),
+        }
+    })
 }
 
 pub struct DocumentExtractorBox(pub Box<dyn kreuzberg::plugins::DocumentExtractor + Send + Sync>);
@@ -10612,22 +10614,18 @@ pub fn document_extractor_call_extract_bytes(
     mime_type: String,
     config: ExtractionConfig,
 ) -> String {
-    ::tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("build tokio runtime")
-        .block_on(async {
-            match this.0.extract_bytes(&content, &mime_type, &config.0).await {
-                Ok(v) => format!(
-                    "{{\"ok\": {}}}",
-                    serde_json::to_string(&v).expect("serializable return")
-                ),
-                Err(e) => format!(
-                    "{{\"err\": {}}}",
-                    serde_json::to_string(&e.to_string()).expect("serializable error")
-                ),
-            }
-        })
+    crate::__alef_tokio_runtime().block_on(async {
+        match this.0.extract_bytes(&content, &mime_type, &config.0).await {
+            Ok(v) => format!(
+                "{{\"ok\": {}}}",
+                serde_json::to_string(&v).expect("serializable return")
+            ),
+            Err(e) => format!(
+                "{{\"err\": {}}}",
+                serde_json::to_string(&e.to_string()).expect("serializable error")
+            ),
+        }
+    })
 }
 pub fn document_extractor_call_supported_mime_types(this: &DocumentExtractorBox) -> Vec<String> {
     this.0.supported_mime_types().iter().map(|s| s.to_string()).collect()

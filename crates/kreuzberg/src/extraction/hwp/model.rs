@@ -24,7 +24,7 @@ pub struct HwpDocument {
 // ---------------------------------------------------------------------------
 
 /// A body-text section containing a flat list of paragraphs.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Section {
     pub paragraphs: Vec<Paragraph>,
 }
@@ -34,7 +34,7 @@ pub struct Section {
 
 #[cfg_attr(alef, alef(skip))]
 /// A single paragraph; may or may not carry a text payload.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Paragraph {
     pub text: Option<ParaText>,
     pub outline_level: u8,
@@ -70,7 +70,7 @@ pub struct HwpImage {
 
 #[cfg_attr(alef, alef(skip))]
 /// Plain text content decoded from a ParaText record (tag 0x43).
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ParaText {
     pub content: String,
 }

@@ -6,11 +6,9 @@ dist/
 /check_pdf_oxide
 /check_*
 # Hand-authored WASM JS distribution files (intentionally committed)
+!crates/kreuzberg-wasm/dist/index.js
 !crates/kreuzberg-wasm/dist/extraction/files.js
 !crates/kreuzberg-wasm/dist/ocr/enabler.js
-!crates/kreuzberg-wasm/dist/ocr/ocr-worker.js
-!crates/kreuzberg-wasm/dist/ocr/tesseract-wasm-backend.js
-!crates/kreuzberg-wasm/dist/ocr/worker-bridge.js
 .lycheecache
 dist-musl/
 *.so

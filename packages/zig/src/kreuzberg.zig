@@ -49,7 +49,7 @@ inline fn _first_error(comptime E: type) E {
 /// - `LockPoisoned` - Mutex/RwLock poisoning (should not happen in normal operation)
 /// - `UnsupportedFormat` - Unsupported MIME type or file format
 /// - `Other` - Catch-all for uncommon errors
-pub const KreuzbergError = error{
+pub const KreuzbergError = error {
     Io,
     Parsing,
     Ocr,
@@ -3803,9 +3803,11 @@ pub const LayoutClass = enum {
 /// Returns `KreuzbergError.Validation` if MIME type is invalid.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const u8) KreuzbergError![]u8 {
-    const mime_type_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{mime_type}, 0);
+    const mime_type_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{mime_type}, 0);
     defer std.heap.c_allocator.free(mime_type_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_bytes(content.ptr, content.len, mime_type_z, config_handle);
@@ -3820,7 +3822,8 @@ pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    };
+    }
+;
 }
 
 /// Extract content from a file.
@@ -3842,11 +3845,14 @@ pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const
 /// Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 pub fn extract_file(path: []const u8, mime_type: ?[]const u8, config: []const u8) KreuzbergError![]u8 {
-    const path_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{path}, 0);
+    const path_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{path}, 0);
     defer std.heap.c_allocator.free(path_z);
-    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{v}, 0) else null;
     defer if (mime_type_z) |z| std.heap.c_allocator.free(z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_file(path_z, if (mime_type_z) |z| z.ptr else null, config_handle);
@@ -3861,7 +3867,8 @@ pub fn extract_file(path: []const u8, mime_type: ?[]const u8, config: []const u8
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    };
+    }
+;
 }
 
 /// Synchronous wrapper for `extract_file`.
@@ -3875,11 +3882,14 @@ pub fn extract_file(path: []const u8, mime_type: ?[]const u8, config: []const u8
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
 pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []const u8) KreuzbergError![]u8 {
-    const path_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{path}, 0);
+    const path_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{path}, 0);
     defer std.heap.c_allocator.free(path_z);
-    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{v}, 0) else null;
     defer if (mime_type_z) |z| std.heap.c_allocator.free(z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_file_sync(path_z, if (mime_type_z) |z| z.ptr else null, config_handle);
@@ -3894,7 +3904,8 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []con
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    };
+    }
+;
 }
 
 /// Synchronous wrapper for `extract_bytes`.
@@ -3905,9 +3916,11 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []con
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
 pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []const u8) KreuzbergError![]u8 {
-    const mime_type_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{mime_type}, 0);
+    const mime_type_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{mime_type}, 0);
     defer std.heap.c_allocator.free(mime_type_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_bytes_sync(content.ptr, content.len, mime_type_z, config_handle);
@@ -3922,7 +3935,8 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    };
+    }
+;
 }
 
 /// Synchronous wrapper for `batch_extract_files`.
@@ -3931,9 +3945,11 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []
 /// Only available with `tokio-runtime` (WASM has no filesystem).
 pub fn batch_extract_files_sync(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_files_sync(items_z, config_handle);
@@ -3959,9 +3975,11 @@ pub fn batch_extract_files_sync(items: []const u8, config: []const u8) Kreuzberg
 /// that iterates through items and calls `extract_bytes_sync()`.
 pub fn batch_extract_bytes_sync(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_bytes_sync(items_z, config_handle);
@@ -4009,9 +4027,11 @@ pub fn batch_extract_bytes_sync(items: []const u8, config: []const u8) Kreuzberg
 /// Per-file configuration overrides:
 pub fn batch_extract_files(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_files(items_z, config_handle);
@@ -4053,9 +4073,11 @@ pub fn batch_extract_files(items: []const u8, config: []const u8) KreuzbergError
 /// Per-item configuration overrides:
 pub fn batch_extract_bytes(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_bytes(items_z, config_handle);
@@ -4111,7 +4133,8 @@ pub fn detect_mime_type_from_bytes(content: []const u8) KreuzbergError![]u8 {
 ///
 /// A vector of file extensions (without leading dot) for the MIME type.
 pub fn get_extensions_for_mime(mime_type: []const u8) KreuzbergError![]u8 {
-    const mime_type_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{mime_type}, 0);
+    const mime_type_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{mime_type}, 0);
     defer std.heap.c_allocator.free(mime_type_z);
     const _result = c.kreuzberg_get_extensions_for_mime(mime_type_z);
     const _result_len = c.kreuzberg_get_extensions_for_mime_len(mime_type_z);
@@ -4259,9 +4282,11 @@ pub fn list_validators() KreuzbergError![]u8 {
 ///   or the blocking inference task panics
 pub fn embed_texts_async(texts: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const texts_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{texts}, 0);
+    const texts_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{texts}, 0);
     defer std.heap.c_allocator.free(texts_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_embedding_config_from_json(config_z);
     const _result = c.kreuzberg_embed_texts_async(texts_z, config_handle);
@@ -4289,7 +4314,8 @@ pub fn embed_texts_async(texts: []const u8, config: []const u8) KreuzbergError![
 /// Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
 /// or rendered, or if `page_index` is out of range.
 pub fn render_pdf_page_to_png(pdf_bytes: []const u8, page_index: u64, dpi: ?i32, password: ?[]const u8) KreuzbergError![]u8 {
-    const password_z: ?[:0]u8 = if (password) |v| try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const password_z: ?[:0]u8 = if (password) |v| try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{v}, 0) else null;
     defer if (password_z) |z| std.heap.c_allocator.free(z);
     var _out_ptr: [*c]u8 = undefined;
     var _out_len: usize = 0;
@@ -4308,7 +4334,8 @@ pub fn render_pdf_page_to_png(pdf_bytes: []const u8, page_index: u64, dpi: ?i32,
 /// Uses the file extension and optionally the file content to determine the MIME type.
 /// Set `check_exists` to `true` to verify the file exists before detection.
 pub fn detect_mime_type(path: []const u8, check_exists: bool) KreuzbergError![]u8 {
-    const path_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{path}, 0);
+    const path_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{path}, 0);
     defer std.heap.c_allocator.free(path_z);
     const _result = c.kreuzberg_detect_mime_type(path_z, check_exists);
     const _result_len = c.kreuzberg_detect_mime_type_len(path_z, check_exists);
@@ -4329,9 +4356,11 @@ pub fn detect_mime_type(path: []const u8, check_exists: bool) KreuzbergError![]u
 /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
 pub fn embed_texts(texts: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const texts_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{texts}, 0);
+    const texts_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{texts}, 0);
     defer std.heap.c_allocator.free(texts_z);
-    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_embedding_config_from_json(config_z);
     const _result = c.kreuzberg_embed_texts(texts_z, config_handle);
@@ -4354,7 +4383,8 @@ pub fn embed_texts(texts: []const u8, config: []const u8) KreuzbergError![]u8 {
 /// Returns `null` if no preset with the given name exists. Returns an owned
 /// clone so the value is safe to pass across FFI boundaries.
 pub fn get_embedding_preset(name: []const u8) error{OutOfMemory}!?[]u8 {
-    const name_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{name}, 0);
+    const name_z = try std.fmt.allocPrintSentinel(
+        std.heap.c_allocator, "{s}", .{name}, 0);
     defer std.heap.c_allocator.free(name_z);
     const _result = c.kreuzberg_get_embedding_preset(name_z);
     return if (_result == null) null else blk: {
@@ -4364,7 +4394,8 @@ pub fn get_embedding_preset(name: []const u8) error{OutOfMemory}!?[]u8 {
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    };
+    }
+;
 }
 
 /// List the names of all available embedding presets.
@@ -4588,9 +4619,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const image_bytes_slice = image_bytes_ptr[0..image_bytes_len];
                 if (self.process_image(image_bytes_slice, config)) |value| {
-                    _ = value;
-                    _ = out_result;
-                    unreachable; // complex return: implement manually
+                    _ = value; _ = out_result; unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -4603,9 +4632,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
             fn thunk(ud: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.process_image_file(path, config)) |value| {
-                    _ = value;
-                    _ = out_result;
-                    unreachable; // complex return: implement manually
+                    _ = value; _ = out_result; unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -4658,9 +4685,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
             fn thunk(ud: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.process_document(_path, _config)) |value| {
-                    _ = value;
-                    _ = out_result;
-                    unreachable; // complex return: implement manually
+                    _ = value; _ = out_result; unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5280,9 +5305,7 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
             fn thunk(ud: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.embed(texts)) |value| {
-                    _ = value;
-                    _ = out_result;
-                    unreachable; // complex return: implement manually
+                    _ = value; _ = out_result; unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5472,9 +5495,7 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
                 const self: *T = @ptrCast(@alignCast(ud));
                 const content_slice = content_ptr[0..content_len];
                 if (self.extract_bytes(content_slice, mime_type, config)) |value| {
-                    _ = value;
-                    _ = out_result;
-                    unreachable; // complex return: implement manually
+                    _ = value; _ = out_result; unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5487,9 +5508,7 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
             fn thunk(ud: ?*anyopaque, path: [*c]const u8, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.extract_file(path, mime_type, config)) |value| {
-                    _ = value;
-                    _ = out_result;
-                    unreachable; // complex return: implement manually
+                    _ = value; _ = out_result; unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5637,9 +5656,7 @@ pub fn make_renderer_vtable(comptime T: type, instance: *T) IRenderer {
             fn thunk(ud: ?*anyopaque, doc: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.render(doc)) |value| {
-                    _ = value;
-                    _ = out_result;
-                    unreachable; // complex return: implement manually
+                    _ = value; _ = out_result; unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5655,6 +5672,16 @@ pub fn make_renderer_vtable(comptime T: type, instance: *T) IRenderer {
         }.thunk,
     };
 }
+
+/// Image metadata extracted from an image file.
+pub const ExtractedImageMetadata = struct {
+    _handle: *anyopaque,
+
+    /// Release the underlying FFI handle. Safe to call once per instance.
+    pub fn free(self: *ExtractedImageMetadata) void {
+        c.kreuzberg_extracted_image_metadata_free(@as(*c.KREUZBERGExtractedImageMetadata, @ptrCast(self._handle)));
+    }
+};
 
 pub const OcrCacheStats = struct {
     _handle: *anyopaque,

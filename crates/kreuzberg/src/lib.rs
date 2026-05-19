@@ -120,6 +120,14 @@ pub mod pdf;
 pub use error::{KreuzbergError, Result};
 pub use types::*;
 
+// Office metadata types are nested under `extraction::office_metadata::*` but
+// alef-backend-dart's mirror declarations resolve names against the crate
+// root (`#[frb(mirror(CoreProperties))]` → `kreuzberg::CoreProperties`).
+// Re-export at the root for path resolution; the canonical module path
+// remains valid via `extraction::office_metadata`.
+#[cfg(feature = "office")]
+pub use extraction::office_metadata::{CoreProperties, DocxAppProperties};
+
 // ── Extraction — public API (8 functions) ────────────────────────────────────
 #[cfg(feature = "tokio-runtime")]
 pub use core::extractor::{batch_extract_bytes, batch_extract_files};
@@ -157,7 +165,11 @@ pub use rendering::StyledHtmlRenderer;
 pub use paddle_ocr::{ModelPaths, PaddleLanguage, PaddleOcrConfig};
 
 #[cfg(feature = "paddle-ocr")]
-pub use paddle_ocr::{CacheStats, ModelManager, ModelManifestEntry, PaddleOcrBackend};
+pub use paddle_ocr::{ModelCacheStats, ModelManager, ModelManifestEntry, PaddleOcrBackend};
+
+// Re-export canonical CacheStats (generic extraction cache statistics) at the crate root.
+// This supersedes the orphan `types::formats::CacheStats` which has been removed.
+pub use cache::CacheStats;
 
 #[cfg(feature = "layout-types")]
 pub use core::config::{LayoutDetectionConfig, TableModel};
@@ -274,4 +286,43 @@ pub fn get_embedding_preset(name: &str) -> Option<embeddings::EmbeddingPreset> {
 #[cfg(feature = "embedding-presets")]
 pub fn list_embedding_presets() -> Vec<String> {
     embeddings::list_presets()
+}
+
+// ── Embedding-preset stubs for builds without the feature ────────────────────
+// The alef-generated kreuzberg-ffi crate references `kreuzberg::EmbeddingPreset`
+// unconditionally in FFI return-type positions. Without these stubs, any build
+// that omits `embedding-presets` fails to compile kreuzberg-ffi and — if the
+// feature was accidentally dropped from a release build — causes a Java
+// `UnsatisfiedLinkError` at class-load time (issue #998).  Stubs return
+// empty/None so callers degrade gracefully instead of crashing.
+
+/// Stub preset type for builds without the `embedding-presets` feature.
+///
+/// Field names match the real type so JSON round-trips through
+/// `kreuzberg_embedding_preset_from_json` remain schema-compatible. When the
+/// feature is absent, `get_embedding_preset` always returns `None`, so the
+/// stub is never allocated in practice.
+#[cfg(not(feature = "embedding-presets"))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EmbeddingPreset {
+    pub name: String,
+    pub chunk_size: usize,
+    pub overlap: usize,
+    pub model_repo: String,
+    pub pooling: String,
+    pub model_file: String,
+    pub dimensions: usize,
+    pub description: String,
+}
+
+/// Returns `None` for builds without the `embedding-presets` feature.
+#[cfg(not(feature = "embedding-presets"))]
+pub fn get_embedding_preset(_name: &str) -> Option<EmbeddingPreset> {
+    None
+}
+
+/// Returns an empty list for builds without the `embedding-presets` feature.
+#[cfg(not(feature = "embedding-presets"))]
+pub fn list_embedding_presets() -> Vec<String> {
+    Vec::new()
 }

@@ -9,6 +9,9 @@ version: "3"
 #   Docs server  → http://localhost:8001  (serves docs/)
 #   Asset server → http://localhost:9000  (serves crates/kreuzberg-wasm/)
 #
+# First-time setup:
+#   task demo:dev:setup              # install wasm-pack, wasm-bindgen-cli, WASI SDK
+#
 # Usage:
 #   task demo:dev                    # full build + patch + both servers
 #   SKIP_WASM_BUILD=1 task demo:dev  # skip Rust build, TS + patch only
@@ -29,7 +32,7 @@ tasks:
     desc: "Build WASM binary for web target (unless SKIP_WASM_BUILD=1)"
     dir: crates/kreuzberg-wasm
     cmds:
-      - '[ "${SKIP_WASM_BUILD:-0}" = "1" ] || pnpm run build:wasm:web'
+      - '[ "${SKIP_WASM_BUILD:-0}" = "1" ] || { pnpm run build:wasm:web && mkdir -p dist/pkg && cp pkg/web/kreuzberg_wasm_bg.wasm dist/pkg/kreuzberg_wasm_bg.wasm; }'
 
   dev:patch:
     desc: "Generate docs/demo-dev.html with CDN URLs replaced by localhost:9000"
@@ -69,3 +72,82 @@ tasks:
     dir: crates/kreuzberg-wasm
     cmds:
       - npx --yes serve . --cors -l tcp://0.0.0.0:9000
+
+  dev:setup:
+    desc: "Install demo:dev prerequisites (wasm-pack, wasm-bindgen-cli, WASI SDK 25)"
+    cmds:
+      - task: dev:setup:wasm-pack
+      - task: dev:setup:wasm-bindgen-cli
+      - task: dev:setup:wasi-sdk
+
+  dev:setup:wasm-pack:
+    desc: "Install wasm-pack 0.13.1 (matches CI pinned version)"
+    vars:
+      WASM_PACK_VERSION: "0.13.1"
+    cmds:
+      - |
+        if command -v wasm-pack &>/dev/null && [ "$(wasm-pack --version 2>/dev/null | awk '{print $2}')" = "{{.WASM_PACK_VERSION}}" ]; then
+          echo "wasm-pack {{.WASM_PACK_VERSION}} already installed"
+          exit 0
+        fi
+        cargo install wasm-pack --version {{.WASM_PACK_VERSION}} --locked
+
+  dev:setup:wasm-bindgen-cli:
+    desc: "Install wasm-bindgen-cli at the version pinned in Cargo.lock"
+    vars:
+      WASM_BINDGEN_VERSION:
+        sh: grep -A 3 '^name = "wasm-bindgen"$' Cargo.lock | grep '^version' | head -1 | awk '{print $3}' | tr -d '"'
+    cmds:
+      - |
+        if command -v wasm-bindgen &>/dev/null && [ "$(wasm-bindgen --version 2>/dev/null | awk '{print $2}')" = "{{.WASM_BINDGEN_VERSION}}" ]; then
+          echo "wasm-bindgen-cli {{.WASM_BINDGEN_VERSION}} already installed"
+          exit 0
+        fi
+        cargo install wasm-bindgen-cli --version {{.WASM_BINDGEN_VERSION}} --locked
+
+  dev:setup:wasi-sdk:
+    desc: "Install WASI SDK 25 to ~/wasi-sdk-25 (skips if already present)"
+    vars:
+      WASI_SDK_VERSION: "25"
+    cmds:
+      - |
+        WASI_SDK_DIR="${WASI_SDK_PATH:-$HOME/wasi-sdk-{{.WASI_SDK_VERSION}}}"
+        if [ -d "$WASI_SDK_DIR/share/wasi-sysroot" ]; then
+          echo "WASI SDK {{.WASI_SDK_VERSION}} already installed at $WASI_SDK_DIR"
+          exit 0
+        fi
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        case "$OS-$ARCH" in
+          linux-x86_64)  PKG="wasi-sdk-{{.WASI_SDK_VERSION}}.0-x86_64-linux.tar.gz" ;;
+          linux-aarch64) PKG="wasi-sdk-{{.WASI_SDK_VERSION}}.0-arm64-linux.tar.gz" ;;
+          darwin-x86_64) PKG="wasi-sdk-{{.WASI_SDK_VERSION}}.0-x86_64-macos.tar.gz" ;;
+          darwin-arm64)  PKG="wasi-sdk-{{.WASI_SDK_VERSION}}.0-arm64-macos.tar.gz" ;;
+          *)
+            echo "Unsupported platform: $OS-$ARCH"
+            echo "Download manually: https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-{{.WASI_SDK_VERSION}}"
+            exit 1
+            ;;
+        esac
+        BASE_URL="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{{.WASI_SDK_VERSION}}"
+        TMPFILE=$(mktemp /tmp/wasi-sdk-XXXXXX.tar.gz)
+        echo "Downloading WASI SDK {{.WASI_SDK_VERSION}} ..."
+        curl -fL "${BASE_URL}/${PKG}" -o "$TMPFILE"
+        curl -fL "${BASE_URL}/${PKG}.sha256" -o "${TMPFILE}.sha256"
+        echo "Verifying SHA256 ..."
+        EXPECTED_HASH=$(awk '{print $1}' "${TMPFILE}.sha256")
+        if command -v sha256sum &>/dev/null; then
+          echo "${EXPECTED_HASH}  ${TMPFILE}" | sha256sum -c -
+        elif command -v shasum &>/dev/null; then
+          echo "${EXPECTED_HASH}  ${TMPFILE}" | shasum -a 256 -c -
+        else
+          echo "Warning: no SHA256 tool found, skipping checksum verification"
+        fi
+        echo "Extracting to $WASI_SDK_DIR ..."
+        mkdir -p "$WASI_SDK_DIR"
+        tar -xzf "$TMPFILE" -C "$WASI_SDK_DIR" --strip-components=1
+        rm -f "$TMPFILE" "${TMPFILE}.sha256"
+        echo ""
+        echo "WASI SDK {{.WASI_SDK_VERSION}} installed at $WASI_SDK_DIR"
+        echo "Add to your shell profile:"
+        echo "  export WASI_SDK_PATH=$WASI_SDK_DIR"

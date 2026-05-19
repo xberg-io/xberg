@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1862857345;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1689775888;
 
 // Section: executor
 
@@ -695,6 +695,34 @@ fn wire__crate__create_contributor_role_from_json_impl(
         },
     )
 }
+fn wire__crate__create_core_properties_from_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_core_properties_from_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_)
+            };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::create_core_properties_from_json(api_json)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__create_csv_metadata_from_json_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1045,6 +1073,34 @@ fn wire__crate__create_document_structure_from_json_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::create_document_structure_from_json(api_json)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__create_docx_app_properties_from_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_docx_app_properties_from_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_)
+            };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::create_docx_app_properties_from_json(api_json)?;
                     Ok(output_ok)
                 })())
             }
@@ -3215,6 +3271,34 @@ fn wire__crate__create_post_processor_dart_impl_impl(
         },
     )
 }
+fn wire__crate__create_pptx_app_properties_from_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_pptx_app_properties_from_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_)
+            };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::create_pptx_app_properties_from_json(api_json)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__create_pptx_extraction_result_from_json_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3959,6 +4043,34 @@ fn wire__crate__create_validator_dart_impl_impl(
                         api_should_validate,
                         api_priority,
                     ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__create_xlsx_app_properties_from_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_xlsx_app_properties_from_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_)
+            };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::create_xlsx_app_properties_from_json(api_json)?;
                     Ok(output_ok)
                 })())
             }
@@ -5068,6 +5180,24 @@ const _: fn() = || {
         let _: Option<String> = ContributorRole.role;
     }
     {
+        let CoreProperties = None::<crate::CoreProperties>.unwrap();
+        let _: Option<String> = CoreProperties.title;
+        let _: Option<String> = CoreProperties.subject;
+        let _: Option<String> = CoreProperties.creator;
+        let _: Option<String> = CoreProperties.keywords;
+        let _: Option<String> = CoreProperties.description;
+        let _: Option<String> = CoreProperties.last_modified_by;
+        let _: Option<String> = CoreProperties.revision;
+        let _: Option<String> = CoreProperties.created;
+        let _: Option<String> = CoreProperties.modified;
+        let _: Option<String> = CoreProperties.category;
+        let _: Option<String> = CoreProperties.content_status;
+        let _: Option<String> = CoreProperties.language;
+        let _: Option<String> = CoreProperties.identifier;
+        let _: Option<String> = CoreProperties.version;
+        let _: Option<String> = CoreProperties.last_printed;
+    }
+    {
         let CsvMetadata = None::<crate::CsvMetadata>.unwrap();
         let _: i64 = CsvMetadata.row_count;
         let _: i64 = CsvMetadata.column_count;
@@ -5149,9 +5279,28 @@ const _: fn() = || {
         let _: Vec<String> = DocumentStructure.node_types;
     }
     {
+        let DocxAppProperties = None::<crate::DocxAppProperties>.unwrap();
+        let _: Option<String> = DocxAppProperties.application;
+        let _: Option<String> = DocxAppProperties.app_version;
+        let _: Option<String> = DocxAppProperties.template;
+        let _: Option<i64> = DocxAppProperties.total_time;
+        let _: Option<i64> = DocxAppProperties.pages;
+        let _: Option<i64> = DocxAppProperties.words;
+        let _: Option<i64> = DocxAppProperties.characters;
+        let _: Option<i64> = DocxAppProperties.characters_with_spaces;
+        let _: Option<i64> = DocxAppProperties.lines;
+        let _: Option<i64> = DocxAppProperties.paragraphs;
+        let _: Option<String> = DocxAppProperties.company;
+        let _: Option<i64> = DocxAppProperties.doc_security;
+        let _: Option<bool> = DocxAppProperties.scale_crop;
+        let _: Option<bool> = DocxAppProperties.links_up_to_date;
+        let _: Option<bool> = DocxAppProperties.shared_doc;
+        let _: Option<bool> = DocxAppProperties.hyperlinks_changed;
+    }
+    {
         let DocxMetadata = None::<crate::DocxMetadata>.unwrap();
-        let _: Option<String> = DocxMetadata.core_properties;
-        let _: Option<String> = DocxMetadata.app_properties;
+        let _: Option<crate::CoreProperties> = DocxMetadata.core_properties;
+        let _: Option<crate::DocxAppProperties> = DocxMetadata.app_properties;
         let _: Option<std::collections::HashMap<String, String>> = DocxMetadata.custom_properties;
     }
     {
@@ -6028,6 +6177,24 @@ const _: fn() = || {
         let _: Option<String> = PostProcessorConfig.disabled_set;
     }
     {
+        let PptxAppProperties = None::<crate::PptxAppProperties>.unwrap();
+        let _: Option<String> = PptxAppProperties.application;
+        let _: Option<String> = PptxAppProperties.app_version;
+        let _: Option<i64> = PptxAppProperties.total_time;
+        let _: Option<String> = PptxAppProperties.company;
+        let _: Option<i64> = PptxAppProperties.doc_security;
+        let _: Option<bool> = PptxAppProperties.scale_crop;
+        let _: Option<bool> = PptxAppProperties.links_up_to_date;
+        let _: Option<bool> = PptxAppProperties.shared_doc;
+        let _: Option<bool> = PptxAppProperties.hyperlinks_changed;
+        let _: Option<i64> = PptxAppProperties.slides;
+        let _: Option<i64> = PptxAppProperties.notes;
+        let _: Option<i64> = PptxAppProperties.hidden_slides;
+        let _: Option<i64> = PptxAppProperties.multimedia_clips;
+        let _: Option<String> = PptxAppProperties.presentation_format;
+        let _: Vec<String> = PptxAppProperties.slide_titles;
+    }
+    {
         let PptxExtractionResult = None::<crate::PptxExtractionResult>.unwrap();
         let _: String = PptxExtractionResult.content;
         let _: crate::PptxMetadata = PptxExtractionResult.metadata;
@@ -6229,6 +6396,18 @@ const _: fn() = || {
         let _: Option<String> = Uri.label;
         let _: Option<i64> = Uri.page;
         let _: crate::UriKind = Uri.kind;
+    }
+    {
+        let XlsxAppProperties = None::<crate::XlsxAppProperties>.unwrap();
+        let _: Option<String> = XlsxAppProperties.application;
+        let _: Option<String> = XlsxAppProperties.app_version;
+        let _: Option<i64> = XlsxAppProperties.doc_security;
+        let _: Option<bool> = XlsxAppProperties.scale_crop;
+        let _: Option<bool> = XlsxAppProperties.links_up_to_date;
+        let _: Option<bool> = XlsxAppProperties.shared_doc;
+        let _: Option<bool> = XlsxAppProperties.hyperlinks_changed;
+        let _: Option<String> = XlsxAppProperties.company;
+        let _: Vec<String> = XlsxAppProperties.worksheet_names;
     }
     {
         let XmlExtractionResult = None::<crate::XmlExtractionResult>.unwrap();
@@ -7308,6 +7487,44 @@ impl SseDecode for crate::ContributorRole {
     }
 }
 
+impl SseDecode for crate::CoreProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_title = <Option<String>>::sse_decode(deserializer);
+        let mut var_subject = <Option<String>>::sse_decode(deserializer);
+        let mut var_creator = <Option<String>>::sse_decode(deserializer);
+        let mut var_keywords = <Option<String>>::sse_decode(deserializer);
+        let mut var_description = <Option<String>>::sse_decode(deserializer);
+        let mut var_lastModifiedBy = <Option<String>>::sse_decode(deserializer);
+        let mut var_revision = <Option<String>>::sse_decode(deserializer);
+        let mut var_created = <Option<String>>::sse_decode(deserializer);
+        let mut var_modified = <Option<String>>::sse_decode(deserializer);
+        let mut var_category = <Option<String>>::sse_decode(deserializer);
+        let mut var_contentStatus = <Option<String>>::sse_decode(deserializer);
+        let mut var_language = <Option<String>>::sse_decode(deserializer);
+        let mut var_identifier = <Option<String>>::sse_decode(deserializer);
+        let mut var_version = <Option<String>>::sse_decode(deserializer);
+        let mut var_lastPrinted = <Option<String>>::sse_decode(deserializer);
+        return crate::CoreProperties {
+            title: var_title,
+            subject: var_subject,
+            creator: var_creator,
+            keywords: var_keywords,
+            description: var_description,
+            last_modified_by: var_lastModifiedBy,
+            revision: var_revision,
+            created: var_created,
+            modified: var_modified,
+            category: var_category,
+            content_status: var_contentStatus,
+            language: var_language,
+            identifier: var_identifier,
+            version: var_version,
+            last_printed: var_lastPrinted,
+        };
+    }
+}
+
 impl SseDecode for crate::CsvMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7492,11 +7709,51 @@ impl SseDecode for crate::DocumentStructure {
     }
 }
 
+impl SseDecode for crate::DocxAppProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_application = <Option<String>>::sse_decode(deserializer);
+        let mut var_appVersion = <Option<String>>::sse_decode(deserializer);
+        let mut var_template = <Option<String>>::sse_decode(deserializer);
+        let mut var_totalTime = <Option<i64>>::sse_decode(deserializer);
+        let mut var_pages = <Option<i64>>::sse_decode(deserializer);
+        let mut var_words = <Option<i64>>::sse_decode(deserializer);
+        let mut var_characters = <Option<i64>>::sse_decode(deserializer);
+        let mut var_charactersWithSpaces = <Option<i64>>::sse_decode(deserializer);
+        let mut var_lines = <Option<i64>>::sse_decode(deserializer);
+        let mut var_paragraphs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_company = <Option<String>>::sse_decode(deserializer);
+        let mut var_docSecurity = <Option<i64>>::sse_decode(deserializer);
+        let mut var_scaleCrop = <Option<bool>>::sse_decode(deserializer);
+        let mut var_linksUpToDate = <Option<bool>>::sse_decode(deserializer);
+        let mut var_sharedDoc = <Option<bool>>::sse_decode(deserializer);
+        let mut var_hyperlinksChanged = <Option<bool>>::sse_decode(deserializer);
+        return crate::DocxAppProperties {
+            application: var_application,
+            app_version: var_appVersion,
+            template: var_template,
+            total_time: var_totalTime,
+            pages: var_pages,
+            words: var_words,
+            characters: var_characters,
+            characters_with_spaces: var_charactersWithSpaces,
+            lines: var_lines,
+            paragraphs: var_paragraphs,
+            company: var_company,
+            doc_security: var_docSecurity,
+            scale_crop: var_scaleCrop,
+            links_up_to_date: var_linksUpToDate,
+            shared_doc: var_sharedDoc,
+            hyperlinks_changed: var_hyperlinksChanged,
+        };
+    }
+}
+
 impl SseDecode for crate::DocxMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_coreProperties = <Option<String>>::sse_decode(deserializer);
-        let mut var_appProperties = <Option<String>>::sse_decode(deserializer);
+        let mut var_coreProperties = <Option<crate::CoreProperties>>::sse_decode(deserializer);
+        let mut var_appProperties = <Option<crate::DocxAppProperties>>::sse_decode(deserializer);
         let mut var_customProperties = <Option<std::collections::HashMap<String, String>>>::sse_decode(deserializer);
         return crate::DocxMetadata {
             core_properties: var_coreProperties,
@@ -10003,6 +10260,17 @@ impl SseDecode for Option<crate::ContentFilterConfig> {
     }
 }
 
+impl SseDecode for Option<crate::CoreProperties> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::CoreProperties>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::DjotContent> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10019,6 +10287,17 @@ impl SseDecode for Option<crate::DocumentStructure> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::DocumentStructure>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::DocxAppProperties> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::DocxAppProperties>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -10988,6 +11267,44 @@ impl SseDecode for crate::PostProcessorConfig {
     }
 }
 
+impl SseDecode for crate::PptxAppProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_application = <Option<String>>::sse_decode(deserializer);
+        let mut var_appVersion = <Option<String>>::sse_decode(deserializer);
+        let mut var_totalTime = <Option<i64>>::sse_decode(deserializer);
+        let mut var_company = <Option<String>>::sse_decode(deserializer);
+        let mut var_docSecurity = <Option<i64>>::sse_decode(deserializer);
+        let mut var_scaleCrop = <Option<bool>>::sse_decode(deserializer);
+        let mut var_linksUpToDate = <Option<bool>>::sse_decode(deserializer);
+        let mut var_sharedDoc = <Option<bool>>::sse_decode(deserializer);
+        let mut var_hyperlinksChanged = <Option<bool>>::sse_decode(deserializer);
+        let mut var_slides = <Option<i64>>::sse_decode(deserializer);
+        let mut var_notes = <Option<i64>>::sse_decode(deserializer);
+        let mut var_hiddenSlides = <Option<i64>>::sse_decode(deserializer);
+        let mut var_multimediaClips = <Option<i64>>::sse_decode(deserializer);
+        let mut var_presentationFormat = <Option<String>>::sse_decode(deserializer);
+        let mut var_slideTitles = <Vec<String>>::sse_decode(deserializer);
+        return crate::PptxAppProperties {
+            application: var_application,
+            app_version: var_appVersion,
+            total_time: var_totalTime,
+            company: var_company,
+            doc_security: var_docSecurity,
+            scale_crop: var_scaleCrop,
+            links_up_to_date: var_linksUpToDate,
+            shared_doc: var_sharedDoc,
+            hyperlinks_changed: var_hyperlinksChanged,
+            slides: var_slides,
+            notes: var_notes,
+            hidden_slides: var_hiddenSlides,
+            multimedia_clips: var_multimediaClips,
+            presentation_format: var_presentationFormat,
+            slide_titles: var_slideTitles,
+        };
+    }
+}
+
 impl SseDecode for crate::PptxExtractionResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11600,6 +11917,32 @@ impl SseDecode for usize {
     }
 }
 
+impl SseDecode for crate::XlsxAppProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_application = <Option<String>>::sse_decode(deserializer);
+        let mut var_appVersion = <Option<String>>::sse_decode(deserializer);
+        let mut var_docSecurity = <Option<i64>>::sse_decode(deserializer);
+        let mut var_scaleCrop = <Option<bool>>::sse_decode(deserializer);
+        let mut var_linksUpToDate = <Option<bool>>::sse_decode(deserializer);
+        let mut var_sharedDoc = <Option<bool>>::sse_decode(deserializer);
+        let mut var_hyperlinksChanged = <Option<bool>>::sse_decode(deserializer);
+        let mut var_company = <Option<String>>::sse_decode(deserializer);
+        let mut var_worksheetNames = <Vec<String>>::sse_decode(deserializer);
+        return crate::XlsxAppProperties {
+            application: var_application,
+            app_version: var_appVersion,
+            doc_security: var_docSecurity,
+            scale_crop: var_scaleCrop,
+            links_up_to_date: var_linksUpToDate,
+            shared_doc: var_sharedDoc,
+            hyperlinks_changed: var_hyperlinksChanged,
+            company: var_company,
+            worksheet_names: var_worksheetNames,
+        };
+    }
+}
+
 impl SseDecode for crate::XmlExtractionResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11682,153 +12025,157 @@ fn pde_ffi_dispatcher_primary_impl(
         21 => wire__crate__create_citation_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
         22 => wire__crate__create_content_filter_config_from_json_impl(port, ptr, rust_vec_len, data_len),
         23 => wire__crate__create_contributor_role_from_json_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__create_csv_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__create_dbf_field_info_from_json_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__create_dbf_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__create_detect_response_from_json_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__create_detection_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__create_djot_content_from_json_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__create_djot_image_from_json_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__create_djot_link_from_json_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__create_document_extractor_dart_impl_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__create_document_node_from_json_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__create_document_relationship_from_json_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__create_document_structure_from_json_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__create_docx_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__create_element_from_json_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__create_element_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__create_email_attachment_from_json_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__create_email_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__create_email_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__create_email_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__create_embedded_file_from_json_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__create_embedding_backend_dart_impl_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__create_embedding_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__create_embedding_preset_from_json_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__create_epub_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__create_error_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__create_excel_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__create_excel_sheet_from_json_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__create_excel_workbook_from_json_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__create_extracted_image_from_json_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__create_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__create_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__create_fiction_book_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__create_file_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__create_footnote_from_json_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__create_formatted_block_from_json_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__create_grid_cell_from_json_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__create_header_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__create_heading_context_from_json_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__create_heading_level_from_json_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__create_hierarchical_block_from_json_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__create_hierarchy_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__create_html_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__create_html_output_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__create_image_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__create_image_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__create_image_metadata_type_from_json_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__create_image_preprocessing_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__create_image_preprocessing_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__create_inline_element_from_json_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__create_jats_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__create_keyword_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__create_keyword_from_json_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__create_language_detection_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__create_layout_detection_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__create_layout_detection_from_json_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__create_layout_region_from_json_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__create_link_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__create_llm_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__create_llm_usage_from_json_impl(port, ptr, rust_vec_len, data_len),
-        83 => wire__crate__create_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__create_model_paths_from_json_impl(port, ptr, rust_vec_len, data_len),
-        85 => wire__crate__create_ocr_backend_dart_impl_impl(port, ptr, rust_vec_len, data_len),
-        86 => wire__crate__create_ocr_confidence_from_json_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__create_ocr_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__create_ocr_element_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__create_ocr_element_from_json_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__create_ocr_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        91 => wire__crate__create_ocr_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        92 => wire__crate__create_ocr_pipeline_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        93 => wire__crate__create_ocr_pipeline_stage_from_json_impl(port, ptr, rust_vec_len, data_len),
-        94 => wire__crate__create_ocr_quality_thresholds_from_json_impl(port, ptr, rust_vec_len, data_len),
-        95 => wire__crate__create_ocr_rotation_from_json_impl(port, ptr, rust_vec_len, data_len),
-        96 => wire__crate__create_ocr_table_bounding_box_from_json_impl(port, ptr, rust_vec_len, data_len),
-        97 => wire__crate__create_ocr_table_from_json_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__create_orientation_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        99 => wire__crate__create_paddle_ocr_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        100 => wire__crate__create_page_boundary_from_json_impl(port, ptr, rust_vec_len, data_len),
-        101 => wire__crate__create_page_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        102 => wire__crate__create_page_content_from_json_impl(port, ptr, rust_vec_len, data_len),
-        103 => wire__crate__create_page_hierarchy_from_json_impl(port, ptr, rust_vec_len, data_len),
-        104 => wire__crate__create_page_info_from_json_impl(port, ptr, rust_vec_len, data_len),
-        105 => wire__crate__create_page_structure_from_json_impl(port, ptr, rust_vec_len, data_len),
-        106 => wire__crate__create_pdf_annotation_from_json_impl(port, ptr, rust_vec_len, data_len),
-        107 => wire__crate__create_pdf_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        108 => wire__crate__create_pdf_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        109 => wire__crate__create_post_processor_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        110 => wire__crate__create_post_processor_dart_impl_impl(port, ptr, rust_vec_len, data_len),
-        111 => wire__crate__create_pptx_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        112 => wire__crate__create_pptx_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        113 => wire__crate__create_processing_warning_from_json_impl(port, ptr, rust_vec_len, data_len),
-        114 => wire__crate__create_pst_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        115 => wire__crate__create_rake_params_from_json_impl(port, ptr, rust_vec_len, data_len),
-        116 => wire__crate__create_recognized_table_from_json_impl(port, ptr, rust_vec_len, data_len),
-        117 => wire__crate__create_renderer_dart_impl_impl(port, ptr, rust_vec_len, data_len),
-        118 => wire__crate__create_security_limits_from_json_impl(port, ptr, rust_vec_len, data_len),
-        119 => wire__crate__create_server_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        120 => wire__crate__create_structured_data_from_json_impl(port, ptr, rust_vec_len, data_len),
-        121 => wire__crate__create_structured_data_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        122 => wire__crate__create_structured_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        123 => wire__crate__create_supported_format_from_json_impl(port, ptr, rust_vec_len, data_len),
-        124 => wire__crate__create_table_cell_from_json_impl(port, ptr, rust_vec_len, data_len),
-        125 => wire__crate__create_table_from_json_impl(port, ptr, rust_vec_len, data_len),
-        126 => wire__crate__create_table_grid_from_json_impl(port, ptr, rust_vec_len, data_len),
-        127 => wire__crate__create_tesseract_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        128 => wire__crate__create_text_annotation_from_json_impl(port, ptr, rust_vec_len, data_len),
-        129 => wire__crate__create_text_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        130 => wire__crate__create_text_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        131 => wire__crate__create_token_reduction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        132 => wire__crate__create_token_reduction_options_from_json_impl(port, ptr, rust_vec_len, data_len),
-        133 => wire__crate__create_tree_sitter_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        134 => wire__crate__create_tree_sitter_process_config_from_json_impl(port, ptr, rust_vec_len, data_len),
-        135 => wire__crate__create_uri_from_json_impl(port, ptr, rust_vec_len, data_len),
-        136 => wire__crate__create_validator_dart_impl_impl(port, ptr, rust_vec_len, data_len),
-        137 => wire__crate__create_xml_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
-        138 => wire__crate__create_xml_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
-        139 => wire__crate__create_yake_params_from_json_impl(port, ptr, rust_vec_len, data_len),
-        140 => wire__crate__create_year_range_from_json_impl(port, ptr, rust_vec_len, data_len),
-        141 => wire__crate__detect_mime_type_impl(port, ptr, rust_vec_len, data_len),
-        142 => wire__crate__detect_mime_type_from_bytes_impl(port, ptr, rust_vec_len, data_len),
-        143 => wire__crate__embed_texts_impl(port, ptr, rust_vec_len, data_len),
-        144 => wire__crate__embed_texts_async_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__extract_bytes_impl(port, ptr, rust_vec_len, data_len),
-        146 => wire__crate__extract_bytes_sync_impl(port, ptr, rust_vec_len, data_len),
-        147 => wire__crate__extract_file_impl(port, ptr, rust_vec_len, data_len),
-        148 => wire__crate__extract_file_sync_impl(port, ptr, rust_vec_len, data_len),
-        149 => wire__crate__get_embedding_preset_impl(port, ptr, rust_vec_len, data_len),
-        150 => wire__crate__get_extensions_for_mime_impl(port, ptr, rust_vec_len, data_len),
-        151 => wire__crate__list_document_extractors_impl(port, ptr, rust_vec_len, data_len),
-        152 => wire__crate__list_embedding_backends_impl(port, ptr, rust_vec_len, data_len),
-        153 => wire__crate__list_embedding_presets_impl(port, ptr, rust_vec_len, data_len),
-        154 => wire__crate__list_ocr_backends_impl(port, ptr, rust_vec_len, data_len),
-        155 => wire__crate__list_post_processors_impl(port, ptr, rust_vec_len, data_len),
-        156 => wire__crate__list_renderers_impl(port, ptr, rust_vec_len, data_len),
-        157 => wire__crate__list_validators_impl(port, ptr, rust_vec_len, data_len),
-        158 => wire__crate__register_document_extractor_impl(port, ptr, rust_vec_len, data_len),
-        159 => wire__crate__register_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
-        160 => wire__crate__register_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
-        161 => wire__crate__register_post_processor_impl(port, ptr, rust_vec_len, data_len),
-        162 => wire__crate__register_renderer_impl(port, ptr, rust_vec_len, data_len),
-        163 => wire__crate__register_validator_impl(port, ptr, rust_vec_len, data_len),
-        164 => wire__crate__render_pdf_page_to_png_impl(port, ptr, rust_vec_len, data_len),
-        165 => wire__crate__unregister_document_extractor_impl(port, ptr, rust_vec_len, data_len),
-        166 => wire__crate__unregister_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
-        167 => wire__crate__unregister_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
-        168 => wire__crate__unregister_post_processor_impl(port, ptr, rust_vec_len, data_len),
-        169 => wire__crate__unregister_renderer_impl(port, ptr, rust_vec_len, data_len),
-        170 => wire__crate__unregister_validator_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__create_core_properties_from_json_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__create_csv_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__create_dbf_field_info_from_json_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__create_dbf_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__create_detect_response_from_json_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__create_detection_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__create_djot_content_from_json_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__create_djot_image_from_json_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__create_djot_link_from_json_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__create_document_extractor_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__create_document_node_from_json_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__create_document_relationship_from_json_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__create_document_structure_from_json_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__create_docx_app_properties_from_json_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__create_docx_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__create_element_from_json_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__create_element_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__create_email_attachment_from_json_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__create_email_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__create_email_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__create_email_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__create_embedded_file_from_json_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__create_embedding_backend_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__create_embedding_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__create_embedding_preset_from_json_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__create_epub_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__create_error_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__create_excel_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__create_excel_sheet_from_json_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__create_excel_workbook_from_json_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__create_extracted_image_from_json_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__create_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__create_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__create_fiction_book_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__create_file_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__create_footnote_from_json_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__create_formatted_block_from_json_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__create_grid_cell_from_json_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__create_header_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__create_heading_context_from_json_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__create_heading_level_from_json_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__create_hierarchical_block_from_json_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__create_hierarchy_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__create_html_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__create_html_output_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__create_image_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__create_image_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__create_image_metadata_type_from_json_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__create_image_preprocessing_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__create_image_preprocessing_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__create_inline_element_from_json_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__create_jats_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__create_keyword_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__create_keyword_from_json_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__create_language_detection_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__create_layout_detection_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__create_layout_detection_from_json_impl(port, ptr, rust_vec_len, data_len),
+        81 => wire__crate__create_layout_region_from_json_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__create_link_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__create_llm_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__create_llm_usage_from_json_impl(port, ptr, rust_vec_len, data_len),
+        85 => wire__crate__create_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__create_model_paths_from_json_impl(port, ptr, rust_vec_len, data_len),
+        87 => wire__crate__create_ocr_backend_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__create_ocr_confidence_from_json_impl(port, ptr, rust_vec_len, data_len),
+        89 => wire__crate__create_ocr_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__create_ocr_element_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__create_ocr_element_from_json_impl(port, ptr, rust_vec_len, data_len),
+        92 => wire__crate__create_ocr_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        93 => wire__crate__create_ocr_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        94 => wire__crate__create_ocr_pipeline_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        95 => wire__crate__create_ocr_pipeline_stage_from_json_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__create_ocr_quality_thresholds_from_json_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__create_ocr_rotation_from_json_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__create_ocr_table_bounding_box_from_json_impl(port, ptr, rust_vec_len, data_len),
+        99 => wire__crate__create_ocr_table_from_json_impl(port, ptr, rust_vec_len, data_len),
+        100 => wire__crate__create_orientation_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        101 => wire__crate__create_paddle_ocr_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        102 => wire__crate__create_page_boundary_from_json_impl(port, ptr, rust_vec_len, data_len),
+        103 => wire__crate__create_page_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        104 => wire__crate__create_page_content_from_json_impl(port, ptr, rust_vec_len, data_len),
+        105 => wire__crate__create_page_hierarchy_from_json_impl(port, ptr, rust_vec_len, data_len),
+        106 => wire__crate__create_page_info_from_json_impl(port, ptr, rust_vec_len, data_len),
+        107 => wire__crate__create_page_structure_from_json_impl(port, ptr, rust_vec_len, data_len),
+        108 => wire__crate__create_pdf_annotation_from_json_impl(port, ptr, rust_vec_len, data_len),
+        109 => wire__crate__create_pdf_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        110 => wire__crate__create_pdf_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        111 => wire__crate__create_post_processor_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        112 => wire__crate__create_post_processor_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        113 => wire__crate__create_pptx_app_properties_from_json_impl(port, ptr, rust_vec_len, data_len),
+        114 => wire__crate__create_pptx_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        115 => wire__crate__create_pptx_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        116 => wire__crate__create_processing_warning_from_json_impl(port, ptr, rust_vec_len, data_len),
+        117 => wire__crate__create_pst_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        118 => wire__crate__create_rake_params_from_json_impl(port, ptr, rust_vec_len, data_len),
+        119 => wire__crate__create_recognized_table_from_json_impl(port, ptr, rust_vec_len, data_len),
+        120 => wire__crate__create_renderer_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        121 => wire__crate__create_security_limits_from_json_impl(port, ptr, rust_vec_len, data_len),
+        122 => wire__crate__create_server_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        123 => wire__crate__create_structured_data_from_json_impl(port, ptr, rust_vec_len, data_len),
+        124 => wire__crate__create_structured_data_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        125 => wire__crate__create_structured_extraction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        126 => wire__crate__create_supported_format_from_json_impl(port, ptr, rust_vec_len, data_len),
+        127 => wire__crate__create_table_cell_from_json_impl(port, ptr, rust_vec_len, data_len),
+        128 => wire__crate__create_table_from_json_impl(port, ptr, rust_vec_len, data_len),
+        129 => wire__crate__create_table_grid_from_json_impl(port, ptr, rust_vec_len, data_len),
+        130 => wire__crate__create_tesseract_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        131 => wire__crate__create_text_annotation_from_json_impl(port, ptr, rust_vec_len, data_len),
+        132 => wire__crate__create_text_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        133 => wire__crate__create_text_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        134 => wire__crate__create_token_reduction_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        135 => wire__crate__create_token_reduction_options_from_json_impl(port, ptr, rust_vec_len, data_len),
+        136 => wire__crate__create_tree_sitter_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        137 => wire__crate__create_tree_sitter_process_config_from_json_impl(port, ptr, rust_vec_len, data_len),
+        138 => wire__crate__create_uri_from_json_impl(port, ptr, rust_vec_len, data_len),
+        139 => wire__crate__create_validator_dart_impl_impl(port, ptr, rust_vec_len, data_len),
+        140 => wire__crate__create_xlsx_app_properties_from_json_impl(port, ptr, rust_vec_len, data_len),
+        141 => wire__crate__create_xml_extraction_result_from_json_impl(port, ptr, rust_vec_len, data_len),
+        142 => wire__crate__create_xml_metadata_from_json_impl(port, ptr, rust_vec_len, data_len),
+        143 => wire__crate__create_yake_params_from_json_impl(port, ptr, rust_vec_len, data_len),
+        144 => wire__crate__create_year_range_from_json_impl(port, ptr, rust_vec_len, data_len),
+        145 => wire__crate__detect_mime_type_impl(port, ptr, rust_vec_len, data_len),
+        146 => wire__crate__detect_mime_type_from_bytes_impl(port, ptr, rust_vec_len, data_len),
+        147 => wire__crate__embed_texts_impl(port, ptr, rust_vec_len, data_len),
+        148 => wire__crate__embed_texts_async_impl(port, ptr, rust_vec_len, data_len),
+        149 => wire__crate__extract_bytes_impl(port, ptr, rust_vec_len, data_len),
+        150 => wire__crate__extract_bytes_sync_impl(port, ptr, rust_vec_len, data_len),
+        151 => wire__crate__extract_file_impl(port, ptr, rust_vec_len, data_len),
+        152 => wire__crate__extract_file_sync_impl(port, ptr, rust_vec_len, data_len),
+        153 => wire__crate__get_embedding_preset_impl(port, ptr, rust_vec_len, data_len),
+        154 => wire__crate__get_extensions_for_mime_impl(port, ptr, rust_vec_len, data_len),
+        155 => wire__crate__list_document_extractors_impl(port, ptr, rust_vec_len, data_len),
+        156 => wire__crate__list_embedding_backends_impl(port, ptr, rust_vec_len, data_len),
+        157 => wire__crate__list_embedding_presets_impl(port, ptr, rust_vec_len, data_len),
+        158 => wire__crate__list_ocr_backends_impl(port, ptr, rust_vec_len, data_len),
+        159 => wire__crate__list_post_processors_impl(port, ptr, rust_vec_len, data_len),
+        160 => wire__crate__list_renderers_impl(port, ptr, rust_vec_len, data_len),
+        161 => wire__crate__list_validators_impl(port, ptr, rust_vec_len, data_len),
+        162 => wire__crate__register_document_extractor_impl(port, ptr, rust_vec_len, data_len),
+        163 => wire__crate__register_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
+        164 => wire__crate__register_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
+        165 => wire__crate__register_post_processor_impl(port, ptr, rust_vec_len, data_len),
+        166 => wire__crate__register_renderer_impl(port, ptr, rust_vec_len, data_len),
+        167 => wire__crate__register_validator_impl(port, ptr, rust_vec_len, data_len),
+        168 => wire__crate__render_pdf_page_to_png_impl(port, ptr, rust_vec_len, data_len),
+        169 => wire__crate__unregister_document_extractor_impl(port, ptr, rust_vec_len, data_len),
+        170 => wire__crate__unregister_embedding_backend_impl(port, ptr, rust_vec_len, data_len),
+        171 => wire__crate__unregister_ocr_backend_impl(port, ptr, rust_vec_len, data_len),
+        172 => wire__crate__unregister_post_processor_impl(port, ptr, rust_vec_len, data_len),
+        173 => wire__crate__unregister_renderer_impl(port, ptr, rust_vec_len, data_len),
+        174 => wire__crate__unregister_validator_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -12689,6 +13036,35 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::ContributorRole>> for c
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::CoreProperties> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.title.into_into_dart().into_dart(),
+            self.0.subject.into_into_dart().into_dart(),
+            self.0.creator.into_into_dart().into_dart(),
+            self.0.keywords.into_into_dart().into_dart(),
+            self.0.description.into_into_dart().into_dart(),
+            self.0.last_modified_by.into_into_dart().into_dart(),
+            self.0.revision.into_into_dart().into_dart(),
+            self.0.created.into_into_dart().into_dart(),
+            self.0.modified.into_into_dart().into_dart(),
+            self.0.category.into_into_dart().into_dart(),
+            self.0.content_status.into_into_dart().into_dart(),
+            self.0.language.into_into_dart().into_dart(),
+            self.0.identifier.into_into_dart().into_dart(),
+            self.0.version.into_into_dart().into_dart(),
+            self.0.last_printed.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::CoreProperties> {}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::CoreProperties>> for crate::CoreProperties {
+    fn into_into_dart(self) -> FrbWrapper<crate::CoreProperties> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::CsvMetadata> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -12887,6 +13263,36 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::DocumentStructure> {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::DocumentStructure> {}
 impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::DocumentStructure>> for crate::DocumentStructure {
     fn into_into_dart(self) -> FrbWrapper<crate::DocumentStructure> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::DocxAppProperties> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.application.into_into_dart().into_dart(),
+            self.0.app_version.into_into_dart().into_dart(),
+            self.0.template.into_into_dart().into_dart(),
+            self.0.total_time.into_into_dart().into_dart(),
+            self.0.pages.into_into_dart().into_dart(),
+            self.0.words.into_into_dart().into_dart(),
+            self.0.characters.into_into_dart().into_dart(),
+            self.0.characters_with_spaces.into_into_dart().into_dart(),
+            self.0.lines.into_into_dart().into_dart(),
+            self.0.paragraphs.into_into_dart().into_dart(),
+            self.0.company.into_into_dart().into_dart(),
+            self.0.doc_security.into_into_dart().into_dart(),
+            self.0.scale_crop.into_into_dart().into_dart(),
+            self.0.links_up_to_date.into_into_dart().into_dart(),
+            self.0.shared_doc.into_into_dart().into_dart(),
+            self.0.hyperlinks_changed.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::DocxAppProperties> {}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::DocxAppProperties>> for crate::DocxAppProperties {
+    fn into_into_dart(self) -> FrbWrapper<crate::DocxAppProperties> {
         self.into()
     }
 }
@@ -14878,6 +15284,35 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::PostProcessorConfig>> f
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::PptxAppProperties> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.application.into_into_dart().into_dart(),
+            self.0.app_version.into_into_dart().into_dart(),
+            self.0.total_time.into_into_dart().into_dart(),
+            self.0.company.into_into_dart().into_dart(),
+            self.0.doc_security.into_into_dart().into_dart(),
+            self.0.scale_crop.into_into_dart().into_dart(),
+            self.0.links_up_to_date.into_into_dart().into_dart(),
+            self.0.shared_doc.into_into_dart().into_dart(),
+            self.0.hyperlinks_changed.into_into_dart().into_dart(),
+            self.0.slides.into_into_dart().into_dart(),
+            self.0.notes.into_into_dart().into_dart(),
+            self.0.hidden_slides.into_into_dart().into_dart(),
+            self.0.multimedia_clips.into_into_dart().into_dart(),
+            self.0.presentation_format.into_into_dart().into_dart(),
+            self.0.slide_titles.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::PptxAppProperties> {}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::PptxAppProperties>> for crate::PptxAppProperties {
+    fn into_into_dart(self) -> FrbWrapper<crate::PptxAppProperties> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::PptxExtractionResult> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -15470,6 +15905,29 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::UriKind> {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::UriKind> {}
 impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::UriKind>> for crate::UriKind {
     fn into_into_dart(self) -> FrbWrapper<crate::UriKind> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::XlsxAppProperties> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.application.into_into_dart().into_dart(),
+            self.0.app_version.into_into_dart().into_dart(),
+            self.0.doc_security.into_into_dart().into_dart(),
+            self.0.scale_crop.into_into_dart().into_dart(),
+            self.0.links_up_to_date.into_into_dart().into_dart(),
+            self.0.shared_doc.into_into_dart().into_dart(),
+            self.0.hyperlinks_changed.into_into_dart().into_dart(),
+            self.0.company.into_into_dart().into_dart(),
+            self.0.worksheet_names.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<crate::XlsxAppProperties> {}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::XlsxAppProperties>> for crate::XlsxAppProperties {
+    fn into_into_dart(self) -> FrbWrapper<crate::XlsxAppProperties> {
         self.into()
     }
 }
@@ -16466,6 +16924,27 @@ impl SseEncode for crate::ContributorRole {
     }
 }
 
+impl SseEncode for crate::CoreProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.subject, serializer);
+        <Option<String>>::sse_encode(self.creator, serializer);
+        <Option<String>>::sse_encode(self.keywords, serializer);
+        <Option<String>>::sse_encode(self.description, serializer);
+        <Option<String>>::sse_encode(self.last_modified_by, serializer);
+        <Option<String>>::sse_encode(self.revision, serializer);
+        <Option<String>>::sse_encode(self.created, serializer);
+        <Option<String>>::sse_encode(self.modified, serializer);
+        <Option<String>>::sse_encode(self.category, serializer);
+        <Option<String>>::sse_encode(self.content_status, serializer);
+        <Option<String>>::sse_encode(self.language, serializer);
+        <Option<String>>::sse_encode(self.identifier, serializer);
+        <Option<String>>::sse_encode(self.version, serializer);
+        <Option<String>>::sse_encode(self.last_printed, serializer);
+    }
+}
+
 impl SseEncode for crate::CsvMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -16580,11 +17059,33 @@ impl SseEncode for crate::DocumentStructure {
     }
 }
 
+impl SseEncode for crate::DocxAppProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.application, serializer);
+        <Option<String>>::sse_encode(self.app_version, serializer);
+        <Option<String>>::sse_encode(self.template, serializer);
+        <Option<i64>>::sse_encode(self.total_time, serializer);
+        <Option<i64>>::sse_encode(self.pages, serializer);
+        <Option<i64>>::sse_encode(self.words, serializer);
+        <Option<i64>>::sse_encode(self.characters, serializer);
+        <Option<i64>>::sse_encode(self.characters_with_spaces, serializer);
+        <Option<i64>>::sse_encode(self.lines, serializer);
+        <Option<i64>>::sse_encode(self.paragraphs, serializer);
+        <Option<String>>::sse_encode(self.company, serializer);
+        <Option<i64>>::sse_encode(self.doc_security, serializer);
+        <Option<bool>>::sse_encode(self.scale_crop, serializer);
+        <Option<bool>>::sse_encode(self.links_up_to_date, serializer);
+        <Option<bool>>::sse_encode(self.shared_doc, serializer);
+        <Option<bool>>::sse_encode(self.hyperlinks_changed, serializer);
+    }
+}
+
 impl SseEncode for crate::DocxMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Option<String>>::sse_encode(self.core_properties, serializer);
-        <Option<String>>::sse_encode(self.app_properties, serializer);
+        <Option<crate::CoreProperties>>::sse_encode(self.core_properties, serializer);
+        <Option<crate::DocxAppProperties>>::sse_encode(self.app_properties, serializer);
         <Option<std::collections::HashMap<String, String>>>::sse_encode(self.custom_properties, serializer);
     }
 }
@@ -18460,6 +18961,16 @@ impl SseEncode for Option<crate::ContentFilterConfig> {
     }
 }
 
+impl SseEncode for Option<crate::CoreProperties> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::CoreProperties>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::DjotContent> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -18476,6 +18987,16 @@ impl SseEncode for Option<crate::DocumentStructure> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::DocumentStructure>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::DocxAppProperties> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::DocxAppProperties>::sse_encode(value, serializer);
         }
     }
 }
@@ -19299,6 +19820,27 @@ impl SseEncode for crate::PostProcessorConfig {
     }
 }
 
+impl SseEncode for crate::PptxAppProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.application, serializer);
+        <Option<String>>::sse_encode(self.app_version, serializer);
+        <Option<i64>>::sse_encode(self.total_time, serializer);
+        <Option<String>>::sse_encode(self.company, serializer);
+        <Option<i64>>::sse_encode(self.doc_security, serializer);
+        <Option<bool>>::sse_encode(self.scale_crop, serializer);
+        <Option<bool>>::sse_encode(self.links_up_to_date, serializer);
+        <Option<bool>>::sse_encode(self.shared_doc, serializer);
+        <Option<bool>>::sse_encode(self.hyperlinks_changed, serializer);
+        <Option<i64>>::sse_encode(self.slides, serializer);
+        <Option<i64>>::sse_encode(self.notes, serializer);
+        <Option<i64>>::sse_encode(self.hidden_slides, serializer);
+        <Option<i64>>::sse_encode(self.multimedia_clips, serializer);
+        <Option<String>>::sse_encode(self.presentation_format, serializer);
+        <Vec<String>>::sse_encode(self.slide_titles, serializer);
+    }
+}
+
 impl SseEncode for crate::PptxExtractionResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -19752,6 +20294,21 @@ impl SseEncode for usize {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u64::<NativeEndian>(self as _).unwrap();
+    }
+}
+
+impl SseEncode for crate::XlsxAppProperties {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.application, serializer);
+        <Option<String>>::sse_encode(self.app_version, serializer);
+        <Option<i64>>::sse_encode(self.doc_security, serializer);
+        <Option<bool>>::sse_encode(self.scale_crop, serializer);
+        <Option<bool>>::sse_encode(self.links_up_to_date, serializer);
+        <Option<bool>>::sse_encode(self.shared_doc, serializer);
+        <Option<bool>>::sse_encode(self.hyperlinks_changed, serializer);
+        <Option<String>>::sse_encode(self.company, serializer);
+        <Vec<String>>::sse_encode(self.worksheet_names, serializer);
     }
 }
 

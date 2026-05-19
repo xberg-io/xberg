@@ -1091,7 +1091,7 @@ jobs:
           fetch-depth: 0
 
           submodules: recursive
-      - uses: erlef/setup-beam@v1.24
+      - uses: erlef/setup-beam@v1.24.0
         with:
           elixir-version: "1.17"
           otp-version: "27"
@@ -1314,11 +1314,17 @@ jobs:
           fetch-depth: 0
           submodules: recursive
       - uses: kreuzberg-dev/actions/setup-rust@v1
-      - uses: kreuzberg-dev/actions/build-swift-artifactbundle@v1
+      # Pinned to a fixed SHA on kreuzberg-dev/actions main until v1 is
+      # retagged. Carries the include-macos-x86_64 + include-ios-x86_64
+      # inputs needed to opt out of targets pyke ORT no longer ships
+      # prebuilts for.
+      - uses: kreuzberg-dev/actions/build-swift-artifactbundle@3ae1c6ee820ff66a4936ea68dc0255d6470e1f77 # v1
         id: bundle
         with:
           crate-name: kreuzberg-swift
           artifact-name: KreuzbergSwift
+          include-macos-x86_64: "false"
+          include-ios-x86_64: "false"
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: swift-artifactbundle
@@ -1590,7 +1596,11 @@ jobs:
 
       - uses: rubygems/configure-rubygems-credentials@v2.0.0
 
-      - uses: kreuzberg-dev/actions/publish-rubygems@v1
+      # Pinned to a fixed SHA on kreuzberg-dev/actions main until v1 is
+      # retagged. Carries the gem-spec diagnostic surfacing fix that prints
+      # the underlying `gem spec` exit code + stderr/stdout, replacing the
+      # bare "invalid gem structure" message.
+      - uses: kreuzberg-dev/actions/publish-rubygems@a2da7ee8758a05cf2a59e369018254f7590d1f8c # v1
         with:
           gems-dir: dist
           dry-run: ${{ needs.prepare.outputs.dry_run }}
@@ -1863,7 +1873,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: recursive
-      - uses: erlef/setup-beam@v1.24
+      - uses: erlef/setup-beam@v1.24.0
         with:
           elixir-version: "1.17"
           otp-version: "27"
@@ -2004,7 +2014,9 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: recursive
-      - uses: kreuzberg-dev/actions/publish-zig@v1
+      # Pinned to a fixed SHA on kreuzberg-dev/actions main until v1 is
+      # retagged. Carries the dry-run gating fix on verify-tag/resolve-tarball.
+      - uses: kreuzberg-dev/actions/publish-zig@a2da7ee8758a05cf2a59e369018254f7590d1f8c # v1
         with:
           working-directory: packages/zig
           tag: ${{ needs.prepare.outputs.tag }}
