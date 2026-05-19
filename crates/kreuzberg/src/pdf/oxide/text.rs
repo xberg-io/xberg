@@ -4,6 +4,7 @@ use super::OxideDocument;
 use crate::core::config::{ExtractionConfig, PageConfig};
 use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::PdfExtractionMetadata;
+use crate::pdf::structure::constants::{COALESCE_THRESHOLD, MAX_GLYPH_JITTER_PT, MIN_DISORDER_COUNT};
 use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
 use crate::types::{PageBoundary, PageContent};
 use pdf_oxide::document::ReadingOrder;
@@ -201,40 +202,9 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
     Ok((content, Some(boundaries), page_contents))
 }
 
-/// Maximum y-gap (pt) between two spans that can still be considered "same line" under
-/// the glyph-fragmentation detection heuristic.
-///
-/// Word's per-glyph BT/ET sinusoidal jitter (6-glyph period, ~3 pt amplitude) produces
-/// consecutive-pair y-gaps of ≤ ~3.03 pt. 5 pt adds headroom for atypical Word
-/// configurations while remaining well below normal body-text line spacing (~12–14 pt).
-/// Using an absolute value instead of a font-size fraction avoids the false-positive
-/// zone where `font_size * 0.25` (the old fallback) is large enough for bigger fonts
-/// to classify consecutive real lines as "same line".
-const MAX_GLYPH_JITTER_PT: f32 = 5.0;
-
-/// Minimum number of qualifying x-disorder events before the span list is classified
-/// as glyph-fragmented.
-///
-/// Empirically, pdf_oxide groups consecutive same-y chars into multi-char spans, so a
-/// 32-char Word jitter word (period 6, 3 distinct y-levels) produces exactly 4 disorder
-/// events (2 per XY-Cut column at each y-level transition). Requiring ≥ 3 events is
-/// sufficient to detect all jitter amplitudes ≥ 3 pt while remaining robust against
-/// false positives: the short-span guard (≤ 3 chars) and the 5 pt same-line ceiling
-/// together make it essentially impossible for normal multi-column text to accumulate
-/// 3 consecutive qualifying resets.
-const MIN_DISORDER_COUNT: usize = 3;
-
-/// y-proximity threshold (pt) for grouping spans into visual lines during reconstruction.
-/// Must be ≥ MAX_GLYPH_JITTER_PT so every span pair accepted by the detection gate is
-/// also merged into the same group during reconstruction.
-const COALESCE_THRESHOLD: f32 = 5.0;
-
-// TODO: remove this heuristic once https://github.com/yfedoseev/pdf_oxide/issues/518 is fixed.
-// pdf_oxide's Tm continuation check (`f.round() as i32`) tolerates only ±0.5 pt of Y-jitter;
-// Word's per-glyph PDFs jitter 2.5–5 pt, splitting same-line characters into separate spans
-// that are then sorted by Y-band, scrambling reading order.
-
 /// Returns true when `spans` exhibits the glyph-fragmentation signature (issue #962).
+///
+/// See `crate::pdf::structure::constants` for the threshold values and their justification.
 ///
 /// pdf_oxide's ColumnAware reading order groups all spans at one y-level before moving
 /// to the next. For Word-exported PDFs where each glyph has its own BT…ET block with a

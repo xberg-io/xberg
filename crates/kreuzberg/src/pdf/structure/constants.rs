@@ -1,5 +1,46 @@
 //! Threshold constants for PDF-to-Markdown spatial analysis.
 
+// ── Glyph-fragmentation repair (issue #962) ────────────────────────────────
+//
+// Word-exported PDFs position each glyph via its own BT…ET block with a
+// sinusoidal y-jitter (~3–5 pt amplitude, 6-glyph period). pdf_oxide's
+// ColumnAware reading order groups spans by y-level, scrambling reading
+// order for these documents. The constants below parameterise the
+// detection and reconstruction heuristic in `pdf::oxide::text`.
+//
+// TODO: remove once https://github.com/yfedoseev/pdf_oxide/issues/518 is
+// fixed. pdf_oxide's Tm continuation check tolerates only ±0.5 pt of
+// Y-jitter; Word PDFs jitter 2.5–5 pt.
+
+/// Maximum y-gap (pt) between two spans that can still be considered "same
+/// line" under the glyph-fragmentation detection heuristic.
+///
+/// Word's sinusoidal jitter (6-glyph period, ~3 pt amplitude) produces
+/// consecutive-pair y-gaps of ≤ ~3.03 pt. 5 pt adds headroom for atypical
+/// Word configurations while remaining well below normal body-text leading
+/// (~12–14 pt). Using an absolute ceiling instead of a font-size fraction
+/// avoids the false-positive zone where `font_size * 0.25` (the old
+/// fallback) overlaps with normal tight leading for larger fonts.
+pub(crate) const MAX_GLYPH_JITTER_PT: f32 = 5.0;
+
+/// Minimum qualifying x-disorder events before classifying a span list as
+/// glyph-fragmented.
+///
+/// A 32-char Word jitter word (period 6, 3 distinct y-levels) produces
+/// exactly 4 disorder events. Requiring ≥ 3 is sufficient to detect all
+/// jitter amplitudes ≥ 3 pt while being robust against false positives:
+/// the short-span guard (≤ 3 chars) and the 5 pt same-line ceiling
+/// together make it essentially impossible for normal multi-column text
+/// to accumulate 3 consecutive qualifying resets.
+pub(crate) const MIN_DISORDER_COUNT: usize = 3;
+
+/// y-proximity threshold (pt) for grouping spans into visual lines during
+/// reconstruction. Must be ≥ MAX_GLYPH_JITTER_PT so every span pair
+/// accepted by the detection gate is merged into the same group.
+pub(crate) const COALESCE_THRESHOLD: f32 = 5.0;
+
+// ── Structural heading analysis ────────────────────────────────────────────
+
 /// Maximum word count for a paragraph to qualify as a heading.
 pub(super) const MAX_HEADING_WORD_COUNT: usize = 20;
 /// Maximum distance multiplier relative to average inter-cluster gap for heading assignment.

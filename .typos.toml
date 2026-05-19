@@ -76,7 +76,8 @@ formated = "formated"
 specifing = "specifing"
 # English variants / valid words flagged incorrectly
 unparseable = "unparseable"
-# Dutch words in issue #962 test comments ("relatie-id" = relation-id)
+# Dutch word in crates/kreuzberg/tests/pdf_glyph_spacing_issue_962.rs module doc
+# ("relatie-id" = Dutch for "relation-id", from Microsoft Word broken-image placeholder)
 relatie = "relatie"
 # PaddleOCR upstream naming
 substract = "substract"

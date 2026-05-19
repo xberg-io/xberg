@@ -8,10 +8,10 @@
 //! "broken image" placeholder text
 //! (`Het afbeelding onderdeel met relatie-id … is niet aangetroffen`).
 //!
-//! Fix: `oxide/text.rs` detects the fragmentation signature (≥ 5 same-line
-//! x-disorder events among short spans) and rebuilds page text from span
-//! positions: sort by y-descending, group by y-proximity, sort each group by x,
-//! insert spaces at word gaps.
+//! Fix: `oxide/text.rs` detects the fragmentation signature (≥ 3 same-line
+//! x-disorder events among short spans; see `pdf::structure::constants`) and
+//! rebuilds page text from span positions: sort by y-descending, group by
+//! y-proximity, sort each group by x, insert spaces at word gaps.
 
 #![cfg(feature = "pdf")]
 
