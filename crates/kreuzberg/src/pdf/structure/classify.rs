@@ -1784,6 +1784,23 @@ mod tests {
         assert_eq!(page[1].text, "Over");
     }
 
+    #[test]
+    fn test_merge_h1s_terminal_punctuation_not_merged() {
+        // A heading ending with sentence-terminal punctuation is a complete
+        // statement, not a split title. It must not absorb the following heading.
+        for suffix in [".", "!", "?", ":"] {
+            let first = format!("SECTION ONE{suffix}");
+            let mut page = vec![make_h1_with_text(24.0, &first), make_h1_with_text(24.0, "INTRODUCTION")];
+            merge_consecutive_h1s(&mut page);
+            assert_eq!(
+                page.len(),
+                2,
+                "heading ending with '{suffix}' must not merge: got {:?}",
+                page[0].text
+            );
+        }
+    }
+
     /// Create a paragraph with bbox in the top margin of a 792pt page.
     fn make_margin_body(text: &str) -> PdfParagraph {
         let mut p = make_paragraph(12.0, 1);
