@@ -21,6 +21,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implementations of both functions. The stubs ensure the symbols are always present
   and callers degrade gracefully (empty list / `null` handle) instead of crashing.
 
+- **#962**: PDF text extracted one character per line on glyph-spaced documents
+  (programmatic reproducer in `crates/kreuzberg/tests/pdf_glyph_spacing_issue_962.rs`)
+  — when a Word-exported PDF places each glyph via its own `BT…ET` block with a
+  sinusoidal y-jitter, pdf_oxide's ColumnAware reading order groups spans by y-level
+  rather than reading order, yielding single-character spans out of sequence. Detection:
+  ≥ 3 same-line x-disorder events among short (≤ 3 char) spans, where "same-line" uses
+  a 5 pt absolute ceiling (`MAX_GLYPH_JITTER_PT`) instead of a font-size fraction,
+  preventing false positives on height-zero span lists from normal documents.
+  Reconstruction: sort by y-descending, group by 5 pt y-proximity, re-sort each group
+  by x-ascending, insert spaces at word gaps (x-gap > `font_size × 0.5`). Heuristic
+  constants live in `crate::pdf::structure::constants` with measurement justification;
+  upstream TODO references pdf_oxide issue #518. Dutch word `relatie` (from
+  "relatie-id" in the Word broken-image placeholder string) added to `.typos.toml`.
+
 ### Changed
 
 - **API surface lockdown via `#[cfg_attr(alef, alef(skip))]`**: 41 internal types
@@ -388,7 +402,6 @@ contain a buildable target.` on every `task swift:e2e` invocation.
 
 ### Fixed
 
-- **#962**: PDF text extracted one character per line on glyph-spaced documents (programmatic reproducer in `tests/pdf_glyph_spacing_issue_962.rs`) — when a Word-exported PDF places each glyph via its own `BT…ET` block with a sinusoidal y-jitter, pdf_oxide's ColumnAware reading order groups spans by y-level rather than reading order, yielding single-character spans out of sequence. Detection: ≥ 3 same-line x-disorder events among short (≤ 3 char) spans, where "same-line" uses the known Word jitter ceiling (5 pt absolute) instead of a font-size fraction, preventing false positives on height-zero span lists from normal documents. Reconstruction: sort by y-descending, group by 5 pt y-proximity, re-sort each group by x-ascending, insert spaces at word gaps (x-gap > font_size × 0.5). Dutch word `relatie` (from "relatie-id" in the Word placeholder string) added to `.typos.toml`.
 - **#799**: Extract images nested inside PDF Form XObjects across XObject references — recursive Form XObject descent (depth-limited to 8) now follows indirect references through the resource chain, with cycle detection via a visited-set so self-referential XObject DAGs no longer hang. Both the lopdf and pdfium image-decoding paths benefit.
 - **#824**: Robust PDF image extraction across XObject references — fixes silent image drops when documents reference XObjects through indirect chains. Combined with the depth limit and cycle guard from #799 to harden the recursive walker against malformed structures.
 - **#826**: WASM loading on Next.js / Turbopack — `@kreuzberg/wasm` now bundles cleanly under webpack 5, Turbopack, and Next.js's app router. Dynamic imports of Node built-ins and the pdfium-js subsystem carry `/* webpackIgnore: true */` markers so bundlers stop trying to inline platform-specific binaries.
