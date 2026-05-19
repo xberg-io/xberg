@@ -1106,6 +1106,19 @@ pub struct StructuredDataResult {
     pub text_fields: Vec<String>,
 }
 
+/// Image metadata extracted from an image file.
+#[frb(mirror(ExtractedImageMetadata))]
+pub struct ExtractedImageMetadata {
+    /// Image width in pixels
+    pub width: i64,
+    /// Image height in pixels
+    pub height: i64,
+    /// Image format (e.g., "PNG", "JPEG")
+    pub format: String,
+    /// EXIF data if available
+    pub exif_data: std::collections::HashMap<String, String>,
+}
+
 /// Application properties from docProps/app.xml for DOCX
 ///
 /// Contains Word-specific document statistics and metadata.
@@ -4426,6 +4439,17 @@ impl From<kreuzberg::extraction::structured::StructuredDataResult> for Structure
             format: v.format.into_owned(),
             metadata: v.metadata.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
             text_fields: v.text_fields.into_iter().map(|s| s.into()).collect(),
+        }
+    }
+}
+
+impl From<kreuzberg::extraction::image::ExtractedImageMetadata> for ExtractedImageMetadata {
+    fn from(v: kreuzberg::extraction::image::ExtractedImageMetadata) -> Self {
+        ExtractedImageMetadata {
+            width: v.width as _,
+            height: v.height as _,
+            format: v.format.into(),
+            exif_data: v.exif_data.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
         }
     }
 }

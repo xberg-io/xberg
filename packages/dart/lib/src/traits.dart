@@ -94,7 +94,6 @@ abstract class OcrBackend {
   /// ```
   /// throws anyhow::Error on failure
   Future<ExtractionResult> processImage(Uint8List imageBytes, OcrConfig config);
-
   /// Process a file and extract text via OCR.
   ///
   /// Default implementation reads the file and calls `process_image`.
@@ -110,7 +109,6 @@ abstract class OcrBackend {
   /// Same as `process_image`, plus file I/O errors.
   /// throws anyhow::Error on failure
   Future<ExtractionResult> processImageFile(String path, OcrConfig config);
-
   /// Check if this backend supports a given language code.
   ///
   /// # Arguments
@@ -129,7 +127,6 @@ abstract class OcrBackend {
   /// }
   /// ```
   Future<bool> supportsLanguage(String lang);
-
   /// Get the backend type identifier.
   ///
   /// # Returns
@@ -144,22 +141,18 @@ abstract class OcrBackend {
   /// }
   /// ```
   Future<OcrBackendType> backendType();
-
   /// Optional: Get a list of all supported languages.
   ///
   /// Defaults to empty list. Override to provide comprehensive language support info.
   Future<List<String>> supportedLanguages();
-
   /// Optional: Check if the backend supports table detection.
   ///
   /// Defaults to `false`. Override if your backend can detect and extract tables.
   Future<bool> supportsTableDetection();
-
   /// Check if the backend supports direct document-level processing (e.g. for PDFs).
   ///
   /// Defaults to `false`. Override if the backend has optimized document processing.
   Future<bool> supportsDocumentProcessing();
-
   /// Process a document file directly via OCR.
   ///
   /// Only called if `supports_document_processing` returns `true`.
@@ -258,7 +251,6 @@ abstract class PostProcessor {
   /// ```
   /// throws anyhow::Error on failure
   Future<void> process(ExtractionResult result, ExtractionConfig config);
-
   /// Get the processing stage for this post-processor.
   ///
   /// Determines when this processor runs in the pipeline.
@@ -275,7 +267,6 @@ abstract class PostProcessor {
   /// }
   /// ```
   Future<ProcessingStage> processingStage();
-
   /// Optional: Check if this processor should run for a given result.
   ///
   /// Allows conditional processing based on MIME type, metadata, or content.
@@ -299,7 +290,6 @@ abstract class PostProcessor {
   /// }
   /// ```
   Future<bool> shouldProcess(ExtractionResult result, ExtractionConfig config);
-
   /// Optional: Estimate processing time in milliseconds.
   ///
   /// Used for logging and debugging. Defaults to 0 (unknown).
@@ -312,7 +302,6 @@ abstract class PostProcessor {
   ///
   /// Estimated processing time in milliseconds.
   Future<int> estimatedDurationMs(ExtractionResult result);
-
   /// Execution priority within the processing stage.
   ///
   /// Higher values run first within the same `ProcessingStage`. Defaults to 50.
@@ -430,7 +419,6 @@ abstract class Validator {
   /// ```
   /// throws anyhow::Error on failure
   Future<void> validate(ExtractionResult result, ExtractionConfig config);
-
   /// Optional: Check if this validator should run for a given result.
   ///
   /// Allows conditional validation based on MIME type, metadata, or content.
@@ -454,7 +442,6 @@ abstract class Validator {
   /// }
   /// ```
   Future<bool> shouldValidate(ExtractionResult result, ExtractionConfig config);
-
   /// Optional: Get the validation priority.
   ///
   /// Higher priority validators run first. Useful for ordering validation checks
@@ -498,7 +485,6 @@ abstract class EmbeddingBackend {
   /// Embedding vector dimension. Must be `> 0` and must match the length of
   /// every vector returned by `embed`.
   Future<int> dimensions();
-
   /// Embed a batch of texts, returning one vector per input in order.
   ///
   /// # Errors
@@ -562,12 +548,7 @@ abstract class DocumentExtractor {
   /// - `KreuzbergError::Io` - I/O errors (these always bubble up)
   /// - `KreuzbergError::MissingDependency` - Required dependency not available
   /// throws anyhow::Error on failure
-  Future<InternalDocument> extractBytes(
-    Uint8List content,
-    String mimeType,
-    ExtractionConfig config,
-  );
-
+  Future<InternalDocument> extractBytes(Uint8List content, String mimeType, ExtractionConfig config);
   /// Extract content from a file.
   ///
   /// Default implementation reads the file and calls `extract_bytes`.
@@ -587,12 +568,7 @@ abstract class DocumentExtractor {
   ///
   /// Same as `extract_bytes`, plus file I/O errors.
   /// throws anyhow::Error on failure
-  Future<InternalDocument> extractFile(
-    String path,
-    String mimeType,
-    ExtractionConfig config,
-  );
-
+  Future<InternalDocument> extractFile(String path, String mimeType, ExtractionConfig config);
   /// Get the list of MIME types supported by this extractor.
   ///
   /// Can include exact MIME types and prefix patterns:
@@ -603,7 +579,6 @@ abstract class DocumentExtractor {
   ///
   /// A slice of MIME type strings.
   Future<List<String>> supportedMimeTypes();
-
   /// Get the priority of this extractor.
   ///
   /// Higher priority extractors are preferred when multiple extractors
@@ -621,7 +596,6 @@ abstract class DocumentExtractor {
   ///
   /// Priority value (default: 50)
   Future<int> priority();
-
   /// Optional: Check if this extractor can handle a specific file.
   ///
   /// Allows for more sophisticated detection beyond MIME types.
@@ -636,7 +610,6 @@ abstract class DocumentExtractor {
   ///
   /// `true` if the extractor can handle this file, `false` otherwise.
   Future<bool> canHandle(String path, String mimeType);
-
   /// Attempt to get a reference to this extractor as a SyncExtractor.
   ///
   /// Returns None if the extractor doesn't support synchronous extraction.

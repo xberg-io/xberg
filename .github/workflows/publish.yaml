@@ -1318,7 +1318,7 @@ jobs:
       # retagged. Carries the include-macos-x86_64 + include-ios-x86_64
       # inputs needed to opt out of targets pyke ORT no longer ships
       # prebuilts for.
-      - uses: kreuzberg-dev/actions/build-swift-artifactbundle@a2da7ee8758a05cf2a59e369018254f7590d1f8c # v1
+      - uses: kreuzberg-dev/actions/build-swift-artifactbundle@3ae1c6ee820ff66a4936ea68dc0255d6470e1f77 # v1
         id: bundle
         with:
           crate-name: kreuzberg-swift

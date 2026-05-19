@@ -47,7 +47,7 @@ pub use config::{PaddleLanguage, PaddleOcrConfig};
 pub use model_manager::{ModelPaths, RecModelPaths, ResolvedRecModel, SharedModelPaths};
 
 #[cfg(feature = "paddle-ocr")]
-pub use model_manager::{CacheStats, ModelManager, ModelManifestEntry};
+pub use model_manager::{ModelCacheStats, ModelManager, ModelManifestEntry};
 
 /// Supported languages for PaddleOCR.
 ///

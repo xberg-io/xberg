@@ -165,7 +165,11 @@ pub use rendering::StyledHtmlRenderer;
 pub use paddle_ocr::{ModelPaths, PaddleLanguage, PaddleOcrConfig};
 
 #[cfg(feature = "paddle-ocr")]
-pub use paddle_ocr::{CacheStats, ModelManager, ModelManifestEntry, PaddleOcrBackend};
+pub use paddle_ocr::{ModelCacheStats, ModelManager, ModelManifestEntry, PaddleOcrBackend};
+
+// Re-export canonical CacheStats (generic extraction cache statistics) at the crate root.
+// This supersedes the orphan `types::formats::CacheStats` which has been removed.
+pub use cache::CacheStats;
 
 #[cfg(feature = "layout-types")]
 pub use core::config::{LayoutDetectionConfig, TableModel};

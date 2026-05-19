@@ -231,10 +231,7 @@ private class NodeContentDeserializer : com.fasterxml.jackson.databind.deser.std
             "raw_block" -> ctx.readTreeAsValue<NodeContent.RawBlock>(payload, NodeContent.RawBlock::class.java)
             "metadata_block" -> ctx.readTreeAsValue<NodeContent.MetadataBlock>(payload, NodeContent.MetadataBlock::class.java)
             else -> throw com.fasterxml.jackson.databind.exc.InvalidFormatException(
-                parser,
-                "Unknown NodeContent tag",
-                tag,
-                NodeContent::class.java,
+                parser, "Unknown NodeContent tag", tag, NodeContent::class.java,
             )
         }
     }
@@ -248,80 +245,53 @@ private class NodeContentSerializer : com.fasterxml.jackson.databind.ser.std.Std
         provider: com.fasterxml.jackson.databind.SerializerProvider,
     ) {
         @Suppress("UNCHECKED_CAST")
-        val mapper =
-            (gen.codec as? com.fasterxml.jackson.databind.ObjectMapper)
-                ?: com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
-        val node: com.fasterxml.jackson.databind.node.ObjectNode =
-            when (value) {
+        val mapper = (gen.codec as? com.fasterxml.jackson.databind.ObjectMapper) ?: com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
+        val node: com.fasterxml.jackson.databind.node.ObjectNode = when (value) {
             is NodeContent.Title -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Title
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Title) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "title")
                 n
             }
             is NodeContent.Heading -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Heading
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Heading) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "heading")
                 n
             }
             is NodeContent.Paragraph -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Paragraph
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Paragraph) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "paragraph")
                 n
             }
             is NodeContent.List -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.List
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.List) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "list")
                 n
             }
             is NodeContent.ListItem -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.ListItem
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.ListItem) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "list_item")
                 n
             }
             is NodeContent.Table -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Table
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Table) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "table")
                 n
             }
             is NodeContent.Image -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Image
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Image) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "image")
                 n
             }
             is NodeContent.Code -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Code
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Code) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "code")
                 n
             }
@@ -332,28 +302,19 @@ private class NodeContentSerializer : com.fasterxml.jackson.databind.ser.std.Std
             }
             is NodeContent.Formula -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Formula
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Formula) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "formula")
                 n
             }
             is NodeContent.Footnote -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Footnote
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Footnote) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "footnote")
                 n
             }
             is NodeContent.Group -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Group
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Group) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "group")
                 n
             }
@@ -364,10 +325,7 @@ private class NodeContentSerializer : com.fasterxml.jackson.databind.ser.std.Std
             }
             is NodeContent.Slide -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Slide
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Slide) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "slide")
                 n
             }
@@ -378,46 +336,31 @@ private class NodeContentSerializer : com.fasterxml.jackson.databind.ser.std.Std
             }
             is NodeContent.DefinitionItem -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.DefinitionItem
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.DefinitionItem) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "definition_item")
                 n
             }
             is NodeContent.Citation -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Citation
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Citation) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "citation")
                 n
             }
             is NodeContent.Admonition -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.Admonition
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Admonition) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "admonition")
                 n
             }
             is NodeContent.RawBlock -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.RawBlock
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.RawBlock) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "raw_block")
                 n
             }
             is NodeContent.MetadataBlock -> {
                 @Suppress("UNCHECKED_CAST")
-                val n =
-                    mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as NodeContent.MetadataBlock
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.MetadataBlock) as com.fasterxml.jackson.databind.node.ObjectNode
                 n.put("node_type", "metadata_block")
                 n
             }

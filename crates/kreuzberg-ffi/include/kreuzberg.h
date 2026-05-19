@@ -480,6 +480,10 @@ typedef struct KREUZBERGExecutionProviderType KREUZBERGExecutionProviderType;
  */
 typedef struct KREUZBERGExtractedImage KREUZBERGExtractedImage;
 /**
+ * Image metadata extracted from an image file.
+ */
+typedef struct KREUZBERGExtractedImageMetadata KREUZBERGExtractedImageMetadata;
+/**
  * Main extraction configuration.
  *
  * This struct contains all configuration options for the extraction process.
@@ -4588,6 +4592,41 @@ char *kreuzberg_structured_data_result_metadata(const KREUZBERGStructuredDataRes
  * Pointer must be a valid handle returned by this library.
  */
 char *kreuzberg_structured_data_result_text_fields(const KREUZBERGStructuredDataResult *ptr);
+
+/**
+ * Free a `ExtractedImageMetadata` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_extracted_image_metadata_free(KREUZBERGExtractedImageMetadata *ptr);
+
+/**
+ * Get the `width` field from a `ExtractedImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t kreuzberg_extracted_image_metadata_width(const KREUZBERGExtractedImageMetadata *ptr);
+
+/**
+ * Get the `height` field from a `ExtractedImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint32_t kreuzberg_extracted_image_metadata_height(const KREUZBERGExtractedImageMetadata *ptr);
+
+/**
+ * Get the `format` field from a `ExtractedImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_extracted_image_metadata_format(const KREUZBERGExtractedImageMetadata *ptr);
+
+/**
+ * Get the `exif_data` field from a `ExtractedImageMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_extracted_image_metadata_exif_data(const KREUZBERGExtractedImageMetadata *ptr);
 
 /**
  * Create a `DocxAppProperties` from a JSON string. Returns null on failure.
