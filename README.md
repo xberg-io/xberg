@@ -340,6 +340,7 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 ## License
 
 Elastic License 2.0 (ELv2) - see [LICENSE](LICENSE) for details. See [https://www.elastic.co/licensing/elastic-license](https://www.elastic.co/licensing/elastic-license) for the full license text.
+
 ## FAQ
 
 ### What is Kreuzberg?
@@ -372,6 +373,7 @@ Kreuzberg's Rust core with SIMD optimizations and parallelism delivers 10-100x f
 ### What file formats does Kreuzberg support?
 
 8 categories covering 91+ formats:
+
 - **Documents** — PDF, DOCX, DOC, ODT, RTF, WPD
 - **Office** — XLSX, XLS, PPTX, PPT, ODS, ODP
 - **Images** — PNG, JPEG, TIFF, BMP, GIF, WebP
@@ -386,32 +388,41 @@ Kreuzberg's Rust core with SIMD optimizations and parallelism delivers 10-100x f
 Choose your platform:
 
 **Python:**
+
 ```bash
 pip install kreuzberg
 ```
+
 See [Python docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/python)
 
 **Node.js:**
+
 ```bash
 npm install @kreuzberg/node
 ```
+
 See [Node.js docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-node)
 
 **Rust:**
+
 ```bash
 cargo add kreuzberg
 ```
+
 See [Rust docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg)
 
 **Docker:**
+
 ```bash
 docker pull ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
+
 See [Docker docs](https://docs.kreuzberg.dev/guides/docker/)
 
 ### What LLM/VLM providers are supported?
 
 143 providers including:
+
 - **OpenAI** — GPT-4o (vision), text models
 - **Anthropic** — Claude (vision), Claude 3.5 Sonnet
 - **Google** — Gemini (vision), Gemini 2.0 Flash
@@ -430,6 +441,7 @@ See [Docker docs](https://docs.kreuzberg.dev/guides/docker/)
 ### What is the TOON wire format?
 
 TOON is Kreuzberg's token-efficient serialization format for LLM/RAG pipelines. It uses ~30-50% fewer tokens than JSON, making it ideal for:
+
 - Large document processing
 - RAG system integration
 - LLM context window optimization
@@ -438,6 +450,7 @@ TOON is Kreuzberg's token-efficient serialization format for LLM/RAG pipelines. 
 ### What is code intelligence extraction?
 
 Kreuzberg extracts semantic code information via tree-sitter:
+
 - **Functions** — Names, parameters, return types, docstrings
 - **Classes** — Names, methods, inheritance, properties
 - **Imports** — Module names, import paths
@@ -449,6 +462,7 @@ Results in `ExtractionResult.code_intelligence` with semantic chunking.
 ### Does Kreuzberg work in browsers?
 
 Yes! The WASM package (`@kreuzberg/wasm`) supports browsers, Deno, and Cloudflare Workers with:
+
 - PDF, Excel, archives, all office formats
 - Real Tesseract OCR via WASI build
 - Only ORT-dependent features excluded (PaddleOCR, layout detection, embeddings, auto-rotate)
@@ -485,6 +499,7 @@ Yes! The WASM package (`@kreuzberg/wasm`) supports browsers, Deno, and Cloudflar
 ### What platforms are supported?
 
 All bindings support:
+
 - **Linux** — x86_64 and aarch64
 - **macOS** — ARM64
 - **Windows** — x64 (most bindings)
@@ -502,4 +517,3 @@ Elastic-2.0 License — open-source with commercial use restrictions. See [LICEN
 - **Discord**: [discord.gg/xt9WY3GnKR](https://discord.gg/xt9WY3GnKR)
 - **Hugging Face**: [huggingface.co/Kreuzberg](https://huggingface.co/Kreuzberg)
 - **GitHub Issues**: [github.com/kreuzberg-dev/kreuzberg/issues](https://github.com/kreuzberg-dev/kreuzberg/issues)
-
