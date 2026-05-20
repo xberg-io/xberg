@@ -72,8 +72,10 @@ fn parse_group(node: &Node) -> Result<Vec<SlideElement>> {
             }
         }
         "pic" => {
-            let image_reference = parse_pic(node)?;
-            elements.push(SlideElement::Image(image_reference, position));
+            match parse_pic(node) {
+                Ok(image_reference) => elements.push(SlideElement::Image(image_reference, position)),
+                Err(e) => tracing::warn!("Skipping broken image in slide: {}", e),
+            }
         }
         "grpSp" => {
             for child in node.children().filter(|n| n.is_element()) {
