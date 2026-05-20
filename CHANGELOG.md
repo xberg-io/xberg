@@ -46,6 +46,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Only legitimate WASM/Rust platform-imposed skips remain (7× WASM-async,
   1× Rust-missing-file-path).
 
+### Fixed (#985 pdf image extraction hang)
+
+- **PDF image extraction hang on dense pages (#985)**: `extract_image_positions`
+  previously ran a full decompression pass over every page unconditionally — even
+  when `extract_images=false` — causing multi-minute hangs on PDFs with many image
+  objects per page (e.g. InDesign/Acrobat exports). The pre-pass is eliminated;
+  image positions are now derived from the capped extraction result, so the
+  decompression path is skipped entirely when images are not requested. Also adds
+  cancellation-token support inside `extract_images_with_data` so
+  `extraction_timeout_secs` can interrupt multi-page extraction between pages, and
+  inside the inline-OCR image loop so a timeout can interrupt per-image OCR.
+
+  `max_images_per_page` now bounds decompression for XObject images: the pdf_oxide
+  backend enumerates the page XObject resource dictionary and stops decompressing
+  after `limit` images, avoiding the eager cost of `extract_images()` for images
+  beyond the cap. Inline images (`BI`/`EI` content-stream operators) fall back to
+  the eager path with a `.take(limit)` guard; full inline-image support is tracked
+  in #989.
+
+- **`kreuzberg::utils::pool` API simplified**: `Pool::acquire()` is now infallible
+  — it returns `PoolGuard<T>` directly instead of `Result<PoolGuard<T>, PoolError>`.
+  `PoolError` is removed. `parking_lot::Mutex` cannot poison, so the `Result`
+  wrapper was dead code. `Pool`, `PoolGuard`, `Recyclable`, `StringBufferPool`, and
+  `ByteBufferPool` are marked `#[doc(hidden)]` — they were technically reachable via
+  `kreuzberg::utils::pool` but were never part of the stable public API.
+
 ### Added
 
 - **`kreuzberg` crate root**: plugin_api surface (`list_*`, `clear_*`, `register_*`,

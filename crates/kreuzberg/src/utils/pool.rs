@@ -23,7 +23,7 @@
 //! use kreuzberg::utils::pool::StringBufferPool;
 //!
 //! let pool = StringBufferPool::new(|| String::with_capacity(4096), 10); // 10 buffers of 4KB each
-//! let mut buffer = pool.acquire().unwrap();
+//! let mut buffer = pool.acquire();
 //! buffer.push_str("some content");
 //! // buffer is returned to pool when dropped
 //! ```
@@ -86,6 +86,7 @@ impl Default for PoolMetrics {
 ///
 /// Generic over any type that implements `Recyclable`, allowing pooling of
 /// different object types with custom reset logic.
+#[doc(hidden)]
 #[cfg_attr(alef, alef(skip))]
 #[derive(Clone)]
 pub struct Pool<T: Recyclable> {
@@ -100,6 +101,7 @@ pub struct Pool<T: Recyclable> {
 ///
 /// Implementing this trait allows a type to be used with `Pool<T>`.
 /// The `reset()` method should clear the object's state for reuse.
+#[doc(hidden)]
 #[cfg_attr(alef, alef(skip))]
 pub trait Recyclable: Send + 'static {
     /// Reset the object to a reusable state.
@@ -151,7 +153,7 @@ impl<T: Recyclable> Pool<T> {
     ///
     /// Panics if the mutex is already locked by the current thread (deadlock).
     /// This is a safety mechanism provided by parking_lot to prevent subtle bugs.
-    pub fn acquire(&self) -> Result<PoolGuard<T>, PoolError> {
+    pub fn acquire(&self) -> PoolGuard<T> {
         #[cfg(feature = "pool-metrics")]
         self.metrics.total_acquires.fetch_add(1, Ordering::Relaxed);
 
@@ -170,7 +172,7 @@ impl<T: Recyclable> Pool<T> {
             (self.factory)()
         };
 
-        Ok(PoolGuard {
+        PoolGuard {
             object: Some(object),
             pool: Pool {
                 factory: Arc::clone(&self.factory),
@@ -179,7 +181,7 @@ impl<T: Recyclable> Pool<T> {
                 #[cfg(feature = "pool-metrics")]
                 metrics: Arc::clone(&self.metrics),
             },
-        })
+        }
     }
 
     /// Get the current number of objects in the pool.
@@ -189,9 +191,8 @@ impl<T: Recyclable> Pool<T> {
 
     /// Clear the pool, discarding all pooled objects.
     #[cfg(any(feature = "tokio-runtime", test))]
-    pub(crate) fn clear(&self) -> Result<(), PoolError> {
+    pub(crate) fn clear(&self) {
         self.objects.lock().clear();
-        Ok(())
     }
 
     /// Get a reference to the pool metrics (only available with `pool-metrics` feature).
@@ -202,6 +203,7 @@ impl<T: Recyclable> Pool<T> {
 }
 
 /// RAII guard that returns an object to the pool when dropped.
+#[doc(hidden)]
 pub struct PoolGuard<T: Recyclable> {
     object: Option<T>,
     pool: Pool<T>,
@@ -263,32 +265,13 @@ impl Recyclable for Vec<u8> {
     }
 }
 
-/// Error type for pool operations.
-#[derive(Debug, Clone)]
-#[cfg_attr(alef, alef(skip))]
-pub enum PoolError {
-    /// The pool's internal mutex was poisoned.
-    ///
-    /// This indicates a panic occurred while holding the lock.
-    /// The pool is in a locked state and cannot be recovered.
-    LockPoisoned,
-}
-
-impl std::fmt::Display for PoolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PoolError::LockPoisoned => write!(f, "pool lock poisoned"),
-        }
-    }
-}
-
-impl std::error::Error for PoolError {}
-
 /// Convenience type alias for a pooled String.
+#[doc(hidden)]
 #[cfg_attr(alef, alef(skip))]
 pub type StringBufferPool = Pool<String>;
 
 /// Convenience type alias for a pooled Vec<u8>.
+#[doc(hidden)]
 #[cfg_attr(alef, alef(skip))]
 pub type ByteBufferPool = Pool<Vec<u8>>;
 
@@ -309,7 +292,7 @@ pub type ByteBufferPool = Pool<Vec<u8>>;
 /// use kreuzberg::utils::pool::create_string_buffer_pool;
 ///
 /// let pool = create_string_buffer_pool(10, 8192);
-/// let mut buffer = pool.acquire().unwrap();
+/// let mut buffer = pool.acquire();
 /// buffer.push_str("content");
 /// ```
 #[cfg_attr(alef, alef(skip))]
@@ -334,7 +317,7 @@ pub fn create_string_buffer_pool(pool_size: usize, buffer_capacity: usize) -> St
 /// use kreuzberg::utils::pool::create_byte_buffer_pool;
 ///
 /// let pool = create_byte_buffer_pool(10, 65536);
-/// let mut buffer = pool.acquire().unwrap();
+/// let mut buffer = pool.acquire();
 /// buffer.extend_from_slice(b"binary data");
 /// ```
 #[cfg_attr(alef, alef(skip))]
@@ -351,13 +334,13 @@ mod tests {
         let pool = Pool::new(String::new, 5);
 
         {
-            let mut s1 = pool.acquire().unwrap();
+            let mut s1 = pool.acquire();
             s1.push_str("hello");
             assert_eq!(s1.len(), 5);
         }
 
         {
-            let s2 = pool.acquire().unwrap();
+            let s2 = pool.acquire();
             assert_eq!(s2.len(), 0, "string should be cleared when reused");
         }
     }
@@ -366,9 +349,9 @@ mod tests {
     fn test_pool_respects_max_size() {
         let pool = Pool::new(String::new, 2);
 
-        let guard1 = pool.acquire().unwrap();
-        let guard2 = pool.acquire().unwrap();
-        let guard3 = pool.acquire().unwrap();
+        let guard1 = pool.acquire();
+        let guard2 = pool.acquire();
+        let guard3 = pool.acquire();
 
         drop(guard1);
         drop(guard2);
@@ -381,14 +364,14 @@ mod tests {
     fn test_pool_clear() {
         let pool = Pool::new(String::new, 5);
 
-        let _g1 = pool.acquire().unwrap();
-        let _g2 = pool.acquire().unwrap();
+        let _g1 = pool.acquire();
+        let _g2 = pool.acquire();
 
         drop(_g1);
         drop(_g2);
 
         assert!(pool.size() > 0, "pool should have items");
-        pool.clear().unwrap();
+        pool.clear();
         assert_eq!(pool.size(), 0, "pool should be empty after clear");
     }
 
@@ -397,13 +380,13 @@ mod tests {
         let pool = Pool::new(Vec::new, 5);
 
         {
-            let mut buf = pool.acquire().unwrap();
+            let mut buf = pool.acquire();
             buf.extend_from_slice(b"hello");
             assert_eq!(buf.len(), 5);
         }
 
         {
-            let buf = pool.acquire().unwrap();
+            let buf = pool.acquire();
             assert_eq!(buf.len(), 0, "buffer should be cleared");
         }
     }
@@ -411,7 +394,7 @@ mod tests {
     #[test]
     fn test_pool_deref() {
         let pool = Pool::new(String::new, 5);
-        let mut guard = pool.acquire().unwrap();
+        let mut guard = pool.acquire();
 
         let _len = guard.len();
 
@@ -430,7 +413,7 @@ mod tests {
         for i in 0..5 {
             let pool_clone = Arc::clone(&pool);
             let handle = thread::spawn(move || {
-                let mut buf = pool_clone.acquire().unwrap();
+                let mut buf = pool_clone.acquire();
                 buf.push_str(&format!("thread_{}", i));
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 drop(buf);
@@ -451,11 +434,11 @@ mod tests {
         let pool = Pool::new(String::new, 5);
 
         {
-            let _s1 = pool.acquire().unwrap();
+            let _s1 = pool.acquire();
         }
 
         {
-            let _s2 = pool.acquire().unwrap();
+            let _s2 = pool.acquire();
         }
 
         let metrics = pool.metrics();
@@ -472,9 +455,9 @@ mod tests {
     fn test_pool_metrics_peak_tracking() {
         let pool = Pool::new(String::new, 5);
 
-        let g1 = pool.acquire().unwrap();
-        let g2 = pool.acquire().unwrap();
-        let g3 = pool.acquire().unwrap();
+        let g1 = pool.acquire();
+        let g2 = pool.acquire();
+        let g3 = pool.acquire();
 
         drop(g1);
         drop(g2);

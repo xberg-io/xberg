@@ -21,7 +21,7 @@ mod tests {
 
         let mut buffers = vec![];
         for _ in 0..3 {
-            let buf = pool.acquire().expect("Operation failed");
+            let buf = pool.acquire();
             buffers.push(buf);
         }
 
@@ -31,7 +31,7 @@ mod tests {
 
         let mut buffers = vec![];
         for _ in 0..3 {
-            let buf = pool.acquire().expect("Operation failed");
+            let buf = pool.acquire();
             buffers.push(buf);
         }
         drop(buffers);
@@ -47,8 +47,8 @@ mod tests {
             let mut results = vec![];
 
             for _i in 0..5 {
-                let string_buf = processor.string_pool().acquire().expect("Operation failed");
-                let byte_buf = processor.byte_pool().acquire().expect("Operation failed");
+                let string_buf = processor.string_pool().acquire();
+                let byte_buf = processor.byte_pool().acquire();
 
                 results.push((string_buf, byte_buf));
             }
@@ -65,17 +65,17 @@ mod tests {
         let pool = create_string_buffer_pool(5, 4096);
 
         let capacity_initial = {
-            let buf = pool.acquire().expect("Operation failed");
+            let buf = pool.acquire();
             buf.capacity()
         };
 
         for _ in 0..10 {
-            let mut buf = pool.acquire().expect("Operation failed");
+            let mut buf = pool.acquire();
             buf.push_str("test data");
         }
 
         let capacity_final = {
-            let buf = pool.acquire().expect("Operation failed");
+            let buf = pool.acquire();
             buf.capacity()
         };
 
@@ -101,15 +101,15 @@ mod tests {
         let processor = BatchProcessor::new();
 
         {
-            let _s1 = processor.string_pool().acquire().expect("Operation failed");
-            let _s2 = processor.string_pool().acquire().expect("Operation failed");
-            let _b1 = processor.byte_pool().acquire().expect("Operation failed");
+            let _s1 = processor.string_pool().acquire();
+            let _s2 = processor.string_pool().acquire();
+            let _b1 = processor.byte_pool().acquire();
         }
 
         assert!(processor.string_pool_size() > 0);
         assert!(processor.byte_pool_size() > 0);
 
-        processor.clear_pools().expect("Operation failed");
+        processor.clear_pools();
 
         assert_eq!(processor.string_pool_size(), 0);
         assert_eq!(processor.byte_pool_size(), 0);
@@ -137,7 +137,7 @@ mod tests {
         }
 
         for handle in handles {
-            handle.join().expect("Operation failed");
+            handle.join().expect("thread panicked");
         }
 
         assert!(processor.string_pool_size() <= 10);
@@ -148,7 +148,7 @@ mod tests {
     fn test_pool_respects_capacity_hints() {
         let pool = create_string_buffer_pool(3, 2048);
 
-        let buf = pool.acquire().expect("Operation failed");
+        let buf = pool.acquire();
         assert!(buf.capacity() >= 2048, "buffer should respect capacity hint");
     }
 }

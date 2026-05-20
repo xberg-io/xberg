@@ -92,15 +92,8 @@ pub(crate) fn extract_all_from_oxide_document(
         None
     };
 
-    // --- Image positions for assembly pipeline ---
-    let image_positions = crate::pdf::oxide::images::extract_image_positions(&mut doc).map_err(|e| {
-        crate::error::KreuzbergError::Parsing {
-            message: format!("pdf_oxide image position extraction failed: {e}"),
-            source: None,
-        }
-    })?;
-
     // --- Extracted images (data + OCR) ---
+    // Positions are derived from extracted data — no separate decompression pass needed.
     let images_extraction_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
         || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
 
@@ -110,15 +103,15 @@ pub(crate) fn extract_all_from_oxide_document(
         .map(|p| p.ocr_inline_images)
         .unwrap_or(false);
 
-    let images = if images_extraction_enabled || ocr_inline_images {
+    let (images, image_positions) = if images_extraction_enabled || ocr_inline_images {
         let max_images = config.images.as_ref().and_then(|i| i.max_images_per_page);
         #[cfg_attr(not(feature = "ocr"), allow(unused_mut))]
-        let mut extracted = crate::pdf::oxide::images::extract_images_with_data(&mut doc, max_images).map_err(|e| {
-            crate::error::KreuzbergError::Parsing {
-                message: format!("pdf_oxide image extraction failed: {e}"),
-                source: None,
-            }
-        })?;
+        let mut extracted =
+            crate::pdf::oxide::images::extract_images_with_data(&mut doc, max_images, config.cancel_token.as_ref())
+                .map_err(|e| crate::error::KreuzbergError::Parsing {
+                    message: format!("pdf_oxide image extraction failed: {e}"),
+                    source: None,
+                })?;
 
         // Perform OCR on extracted images if enabled
         if ocr_inline_images && !extracted.is_empty() {
@@ -139,6 +132,9 @@ pub(crate) fn extract_all_from_oxide_document(
                     .unwrap_or_default();
 
                 for img in &mut extracted {
+                    if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+                        break;
+                    }
                     let internal_config: crate::ocr::types::TesseractConfig = (&tesseract_config).into();
                     match ocr_processor.process_image(&img.data, &internal_config) {
                         Ok(ocr_result) => {
@@ -156,9 +152,15 @@ pub(crate) fn extract_all_from_oxide_document(
                 }
             }
         }
-        Some(extracted)
+        // Derive positions from the capped set — no second decompression pass.
+        let positions: Vec<(u32, u32)> = extracted
+            .iter()
+            .map(|img| (img.page_number.unwrap_or(1), img.image_index))
+            .collect();
+        (Some(extracted), positions)
     } else {
-        None
+        // inject_placeholders is gated on images_extraction_enabled, so empty is correct.
+        (None, Vec::new())
     };
 
     if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
@@ -213,8 +215,6 @@ pub(crate) fn extract_all_from_oxide_document(
             // Same gate as the oxide path: only inject placeholders when image extraction
             // is explicitly enabled. Prevents base64 data from leaking into results when
             // the caller sets extract_images=false (fixes #796).
-            let images_extraction_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
-                || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
             let inject_placeholders =
                 images_extraction_enabled && config.images.as_ref().map(|c| c.inject_placeholders).unwrap_or(false);
 

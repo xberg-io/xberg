@@ -552,6 +552,344 @@ fn test_chunk_image_indices_are_valid_when_images_extracted() {
     }
 }
 
+/// Regression for #985: max_images_per_page must cap the output count per page.
+///
+/// Before the fix, `extract_image_positions` ran a complete decompression pass
+/// over every page unconditionally (even when extract_images=false), then
+/// `extract_images_with_data` ran a second pass.  The `.take(N)` limit only
+/// clipped the returned slice — it did not stop the decompression work.
+///
+/// After the fix:
+/// - When extract_images=false, NO decompression occurs at all (the main hang fix).
+/// - When extract_images=true, a single pass runs and the cap is respected in output.
+///   The per-page decompression cost for images beyond the cap is a pdf_oxide
+///   upstream limitation: `extract_images()` is eager.  Eliminating that
+///   remaining cost requires a count-limited API upstream.
+#[test]
+fn test_max_images_per_page_cap_respected_in_output() {
+    use kreuzberg::core::config::ImageExtractionConfig;
+    use std::collections::HashMap;
+
+    let path = test_documents_dir().join("pdf/installatiehandleiding_kombi_kompakt_hr.pdf");
+    if !path.exists() {
+        eprintln!("skipping: test PDF not present at {}", path.display());
+        return;
+    }
+
+    let cap: u32 = 5;
+    let config = ExtractionConfig {
+        images: Some(ImageExtractionConfig {
+            extract_images: true,
+            max_images_per_page: Some(cap),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt
+        .block_on(extract_file(&path, None, &config))
+        .expect("extraction must succeed");
+
+    let images = result
+        .images
+        .as_ref()
+        .expect("images must be Some when extract_images=true");
+
+    // Cap must be respected per page in the output.
+    let mut per_page: HashMap<u32, usize> = HashMap::new();
+    for img in images {
+        *per_page.entry(img.page_number.unwrap_or(1)).or_default() += 1;
+    }
+    for (page, count) in &per_page {
+        assert!(
+            *count <= cap as usize,
+            "page {page} has {count} images; cap={cap} must be respected"
+        );
+    }
+}
+
+/// Regression for #985 (no-images case): when extract_images=false, no images
+/// are returned and the result is consistent with the fix.
+///
+/// Before the fix, `extract_image_positions` ran unconditionally and triggered
+/// a full decompression pass over every image on every page — even when the
+/// caller never asked for image data.  After the fix the decompression path is
+/// skipped entirely when images are not requested.
+#[test]
+fn test_no_images_returned_when_extraction_disabled_on_dense_pdf() {
+    let path = test_documents_dir().join("pdf/installatiehandleiding_kombi_kompakt_hr.pdf");
+    if !path.exists() {
+        eprintln!("skipping: test PDF not present at {}", path.display());
+        return;
+    }
+
+    let config = ExtractionConfig::default(); // extract_images defaults to false
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt
+        .block_on(extract_file(&path, None, &config))
+        .expect("extraction must succeed");
+
+    // No images should be returned when extraction is disabled.
+    assert!(
+        result.images.is_none() || result.images.as_ref().is_some_and(|v| v.is_empty()),
+        "images must be absent when extract_images=false"
+    );
+}
+
+/// Positions derived from extracted data must be consistent with the Markdown placeholders.
+///
+/// When inject_placeholders=true, the renderer emits `![](image_N.ext)` links where N
+/// is the image_index.  Every such N must have a corresponding entry in result.images.
+/// Also verifies that image_index values are unique — the derivation loop must not emit
+/// duplicate global indices.
+#[test]
+fn test_image_positions_consistent_with_image_data() {
+    use kreuzberg::core::config::{ImageExtractionConfig, OutputFormat};
+
+    let path = test_documents_dir().join("pdf/embedded_images_tables.pdf");
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        images: Some(ImageExtractionConfig {
+            extract_images: true,
+            inject_placeholders: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(extract_file(&path, None, &config)).unwrap();
+
+    let images = match result.images.as_ref() {
+        Some(imgs) if !imgs.is_empty() => imgs,
+        _ => return, // no images in this PDF — nothing to verify
+    };
+
+    // image_index values must be unique across the returned set.
+    let mut seen = std::collections::HashSet::new();
+    for img in images {
+        assert!(
+            seen.insert(img.image_index),
+            "image_index {} appears more than once — position derivation emitted duplicates",
+            img.image_index
+        );
+    }
+
+    // Every `![](image_N.ext)` placeholder in Markdown must resolve to an index in
+    // result.images.  This would fail if inject_placeholders emitted a reference for
+    // an image that was never extracted (orphaned placeholder).
+    let known: std::collections::HashSet<u32> = images.iter().map(|i| i.image_index).collect();
+    let re = regex::Regex::new(r"!\[\]\(image_(\d+)\.[a-z]+\)").unwrap();
+    for cap in re.captures_iter(&result.content) {
+        let idx: u32 = cap[1].parse().unwrap();
+        assert!(
+            known.contains(&idx),
+            "Markdown contains `![](image_{idx}.ext)` but result.images has no entry \
+             with image_index={idx} — orphaned placeholder"
+        );
+    }
+}
+
+/// Regression for #985 (double-decompression fix): the text-only extraction path must
+/// skip `extract_images_with_data` entirely.
+///
+/// When `extract_images` is `false` (the default), `extraction.rs` must not enter the
+/// images branch at all — verified here by confirming that `result.images` is `None`
+/// (or empty) and that the call completes without decompressing any image data.
+/// This is the minimal structural proof that the guard in `extraction.rs` works:
+/// if `extract_images_with_data` were called unconditionally, the result would be
+/// `Some(non_empty_vec)` for a PDF that actually contains images.
+#[test]
+fn test_no_decompression_when_images_disabled() {
+    let path = test_documents_dir().join("pdf/embedded_images_tables.pdf");
+    assert!(path.exists(), "missing fixture: {}", path.display());
+
+    // Default config: extract_images defaults to false.
+    let config = ExtractionConfig::default();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt
+        .block_on(kreuzberg::core::extractor::extract_file(&path, None, &config))
+        .expect("extraction must succeed");
+
+    // The text-only path must not return any image data.
+    assert!(
+        result.images.as_ref().is_none_or(|v| v.is_empty()),
+        "images must be absent on text-only extraction (extract_images=false). \
+         Got {} image(s) — extract_images_with_data was called when it should not have been.",
+        result.images.as_ref().map_or(0, |v| v.len())
+    );
+
+    // Text content must still be present — no regression on the extraction itself.
+    assert!(
+        !result.content.is_empty(),
+        "text content must still be extracted when images are disabled"
+    );
+}
+
+/// Trace-span assertion for #985: `extract_images_with_data` must NOT be entered
+/// when `extract_images` is false (the default).
+///
+/// This directly proves the decompression code path was skipped — complementing
+/// `test_no_decompression_when_images_disabled` which only observes the output.
+/// An event with target `kreuzberg::pdf::oxide::images` and field
+/// `event = "decompression_started"` is emitted at the top of
+/// `extract_images_with_data`; absence of that event is structural proof the
+/// function was not called.
+#[test]
+fn test_no_decompression_trace_when_images_disabled() {
+    use std::sync::{Arc, Mutex};
+    use tracing_subscriber::{EnvFilter, layer::SubscriberExt as _};
+
+    // ── Captured-event layer ────────────────────────────────────────────────
+
+    #[allow(clippy::type_complexity)]
+    #[derive(Clone, Default)]
+    struct EventCapture {
+        events: Arc<Mutex<Vec<(String, Option<String>)>>>,
+    }
+
+    impl<S> tracing_subscriber::Layer<S> for EventCapture
+    where
+        S: tracing::Subscriber,
+    {
+        fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+            let target = event.metadata().target().to_owned();
+
+            // Only record events from our target to avoid unbounded accumulation.
+            if target != "kreuzberg::pdf::oxide::images" {
+                return;
+            }
+
+            // Walk the fields to capture the `event` key if present.
+            struct FieldVisitor(Option<String>);
+            impl tracing::field::Visit for FieldVisitor {
+                fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                    if field.name() == "event" {
+                        self.0 = Some(value.to_owned());
+                    }
+                }
+                fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                    if field.name() == "event" {
+                        self.0 = Some(format!("{value:?}"));
+                    }
+                }
+            }
+
+            let mut visitor = FieldVisitor(None);
+            event.record(&mut visitor);
+
+            self.events.lock().unwrap().push((target, visitor.0));
+        }
+    }
+
+    // ── Test body ───────────────────────────────────────────────────────────
+
+    let path = test_documents_dir().join("pdf/embedded_images_tables.pdf");
+    assert!(path.exists(), "missing fixture: {}", path.display());
+
+    let capture = EventCapture::default();
+    let capture_clone = capture.clone();
+
+    // Enable DEBUG so the tracing event would be visible if the function ran.
+    let filter = EnvFilter::new("debug");
+    let subscriber = tracing_subscriber::registry().with(filter).with(capture_clone);
+
+    // Wrap the runtime inside with_default so all spans/events are recorded.
+    let result = tracing::subscriber::with_default(subscriber, || {
+        let config = ExtractionConfig::default(); // extract_images defaults to false
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(kreuzberg::core::extractor::extract_file(&path, None, &config))
+            .expect("extraction must succeed")
+    });
+
+    // Output assertion: no image data returned.
+    assert!(
+        result.images.as_ref().is_none_or(|v| v.is_empty()),
+        "images must be absent when extract_images=false"
+    );
+
+    // Trace assertion: the decompression_started event must not have fired.
+    let events = capture.events.lock().unwrap();
+    let decompression_events: Vec<_> = events
+        .iter()
+        .filter(|(target, event_field)| {
+            target == "kreuzberg::pdf::oxide::images" && event_field.as_deref() == Some("decompression_started")
+        })
+        .collect();
+
+    assert!(
+        decompression_events.is_empty(),
+        "extract_images_with_data must not be entered when extract_images=false; \
+         got {} decompression_started event(s)",
+        decompression_events.len()
+    );
+}
+
+// ─── ocr_inline_images decompression path ─────────────────────────────────────
+//
+// When `ocr_inline_images=true`, the extraction branch condition
+// `images_extraction_enabled || ocr_inline_images` is true regardless of
+// `extract_images`.  Images are decompressed and stored in `result.images` even
+// when `ImageExtractionConfig.extract_images = false`.  Without this test, a
+// regression that short-circuits the extraction when `images_extraction_enabled`
+// is false would go undetected.
+//
+// Note: unbounded decompression when `ocr_inline_images=true` and
+// `config.images=None` (no cap) is a known limitation tracked separately in
+// kreuzberg#989.  Set `config.images.max_images_per_page` to apply a cap.
+
+/// When `ocr_inline_images=true` and `extract_images=false`, images must still
+/// be decompressed — `ocr_inline_images` forces entry into the extraction branch.
+///
+/// Before the fix for #985 this path was doubly dangerous: the unconditional
+/// `extract_image_positions` call ran even when `extract_images=false`, and on
+/// the oxide path the decompression was unbounded.  The OCR path was never
+/// covered by a test, so a regression disabling decompression for
+/// `ocr_inline_images=true` would be invisible.
+#[test]
+fn test_ocr_inline_images_enters_decompression_path() {
+    use kreuzberg::PdfConfig;
+    use kreuzberg::core::config::ImageExtractionConfig;
+
+    let path = test_documents_dir().join("pdf/embedded_images_tables.pdf");
+    assert!(path.exists(), "missing fixture: {}", path.display());
+
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        // Explicitly disable extract_images — images_extraction_enabled will be false.
+        images: Some(ImageExtractionConfig {
+            extract_images: false,
+            ..Default::default()
+        }),
+        // Enable ocr_inline_images — this must force entry into the extraction branch.
+        pdf_options: Some(PdfConfig {
+            ocr_inline_images: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(extract_file(&path, None, &config)).unwrap();
+
+    // Images must be decompressed even though extract_images=false, because
+    // ocr_inline_images=true enters the extraction branch regardless.
+    let images = result.images.as_ref().expect(
+        "result.images must be Some when ocr_inline_images=true, \
+         even if extract_images=false — the extraction branch must be entered",
+    );
+    assert!(
+        !images.is_empty(),
+        "embedded_images_tables.pdf has embedded images; result.images must be non-empty \
+         when ocr_inline_images=true forces entry into the decompression branch"
+    );
+}
+
 /// `image_indices` on chunks must be empty when image extraction is disabled.
 #[cfg(feature = "chunking")]
 #[test]
