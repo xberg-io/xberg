@@ -76,7 +76,6 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 ### Package Installation
 
-
 Add to your `mix.exs` dependencies:
 
 ```elixir
@@ -95,12 +94,10 @@ mix deps.get
 
 
 ### System Requirements
-
 - **Elixir 1.14+** and **Erlang/OTP 26+** required
 - Pre-compiled NIFs bundled via `rustler_precompiled` for macOS (arm64, x64), Linux (x64, arm64), and Windows (x64)
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.22.x for embeddings support
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
-
 
 ## Quick Start
 
@@ -130,7 +127,6 @@ IO.puts("Tables found: #{length(result.tables)}")
 
 Most use cases benefit from configuration to control extraction behavior:
 
-
 **With OCR (for scanned documents):**
 
 ```exs
@@ -153,12 +149,10 @@ IO.puts("Metadata: #{inspect(result.metadata)}")
 
 #### Table Extraction
 
-
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
 
 #### Processing Multiple Files
-
 
 ```exs
 ```elixir title="Elixir"
@@ -278,21 +272,13 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 - **Table Extraction** - Parse tables with structure and cell content preservation
 - **Image Extraction** - Extract embedded images and render page previews
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
-
 - **Async/Await** - Non-blocking document processing with concurrent operations
-
-
 - **Plugin System** - Extensible post-processing for custom text transformation
-
-
 - **Embeddings** - Generate vector embeddings using ONNX Runtime models
-
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
-
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
-
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics
@@ -313,9 +299,7 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 - **Tesseract**
 
-
 - **Paddleocr**
-
 
 ### OCR Configuration Example
 

@@ -346,19 +346,13 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 - **Table Extraction** - Parse tables with structure and cell content preservation
 - **Image Extraction** - Extract embedded images and render page previews
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
-
 - **Async/Await** - Non-blocking document processing with concurrent operations
-
 - **Plugin System** - Extensible post-processing for custom text transformation
-
 - **Embeddings** - Generate vector embeddings using ONNX Runtime models
-
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
-
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
-
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics

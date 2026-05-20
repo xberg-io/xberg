@@ -13,7 +13,7 @@ Main error type for all Kreuzberg operations.
 All errors in Kreuzberg use this enum, which preserves error chains
 and provides context for debugging.
 
-## Variants
+# Variants
 
 - `Io` - File system and I/O errors (always bubble up)
 - `Parsing` - Document parsing errors (corrupt files, unsupported features)

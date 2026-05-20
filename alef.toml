@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.17.2"
+alef_version = "0.17.8"
 languages = [
   "python",
   "node",
@@ -386,6 +386,14 @@ visitor_callbacks = false
 # variant with two fields and cannot be built via `From<String>`, so we
 # provide the literal here. The placeholder local `msg` carries the message.
 plugin_error_constructor = "kreuzberg::KreuzbergError::Plugin { message: msg, plugin_name: String::new() }"
+
+# x86_64-linux-android (emulator) lacks a pyke ORT prebuilt. The C FFI cdylib is
+# embedded into Android app builds via jniLibs/x86_64/, so the kreuzberg-ffi
+# crate must drop ORT-dependent features on that target. All other targets
+# (incl. arm64 Android phones) keep the full ORT-enabled feature set.
+[[crates.ffi.target_dep_overrides]]
+cfg = 'all(target_os = "android", target_arch = "x86_64")'
+features = ["android-target"]
 
 [crates.go]
 module = "github.com/kreuzberg-dev/kreuzberg/v5"

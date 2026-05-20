@@ -76,7 +76,6 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 ### Package Installation
 
-
 Build the shared library from the workspace:
 
 ```bash
@@ -87,12 +86,10 @@ The built artifacts are emitted under `target/release/` (`libkreuzberg_ffi.{so,d
 
 
 ### System Requirements
-
 - A C/C++ toolchain (clang, gcc, or MSVC) and a Rust toolchain (`rustup`) for building from source
 - A `pkg-config` or CMake-aware build system that can locate `libkreuzberg_ffi` and `kreuzberg.h`
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.22.x for embeddings support
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
-
 
 ## Quick Start
 
@@ -110,7 +107,6 @@ Most use cases benefit from configuration to control extraction behavior:
 
 
 #### Table Extraction
-
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
@@ -197,21 +193,13 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 - **Table Extraction** - Parse tables with structure and cell content preservation
 - **Image Extraction** - Extract embedded images and render page previews
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
-
 - **Async/Await** - Non-blocking document processing with concurrent operations
-
-
 - **Plugin System** - Extensible post-processing for custom text transformation
-
-
 - **Embeddings** - Generate vector embeddings using ONNX Runtime models
-
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
-
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
-
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics

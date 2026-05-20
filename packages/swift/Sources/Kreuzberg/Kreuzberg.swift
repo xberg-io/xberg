@@ -4479,7 +4479,7 @@ extension ExecutionProviderType {
 /// accordingly. `Plain` returns the raw extracted text.
 /// `Structured` returns JSON with full OCR element data including bounding
 /// boxes and confidence scores.
-public enum OutputFormat {
+public enum OutputFormat: Codable, Sendable, Hashable {
     /// Plain text content only (default)
     case plain
     /// Markdown format
@@ -4592,7 +4592,7 @@ extension ChunkerType {
 /// Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer
 /// available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 /// (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
-public enum ChunkSizing {
+public enum ChunkSizing: Codable, Sendable, Hashable {
     /// Size measured in Unicode characters (default).
     case characters
     /// Size measured in tokens from a HuggingFace tokenizer.
@@ -4607,7 +4607,7 @@ extension ChunkSizing {
 }
 
 /// Embedding model types supported by Kreuzberg.
-public enum EmbeddingModelType {
+public enum EmbeddingModelType: Codable, Sendable, Hashable {
     /// Use a preset model configuration (recommended)
     case preset(name: String)
     /// Use a custom ONNX model from HuggingFace
@@ -4670,7 +4670,7 @@ extension CodeContentMode {
 public typealias ListType = RustBridge.ListType
 
 /// Whether the drawing is inline or anchored.
-public enum DrawingType {
+public enum DrawingType: Codable, Sendable, Hashable {
     case inline
     case anchored(field0: String)
 }
@@ -4885,7 +4885,7 @@ extension ContentLayer {
 ///
 /// Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
 /// Go/Java/TypeScript bindings.
-public enum NodeContent {
+public enum NodeContent: Codable, Sendable, Hashable {
     /// Document title.
     case title(text: String)
     /// Section heading with level (1-6).
@@ -4944,7 +4944,7 @@ extension NodeContent {
 }
 
 /// Types of inline text annotations.
-public enum AnnotationKind {
+public enum AnnotationKind: Codable, Sendable, Hashable {
     case bold
     case italic
     case underline
@@ -5117,35 +5117,7 @@ extension ElementType {
 ///
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
-public enum FormatMetadata {
-    case pdf(field0: PdfMetadata)
-    case docx(field0: DocxMetadata)
-    case excel(field0: ExcelMetadata)
-    case email(field0: EmailMetadata)
-    case pptx(field0: PptxMetadata)
-    case archive(field0: ArchiveMetadata)
-    case image(field0: ImageMetadata)
-    case xml(field0: XmlMetadata)
-    case text(field0: TextMetadata)
-    case html(field0: HtmlMetadata)
-    case ocr(field0: OcrMetadata)
-    case csv(field0: CsvMetadata)
-    case bibtex(field0: BibtexMetadata)
-    case citation(field0: CitationMetadata)
-    case fictionBook(field0: FictionBookMetadata)
-    case dbf(field0: DbfMetadata)
-    case jats(field0: JatsMetadata)
-    case epub(field0: EpubMetadata)
-    case pst(field0: PstMetadata)
-    case code(field0: String)
-}
-extension FormatMetadata {
-    func intoRust() throws -> RustBridge.FormatMetadata {
-        let data = try JSONEncoder().encode(self)
-        let json = String(data: data, encoding: .utf8) ?? "null"
-        return try RustBridge.formatMetadataFromJson(json)
-    }
-}
+public typealias FormatMetadata = RustBridge.FormatMetadata
 
 /// Text direction enumeration for HTML documents.
 public enum TextDirection: String, Codable, Sendable, Hashable {
@@ -5227,7 +5199,7 @@ extension StructuredDataType {
 ///
 /// Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
 /// (from PaddleOCR and rotated text detection).
-public enum OcrBoundingGeometry {
+public enum OcrBoundingGeometry: Codable, Sendable, Hashable {
     /// Axis-aligned bounding box (typical for Tesseract output).
     case rectangle(left: UInt32, top: UInt32, width: UInt32, height: UInt32)
     /// 4-point quadrilateral for rotated/skewed text (PaddleOCR).
@@ -6375,8 +6347,7 @@ public func elementTypeFromJson(_ json: String) throws -> ElementType {
 }
 
 public func formatMetadataFromJson(_ json: String) throws -> FormatMetadata {
-    let data = json.data(using: .utf8) ?? Data()
-    return try JSONDecoder().decode(FormatMetadata.self, from: data)
+    return try RustBridge.formatMetadataFromJson(json)
 }
 
 public func textDirectionFromJson(_ json: String) throws -> TextDirection {

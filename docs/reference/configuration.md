@@ -110,11 +110,10 @@ This type is used with `batch_extract_files` and
 `batch_extract_bytes` to allow heterogeneous
 extraction settings within a single batch.
 
-## Excluded Fields
+# Excluded Fields
 
 The following `ExtractionConfig` fields are batch-level only and
 cannot be overridden per file:
-
 - `max_concurrent_extractions` — controls batch parallelism
 - `use_cache` — global caching policy
 - `acceleration` — shared ONNX execution provider
@@ -167,7 +166,7 @@ Image extraction configuration.
 
 ---
 
-#### TokenReductionOptions
+### TokenReductionOptions
 
 Token reduction configuration.
 
@@ -179,7 +178,7 @@ Token reduction configuration.
 
 ---
 
-#### LanguageDetectionConfig
+### LanguageDetectionConfig
 
 Language detection configuration.
 
@@ -192,7 +191,7 @@ Language detection configuration.
 
 ---
 
-#### HtmlOutputConfig
+### HtmlOutputConfig
 
 Configuration for styled HTML output.
 
@@ -212,7 +211,7 @@ the plain comrak-based renderer.
 
 ---
 
-#### LayoutDetectionConfig
+### LayoutDetectionConfig
 
 Layout detection configuration.
 
@@ -230,7 +229,7 @@ is enabled for PDF extraction.
 
 ---
 
-#### LlmConfig
+### LlmConfig
 
 Configuration for an LLM provider/model via liter-llm.
 
@@ -250,7 +249,7 @@ its own `LlmConfig`, allowing different providers per feature.
 
 ---
 
-#### StructuredExtractionConfig
+### StructuredExtractionConfig
 
 Configuration for LLM-based structured data extraction.
 
@@ -269,7 +268,7 @@ returning structured data that conforms to the schema.
 
 ---
 
-#### OcrQualityThresholds
+### OcrQualityThresholds
 
 Quality thresholds for OCR fallback decisions and pipeline quality gating.
 
@@ -298,7 +297,7 @@ so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 
 ---
 
-#### OcrPipelineConfig
+### OcrPipelineConfig
 
 Multi-backend OCR pipeline with quality-based fallback.
 
@@ -314,7 +313,7 @@ the result is accepted. Otherwise the next backend is tried.
 
 ---
 
-#### OcrConfig
+### OcrConfig
 
 OCR configuration.
 
@@ -327,7 +326,7 @@ OCR configuration.
 | `tesseract_config` | `TesseractConfig \| None` | `None` | Tesseract-specific configuration (optional) |
 | `output_format` | `OutputFormat \| None` | `None` | Output format for OCR results (optional, for format conversion) |
 | `paddle_ocr_config` | `dict[str, Any] \| None` | `None` | PaddleOCR-specific configuration (optional, JSON passthrough) |
-| `backend_options` | `dict[str, Any] \| None` | `None` | Arbitrary per-call options passed through to the backend unchanged. Custom OCR backends and built-in backends that support runtime tuning can read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored. This is the recommended extension point for per-call parameters that are not covered by the typed fields above (e.g. mode switching, preprocessing flags, inference batch size). **Scope:** when `pipeline` is `None`, this value is propagated to the primary stage of the auto-constructed pipeline. When `pipeline` is explicitly set, this field has **no effect** — the caller must set `OcrPipelineStage.backend_options` directly on the relevant stage(s) instead. Example: ```json { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 }``` |
+| `backend_options` | `dict[str, Any] \| None` | `None` | Arbitrary per-call options passed through to the backend unchanged. Custom OCR backends and built-in backends that support runtime tuning can read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored. This is the recommended extension point for per-call parameters that are not covered by the typed fields above (e.g. mode switching, preprocessing flags, inference batch size). **Scope:** when `pipeline` is `None`, this value is propagated to the primary stage of the auto-constructed pipeline. When `pipeline` is explicitly set, this field has **no effect** — the caller must set `OcrPipelineStage.backend_options` directly on the relevant stage(s) instead. Example: ```json { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 } ``` |
 | `element_config` | `OcrElementConfig \| None` | `None` | OCR element extraction configuration |
 | `quality_thresholds` | `OcrQualityThresholds \| None` | `None` | Quality thresholds for the native-text-to-OCR fallback decision. When None, uses compiled defaults (matching previous hardcoded behavior). |
 | `pipeline` | `OcrPipelineConfig \| None` | `None` | Multi-backend OCR pipeline configuration. When set, enables weighted fallback across multiple OCR backends based on output quality. When None, uses the single `backend` field (same as today). |
@@ -339,7 +338,7 @@ OCR configuration.
 
 ---
 
-#### PageConfig
+### PageConfig
 
 Page extraction and tracking configuration.
 
@@ -354,7 +353,7 @@ when page boundaries are available and chunking is configured.
 |-------|------|---------|-------------|
 | `extract_pages` | `bool` | `False` | Extract pages as separate array (ExtractionResult.pages) |
 | `insert_page_markers` | `bool` | `False` | Insert page markers in main content string |
-| `marker_format` | `str` | `" |  |
+| `marker_format` | `str` | `"
 
 <!-- PAGE {page_num} -->
 
@@ -362,7 +361,7 @@ when page boundaries are available and chunking is configured.
 
 ---
 
-#### PdfConfig
+### PdfConfig
 
 PDF-specific configuration.
 
@@ -382,7 +381,7 @@ PDF-specific configuration.
 
 ---
 
-#### HierarchyConfig
+### HierarchyConfig
 
 Hierarchy extraction configuration for PDF text structure analysis.
 
@@ -400,7 +399,7 @@ included in page content.
 
 ---
 
-#### PostProcessorConfig
+### PostProcessorConfig
 
 Post-processor configuration.
 
@@ -415,7 +414,7 @@ Post-processor configuration.
 
 ---
 
-#### ChunkingConfig
+### ChunkingConfig
 
 Chunking configuration.
 
@@ -439,7 +438,7 @@ Use `..the default constructor` when constructing to allow for future field addi
 
 ---
 
-#### EmbeddingConfig
+### EmbeddingConfig
 
 Embedding configuration for text chunks.
 
@@ -459,13 +458,13 @@ Requires the `embeddings` feature to be enabled.
 
 ---
 
-#### TreeSitterConfig
+### TreeSitterConfig
 
 Configuration for tree-sitter language pack integration.
 
 Controls grammar download behavior and code analysis options.
 
-## Example (TOML)
+# Example (TOML)
 
 ```toml
 [tree_sitter]
@@ -510,14 +509,14 @@ Controls which analysis features are enabled when extracting code files.
 
 ---
 
-#### ServerConfig
+### ServerConfig
 
 API server configuration.
 
 This struct holds all configuration options for the Kreuzberg API server,
 including host/port settings, CORS configuration, and upload limits.
 
-## Defaults
+# Defaults
 
 - `host`: "127.0.0.1" (localhost only)
 - `port`: 8000
@@ -564,7 +563,7 @@ Contains Word-specific document statistics and metadata.
 
 ---
 
-#### XlsxAppProperties
+### XlsxAppProperties
 
 Application properties from docProps/app.xml for XLSX
 
@@ -585,7 +584,7 @@ Contains Excel-specific document metadata.
 
 ---
 
-#### PptxAppProperties
+### PptxAppProperties
 
 Application properties from docProps/app.xml for PPTX
 
@@ -612,7 +611,7 @@ Contains PowerPoint-specific document metadata.
 
 ---
 
-#### CoreProperties
+### CoreProperties
 
 Dublin Core metadata from docProps/core.xml
 
@@ -640,7 +639,7 @@ and Office-specific extensions.
 
 ---
 
-#### SecurityLimits
+### SecurityLimits
 
 Configuration for security limits across extractors.
 
@@ -662,7 +661,7 @@ while still supporting legitimate documents.
 
 ---
 
-#### TokenReductionConfig
+### TokenReductionConfig
 
 
 | Field | Type | Default | Description |
@@ -681,7 +680,7 @@ while still supporting legitimate documents.
 
 ---
 
-#### DocumentStructure
+### DocumentStructure
 
 Top-level structured document representation.
 
@@ -689,7 +688,7 @@ A flat array of nodes with index-based parent/child references forming a tree.
 Root-level nodes have `parent: None`. Use `body_roots()` and `furniture_roots()`
 to iterate over top-level content by layer.
 
-## Validation
+# Validation
 
 Call `validate()` after construction to verify all node indices are in bounds
 and parent-child relationships are bidirectionally consistent.
@@ -719,7 +718,7 @@ Stores row/column dimensions and a flat list of cells with position info.
 
 ---
 
-#### ExtractionResult
+### ExtractionResult
 
 General extraction result used by the core extraction API.
 
@@ -755,7 +754,7 @@ This is the main result type returned by all extraction functions.
 
 ---
 
-#### LlmUsage
+### LlmUsage
 
 Token usage and cost data for a single LLM call made during extraction.
 
@@ -776,7 +775,7 @@ within one extraction (e.g. VLM OCR + structured extraction).
 
 ---
 
-#### ImagePreprocessingConfig
+### ImagePreprocessingConfig
 
 Image preprocessing configuration for OCR.
 
@@ -797,7 +796,7 @@ for different document types.
 
 ---
 
-#### TesseractConfig
+### TesseractConfig
 
 Tesseract OCR configuration.
 
@@ -832,7 +831,7 @@ for specific document types (invoices, handwriting, etc.).
 
 ---
 
-#### Metadata
+### Metadata
 
 Extraction result metadata.
 
@@ -867,7 +866,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 
 ---
 
-#### ExcelMetadata
+### ExcelMetadata
 
 Excel/spreadsheet format metadata.
 
@@ -882,7 +881,7 @@ discriminant. Sheet count and sheet names are stored inside this struct.
 
 ---
 
-#### EmailMetadata
+### EmailMetadata
 
 Email metadata extracted from .eml and .msg files.
 
@@ -901,7 +900,7 @@ Includes sender/recipient information, message ID, and attachment list.
 
 ---
 
-#### ArchiveMetadata
+### ArchiveMetadata
 
 Archive (ZIP/TAR/7Z) metadata.
 
@@ -918,7 +917,7 @@ Extracted from compressed archive files containing file lists and size informati
 
 ---
 
-#### ImageMetadata
+### ImageMetadata
 
 Image metadata extracted from image files.
 
@@ -934,7 +933,7 @@ Includes dimensions, format, and EXIF data.
 
 ---
 
-#### XmlMetadata
+### XmlMetadata
 
 XML metadata extracted during XML parsing.
 
@@ -948,7 +947,7 @@ Provides statistics about XML document structure.
 
 ---
 
-#### TextMetadata
+### TextMetadata
 
 Text/Markdown metadata.
 
@@ -967,7 +966,7 @@ for Markdown, structural elements like headers and links.
 
 ---
 
-#### HtmlMetadata
+### HtmlMetadata
 
 HTML metadata extracted from HTML documents.
 
@@ -995,7 +994,7 @@ and extracted structural elements (headers, links, images, structured data).
 
 ---
 
-#### OcrMetadata
+### OcrMetadata
 
 OCR processing metadata.
 
@@ -1013,7 +1012,7 @@ Captures information about OCR processing configuration and results.
 
 ---
 
-#### PptxMetadata
+### PptxMetadata
 
 PowerPoint presentation metadata.
 
@@ -1029,7 +1028,7 @@ Extracted from PPTX files containing slide counts and presentation details.
 
 ---
 
-#### DocxMetadata
+### DocxMetadata
 
 Word document metadata.
 
@@ -1045,7 +1044,7 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 ---
 
-#### CsvMetadata
+### CsvMetadata
 
 CSV/TSV file metadata.
 
@@ -1060,7 +1059,7 @@ CSV/TSV file metadata.
 
 ---
 
-#### BibtexMetadata
+### BibtexMetadata
 
 BibTeX bibliography metadata.
 
@@ -1075,7 +1074,7 @@ BibTeX bibliography metadata.
 
 ---
 
-#### CitationMetadata
+### CitationMetadata
 
 Citation file metadata (RIS, PubMed, EndNote).
 
@@ -1091,7 +1090,7 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### FictionBookMetadata
+### FictionBookMetadata
 
 FictionBook (FB2) metadata.
 
@@ -1104,7 +1103,7 @@ FictionBook (FB2) metadata.
 
 ---
 
-#### DbfMetadata
+### DbfMetadata
 
 dBASE (DBF) file metadata.
 
@@ -1117,7 +1116,7 @@ dBASE (DBF) file metadata.
 
 ---
 
-#### JatsMetadata
+### JatsMetadata
 
 JATS (Journal Article Tag Suite) metadata.
 
@@ -1131,7 +1130,7 @@ JATS (Journal Article Tag Suite) metadata.
 
 ---
 
-#### EpubMetadata
+### EpubMetadata
 
 EPUB metadata (Dublin Core extensions).
 
@@ -1147,7 +1146,7 @@ EPUB metadata (Dublin Core extensions).
 
 ---
 
-#### PstMetadata
+### PstMetadata
 
 Outlook PST archive metadata.
 
@@ -1158,7 +1157,7 @@ Outlook PST archive metadata.
 
 ---
 
-#### OcrConfidence
+### OcrConfidence
 
 Confidence scores for an OCR element.
 
@@ -1173,7 +1172,7 @@ from recognition confidence (how confident about the actual text content).
 
 ---
 
-#### OcrElement
+### OcrElement
 
 A unified OCR element representing detected text with full metadata.
 
@@ -1194,7 +1193,7 @@ from both Tesseract and PaddleOCR backends.
 
 ---
 
-#### OcrElementConfig
+### OcrElementConfig
 
 Configuration for OCR element extraction.
 
@@ -1210,7 +1209,7 @@ Controls how OCR elements are extracted and filtered.
 
 ---
 
-#### LayoutRegion
+### LayoutRegion
 
 A detected layout region on a page.
 
@@ -1228,7 +1227,7 @@ with confidence scores and spatial positions.
 
 ---
 
-#### Table
+### Table
 
 Extracted table structure.
 
@@ -1245,7 +1244,7 @@ Tables are converted to both structured cell data and Markdown format.
 
 ---
 
-#### TableCell
+### TableCell
 
 Individual table cell with content and optional styling.
 
@@ -1261,7 +1260,7 @@ Future extension point for rich table support with cell-level metadata.
 
 ---
 
-#### YakeParams
+### YakeParams
 
 YAKE-specific parameters.
 
@@ -1272,7 +1271,7 @@ YAKE-specific parameters.
 
 ---
 
-#### RakeParams
+### RakeParams
 
 RAKE-specific parameters.
 
@@ -1284,7 +1283,7 @@ RAKE-specific parameters.
 
 ---
 
-#### KeywordConfig
+### KeywordConfig
 
 Keyword extraction configuration.
 
@@ -1301,7 +1300,7 @@ Keyword extraction configuration.
 
 ---
 
-#### OcrCacheStats
+### OcrCacheStats
 
 
 | Field | Type | Default | Description |
@@ -1311,7 +1310,7 @@ Keyword extraction configuration.
 
 ---
 
-#### PaddleOcrConfig
+### PaddleOcrConfig
 
 Configuration for PaddleOCR backend.
 
@@ -1336,7 +1335,7 @@ Uses a builder pattern for convenient configuration.
 
 ---
 
-#### PdfMetadata
+### PdfMetadata
 
 PDF-specific metadata.
 
@@ -1356,9 +1355,9 @@ are at the `Metadata` level.
 
 ---
 
-#### Enums
+### Enums
 
-##### ChunkSizing
+#### ChunkSizing
 
 How chunk size is measured.
 
@@ -1377,16 +1376,16 @@ available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 
 ---
 
-##### ChunkerType
+#### ChunkerType
 
 Type of text chunker to use.
 
-## Variants
+# Variants
 
-- `Text` - Generic text splitter, splits on whitespace and punctuation
-- `Markdown` - Markdown-aware splitter, preserves formatting and structure
-- `Yaml` - YAML-aware splitter, creates one chunk per top-level key
-- `Semantic` - Topic-aware chunker. With an `EmbeddingConfig`, splits at
+* `Text` - Generic text splitter, splits on whitespace and punctuation
+* `Markdown` - Markdown-aware splitter, preserves formatting and structure
+* `Yaml` - YAML-aware splitter, creates one chunk per top-level key
+* `Semantic` - Topic-aware chunker. With an `EmbeddingConfig`, splits at
   embedding-based topic shifts tuned by `topic_threshold` (default 0.75,
   lower = more splits). Without an embedding, falls back to a
   structural-boundary heuristic (ALL-CAPS headers, numbered sections,
@@ -1404,7 +1403,7 @@ Type of text chunker to use.
 
 ---
 
-### CodeContentMode
+#### CodeContentMode
 
 Content rendering mode for code extraction.
 
@@ -1434,7 +1433,7 @@ Embedding model types supported by Kreuzberg.
 
 ---
 
-##### ExecutionProviderType
+#### ExecutionProviderType
 
 ONNX Runtime execution provider type.
 
@@ -1452,7 +1451,7 @@ Determines which hardware backend is used for model inference.
 
 ---
 
-##### ExtractionMethod
+#### ExtractionMethod
 
 How the extracted text was produced.
 
@@ -1465,7 +1464,7 @@ How the extracted text was produced.
 
 ---
 
-##### FormatMetadata
+#### FormatMetadata
 
 Format-specific metadata (discriminated union).
 
@@ -1498,7 +1497,7 @@ type-safe, clean metadata without nested optionals.
 
 ---
 
-##### HtmlTheme
+#### HtmlTheme
 
 Built-in HTML theme selection.
 
@@ -1513,7 +1512,7 @@ Built-in HTML theme selection.
 
 ---
 
-##### KeywordAlgorithm
+#### KeywordAlgorithm
 
 Keyword algorithm selection.
 
@@ -1525,7 +1524,7 @@ Keyword algorithm selection.
 
 ---
 
-##### OcrBoundingGeometry
+#### OcrBoundingGeometry
 
 Bounding geometry for an OCR element.
 
@@ -1540,7 +1539,7 @@ Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilateral
 
 ---
 
-##### OcrElementLevel
+#### OcrElementLevel
 
 Hierarchical level of an OCR element.
 
@@ -1557,7 +1556,7 @@ equivalent semantics for PaddleOCR.
 
 ---
 
-##### OutputFormat
+#### OutputFormat
 
 Output format for extraction results.
 
@@ -1580,7 +1579,7 @@ boxes and confidence scores.
 
 ---
 
-##### ReductionLevel
+#### ReductionLevel
 
 
 | Variant | Description |
@@ -1593,7 +1592,7 @@ boxes and confidence scores.
 
 ---
 
-##### ResultFormat
+#### ResultFormat
 
 Result-shape selection for extraction results.
 
@@ -1609,7 +1608,7 @@ blob vs. an element-based decomposition.
 
 ---
 
-##### TableModel
+#### TableModel
 
 Which table structure recognition model to use.
 
@@ -1629,7 +1628,7 @@ YAML).
 
 ---
 
-##### TextDirection
+#### TextDirection
 
 Text direction enumeration for HTML documents.
 

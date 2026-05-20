@@ -76,7 +76,6 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 ### Package Installation
 
-
 Kotlin DSL (`build.gradle.kts`):
 
 ```kotlin
@@ -88,7 +87,6 @@ Groovy DSL (`build.gradle`):
 ```groovy
 implementation 'dev.kreuzberg:kreuzberg-android:5.0.0-rc.1'
 ```
-
 
 Add to your `pom.xml`:
 
@@ -102,9 +100,7 @@ Add to your `pom.xml`:
 
 
 ### System Requirements
-
 - See [Installation Guide](https://kreuzberg.dev/getting-started/installation/) for requirements
-
 
 ## Quick Start
 
@@ -120,7 +116,6 @@ Extract text, metadata, and structure from any supported document format:
 
 Most use cases benefit from configuration to control extraction behavior:
 
-
 **With OCR (for scanned documents):**
 
 <!-- snippet not found: ocr/ocr_extraction.md -->
@@ -128,12 +123,10 @@ Most use cases benefit from configuration to control extraction behavior:
 
 #### Table Extraction
 
-
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
 
 #### Processing Multiple Files
-
 
 <!-- snippet not found: api/batch_extract_files_sync.md -->
 
@@ -224,21 +217,13 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 - **Table Extraction** - Parse tables with structure and cell content preservation
 - **Image Extraction** - Extract embedded images and render page previews
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
-
 - **Async/Await** - Non-blocking document processing with concurrent operations
-
-
 - **Plugin System** - Extensible post-processing for custom text transformation
-
-
 - **Embeddings** - Generate vector embeddings using ONNX Runtime models
-
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
-
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
-
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics
@@ -259,9 +244,7 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 - **Tesseract**
 
-
 - **Paddleocr**
-
 
 ### OCR Configuration Example
 

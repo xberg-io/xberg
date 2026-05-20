@@ -76,7 +76,6 @@ Extract text, tables, images, and metadata from 91+ file formats and 248 program
 
 ### Package Installation
 
-
 Install via pub:
 
 ```bash
@@ -91,12 +90,10 @@ flutter pub add kreuzberg
 
 
 ### System Requirements
-
 - **Dart SDK 3.0+** for pure-Dart consumers
 - Flutter projects supported on macOS, iOS, Android, Linux, and Windows; Flutter Web is not supported
 - Native runtime delivered via `flutter_rust_bridge` with bundled binaries for the supported platforms
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
-
 
 ## Quick Start
 
@@ -123,7 +120,6 @@ Future<void> main() async {
 #### Extract with Custom Configuration
 
 Most use cases benefit from configuration to control extraction behavior:
-
 
 **With OCR (for scanned documents):**
 
@@ -157,12 +153,10 @@ Future<void> main() async {
 
 #### Table Extraction
 
-
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
 
 #### Processing Multiple Files
-
 
 ```dart title="Dart"
 import 'package:kreuzberg/kreuzberg.dart';
@@ -283,21 +277,13 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 - **Table Extraction** - Parse tables with structure and cell content preservation
 - **Image Extraction** - Extract embedded images and render page previews
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
-
 - **Async/Await** - Non-blocking document processing with concurrent operations
-
-
 - **Plugin System** - Extensible post-processing for custom text transformation
-
-
 - **Embeddings** - Generate vector embeddings using ONNX Runtime models
-
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
-
 - **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
-
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics
@@ -318,9 +304,7 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 - **Tesseract**
 
-
 - **Paddleocr**
-
 
 ### OCR Configuration Example
 
