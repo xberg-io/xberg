@@ -780,7 +780,7 @@ jobs:
           use-sccache: true
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@v1.308.0
+        uses: ruby/setup-ruby@v1.309.0
         with:
           ruby-version: "3.2"
 
@@ -885,7 +885,7 @@ jobs:
           use-sccache: true
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@v1.308.0
+        uses: ruby/setup-ruby@v1.309.0
         with:
           ruby-version: "3.2"
 

@@ -240,7 +240,7 @@ jobs:
 
       - name: Setup Ruby
         if: matrix.ruby-version
-        uses: ruby/setup-ruby@v1.308.0
+        uses: ruby/setup-ruby@v1.309.0
         with:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
