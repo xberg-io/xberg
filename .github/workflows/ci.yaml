@@ -26,7 +26,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run prek hooks
-        uses: j178/prek-action@v2.0.3
+        uses: j178/prek-action@v2.0.4
         with:
           extra-args: --all-files
 
