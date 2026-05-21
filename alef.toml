@@ -851,6 +851,9 @@ options_type = "Kreuzberg::ExtractionConfig"
 options_type = "WasmExtractionConfig"
 bigint_fields = ["cacheTtlSecs", "extractionTimeoutSecs"]
 
+[crates.e2e.call.overrides.swift]
+unnamed_arg_indices = [0, 1, 2]
+
 [crates.e2e.call.overrides.php]
 class = "Kreuzberg\\Kreuzberg"
 function = "extractFile"
