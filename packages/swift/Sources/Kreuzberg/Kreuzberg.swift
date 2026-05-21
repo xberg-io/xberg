@@ -5901,26 +5901,6 @@ public func extractFile(
 , config
 )
 }
-// MARK: - E2e Test Convenience Wrappers
-// JSON-config and file-loading wrappers used exclusively by the generated e2e tests.
-
-public func extractionConfigFromJson<GenericIntoRustString: IntoRustString>(
-    _ json: GenericIntoRustString
-) throws -> ExtractionConfig {
-    try RustBridge.extractionConfigFromJson(json)
-}
-
-public func batchBytesItemFromJson<GenericIntoRustString: IntoRustString>(
-    _ json: GenericIntoRustString
-) throws -> BatchBytesItem {
-    try RustBridge.batchBytesItemFromJson(json)
-}
-
-public func batchFileItemFromJson<GenericIntoRustString: IntoRustString>(
-    _ json: GenericIntoRustString
-) throws -> BatchFileItem {
-    try RustBridge.batchFileItemFromJson(json)
-}
 
 // MARK: - ExtractionResult Property Accessors
 extension ExtractionResultRef {
