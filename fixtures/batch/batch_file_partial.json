@@ -2,8 +2,29 @@
   "id": "batch_file_partial",
   "category": "batch",
   "description": "batch_extract_file_sync mixed",
-  "tags": ["batch"],
+  "tags": [
+    "batch"
+  ],
   "call": "batch_extract_files_sync",
-  "input": { "paths": [{ "path": "text/plain.txt" }, { "path": "/nonexistent/missing.pdf" }] },
-  "assertions": [{ "type": "not_error" }]
+  "input": {
+    "paths": [
+      {
+        "path": "text/plain.txt"
+      },
+      {
+        "path": "/nonexistent/missing.pdf"
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "type": "not_error"
+    }
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

@@ -2,7 +2,11 @@
   "id": "format_pptx",
   "category": "format_specific",
   "description": "PPTX presentation extraction using extract_file_sync",
-  "tags": ["format_specific", "pptx", "text_extraction"],
+  "tags": [
+    "format_specific",
+    "pptx",
+    "text_extraction"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "pptx/simple.pptx",
@@ -12,5 +16,11 @@
     {
       "type": "not_error"
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

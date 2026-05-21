@@ -1,7 +1,11 @@
 {
   "id": "config_quality_enabled",
   "description": "Tests quality scoring produces a score value in [0.0, 1.0]",
-  "tags": ["contract", "config", "quality"],
+  "tags": [
+    "contract",
+    "config",
+    "quality"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "pdf/fake_memo.pdf",
@@ -34,5 +38,11 @@
       "field": "quality_score",
       "value": 1.0
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

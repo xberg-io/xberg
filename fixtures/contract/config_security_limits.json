@@ -1,7 +1,11 @@
 {
   "id": "config_security_limits",
   "description": "Tests archive extraction with custom security limits",
-  "tags": ["contract", "config", "security"],
+  "tags": [
+    "contract",
+    "config",
+    "security"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "archives/documents.zip",
@@ -17,12 +21,21 @@
     {
       "type": "contains_any",
       "field": "mime_type",
-      "values": ["application/zip", "application/x-zip-compressed"]
+      "values": [
+        "application/zip",
+        "application/x-zip-compressed"
+      ]
     },
     {
       "type": "min_length",
       "field": "content",
       "value": 10
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

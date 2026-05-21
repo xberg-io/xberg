@@ -1,7 +1,10 @@
 {
   "id": "config_document_structure_with_headings",
   "description": "Tests document structure with DOCX heading-driven nesting",
-  "tags": ["contract", "document_structure"],
+  "tags": [
+    "contract",
+    "document_structure"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "docx/fake.docx",
@@ -24,5 +27,11 @@
       "field": "document.nodes",
       "value": 1
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

@@ -2,7 +2,11 @@
   "id": "code_shebang_detection",
   "category": "code",
   "description": "Test language detection from shebang line via bytes input",
-  "tags": ["code", "shebang", "tree-sitter"],
+  "tags": [
+    "code",
+    "shebang",
+    "tree-sitter"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "code/script.sh",
@@ -22,7 +26,16 @@
     {
       "type": "contains_all",
       "field": "content",
-      "values": ["build", "clean"]
+      "values": [
+        "build",
+        "clean"
+      ]
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

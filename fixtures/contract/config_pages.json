@@ -1,7 +1,10 @@
 {
   "id": "config_pages",
   "description": "Tests page extraction and page marker configuration",
-  "tags": ["contract", "config"],
+  "tags": [
+    "contract",
+    "config"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "pdf/fake_memo.pdf",
@@ -26,7 +29,15 @@
     {
       "type": "contains_any",
       "field": "content",
-      "values": ["PAGE"]
+      "values": [
+        "PAGE"
+      ]
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

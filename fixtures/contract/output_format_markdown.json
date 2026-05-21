@@ -1,7 +1,10 @@
 {
   "id": "output_format_markdown",
   "description": "Tests Markdown output format",
-  "tags": ["contract", "output_format"],
+  "tags": [
+    "contract",
+    "output_format"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "pdf/fake_memo.pdf",
@@ -25,5 +28,11 @@
       "field": "metadata.output_format",
       "value": "markdown"
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

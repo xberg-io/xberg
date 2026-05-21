@@ -2,8 +2,30 @@
   "id": "batch_file_not_found",
   "category": "batch",
   "description": "batch_extract_file_sync nonexistent",
-  "tags": ["batch", "error"],
+  "tags": [
+    "batch",
+    "error"
+  ],
   "call": "batch_extract_files_sync",
-  "input": { "paths": [{ "path": "/nonexistent/a.pdf" }, { "path": "/nonexistent/b.txt" }] },
-  "assertions": [{ "type": "not_error" }]
+  "input": {
+    "paths": [
+      {
+        "path": "/nonexistent/a.pdf"
+      },
+      {
+        "path": "/nonexistent/b.txt"
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "type": "not_error"
+    }
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }
