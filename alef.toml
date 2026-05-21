@@ -786,9 +786,11 @@ fields_array = [
 ]
 fields_method_calls = ["metadata.format.excel"]
 result_fields = [
+  "content",
   "mime_type",
   "extraction_method",
   "tables",
+  "metadata",
 ]
 
 [crates.e2e.call]
