@@ -6,7 +6,12 @@
   "call": "embed_texts",
   "input": {
     "texts": ["Hello", "World"],
-    "config": {}
+    "config": {
+      "model": {
+        "type": "preset",
+        "name": "balanced"
+      }
+    }
   },
   "assertions": [{ "type": "not_error" }],
   "skip": {
