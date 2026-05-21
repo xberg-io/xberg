@@ -6143,10 +6143,6 @@ public func postProcessorConfigFromJson(_ json: String) throws -> PostProcessorC
     return try JSONDecoder().decode(PostProcessorConfig.self, from: data)
 }
 
-public func extractionConfigFromJson(_ json: String) throws -> ExtractionConfig {
-    return try RustBridge.extractionConfigFromJson(json)
-}
-
 public func chunkingConfigFromJson(_ json: String) throws -> ChunkingConfig {
     return try RustBridge.chunkingConfigFromJson(json)
 }

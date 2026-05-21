@@ -232,7 +232,7 @@ jobs:
 
       - name: Build and push image
         if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true')) }}
-        uses: docker/build-push-action@v7.1.0
+        uses: docker/build-push-action@v7.2.0
         with:
           context: .
           file: ${{ matrix.dockerfile }}
