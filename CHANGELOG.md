@@ -9,10 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Known Issues (Alef Generator)
-
-- **e2e/elixir**: Elixir e2e tests fail to compile due to an upstream alef generator bug. The `extract_file_async` call is generated with mixed positional and keyword arguments (`extract_file_async(path, mime_type: "...", "{}"`), which violates Elixir syntax rules (keyword arguments must come last). The root cause is that alef's e2e generator doesn't understand that Elixir's public API wrapper uses a keyword list for optional parameters, requiring ALL optional args to be keywords when any are. This needs to be fixed in the alef e2e code generator (https://github.com/kreuzberg-dev/alef). Tracked separately; awaiting upstream alef fix.
-
 ### Fixed
 
 - **deps**: Loosened `tar` requirement in `crates/kreuzberg/Cargo.toml` from `^0.4.46` back to `^0.4` so it remains compatible with `tree-sitter-language-pack v1.8.1`, which locks `tar` to `0.4.45`. The pinned floor prevented the e2e/rust crate from resolving a consistent version. (`crates/kreuzberg/Cargo.toml`)
