@@ -1,5 +1,7 @@
 # Kreuzberg
 
+[![Bindings by alef](https://img.shields.io/badge/bindings%20by-alef%20%D7%90-007ec6)](https://github.com/kreuzberg-dev/alef)
+
 [![Rust](https://img.shields.io/crates/v/kreuzberg?label=Rust)](https://crates.io/crates/kreuzberg)
 [![Python](https://img.shields.io/pypi/v/kreuzberg?label=Python)](https://pypi.org/project/kreuzberg/)
 [![TypeScript](https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript)](https://www.npmjs.com/package/@kreuzberg/node)

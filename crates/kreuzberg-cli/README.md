@@ -1,5 +1,7 @@
 # kreuzberg-cli
 
+[![Bindings by alef](https://img.shields.io/badge/bindings%20by-alef%20%D7%90-007ec6)](https://github.com/kreuzberg-dev/alef)
+
 Command-line interface for the Kreuzberg document intelligence library.
 
 ## Overview

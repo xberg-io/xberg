@@ -1,5 +1,7 @@
 # kreuzberg-tesseract
 
+[![Bindings by alef](https://img.shields.io/badge/bindings%20by-alef%20%D7%90-007ec6)](https://github.com/kreuzberg-dev/alef)
+
 Rust bindings for Tesseract OCR with built-in compilation of Tesseract and Leptonica libraries. Provides a safe and idiomatic Rust interface to Tesseract's functionality while handling the complexity of compiling the underlying C++ libraries.
 
 Based on the original [tesseract-rs](https://github.com/cafercangundogdu/tesseract-rs) by Cafer Can Gündoğdu, this maintained version adds critical improvements for production use:
