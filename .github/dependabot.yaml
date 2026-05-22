@@ -1,35 +1,29 @@
 version: 2
-updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    ignore:
-      # Pin artifact actions to v4 until GitHub Actions runners support v6/v7
-      # v6 and v7 require Actions Runner 2.327.1+ (released Dec 12, 2025)
-      - dependency-name: "actions/upload-artifact"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "actions/download-artifact"
-        update-types: ["version-update:semver-major"]
 
+multi-ecosystem-groups:
+  dependencies:
+    schedule:
+      interval: "weekly"
+
+updates:
   - package-ecosystem: "cargo"
     # Explicitly list root only — packages/ruby/ext and packages/r/src have
     # standalone workspaces with path deps to vendored crates that only exist
     # at build time. Dependabot cannot resolve these paths.
     directories:
       - "/"
-    schedule:
-      interval: "weekly"
     ignore:
       - dependency-name: "kreuzberg"
       - dependency-name: "kreuzberg-ffi"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "pip"
     directories:
       - "/"
       - "/packages/python"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "npm"
     directories:
@@ -37,37 +31,37 @@ updates:
       - "/crates/kreuzberg-node"
       - "/crates/kreuzberg-wasm"
       - "/packages/typescript/core"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "bundler"
     directory: "/packages/ruby"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "composer"
     directories:
       - "/"
       - "/packages/php"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "gomod"
     directory: "/packages/go/v5"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "maven"
     directory: "/packages/java"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "nuget"
     directory: "/packages/csharp"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "mix"
     directory: "/packages/elixir"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
