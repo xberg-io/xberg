@@ -88,7 +88,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         if: ${{ steps.meta.outputs.dry_run != 'true' }}
-        uses: docker/login-action@v4.1.0
+        uses: docker/login-action@v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
