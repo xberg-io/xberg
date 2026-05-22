@@ -9,6 +9,6 @@
   "devDependencies": {
     "kreuzberg": "file:../../crates/kreuzberg-wasm/pkg/nodejs",
     "rollup": "^4.53.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.7"
   }
 }
