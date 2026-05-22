@@ -20,7 +20,7 @@
   <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg">
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
-  <a href="https://pkg.go.dev/github.com/kreuzberg-dev/kreuzberg/v5">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5">
     <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v5*" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
@@ -67,19 +67,23 @@
   <a href="https://docs.kreuzberg.dev">
     <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
   </a>
-  <a href="https://docs.kreuzberg.dev/demo.html">
-    <img src="https://img.shields.io/badge/Live%20Demo-open-007ec6" alt="Live Demo">
-  </a>
   <a href="https://huggingface.co/Kreuzberg">
     <img src="https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6" alt="Hugging Face">
   </a>
 </div>
 
-<img width="1128" height="191" alt="Banner2" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+<div align="center" style="margin: 24px 0 0;">
+  <a href="https://kreuzberg.dev">
+    <img width="1128" height="191" alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+  </a>
+</div>
 
-<div align="center" style="margin-top: 20px;">
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
-      <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Discord">
+    <img height="32" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Join Discord">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img height="32" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
 </div>
 
@@ -87,6 +91,13 @@ High-performance document intelligence for Go backed by the Rust core that power
 
 > **Version 5.0.0-rc.1**
 > Report issues at [github.com/kreuzberg-dev/kreuzberg](https://github.com/kreuzberg-dev/kreuzberg/issues).
+
+## What This Package Provides
+
+- **Go module over the Rust core** — context-aware extraction with Go structs and errors.
+- **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings.
+- **Static-link workflow** — build against `kreuzberg-ffi` and ship a self-contained Go binary.
+- **Cross-binding parity** — output matches the Python, Node.js, Ruby, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
 
 ## Install
 
@@ -313,7 +324,7 @@ func init() {
 
 ## API Reference
 
-- **GoDoc**: [pkg.go.dev/github.com/kreuzberg-dev/kreuzberg/v5](<https://pkg.go.dev/github.com/kreuzberg-dev/kreuzberg/v5>)
+- **Source**: [packages/go/v5](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5)
 - **Full documentation**: [kreuzberg.dev](https://kreuzberg.dev) (configuration, formats, OCR backends)
 
 ## Troubleshooting

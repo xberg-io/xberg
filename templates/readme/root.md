@@ -37,13 +37,13 @@ Each language binding provides comprehensive documentation with examples and bes
 **JavaScript/TypeScript:**
 
 - **[@kreuzberg/node](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-node)** – Native NAPI-RS bindings for Node.js/Bun, fastest performance
-- **[@kreuzberg/wasm](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/typescript)** – WebAssembly for browsers/Deno/Cloudflare Workers, comprehensive format and OCR support (PDF, Excel, archives, all office formats, real Tesseract via the WASI build) — only ORT-dependent features (paddle-ocr, layout detection, embeddings, auto-rotate) and server modes (api/mcp/cli) are excluded
+- **[@kreuzberg/wasm](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-wasm)** – WebAssembly for browsers/Deno/Cloudflare Workers, comprehensive format and OCR support (PDF, Excel, archives, all office formats, real Tesseract via the WASI build) — only ORT-dependent features (paddle-ocr, layout detection, embeddings, auto-rotate) and server modes (api/mcp/cli) are excluded
 
 **Compiled Languages:**
 
 - **[Go](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5)** – Go module with FFI bindings, context-aware async
 - **[Java](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/java)** – Maven Central, Foreign Function & Memory API
-- **[Kotlin](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/kotlin)** – Maven Central, Kotlin/JVM with idiomatic data classes, sealed enums, and coroutine-based async
+- **[Kotlin](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/kotlin-android)** – Maven Central, Kotlin/JVM with idiomatic data classes, sealed enums, and coroutine-based async
 - **[C#](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/csharp)** – NuGet package, .NET 6.0+, full async/await support
 - **[Swift](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/swift)** – Swift Package Manager, macOS 13+/iOS 16+, native Swift types and async/await
 

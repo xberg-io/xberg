@@ -20,7 +20,7 @@
   <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg">
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
-  <a href="https://pkg.go.dev/github.com/kreuzberg-dev/kreuzberg/v5">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5">
     <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v5*" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
@@ -67,25 +67,34 @@
   <a href="https://docs.kreuzberg.dev">
     <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
   </a>
-  <a href="https://docs.kreuzberg.dev/demo.html">
-    <img src="https://img.shields.io/badge/Live%20Demo-open-007ec6" alt="Live Demo">
-  </a>
   <a href="https://huggingface.co/Kreuzberg">
     <img src="https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6" alt="Hugging Face">
   </a>
 </div>
 
-<img width="1128" height="191" alt="Banner2" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+<div align="center" style="margin: 24px 0 0;">
+  <a href="https://kreuzberg.dev">
+    <img width="1128" height="191" alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+  </a>
+</div>
 
-<div align="center" style="margin-top: 20px;">
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
-      <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Discord">
+    <img height="32" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Join Discord">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img height="32" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
 </div>
 
 Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system.
 
-**Powered by a Rust core** – Native performance for document extraction.
+## What This Package Provides
+
+- **Python-native extraction** — sync and async APIs for files, bytes, URLs, and batch ingestion.
+- **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings in typed Python objects.
+- **OCR choices** — Tesseract, EasyOCR, PaddleOCR, and VLM OCR where configured.
+- **Same Rust engine as every binding** — behavior matches the Node.js, Ruby, Go, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
 
 ## Installation
 

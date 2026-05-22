@@ -20,7 +20,7 @@
   <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg">
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
-  <a href="https://pkg.go.dev/github.com/kreuzberg-dev/kreuzberg/v5">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5">
     <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v5*" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
@@ -67,23 +67,35 @@
   <a href="https://docs.kreuzberg.dev">
     <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
   </a>
-  <a href="https://docs.kreuzberg.dev/demo.html">
-    <img src="https://img.shields.io/badge/Live%20Demo-open-007ec6" alt="Live Demo">
-  </a>
   <a href="https://huggingface.co/Kreuzberg">
     <img src="https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6" alt="Hugging Face">
   </a>
 </div>
 
-<img width="1128" height="191" alt="Banner2" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+<div align="center" style="margin: 24px 0 0;">
+  <a href="https://kreuzberg.dev">
+    <img width="1128" height="191" alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+  </a>
+</div>
 
-<div align="center" style="margin-top: 20px;">
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
-      <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Discord">
+    <img height="32" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Join Discord">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img height="32" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
 </div>
 
 Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Swift bindings via swift-bridge for macOS, iOS, and Linux, with native Swift types and async/await support.
+
+## What This Package Provides
+
+- **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, and code intelligence from one API.
+- **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, and plain text.
+- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
+- **SwiftPM package** — Swift Concurrency API for Apple targets.
 
 ## Installation
 
@@ -163,7 +175,7 @@ print(result.content().toString())
 
 #### Table Extraction
 
-See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
+See [Configuration Guide](https://docs.kreuzberg.dev/guides/configuration/) for table extraction options.
 
 
 #### Processing Multiple Files
@@ -218,10 +230,10 @@ struct App {
 
 ### Next Steps
 
-- **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
-- **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
-- **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
-- **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+- **[Installation Guide](https://docs.kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
+- **[API Documentation](https://docs.kreuzberg.dev/reference/api-python/)** - Complete API reference
+- **[Examples & Guides](https://docs.kreuzberg.dev/)** - Full code examples and usage guides
+- **[Configuration Guide](https://docs.kreuzberg.dev/guides/configuration/)** - Advanced configuration options
 
 
 ## Features
@@ -286,7 +298,7 @@ struct App {
 
 Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack) — [documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev).
 
-**[Complete Format Reference](https://kreuzberg.dev/reference/formats/)**
+**[Complete Format Reference](https://docs.kreuzberg.dev/reference/formats/)**
 
 ### Key Capabilities
 
@@ -377,14 +389,14 @@ struct App {
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
 
-For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
+For detailed plugin documentation, visit [Plugin System Guide](https://docs.kreuzberg.dev/guides/plugins/).
 
 
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
-**[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+**[Embeddings Guide](https://docs.kreuzberg.dev/features/#embeddings)**
 
 
 ## Batch Processing
@@ -417,13 +429,13 @@ for (index, result) in results.enumerated() {
 
 For advanced configuration options including language detection, table extraction, OCR settings, and more:
 
-**[Configuration Guide](https://kreuzberg.dev/guides/configuration/)**
+**[Configuration Guide](https://docs.kreuzberg.dev/guides/configuration/)**
 
 ## Documentation
 
-- **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](https://kreuzberg.dev/reference/api-swift/)**
-- **[Examples & Guides](https://kreuzberg.dev/guides/)**
+- **[Official Documentation](https://docs.kreuzberg.dev/)**
+- **[API Reference](https://docs.kreuzberg.dev/reference/api-python/)**
+- **[Examples & Guides](https://docs.kreuzberg.dev/)**
 
 ## Contributing
 

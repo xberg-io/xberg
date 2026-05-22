@@ -20,7 +20,7 @@
   <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg">
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
-  <a href="https://pkg.go.dev/github.com/kreuzberg-dev/kreuzberg/v5">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5">
     <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v5*" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
@@ -67,19 +67,23 @@
   <a href="https://docs.kreuzberg.dev">
     <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
   </a>
-  <a href="https://docs.kreuzberg.dev/demo.html">
-    <img src="https://img.shields.io/badge/Live%20Demo-open-007ec6" alt="Live Demo">
-  </a>
   <a href="https://huggingface.co/Kreuzberg">
     <img src="https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6" alt="Hugging Face">
   </a>
 </div>
 
-<img width="1128" height="191" alt="Banner2" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+<div align="center" style="margin: 24px 0 0;">
+  <a href="https://kreuzberg.dev">
+    <img width="1128" height="191" alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+  </a>
+</div>
 
-<div align="center" style="margin-top: 20px;">
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
-      <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Discord">
+    <img height="32" src="https://img.shields.io/badge/Discord-Join%20our%20community-007ec6?logo=discord&logoColor=white" alt="Join Discord">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img height="32" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
 </div>
 
@@ -118,13 +122,13 @@ Each language binding provides comprehensive documentation with examples and bes
 **JavaScript/TypeScript:**
 
 - **[@kreuzberg/node](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-node)** – Native NAPI-RS bindings for Node.js/Bun, fastest performance
-- **[@kreuzberg/wasm](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/typescript)** – WebAssembly for browsers/Deno/Cloudflare Workers, comprehensive format and OCR support (PDF, Excel, archives, all office formats, real Tesseract via the WASI build) — only ORT-dependent features (paddle-ocr, layout detection, embeddings, auto-rotate) and server modes (api/mcp/cli) are excluded
+- **[@kreuzberg/wasm](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-wasm)** – WebAssembly for browsers/Deno/Cloudflare Workers, comprehensive format and OCR support (PDF, Excel, archives, all office formats, real Tesseract via the WASI build) — only ORT-dependent features (paddle-ocr, layout detection, embeddings, auto-rotate) and server modes (api/mcp/cli) are excluded
 
 **Compiled Languages:**
 
 - **[Go](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5)** – Go module with FFI bindings, context-aware async
 - **[Java](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/java)** – Maven Central, Foreign Function & Memory API
-- **[Kotlin](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/kotlin)** – Maven Central, Kotlin/JVM with idiomatic data classes, sealed enums, and coroutine-based async
+- **[Kotlin](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/kotlin-android)** – Maven Central, Kotlin/JVM with idiomatic data classes, sealed enums, and coroutine-based async
 - **[C#](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/csharp)** – NuGet package, .NET 6.0+, full async/await support
 - **[Swift](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/swift)** – Swift Package Manager, macOS 13+/iOS 16+, native Swift types and async/await
 

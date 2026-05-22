@@ -4,6 +4,44 @@
 
 {{ description }}
 
+## What This Package Provides
+
+- **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, and code intelligence from one API.
+- **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, and plain text.
+- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
+{% if language == "typescript" %}
+- **Node-first TypeScript API** — NAPI-RS package with typed options/results and async extraction.
+{% elif language == "python" %}
+- **Python package** — sync and async APIs with typed results for ingestion, RAG, and data workflows.
+{% elif language == "go" %}
+- **Go module** — context-aware API over the shared native library.
+{% elif language == "java" %}
+- **Java package** — FFM binding for direct native document extraction.
+{% elif language == "php" %}
+- **PHP package** — PHP 8.2+ API with generated types.
+{% elif language == "ruby" %}
+- **Ruby package** — native extension with idiomatic Ruby objects.
+{% elif language == "csharp" %}
+- **.NET package** — async/await API with nullable-aware result types.
+{% elif language == "elixir" %}
+- **BEAM package** — Rustler NIF binding for OTP pipelines.
+{% elif language == "wasm" %}
+- **WASM package** — browser and edge-compatible extraction where native libraries are unavailable.
+{% elif language == "r" %}
+- **R package** — data workflow binding with data-frame-friendly extracted structures.
+{% elif language == "ffi" %}
+- **C ABI** — stable shared library surface for custom hosts and secondary bindings.
+{% elif language == "kotlin_android" %}
+- **Android AAR** — JNI-backed package for mobile extraction workloads.
+{% elif language == "swift" %}
+- **SwiftPM package** — Swift Concurrency API for Apple targets.
+{% elif language == "dart" %}
+- **Dart package** — Future/Stream API through flutter_rust_bridge.
+{% elif language == "zig" %}
+- **Zig package** — wrapper over the C FFI with explicit memory ownership.
+{% endif %}
+
 ## Installation
 
 {% include 'partials/installation.md.jinja' %}
@@ -52,7 +90,7 @@ This binding provides full async/await support for non-blocking document process
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
 
-For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
+For detailed plugin documentation, visit [Plugin System Guide](https://docs.kreuzberg.dev/guides/plugins/).
 
 {% if snippets.plugin_system %}
 
@@ -68,7 +106,7 @@ For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
-**[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+**[Embeddings Guide](https://docs.kreuzberg.dev/features/#embeddings)**
 {% endif %}
 
 {% if snippets.batch_processing %}
@@ -85,13 +123,13 @@ Process multiple documents efficiently:
 
 For advanced configuration options including language detection, table extraction, OCR settings, and more:
 
-**[Configuration Guide](https://kreuzberg.dev/guides/configuration/)**
+**[Configuration Guide](https://docs.kreuzberg.dev/guides/configuration/)**
 
 ## Documentation
 
-- **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](https://kreuzberg.dev/reference/api-{{ language }}/)**
-- **[Examples & Guides](https://kreuzberg.dev/guides/)**
+- **[Official Documentation](https://docs.kreuzberg.dev/)**
+- **[API Reference](https://docs.kreuzberg.dev/reference/api-python/)**
+- **[Examples & Guides](https://docs.kreuzberg.dev/)**
 
 ## Contributing
 
