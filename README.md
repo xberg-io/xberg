@@ -18,7 +18,7 @@
 
 [Kreuzberg](https://github.com/kreuzberg-dev/kreuzberg) document extraction tools for [CrewAI](https://www.crewai.com/) agents.
 
-Extract text and metadata from 88+ document formats — PDF, DOCX, XLSX, HTML, images with OCR, and more — directly from your CrewAI agents.
+Extract text and metadata from 90+ document formats — PDF, DOCX, XLSX, HTML, images with OCR, and more — directly from your CrewAI agents.
 
 ## Installation
 
@@ -130,7 +130,7 @@ result = crew.kickoff()
 
 ## Supported Formats
 
-Kreuzberg supports 88+ file formats:
+Kreuzberg supports 90+ file formats:
 
 - **Documents:** PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP, RTF, and more
 - **Text/Markup:** TXT, MD, HTML, XML, JSON, YAML, LaTeX, Jupyter notebooks
