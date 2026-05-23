@@ -35,6 +35,11 @@ ktlint_standard_multiline-expression-wrapping = disabled
 # canonical formatter for emitted code, so disable the ktlint counter-rules.
 ktlint_standard_chain-method-continuation = disabled
 ktlint_standard_multiline-if-else = disabled
+# ktfmt strips trailing commas before `)` on multiline call sites; ktlint
+# `trailing-comma-on-call-site` demands them. The two fight in a loop.
+# Defer to ktfmt — disable the ktlint rule.
+ktlint_standard_trailing-comma-on-call-site = disabled
+ktlint_standard_trailing-comma-on-declaration-site = disabled
 
 [*.gradle.kts]
 indent_style = space
@@ -54,6 +59,11 @@ ktlint_standard_filename = disabled
 ktlint_standard_multiline-expression-wrapping = disabled
 ktlint_standard_chain-method-continuation = disabled
 ktlint_standard_multiline-if-else = disabled
+# ktfmt strips trailing commas before `)` on multiline call sites; ktlint
+# `trailing-comma-on-call-site` demands them. The two fight in a loop.
+# Defer to ktfmt — disable the ktlint rule.
+ktlint_standard_trailing-comma-on-call-site = disabled
+ktlint_standard_trailing-comma-on-declaration-site = disabled
 
 [*.{xml,pro,gitignore}]
 indent_style = space
