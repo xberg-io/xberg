@@ -379,7 +379,7 @@ impl PdfExtractor {
                     let pages_len = pages.len();
 
                     for (page, text) in pages.iter_mut().zip(pts) {
-                        page.content = text;
+                        page.content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
                     }
 
                     // Special case for VLM models that return a single string for a multi-page PDF:
@@ -396,7 +396,7 @@ impl PdfExtractor {
                             .enumerate()
                             .map(|(i, text)| crate::types::PageContent {
                                 page_number: (i + 1) as u32,
-                                content: text,
+                                content: crate::pdf::text::fix_pdf_control_chars(&text).into_owned(),
                                 tables: Vec::new(),
                                 image_indices: vec![],
                                 hierarchy: None,
@@ -413,7 +413,7 @@ impl PdfExtractor {
             {
                 for page in pages.iter_mut() {
                     if let Some(ocr_text) = results_map.get(&page.page_number) {
-                        page.content = ocr_text.clone();
+                        page.content = crate::pdf::text::fix_pdf_control_chars(ocr_text).into_owned();
                     }
                 }
             }

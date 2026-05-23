@@ -334,3 +334,81 @@ pub(super) fn execute_token_reduction(result: &mut ExtractionResult, config: &Ex
 
     Ok(())
 }
+
+#[cfg(all(test, feature = "chunking"))]
+mod tests {
+    use super::*;
+    use crate::types::PageContent;
+
+    fn make_page(page_number: u32, content: impl Into<String>) -> PageContent {
+        PageContent {
+            page_number,
+            content: content.into(),
+            tables: vec![],
+            image_indices: vec![],
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+        }
+    }
+
+    // When PageContent.content matches result.content exactly, all boundaries succeed.
+    #[test]
+    fn recompute_boundaries_exact_match_produces_full_boundary_set() {
+        let p1 = "Hello world";
+        let p2 = "Second page text";
+        let p3 = "Third page here";
+        let content = format!("{p1}\n\n{p2}\n\n{p3}");
+
+        let pages = vec![make_page(1, p1), make_page(2, p2), make_page(3, p3)];
+        let boundaries = recompute_boundaries_from_pages(&content, &pages);
+
+        assert_eq!(boundaries.len(), 3, "all pages should resolve to boundaries");
+        assert_eq!(&content[boundaries[0].byte_start..boundaries[0].byte_end], p1);
+        assert_eq!(&content[boundaries[1].byte_start..boundaries[1].byte_end], p2);
+        assert_eq!(&content[boundaries[2].byte_start..boundaries[2].byte_end], p3);
+    }
+
+    // When PageContent.content is raw (control char present) but result.content has the
+    // cleaned version, the affected page is silently skipped — leaving fewer boundaries
+    // than pages. Documents the pre-fix failure mode.
+    #[test]
+    fn recompute_boundaries_raw_content_causes_skipped_pages() {
+        // U+0001 between word chars → fix_pdf_control_chars replaces with '-'
+        let p1_clean = "Hello world";
+        let p2_raw = "ab\x01cd"; // raw page text — control char present
+        let p2_clean = "ab-cd"; // what result.content contains after cleanup
+        let p3_clean = "Third page";
+        let content = format!("{p1_clean}\n\n{p2_clean}\n\n{p3_clean}");
+
+        // Pre-fix scenario: page.content = raw, result.content = cleaned → mismatch
+        let pages = vec![
+            make_page(1, p1_clean),
+            make_page(2, p2_raw), // intentionally stale raw content
+            make_page(3, p3_clean),
+        ];
+        let boundaries = recompute_boundaries_from_pages(&content, &pages);
+
+        // Page 2 is skipped: neither exact nor first-line search finds "ab\x01cd"
+        // inside content (which has "ab-cd"). Only pages 1 and 3 resolve.
+        assert_eq!(boundaries.len(), 2, "page with raw/cleaned mismatch should be skipped");
+        assert_eq!(boundaries[0].page_number, 1);
+        assert_eq!(boundaries[1].page_number, 3);
+    }
+
+    // When PageContent.content is the cleaned text (the fix), all pages resolve.
+    #[test]
+    fn recompute_boundaries_cleaned_content_resolves_all_pages() {
+        let p1_clean = "Hello world";
+        let p2_clean = "ab-cd"; // cleaned — matches result.content exactly
+        let p3_clean = "Third page";
+        let content = format!("{p1_clean}\n\n{p2_clean}\n\n{p3_clean}");
+
+        // Post-fix scenario: page.content = cleaned, result.content = cleaned → exact match
+        let pages = vec![make_page(1, p1_clean), make_page(2, p2_clean), make_page(3, p3_clean)];
+        let boundaries = recompute_boundaries_from_pages(&content, &pages);
+
+        assert_eq!(boundaries.len(), 3, "all pages should resolve after fix");
+        assert_eq!(&content[boundaries[1].byte_start..boundaries[1].byte_end], p2_clean);
+    }
+}

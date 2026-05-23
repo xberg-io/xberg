@@ -179,10 +179,12 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
         });
 
         if let Some(ref mut pages) = page_contents {
-            let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page_text));
+            let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&cleaned));
             pages.push(PageContent {
                 page_number: page_number as u32,
-                content: page_text,
+                // Must match result.content (also cleaned) so recompute_boundaries_from_pages
+                // can locate this page via exact substring search.
+                content: cleaned.into_owned(),
                 tables: Vec::new(),
                 image_indices: Vec::new(),
                 hierarchy: None,
