@@ -1,9 +1,10 @@
-//! Regression tests for Markdown chunker behaviour on nested list input.
+//! Regression tests for issue 1004: nested list content duplication.
 //!
-//! Two bugs fixed together:
+//! Two bugs tracked together:
 //!
 //! 1. html-to-markdown-rs emitted malformed/duplicated Markdown for nested
 //!    `ul > li > ul > li > ol` HTML structures.
+//!    Fixed in html-to-markdown-rs 3.5.0 (kreuzberg-dev/html-to-markdown#385).
 //!
 //! 2. The Markdown chunker panicked on the malformed Markdown from (1).
 //!    The underflow originated in `sep.start - offset` in

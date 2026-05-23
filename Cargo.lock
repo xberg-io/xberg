@@ -2912,9 +2912,8 @@ dependencies = [
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "3.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42f856d5f5daa55ea8b81bd746f1e49170fe589eccd2f5020d9ea888417983ab"
+version = "3.5.0"
+source = "git+https://github.com/kreuzberg-dev/html-to-markdown?branch=fix%2Fissue-1004-nested-list-duplication#3d7f6695f928d584d44d76c10fe01f55c027cd60"
 dependencies = [
  "ahash",
  "astral-tl",

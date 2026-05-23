@@ -115,6 +115,7 @@ web-sys = { version = "0.3", features = [
 kreuzberg = { path = "crates/kreuzberg" }
 kreuzberg-tesseract = { path = "crates/kreuzberg-tesseract" }
 kreuzberg-paddle-ocr = { path = "crates/kreuzberg-paddle-ocr" }
+html-to-markdown-rs = { git = "https://github.com/kreuzberg-dev/html-to-markdown", branch = "fix/issue-1004-nested-list-duplication" }
 
 [profile.release]
 lto = "thin"
