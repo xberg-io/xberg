@@ -68,14 +68,14 @@ fn markdown_chunker_empty_input_returns_empty_chunks() {
     assert!(result.unwrap().chunks.is_empty());
 }
 
-/// Chunker must not panic on single-character input.
+/// Chunker must not panic on single-character input; Ok or Err is acceptable.
 #[test]
 fn markdown_chunker_single_char_input() {
     let result = chunk_text("x", &markdown_chunk_config(), None);
     let _ = result;
 }
 
-/// Chunker must not panic on input consisting only of newlines.
+/// Chunker must not panic on input consisting only of newlines; Ok or Err is acceptable.
 #[test]
 fn markdown_chunker_only_newlines() {
     let result = chunk_text("\n\n\n\n", &markdown_chunk_config(), None);
@@ -98,7 +98,7 @@ fn markdown_chunker_valid_nested_list() {
     assert!(result.is_ok(), "valid nested list must chunk without error");
 }
 
-#[cfg(all(feature = "html", feature = "chunking"))]
+#[cfg(feature = "html")]
 mod html_extraction {
     use kreuzberg::chunking::{ChunkerType, ChunkingConfig};
     use kreuzberg::core::config::{ExtractionConfig, OutputFormat};
@@ -125,23 +125,20 @@ mod html_extraction {
         assert!(result.is_ok(), "extraction must not error: {:?}", result.err());
     }
 
-    /// After fixing html-to-markdown: each inner list item must appear exactly once.
+    /// After fixing html-to-markdown: every list item must appear exactly once.
     #[test]
     fn html_nested_list_no_content_duplication() {
         let html = b"<ul><li>outer<ul><li>mid<ol><li>inner1</li><li>inner2</li></ol></li></ul></li></ul>";
         let result =
             extract_bytes_sync(html, "text/html", &ExtractionConfig::default()).expect("extraction must not error");
         let content = &result.content;
-        assert_eq!(
-            content.matches("inner1").count(),
-            1,
-            "inner1 must appear exactly once, got content:\n{content}"
-        );
-        assert_eq!(
-            content.matches("inner2").count(),
-            1,
-            "inner2 must appear exactly once, got content:\n{content}"
-        );
+        for word in ["outer", "mid", "inner1", "inner2"] {
+            assert_eq!(
+                content.matches(word).count(),
+                1,
+                "{word} must appear exactly once, got content:\n{content}"
+            );
+        }
     }
 
     /// Passing the malformed markdown from step 1 into a second extraction
