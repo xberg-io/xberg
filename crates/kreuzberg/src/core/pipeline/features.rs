@@ -14,11 +14,12 @@ use std::borrow::Cow;
 ///
 /// `PageBoundary` offsets produced during extraction are computed against raw
 /// rendered/source text, but `result.content` is produced by `render_plain` which
-/// may have different byte lengths (e.g. normalised whitespace, Unicode
-/// normalisation, dropped control characters).  This function re-derives the
-/// boundaries by locating each page's rendered content inside the combined
-/// `content` string, so that the byte offsets passed to the chunker are valid
-/// indices into `result.content`.
+/// trims trailing whitespace from each paragraph.  The raw page text therefore has
+/// different byte lengths for pages that contain trailing-space artifacts from PDF
+/// rendering.  This function re-derives the boundaries by locating each page's
+/// **paragraph-normalised** content (each `"\n\n"`-separated segment trimmed, then
+/// re-joined) inside the combined `content` string, so that the byte offsets passed
+/// to the chunker are valid indices into `result.content`.
 ///
 /// Pages whose content cannot be found are silently skipped (the chunker will
 /// still produce output, just without page-range metadata for those pages).
@@ -37,10 +38,24 @@ fn recompute_boundaries_from_pages(content: &str, pages: &[crate::types::PageCon
             continue;
         }
 
-        // Try exact match first
-        if let Some(pos) = content[search_offset..].find(&page.content) {
+        // Normalise page content to match what render_plain produces: split on the
+        // paragraph separator, trim each segment (PDF pages often carry trailing
+        // spaces before "\n\n" that render_plain strips via paragraph.trim()), then
+        // re-join.  Using the normalised form means exact-match succeeds and the
+        // resulting byte_end is correct — avoiding the cascading search_offset
+        // over-advance that caused null page metadata on subsequent pages (#1004).
+        let normalized: String = page
+            .content
+            .split("\n\n")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        // Try normalised-exact match (primary path — handles trailing-space pages).
+        if let Some(pos) = content[search_offset..].find(normalized.as_str()) {
             let byte_start = search_offset + pos;
-            let byte_end = content.floor_char_boundary(byte_start + page.content.len());
+            let byte_end = content.floor_char_boundary(byte_start + normalized.len());
             boundaries.push(PageBoundary {
                 page_number: page.page_number,
                 byte_start,
@@ -50,12 +65,13 @@ fn recompute_boundaries_from_pages(content: &str, pages: &[crate::types::PageCon
             continue;
         }
 
-        // Fallback: search for first non-empty line of page content
+        // Fallback: search for first non-empty line of page content.
+        // Use normalized.len() for byte_end so search_offset advances correctly.
         if let Some(line) = page.content.lines().find(|l| !l.trim().is_empty()).map(|l| l.trim())
             && let Some(pos) = content[search_offset..].find(line)
         {
             let byte_start = search_offset + pos;
-            let raw_end = (byte_start + page.content.len()).min(content.len());
+            let raw_end = (byte_start + normalized.len()).min(content.len());
             let byte_end = content.floor_char_boundary(raw_end);
             boundaries.push(PageBoundary {
                 page_number: page.page_number,
@@ -410,5 +426,32 @@ mod tests {
 
         assert_eq!(boundaries.len(), 3, "all pages should resolve after fix");
         assert_eq!(&content[boundaries[1].byte_start..boundaries[1].byte_end], p2_clean);
+    }
+
+    // PDF pages often have trailing spaces before "\n\n" paragraph separators (PDF
+    // rendering artifact).  render_plain trims each paragraph via paragraph.trim(),
+    // so result.content lacks those trailing spaces while page.content retains them.
+    // The normalised-exact match must succeed and produce correct byte_end so that
+    // subsequent pages are found without cascading search_offset over-advance.
+    #[test]
+    fn recompute_boundaries_trailing_space_pages_all_resolve() {
+        // Simulate PDF page content with trailing spaces before "\n\n".
+        let p1_raw = "Heading \n\nBody paragraph one. ";
+        let p2_raw = "Second heading \n\nBody paragraph two. ";
+        let p3_raw = "Conclusion. ";
+
+        // result.content as render_plain produces it (each paragraph trimmed).
+        let p1_norm = "Heading\n\nBody paragraph one.";
+        let p2_norm = "Second heading\n\nBody paragraph two.";
+        let p3_norm = "Conclusion.";
+        let content = format!("{p1_norm}\n\n{p2_norm}\n\n{p3_norm}");
+
+        let pages = vec![make_page(1, p1_raw), make_page(2, p2_raw), make_page(3, p3_raw)];
+        let boundaries = recompute_boundaries_from_pages(&content, &pages);
+
+        assert_eq!(boundaries.len(), 3, "all pages must resolve despite trailing spaces");
+        assert_eq!(&content[boundaries[0].byte_start..boundaries[0].byte_end], p1_norm);
+        assert_eq!(&content[boundaries[1].byte_start..boundaries[1].byte_end], p2_norm);
+        assert_eq!(&content[boundaries[2].byte_start..boundaries[2].byte_end], p3_norm);
     }
 }
