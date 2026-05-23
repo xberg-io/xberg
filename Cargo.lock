@@ -2913,7 +2913,7 @@ dependencies = [
 [[package]]
 name = "html-to-markdown-rs"
 version = "3.5.0"
-source = "git+https://github.com/kreuzberg-dev/html-to-markdown?branch=fix%2Fissue-1004-nested-list-duplication#3d7f6695f928d584d44d76c10fe01f55c027cd60"
+source = "git+https://github.com/kreuzberg-dev/html-to-markdown?rev=3d7f6695f928d584d44d76c10fe01f55c027cd60#3d7f6695f928d584d44d76c10fe01f55c027cd60"
 dependencies = [
  "ahash",
  "astral-tl",

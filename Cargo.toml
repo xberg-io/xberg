@@ -115,7 +115,8 @@ web-sys = { version = "0.3", features = [
 kreuzberg = { path = "crates/kreuzberg" }
 kreuzberg-tesseract = { path = "crates/kreuzberg-tesseract" }
 kreuzberg-paddle-ocr = { path = "crates/kreuzberg-paddle-ocr" }
-html-to-markdown-rs = { git = "https://github.com/kreuzberg-dev/html-to-markdown", branch = "fix/issue-1004-nested-list-duplication" }
+# TODO: remove once html-to-markdown-rs 3.5.0 lands on crates.io (kreuzberg-dev/html-to-markdown#385)
+html-to-markdown-rs = { git = "https://github.com/kreuzberg-dev/html-to-markdown", rev = "3d7f6695f928d584d44d76c10fe01f55c027cd60" }
 
 [profile.release]
 lto = "thin"
