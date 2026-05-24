@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **deps**: bump alef pin to v0.19.5 (bundles AHashMap binding fixes for FFI/Dart/Swift/Elixir/Ruby/PHP and WASM emitter dedup + collect + From-impl + sub-config deserialize fixes).
+- **repo**: Add `.gitattributes` marking all alef-generated output directories (`packages/**`, `crates/*-{py,php,ffi,node,wasm}/**`, `e2e/**`) as `linguist-generated=true` so generated files collapse in GitHub PR diffs.
 
 ### Fixed
 
