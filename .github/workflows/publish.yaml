@@ -1879,6 +1879,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: recursive
+      - uses: kreuzberg-dev/actions/setup-rust@v1
       - uses: erlef/setup-beam@v1.24.0
         with:
           elixir-version: "1.17"
@@ -1893,6 +1894,14 @@ jobs:
           lib-name: kreuzberg_nif
           targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-pc-windows-msvc
           output-path: packages/elixir/checksum-Elixir.Kreuzberg.Native.exs
+
+      - name: Build Elixir Hex tarball with dependency rewrite
+        uses: kreuzberg-dev/actions/build-elixir-hex@v1
+        with:
+          package-dir: packages/elixir
+          nif-crate-path: packages/elixir/native/kreuzberg_nif
+          rewrite-native-deps: "true"
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
 
       - uses: kreuzberg-dev/actions/publish-hex@v1
         with:
