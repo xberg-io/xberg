@@ -303,17 +303,21 @@ def _to_rust_chunking_config(value: ChunkingConfig | dict[str, Any] | None) -> _
         value = ChunkingConfig(**value)
     if value is None:
         return None
-    return _rust.ChunkingConfig(
-        max_chars=value.max_characters,
-        max_overlap=value.overlap,
-        trim=value.trim,
-        chunker_type=_coerce_enum(_rust.ChunkerType, value.chunker_type),
-        embedding=_to_rust_embedding_config(value.embedding),
-        preset=value.preset,
-        sizing=value.sizing if isinstance(value.sizing, _rust.ChunkSizing) else _rust.ChunkSizing(value.sizing),
-        prepend_heading_context=value.prepend_heading_context,
-        topic_threshold=value.topic_threshold,
-    )
+    kwargs: dict[str, Any] = {
+        "max_chars": value.max_characters,
+        "max_overlap": value.overlap,
+        "trim": value.trim,
+        "chunker_type": _coerce_enum(_rust.ChunkerType, value.chunker_type),
+        "embedding": _to_rust_embedding_config(value.embedding),
+        "preset": value.preset,
+        "prepend_heading_context": value.prepend_heading_context,
+        "topic_threshold": value.topic_threshold,
+    }
+    if value.sizing is not None:
+        kwargs["sizing"] = (
+            value.sizing if isinstance(value.sizing, _rust.ChunkSizing) else _rust.ChunkSizing(value.sizing)
+        )
+    return _rust.ChunkingConfig(**kwargs)
 
 
 def _to_rust_content_filter_config(
