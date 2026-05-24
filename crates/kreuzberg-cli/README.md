@@ -1,12 +1,14 @@
 # kreuzberg-cli
 
+[![Bindings](https://img.shields.io/badge/Bindings-alef%20%D7%90-007ec6)](https://github.com/kreuzberg-dev/alef)
+
 Command-line interface for the Kreuzberg document intelligence library.
 
 ## Overview
 
 This crate provides a production-ready CLI tool for document extraction, MIME type detection, batch processing, embeddings, chunking, and cache management. It exposes the core extraction capabilities of the Kreuzberg Rust library through an easy-to-use command-line interface.
 
-The CLI supports 91+ file formats including PDF, DOCX, PPTX, XLSX, images, HTML, and more, with optional OCR support for scanned documents.
+The CLI supports 90+ file formats including PDF, DOCX, PPTX, XLSX, images, HTML, and more, with optional OCR support for scanned documents.
 
 ## Architecture
 

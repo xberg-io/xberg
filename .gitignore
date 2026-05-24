@@ -274,6 +274,9 @@ e2e/go/vendor/
 
 erl_crash.dump
 
+
+.gradle/
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .agents/agents/c-ffi-specialist.md
 .agents/agents/code-reviewer.md

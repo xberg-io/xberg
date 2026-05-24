@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -30,5 +31,5 @@ data class SupportedFormat(
     /** File extension (without leading dot), e.g., "pdf", "docx" */
     val extension: String,
     /** MIME type string, e.g., "application/pdf" */
-    val mimeType: String
+    val mimeType: String,
 )

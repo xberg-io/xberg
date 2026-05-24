@@ -49,6 +49,9 @@ public func listRenderers() throws -> RustVec<RustString> {
 public func listValidators() throws -> RustVec<RustString> {
     try { let val = __swift_bridge__$list_validators(); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func calculateQualityScore<GenericIntoRustString: IntoRustString>(_ text: GenericIntoRustString, _ metadata: Optional<GenericIntoRustString>) -> Double {
+    __swift_bridge__$calculate_quality_score({ let rustString = text.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { if let rustString = optionalStringIntoRustString(metadata) { rustString.isOwned = false; return rustString.ptr } else { return nil } }())
+}
 public func embedTextsAsync<GenericIntoRustString: IntoRustString>(_ texts: RustVec<GenericIntoRustString>, _ config: EmbeddingConfig) throws -> RustString {
     try { let val = __swift_bridge__$embed_texts_async({ let val = texts; val.isOwned = false; return val.ptr }(), {config.isOwned = false; return config.ptr;}()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -590,6 +593,9 @@ public func chunkMetadataFromJson<GenericIntoRustString: IntoRustString>(_ json:
 }
 public func extractedImageFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ExtractedImage {
     try { let val = __swift_bridge__$extracted_image_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ExtractedImage(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func boundingBoxFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> BoundingBox {
+    try { let val = __swift_bridge__$bounding_box_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return BoundingBox(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
 public func elementMetadataFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ElementMetadata {
     try { let val = __swift_bridge__$element_metadata_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ElementMetadata(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
@@ -4968,8 +4974,8 @@ extension PdfAnnotationRef {
         __swift_bridge__$PdfAnnotation$page_number(ptr)
     }
 
-    public func boundingBox() -> Optional<RustString> {
-        { let val = __swift_bridge__$PdfAnnotation$bounding_box(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    public func boundingBox() -> Optional<BoundingBox> {
+        { let val = __swift_bridge__$PdfAnnotation$bounding_box(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
     }
 }
 extension PdfAnnotation: Vectorizable {
@@ -5829,8 +5835,8 @@ extension DocumentNodeRef {
         __swift_bridge__$DocumentNode$page_end(ptr).intoSwiftRepr()
     }
 
-    public func bbox() -> Optional<RustString> {
-        { let val = __swift_bridge__$DocumentNode$bbox(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    public func bbox() -> Optional<BoundingBox> {
+        { let val = __swift_bridge__$DocumentNode$bbox(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
     }
 
     public func annotations() -> RustVec<TextAnnotation> {
@@ -6034,8 +6040,8 @@ extension GridCellRef {
         __swift_bridge__$GridCell$is_header(ptr)
     }
 
-    public func bbox() -> Optional<RustString> {
-        { let val = __swift_bridge__$GridCell$bbox(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    public func bbox() -> Optional<BoundingBox> {
+        { let val = __swift_bridge__$GridCell$bbox(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
     }
 }
 extension GridCell: Vectorizable {
@@ -7068,8 +7074,8 @@ extension ExtractedImageRef {
         { let val = __swift_bridge__$ExtractedImage$ocr_result(ptr); if val != nil { return ExtractionResult(ptr: val!) } else { return nil } }()
     }
 
-    public func boundingBox() -> Optional<RustString> {
-        { let val = __swift_bridge__$ExtractedImage$bounding_box(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    public func boundingBox() -> Optional<BoundingBox> {
+        { let val = __swift_bridge__$ExtractedImage$bounding_box(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
     }
 
     public func sourcePath() -> Optional<RustString> {
@@ -7138,6 +7144,103 @@ extension ExtractedImage: Vectorizable {
 }
 
 
+public class BoundingBox: BoundingBoxRefMut {
+    var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$BoundingBox$_free(ptr)
+        }
+    }
+}
+extension BoundingBox {
+    public convenience init(_ x0: Double, _ y0: Double, _ x1: Double, _ y1: Double) {
+        self.init(ptr: __swift_bridge__$BoundingBox$new(x0, y0, x1, y1))
+    }
+}
+public class BoundingBoxRefMut: BoundingBoxRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class BoundingBoxRef {
+    var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension BoundingBoxRef {
+    public func x0() -> Double {
+        __swift_bridge__$BoundingBox$x0(ptr)
+    }
+
+    public func y0() -> Double {
+        __swift_bridge__$BoundingBox$y0(ptr)
+    }
+
+    public func x1() -> Double {
+        __swift_bridge__$BoundingBox$x1(ptr)
+    }
+
+    public func y1() -> Double {
+        __swift_bridge__$BoundingBox$y1(ptr)
+    }
+}
+extension BoundingBox: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_BoundingBox$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_BoundingBox$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: BoundingBox) {
+        __swift_bridge__$Vec_BoundingBox$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_BoundingBox$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (BoundingBox(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<BoundingBoxRef> {
+        let pointer = __swift_bridge__$Vec_BoundingBox$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return BoundingBoxRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<BoundingBoxRefMut> {
+        let pointer = __swift_bridge__$Vec_BoundingBox$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return BoundingBoxRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<BoundingBoxRef> {
+        UnsafePointer<BoundingBoxRef>(OpaquePointer(__swift_bridge__$Vec_BoundingBox$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_BoundingBox$len(vecPtr)
+    }
+}
+
+
 public class ElementMetadata: ElementMetadataRefMut {
     var isOwned: Bool = true
 
@@ -7172,8 +7275,8 @@ extension ElementMetadataRef {
         { let val = __swift_bridge__$ElementMetadata$filename(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
     }
 
-    public func coordinates() -> Optional<RustString> {
-        { let val = __swift_bridge__$ElementMetadata$coordinates(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    public func coordinates() -> Optional<BoundingBox> {
+        { let val = __swift_bridge__$ElementMetadata$coordinates(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
     }
 
     public func elementIndex() -> Optional<UInt> {
@@ -9385,8 +9488,8 @@ public class TextMetadata: TextMetadataRefMut {
     }
 }
 extension TextMetadata {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ line_count: UInt32, _ word_count: UInt32, _ character_count: UInt32, _ headers: Optional<RustVec<GenericIntoRustString>>, _ links: Optional<RustVec<GenericIntoRustString>>, _ code_blocks: Optional<RustVec<GenericIntoRustString>>) {
-        self.init(ptr: __swift_bridge__$TextMetadata$new(line_count, word_count, character_count, { if let val = headers { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = links { val.isOwned = false; return val.ptr } else { return nil } }(), { if let val = code_blocks { val.isOwned = false; return val.ptr } else { return nil } }()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ line_count: UInt32, _ word_count: UInt32, _ character_count: UInt32, _ headers: Optional<RustVec<GenericIntoRustString>>, _ links: GenericIntoRustString, _ code_blocks: GenericIntoRustString) {
+        self.init(ptr: __swift_bridge__$TextMetadata$new(line_count, word_count, character_count, { if let val = headers { val.isOwned = false; return val.ptr } else { return nil } }(), { let rustString = links.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = code_blocks.intoRustString(); rustString.isOwned = false; return rustString.ptr }()))
     }
 }
 public class TextMetadataRefMut: TextMetadataRef {
@@ -12199,8 +12302,8 @@ public class LayoutRegion: LayoutRegionRefMut {
     }
 }
 extension LayoutRegion {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ class_name: GenericIntoRustString, _ confidence: Double, _ bounding_box: GenericIntoRustString, _ area_fraction: Double) {
-        self.init(ptr: __swift_bridge__$LayoutRegion$new({ let rustString = class_name.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), confidence, { let rustString = bounding_box.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), area_fraction))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ class_name: GenericIntoRustString, _ confidence: Double, _ bounding_box: BoundingBox, _ area_fraction: Double) {
+        self.init(ptr: __swift_bridge__$LayoutRegion$new({ let rustString = class_name.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), confidence, {bounding_box.isOwned = false; return bounding_box.ptr;}(), area_fraction))
     }
 }
 public class LayoutRegionRefMut: LayoutRegionRef {
@@ -12224,8 +12327,8 @@ extension LayoutRegionRef {
         __swift_bridge__$LayoutRegion$confidence(ptr)
     }
 
-    public func boundingBox() -> RustString {
-        RustString(ptr: __swift_bridge__$LayoutRegion$bounding_box(ptr))
+    public func boundingBox() -> BoundingBox {
+        BoundingBox(ptr: __swift_bridge__$LayoutRegion$bounding_box(ptr))
     }
 
     public func areaFraction() -> Double {
@@ -12472,8 +12575,8 @@ public class Table: TableRefMut {
     }
 }
 extension Table {
-    public convenience init<GenericIntoRustString: IntoRustString>(_ cells: GenericIntoRustString, _ markdown: GenericIntoRustString, _ page_number: UInt32, _ bounding_box: Optional<GenericIntoRustString>) {
-        self.init(ptr: __swift_bridge__$Table$new({ let rustString = cells.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = markdown.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), page_number, { if let rustString = optionalStringIntoRustString(bounding_box) { rustString.isOwned = false; return rustString.ptr } else { return nil } }()))
+    public convenience init<GenericIntoRustString: IntoRustString>(_ cells: GenericIntoRustString, _ markdown: GenericIntoRustString, _ page_number: UInt32, _ bounding_box: Optional<BoundingBox>) {
+        self.init(ptr: __swift_bridge__$Table$new({ let rustString = cells.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let rustString = markdown.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), page_number, { if let val = bounding_box { val.isOwned = false; return val.ptr } else { return nil } }()))
     }
 }
 public class TableRefMut: TableRef {
@@ -12501,8 +12604,8 @@ extension TableRef {
         __swift_bridge__$Table$page_number(ptr)
     }
 
-    public func boundingBox() -> Optional<RustString> {
-        { let val = __swift_bridge__$Table$bounding_box(ptr); if val != nil { return RustString(ptr: val!) } else { return nil } }()
+    public func boundingBox() -> Optional<BoundingBox> {
+        { let val = __swift_bridge__$Table$bounding_box(ptr); if val != nil { return BoundingBox(ptr: val!) } else { return nil } }()
     }
 }
 extension Table: Vectorizable {

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -34,5 +35,5 @@ data class PptxMetadata(
     /** Number of embedded images */
     val imageCount: Int? = null,
     /** Number of tables */
-    val tableCount: Int? = null
+    val tableCount: Int? = null,
 )

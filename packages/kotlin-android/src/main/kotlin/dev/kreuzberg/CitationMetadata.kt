@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -28,5 +29,5 @@ data class CitationMetadata(
     val authors: List<String> = emptyList(),
     val yearRange: YearRange? = null,
     val dois: List<String> = emptyList(),
-    val keywords: List<String> = emptyList()
+    val keywords: List<String> = emptyList(),
 )

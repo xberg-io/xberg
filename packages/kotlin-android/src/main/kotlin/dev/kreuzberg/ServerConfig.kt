@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * API server configuration.
  *
- * This struct holds all configuration options for the Kreuzberg API server,
- * including host/port settings, CORS configuration, and upload limits.
+ * This struct holds all configuration options for the Kreuzberg API server, including host/port
+ * settings, CORS configuration, and upload limits.
  *
  * # Defaults
  *
@@ -43,13 +44,12 @@ data class ServerConfig(
     /**
      * CORS allowed origins. Empty vector means allow all origins.
      *
-     * If this is an empty vector, the server will accept requests from any origin.
-     * If populated with specific origins (e.g., `"https://example.com"`), only
-     * those origins will be allowed.
+     * If this is an empty vector, the server will accept requests from any origin. If populated
+     * with specific origins (e.g., `"https://example.com"`), only those origins will be allowed.
      */
     val corsOrigins: List<String> = emptyList(),
     /** Maximum size of request body in bytes (default: 100 MB) */
     val maxRequestBodyBytes: Long = 0L,
     /** Maximum size of multipart fields in bytes (default: 100 MB) */
-    val maxMultipartFieldBytes: Long = 0L
+    val maxMultipartFieldBytes: Long = 0L,
 )

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -44,5 +45,5 @@ data class TreeSitterProcessConfig(
     /** Maximum chunk size in bytes. `null` disables chunking. */
     val chunkMaxSize: Long? = null,
     /** Content rendering mode for code extraction. */
-    val contentMode: CodeContentMode = CodeContentMode.CHUNKS
+    val contentMode: CodeContentMode = CodeContentMode.CHUNKS,
 )

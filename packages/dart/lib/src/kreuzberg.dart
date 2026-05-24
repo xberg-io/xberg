@@ -603,6 +603,25 @@ class KreuzbergBridge {
     return await rust_bridge.listValidators();
   }
 
+  /// Score an extracted text on the closed interval `[0.0, 1.0]`, where higher is better.
+  ///
+  /// `1.0` is the neutral score for clean prose; penalties (OCR artifacts, embedded
+  /// script/style noise, navigation chrome) subtract, structural cues (headings,
+  /// punctuation) add. The result is clamped to `[0.0, 1.0]`.
+  ///
+  /// Pass `metadata` as `None` when the caller has no extraction metadata available;
+  /// the metadata bonus simply isn't applied in that case. Texts shorter than
+  /// `MIN_TEXT_LENGTH` short-circuit to `0.1` regardless of metadata.
+  static Future<double> calculateQualityScore(
+    String text, {
+    Map<String, String>? metadata,
+  }) async {
+    return await rust_bridge.calculateQualityScore(
+      text: text,
+      metadata: metadata,
+    );
+  }
+
   /// Generate embeddings asynchronously for a list of text strings.
   ///
   /// This is the async counterpart to [`embed_texts`]. It offloads the blocking

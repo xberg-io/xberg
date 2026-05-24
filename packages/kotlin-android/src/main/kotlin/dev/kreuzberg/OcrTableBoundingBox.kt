@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -30,5 +31,5 @@ data class OcrTableBoundingBox(
     /** Right x-coordinate (pixels) */
     val right: Int,
     /** Bottom y-coordinate (pixels) */
-    val bottom: Int
+    val bottom: Int,
 )

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -26,5 +27,5 @@ data class OrientationResult(
     /** Detected orientation in degrees (0, 90, 180, or 270). */
     val degrees: Int,
     /** Confidence score (0.0-1.0). */
-    val confidence: Float
+    val confidence: Float,
 )

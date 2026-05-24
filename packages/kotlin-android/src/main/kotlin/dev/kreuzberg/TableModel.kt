@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,54 +25,49 @@ package dev.kreuzberg
 /**
  * Which table structure recognition model to use.
  *
- * Controls the model used for table cell detection within layout-detected
- * table regions. Wire format is snake_case in all serializers (JSON, TOML,
- * YAML).
+ * Controls the model used for table cell detection within layout-detected table regions. Wire
+ * format is snake_case in all serializers (JSON, TOML, YAML).
  */
 enum class TableModel {
     /** TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection. */
-    @com.fasterxml.jackson.annotation.JsonProperty("tatr")
-    TATR,
+    @com.fasterxml.jackson.annotation.JsonProperty("tatr") TATR,
     /** SLANeXT wired variant -- 365MB, optimized for bordered tables. */
-    @com.fasterxml.jackson.annotation.JsonProperty("slanet_wired")
-    SLANET_WIRED,
+    @com.fasterxml.jackson.annotation.JsonProperty("slanet_wired") SLANET_WIRED,
     /** SLANeXT wireless variant -- 365MB, optimized for borderless tables. */
-    @com.fasterxml.jackson.annotation.JsonProperty("slanet_wireless")
-    SLANET_WIRELESS,
+    @com.fasterxml.jackson.annotation.JsonProperty("slanet_wireless") SLANET_WIRELESS,
     /** SLANet-plus -- 7.78MB, lightweight general-purpose. */
-    @com.fasterxml.jackson.annotation.JsonProperty("slanet_plus")
-    SLANET_PLUS,
+    @com.fasterxml.jackson.annotation.JsonProperty("slanet_plus") SLANET_PLUS,
     /**
-     * Classifier-routed SLANeXT: auto-select wired/wireless per table.
-     * Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
+     * Classifier-routed SLANeXT: auto-select wired/wireless per table. Uses PP-LCNet classifier
+     * (6.78MB) + both SLANeXT variants (730MB total).
      */
-    @com.fasterxml.jackson.annotation.JsonProperty("slanet_auto")
-    SLANET_AUTO,
+    @com.fasterxml.jackson.annotation.JsonProperty("slanet_auto") SLANET_AUTO,
     /** Disable table structure model inference entirely; use heuristic path only. */
-    @com.fasterxml.jackson.annotation.JsonProperty("disabled")
-    DISABLED;
+    @com.fasterxml.jackson.annotation.JsonProperty("disabled") DISABLED;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String = when (this) {
-        TATR -> "tatr"
-        SLANET_WIRED -> "slanet_wired"
-        SLANET_WIRELESS -> "slanet_wireless"
-        SLANET_PLUS -> "slanet_plus"
-        SLANET_AUTO -> "slanet_auto"
-        DISABLED -> "disabled"
-    }
+    fun toWire(): String =
+        when (this) {
+            TATR -> "tatr"
+            SLANET_WIRED -> "slanet_wired"
+            SLANET_WIRELESS -> "slanet_wireless"
+            SLANET_PLUS -> "slanet_plus"
+            SLANET_AUTO -> "slanet_auto"
+            DISABLED -> "disabled"
+        }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): TableModel = when (value) {
-            "tatr" -> TATR
-            "slanet_wired" -> SLANET_WIRED
-            "slanet_wireless" -> SLANET_WIRELESS
-            "slanet_plus" -> SLANET_PLUS
-            "slanet_auto" -> SLANET_AUTO
-            "disabled" -> DISABLED
-            else -> throw IllegalArgumentException("Unknown TableModel value: $value")
-        }
+        fun fromWire(value: String): TableModel =
+            when (value) {
+                "tatr" -> TATR
+                "slanet_wired" -> SLANET_WIRED
+                "slanet_wireless" -> SLANET_WIRELESS
+                "slanet_plus" -> SLANET_PLUS
+                "slanet_auto" -> SLANET_AUTO
+                "disabled" -> DISABLED
+                else -> throw IllegalArgumentException("Unknown TableModel value: $value")
+            }
     }
 }

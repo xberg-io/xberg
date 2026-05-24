@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * A text block with hierarchy level assignment.
  *
- * Represents a block of text with semantic heading information extracted from
- * font size clustering and hierarchical analysis.
+ * Represents a block of text with semantic heading information extracted from font size clustering
+ * and hierarchical analysis.
  */
 data class HierarchicalBlock(
     /** The text content of this block */
@@ -36,6 +37,7 @@ data class HierarchicalBlock(
      * The hierarchy level of this block (H1-H6 or Body)
      *
      * Levels correspond to HTML heading tags:
+     *
      * - "h1": Top-level heading
      * - "h2": Secondary heading
      * - "h3": Tertiary heading
@@ -50,5 +52,5 @@ data class HierarchicalBlock(
      *
      * Contains coordinates as (left, top, right, bottom) in PDF units.
      */
-    val bbox: List<Float>? = null
+    val bbox: List<Float>? = null,
 )

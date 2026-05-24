@@ -18,7 +18,7 @@ repository = "https://github.com/kreuzberg-dev/kreuzberg"
 # configured but no actual async-trait / async-stream callsite in the
 # generated FFI shim.
 [package.metadata.cargo-machete]
-ignored = ["serde_json", "tokio", "async-trait"]
+ignored = ["ahash", "serde_json", "tokio", "async-trait"]
 
 [lib]
 crate-type = ["cdylib", "staticlib"]
@@ -27,15 +27,16 @@ crate-type = ["cdylib", "staticlib"]
 default = []
 
 [dependencies]
+ahash = "0.8"
 async-trait = "0.1"
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
 [target.'cfg(all(target_os = "android", target_arch = "x86_64"))'.dependencies]
-kreuzberg = { path = "../kreuzberg", features = ["android-target"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.1", features = ["android-target"] }
 
 [target.'cfg(not(all(target_os = "android", target_arch = "x86_64")))'.dependencies]
-kreuzberg = { path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.1", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 
 [build-dependencies]
 cbindgen = "0.29"

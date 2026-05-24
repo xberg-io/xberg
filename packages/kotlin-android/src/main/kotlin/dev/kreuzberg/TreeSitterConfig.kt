@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -45,8 +46,8 @@ data class TreeSitterConfig(
     /**
      * Enable code intelligence processing (default: true).
      *
-     * When `false`, tree-sitter analysis is completely skipped even if
-     * the config section is present.
+     * When `false`, tree-sitter analysis is completely skipped even if the config section is
+     * present.
      */
     val enabled: Boolean = true,
     /**
@@ -60,5 +61,5 @@ data class TreeSitterConfig(
     /** Language groups to pre-download (e.g., `["web", "systems", "scripting"]`). */
     val groups: List<String>? = null,
     /** Processing options for code analysis. */
-    val process: TreeSitterProcessConfig = TreeSitterProcessConfig()
+    val process: TreeSitterProcessConfig = TreeSitterProcessConfig(),
 )

@@ -2,7 +2,7 @@ import com.android.build.api.dsl.ManagedVirtualDevice
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("com.android.library") version "8.7.3"
+    id("com.android.library") version "8.13.0"
     kotlin("android") version "2.3.21"
 }
 

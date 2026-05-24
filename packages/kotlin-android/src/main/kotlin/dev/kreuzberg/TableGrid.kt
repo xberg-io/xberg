@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -32,5 +33,5 @@ data class TableGrid(
     /** Number of columns in the table. */
     val cols: Int = 0,
     /** All cells in row-major order. */
-    val cells: List<GridCell> = emptyList()
+    val cells: List<GridCell> = emptyList(),
 )

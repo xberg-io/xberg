@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,30 +25,29 @@ package dev.kreuzberg
 /** Text direction enumeration for HTML documents. */
 enum class TextDirection {
     /** Left-to-right text direction */
-    @com.fasterxml.jackson.annotation.JsonProperty("ltr")
-    LEFT_TO_RIGHT,
+    @com.fasterxml.jackson.annotation.JsonProperty("ltr") LEFT_TO_RIGHT,
     /** Right-to-left text direction */
-    @com.fasterxml.jackson.annotation.JsonProperty("rtl")
-    RIGHT_TO_LEFT,
+    @com.fasterxml.jackson.annotation.JsonProperty("rtl") RIGHT_TO_LEFT,
     /** Automatic text direction detection */
-    @com.fasterxml.jackson.annotation.JsonProperty("auto")
-    AUTO;
+    @com.fasterxml.jackson.annotation.JsonProperty("auto") AUTO;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String = when (this) {
-        LEFT_TO_RIGHT -> "ltr"
-        RIGHT_TO_LEFT -> "rtl"
-        AUTO -> "auto"
-    }
+    fun toWire(): String =
+        when (this) {
+            LEFT_TO_RIGHT -> "ltr"
+            RIGHT_TO_LEFT -> "rtl"
+            AUTO -> "auto"
+        }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): TextDirection = when (value) {
-            "ltr" -> LEFT_TO_RIGHT
-            "rtl" -> RIGHT_TO_LEFT
-            "auto" -> AUTO
-            else -> throw IllegalArgumentException("Unknown TextDirection value: $value")
-        }
+        fun fromWire(value: String): TextDirection =
+            when (value) {
+                "ltr" -> LEFT_TO_RIGHT
+                "rtl" -> RIGHT_TO_LEFT
+                "auto" -> AUTO
+                else -> throw IllegalArgumentException("Unknown TextDirection value: $value")
+            }
     }
 }

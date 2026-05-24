@@ -2934,6 +2934,8 @@ dependencies = [
 name = "kreuzberg-e2e-rust"
 version = "5.0.0-rc.1"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "kreuzberg",
  "serde_json",
  "tokio",

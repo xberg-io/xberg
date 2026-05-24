@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -28,5 +29,5 @@ data class LanguageDetectionConfig(
     /** Minimum confidence threshold (0.0-1.0) */
     val minConfidence: Double = 0.8,
     /** Detect multiple languages in the document */
-    val detectMultiple: Boolean = false
+    val detectMultiple: Boolean = false,
 )

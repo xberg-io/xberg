@@ -915,8 +915,8 @@ typedef struct KREUZBERGOrientationResult KREUZBERGOrientationResult;
  * Output format for extraction results.
  *
  * Controls the format of the `content` field in `ExtractionResult`.
- * When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
- * accordingly. `Plain` returns the raw extracted text.
+ * When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+ * `Plain` returns the raw extracted text.
  * `Structured` returns JSON with full OCR element data including bounding
  * boxes and confidence scores.
  */
@@ -4590,6 +4590,13 @@ void kreuzberg_structured_data_result_free(KREUZBERGStructuredDataResult *ptr);
 char *kreuzberg_structured_data_result_content(const KREUZBERGStructuredDataResult *ptr);
 
 /**
+ * Get the `format` field from a `StructuredDataResult`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_structured_data_result_format(const KREUZBERGStructuredDataResult *ptr);
+
+/**
  * Get the `metadata` field from a `StructuredDataResult`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -6067,6 +6074,13 @@ void kreuzberg_extraction_result_free(KREUZBERGExtractionResult *ptr);
 char *kreuzberg_extraction_result_content(const KREUZBERGExtractionResult *ptr);
 
 /**
+ * Get the `mime_type` field from a `ExtractionResult`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_extraction_result_mime_type(const KREUZBERGExtractionResult *ptr);
+
+/**
  * Get the `metadata` field from a `ExtractionResult`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -6286,6 +6300,20 @@ char *kreuzberg_processing_warning_to_json(const KREUZBERGProcessingWarning *ptr
  * Pointer must have been returned by this library, or be null.
  */
 void kreuzberg_processing_warning_free(KREUZBERGProcessingWarning *ptr);
+
+/**
+ * Get the `source` field from a `ProcessingWarning`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_processing_warning_source(const KREUZBERGProcessingWarning *ptr);
+
+/**
+ * Get the `message` field from a `ProcessingWarning`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_processing_warning_message(const KREUZBERGProcessingWarning *ptr);
 
 /**
  * Create a `LlmUsage` from a JSON string. Returns null on failure.
@@ -6593,6 +6621,13 @@ void kreuzberg_extracted_image_free(KREUZBERGExtractedImage *ptr);
  */
 uint8_t *kreuzberg_extracted_image_data(const KREUZBERGExtractedImage *ptr,
                                         uintptr_t *out_len);
+
+/**
+ * Get the `format` field from a `ExtractedImage`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_extracted_image_format(const KREUZBERGExtractedImage *ptr);
 
 /**
  * Get the `image_index` field from a `ExtractedImage`.
@@ -8065,6 +8100,13 @@ char *kreuzberg_archive_metadata_to_json(const KREUZBERGArchiveMetadata *ptr);
  * Pointer must have been returned by this library, or be null.
  */
 void kreuzberg_archive_metadata_free(KREUZBERGArchiveMetadata *ptr);
+
+/**
+ * Get the `format` field from a `ArchiveMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_archive_metadata_format(const KREUZBERGArchiveMetadata *ptr);
 
 /**
  * Get the `file_count` field from a `ArchiveMetadata`.
@@ -12703,17 +12745,6 @@ char *kreuzberg_get_extensions_for_mime(const char *mime_type);
 uintptr_t kreuzberg_get_extensions_for_mime_len(const char *mime_type);
 
 /**
- * Clear all embedding backends from the global registry.
- *
- * Calls `shutdown()` on every registered backend, then empties the registry.
- * \note - Any error returned by a backend's `shutdown()` method. The first error
- *   encountered stops processing of remaining backends.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_embedding_backends(void);
-
-/**
  * List the names of all registered embedding backends.
  *
  * Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
@@ -12749,17 +12780,6 @@ char *kreuzberg_list_document_extractors(void);
 uintptr_t kreuzberg_list_document_extractors_len(void);
 
 /**
- * Clear all document extractors from the global registry.
- *
- * Calls `shutdown()` on every registered extractor, then empties the registry.
- * \note - Any error returned by an extractor's `shutdown()` method. The first error
- *   encountered stops processing of remaining extractors.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_document_extractors(void);
-
-/**
  * List all registered OCR backends.
  *
  * Returns the names of all OCR backends currently registered in the global registry.
@@ -12784,22 +12804,6 @@ char *kreuzberg_list_ocr_backends(void);
  * \note SAFETY: All pointer parameters obey the same validity rules as `kreuzberg_list_ocr_backends`.
  */
 uintptr_t kreuzberg_list_ocr_backends_len(void);
-
-/**
- * Clear all OCR backends from the global registry.
- *
- * Removes all OCR backends and calls their `shutdown()` methods.
- * \return - `Ok(())` if all backends were cleared successfully
- * - `Err(...)` if any shutdown method failed
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- * \code
- * use kreuzberg::plugins::clear_ocr_backends;
- *
- * clear_ocr_backends()?;
- * \endcode
- */
-int32_t kreuzberg_clear_ocr_backends(void);
 
 /**
  * List all registered post-processor names.
@@ -12831,13 +12835,6 @@ char *kreuzberg_list_post_processors(void);
 uintptr_t kreuzberg_list_post_processors_len(void);
 
 /**
- * Remove all registered post-processors.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_post_processors(void);
-
-/**
  * List names of all registered renderers.
  * \note Returns an error if the registry lock is poisoned.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
@@ -12854,18 +12851,6 @@ char *kreuzberg_list_renderers(void);
 uintptr_t kreuzberg_list_renderers_len(void);
 
 /**
- * Clear all renderers from the global registry.
- *
- * Removes every renderer, including the built-in defaults (markdown, html,
- * djot, plain). After calling this no renderers are registered; re-register
- * as needed.
- * \note Returns an error if the registry lock is poisoned.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_renderers(void);
-
-/**
  * List names of all registered validators.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
@@ -12879,13 +12864,6 @@ char *kreuzberg_list_validators(void);
  * \note SAFETY: All pointer parameters obey the same validity rules as `kreuzberg_list_validators`.
  */
 uintptr_t kreuzberg_list_validators_len(void);
-
-/**
- * Remove all registered validators.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_validators(void);
 
 /**
  * Generate embeddings asynchronously for a list of text strings.

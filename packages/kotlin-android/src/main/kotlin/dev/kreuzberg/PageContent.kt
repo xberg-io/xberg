@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,18 +25,19 @@ package dev.kreuzberg
 /**
  * Content for a single page/slide.
  *
- * When page extraction is enabled, documents are split into per-page content
- * with associated tables and images mapped to each page.
+ * When page extraction is enabled, documents are split into per-page content with associated tables
+ * and images mapped to each page.
  *
  * # Performance
  *
  * Uses Arc-wrapped tables and images for memory efficiency:
+ *
  * - `Vec<Arc<Table>>` enables zero-copy sharing of table data
  * - `Vec<Arc<ExtractedImage>>` enables zero-copy sharing of image data
  * - Maintains exact JSON compatibility via custom Serialize/Deserialize
  *
- * This reduces memory overhead for documents with shared tables/images
- * by avoiding redundant copies during serialization.
+ * This reduces memory overhead for documents with shared tables/images by avoiding redundant copies
+ * during serialization.
  */
 data class PageContent(
     /** Page number (1-indexed) */
@@ -45,15 +47,15 @@ data class PageContent(
     /**
      * Tables found on this page (uses Arc for memory efficiency)
      *
-     * Serializes as Vec<Table> for JSON compatibility while maintaining
-     * Arc semantics in-memory for zero-copy sharing.
+     * Serializes as Vec<Table> for JSON compatibility while maintaining Arc semantics in-memory for
+     * zero-copy sharing.
      */
     val tables: List<Table> = emptyList(),
     /**
      * Indices into `ExtractionResult.images` for images found on this page.
      *
-     * Each value is a zero-based index into the top-level `images` collection.
-     * Only populated when `extract_images = true` in the extraction config.
+     * Each value is a zero-based index into the top-level `images` collection. Only populated when
+     * `extract_images = true` in the extraction config.
      */
     val imageIndices: List<Int> = emptyList(),
     /**
@@ -65,16 +67,15 @@ data class PageContent(
     /**
      * Whether this page is blank (no meaningful text content)
      *
-     * Determined during extraction based on text content analysis.
-     * A page is blank if it has fewer than 3 non-whitespace characters
-     * and contains no tables or images.
+     * Determined during extraction based on text content analysis. A page is blank if it has fewer
+     * than 3 non-whitespace characters and contains no tables or images.
      */
     val isBlank: Boolean? = null,
     /**
      * Layout detection regions for this page (when layout detection is enabled).
      *
-     * Contains detected layout regions with class, confidence, bounding box,
-     * and area fraction. Only populated when layout detection is configured.
+     * Contains detected layout regions with class, confidence, bounding box, and area fraction.
+     * Only populated when layout detection is configured.
      */
-    val layoutRegions: List<LayoutRegion>? = null
+    val layoutRegions: List<LayoutRegion>? = null,
 )

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -34,5 +35,5 @@ data class InlineElement(
     /** Element attributes */
     val attributes: String? = null,
     /** Additional metadata (e.g., href for links, src/alt for images) */
-    val metadata: Map<String, String>? = null
+    val metadata: Map<String, String>? = null,
 )

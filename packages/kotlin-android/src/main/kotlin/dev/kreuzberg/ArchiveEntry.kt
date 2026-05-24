@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * A single file extracted from an archive.
  *
- * When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
- * enabled, each processable file produces its own full `ExtractionResult`.
+ * When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction enabled, each
+ * processable file produces its own full `ExtractionResult`.
  */
 data class ArchiveEntry(
     /** Archive-relative file path (e.g. "folder/document.pdf"). */
@@ -33,5 +34,5 @@ data class ArchiveEntry(
     /** Detected MIME type of the file. */
     val mimeType: String,
     /** Full extraction result for this file. */
-    val result: ExtractionResult
+    val result: ExtractionResult,
 )

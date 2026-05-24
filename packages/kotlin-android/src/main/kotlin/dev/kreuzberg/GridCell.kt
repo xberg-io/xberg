@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -36,5 +37,5 @@ data class GridCell(
     /** Whether this is a header cell. */
     val isHeader: Boolean,
     /** Bounding box for this cell (if available). */
-    val bbox: String? = null
+    val bbox: BoundingBox? = null,
 )

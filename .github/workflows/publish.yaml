@@ -478,8 +478,13 @@ jobs:
 
   python-sdist:
     name: Build Python sdist
-    needs: [prepare, check-pypi]
-    if: ${{ needs.prepare.outputs.release_python == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
+    # The sdist compiles on the consumer's machine, so its Cargo.toml must carry
+    # registry version-deps, not workspace paths. build-python-sdist@v1 rewrites
+    # them (--require-registry) then runs maturin sdist, so the core crates must be
+    # on crates.io first. The status guard lets it run when publish-crates is
+    # skipped, blocking only on its actual failure.
+    needs: [prepare, check-pypi, publish-crates]
+    if: ${{ !cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_python == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6.0.2
@@ -493,14 +498,10 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Build sdist via maturin
-        # Inline: maturin sdist is a one-liner; no shared action wraps it.
-        # `-m` must point to the Rust crate's Cargo.toml; pyproject.toml in
-        # packages/python/ already declares the manifest-path that maturin reads.
-        run: |
-          python -m pip install --upgrade pip maturin
-          maturin sdist -m crates/kreuzberg-py/Cargo.toml -o dist
-        shell: bash
+      - uses: kreuzberg-dev/actions/build-python-sdist@v1
+        with:
+          manifest-path: crates/kreuzberg-py/Cargo.toml
+          output-dir: dist
 
       - uses: actions/upload-artifact@v7.0.1
         with:
@@ -586,8 +587,13 @@ jobs:
 
   ruby-gem:
     name: Build Ruby gem (${{ matrix.label }})
-    needs: [prepare, check-rubygems]
-    if: ${{ needs.prepare.outputs.release_ruby == 'true' && (needs.check-rubygems.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
+    # build-ruby-gem@v1 rewrites workspace path-deps to registry version-deps
+    # (--require-registry) before compiling, so the core crates must be on
+    # crates.io first: order after publish-crates. The status guard lets the build
+    # still run when publish-crates is skipped (crates already published), blocking
+    # only on its actual failure.
+    needs: [prepare, check-rubygems, publish-crates]
+    if: ${{ !cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_ruby == 'true' && (needs.check-rubygems.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ${{ matrix.os }}
     env:
       RB_SYS_CARGO_PROFILE: release
@@ -633,8 +639,11 @@ jobs:
 
   php-extension:
     name: Build PHP extension (php${{ matrix.php }} ${{ matrix.platform.label }})
-    needs: [prepare, check-packagist]
-    if: ${{ needs.prepare.outputs.release_php == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
+    # build-php-extension@v1 rewrites path-deps to registry versions before
+    # building; the core crates must be published first. The status guard lets the
+    # build run when publish-crates is skipped, blocking only on its actual failure.
+    needs: [prepare, check-packagist, publish-crates]
+    if: ${{ !cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_php == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ${{ matrix.platform.os }}
     timeout-minutes: 60
     strategy:
@@ -1071,8 +1080,12 @@ jobs:
 
   elixir-natives:
     name: Build Elixir NIF (${{ matrix.label }})
-    needs: [prepare, check-elixir-release]
-    if: ${{ needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
+    # build-elixir-natives@v1 rewrites path-deps to registry versions before
+    # building (so the hex source fallback resolves); needs published crates. The
+    # status guard lets the build run when publish-crates is skipped, blocking only
+    # on its actual failure.
+    needs: [prepare, check-elixir-release, publish-crates]
+    if: ${{ !cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -1120,9 +1133,10 @@ jobs:
     # Alpine container build via Dockerfile.musl-rustler (system onnxruntime-dev).
     # Replicates RustlerPrecompiled tarball naming the build-elixir-natives action
     # uses for non-musl variants: lib{nif}-v{ver}-nif-{api}-{target}.so.tar.gz + sha256.
+    # Like elixir-natives, needs published crates for the hex source fallback.
     name: Build Elixir NIF (linux-musl-${{ matrix.arch }} nif-${{ matrix.nif }})
-    needs: [prepare, check-elixir-release]
-    if: ${{ needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
+    needs: [prepare, check-elixir-release, publish-crates]
+    if: ${{ !cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -1314,11 +1328,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
       - uses: kreuzberg-dev/actions/setup-rust@v1
-      # Pinned to a fixed SHA on kreuzberg-dev/actions main until v1 is
-      # retagged. Carries the include-macos-x86_64 + include-ios-x86_64
-      # inputs needed to opt out of targets pyke ORT no longer ships
-      # prebuilts for.
-      - uses: kreuzberg-dev/actions/build-swift-artifactbundle@3ae1c6ee820ff66a4936ea68dc0255d6470e1f77 # v1
+      - uses: kreuzberg-dev/actions/build-swift-artifactbundle@v1
         id: bundle
         with:
           crate-name: kreuzberg-swift
@@ -1569,6 +1579,20 @@ jobs:
           name: python-sdist
           path: dist
 
+      - name: Verify Python wheel package contents
+        uses: kreuzberg-dev/actions/verify-package-contents@v1
+        with:
+          language: python
+          artifact-path: dist
+          package-name: kreuzberg
+          required-extras: |
+            **/*.pyi
+            **/__init__.py
+            **/py.typed
+            **/*.so
+            **/*.dylib
+            **/*.dll
+
       - uses: kreuzberg-dev/actions/publish-pypi@v1
         with:
           packages-dir: dist
@@ -1596,11 +1620,20 @@ jobs:
 
       - uses: rubygems/configure-rubygems-credentials@v2.0.0
 
-      # Pinned to a fixed SHA on kreuzberg-dev/actions main until v1 is
-      # retagged. Carries the gem-spec diagnostic surfacing fix that prints
-      # the underlying `gem spec` exit code + stderr/stdout, replacing the
-      # bare "invalid gem structure" message.
-      - uses: kreuzberg-dev/actions/publish-rubygems@a2da7ee8758a05cf2a59e369018254f7590d1f8c # v1
+      - name: Verify Ruby gem package contents
+        uses: kreuzberg-dev/actions/verify-package-contents@v1
+        with:
+          language: ruby
+          artifact-path: dist
+          package-name: kreuzberg
+          required-extras: |
+            **/*.rbs
+            **/lib/**/*.rb
+            **/*.so
+            **/*.dylib
+            **/*.dll
+
+      - uses: kreuzberg-dev/actions/publish-rubygems@v1
         with:
           gems-dir: dist
           dry-run: ${{ needs.prepare.outputs.dry_run }}
@@ -1650,6 +1683,17 @@ jobs:
             [ -d "$d" ] || continue
             (cd "$d" && npm pack)
           done
+
+      - name: Verify Node platform sub-package contents
+        uses: kreuzberg-dev/actions/verify-package-contents@v1
+        with:
+          language: node
+          artifact-path: crates/kreuzberg-node/npm
+          package-name: "@kreuzberg/node"
+          required-extras: |
+            **/*.d.ts
+            **/index.js
+            **/*.node
 
       - name: Publish platform sub-packages
         uses: kreuzberg-dev/actions/publish-npm@v1
@@ -1873,6 +1917,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: recursive
+      - uses: kreuzberg-dev/actions/setup-rust@v1
       - uses: erlef/setup-beam@v1.24.0
         with:
           elixir-version: "1.17"
@@ -1888,9 +1933,19 @@ jobs:
           targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-pc-windows-msvc
           output-path: packages/elixir/checksum-Elixir.Kreuzberg.Native.exs
 
+      - name: Build Elixir Hex tarball with dependency rewrite
+        id: build-hex
+        uses: kreuzberg-dev/actions/build-elixir-hex@v1
+        with:
+          package-dir: packages/elixir
+          nif-crate-path: packages/elixir/native/kreuzberg_nif
+          rewrite-native-deps: "true"
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
+
       - uses: kreuzberg-dev/actions/publish-hex@v1
         with:
           package-dir: packages/elixir
+          tarball-path: ${{ steps.build-hex.outputs.archive-path }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
@@ -2032,9 +2087,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
 
           submodules: recursive
-      # Pinned to a fixed SHA on kreuzberg-dev/actions main until v1 is
-      # retagged. Carries the dry-run gating fix on verify-tag/resolve-tarball.
-      - uses: kreuzberg-dev/actions/publish-zig@a2da7ee8758a05cf2a59e369018254f7590d1f8c # v1
+      - uses: kreuzberg-dev/actions/publish-zig@v1
         with:
           working-directory: packages/zig
           tag: ${{ needs.prepare.outputs.tag }}
@@ -2114,10 +2167,11 @@ jobs:
       matrix:
         include:
           - { os: macos-latest, bottle_tag: arm64_sonoma, install_brew: false }
+          - { os: macos-15-intel, bottle_tag: sequoia, install_brew: false }
           - { os: ubuntu-latest, bottle_tag: x86_64_linux, install_brew: true }
           - { os: ubuntu-24.04-arm, bottle_tag: arm64_linux, install_brew: true }
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 

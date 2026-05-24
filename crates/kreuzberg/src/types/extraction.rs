@@ -652,7 +652,6 @@ pub enum ElementType {
     /// Header text
     Header,
 }
-#[cfg_attr(alef, alef(skip))]
 /// Bounding box coordinates for element positioning.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]

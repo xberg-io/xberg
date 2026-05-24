@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -30,5 +31,5 @@ data class ExtractedImageMetadata(
     /** Image format (e.g., "PNG", "JPEG") */
     val format: String,
     /** EXIF data if available */
-    val exifData: Map<String, String> = emptyMap()
+    val exifData: Map<String, String> = emptyMap(),
 )

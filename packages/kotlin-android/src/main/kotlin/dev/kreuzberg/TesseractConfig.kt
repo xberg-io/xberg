@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,9 +25,9 @@ package dev.kreuzberg
 /**
  * Tesseract OCR configuration.
  *
- * Provides fine-grained control over Tesseract OCR engine parameters.
- * Most users can use the defaults, but these settings allow optimization
- * for specific document types (invoices, handwriting, etc.).
+ * Provides fine-grained control over Tesseract OCR engine parameters. Most users can use the
+ * defaults, but these settings allow optimization for specific document types (invoices,
+ * handwriting, etc.).
  */
 data class TesseractConfig(
     /** Language code (e.g., "eng", "deu", "fra") */
@@ -35,6 +36,7 @@ data class TesseractConfig(
      * Page Segmentation Mode (0-13).
      *
      * Common values:
+     *
      * - 3: Fully automatic page segmentation (native default)
      * - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang)
      * - 11: Sparse text with no particular order
@@ -56,18 +58,18 @@ data class TesseractConfig(
      *
      * Words with confidence below this threshold may be rejected or flagged.
      */
-    val minConfidence: Double = 0,
+    val minConfidence: Double = 0.0,
     /**
      * Image preprocessing configuration.
      *
-     * Controls how images are preprocessed before OCR. Can significantly
-     * improve quality for scanned documents or low-quality images.
+     * Controls how images are preprocessed before OCR. Can significantly improve quality for
+     * scanned documents or low-quality images.
      */
     val preprocessing: ImagePreprocessingConfig? = null,
     /** Enable automatic table detection and reconstruction */
     val enableTableDetection: Boolean = true,
     /** Minimum confidence threshold for table detection (0.0-1.0) */
-    val tableMinConfidence: Double = 0,
+    val tableMinConfidence: Double = 0.0,
     /** Column threshold for table detection (pixels) */
     val tableColumnThreshold: Int = 50,
     /** Row threshold ratio for table detection (0.0-1.0) */
@@ -93,5 +95,5 @@ data class TesseractConfig(
     /** Variable-width space detection */
     val textordSpaceSizeIsVariable: Boolean = true,
     /** Use adaptive thresholding method */
-    val thresholdingMethod: Boolean = false
+    val thresholdingMethod: Boolean = false,
 )

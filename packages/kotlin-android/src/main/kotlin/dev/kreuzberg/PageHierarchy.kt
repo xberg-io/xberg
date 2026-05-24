@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,12 +25,12 @@ package dev.kreuzberg
 /**
  * Page hierarchy structure containing heading levels and block information.
  *
- * Used when PDF text hierarchy extraction is enabled. Contains hierarchical
- * blocks with heading levels (H1-H6) for semantic document structure.
+ * Used when PDF text hierarchy extraction is enabled. Contains hierarchical blocks with heading
+ * levels (H1-H6) for semantic document structure.
  */
 data class PageHierarchy(
     /** Number of hierarchy blocks on this page */
     val blockCount: Int,
     /** Hierarchical blocks with heading levels */
-    val blocks: List<HierarchicalBlock> = emptyList()
+    val blocks: List<HierarchicalBlock> = emptyList(),
 )

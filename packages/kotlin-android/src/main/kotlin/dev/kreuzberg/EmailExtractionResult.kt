@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Email extraction result.
  *
- * Complete representation of an extracted email message (.eml or .msg)
- * including headers, body content, and attachments.
+ * Complete representation of an extracted email message (.eml or .msg) including headers, body
+ * content, and attachments.
  */
 data class EmailExtractionResult(
     /** Email subject line */
@@ -51,5 +52,5 @@ data class EmailExtractionResult(
     /** List of email attachments */
     val attachments: List<EmailAttachment> = emptyList(),
     /** Additional email headers and metadata */
-    val metadata: Map<String, String> = emptyMap()
+    val metadata: Map<String, String> = emptyMap(),
 )

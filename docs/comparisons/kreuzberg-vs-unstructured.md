@@ -7,7 +7,7 @@ Both Kreuzberg and Unstructured are open-source tools for extracting text, table
 |                  | Kreuzberg                                                       | Unstructured                                                 |
 | ---------------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
 | **Written in**   | Rust                                                            | Python                                                       |
-| **File formats** | 91+                                                             | ~30                                                          |
+| **File formats** | 90+                                                             | ~30                                                          |
 | **Use from**     | Python, TypeScript, Go, Ruby, Java, C#, PHP, Elixir, Rust, Wasm | Python, or any language via REST API                         |
 | **Run it as**    | Library, CLI, self-hosted API, browser (Wasm)                   | Python library, managed cloud API, self-hosted API           |
 | **Pricing**      | Free, Apache 2.0                                                | Free (open-source) + paid managed API                        |
@@ -30,7 +30,7 @@ Bottom line: if you're processing thousands of documents in a pipeline, the Rust
 
 How much of your document zoo each tool can handle.
 
-- **Kreuzberg (91+ formats)** -- PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data (JSON/YAML/TOML), plus niche formats like LaTeX, Typst, BibTeX, Jupyter notebooks, EPUB, and OrgMode.
+- **Kreuzberg (90+ formats)** -- PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data (JSON/YAML/TOML), plus niche formats like LaTeX, Typst, BibTeX, Jupyter notebooks, EPUB, and OrgMode.
 - **Unstructured (~30 formats)** -- PDFs, Office files, HTML, images, email, and the most common document types. Covers the essentials well.
 
 If your pipeline only deals with PDFs and Word docs, both work. To ingest Jupyter notebooks or OrgMode files, Kreuzberg has you covered.

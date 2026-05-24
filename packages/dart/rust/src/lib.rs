@@ -82,8 +82,8 @@ pub struct ContentFilterConfig {
     ///
     /// Note: when a layout-detection model is active, the model may independently
     /// classify page-header / page-footer regions as furniture on a per-page basis.
-    /// To preserve those regions, set `include_headers = true` and/or
-    /// `include_footers = true` in addition to disabling this flag.
+    /// To preserve those regions, set `include_headers = true`, `include_footers = true`,
+    /// or both, in addition to disabling this flag.
     ///
     /// Primarily affects PDF extraction.
     ///
@@ -222,7 +222,7 @@ pub struct ExtractionConfig {
     ///
     /// Controls maximum archive size, compression ratio, file count, and other
     /// security thresholds to prevent decompression bomb attacks. Also caps
-    /// nesting depth, iteration count, entity / token length, cumulative
+    /// nesting depth, iteration count, entity / token length, total
     /// content size, and table cell count for every extraction path that
     /// ingests user-controlled bytes.
     /// When `None`, default limits are used.
@@ -254,7 +254,7 @@ pub struct ExtractionConfig {
     ///
     /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
     /// table, list, and figure detection in the structure pipeline that would
-    /// otherwise rely on font-clustering heuristics alone. Substantially
+    /// otherwise rely on font-clustering heuristics alone. Significantly
     /// improves SF1 (structural F1) at the cost of inference latency
     /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
     /// Requires the `layout-detection` feature.
@@ -1273,7 +1273,7 @@ pub struct SecurityLimits {
     /// Maximum nesting depth for structures (100)
     pub max_nesting_depth: i64,
     /// Maximum length of any single XML entity / attribute / token (1 MiB).
-    /// This is a per-token cap, NOT a cumulative cap — billion-laughs class
+    /// This is a per-token cap, NOT a total cap — billion-laughs class
     /// attacks where a single entity expands to hundreds of MB are caught
     /// here, while normal long text content (a paragraph, a CDATA block) is
     /// caught by `max_content_size` instead.
@@ -1313,7 +1313,7 @@ pub struct PdfAnnotation {
     /// Page number where the annotation appears (1-indexed).
     pub page_number: i64,
     /// Bounding box of the annotation on the page.
-    pub bounding_box: Option<String>,
+    pub bounding_box: Option<BoundingBox>,
 }
 
 /// Comprehensive Djot document structure with semantic preservation.
@@ -1485,14 +1485,14 @@ pub struct DocumentNode {
     /// Page number where this node ends (for multi-page tables/sections).
     pub page_end: Option<i64>,
     /// Bounding box in document coordinates.
-    pub bbox: Option<String>,
+    pub bbox: Option<BoundingBox>,
     /// Inline annotations (formatting, links) on this node's text content.
     ///
     /// Only meaningful for text-carrying nodes; empty for containers.
     pub annotations: Vec<TextAnnotation>,
     /// Format-specific key-value attributes.
     ///
-    /// Extensible bag for data that doesn't warrant a typed field: CSS classes,
+    /// Extensible bag for miscellaneous data without a dedicated typed field: CSS classes,
     /// LaTeX environment names, Excel cell formulas, slide layout names, etc.
     pub attributes: Option<std::collections::HashMap<String, String>>,
 }
@@ -1526,7 +1526,7 @@ pub struct GridCell {
     /// Whether this is a header cell.
     pub is_header: bool,
     /// Bounding box for this cell (if available).
-    pub bbox: Option<String>,
+    pub bbox: Option<BoundingBox>,
 }
 
 /// Inline text annotation — byte-range based formatting and links.
@@ -1676,7 +1676,7 @@ pub struct ExtractionResult {
     /// LLM token usage and cost data for all LLM calls made during this extraction.
     ///
     /// Contains one entry per LLM call. Multiple entries are produced when
-    /// VLM OCR, structured extraction, and/or LLM embeddings all run during
+    /// VLM OCR, structured extraction, or LLM embeddings run during
     /// the same extraction.
     ///
     /// `None` when no LLM was used.
@@ -1860,7 +1860,7 @@ pub struct ExtractedImage {
     pub ocr_result: Option<ExtractionResult>,
     /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
     /// Only populated for PDF-extracted images when position data is available from the PDF extractor.
-    pub bounding_box: Option<String>,
+    pub bounding_box: Option<BoundingBox>,
     /// Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
     /// Used for rendering image references when the binary data is not extracted.
     pub source_path: Option<String>,
@@ -1874,6 +1874,19 @@ pub struct ExtractedImage {
     pub cluster_id: Option<i64>,
 }
 
+/// Bounding box coordinates for element positioning.
+#[frb(mirror(BoundingBox))]
+pub struct BoundingBox {
+    /// Left x-coordinate
+    pub x0: f64,
+    /// Bottom y-coordinate
+    pub y0: f64,
+    /// Right x-coordinate
+    pub x1: f64,
+    /// Top y-coordinate
+    pub y1: f64,
+}
+
 /// Metadata for a semantic element.
 #[frb(mirror(ElementMetadata))]
 pub struct ElementMetadata {
@@ -1882,7 +1895,7 @@ pub struct ElementMetadata {
     /// Source filename or document name
     pub filename: Option<String>,
     /// Bounding box coordinates if available
-    pub coordinates: Option<String>,
+    pub coordinates: Option<BoundingBox>,
     /// Position index in the element sequence
     pub element_index: Option<i64>,
     /// Additional custom metadata
@@ -1970,9 +1983,9 @@ pub struct TextExtractionResult {
     /// Markdown headers (text only, Markdown files only)
     pub headers: Option<Vec<String>>,
     /// Markdown links as (text, URL) tuples (Markdown files only)
-    pub links: Option<Vec<String>>,
+    pub links: Option<Vec<Vec<String>>>,
     /// Code blocks as (language, code) tuples (Markdown files only)
-    pub code_blocks: Option<Vec<String>>,
+    pub code_blocks: Option<Vec<Vec<String>>>,
 }
 
 /// PowerPoint (PPTX) extraction result.
@@ -2390,9 +2403,9 @@ pub struct TextMetadata {
     /// Markdown headers (headings text only, for Markdown files)
     pub headers: Option<Vec<String>>,
     /// Markdown links as (text, url) tuples (for Markdown files)
-    pub links: Option<Vec<String>>,
+    pub links: Option<Vec<Vec<String>>>,
     /// Code blocks as (language, code) tuples (for Markdown files)
-    pub code_blocks: Option<Vec<String>>,
+    pub code_blocks: Option<Vec<Vec<String>>>,
 }
 
 /// Header/heading element metadata.
@@ -2424,7 +2437,7 @@ pub struct LinkMetadata {
     /// Rel attribute values
     pub rel: Vec<String>,
     /// Additional attributes as key-value pairs
-    pub attributes: Vec<String>,
+    pub attributes: Vec<Vec<String>>,
 }
 
 /// Image element metadata.
@@ -2441,7 +2454,7 @@ pub struct ImageMetadataType {
     /// Image type classification
     pub image_type: ImageType,
     /// Additional attributes as key-value pairs
-    pub attributes: Vec<String>,
+    pub attributes: Vec<Vec<String>>,
 }
 
 /// Structured data (Schema.org, microdata, RDFa) block.
@@ -2860,7 +2873,7 @@ pub struct LayoutRegion {
     /// Confidence score from the layout detection model (0.0 to 1.0).
     pub confidence: f64,
     /// Bounding box in document coordinate space.
-    pub bounding_box: String,
+    pub bounding_box: BoundingBox,
     /// Fraction of the page area covered by this region (0.0 to 1.0).
     pub area_fraction: f64,
 }
@@ -2918,7 +2931,7 @@ pub struct Table {
     pub page_number: i64,
     /// Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
     /// Only populated for PDF-extracted tables when position data is available.
-    pub bounding_box: Option<String>,
+    pub bounding_box: Option<BoundingBox>,
 }
 
 /// Individual table cell with content and optional styling.
@@ -3226,8 +3239,8 @@ pub enum ExecutionProviderType {
 /// Output format for extraction results.
 ///
 /// Controls the format of the `content` field in `ExtractionResult`.
-/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
-/// accordingly. `Plain` returns the raw extracted text.
+/// When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+/// `Plain` returns the raw extracted text.
 /// `Structured` returns JSON with full OCR element data including bounding
 /// boxes and confidence scores.
 #[frb(mirror(OutputFormat))]
@@ -3626,7 +3639,7 @@ pub enum NodeContent {
         content: String,
     },
     /// Structured metadata block (email headers, YAML frontmatter, etc.).
-    MetadataBlock { entries: Vec<String> },
+    MetadataBlock { entries: Vec<Vec<String>> },
 }
 
 /// Types of inline text annotations.
@@ -4472,7 +4485,7 @@ impl From<kreuzberg::extraction::structured::StructuredDataResult> for Structure
     fn from(v: kreuzberg::extraction::structured::StructuredDataResult) -> Self {
         StructuredDataResult {
             content: v.content.into(),
-            format: v.format.into_owned(),
+            format: v.format.into(),
             metadata: v.metadata.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
             text_fields: v.text_fields.into_iter().map(|s| s.into()).collect(),
         }
@@ -4615,7 +4628,7 @@ impl From<kreuzberg::PdfAnnotation> for PdfAnnotation {
             annotation_type: PdfAnnotationType::from(v.annotation_type),
             content: v.content.map(|s| s.into()),
             page_number: v.page_number as _,
-            bounding_box: Default::default(),
+            bounding_box: v.bounding_box.map(BoundingBox::from),
         }
     }
 }
@@ -4724,7 +4737,7 @@ impl From<kreuzberg::DocumentNode> for DocumentNode {
             content_layer: ContentLayer::from(v.content_layer),
             page: v.page.map(|x| x as _),
             page_end: v.page_end.map(|x| x as _),
-            bbox: Default::default(),
+            bbox: v.bbox.map(BoundingBox::from),
             annotations: v.annotations.into_iter().map(TextAnnotation::from).collect(),
             attributes: v
                 .attributes
@@ -4752,7 +4765,7 @@ impl From<kreuzberg::GridCell> for GridCell {
             row_span: v.row_span as _,
             col_span: v.col_span as _,
             is_header: v.is_header as _,
-            bbox: Default::default(),
+            bbox: v.bbox.map(BoundingBox::from),
         }
     }
 }
@@ -4771,7 +4784,7 @@ impl From<kreuzberg::ExtractionResult> for ExtractionResult {
     fn from(v: kreuzberg::ExtractionResult) -> Self {
         ExtractionResult {
             content: v.content.into(),
-            mime_type: v.mime_type.into_owned(),
+            mime_type: v.mime_type.into(),
             metadata: Metadata::from(v.metadata),
             extraction_method: v.extraction_method.map(ExtractionMethod::from),
             tables: v.tables.into_iter().map(Table::from).collect(),
@@ -4823,8 +4836,8 @@ impl From<kreuzberg::ArchiveEntry> for ArchiveEntry {
 impl From<kreuzberg::ProcessingWarning> for ProcessingWarning {
     fn from(v: kreuzberg::ProcessingWarning) -> Self {
         ProcessingWarning {
-            source: v.source.into_owned(),
-            message: v.message.into_owned(),
+            source: v.source.into(),
+            message: v.message.into(),
         }
     }
 }
@@ -4891,7 +4904,7 @@ impl From<kreuzberg::ExtractedImage> for ExtractedImage {
     fn from(v: kreuzberg::ExtractedImage) -> Self {
         ExtractedImage {
             data: v.data.into(),
-            format: v.format.into_owned(),
+            format: v.format.into(),
             image_index: v.image_index as _,
             page_number: v.page_number.map(|x| x as _),
             width: v.width.map(|x| x as _),
@@ -4901,11 +4914,22 @@ impl From<kreuzberg::ExtractedImage> for ExtractedImage {
             is_mask: v.is_mask as _,
             description: v.description.map(|s| s.into()),
             ocr_result: v.ocr_result.map(|b| ExtractionResult::from(*b)),
-            bounding_box: Default::default(),
+            bounding_box: v.bounding_box.map(BoundingBox::from),
             source_path: v.source_path.map(|s| s.into()),
             image_kind: v.image_kind.map(ImageKind::from),
             kind_confidence: v.kind_confidence.map(|x| x as _),
             cluster_id: v.cluster_id.map(|x| x as _),
+        }
+    }
+}
+
+impl From<kreuzberg::BoundingBox> for BoundingBox {
+    fn from(v: kreuzberg::BoundingBox) -> Self {
+        BoundingBox {
+            x0: v.x0 as _,
+            y0: v.y0 as _,
+            x1: v.x1 as _,
+            y1: v.y1 as _,
         }
     }
 }
@@ -4915,7 +4939,7 @@ impl From<kreuzberg::ElementMetadata> for ElementMetadata {
         ElementMetadata {
             page_number: v.page_number.map(|x| x as _),
             filename: v.filename.map(|s| s.into()),
-            coordinates: Default::default(),
+            coordinates: v.coordinates.map(BoundingBox::from),
             element_index: v.element_index.map(|x| x as _),
             additional: v.additional.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
         }
@@ -5196,7 +5220,7 @@ impl From<kreuzberg::EmailMetadata> for EmailMetadata {
 impl From<kreuzberg::ArchiveMetadata> for ArchiveMetadata {
     fn from(v: kreuzberg::ArchiveMetadata) -> Self {
         ArchiveMetadata {
-            format: v.format.into_owned(),
+            format: v.format.into(),
             file_count: v.file_count as _,
             file_list: v.file_list.into_iter().map(|s| s.into()).collect(),
             total_size: v.total_size as _,
@@ -5581,7 +5605,7 @@ impl From<kreuzberg::LayoutRegion> for LayoutRegion {
         LayoutRegion {
             class_name: v.class_name.into(),
             confidence: v.confidence as _,
-            bounding_box: Default::default(),
+            bounding_box: BoundingBox::from(v.bounding_box),
             area_fraction: v.area_fraction as _,
         }
     }
@@ -5613,7 +5637,7 @@ impl From<kreuzberg::Table> for Table {
             cells: v.cells,
             markdown: v.markdown.into(),
             page_number: v.page_number as _,
-            bounding_box: Default::default(),
+            bounding_box: v.bounding_box.map(BoundingBox::from),
         }
     }
 }
@@ -5940,23 +5964,23 @@ impl From<kreuzberg::extraction::docx::math::FracType> for FracType {
     }
 }
 
-impl From<kreuzberg::plugins::OcrBackendType> for OcrBackendType {
-    fn from(v: kreuzberg::plugins::OcrBackendType) -> Self {
+impl From<kreuzberg::OcrBackendType> for OcrBackendType {
+    fn from(v: kreuzberg::OcrBackendType) -> Self {
         match v {
-            kreuzberg::plugins::OcrBackendType::Tesseract => OcrBackendType::Tesseract,
-            kreuzberg::plugins::OcrBackendType::EasyOCR => OcrBackendType::EasyOCR,
-            kreuzberg::plugins::OcrBackendType::PaddleOCR => OcrBackendType::PaddleOCR,
-            kreuzberg::plugins::OcrBackendType::Custom => OcrBackendType::Custom,
+            kreuzberg::OcrBackendType::Tesseract => OcrBackendType::Tesseract,
+            kreuzberg::OcrBackendType::EasyOCR => OcrBackendType::EasyOCR,
+            kreuzberg::OcrBackendType::PaddleOCR => OcrBackendType::PaddleOCR,
+            kreuzberg::OcrBackendType::Custom => OcrBackendType::Custom,
         }
     }
 }
 
-impl From<kreuzberg::plugins::ProcessingStage> for ProcessingStage {
-    fn from(v: kreuzberg::plugins::ProcessingStage) -> Self {
+impl From<kreuzberg::ProcessingStage> for ProcessingStage {
+    fn from(v: kreuzberg::ProcessingStage) -> Self {
         match v {
-            kreuzberg::plugins::ProcessingStage::Early => ProcessingStage::Early,
-            kreuzberg::plugins::ProcessingStage::Middle => ProcessingStage::Middle,
-            kreuzberg::plugins::ProcessingStage::Late => ProcessingStage::Late,
+            kreuzberg::ProcessingStage::Early => ProcessingStage::Early,
+            kreuzberg::ProcessingStage::Middle => ProcessingStage::Middle,
+            kreuzberg::ProcessingStage::Late => ProcessingStage::Late,
         }
     }
 }
@@ -6115,7 +6139,7 @@ impl From<kreuzberg::NodeContent> for NodeContent {
             kreuzberg::NodeContent::MetadataBlock { entries } => NodeContent::MetadataBlock {
                 entries: entries
                     .into_iter()
-                    .map(|e| serde_json::to_string(&e).unwrap_or_default())
+                    .map(|(a, b)| vec![a.to_string(), b.to_string()])
                     .collect(),
             },
         }
@@ -6927,7 +6951,7 @@ impl From<PdfAnnotation> for kreuzberg::PdfAnnotation {
             annotation_type: v.annotation_type.into(),
             content: v.content.map(Into::into),
             page_number: v.page_number as _,
-            bounding_box: Default::default(),
+            bounding_box: v.bounding_box.map(Into::into),
         }
     }
 }
@@ -7036,7 +7060,7 @@ impl From<DocumentNode> for kreuzberg::DocumentNode {
             content_layer: v.content_layer.into(),
             page: v.page.map(|x| x as _),
             page_end: v.page_end.map(|x| x as _),
-            bbox: Default::default(),
+            bbox: v.bbox.map(Into::into),
             annotations: v.annotations.into_iter().map(Into::into).collect(),
             attributes: v
                 .attributes
@@ -7064,7 +7088,7 @@ impl From<GridCell> for kreuzberg::GridCell {
             row_span: v.row_span as _,
             col_span: v.col_span as _,
             is_header: v.is_header as _,
-            bbox: Default::default(),
+            bbox: v.bbox.map(Into::into),
         }
     }
 }
@@ -7213,11 +7237,22 @@ impl From<ExtractedImage> for kreuzberg::ExtractedImage {
             is_mask: v.is_mask as _,
             description: v.description.map(Into::into),
             ocr_result: v.ocr_result.map(|x| Box::new(x.into())),
-            bounding_box: Default::default(),
+            bounding_box: v.bounding_box.map(Into::into),
             source_path: v.source_path.map(Into::into),
             image_kind: v.image_kind.map(Into::into),
             kind_confidence: v.kind_confidence.map(|x| x as _),
             cluster_id: v.cluster_id.map(|x| x as _),
+        }
+    }
+}
+
+impl From<BoundingBox> for kreuzberg::BoundingBox {
+    fn from(v: BoundingBox) -> Self {
+        kreuzberg::BoundingBox {
+            x0: v.x0 as _,
+            y0: v.y0 as _,
+            x1: v.x1 as _,
+            y1: v.y1 as _,
         }
     }
 }
@@ -7227,7 +7262,7 @@ impl From<ElementMetadata> for kreuzberg::ElementMetadata {
         kreuzberg::ElementMetadata {
             page_number: v.page_number.map(|x| x as _),
             filename: v.filename.map(Into::into),
-            coordinates: Default::default(),
+            coordinates: v.coordinates.map(Into::into),
             element_index: v.element_index.map(|x| x as _),
             additional: v.additional.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
         }
@@ -7740,7 +7775,7 @@ impl From<LayoutRegion> for kreuzberg::LayoutRegion {
         kreuzberg::LayoutRegion {
             class_name: v.class_name.into(),
             confidence: v.confidence as _,
-            bounding_box: Default::default(),
+            bounding_box: v.bounding_box.into(),
             area_fraction: v.area_fraction as _,
         }
     }
@@ -7776,7 +7811,7 @@ impl From<Table> for kreuzberg::Table {
                 .collect(),
             markdown: v.markdown.into(),
             page_number: v.page_number as _,
-            bounding_box: Default::default(),
+            bounding_box: v.bounding_box.map(Into::into),
         }
     }
 }
@@ -7951,23 +7986,23 @@ impl From<CodeContentMode> for kreuzberg::CodeContentMode {
     }
 }
 
-impl From<OcrBackendType> for kreuzberg::plugins::OcrBackendType {
+impl From<OcrBackendType> for kreuzberg::OcrBackendType {
     fn from(v: OcrBackendType) -> Self {
         match v {
-            OcrBackendType::Tesseract => kreuzberg::plugins::OcrBackendType::Tesseract,
-            OcrBackendType::EasyOCR => kreuzberg::plugins::OcrBackendType::EasyOCR,
-            OcrBackendType::PaddleOCR => kreuzberg::plugins::OcrBackendType::PaddleOCR,
-            OcrBackendType::Custom => kreuzberg::plugins::OcrBackendType::Custom,
+            OcrBackendType::Tesseract => kreuzberg::OcrBackendType::Tesseract,
+            OcrBackendType::EasyOCR => kreuzberg::OcrBackendType::EasyOCR,
+            OcrBackendType::PaddleOCR => kreuzberg::OcrBackendType::PaddleOCR,
+            OcrBackendType::Custom => kreuzberg::OcrBackendType::Custom,
         }
     }
 }
 
-impl From<ProcessingStage> for kreuzberg::plugins::ProcessingStage {
+impl From<ProcessingStage> for kreuzberg::ProcessingStage {
     fn from(v: ProcessingStage) -> Self {
         match v {
-            ProcessingStage::Early => kreuzberg::plugins::ProcessingStage::Early,
-            ProcessingStage::Middle => kreuzberg::plugins::ProcessingStage::Middle,
-            ProcessingStage::Late => kreuzberg::plugins::ProcessingStage::Late,
+            ProcessingStage::Early => kreuzberg::ProcessingStage::Early,
+            ProcessingStage::Middle => kreuzberg::ProcessingStage::Middle,
+            ProcessingStage::Late => kreuzberg::ProcessingStage::Late,
         }
     }
 }
@@ -8366,6 +8401,7 @@ impl From<KeywordAlgorithm> for kreuzberg::KeywordAlgorithm {
 /// Extract content from a byte array.
 ///
 /// This is the main entry point for in-memory extraction. It performs the following steps:
+///
 /// 1. Validate MIME type
 /// 2. Handle legacy format conversion if needed
 /// 3. Select appropriate extractor from registry
@@ -8394,6 +8430,7 @@ pub async fn extract_bytes(
 /// Extract content from a file.
 ///
 /// This is the main entry point for file-based extraction. It performs the following steps:
+///
 /// 1. Check cache for existing result (if caching enabled)
 /// 2. Detect or validate MIME type
 /// 3. Select appropriate extractor from registry
@@ -8510,6 +8547,7 @@ pub fn batch_extract_bytes_sync(
 /// taken from the batch-level `config`.
 ///
 ///   per-file configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
 /// **Returns:**
@@ -8553,6 +8591,7 @@ pub async fn batch_extract_files(
 /// the batch-level defaults for that item.
 ///
 ///   MIME type, and optional per-item configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration
 ///
 /// **Returns:**
@@ -8665,6 +8704,24 @@ pub fn list_validators() -> Result<Vec<String>, String> {
     kreuzberg::list_validators()
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
         .map_err(|e| e.to_string())
+}
+
+/// Score an extracted text on the closed interval `[0.0, 1.0]`, where higher is better.
+///
+/// `1.0` is the neutral score for clean prose; penalties (OCR artifacts, embedded
+/// script/style noise, navigation chrome) subtract, structural cues (headings,
+/// punctuation) add. The result is clamped to `[0.0, 1.0]`.
+///
+/// Pass `metadata` as `null` when the caller has no extraction metadata available;
+/// the metadata bonus simply isn't applied in that case. Texts shorter than
+/// `MIN_TEXT_LENGTH` short-circuit to `0.1` regardless of metadata.
+pub fn calculate_quality_score(text: String, metadata: Option<std::collections::HashMap<String, String>>) -> f64 {
+    let __metadata_ahash = metadata.map(|m| {
+        m.into_iter()
+            .map(|(k, v)| (std::borrow::Cow::Owned(k), serde_json::Value::String(v)))
+            .collect::<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>>()
+    });
+    kreuzberg::text::quality::calculate_quality_score(&text, __metadata_ahash.as_ref()) as f64
 }
 
 /// Generate embeddings asynchronously for a list of text strings.
@@ -9155,6 +9212,13 @@ pub fn create_chunk_metadata_from_json(json: String) -> Result<ChunkMetadata, St
 pub fn create_extracted_image_from_json(json: String) -> Result<ExtractedImage, String> {
     serde_json::from_str::<kreuzberg::ExtractedImage>(&json)
         .map(ExtractedImage::from)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub fn create_bounding_box_from_json(json: String) -> Result<BoundingBox, String> {
+    serde_json::from_str::<kreuzberg::BoundingBox>(&json)
+        .map(BoundingBox::from)
         .map_err(|e| e.to_string())
 }
 
@@ -9699,7 +9763,7 @@ impl kreuzberg::plugins::Plugin for OcrBackendDartImpl {
 }
 
 #[async_trait::async_trait]
-impl kreuzberg::plugins::OcrBackend for OcrBackendDartImpl {
+impl kreuzberg::OcrBackend for OcrBackendDartImpl {
     async fn process_image(
         &self,
         image_bytes: &[u8],
@@ -9729,7 +9793,7 @@ impl kreuzberg::plugins::OcrBackend for OcrBackendDartImpl {
         __result
     }
 
-    fn backend_type(&self) -> kreuzberg::plugins::OcrBackendType {
+    fn backend_type(&self) -> kreuzberg::OcrBackendType {
         let __result = ::tokio::runtime::Builder::new_current_thread()
             .build()
             .expect("build alef visitor tokio runtime")
@@ -9871,7 +9935,7 @@ impl kreuzberg::plugins::Plugin for PostProcessorDartImpl {
 }
 
 #[async_trait::async_trait]
-impl kreuzberg::plugins::PostProcessor for PostProcessorDartImpl {
+impl kreuzberg::PostProcessor for PostProcessorDartImpl {
     async fn process(
         &self,
         result: &mut kreuzberg::ExtractionResult,
@@ -9882,7 +9946,7 @@ impl kreuzberg::plugins::PostProcessor for PostProcessorDartImpl {
         Ok((self.process)(result, config).await)
     }
 
-    fn processing_stage(&self) -> kreuzberg::plugins::ProcessingStage {
+    fn processing_stage(&self) -> kreuzberg::ProcessingStage {
         let __result = ::tokio::runtime::Builder::new_current_thread()
             .build()
             .expect("build alef visitor tokio runtime")
@@ -10007,7 +10071,7 @@ impl kreuzberg::plugins::Plugin for ValidatorDartImpl {
 }
 
 #[async_trait::async_trait]
-impl kreuzberg::plugins::Validator for ValidatorDartImpl {
+impl kreuzberg::Validator for ValidatorDartImpl {
     async fn validate(
         &self,
         result: &kreuzberg::ExtractionResult,
@@ -10120,7 +10184,7 @@ impl kreuzberg::plugins::Plugin for EmbeddingBackendDartImpl {
 }
 
 #[async_trait::async_trait]
-impl kreuzberg::plugins::EmbeddingBackend for EmbeddingBackendDartImpl {
+impl kreuzberg::EmbeddingBackend for EmbeddingBackendDartImpl {
     fn dimensions(&self) -> usize {
         let __result = ::tokio::runtime::Builder::new_current_thread()
             .build()
@@ -10228,7 +10292,7 @@ impl kreuzberg::plugins::Plugin for DocumentExtractorDartImpl {
 }
 
 #[async_trait::async_trait]
-impl kreuzberg::plugins::DocumentExtractor for DocumentExtractorDartImpl {
+impl kreuzberg::DocumentExtractor for DocumentExtractorDartImpl {
     async fn extract_bytes(
         &self,
         content: &[u8],
@@ -10375,7 +10439,7 @@ impl kreuzberg::plugins::Plugin for RendererDartImpl {
     }
 }
 
-impl kreuzberg::plugins::Renderer for RendererDartImpl {
+impl kreuzberg::Renderer for RendererDartImpl {
     fn render(&self, doc: &kreuzberg::InternalDocument) -> kreuzberg::Result<String> {
         let doc = doc.clone();
         let __result = ::tokio::runtime::Builder::new_current_thread()

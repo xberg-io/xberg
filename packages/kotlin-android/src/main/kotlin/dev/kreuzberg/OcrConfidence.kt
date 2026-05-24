@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,15 +25,15 @@ package dev.kreuzberg
 /**
  * Confidence scores for an OCR element.
  *
- * Separates detection confidence (how confident that text exists at this location)
- * from recognition confidence (how confident about the actual text content).
+ * Separates detection confidence (how confident that text exists at this location) from recognition
+ * confidence (how confident about the actual text content).
  */
 data class OcrConfidence(
     /**
      * Detection confidence: how confident the OCR engine is that text exists here.
      *
-     * PaddleOCR provides this as `box_score`, Tesseract doesn't have a direct equivalent.
-     * Range: 0.0 to 1.0 (or None if not available).
+     * PaddleOCR provides this as `box_score`, Tesseract doesn't have a direct equivalent. Range:
+     * 0.0 to 1.0 (or None if not available).
      */
     val detection: Double? = null,
     /**
@@ -40,5 +41,5 @@ data class OcrConfidence(
      *
      * Range: 0.0 to 1.0.
      */
-    val recognition: Double = 0.0
+    val recognition: Double = 0.0,
 )

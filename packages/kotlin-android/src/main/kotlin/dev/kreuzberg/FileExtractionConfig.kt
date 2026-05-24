@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,15 +25,14 @@ package dev.kreuzberg
 /**
  * Per-file extraction configuration overrides for batch processing.
  *
- * All fields are `Option<T>` — `null` means "use the batch-level default."
- * This type is used with `batch_extract_files` and
- * `batch_extract_bytes` to allow heterogeneous
- * extraction settings within a single batch.
+ * All fields are `Option<T>` — `null` means "use the batch-level default." This type is used with
+ * `batch_extract_files` and `batch_extract_bytes` to allow heterogeneous extraction settings within
+ * a single batch.
  *
  * # Excluded Fields
  *
- * The following `ExtractionConfig` fields are batch-level only and
- * cannot be overridden per file:
+ * The following `ExtractionConfig` fields are batch-level only and cannot be overridden per file:
+ *
  * - `max_concurrent_extractions` — controls batch parallelism
  * - `use_cache` — global caching policy
  * - `acceleration` — shared ONNX execution provider
@@ -80,9 +80,8 @@ data class FileExtractionConfig(
     /**
      * Override per-file extraction timeout in seconds.
      *
-     * When set, the extraction for this file will be canceled after the
-     * specified duration. A timed-out file produces an error result without
-     * affecting other files in the batch.
+     * When set, the extraction for this file will be canceled after the specified duration. A
+     * timed-out file produces an error result without affecting other files in the batch.
      */
     val timeoutSecs: Long? = null,
     /** Override tree-sitter configuration for this file. */
@@ -90,9 +89,9 @@ data class FileExtractionConfig(
     /**
      * Override structured extraction configuration for this file.
      *
-     * When set, enables LLM-based structured extraction with a JSON schema
-     * for this specific file. The extracted content is sent to a VLM/LLM
-     * and the response is parsed according to the provided schema.
+     * When set, enables LLM-based structured extraction with a JSON schema for this specific file.
+     * The extracted content is sent to a VLM/LLM and the response is parsed according to the
+     * provided schema.
      */
-    val structuredExtraction: StructuredExtractionConfig? = null
+    val structuredExtraction: StructuredExtractionConfig? = null,
 )

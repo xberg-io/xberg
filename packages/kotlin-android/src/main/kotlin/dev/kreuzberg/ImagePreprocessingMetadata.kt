@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Image preprocessing metadata.
  *
- * Tracks the transformations applied to an image during OCR preprocessing,
- * including DPI normalization, resizing, and resampling.
+ * Tracks the transformations applied to an image during OCR preprocessing, including DPI
+ * normalization, resizing, and resampling.
  */
 data class ImagePreprocessingMetadata(
     /** Original image dimensions (width, height) in pixels */
@@ -51,5 +52,5 @@ data class ImagePreprocessingMetadata(
     /** Whether resize was skipped (dimensions already optimal) */
     val skippedResize: Boolean,
     /** Error message if resize failed */
-    val resizeError: String? = null
+    val resizeError: String? = null,
 )

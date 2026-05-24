@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -26,12 +27,12 @@ import java.nio.file.Path
 /**
  * Batch item for file extraction.
  *
- * Used with `batch_extract_files` and `batch_extract_files_sync`
- * to represent a single file in a batch extraction job.
+ * Used with `batch_extract_files` and `batch_extract_files_sync` to represent a single file in a
+ * batch extraction job.
  */
 data class BatchFileItem(
     /** Path to the file to extract from */
     val path: java.nio.file.Path,
     /** Per-file configuration overrides (None uses batch-level defaults) */
-    val config: FileExtractionConfig? = null
+    val config: FileExtractionConfig? = null,
 )

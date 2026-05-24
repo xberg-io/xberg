@@ -1,16 +1,12 @@
 # Kotlin (Android)
 
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 20px 0;">
-  <!-- Built with -->
   <a href="https://github.com/kreuzberg-dev/alef">
-    <img src="https://img.shields.io/badge/built%20with-alef%20%D7%90-007ec6" alt="Built with alef">
+    <img src="https://img.shields.io/badge/Bindings-alef%20%D7%90-007ec6" alt="Bindings">
   </a>
   <!-- Language Bindings -->
   <a href="https://crates.io/crates/kreuzberg">
     <img src="https://img.shields.io/crates/v/kreuzberg?label=Rust&color=007ec6" alt="Rust">
-  </a>
-  <a href="https://hex.pm/packages/kreuzberg">
-    <img src="https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6" alt="Elixir">
   </a>
   <a href="https://pypi.org/project/kreuzberg/">
     <img src="https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6" alt="Python">
@@ -21,12 +17,11 @@
   <a href="https://www.npmjs.com/package/@kreuzberg/wasm">
     <img src="https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
-
   <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg">
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
-    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.0.0" alt="Go">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5">
+    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v5*" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
     <img src="https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6" alt="C#">
@@ -37,14 +32,32 @@
   <a href="https://rubygems.org/gems/kreuzberg">
     <img src="https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6" alt="Ruby">
   </a>
+  <a href="https://hex.pm/packages/kreuzberg">
+    <img src="https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6" alt="Elixir">
+  </a>
   <a href="https://kreuzberg-dev.r-universe.dev/kreuzberg">
     <img src="https://img.shields.io/badge/R-kreuzberg-007ec6" alt="R">
   </a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
-    <img src="https://img.shields.io/badge/Docker-007ec6?logo=docker&logoColor=white" alt="Docker">
+  <a href="https://pub.dev/packages/kreuzberg">
+    <img src="https://img.shields.io/pub/v/kreuzberg?label=Dart&color=007ec6" alt="Dart">
   </a>
-  <a href="https://artifacthub.io/packages/search?repo=kreuzberg">
-    <img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/kreuzberg" alt="Artifact Hub">
+  <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg-android">
+    <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg-android?label=Kotlin&color=007ec6" alt="Kotlin">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/swift">
+    <img src="https://img.shields.io/badge/Swift-SPM-007ec6" alt="Swift">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/zig">
+    <img src="https://img.shields.io/badge/Zig-package-007ec6" alt="Zig">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
+    <img src="https://img.shields.io/badge/C-FFI-007ec6" alt="C FFI">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
+    <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/charts%2Fkreuzberg">
+    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
   </a>
 
   <!-- Project Info -->
@@ -52,25 +65,37 @@
     <img src="https://img.shields.io/badge/License-Elastic--2.0-007ec6" alt="License">
   </a>
   <a href="https://docs.kreuzberg.dev">
-    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
-  </a>
-  <a href="https://docs.kreuzberg.dev/demo.html">
-    <img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Live_Demo-007ec6" alt="Live Demo">
+    <img src="https://img.shields.io/badge/Docs-kreuzberg-007ec6" alt="Documentation">
   </a>
   <a href="https://huggingface.co/Kreuzberg">
-    <img src="https://img.shields.io/badge/%F0%9F%A4%97_Hugging_Face-007ec6" alt="Hugging Face">
+    <img src="https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6" alt="Hugging Face">
   </a>
 </div>
 
-<img width="1128" height="191" alt="Banner2" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+<div align="center" style="margin: 24px 0 0;">
+  <a href="https://kreuzberg.dev">
+    <img alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+  </a>
+</div>
 
-<div align="center" style="margin-top: 20px;">
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
-      <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-7289da?logo=discord&logoColor=white" alt="Discord">
+    <img height="22" src="https://img.shields.io/badge/Discord-Chat-007ec6?logo=discord&logoColor=white" alt="Join Discord">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img height="22" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
 </div>
 
-Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Android library (AAR) with bundled jniLibs/arm64-v8a and jniLibs/x86_64 — Gradle automatically picks up the native cdylib for emulator and device builds. Server-side Kotlin/JVM consumers can use the Java binding directly via standard Kotlin/Java interop.
+Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Android library (AAR) with bundled jniLibs/arm64-v8a and jniLibs/x86_64 — Gradle automatically picks up the native cdylib for emulator and device builds. Server-side Kotlin/JVM consumers can use the Java binding directly via standard Kotlin/Java interop.
+
+## What This Package Provides
+
+- **Document intelligence core** — extract text, tables, images, metadata, entities, keywords, and code intelligence from one API.
+- **Format coverage** — PDF, Office, images, HTML/XML, email, archives, notebooks, citations, scientific formats, and plain text.
+- **OCR choices** — Tesseract, PaddleOCR, EasyOCR where supported, VLM OCR through liter-llm, and plugin hooks for custom backends.
+- **Same engine as every binding** — Rust, Python, Node.js, Go, Java, PHP, Ruby, .NET, Elixir, R, WASM, Kotlin Android, Swift, Dart, Zig, and C FFI share the same Rust implementation.
+- **Android AAR** — JNI-backed package for mobile extraction workloads.
 
 ## Installation
 
@@ -98,9 +123,8 @@ Add to your `pom.xml`:
 </dependency>
 ```
 
-
 ### System Requirements
-- See [Installation Guide](https://kreuzberg.dev/getting-started/installation/) for requirements
+- See [Installation Guide](https://docs.kreuzberg.dev/getting-started/installation/) for requirements
 
 ## Quick Start
 
@@ -120,16 +144,13 @@ Most use cases benefit from configuration to control extraction behavior:
 
 <!-- snippet not found: ocr/ocr_extraction.md -->
 
-
 #### Table Extraction
 
-See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
-
+See [Configuration Guide](https://docs.kreuzberg.dev/guides/configuration/) for table extraction options.
 
 #### Processing Multiple Files
 
 <!-- snippet not found: api/batch_extract_files_sync.md -->
-
 
 #### Async Processing
 
@@ -137,20 +158,18 @@ For non-blocking document processing:
 
 <!-- snippet not found: api/extract_file_async.md -->
 
-
 ### Next Steps
 
-- **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
-- **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
-- **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
-- **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
-
+- **[Installation Guide](https://docs.kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
+- **[API Documentation](https://docs.kreuzberg.dev/reference/api-python/)** - Complete API reference
+- **[Examples & Guides](https://docs.kreuzberg.dev/)** - Full code examples and usage guides
+- **[Configuration Guide](https://docs.kreuzberg.dev/guides/configuration/)** - Advanced configuration options
 
 ## Features
 
-### Supported File Formats (91+)
+### Supported File Formats (90+)
 
-91+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
+90+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
 
 #### Office Documents
 
@@ -195,7 +214,7 @@ For non-blocking document processing:
 | **Scientific** | `.tex`, `.latex`, `.typst`, `.jats`, `.ipynb`, `.docbook` | LaTeX, Jupyter notebooks, PubMed JATS |
 | **Documentation** | `.opml`, `.pod`, `.mdoc`, `.troff` | Technical documentation formats |
 
-#### Code Intelligence (248 Languages)
+#### Code Intelligence (300+ Languages)
 
 | Feature | Description |
 |---------|-------------|
@@ -208,7 +227,7 @@ For non-blocking document processing:
 
 Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack) — [documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev).
 
-**[Complete Format Reference](https://kreuzberg.dev/reference/formats/)**
+**[Complete Format Reference](https://docs.kreuzberg.dev/reference/formats/)**
 
 ### Key Capabilities
 
@@ -223,7 +242,7 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
-- **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
+- **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [300+ programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics
@@ -236,11 +255,9 @@ Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sit
 | **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
-
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
-
 
 - **Tesseract**
 
@@ -250,27 +267,23 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 <!-- snippet not found: ocr/ocr_extraction.md -->
 
-
 ## Async Support
 
 This binding provides full async/await support for non-blocking document processing:
 
 <!-- snippet not found: api/extract_file_async.md -->
 
-
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
 
-For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
-
+For detailed plugin documentation, visit [Plugin System Guide](https://docs.kreuzberg.dev/guides/plugins/).
 
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
-**[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
-
+**[Embeddings Guide](https://docs.kreuzberg.dev/features/#embeddings)**
 
 ## Batch Processing
 
@@ -278,18 +291,17 @@ Process multiple documents efficiently:
 
 <!-- snippet not found: api/batch_extract_files_sync.md -->
 
-
 ## Configuration
 
 For advanced configuration options including language detection, table extraction, OCR settings, and more:
 
-**[Configuration Guide](https://kreuzberg.dev/guides/configuration/)**
+**[Configuration Guide](https://docs.kreuzberg.dev/guides/configuration/)**
 
 ## Documentation
 
-- **[Official Documentation](https://kreuzberg.dev/)**
-- **[API Reference](https://kreuzberg.dev/reference/api-kotlin_android/)**
-- **[Examples & Guides](https://kreuzberg.dev/guides/)**
+- **[Official Documentation](https://docs.kreuzberg.dev/)**
+- **[API Reference](https://docs.kreuzberg.dev/reference/api-python/)**
+- **[Examples & Guides](https://docs.kreuzberg.dev/)**
 
 ## Contributing
 

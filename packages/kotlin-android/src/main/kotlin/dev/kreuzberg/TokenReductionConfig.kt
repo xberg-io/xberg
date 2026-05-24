@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -32,5 +33,5 @@ data class TokenReductionConfig(
     val customStopwords: Map<String, List<String>>? = null,
     val preservePatterns: List<String> = emptyList(),
     val targetReduction: Float? = null,
-    val enableSemanticClustering: Boolean = false
+    val enableSemanticClustering: Boolean = false,
 )

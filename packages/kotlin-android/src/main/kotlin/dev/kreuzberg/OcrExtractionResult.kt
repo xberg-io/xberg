@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * OCR extraction result.
  *
- * Result of performing OCR on an image or scanned document,
- * including recognized text and detected tables.
+ * Result of performing OCR on an image or scanned document, including recognized text and detected
+ * tables.
  */
 data class OcrExtractionResult(
     /** Recognized text content */
@@ -37,14 +38,13 @@ data class OcrExtractionResult(
     /** Tables detected and extracted via OCR */
     val tables: List<OcrTable> = emptyList(),
     /**
-     * Structured OCR elements with bounding boxes and confidence scores.
-     * Available when TSV output is requested or table detection is enabled.
+     * Structured OCR elements with bounding boxes and confidence scores. Available when TSV output
+     * is requested or table detection is enabled.
      */
     val ocrElements: List<OcrElement>? = null,
     /**
-     * Structured document produced from hOCR parsing.
-     * Carries paragraph structure, bounding boxes, and confidence scores
-     * that the flattened `content` string discards.
+     * Structured document produced from hOCR parsing. Carries paragraph structure, bounding boxes,
+     * and confidence scores that the flattened `content` string discards.
      */
-    val internalDocument: String? = null
+    val internalDocument: String? = null,
 )

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -28,5 +29,5 @@ data class EpubMetadata(
     val relation: String? = null,
     val source: String? = null,
     val dcType: String? = null,
-    val coverImage: String? = null
+    val coverImage: String? = null,
 )

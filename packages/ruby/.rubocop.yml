@@ -7,10 +7,11 @@ AllCops:
   NewCops: enable
   SuggestExtensions: false
   Exclude:
-    - 'vendor/**/*'
-    - 'tmp/**/*'
-    - 'lib/**/*.bundle'
-    - 'ext/**/*'
+    - "vendor/**/*"
+    - "tmp/**/*"
+    - "lib/**/*.bundle"
+    - "lib/**/*.rb"
+    - "ext/**/*"
 
 Style/FrozenStringLiteralComment:
   Enabled: true
@@ -18,11 +19,11 @@ Style/FrozenStringLiteralComment:
 
 Style/StringLiterals:
   Enabled: true
-  EnforcedStyle: single_quotes
+  EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   Enabled: true
-  EnforcedStyle: single_quotes
+  EnforcedStyle: double_quotes
 
 Style/Documentation:
   Enabled: false
@@ -32,12 +33,12 @@ Layout/LineLength:
   AllowedPatterns:
     - '\A\s*#'
   Exclude:
-    - 'spec/**/*'
+    - "spec/**/*"
 
 Metrics/MethodLength:
   Max: 20
   Exclude:
-    - 'spec/**/*'
+    - "spec/**/*"
 
 Metrics/BlockLength:
   Enabled: true
@@ -47,7 +48,7 @@ Metrics/BlockLength:
 Metrics/AbcSize:
   Max: 20
   Exclude:
-    - 'spec/**/*'
+    - "spec/**/*"
 
 RSpec/ExampleLength:
   Max: 50

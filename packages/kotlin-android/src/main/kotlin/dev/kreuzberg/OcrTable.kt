@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -34,5 +35,5 @@ data class OcrTable(
     /** Page number where the table was found (1-indexed) */
     val pageNumber: Int,
     /** Bounding box of the table in pixel coordinates (from OCR word positions). */
-    val boundingBox: OcrTableBoundingBox? = null
+    val boundingBox: OcrTableBoundingBox? = null,
 )

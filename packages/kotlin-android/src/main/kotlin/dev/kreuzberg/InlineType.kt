@@ -17,86 +17,73 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
 /** Types of inline elements in Djot. */
 enum class InlineType {
-    @com.fasterxml.jackson.annotation.JsonProperty("text")
-    TEXT,
-    @com.fasterxml.jackson.annotation.JsonProperty("strong")
-    STRONG,
-    @com.fasterxml.jackson.annotation.JsonProperty("emphasis")
-    EMPHASIS,
-    @com.fasterxml.jackson.annotation.JsonProperty("highlight")
-    HIGHLIGHT,
-    @com.fasterxml.jackson.annotation.JsonProperty("subscript")
-    SUBSCRIPT,
-    @com.fasterxml.jackson.annotation.JsonProperty("superscript")
-    SUPERSCRIPT,
-    @com.fasterxml.jackson.annotation.JsonProperty("insert")
-    INSERT,
-    @com.fasterxml.jackson.annotation.JsonProperty("delete")
-    DELETE,
-    @com.fasterxml.jackson.annotation.JsonProperty("code")
-    CODE,
-    @com.fasterxml.jackson.annotation.JsonProperty("link")
-    LINK,
-    @com.fasterxml.jackson.annotation.JsonProperty("image")
-    IMAGE,
-    @com.fasterxml.jackson.annotation.JsonProperty("span")
-    SPAN,
-    @com.fasterxml.jackson.annotation.JsonProperty("math")
-    MATH,
-    @com.fasterxml.jackson.annotation.JsonProperty("raw_inline")
-    RAW_INLINE,
-    @com.fasterxml.jackson.annotation.JsonProperty("footnote_ref")
-    FOOTNOTE_REF,
-    @com.fasterxml.jackson.annotation.JsonProperty("symbol")
-    SYMBOL;
+    @com.fasterxml.jackson.annotation.JsonProperty("text") TEXT,
+    @com.fasterxml.jackson.annotation.JsonProperty("strong") STRONG,
+    @com.fasterxml.jackson.annotation.JsonProperty("emphasis") EMPHASIS,
+    @com.fasterxml.jackson.annotation.JsonProperty("highlight") HIGHLIGHT,
+    @com.fasterxml.jackson.annotation.JsonProperty("subscript") SUBSCRIPT,
+    @com.fasterxml.jackson.annotation.JsonProperty("superscript") SUPERSCRIPT,
+    @com.fasterxml.jackson.annotation.JsonProperty("insert") INSERT,
+    @com.fasterxml.jackson.annotation.JsonProperty("delete") DELETE,
+    @com.fasterxml.jackson.annotation.JsonProperty("code") CODE,
+    @com.fasterxml.jackson.annotation.JsonProperty("link") LINK,
+    @com.fasterxml.jackson.annotation.JsonProperty("image") IMAGE,
+    @com.fasterxml.jackson.annotation.JsonProperty("span") SPAN,
+    @com.fasterxml.jackson.annotation.JsonProperty("math") MATH,
+    @com.fasterxml.jackson.annotation.JsonProperty("raw_inline") RAW_INLINE,
+    @com.fasterxml.jackson.annotation.JsonProperty("footnote_ref") FOOTNOTE_REF,
+    @com.fasterxml.jackson.annotation.JsonProperty("symbol") SYMBOL;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String = when (this) {
-        TEXT -> "text"
-        STRONG -> "strong"
-        EMPHASIS -> "emphasis"
-        HIGHLIGHT -> "highlight"
-        SUBSCRIPT -> "subscript"
-        SUPERSCRIPT -> "superscript"
-        INSERT -> "insert"
-        DELETE -> "delete"
-        CODE -> "code"
-        LINK -> "link"
-        IMAGE -> "image"
-        SPAN -> "span"
-        MATH -> "math"
-        RAW_INLINE -> "raw_inline"
-        FOOTNOTE_REF -> "footnote_ref"
-        SYMBOL -> "symbol"
-    }
+    fun toWire(): String =
+        when (this) {
+            TEXT -> "text"
+            STRONG -> "strong"
+            EMPHASIS -> "emphasis"
+            HIGHLIGHT -> "highlight"
+            SUBSCRIPT -> "subscript"
+            SUPERSCRIPT -> "superscript"
+            INSERT -> "insert"
+            DELETE -> "delete"
+            CODE -> "code"
+            LINK -> "link"
+            IMAGE -> "image"
+            SPAN -> "span"
+            MATH -> "math"
+            RAW_INLINE -> "raw_inline"
+            FOOTNOTE_REF -> "footnote_ref"
+            SYMBOL -> "symbol"
+        }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): InlineType = when (value) {
-            "text" -> TEXT
-            "strong" -> STRONG
-            "emphasis" -> EMPHASIS
-            "highlight" -> HIGHLIGHT
-            "subscript" -> SUBSCRIPT
-            "superscript" -> SUPERSCRIPT
-            "insert" -> INSERT
-            "delete" -> DELETE
-            "code" -> CODE
-            "link" -> LINK
-            "image" -> IMAGE
-            "span" -> SPAN
-            "math" -> MATH
-            "raw_inline" -> RAW_INLINE
-            "footnote_ref" -> FOOTNOTE_REF
-            "symbol" -> SYMBOL
-            else -> throw IllegalArgumentException("Unknown InlineType value: $value")
-        }
+        fun fromWire(value: String): InlineType =
+            when (value) {
+                "text" -> TEXT
+                "strong" -> STRONG
+                "emphasis" -> EMPHASIS
+                "highlight" -> HIGHLIGHT
+                "subscript" -> SUBSCRIPT
+                "superscript" -> SUPERSCRIPT
+                "insert" -> INSERT
+                "delete" -> DELETE
+                "code" -> CODE
+                "link" -> LINK
+                "image" -> IMAGE
+                "span" -> SPAN
+                "math" -> MATH
+                "raw_inline" -> RAW_INLINE
+                "footnote_ref" -> FOOTNOTE_REF
+                "symbol" -> SYMBOL
+                else -> throw IllegalArgumentException("Unknown InlineType value: $value")
+            }
     }
 }

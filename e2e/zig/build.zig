@@ -257,6 +257,22 @@ pub fn build(b: *std.Build) void {
     pdf_run.setCwd(b.path("../../test_documents"));
     test_step.dependOn(&pdf_run.step);
 
+    const plugin_api_module = b.createModule(.{
+        .root_source_file = b.path("src/plugin_api_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    plugin_api_module.addImport("kreuzberg", kreuzberg_module);
+    const plugin_api_tests = b.addTest(.{
+        .name = "plugin_api_test",
+        .root_module = plugin_api_module,
+        .use_llvm = true,
+    });
+    const plugin_api_run = b.addRunArtifact(plugin_api_tests);
+    plugin_api_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&plugin_api_run.step);
+
     const post_processor_management_module = b.createModule(.{
         .root_source_file = b.path("src/post_processor_management_test.zig"),
         .target = target,

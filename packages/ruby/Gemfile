@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-source 'https://rubygems.org'
+source "https://rubygems.org"
 
 gemspec
 
 group :development do
-  gem 'rake-compiler', '~> 1.2'
-  gem 'rb_sys', '~> 0.9'
-  gem 'rspec', '~> 3.0'
-  gem 'rubocop', '~> 1.0'
-  gem 'rubocop-performance', '~> 1.0'
-  gem 'rubocop-rspec', '~> 3.0'
-  gem 'steep', '~> 1.0'
+  gem "rake-compiler", "~> 1.2"
+  gem "rb_sys", "~> 0.9"
+  gem "rspec", "~> 3.0"
+  gem "rubocop", "~> 1.0"
+  gem "rubocop-performance", "~> 1.0"
+  gem "rubocop-rspec", "~> 3.0"
+  gem "steep", "~> 1.0"
 end

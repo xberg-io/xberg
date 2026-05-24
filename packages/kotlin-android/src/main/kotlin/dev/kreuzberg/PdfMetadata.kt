@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,9 +25,8 @@ package dev.kreuzberg
 /**
  * PDF-specific metadata.
  *
- * Contains metadata fields specific to PDF documents that are not in the common
- * `Metadata` structure. Common fields like title, authors, keywords, and dates
- * are at the `Metadata` level.
+ * Contains metadata fields specific to PDF documents that are not in the common `Metadata`
+ * structure. Common fields like title, authors, keywords, and dates are at the `Metadata` level.
  */
 data class PdfMetadata(
     /** PDF version (e.g., "1.7", "2.0") */
@@ -40,5 +40,5 @@ data class PdfMetadata(
     /** First page height in points (1/72 inch) */
     val height: Long? = null,
     /** Total number of pages in the PDF document */
-    val pageCount: Int? = null
+    val pageCount: Int? = null,
 )

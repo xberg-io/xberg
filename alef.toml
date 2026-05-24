@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.17.32"
+alef_version = "0.19.5"
 languages = [
   "python",
   "node",
@@ -555,16 +555,6 @@ check = "cd packages/elixir && mix credo"
 precondition = "command -v mvn >/dev/null 2>&1"
 check = "mvn -f packages/java/pom.xml spotless:check -q"
 
-[crates.lint.wasm]
-precondition = "test -d crates/kreuzberg-wasm/typescript"
-format = "pnpm dlx oxfmt crates/kreuzberg-wasm/typescript"
-check = "pnpm dlx oxlint crates/kreuzberg-wasm/typescript"
-
-[crates.lint.ffi]
-precondition = "test -d e2e/c"
-format = "find e2e/c -name '*.c' -o -name '*.h' | xargs clang-format -i"
-check = "find crates/kreuzberg-ffi/include -name '*.h' | xargs clang-format --dry-run --Werror"
-
 [crates.lint.kotlin_android]
 precondition = "command -v gradle >/dev/null 2>&1"
 format = "cd packages/kotlin-android && gradle ktlintFormat --no-daemon"
@@ -617,7 +607,12 @@ upgrade = "cd packages/zig && zig build --fetch"
 
 [crates.test.python]
 precondition = "command -v uv >/dev/null 2>&1"
-before = "cd packages/python && maturin develop --release"
+# `uv run --no-sync` in the e2e step never refreshes the e2e venv, and `uv sync`
+# installs `kreuzberg` as a *copied* (non-editable) snapshot. A stale snapshot
+# built before the wrapper modules were generated leaves the venv with only
+# `_kreuzberg.abi3.so` + `py.typed`, breaking `from kreuzberg import ...`.
+# Force a clean rebuild of that snapshot from current source before testing.
+before = "cd packages/python && maturin develop --release && cd ../../e2e/python && uv sync --reinstall-package kreuzberg"
 e2e = "cd e2e/python && uv run --no-sync pytest tests/ -q"
 
 [crates.test.node]
@@ -2946,13 +2941,18 @@ output_pattern = "packages/{language}/README.md"
 discord_url = "https://discord.gg/xt9WY3GnKR"
 banner_url = "https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0"
 
+[crates.readme.languages.rust]
+template = "root.md"
+name = "Kreuzberg"
+output_path = "README.md"
+
 [crates.readme.languages.python]
 template = "python.md"
 name = "Python"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system."
 package_manager = ["pip"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "easyocr", "paddleocr"]
@@ -2966,7 +2966,7 @@ name = "TypeScript (Node.js)"
 package_name = "@kreuzberg/node"
 badge_url = "https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
 package_manager = ["pnpm"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, worker_pools = true, config_discovery = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -2985,7 +2985,7 @@ name = "Go"
 package_name = "github.com/kreuzberg-dev/kreuzberg/v5"
 badge_url = "https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance."
 package_manager = ["go get"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -2998,7 +2998,7 @@ name = "Java"
 package_name = "dev.kreuzberg:kreuzberg"
 badge_url = "https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance."
 package_manager = ["maven", "gradle"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3011,7 +3011,7 @@ name = "PHP"
 package_name = "kreuzberg/kreuzberg"
 badge_url = "https://img.shields.io/packagist/v/kreuzberg/kreuzberg?label=PHP&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API."
 package_manager = ["composer"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3024,7 +3024,7 @@ name = "Ruby"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance."
 package_manager = ["rubygems", "bundler"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3037,7 +3037,7 @@ name = "C#"
 package_name = "Kreuzberg"
 badge_url = "https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility."
 package_manager = ["nuget"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3050,7 +3050,7 @@ name = "Elixir"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API."
 package_manager = ["mix"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3064,7 +3064,7 @@ name = "WebAssembly"
 package_name = "@kreuzberg/wasm"
 badge_url = "https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support."
 package_manager = ["pnpm"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = false, code_intelligence = true }
 ocr_backends = ["tesseract-wasm"]
@@ -3077,7 +3077,7 @@ name = "R"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/badge/R-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. R bindings with native R API, data frame integration, and high-performance document extraction."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. R bindings with native R API, data frame integration, and high-performance document extraction."
 package_manager = ["install.packages"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3091,7 +3091,7 @@ name = "FFI (C/C++)"
 package_name = "kreuzberg-ffi"
 badge_url = "https://img.shields.io/badge/C%2FC%2B%2B-kreuzberg--ffi-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. C/C++ FFI bindings providing a stable ABI for native integration, shared library distribution, and cross-language interop."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. C/C++ FFI bindings providing a stable ABI for native integration, shared library distribution, and cross-language interop."
 package_manager = ["cargo"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 
@@ -3101,7 +3101,7 @@ name = "Kotlin (Android)"
 package_name = "dev.kreuzberg:kreuzberg-android"
 badge_url = "https://img.shields.io/badge/Android-kreuzberg-3DDC84"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Android library (AAR) with bundled jniLibs/arm64-v8a and jniLibs/x86_64 — Gradle automatically picks up the native cdylib for emulator and device builds. Server-side Kotlin/JVM consumers can use the Java binding directly via standard Kotlin/Java interop."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Android library (AAR) with bundled jniLibs/arm64-v8a and jniLibs/x86_64 — Gradle automatically picks up the native cdylib for emulator and device builds. Server-side Kotlin/JVM consumers can use the Java binding directly via standard Kotlin/Java interop."
 package_manager = ["gradle", "maven"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3114,7 +3114,7 @@ name = "Swift"
 package_name = "Kreuzberg"
 badge_url = "https://img.shields.io/badge/Swift-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Swift bindings via swift-bridge for macOS, iOS, and Linux, with native Swift types and async/await support."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Swift bindings via swift-bridge for macOS, iOS, and Linux, with native Swift types and async/await support."
 package_manager = ["spm"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3127,7 +3127,7 @@ name = "Dart / Flutter"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/badge/Dart-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Dart bindings via flutter_rust_bridge for both Flutter apps and pure-Dart server contexts, with isolate-safe Future/Stream APIs."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Dart bindings via flutter_rust_bridge for both Flutter apps and pure-Dart server contexts, with isolate-safe Future/Stream APIs."
 package_manager = ["pub"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -3140,7 +3140,7 @@ name = "Zig"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/badge/Zig-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Zig bindings consuming the C FFI surface via @cImport, idiomatic error sets, optional types, and slice-based memory management."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Zig bindings consuming the C FFI surface via @cImport, idiomatic error sets, optional types, and slice-based memory management."
 package_manager = ["zig"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -28,35 +29,33 @@ package dev.kreuzberg
  */
 enum class ContentLayer {
     /** Main document body content. */
-    @com.fasterxml.jackson.annotation.JsonProperty("body")
-    BODY,
+    @com.fasterxml.jackson.annotation.JsonProperty("body") BODY,
     /** Page/section header (running header). */
-    @com.fasterxml.jackson.annotation.JsonProperty("header")
-    HEADER,
+    @com.fasterxml.jackson.annotation.JsonProperty("header") HEADER,
     /** Page/section footer (running footer). */
-    @com.fasterxml.jackson.annotation.JsonProperty("footer")
-    FOOTER,
+    @com.fasterxml.jackson.annotation.JsonProperty("footer") FOOTER,
     /** Footnote content. */
-    @com.fasterxml.jackson.annotation.JsonProperty("footnote")
-    FOOTNOTE;
+    @com.fasterxml.jackson.annotation.JsonProperty("footnote") FOOTNOTE;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String = when (this) {
-        BODY -> "body"
-        HEADER -> "header"
-        FOOTER -> "footer"
-        FOOTNOTE -> "footnote"
-    }
+    fun toWire(): String =
+        when (this) {
+            BODY -> "body"
+            HEADER -> "header"
+            FOOTER -> "footer"
+            FOOTNOTE -> "footnote"
+        }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): ContentLayer = when (value) {
-            "body" -> BODY
-            "header" -> HEADER
-            "footer" -> FOOTER
-            "footnote" -> FOOTNOTE
-            else -> throw IllegalArgumentException("Unknown ContentLayer value: $value")
-        }
+        fun fromWire(value: String): ContentLayer =
+            when (value) {
+                "body" -> BODY
+                "header" -> HEADER
+                "footer" -> FOOTER
+                "footnote" -> FOOTNOTE
+                else -> throw IllegalArgumentException("Unknown ContentLayer value: $value")
+            }
     }
 }

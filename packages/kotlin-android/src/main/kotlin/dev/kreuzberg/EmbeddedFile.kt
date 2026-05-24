@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -28,5 +29,5 @@ data class EmbeddedFile(
     /** Raw file bytes from the embedded stream. */
     val data: ByteArray,
     /** MIME type if specified in the filespec, otherwise `null`. */
-    val mimeType: String? = null
+    val mimeType: String? = null,
 )

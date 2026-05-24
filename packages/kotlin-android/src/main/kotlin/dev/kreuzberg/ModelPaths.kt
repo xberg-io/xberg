@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -32,5 +33,5 @@ data class ModelPaths(
     /** Path to the recognition model directory. */
     val recModel: java.nio.file.Path,
     /** Path to the character dictionary file. */
-    val dictFile: java.nio.file.Path
+    val dictFile: java.nio.file.Path,
 )

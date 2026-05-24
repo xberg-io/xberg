@@ -1,6 +1,8 @@
 name: kreuzberg
 description: High-performance document intelligence library
 version: 5.0.0-rc.1
+repository: https://github.com/kreuzberg-dev/kreuzberg
+homepage: https://kreuzberg.dev
 environment:
   sdk: '>=3.11.0 <4.0.0'
 dependencies:

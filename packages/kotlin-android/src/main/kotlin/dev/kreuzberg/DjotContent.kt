@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -25,6 +26,7 @@ package dev.kreuzberg
  * Comprehensive Djot document structure with semantic preservation.
  *
  * This type captures the full richness of Djot markup, including:
+ *
  * - Block-level structures (headings, lists, blockquotes, code blocks, etc.)
  * - Inline formatting (emphasis, strong, highlight, subscript, superscript, etc.)
  * - Attributes (classes, IDs, key-value pairs)
@@ -50,5 +52,5 @@ data class DjotContent(
     /** Footnote definitions */
     val footnotes: List<Footnote> = emptyList(),
     /** Attributes mapped by element identifier (if present) */
-    val attributes: List<String> = emptyList()
+    val attributes: List<String> = emptyList(),
 )

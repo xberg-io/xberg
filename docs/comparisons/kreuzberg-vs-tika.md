@@ -7,7 +7,7 @@ Apache Tika is the longest-running open-source document extraction tool in the e
 |                  | Kreuzberg                                                       | Apache Tika                                                          |
 | ---------------- | --------------------------------------------------------------- | -------------------------------------------------------------------- |
 | **Written in**   | Rust                                                            | Java                                                                 |
-| **File formats** | 91+ extracted                                                   | 1500+ detected, hundreds extracted                                   |
+| **File formats** | 90+ extracted                                                   | 1500+ detected, hundreds extracted                                   |
 | **Use from**     | Python, TypeScript, Go, Ruby, Java, C#, PHP, Elixir, Rust, Wasm | Java, or any language via Tika Server (HTTP)                         |
 | **Run it as**    | Library, CLI, self-hosted API, browser (Wasm)                   | Java library, Tika Server (HTTP), CLI                                |
 | **License**      | Apache-2.0                                                      | Apache-2.0                                                           |
@@ -31,7 +31,7 @@ If your stack is already JVM-based, Tika integrates naturally. For everything el
 Both tools excel here, but in different ways.
 
 - **Tika** -- Detects **1500+ MIME types** and extracts text from hundreds of formats. It's built to handle practically anything you throw at it, including exotic formats like CAD files and scientific data. Two decades of format support.
-- **Kreuzberg** -- Extracts from **91+ formats** with a focus on high-quality output. Covers PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data, and niche markup formats like Typst and Djot.
+- **Kreuzberg** -- Extracts from **90+ formats** with a focus on high-quality output. Covers PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data, and niche markup formats like Typst and Djot.
 
 Tika's format detection is unmatched in breadth. Kreuzberg focuses on extraction quality for the formats most document pipelines actually encounter.
 

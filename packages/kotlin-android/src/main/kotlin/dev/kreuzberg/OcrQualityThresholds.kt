@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,14 +25,14 @@ package dev.kreuzberg
 /**
  * Quality thresholds for OCR fallback decisions and pipeline quality gating.
  *
- * All fields default to the values that match the previous hardcoded behavior,
- * so `OcrQualityThresholds.default()` preserves existing semantics exactly.
+ * All fields default to the values that match the previous hardcoded behavior, so
+ * `OcrQualityThresholds.default()` preserves existing semantics exactly.
  */
 data class OcrQualityThresholds(
     /** Minimum total non-whitespace characters to consider text substantive. */
     val minTotalNonWhitespace: Long = 64L,
     /** Minimum non-whitespace characters per page on average. */
-    val minNonWhitespacePerPage: Double = 32,
+    val minNonWhitespacePerPage: Double = 32.0,
     /** Minimum character count for a word to be "meaningful". */
     val minMeaningfulWordLen: Long = 4L,
     /** Minimum count of meaningful words before text is accepted. */
@@ -43,12 +44,12 @@ data class OcrQualityThresholds(
     /** Maximum fraction of short (1-2 char) words before text is considered fragmented. */
     val maxFragmentedWordRatio: Double = 0.6,
     /**
-     * Critical fragmentation threshold — triggers OCR regardless of meaningful words.
-     * Normal English text has ~20-30% short words. 80%+ is definitive garbage.
+     * Critical fragmentation threshold — triggers OCR regardless of meaningful words. Normal
+     * English text has ~20-30% short words. 80%+ is definitive garbage.
      */
     val criticalFragmentedWordRatio: Double = 0.8,
     /** Minimum average word length. Below this with enough words indicates garbled extraction. */
-    val minAvgWordLength: Double = 2,
+    val minAvgWordLength: Double = 2.0,
     /** Minimum word count before average word length check applies. */
     val minWordsForAvgLengthCheck: Long = 50L,
     /** Minimum consecutive word repetition ratio to detect column scrambling. */
@@ -62,8 +63,8 @@ data class OcrQualityThresholds(
     /** Alphanumeric+whitespace ratio threshold for skip decisions. */
     val alnumWsRatioThreshold: Double = 0.4,
     /**
-     * Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted.
-     * If the result from a backend scores below this, try the next backend.
+     * Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted. If the result
+     * from a backend scores below this, try the next backend.
      */
-    val pipelineMinQuality: Double = 0.5
+    val pipelineMinQuality: Double = 0.5,
 )

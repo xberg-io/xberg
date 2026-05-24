@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Configuration for LLM-based structured data extraction.
  *
- * Sends extracted document content to a VLM with a JSON schema,
- * returning structured data that conforms to the schema.
+ * Sends extracted document content to a VLM with a JSON schema, returning structured data that
+ * conforms to the schema.
  */
 data class StructuredExtractionConfig(
     /** JSON Schema defining the desired output structure. */
@@ -40,6 +41,7 @@ data class StructuredExtractionConfig(
      * Custom Jinja2 extraction prompt template. When `null`, a default template is used.
      *
      * Available template variables:
+     *
      * - `{{ content }}` — The extracted document text.
      * - `{{ schema }}` — The JSON schema as a formatted string.
      * - `{{ schema_name }}` — The schema name.
@@ -47,5 +49,5 @@ data class StructuredExtractionConfig(
      */
     val prompt: String? = null,
     /** LLM configuration for the extraction. */
-    val llm: LlmConfig
+    val llm: LlmConfig,
 )

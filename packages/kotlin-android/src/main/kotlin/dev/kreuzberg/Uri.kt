@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,9 +25,8 @@ package dev.kreuzberg
 /**
  * A URI extracted from a document.
  *
- * Represents any link, reference, or resource pointer found during extraction.
- * The `kind` field classifies the URI semantically, while `label` carries
- * optional human-readable display text.
+ * Represents any link, reference, or resource pointer found during extraction. The `kind` field
+ * classifies the URI semantically, while `label` carries optional human-readable display text.
  */
 data class Uri(
     /** The URL or path string. */
@@ -36,5 +36,5 @@ data class Uri(
     /** Optional page number where the URI was found (1-indexed). */
     val page: Int? = null,
     /** Semantic classification of the URI. */
-    val kind: UriKind
+    val kind: UriKind,
 )

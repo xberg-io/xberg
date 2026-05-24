@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -52,16 +53,16 @@ data class ChunkMetadata(
     /**
      * Heading context when using Markdown chunker.
      *
-     * Contains the heading hierarchy this chunk falls under.
-     * Only populated when `ChunkerType.Markdown` is used.
+     * Contains the heading hierarchy this chunk falls under. Only populated when
+     * `ChunkerType.Markdown` is used.
      */
     val headingContext: HeadingContext? = null,
     /**
      * Indices into `ExtractionResult.images` for images on pages covered by this chunk.
      *
-     * Contains zero-based indices into the top-level `images` collection for every
-     * image whose `page_number` falls within `[first_page, last_page]`.
-     * Empty when image extraction is disabled or the chunk spans no pages with images.
+     * Contains zero-based indices into the top-level `images` collection for every image whose
+     * `page_number` falls within `[first_page, last_page]`. Empty when image extraction is disabled
+     * or the chunk spans no pages with images.
      */
-    val imageIndices: List<Int> = emptyList()
+    val imageIndices: List<Int> = emptyList(),
 )

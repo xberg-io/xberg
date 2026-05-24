@@ -7,7 +7,7 @@ MarkItDown is a Microsoft-backed Python library that converts documents to Markd
 |                  | Kreuzberg                                                       | MarkItDown                                |
 | ---------------- | --------------------------------------------------------------- | ----------------------------------------- |
 | **Written in**   | Rust                                                            | Python                                    |
-| **File formats** | 91+                                                             | ~25                                       |
+| **File formats** | 90+                                                             | ~25                                       |
 | **Use from**     | Python, TypeScript, Go, Ruby, Java, C#, PHP, Elixir, Rust, Wasm | Python                                    |
 | **Output**       | Unified text, element-based, per-page JSON, Markdown            | Markdown                                  |
 | **License**      | Apache-2.0                                                      | Elastic-2.0                               |
@@ -30,7 +30,7 @@ If you need a complete pipeline (extract, chunk, embed), Kreuzberg handles the f
 
 Both cover common formats, with different long-tail reach.
 
-- **Kreuzberg (91+ formats)** -- PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data (JSON/YAML/TOML), plus LaTeX, Typst, BibTeX, Jupyter notebooks, EPUB, OrgMode, and more.
+- **Kreuzberg (90+ formats)** -- PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data (JSON/YAML/TOML), plus LaTeX, Typst, BibTeX, Jupyter notebooks, EPUB, OrgMode, and more.
 - **MarkItDown (~25 formats)** -- PDFs, DOCX, PPTX, XLSX, HTML, XML, CSV, JSON, EPUB, Jupyter notebooks, MSG email, images, and ZIP archives. Covers the essentials.
 
 MarkItDown handles the formats you'll encounter most often. Kreuzberg also handles the ones you won't expect -- until you do.

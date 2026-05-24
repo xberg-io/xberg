@@ -94,6 +94,7 @@ pub const ContentFilterConfig = struct {
     ///
     /// - PDF: Disables top-margin furniture stripping and prevents the layout
     ///   model from treating `PageHeader`-classified regions as furniture.
+    ///
     /// - DOCX: Includes document headers in text output.
     /// - RTF/ODT: Headers already included; this is a no-op when true.
     /// - HTML/EPUB: Keeps `<header>` element content.
@@ -104,6 +105,7 @@ pub const ContentFilterConfig = struct {
     ///
     /// - PDF: Disables bottom-margin furniture stripping and prevents the layout
     ///   model from treating `PageFooter`-classified regions as furniture.
+    ///
     /// - DOCX: Includes document footers in text output.
     /// - RTF/ODT: Footers already included; this is a no-op when true.
     /// - HTML/EPUB: Keeps `<footer>` element content.
@@ -118,8 +120,8 @@ pub const ContentFilterConfig = struct {
     ///
     /// Note: when a layout-detection model is active, the model may independently
     /// classify page-header / page-footer regions as furniture on a per-page basis.
-    /// To preserve those regions, set `include_headers = true` and/or
-    /// `include_footers = true` in addition to disabling this flag.
+    /// To preserve those regions, set `include_headers = true`, `include_footers = true`,
+    /// or both, in addition to disabling this flag.
     ///
     /// Primarily affects PDF extraction.
     ///
@@ -145,6 +147,7 @@ pub const EmailConfig = struct {
     /// emitted. Users should verify output when supplying unusual values.
     ///
     /// Common values:
+    ///
     /// - 1250: Central European (Polish, Czech, Hungarian, etc.)
     /// - 1251: Cyrillic (Russian, Ukrainian, Bulgarian, etc.)
     /// - 1252: Western European (default)
@@ -244,7 +247,7 @@ pub const ExtractionConfig = struct {
     ///
     /// Controls maximum archive size, compression ratio, file count, and other
     /// security thresholds to prevent decompression bomb attacks. Also caps
-    /// nesting depth, iteration count, entity / token length, cumulative
+    /// nesting depth, iteration count, entity / token length, total
     /// content size, and table cell count for every extraction path that
     /// ingests user-controlled bytes.
     /// When `null`, default limits are used.
@@ -252,6 +255,7 @@ pub const ExtractionConfig = struct {
     /// Content text format (default: Plain).
     ///
     /// Controls the format of the extracted content:
+    ///
     /// - `Plain`: Raw extracted text (default)
     /// - `Markdown`: Markdown formatted output
     /// - `Djot`: Djot markup format (requires djot feature)
@@ -276,7 +280,7 @@ pub const ExtractionConfig = struct {
     ///
     /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
     /// table, list, and figure detection in the structure pipeline that would
-    /// otherwise rely on font-clustering heuristics alone. Substantially
+    /// otherwise rely on font-clustering heuristics alone. Significantly
     /// improves SF1 (structural F1) at the cost of inference latency
     /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
     /// Requires the `layout-detection` feature.
@@ -355,6 +359,7 @@ pub const ExtractionConfig = struct {
 ///
 /// The following `ExtractionConfig` fields are batch-level only and
 /// cannot be overridden per file:
+///
 /// - `max_concurrent_extractions` — controls batch parallelism
 /// - `use_cache` — global caching policy
 /// - `acceleration` — shared ONNX execution provider
@@ -581,6 +586,7 @@ pub const StructuredExtractionConfig = struct {
     /// Custom Jinja2 extraction prompt template. When `null`, a default template is used.
     ///
     /// Available template variables:
+    ///
     /// - `{{ content }}` — The extracted document text.
     /// - `{{ schema }}` — The JSON schema as a formatted string.
     /// - `{{ schema_name }}` — The schema name.
@@ -737,6 +743,7 @@ pub const OcrConfig = struct {
     /// Custom Jinja2 prompt template for VLM OCR.
     ///
     /// When `null`, uses the default template. Available variables:
+    ///
     /// - `{{ language }}` — The document language code (e.g., "eng", "deu").
     vlm_prompt: ?[]const u8,
     /// Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection).
@@ -1197,7 +1204,7 @@ pub const SecurityLimits = struct {
     /// Maximum nesting depth for structures (100)
     max_nesting_depth: u64,
     /// Maximum length of any single XML entity / attribute / token (1 MiB).
-    /// This is a per-token cap, NOT a cumulative cap — billion-laughs class
+    /// This is a per-token cap, NOT a total cap — billion-laughs class
     /// attacks where a single entity expands to hundreds of MB are caught
     /// here, while normal long text content (a paragraph, a CDATA block) is
     /// caught by `max_content_size` instead.
@@ -1235,12 +1242,13 @@ pub const PdfAnnotation = struct {
     /// Page number where the annotation appears (1-indexed).
     page_number: u32,
     /// Bounding box of the annotation on the page.
-    bounding_box: ?[]const u8,
+    bounding_box: ?BoundingBox,
 };
 
 /// Comprehensive Djot document structure with semantic preservation.
 ///
 /// This type captures the full richness of Djot markup, including:
+///
 /// - Block-level structures (headings, lists, blockquotes, code blocks, etc.)
 /// - Inline formatting (emphasis, strong, highlight, subscript, superscript, etc.)
 /// - Attributes (classes, IDs, key-value pairs)
@@ -1398,14 +1406,14 @@ pub const DocumentNode = struct {
     /// Page number where this node ends (for multi-page tables/sections).
     page_end: ?u32,
     /// Bounding box in document coordinates.
-    bbox: ?[]const u8,
+    bbox: ?BoundingBox,
     /// Inline annotations (formatting, links) on this node's text content.
     ///
     /// Only meaningful for text-carrying nodes; empty for containers.
     annotations: []const TextAnnotation,
     /// Format-specific key-value attributes.
     ///
-    /// Extensible bag for data that doesn't warrant a typed field: CSS classes,
+    /// Extensible bag for miscellaneous data without a dedicated typed field: CSS classes,
     /// LaTeX environment names, Excel cell formulas, slide layout names, etc.
     attributes: ?std.StringHashMap([]const u8),
 };
@@ -1437,7 +1445,7 @@ pub const GridCell = struct {
     /// Whether this is a header cell.
     is_header: bool,
     /// Bounding box for this cell (if available).
-    bbox: ?[]const u8,
+    bbox: ?BoundingBox,
 };
 
 /// Inline text annotation — byte-range based formatting and links.
@@ -1494,6 +1502,7 @@ pub const ExtractionResult = struct {
     ///
     /// When extracting Djot documents with structured extraction enabled,
     /// this field contains the full semantic structure including:
+    ///
     /// - Block-level elements with nesting
     /// - Inline formatting with attributes
     /// - Links, images, footnotes
@@ -1508,6 +1517,7 @@ pub const ExtractionResult = struct {
     ///
     /// When OCR is performed with element extraction enabled, this field contains
     /// the structured representation of detected text including:
+    ///
     /// - Bounding geometry (rectangles or quadrilaterals)
     /// - Confidence scores (detection and recognition)
     /// - Rotation information
@@ -1522,6 +1532,7 @@ pub const ExtractionResult = struct {
     ///
     /// When `include_document_structure` is true in `ExtractionConfig`, this field
     /// contains the full hierarchical representation of the document including:
+    ///
     /// - Heading-driven section nesting
     /// - Table grids with cell-level metadata
     /// - Content layer classification (body, header, footer, footnote)
@@ -1585,7 +1596,7 @@ pub const ExtractionResult = struct {
     /// LLM token usage and cost data for all LLM calls made during this extraction.
     ///
     /// Contains one entry per LLM call. Multiple entries are produced when
-    /// VLM OCR, structured extraction, and/or LLM embeddings all run during
+    /// VLM OCR, structured extraction, or LLM embeddings run during
     /// the same extraction.
     ///
     /// `null` when no LLM was used.
@@ -1761,7 +1772,7 @@ pub const ExtractedImage = struct {
     ocr_result: ?ExtractionResult,
     /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
     /// Only populated for PDF-extracted images when position data is available from the PDF extractor.
-    bounding_box: ?[]const u8,
+    bounding_box: ?BoundingBox,
     /// Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
     /// Used for rendering image references when the binary data is not extracted.
     source_path: ?[]const u8,
@@ -1775,6 +1786,18 @@ pub const ExtractedImage = struct {
     cluster_id: ?u32,
 };
 
+/// Bounding box coordinates for element positioning.
+pub const BoundingBox = struct {
+    /// Left x-coordinate
+    x0: f64,
+    /// Bottom y-coordinate
+    y0: f64,
+    /// Right x-coordinate
+    x1: f64,
+    /// Top y-coordinate
+    y1: f64,
+};
+
 /// Metadata for a semantic element.
 pub const ElementMetadata = struct {
     /// Page number (1-indexed)
@@ -1782,7 +1805,7 @@ pub const ElementMetadata = struct {
     /// Source filename or document name
     filename: ?[]const u8,
     /// Bounding box coordinates if available
-    coordinates: ?[]const u8,
+    coordinates: ?BoundingBox,
     /// Position index in the element sequence
     element_index: ?u64,
     /// Additional custom metadata
@@ -1865,9 +1888,9 @@ pub const TextExtractionResult = struct {
     /// Markdown headers (text only, Markdown files only)
     headers: ?[]const []const u8,
     /// Markdown links as (text, URL) tuples (Markdown files only)
-    links: ?[]const []const u8,
+    links: ?[]const []const []const u8,
     /// Code blocks as (language, code) tuples (Markdown files only)
-    code_blocks: ?[]const []const u8,
+    code_blocks: ?[]const []const []const u8,
 };
 
 /// PowerPoint (PPTX) extraction result.
@@ -2032,6 +2055,7 @@ pub const TesseractConfig = struct {
     /// Page Segmentation Mode (0-13).
     ///
     /// Common values:
+    ///
     /// - 3: Fully automatic page segmentation (native default)
     /// - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang)
     /// - 11: Sparse text with no particular order
@@ -2269,9 +2293,9 @@ pub const TextMetadata = struct {
     /// Markdown headers (headings text only, for Markdown files)
     headers: ?[]const []const u8,
     /// Markdown links as (text, url) tuples (for Markdown files)
-    links: ?[]const []const u8,
+    links: ?[]const []const []const u8,
     /// Code blocks as (language, code) tuples (for Markdown files)
-    code_blocks: ?[]const []const u8,
+    code_blocks: ?[]const []const []const u8,
 };
 
 /// Header/heading element metadata.
@@ -2301,7 +2325,7 @@ pub const LinkMetadata = struct {
     /// Rel attribute values
     rel: []const []const u8,
     /// Additional attributes as key-value pairs
-    attributes: []const []const u8,
+    attributes: []const []const []const u8,
 };
 
 /// Image element metadata.
@@ -2317,7 +2341,7 @@ pub const ImageMetadataType = struct {
     /// Image type classification
     image_type: ImageType,
     /// Additional attributes as key-value pairs
-    attributes: []const []const u8,
+    attributes: []const []const []const u8,
 };
 
 /// Structured data (Schema.org, microdata, RDFa) block.
@@ -2661,6 +2685,7 @@ pub const PageInfo = struct {
 /// # Performance
 ///
 /// Uses Arc-wrapped tables and images for memory efficiency:
+///
 /// - `Vec<Arc<Table>>` enables zero-copy sharing of table data
 /// - `Vec<Arc<ExtractedImage>>` enables zero-copy sharing of image data
 /// - Maintains exact JSON compatibility via custom Serialize/Deserialize
@@ -2710,7 +2735,7 @@ pub const LayoutRegion = struct {
     /// Confidence score from the layout detection model (0.0 to 1.0).
     confidence: f64,
     /// Bounding box in document coordinate space.
-    bounding_box: []const u8,
+    bounding_box: BoundingBox,
     /// Fraction of the page area covered by this region (0.0 to 1.0).
     area_fraction: f64,
 };
@@ -2738,6 +2763,7 @@ pub const HierarchicalBlock = struct {
     /// The hierarchy level of this block (H1-H6 or Body)
     ///
     /// Levels correspond to HTML heading tags:
+    ///
     /// - "h1": Top-level heading
     /// - "h2": Secondary heading
     /// - "h3": Tertiary heading
@@ -2765,7 +2791,7 @@ pub const Table = struct {
     page_number: u32,
     /// Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
     /// Only populated for PDF-extracted tables when position data is available.
-    bounding_box: ?[]const u8,
+    bounding_box: ?BoundingBox,
 };
 
 /// Individual table cell with content and optional styling.
@@ -2920,6 +2946,7 @@ pub const PaddleOcrConfig = struct {
     /// Range: 0.0-1.0
     drop_score: f32,
     /// Model tier controlling detection/recognition model size and accuracy trade-off.
+    ///
     /// - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference
     /// - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents
     model_tier: []const u8,
@@ -3032,8 +3059,8 @@ pub const ExecutionProviderType = enum {
 /// Output format for extraction results.
 ///
 /// Controls the format of the `content` field in `ExtractionResult`.
-/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
-/// accordingly. `Plain` returns the raw extracted text.
+/// When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+/// `Plain` returns the raw extracted text.
 /// `Structured` returns JSON with full OCR element data including bounding
 /// boxes and confidence scores.
 pub const OutputFormat = union(enum) {
@@ -3219,6 +3246,7 @@ pub const ProcessingStage = enum {
     /// Early stage - foundational processing.
     ///
     /// Use for:
+    ///
     /// - Language detection
     /// - Character encoding normalization
     /// - Entity extraction (NER)
@@ -3227,6 +3255,7 @@ pub const ProcessingStage = enum {
     /// Middle stage - content transformation.
     ///
     /// Use for:
+    ///
     /// - Keyword extraction
     /// - Token reduction
     /// - Text summarization
@@ -3235,6 +3264,7 @@ pub const ProcessingStage = enum {
     /// Late stage - final enrichment.
     ///
     /// Use for:
+    ///
     /// - Custom user hooks
     /// - Analytics/logging
     /// - Final validation
@@ -3421,7 +3451,7 @@ pub const NodeContent = union(enum) {
         content: []const u8,
     },
     /// Structured metadata block (email headers, YAML frontmatter, etc.).
-    metadata_block: []const []const u8,
+    metadata_block: []const []const []const u8,
 };
 
 /// Types of inline text annotations.
@@ -3786,6 +3816,7 @@ pub const LayoutClass = enum {
 /// Extract content from a byte array.
 ///
 /// This is the main entry point for in-memory extraction. It performs the following steps:
+///
 /// 1. Validate MIME type
 /// 2. Handle legacy format conversion if needed
 /// 3. Select appropriate extractor from registry
@@ -3824,6 +3855,7 @@ pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const
 /// Extract content from a file.
 ///
 /// This is the main entry point for file-based extraction. It performs the following steps:
+///
 /// 1. Check cache for existing result (if caching enabled)
 /// 2. Detect or validate MIME type
 /// 3. Select appropriate extractor from registry
@@ -3990,6 +4022,7 @@ pub fn batch_extract_bytes_sync(items: []const u8, config: []const u8) Kreuzberg
 /// taken from the batch-level `config`.
 ///
 ///   per-file configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
 /// **Returns:**
@@ -4039,6 +4072,7 @@ pub fn batch_extract_files(items: []const u8, config: []const u8) KreuzbergError
 /// the batch-level defaults for that item.
 ///
 ///   MIME type, and optional per-item configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration
 ///
 /// **Returns:**
@@ -4240,6 +4274,25 @@ pub fn list_validators() KreuzbergError![]u8 {
         _free_string(_result);
         break :blk owned;
     };
+}
+
+/// Score an extracted text on the closed interval `[0.0, 1.0]`, where higher is better.
+///
+/// `1.0` is the neutral score for clean prose; penalties (OCR artifacts, embedded
+/// script/style noise, navigation chrome) subtract, structural cues (headings,
+/// punctuation) add. The result is clamped to `[0.0, 1.0]`.
+///
+/// Pass `metadata` as `null` when the caller has no extraction metadata available;
+/// the metadata bonus simply isn't applied in that case. Texts shorter than
+/// `MIN_TEXT_LENGTH` short-circuit to `0.1` regardless of metadata.
+pub fn calculate_quality_score(text: []const u8, metadata: ?[]const u8) error{OutOfMemory}!f64 {
+    const text_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{text}, 0);
+    defer std.heap.c_allocator.free(text_z);
+    // Vec/Map parameters are passed as JSON strings across the FFI boundary.
+    const metadata_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{metadata}, 0);
+    defer std.heap.c_allocator.free(metadata_z);
+    const _result = c.kreuzberg_calculate_quality_score(text_z, metadata_z);
+    return _result;
 }
 
 /// Generate embeddings asynchronously for a list of text strings.

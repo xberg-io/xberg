@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,14 +25,16 @@ package dev.kreuzberg
 /**
  * A unified OCR element representing detected text with full metadata.
  *
- * This is the primary type for structured OCR output, preserving all information
- * from both Tesseract and PaddleOCR backends.
+ * This is the primary type for structured OCR output, preserving all information from both
+ * Tesseract and PaddleOCR backends.
  */
 data class OcrElement(
     /** The recognized text content. */
     val text: String = "",
     /** Bounding geometry (rectangle or quadrilateral). */
-    @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(`as` = OcrBoundingGeometry::class)
+    @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(
+        `as` = OcrBoundingGeometry::class
+    )
     val geometry: OcrBoundingGeometry,
     /** Confidence scores for detection and recognition. */
     val confidence: OcrConfidence = OcrConfidence(),
@@ -48,5 +51,5 @@ data class OcrElement(
      */
     val parentId: String? = null,
     /** Backend-specific metadata that doesn't fit the unified schema. */
-    val backendMetadata: Map<String, Any> = emptyMap()
+    val backendMetadata: Map<String, Any> = emptyMap(),
 )

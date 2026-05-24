@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,30 +25,29 @@ package dev.kreuzberg
 /** Structured data type classification. */
 enum class StructuredDataType {
     /** JSON-LD structured data */
-    @com.fasterxml.jackson.annotation.JsonProperty("json-ld")
-    JSON_LD,
+    @com.fasterxml.jackson.annotation.JsonProperty("json-ld") JSON_LD,
     /** Microdata */
-    @com.fasterxml.jackson.annotation.JsonProperty("microdata")
-    MICRODATA,
+    @com.fasterxml.jackson.annotation.JsonProperty("microdata") MICRODATA,
     /** RDFa */
-    @com.fasterxml.jackson.annotation.JsonProperty("rdfa")
-    R_D_FA;
+    @com.fasterxml.jackson.annotation.JsonProperty("rdfa") R_D_FA;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String = when (this) {
-        JSON_LD -> "json-ld"
-        MICRODATA -> "microdata"
-        R_D_FA -> "rdfa"
-    }
+    fun toWire(): String =
+        when (this) {
+            JSON_LD -> "json-ld"
+            MICRODATA -> "microdata"
+            R_D_FA -> "rdfa"
+        }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): StructuredDataType = when (value) {
-            "json-ld" -> JSON_LD
-            "microdata" -> MICRODATA
-            "rdfa" -> R_D_FA
-            else -> throw IllegalArgumentException("Unknown StructuredDataType value: $value")
-        }
+        fun fromWire(value: String): StructuredDataType =
+            when (value) {
+                "json-ld" -> JSON_LD
+                "microdata" -> MICRODATA
+                "rdfa" -> R_D_FA
+                else -> throw IllegalArgumentException("Unknown StructuredDataType value: $value")
+            }
     }
 }

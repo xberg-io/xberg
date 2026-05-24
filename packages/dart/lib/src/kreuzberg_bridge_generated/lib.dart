@@ -9,11 +9,12 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ExtractedImageMetadata`, `FracType`, `KreuzbergError`, `ListType`, `OcrBackendType`, `OcrCacheStats`, `PSMMode`, `PaddleLanguage`, `ProcessingStage`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `dimensions`, `embed`, `estimated_duration_ms`, `extract_bytes`, `extract_file`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language`, `supports_table_detection`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a byte array.
 ///
 /// This is the main entry point for in-memory extraction. It performs the following steps:
+///
 /// 1. Validate MIME type
 /// 2. Handle legacy format conversion if needed
 /// 3. Select appropriate extractor from registry
@@ -41,6 +42,7 @@ Future<ExtractionResult> extractBytes({
 /// Extract content from a file.
 ///
 /// This is the main entry point for file-based extraction. It performs the following steps:
+///
 /// 1. Check cache for existing result (if caching enabled)
 /// 2. Detect or validate MIME type
 /// 3. Select appropriate extractor from registry
@@ -142,6 +144,7 @@ Future<List<ExtractionResult>> batchExtractBytesSync({
 /// taken from the batch-level `config`.
 ///
 ///   per-file configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
 /// **Returns:**
@@ -174,6 +177,7 @@ Future<List<ExtractionResult>> batchExtractFiles({
 /// the batch-level defaults for that item.
 ///
 ///   MIME type, and optional per-item configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration
 ///
 /// **Returns:**
@@ -261,6 +265,23 @@ Future<List<String>> listRenderers() =>
 /// List names of all registered validators.
 Future<List<String>> listValidators() =>
     RustLib.instance.api.crateListValidators();
+
+/// Score an extracted text on the closed interval `[0.0, 1.0]`, where higher is better.
+///
+/// `1.0` is the neutral score for clean prose; penalties (OCR artifacts, embedded
+/// script/style noise, navigation chrome) subtract, structural cues (headings,
+/// punctuation) add. The result is clamped to `[0.0, 1.0]`.
+///
+/// Pass `metadata` as `null` when the caller has no extraction metadata available;
+/// the metadata bonus simply isn't applied in that case. Texts shorter than
+/// `MIN_TEXT_LENGTH` short-circuit to `0.1` regardless of metadata.
+Future<double> calculateQualityScore({
+  required String text,
+  Map<String, String>? metadata,
+}) => RustLib.instance.api.crateCalculateQualityScore(
+  text: text,
+  metadata: metadata,
+);
 
 /// Generate embeddings asynchronously for a list of text strings.
 ///
@@ -533,6 +554,9 @@ Future<ChunkMetadata> createChunkMetadataFromJson({required String json}) =>
 
 Future<ExtractedImage> createExtractedImageFromJson({required String json}) =>
     RustLib.instance.api.crateCreateExtractedImageFromJson(json: json);
+
+Future<BoundingBox> createBoundingBoxFromJson({required String json}) =>
+    RustLib.instance.api.crateCreateBoundingBoxFromJson(json: json);
 
 Future<ElementMetadata> createElementMetadataFromJson({required String json}) =>
     RustLib.instance.api.crateCreateElementMetadataFromJson(json: json);
@@ -1350,6 +1374,41 @@ enum BlockType {
   mathDisplay,
 }
 
+/// Bounding box coordinates for element positioning.
+class BoundingBox {
+  /// Left x-coordinate
+  final double x0;
+
+  /// Bottom y-coordinate
+  final double y0;
+
+  /// Right x-coordinate
+  final double x1;
+
+  /// Top y-coordinate
+  final double y1;
+
+  const BoundingBox({
+    required this.x0,
+    required this.y0,
+    required this.x1,
+    required this.y1,
+  });
+
+  @override
+  int get hashCode => x0.hashCode ^ y0.hashCode ^ x1.hashCode ^ y1.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BoundingBox &&
+          runtimeType == other.runtimeType &&
+          x0 == other.x0 &&
+          y0 == other.y0 &&
+          x1 == other.x1 &&
+          y1 == other.y1;
+}
+
 /// A text chunk with optional embedding and metadata.
 ///
 /// Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
@@ -1763,8 +1822,8 @@ class ContentFilterConfig {
   ///
   /// Note: when a layout-detection model is active, the model may independently
   /// classify page-header / page-footer regions as furniture on a per-page basis.
-  /// To preserve those regions, set `include_headers = true` and/or
-  /// `include_footers = true` in addition to disabling this flag.
+  /// To preserve those regions, set `include_headers = true`, `include_footers = true`,
+  /// or both, in addition to disabling this flag.
   ///
   /// Primarily affects PDF extraction.
   ///
@@ -2249,7 +2308,7 @@ class DocumentNode {
   final PlatformInt64? pageEnd;
 
   /// Bounding box in document coordinates.
-  final String? bbox;
+  final BoundingBox? bbox;
 
   /// Inline annotations (formatting, links) on this node's text content.
   ///
@@ -2258,7 +2317,7 @@ class DocumentNode {
 
   /// Format-specific key-value attributes.
   ///
-  /// Extensible bag for data that doesn't warrant a typed field: CSS classes,
+  /// Extensible bag for miscellaneous data without a dedicated typed field: CSS classes,
   /// LaTeX environment names, Excel cell formulas, slide layout names, etc.
   final Map<String, String>? attributes;
 
@@ -2605,7 +2664,7 @@ class ElementMetadata {
   final String? filename;
 
   /// Bounding box coordinates if available
-  final String? coordinates;
+  final BoundingBox? coordinates;
 
   /// Position index in the element sequence
   final PlatformInt64? elementIndex;
@@ -3356,7 +3415,7 @@ class ExtractedImage {
 
   /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
   /// Only populated for PDF-extracted images when position data is available from the PDF extractor.
-  final String? boundingBox;
+  final BoundingBox? boundingBox;
 
   /// Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
   /// Used for rendering image references when the binary data is not extracted.
@@ -3553,7 +3612,7 @@ class ExtractionConfig {
   ///
   /// Controls maximum archive size, compression ratio, file count, and other
   /// security thresholds to prevent decompression bomb attacks. Also caps
-  /// nesting depth, iteration count, entity / token length, cumulative
+  /// nesting depth, iteration count, entity / token length, total
   /// content size, and table cell count for every extraction path that
   /// ingests user-controlled bytes.
   /// When `None`, default limits are used.
@@ -3588,7 +3647,7 @@ class ExtractionConfig {
   ///
   /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
   /// table, list, and figure detection in the structure pipeline that would
-  /// otherwise rely on font-clustering heuristics alone. Substantially
+  /// otherwise rely on font-clustering heuristics alone. Significantly
   /// improves SF1 (structural F1) at the cost of inference latency
   /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
   /// Requires the `layout-detection` feature.
@@ -3932,7 +3991,7 @@ class ExtractionResult {
   /// LLM token usage and cost data for all LLM calls made during this extraction.
   ///
   /// Contains one entry per LLM call. Multiple entries are produced when
-  /// VLM OCR, structured extraction, and/or LLM embeddings all run during
+  /// VLM OCR, structured extraction, or LLM embeddings run during
   /// the same extraction.
   ///
   /// `None` when no LLM was used.
@@ -4393,7 +4452,7 @@ class GridCell {
   final bool isHeader;
 
   /// Bounding box for this cell (if available).
-  final String? bbox;
+  final BoundingBox? bbox;
 
   const GridCell({
     required this.content,
@@ -4993,7 +5052,7 @@ class ImageMetadataType {
   final ImageType imageType;
 
   /// Additional attributes as key-value pairs
-  final List<String> attributes;
+  final List<List<String>> attributes;
 
   const ImageMetadataType({
     required this.src,
@@ -5541,7 +5600,7 @@ class LayoutRegion {
   final double confidence;
 
   /// Bounding box in document coordinate space.
-  final String boundingBox;
+  final BoundingBox boundingBox;
 
   /// Fraction of the page area covered by this region (0.0 to 1.0).
   final double areaFraction;
@@ -5589,7 +5648,7 @@ class LinkMetadata {
   final List<String> rel;
 
   /// Additional attributes as key-value pairs
-  final List<String> attributes;
+  final List<List<String>> attributes;
 
   const LinkMetadata({
     required this.href,
@@ -6091,8 +6150,9 @@ sealed class NodeContent with _$NodeContent {
   }) = NodeContent_RawBlock;
 
   /// Structured metadata block (email headers, YAML frontmatter, etc.).
-  const factory NodeContent.metadataBlock({required List<String> entries}) =
-      NodeContent_MetadataBlock;
+  const factory NodeContent.metadataBlock({
+    required List<List<String>> entries,
+  }) = NodeContent_MetadataBlock;
 }
 
 @freezed
@@ -7368,7 +7428,7 @@ class PdfAnnotation {
   final PlatformInt64 pageNumber;
 
   /// Bounding box of the annotation on the page.
-  final String? boundingBox;
+  final BoundingBox? boundingBox;
 
   const PdfAnnotation({
     required this.annotationType,
@@ -8008,7 +8068,7 @@ class SecurityLimits {
   final PlatformInt64 maxNestingDepth;
 
   /// Maximum length of any single XML entity / attribute / token (1 MiB).
-  /// This is a per-token cap, NOT a cumulative cap — billion-laughs class
+  /// This is a per-token cap, NOT a total cap — billion-laughs class
   /// attacks where a single entity expands to hundreds of MB are caught
   /// here, while normal long text content (a paragraph, a CDATA block) is
   /// caught by `max_content_size` instead.
@@ -8317,7 +8377,7 @@ class Table {
 
   /// Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
   /// Only populated for PDF-extracted tables when position data is available.
-  final String? boundingBox;
+  final BoundingBox? boundingBox;
 
   const Table({
     required this.cells,
@@ -8671,10 +8731,10 @@ class TextExtractionResult {
   final List<String>? headers;
 
   /// Markdown links as (text, URL) tuples (Markdown files only)
-  final List<String>? links;
+  final List<List<String>>? links;
 
   /// Code blocks as (language, code) tuples (Markdown files only)
-  final List<String>? codeBlocks;
+  final List<List<String>>? codeBlocks;
 
   const TextExtractionResult({
     required this.content,
@@ -8728,10 +8788,10 @@ class TextMetadata {
   final List<String>? headers;
 
   /// Markdown links as (text, url) tuples (for Markdown files)
-  final List<String>? links;
+  final List<List<String>>? links;
 
   /// Code blocks as (language, code) tuples (for Markdown files)
-  final List<String>? codeBlocks;
+  final List<List<String>>? codeBlocks;
 
   const TextMetadata({
     required this.lineCount,

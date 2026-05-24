@@ -3764,6 +3764,7 @@ dependencies = [
 name = "kreuzberg-dart"
 version = "5.0.0-rc.1"
 dependencies = [
+ "ahash",
  "async-trait",
  "flutter_rust_bridge",
  "kreuzberg",
@@ -3775,6 +3776,7 @@ dependencies = [
 name = "kreuzberg-ffi"
 version = "5.0.0-rc.1"
 dependencies = [
+ "ahash",
  "async-trait",
  "cbindgen",
  "kreuzberg",
@@ -3840,6 +3842,7 @@ dependencies = [
 name = "kreuzberg-swift"
 version = "5.0.0-rc.1"
 dependencies = [
+ "ahash",
  "async-trait",
  "kreuzberg",
  "serde",
@@ -3872,6 +3875,7 @@ dependencies = [
  "getrandom 0.4.2",
  "js-sys",
  "kreuzberg",
+ "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "wasm-bindgen",

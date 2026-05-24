@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -26,5 +27,5 @@ data class DetectResponse(
     /** Detected MIME type */
     val mimeType: String,
     /** Original filename (if provided) */
-    val filename: String? = null
+    val filename: String? = null,
 )

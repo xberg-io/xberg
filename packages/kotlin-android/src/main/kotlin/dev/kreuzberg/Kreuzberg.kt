@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -28,13 +29,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object Kreuzberg {
-    private val mapper = jacksonObjectMapper()
-        .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+    private val mapper =
+        jacksonObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
 
     /**
      * Extract content from a byte array.
      *
      * This is the main entry point for in-memory extraction. It performs the following steps:
+     *
      * 1. Validate MIME type
      * 2. Handle legacy format conversion if needed
      * 3. Select appropriate extractor from registry
@@ -47,11 +49,16 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * Returns `KreuzbergError.Validation` if MIME type is invalid.
-     * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
+     * Returns `KreuzbergError.Validation` if MIME type is invalid. Returns
+     * `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
-    fun extractBytes(content: String, mimeType: String, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractBytes(content, mimeType, mapper.writeValueAsString(config))
+    fun extractBytes(
+        content: String,
+        mimeType: String,
+        config: ExtractionConfig,
+    ): ExtractionResult {
+        val resultJson =
+            KreuzbergBridge.nativeExtractBytes(content, mimeType, mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
@@ -59,6 +66,7 @@ object Kreuzberg {
      * Extract content from a byte array.
      *
      * This is the main entry point for in-memory extraction. It performs the following steps:
+     *
      * 1. Validate MIME type
      * 2. Handle legacy format conversion if needed
      * 3. Select appropriate extractor from registry
@@ -71,16 +79,20 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * Returns `KreuzbergError.Validation` if MIME type is invalid.
-     * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
+     * Returns `KreuzbergError.Validation` if MIME type is invalid. Returns
+     * `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
-    suspend fun extractBytesAsync(content: String, mimeType: String, config: ExtractionConfig): ExtractionResult =
-        withContext(Dispatchers.IO) { extractBytes(content, mimeType, config) }
+    suspend fun extractBytesAsync(
+        content: String,
+        mimeType: String,
+        config: ExtractionConfig,
+    ): ExtractionResult = withContext(Dispatchers.IO) { extractBytes(content, mimeType, config) }
 
     /**
      * Extract content from a file.
      *
      * This is the main entry point for file-based extraction. It performs the following steps:
+     *
      * 1. Check cache for existing result (if caching enabled)
      * 2. Detect or validate MIME type
      * 3. Select appropriate extractor from registry
@@ -94,11 +106,20 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
-     * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
+     * Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O
+     * errors. Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
-    fun extractFile(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractFile(path, mimeType ?: "", mapper.writeValueAsString(config))
+    fun extractFile(
+        path: String,
+        mimeType: String? = null,
+        config: ExtractionConfig,
+    ): ExtractionResult {
+        val resultJson =
+            KreuzbergBridge.nativeExtractFile(
+                path,
+                mimeType ?: "",
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
@@ -106,6 +127,7 @@ object Kreuzberg {
      * Extract content from a file.
      *
      * This is the main entry point for file-based extraction. It performs the following steps:
+     *
      * 1. Check cache for existing result (if caching enabled)
      * 2. Detect or validate MIME type
      * 3. Select appropriate extractor from registry
@@ -119,128 +141,174 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
-     * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
+     * Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O
+     * errors. Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
-    suspend fun extractFileAsync(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult =
-        withContext(Dispatchers.IO) { extractFile(path, mimeType, config) }
+    suspend fun extractFileAsync(
+        path: String,
+        mimeType: String? = null,
+        config: ExtractionConfig,
+    ): ExtractionResult = withContext(Dispatchers.IO) { extractFile(path, mimeType, config) }
 
     /**
      * Synchronous wrapper for `extract_file`.
      *
-     * This is a convenience function that blocks the current thread until extraction completes.
-     * For async code, use `extract_file` directly.
+     * This is a convenience function that blocks the current thread until extraction completes. For
+     * async code, use `extract_file` directly.
      *
-     * Uses the global Tokio runtime for 100x+ performance improvement over creating
-     * a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating a new runtime
+     * per call. Always uses the global runtime to avoid nested runtime issues.
      *
-     * This function is only available with the `tokio-runtime` feature. For WASM targets,
-     * use a truly synchronous extraction approach instead.
+     * This function is only available with the `tokio-runtime` feature. For WASM targets, use a
+     * truly synchronous extraction approach instead.
      */
-    fun extractFileSync(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractFileSync(path, mimeType ?: "", mapper.writeValueAsString(config))
+    fun extractFileSync(
+        path: String,
+        mimeType: String? = null,
+        config: ExtractionConfig,
+    ): ExtractionResult {
+        val resultJson =
+            KreuzbergBridge.nativeExtractFileSync(
+                path,
+                mimeType ?: "",
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
     /**
      * Synchronous wrapper for `extract_file`.
      *
-     * This is a convenience function that blocks the current thread until extraction completes.
-     * For async code, use `extract_file` directly.
+     * This is a convenience function that blocks the current thread until extraction completes. For
+     * async code, use `extract_file` directly.
      *
-     * Uses the global Tokio runtime for 100x+ performance improvement over creating
-     * a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating a new runtime
+     * per call. Always uses the global runtime to avoid nested runtime issues.
      *
-     * This function is only available with the `tokio-runtime` feature. For WASM targets,
-     * use a truly synchronous extraction approach instead.
+     * This function is only available with the `tokio-runtime` feature. For WASM targets, use a
+     * truly synchronous extraction approach instead.
      */
-    suspend fun extractFileSyncAsync(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult =
-        withContext(Dispatchers.IO) { extractFileSync(path, mimeType, config) }
+    suspend fun extractFileSyncAsync(
+        path: String,
+        mimeType: String? = null,
+        config: ExtractionConfig,
+    ): ExtractionResult = withContext(Dispatchers.IO) { extractFileSync(path, mimeType, config) }
 
     /**
      * Synchronous wrapper for `extract_bytes`.
      *
-     * Uses the global Tokio runtime for 100x+ performance improvement over creating
-     * a new runtime per call.
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating a new runtime
+     * per call.
      *
-     * With the `tokio-runtime` feature, this blocks the current thread using the global
-     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
+     * With the `tokio-runtime` feature, this blocks the current thread using the global Tokio
+     * runtime. Without it (WASM), this calls a truly synchronous implementation.
      */
-    fun extractBytesSync(content: String, mimeType: String, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractBytesSync(content, mimeType, mapper.writeValueAsString(config))
+    fun extractBytesSync(
+        content: String,
+        mimeType: String,
+        config: ExtractionConfig,
+    ): ExtractionResult {
+        val resultJson =
+            KreuzbergBridge.nativeExtractBytesSync(
+                content,
+                mimeType,
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
     /**
      * Synchronous wrapper for `extract_bytes`.
      *
-     * Uses the global Tokio runtime for 100x+ performance improvement over creating
-     * a new runtime per call.
+     * Uses the global Tokio runtime for 100x+ performance improvement over creating a new runtime
+     * per call.
      *
-     * With the `tokio-runtime` feature, this blocks the current thread using the global
-     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
+     * With the `tokio-runtime` feature, this blocks the current thread using the global Tokio
+     * runtime. Without it (WASM), this calls a truly synchronous implementation.
      */
-    suspend fun extractBytesSyncAsync(content: String, mimeType: String, config: ExtractionConfig): ExtractionResult =
+    suspend fun extractBytesSyncAsync(
+        content: String,
+        mimeType: String,
+        config: ExtractionConfig,
+    ): ExtractionResult =
         withContext(Dispatchers.IO) { extractBytesSync(content, mimeType, config) }
 
     /**
      * Synchronous wrapper for `batch_extract_files`.
      *
-     * Uses the global Tokio runtime for optimal performance.
-     * Only available with `tokio-runtime` (WASM has no filesystem).
+     * Uses the global Tokio runtime for optimal performance. Only available with `tokio-runtime`
+     * (WASM has no filesystem).
      */
-    fun batchExtractFilesSync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractFilesSync(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+    fun batchExtractFilesSync(
+        items: List<BatchFileItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> {
+        val resultJson =
+            KreuzbergBridge.nativeBatchExtractFilesSync(
+                mapper.writeValueAsString(items),
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 
     /**
      * Synchronous wrapper for `batch_extract_files`.
      *
-     * Uses the global Tokio runtime for optimal performance.
-     * Only available with `tokio-runtime` (WASM has no filesystem).
+     * Uses the global Tokio runtime for optimal performance. Only available with `tokio-runtime`
+     * (WASM has no filesystem).
      */
-    suspend fun batchExtractFilesSyncAsync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> =
-        withContext(Dispatchers.IO) { batchExtractFilesSync(items, config) }
+    suspend fun batchExtractFilesSyncAsync(
+        items: List<BatchFileItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> = withContext(Dispatchers.IO) { batchExtractFilesSync(items, config) }
 
     /**
      * Synchronous wrapper for `batch_extract_bytes`.
      *
-     * Uses the global Tokio runtime for optimal performance.
-     * With the `tokio-runtime` feature, this blocks the current thread using the global
-     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
-     * that iterates through items and calls `extract_bytes_sync()`.
+     * Uses the global Tokio runtime for optimal performance. With the `tokio-runtime` feature, this
+     * blocks the current thread using the global Tokio runtime. Without it (WASM), this calls a
+     * truly synchronous implementation that iterates through items and calls
+     * `extract_bytes_sync()`.
      */
-    fun batchExtractBytesSync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractBytesSync(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+    fun batchExtractBytesSync(
+        items: List<BatchBytesItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> {
+        val resultJson =
+            KreuzbergBridge.nativeBatchExtractBytesSync(
+                mapper.writeValueAsString(items),
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 
     /**
      * Synchronous wrapper for `batch_extract_bytes`.
      *
-     * Uses the global Tokio runtime for optimal performance.
-     * With the `tokio-runtime` feature, this blocks the current thread using the global
-     * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
-     * that iterates through items and calls `extract_bytes_sync()`.
+     * Uses the global Tokio runtime for optimal performance. With the `tokio-runtime` feature, this
+     * blocks the current thread using the global Tokio runtime. Without it (WASM), this calls a
+     * truly synchronous implementation that iterates through items and calls
+     * `extract_bytes_sync()`.
      */
-    suspend fun batchExtractBytesSyncAsync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> =
-        withContext(Dispatchers.IO) { batchExtractBytesSync(items, config) }
+    suspend fun batchExtractBytesSyncAsync(
+        items: List<BatchBytesItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> = withContext(Dispatchers.IO) { batchExtractBytesSync(items, config) }
 
     /**
      * Extract content from multiple files concurrently.
      *
-     * This function processes multiple files in parallel, automatically managing
-     * concurrency to prevent resource exhaustion. The concurrency limit can be
-     * configured via `ExtractionConfig.max_concurrent_extractions` or defaults
-     * to `(num_cpus * 1.5).ceil()`.
+     * This function processes multiple files in parallel, automatically managing concurrency to
+     * prevent resource exhaustion. The concurrency limit can be configured via
+     * `ExtractionConfig.max_concurrent_extractions` or defaults to `(num_cpus * 1.5).ceil()`.
      *
-     * Each file can optionally specify a `FileExtractionConfig` that overrides specific
-     * fields from the batch-level `config`. Pass `null` for a file to use the batch defaults.
-     * Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
-     * taken from the batch-level `config`.
+     * Each file can optionally specify a `FileExtractionConfig` that overrides specific fields from
+     * the batch-level `config`. Pass `null` for a file to use the batch defaults. Batch-level
+     * settings like `max_concurrent_extractions` and `use_cache` are always taken from the
+     * batch-level `config`.
      *
-     *   per-file configuration overrides.
+     * per-file configuration overrides.
+     *
      * * `config` - Batch-level extraction configuration (provides defaults and batch settings)
      *
      * **Returns:**
@@ -249,33 +317,39 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * Individual file errors are captured in the result metadata. System errors
-     * (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
+     * Individual file errors are captured in the result metadata. System errors (IO, RuntimeError
+     * equivalents) will bubble up and fail the entire batch.
      *
      * Simple usage with no per-file overrides:
      *
-     *
      * Per-file configuration overrides:
      */
-    fun batchExtractFiles(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractFiles(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+    fun batchExtractFiles(
+        items: List<BatchFileItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> {
+        val resultJson =
+            KreuzbergBridge.nativeBatchExtractFiles(
+                mapper.writeValueAsString(items),
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 
     /**
      * Extract content from multiple files concurrently.
      *
-     * This function processes multiple files in parallel, automatically managing
-     * concurrency to prevent resource exhaustion. The concurrency limit can be
-     * configured via `ExtractionConfig.max_concurrent_extractions` or defaults
-     * to `(num_cpus * 1.5).ceil()`.
+     * This function processes multiple files in parallel, automatically managing concurrency to
+     * prevent resource exhaustion. The concurrency limit can be configured via
+     * `ExtractionConfig.max_concurrent_extractions` or defaults to `(num_cpus * 1.5).ceil()`.
      *
-     * Each file can optionally specify a `FileExtractionConfig` that overrides specific
-     * fields from the batch-level `config`. Pass `null` for a file to use the batch defaults.
-     * Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
-     * taken from the batch-level `config`.
+     * Each file can optionally specify a `FileExtractionConfig` that overrides specific fields from
+     * the batch-level `config`. Pass `null` for a file to use the batch defaults. Batch-level
+     * settings like `max_concurrent_extractions` and `use_cache` are always taken from the
+     * batch-level `config`.
      *
-     *   per-file configuration overrides.
+     * per-file configuration overrides.
+     *
      * * `config` - Batch-level extraction configuration (provides defaults and batch settings)
      *
      * **Returns:**
@@ -284,30 +358,31 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * Individual file errors are captured in the result metadata. System errors
-     * (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
+     * Individual file errors are captured in the result metadata. System errors (IO, RuntimeError
+     * equivalents) will bubble up and fail the entire batch.
      *
      * Simple usage with no per-file overrides:
      *
-     *
      * Per-file configuration overrides:
      */
-    suspend fun batchExtractFilesAsync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> =
-        withContext(Dispatchers.IO) { batchExtractFiles(items, config) }
+    suspend fun batchExtractFilesAsync(
+        items: List<BatchFileItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> = withContext(Dispatchers.IO) { batchExtractFiles(items, config) }
 
     /**
      * Extract content from multiple byte arrays concurrently.
      *
-     * This function processes multiple byte arrays in parallel, automatically managing
-     * concurrency to prevent resource exhaustion. The concurrency limit can be
-     * configured via `ExtractionConfig.max_concurrent_extractions` or defaults
-     * to `(num_cpus * 1.5).ceil()`.
+     * This function processes multiple byte arrays in parallel, automatically managing concurrency
+     * to prevent resource exhaustion. The concurrency limit can be configured via
+     * `ExtractionConfig.max_concurrent_extractions` or defaults to `(num_cpus * 1.5).ceil()`.
      *
-     * Each item can optionally specify a `FileExtractionConfig` that overrides specific
-     * fields from the batch-level `config`. Pass `null` as the config to use
-     * the batch-level defaults for that item.
+     * Each item can optionally specify a `FileExtractionConfig` that overrides specific fields from
+     * the batch-level `config`. Pass `null` as the config to use the batch-level defaults for that
+     * item.
      *
-     *   MIME type, and optional per-item configuration overrides.
+     * MIME type, and optional per-item configuration overrides.
+     *
      * * `config` - Batch-level extraction configuration
      *
      * **Returns:**
@@ -316,27 +391,33 @@ object Kreuzberg {
      *
      * Simple usage with no per-item overrides:
      *
-     *
      * Per-item configuration overrides:
      */
-    fun batchExtractBytes(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractBytes(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+    fun batchExtractBytes(
+        items: List<BatchBytesItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> {
+        val resultJson =
+            KreuzbergBridge.nativeBatchExtractBytes(
+                mapper.writeValueAsString(items),
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 
     /**
      * Extract content from multiple byte arrays concurrently.
      *
-     * This function processes multiple byte arrays in parallel, automatically managing
-     * concurrency to prevent resource exhaustion. The concurrency limit can be
-     * configured via `ExtractionConfig.max_concurrent_extractions` or defaults
-     * to `(num_cpus * 1.5).ceil()`.
+     * This function processes multiple byte arrays in parallel, automatically managing concurrency
+     * to prevent resource exhaustion. The concurrency limit can be configured via
+     * `ExtractionConfig.max_concurrent_extractions` or defaults to `(num_cpus * 1.5).ceil()`.
      *
-     * Each item can optionally specify a `FileExtractionConfig` that overrides specific
-     * fields from the batch-level `config`. Pass `null` as the config to use
-     * the batch-level defaults for that item.
+     * Each item can optionally specify a `FileExtractionConfig` that overrides specific fields from
+     * the batch-level `config`. Pass `null` as the config to use the batch-level defaults for that
+     * item.
      *
-     *   MIME type, and optional per-item configuration overrides.
+     * MIME type, and optional per-item configuration overrides.
+     *
      * * `config` - Batch-level extraction configuration
      *
      * **Returns:**
@@ -345,20 +426,21 @@ object Kreuzberg {
      *
      * Simple usage with no per-item overrides:
      *
-     *
      * Per-item configuration overrides:
      */
-    suspend fun batchExtractBytesAsync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> =
-        withContext(Dispatchers.IO) { batchExtractBytes(items, config) }
+    suspend fun batchExtractBytesAsync(
+        items: List<BatchBytesItem>,
+        config: ExtractionConfig,
+    ): List<ExtractionResult> = withContext(Dispatchers.IO) { batchExtractBytes(items, config) }
 
     /**
      * Detect MIME type from raw file bytes.
      *
-     * Uses magic byte signatures to detect file type from content.
-     * Falls back to `infer` crate for comprehensive detection.
+     * Uses magic byte signatures to detect file type from content. Falls back to `infer` crate for
+     * comprehensive detection.
      *
-     * For ZIP-based files, inspects contents to distinguish Office Open XML
-     * formats (DOCX, XLSX, PPTX) from plain ZIP archives.
+     * For ZIP-based files, inspects contents to distinguish Office Open XML formats (DOCX, XLSX,
+     * PPTX) from plain ZIP archives.
      *
      * **Returns:**
      *
@@ -368,7 +450,9 @@ object Kreuzberg {
      *
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type cannot be determined.
      */
-    fun detectMimeTypeFromBytes(content: String): String = KreuzbergBridge.nativeDetectMimeTypeFromBytes(content)
+    fun detectMimeTypeFromBytes(content: String): String =
+        KreuzbergBridge.nativeDetectMimeTypeFromBytes(content)
+
     /**
      * Get file extensions for a given MIME type.
      *
@@ -402,15 +486,16 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * - Any error returned by a backend's `shutdown()` method. The first error
-     *   encountered stops processing of remaining backends.
+     * - Any error returned by a backend's `shutdown()` method. The first error encountered stops
+     *   processing of remaining backends.
      */
     fun clearEmbeddingBackends(): Unit = KreuzbergBridge.nativeClearEmbeddingBackends()
+
     /**
      * List the names of all registered embedding backends.
      *
-     * Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
-     * language bindings via `alef.toml [exclude].functions`.
+     * Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the language bindings via
+     * `alef.toml [exclude].functions`.
      */
     fun listEmbeddingBackends(): List<String> {
         val resultJson = KreuzbergBridge.nativeListEmbeddingBackends()
@@ -420,8 +505,8 @@ object Kreuzberg {
     /**
      * List the names of all registered embedding backends.
      *
-     * Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
-     * language bindings via `alef.toml [exclude].functions`.
+     * Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the language bindings via
+     * `alef.toml [exclude].functions`.
      */
     suspend fun listEmbeddingBackendsAsync(): List<String> =
         withContext(Dispatchers.IO) { listEmbeddingBackends() }
@@ -443,10 +528,11 @@ object Kreuzberg {
      *
      * **Errors:**
      *
-     * - Any error returned by an extractor's `shutdown()` method. The first error
-     *   encountered stops processing of remaining extractors.
+     * - Any error returned by an extractor's `shutdown()` method. The first error encountered stops
+     *   processing of remaining extractors.
      */
     fun clearDocumentExtractors(): Unit = KreuzbergBridge.nativeClearDocumentExtractors()
+
     /**
      * List all registered OCR backends.
      *
@@ -484,11 +570,11 @@ object Kreuzberg {
      * - `Err(...)` if any shutdown method failed
      */
     fun clearOcrBackends(): Unit = KreuzbergBridge.nativeClearOcrBackends()
+
     /**
      * List all registered post-processor names.
      *
-     * Returns a vector of all post-processor names currently registered in the
-     * global registry.
+     * Returns a vector of all post-processor names currently registered in the global registry.
      *
      * **Returns:**
      *
@@ -503,8 +589,7 @@ object Kreuzberg {
     /**
      * List all registered post-processor names.
      *
-     * Returns a vector of all post-processor names currently registered in the
-     * global registry.
+     * Returns a vector of all post-processor names currently registered in the global registry.
      *
      * **Returns:**
      *
@@ -516,6 +601,7 @@ object Kreuzberg {
 
     /** Remove all registered post-processors. */
     fun clearPostProcessors(): Unit = KreuzbergBridge.nativeClearPostProcessors()
+
     /**
      * List names of all registered renderers.
      *
@@ -535,21 +621,20 @@ object Kreuzberg {
      *
      * Returns an error if the registry lock is poisoned.
      */
-    suspend fun listRenderersAsync(): List<String> =
-        withContext(Dispatchers.IO) { listRenderers() }
+    suspend fun listRenderersAsync(): List<String> = withContext(Dispatchers.IO) { listRenderers() }
 
     /**
      * Clear all renderers from the global registry.
      *
-     * Removes every renderer, including the built-in defaults (markdown, html,
-     * djot, plain). After calling this no renderers are registered; re-register
-     * as needed.
+     * Removes every renderer, including the built-in defaults (markdown, html, djot, plain). After
+     * calling this no renderers are registered; re-register as needed.
      *
      * **Errors:**
      *
      * Returns an error if the registry lock is poisoned.
      */
     fun clearRenderers(): Unit = KreuzbergBridge.nativeClearRenderers()
+
     /** List names of all registered validators. */
     fun listValidators(): List<String> {
         val resultJson = KreuzbergBridge.nativeListValidators()
@@ -562,42 +647,63 @@ object Kreuzberg {
 
     /** Remove all registered validators. */
     fun clearValidators(): Unit = KreuzbergBridge.nativeClearValidators()
+
+    /**
+     * Score an extracted text on the closed interval `[0.0, 1.0]`, where higher is better.
+     *
+     * `1.0` is the neutral score for clean prose; penalties (OCR artifacts, embedded script/style
+     * noise, navigation chrome) subtract, structural cues (headings, punctuation) add. The result
+     * is clamped to `[0.0, 1.0]`.
+     *
+     * Pass `metadata` as `null` when the caller has no extraction metadata available; the metadata
+     * bonus simply isn't applied in that case. Texts shorter than `MIN_TEXT_LENGTH` short-circuit
+     * to `0.1` regardless of metadata.
+     */
+    fun calculateQualityScore(text: String, metadata: String? = null): Double =
+        KreuzbergBridge.nativeCalculateQualityScore(
+            text,
+            metadata?.let { mapper.writeValueAsString(it) } ?: "",
+        )
+
     /**
      * Render a single PDF page to PNG bytes.
      *
-     * Returns raw PNG-encoded bytes for the specified page at the given DPI.
-     * Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+     * Returns raw PNG-encoded bytes for the specified page at the given DPI. Uses pdf_oxide with
+     * tiny-skia for pure-Rust rendering.
      *
      * **Errors:**
      *
-     * Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
-     * or rendered, or if `page_index` is out of range.
+     * Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated, or rendered, or
+     * if `page_index` is out of range.
      */
     fun renderPdfPageToPng(
         pdfBytes: String,
         pageIndex: Long,
         dpi: Int? = null,
-        password: String? = null
-    ): ByteArray = KreuzbergBridge.nativeRenderPdfPageToPng(
-        pdfBytes,
-        pageIndex,
-        dpi ?: 0,
-        password ?: ""
-    )
+        password: String? = null,
+    ): ByteArray =
+        KreuzbergBridge.nativeRenderPdfPageToPng(pdfBytes, pageIndex, dpi ?: 0, password ?: "")
+
     /**
      * Detect the MIME type of a file at the given path.
      *
-     * Uses the file extension and optionally the file content to determine the MIME type.
-     * Set `check_exists` to `true` to verify the file exists before detection.
+     * Uses the file extension and optionally the file content to determine the MIME type. Set
+     * `check_exists` to `true` to verify the file exists before detection.
      */
-    fun detectMimeType(path: String, checkExists: Boolean): String = KreuzbergBridge.nativeDetectMimeType(path, checkExists)
+    fun detectMimeType(path: String, checkExists: Boolean): String =
+        KreuzbergBridge.nativeDetectMimeType(path, checkExists)
+
     /**
      * Embed a list of texts using the configured embedding model.
      *
      * Returns a 2D vector where each inner vector is the embedding for the corresponding text.
      */
     fun embedTexts(texts: List<String>, config: EmbeddingConfig): List<List<Float>> {
-        val resultJson = KreuzbergBridge.nativeEmbedTexts(mapper.writeValueAsString(texts), mapper.writeValueAsString(config))
+        val resultJson =
+            KreuzbergBridge.nativeEmbedTexts(
+                mapper.writeValueAsString(texts),
+                mapper.writeValueAsString(config),
+            )
         return mapper.readValue(resultJson, object : TypeReference<List<List<Float>>>() {})
     }
 
@@ -612,10 +718,11 @@ object Kreuzberg {
     /**
      * Get an embedding preset by name.
      *
-     * Returns `null` if no preset with the given name exists. Returns an owned
-     * clone so the value is safe to pass across FFI boundaries.
+     * Returns `null` if no preset with the given name exists. Returns an owned clone so the value
+     * is safe to pass across FFI boundaries.
      */
     fun getEmbeddingPreset(name: String): String? = KreuzbergBridge.nativeGetEmbeddingPreset(name)
+
     /**
      * List the names of all available embedding presets.
      *

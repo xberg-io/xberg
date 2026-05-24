@@ -234,6 +234,15 @@ pub use plugins::{
     unregister_validator,
 };
 
+// ── Plugin Traits — public API (for plugin implementors) ─────────────────────
+// Re-exported at the top level so plugin implementors can write
+// `use kreuzberg::DocumentExtractor` without knowledge of internal module paths.
+#[cfg_attr(alef, alef(skip))]
+pub use plugins::{
+    DocumentExtractor, EmbeddingBackend, OcrBackend, OcrBackendType, PostProcessor, ProcessingStage, Renderer,
+    Validator,
+};
+
 // ── Embeddings — public API (4 functions + 1 type, feature-gated) ────────────
 #[cfg(feature = "embedding-presets")]
 pub use embeddings::EmbeddingPreset;

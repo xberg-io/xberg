@@ -28,7 +28,6 @@ and provides context for debugging.
 - `UnsupportedFormat` - Unsupported MIME type or file format
 - `Other` - Catch-all for uncommon errors
 
-
 | Variant | Message | Description |
 |---------|---------|-------------|
 | `Io` | IO error: {0} | Io errors |

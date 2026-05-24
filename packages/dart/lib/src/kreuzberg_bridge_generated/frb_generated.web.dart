@@ -420,6 +420,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  BoundingBox dco_decode_bounding_box(dynamic raw);
+
+  @protected
   AccelerationConfig dco_decode_box_autoadd_acceleration_config(dynamic raw);
 
   @protected
@@ -430,6 +433,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
+
+  @protected
+  BoundingBox dco_decode_box_autoadd_bounding_box(dynamic raw);
 
   @protected
   ChunkingConfig dco_decode_box_autoadd_chunking_config(dynamic raw);
@@ -1144,6 +1150,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+
+  @protected
+  BoundingBox? dco_decode_opt_box_autoadd_bounding_box(dynamic raw);
 
   @protected
   ChunkingConfig? dco_decode_opt_box_autoadd_chunking_config(dynamic raw);
@@ -1872,6 +1881,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  BoundingBox sse_decode_bounding_box(SseDeserializer deserializer);
+
+  @protected
   AccelerationConfig sse_decode_box_autoadd_acceleration_config(
     SseDeserializer deserializer,
   );
@@ -1888,6 +1900,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
+  BoundingBox sse_decode_box_autoadd_bounding_box(SseDeserializer deserializer);
 
   @protected
   ChunkingConfig sse_decode_box_autoadd_chunking_config(
@@ -2778,6 +2793,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
+  BoundingBox? sse_decode_opt_box_autoadd_bounding_box(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ChunkingConfig? sse_decode_opt_box_autoadd_chunking_config(
@@ -3687,6 +3707,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_bounding_box(BoundingBox self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_acceleration_config(
     AccelerationConfig self,
     SseSerializer serializer,
@@ -3706,6 +3729,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_bounding_box(
+    BoundingBox self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_chunking_config(
@@ -4861,6 +4890,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_bounding_box(
+    BoundingBox? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_chunking_config(

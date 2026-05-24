@@ -406,6 +406,118 @@ fn lock_acquisition_hint(cache_dir: &std::path::Path, repo_name: &str) -> String
     )
 }
 
+/// A held cross-process advisory lock that serializes model downloads.
+///
+/// `hf-hub` coordinates concurrent downloads with a *non-blocking* `flock`
+/// that retries only 5 times at 1-second intervals (see `lock_file` in
+/// `hf_hub::api::sync`). A sentence-transformer ONNX model is 100 MB+, so the
+/// download routinely takes far longer than 5 seconds — any second process
+/// that races the first one exhausts its retries and fails outright with
+/// `ApiError::LockAcquisition` instead of waiting for the download to finish.
+///
+/// This guard wraps a *blocking* `flock(LOCK_EX)` (or `LockFileEx` on Windows)
+/// on a kreuzberg-owned lock file. The first process to enter `download_model_files`
+/// holds the lock for the full duration of the download; every other process
+/// blocks at acquisition until the lock is released, then proceeds and finds
+/// the model already present in the `hf-hub` cache (so `Repo::get()` returns
+/// the cached path without ever touching `hf-hub`'s own lock).
+///
+/// The lock is released when the guard is dropped, or by the OS if the owning
+/// process exits — so a killed process never permanently wedges the lock.
+#[cfg(feature = "embeddings")]
+struct ProcessDownloadLock {
+    file: std::fs::File,
+}
+
+#[cfg(feature = "embeddings")]
+impl ProcessDownloadLock {
+    /// Acquire the cross-process download lock for `repo_name`, blocking until
+    /// it is available.
+    ///
+    /// The lock file lives at `<cache_dir>/models--<repo>/.kbz-download.lock`.
+    /// Returns `None` (rather than failing) if the lock file cannot be created
+    /// or locked — callers fall back to the unsynchronized `hf-hub` path, which
+    /// is no worse than the previous behavior.
+    fn acquire(cache_dir: &std::path::Path, repo_name: &str) -> Option<Self> {
+        let folder = format!("models--{}", repo_name.replace('/', "--"));
+        let model_dir = cache_dir.join(folder);
+        if let Err(error) = std::fs::create_dir_all(&model_dir) {
+            tracing::debug!(?error, "Could not create model dir for download lock");
+            return None;
+        }
+        let lock_path = model_dir.join(".kbz-download.lock");
+        let file = match std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+        {
+            Ok(file) => file,
+            Err(error) => {
+                tracing::debug!(?error, path = ?lock_path, "Could not open download lock file");
+                return None;
+            }
+        };
+
+        if !blocking_lock_exclusive(&file) {
+            tracing::debug!(path = ?lock_path, "Could not acquire cross-process download lock");
+            return None;
+        }
+
+        tracing::debug!(path = ?lock_path, "Acquired cross-process download lock");
+        Some(Self { file })
+    }
+}
+
+#[cfg(feature = "embeddings")]
+impl Drop for ProcessDownloadLock {
+    fn drop(&mut self) {
+        unlock_file(&self.file);
+    }
+}
+
+/// Acquire a blocking exclusive advisory lock on `file`. Returns `true` on success.
+#[cfg(all(feature = "embeddings", target_family = "unix"))]
+fn blocking_lock_exclusive(file: &std::fs::File) -> bool {
+    use std::os::fd::AsRawFd;
+    // SAFETY: `file` is a live, open file owned by the caller for the duration
+    // of the call; `as_raw_fd()` yields a valid descriptor. `flock` with
+    // `LOCK_EX` (no `LOCK_NB`) blocks until the advisory lock is granted and
+    // mutates no Rust-visible state. The lock is released by `unlock_file` on
+    // drop or by the kernel when the process exits.
+    #[allow(unsafe_code)]
+    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    result == 0
+}
+
+/// Release an advisory lock held on `file`.
+#[cfg(all(feature = "embeddings", target_family = "unix"))]
+fn unlock_file(file: &std::fs::File) {
+    use std::os::fd::AsRawFd;
+    // SAFETY: `file` is a live, open file owned by the caller; `flock` with
+    // `LOCK_UN` releases any advisory lock and mutates no Rust-visible state.
+    #[allow(unsafe_code)]
+    unsafe {
+        libc::flock(file.as_raw_fd(), libc::LOCK_UN);
+    }
+}
+
+/// Fallback for non-unix targets (Windows): no cross-process lock is taken.
+///
+/// `hf-hub` retains its own (best-effort, non-blocking) lock on these targets,
+/// so behavior is unchanged from before this guard existed. Returning `false`
+/// makes [`ProcessDownloadLock::acquire`] yield `None` and the caller proceeds
+/// straight to the `hf-hub` download path.
+#[cfg(all(feature = "embeddings", not(target_family = "unix")))]
+fn blocking_lock_exclusive(_file: &std::fs::File) -> bool {
+    false
+}
+
+/// Fallback unlock for non-unix targets — no-op since no lock was taken.
+#[cfg(all(feature = "embeddings", not(target_family = "unix")))]
+fn unlock_file(_file: &std::fs::File) {}
+
 /// Download model files from HuggingFace and return their local paths.
 ///
 /// Returns `(model_path, tokenizer_path, config_path, special_tokens_path, tokenizer_config_path)`.
@@ -425,6 +537,15 @@ fn download_model_files(
     std::path::PathBuf,
     std::path::PathBuf,
 )> {
+    // Serialize concurrent first-time downloads across processes. hf-hub's own
+    // lock is non-blocking and retries for only ~5s, which is far shorter than
+    // a 100MB+ model download — racing processes would otherwise fail outright
+    // with LockAcquisition. Holding this blocking lock means exactly one process
+    // downloads while the rest wait, then find the model already cached.
+    //
+    // The guard is held for the entire function body via `_download_lock`.
+    let _download_lock = ProcessDownloadLock::acquire(cache_directory, repo_name);
+
     // Self-heal any stale .lock/.part files from a previous interrupted download
     // before hf-hub's own lock_file() runs and fails on them.
     cleanup_stale_locks(cache_directory, repo_name);
@@ -1217,6 +1338,95 @@ mod tests {
         );
         assert!(hint.contains("*.lock"), "hint must mention .lock pattern");
         assert!(hint.contains("*.part"), "hint must mention .part pattern");
+    }
+
+    /// The process download lock can be acquired and creates its lock file in
+    /// the expected `models--<repo>` directory.
+    #[test]
+    fn test_process_download_lock_acquire_creates_lock_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = ProcessDownloadLock::acquire(tmp.path(), "org/model");
+
+        // On unix the lock is acquired; on other targets acquisition is a
+        // graceful no-op (returns None) and behavior falls back to hf-hub.
+        if cfg!(target_family = "unix") {
+            assert!(guard.is_some(), "lock should be acquired on unix");
+            let lock_path = tmp.path().join("models--org--model").join(".kbz-download.lock");
+            assert!(lock_path.exists(), "lock file must be created at {lock_path:?}");
+        }
+        drop(guard);
+    }
+
+    /// Two concurrent acquisitions of the same model's download lock serialize:
+    /// the second blocks until the first is released, so their critical
+    /// sections never overlap. This is the regression guard for the e2e
+    /// `LockAcquisition` failure across parallel worker processes/threads.
+    #[cfg(target_family = "unix")]
+    #[test]
+    fn test_process_download_lock_serializes_concurrent_acquirers() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::time::Duration;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir: Arc<std::path::PathBuf> = Arc::new(tmp.path().to_path_buf());
+
+        // Tracks whether two critical sections were ever observed concurrently.
+        let inside = Arc::new(AtomicUsize::new(0));
+        let overlap_detected = Arc::new(AtomicBool::new(false));
+
+        let mut handles = Vec::new();
+        for _ in 0..4 {
+            let cache_dir = Arc::clone(&cache_dir);
+            let inside = Arc::clone(&inside);
+            let overlap_detected = Arc::clone(&overlap_detected);
+            handles.push(std::thread::spawn(move || {
+                let guard = ProcessDownloadLock::acquire(&cache_dir, "org/model")
+                    .expect("lock acquisition must succeed on unix");
+
+                // Simulate the download critical section. If the lock truly
+                // serializes callers, the in-flight count never exceeds 1.
+                let count = inside.fetch_add(1, Ordering::SeqCst) + 1;
+                if count > 1 {
+                    overlap_detected.store(true, Ordering::SeqCst);
+                }
+                std::thread::sleep(Duration::from_millis(20));
+                inside.fetch_sub(1, Ordering::SeqCst);
+
+                drop(guard);
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert!(
+            !overlap_detected.load(Ordering::SeqCst),
+            "download lock must serialize concurrent acquirers — critical sections overlapped"
+        );
+        assert_eq!(
+            inside.load(Ordering::SeqCst),
+            0,
+            "all critical sections must have exited"
+        );
+    }
+
+    /// The lock is released when the guard is dropped, so a subsequent acquirer
+    /// of the same model proceeds without blocking forever.
+    #[cfg(target_family = "unix")]
+    #[test]
+    fn test_process_download_lock_released_on_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let first = ProcessDownloadLock::acquire(tmp.path(), "org/model");
+        assert!(first.is_some(), "first acquisition must succeed");
+        drop(first);
+
+        // After the first guard is dropped the lock is free; re-acquiring it
+        // must succeed promptly rather than deadlock.
+        let second = ProcessDownloadLock::acquire(tmp.path(), "org/model");
+        assert!(second.is_some(), "lock must be re-acquirable after release");
     }
 
     /// Regression test for #683: GraphOptimizationLevel::Level3 maps to

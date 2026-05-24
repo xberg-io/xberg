@@ -13,7 +13,6 @@ Hardware acceleration configuration for ONNX Runtime models.
 Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
 for inference in layout detection and embedding generation.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `provider` | `ExecutionProviderType` | `ExecutionProviderType.AUTO` | Execution provider to use for ONNX inference. |
@@ -33,12 +32,11 @@ with format-specific implementation.
 When `None` on `ExtractionConfig`, each extractor uses its current
 default behavior unchanged.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `include_headers` | `bool` | `False` | Include running headers in extraction output. - PDF: Disables top-margin furniture stripping and prevents the layout model from treating `PageHeader`-classified regions as furniture. - DOCX: Includes document headers in text output. - RTF/ODT: Headers already included; this is a no-op when true. - HTML/EPUB: Keeps `<header>` element content. Default: `False` (headers are stripped or excluded). |
 | `include_footers` | `bool` | `False` | Include running footers in extraction output. - PDF: Disables bottom-margin furniture stripping and prevents the layout model from treating `PageFooter`-classified regions as furniture. - DOCX: Includes document footers in text output. - RTF/ODT: Footers already included; this is a no-op when true. - HTML/EPUB: Keeps `<footer>` element content. Default: `False` (footers are stripped or excluded). |
-| `strip_repeating_text` | `bool` | `True` | Enable the heuristic cross-page repeating text detector. When `True` (default), text that repeats verbatim across a supermajority of pages is classified as furniture and stripped.  Disable this if brand names or repeated headings are being incorrectly removed by the heuristic. Note: when a layout-detection model is active, the model may independently classify page-header / page-footer regions as furniture on a per-page basis. To preserve those regions, set `include_headers = true` and/or `include_footers = true` in addition to disabling this flag. Primarily affects PDF extraction. Default: `True`. |
+| `strip_repeating_text` | `bool` | `True` | Enable the heuristic cross-page repeating text detector. When `True` (default), text that repeats verbatim across a supermajority of pages is classified as furniture and stripped.  Disable this if brand names or repeated headings are being incorrectly removed by the heuristic. Note: when a layout-detection model is active, the model may independently classify page-header / page-footer regions as furniture on a per-page basis. To preserve those regions, set `include_headers = true`, `include_footers = true`, or both, in addition to disabling this flag. Primarily affects PDF extraction. Default: `True`. |
 | `include_watermarks` | `bool` | `False` | Include watermark text in extraction output. - PDF: Keeps watermark artifacts and arXiv identifiers. - Other formats: No effect currently. Default: `False` (watermarks are stripped). |
 
 ---
@@ -46,7 +44,6 @@ default behavior unchanged.
 ### EmailConfig
 
 Configuration for email extraction.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -60,7 +57,6 @@ Main extraction configuration.
 
 This struct contains all configuration options for the extraction process.
 It can be loaded from TOML, YAML, or JSON files, or created programmatically.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -84,10 +80,10 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `extraction_timeout_secs` | `int \| None` | `None` | Default per-file timeout in seconds for batch extraction. When set, each file in a batch will be canceled after this duration unless overridden by `FileExtractionConfig.timeout_secs`. `None` means no timeout (unbounded extraction time). |
 | `max_concurrent_extractions` | `int \| None` | `None` | Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()). Limits parallelism to prevent resource exhaustion when processing large batches. Defaults to (num_cpus × 1.5).ceil() when not set. |
 | `result_format` | `ResultFormat` | `ResultFormat.UNIFIED` | Result structure format Controls whether results are returned in unified format (default) with all content in the `content` field, or element-based format with semantic elements (for Unstructured-compatible output). |
-| `security_limits` | `SecurityLimits \| None` | `None` | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, cumulative content size, and table cell count for every extraction path that ingests user-controlled bytes. When `None`, default limits are used. |
+| `security_limits` | `SecurityLimits \| None` | `None` | Security limits for archive extraction. Controls maximum archive size, compression ratio, file count, and other security thresholds to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity / token length, total content size, and table cell count for every extraction path that ingests user-controlled bytes. When `None`, default limits are used. |
 | `output_format` | `OutputFormat` | `OutputFormat.PLAIN` | Content text format (default: Plain). Controls the format of the extracted content: - `Plain`: Raw extracted text (default) - `Markdown`: Markdown formatted output - `Djot`: Djot markup format (requires djot feature) - `Html`: HTML formatted output When set to a structured format, extraction results will include formatted output. The `formatted_content` field may be populated when format conversion is applied. |
 | `layout` | `LayoutDetectionConfig \| None` | `None` | Layout detection configuration (None = layout detection disabled). When set, PDF pages and images are analyzed for document structure (headings, code, formulas, tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override paragraph classification in the markdown pipeline. For images, per-region OCR is performed with markdown formatting based on detected layout classes. Requires the `layout-detection` feature to run inference; the field is present whenever the `layout-types` feature is active (which includes `layout-detection` as well as the no-ORT target groups). |
-| `use_layout_for_markdown` | `bool` | `False` | Run layout detection on the non-OCR PDF markdown path. When `True` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Substantially improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `False`. Requires the `layout-detection` feature. |
+| `use_layout_for_markdown` | `bool` | `False` | Run layout detection on the non-OCR PDF markdown path. When `True` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure detection in the structure pipeline that would otherwise rely on font-clustering heuristics alone. Significantly improves SF1 (structural F1) at the cost of inference latency (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `False`. Requires the `layout-detection` feature. |
 | `include_document_structure` | `bool` | `False` | Enable structured document tree output. When true, populates the `document` field on `ExtractionResult` with a hierarchical `DocumentStructure` containing heading-driven section nesting, table grids, content layer classification, and inline annotations. Independent of `result_format` — can be combined with Unified or ElementBased. |
 | `acceleration` | `AccelerationConfig \| None` | `None` | Hardware acceleration configuration for ONNX Runtime models. Controls execution provider selection for layout detection and embedding models. When `None`, uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows). |
 | `cache_namespace` | `str \| None` | `None` | Cache namespace for tenant isolation. When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric, hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces on the same filesystem. |
@@ -120,7 +116,6 @@ cannot be overridden per file:
 - `acceleration` — shared ONNX execution provider
 - `security_limits` — global archive security policy
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enable_quality_processing` | `bool \| None` | `None` | Override quality post-processing for this file. |
@@ -152,7 +147,6 @@ cannot be overridden per file:
 
 Image extraction configuration.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `extract_images` | `bool` | `True` | Extract images from documents |
@@ -167,10 +161,9 @@ Image extraction configuration.
 
 ---
 
-#### TokenReductionOptions
+### TokenReductionOptions
 
 Token reduction configuration.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -179,10 +172,9 @@ Token reduction configuration.
 
 ---
 
-#### LanguageDetectionConfig
+### LanguageDetectionConfig
 
 Language detection configuration.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -192,7 +184,7 @@ Language detection configuration.
 
 ---
 
-#### HtmlOutputConfig
+### HtmlOutputConfig
 
 Configuration for styled HTML output.
 
@@ -200,7 +192,6 @@ When set on `ExtractionConfig.html_output` alongside
 `output_format = OutputFormat.Html`, the pipeline builds a
 `StyledHtmlRenderer` instead of
 the plain comrak-based renderer.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -212,14 +203,13 @@ the plain comrak-based renderer.
 
 ---
 
-#### LayoutDetectionConfig
+### LayoutDetectionConfig
 
 Layout detection configuration.
 
 Controls layout detection behavior in the extraction pipeline.
 When set on `ExtractionConfig`, layout detection
 is enabled for PDF extraction.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -230,13 +220,12 @@ is enabled for PDF extraction.
 
 ---
 
-#### LlmConfig
+### LlmConfig
 
 Configuration for an LLM provider/model via liter-llm.
 
 Each feature (VLM OCR, VLM embeddings, structured extraction) carries
 its own `LlmConfig`, allowing different providers per feature.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -250,32 +239,30 @@ its own `LlmConfig`, allowing different providers per feature.
 
 ---
 
-#### StructuredExtractionConfig
+### StructuredExtractionConfig
 
 Configuration for LLM-based structured data extraction.
 
 Sends extracted document content to a VLM with a JSON schema,
 returning structured data that conforms to the schema.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `schema` | `dict[str, Any]` | — | JSON Schema defining the desired output structure. |
-| `schema_name` | `str` | — | Schema name passed to the LLM's structured output mode. |
-| `schema_description` | `str \| None` | `None` | Optional schema description for the LLM. |
-| `strict` | `bool` | — | Enable strict mode — output must exactly match the schema. |
-| `prompt` | `str \| None` | `None` | Custom Jinja2 extraction prompt template. When `None`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |
+| `schema_name` | `str` | `/* serde(default) */` | Schema name passed to the LLM's structured output mode. |
+| `schema_description` | `str \| None` | `/* serde(default) */` | Optional schema description for the LLM. |
+| `strict` | `bool` | `/* serde(default) */` | Enable strict mode — output must exactly match the schema. |
+| `prompt` | `str \| None` | `/* serde(default) */` | Custom Jinja2 extraction prompt template. When `None`, a default template is used. Available template variables: - `{{ content }}` — The extracted document text. - `{{ schema }}` — The JSON schema as a formatted string. - `{{ schema_name }}` — The schema name. - `{{ schema_description }}` — The schema description (may be empty). |
 | `llm` | `LlmConfig` | — | LLM configuration for the extraction. |
 
 ---
 
-#### OcrQualityThresholds
+### OcrQualityThresholds
 
 Quality thresholds for OCR fallback decisions and pipeline quality gating.
 
 All fields default to the values that match the previous hardcoded behavior,
 so `OcrQualityThresholds.default()` preserves existing semantics exactly.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -298,7 +285,7 @@ so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 
 ---
 
-#### OcrPipelineConfig
+### OcrPipelineConfig
 
 Multi-backend OCR pipeline with quality-based fallback.
 
@@ -306,18 +293,16 @@ Backends are tried in priority order (highest first). After each backend
 produces output, quality is evaluated. If it meets `quality_thresholds.pipeline_min_quality`,
 the result is accepted. Otherwise the next backend is tried.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `stages` | `list[OcrPipelineStage]` | — | Ordered list of backends to try. Sorted by priority (descending) at runtime. |
-| `quality_thresholds` | `OcrQualityThresholds` | — | Quality thresholds for deciding whether to accept a result or try the next backend. |
+| `quality_thresholds` | `OcrQualityThresholds` | `/* serde(default) */` | Quality thresholds for deciding whether to accept a result or try the next backend. |
 
 ---
 
-#### OcrConfig
+### OcrConfig
 
 OCR configuration.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -339,7 +324,7 @@ OCR configuration.
 
 ---
 
-#### PageConfig
+### PageConfig
 
 Page extraction and tracking configuration.
 
@@ -348,7 +333,6 @@ When `None`, page tracking is disabled.
 
 Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
 when page boundaries are available and chunking is configured.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -362,10 +346,9 @@ when page boundaries are available and chunking is configured.
 
 ---
 
-#### PdfConfig
+### PdfConfig
 
 PDF-specific configuration.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -382,14 +365,13 @@ PDF-specific configuration.
 
 ---
 
-#### HierarchyConfig
+### HierarchyConfig
 
 Hierarchy extraction configuration for PDF text structure analysis.
 
 Enables extraction of document hierarchy levels (H1-H6) based on font size
 clustering and semantic analysis. When enabled, hierarchical blocks are
 included in page content.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -400,10 +382,9 @@ included in page content.
 
 ---
 
-#### PostProcessorConfig
+### PostProcessorConfig
 
 Post-processor configuration.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -415,7 +396,7 @@ Post-processor configuration.
 
 ---
 
-#### ChunkingConfig
+### ChunkingConfig
 
 Chunking configuration.
 
@@ -423,7 +404,6 @@ Configures text chunking for document content, including chunk size,
 overlap, trimming behavior, and optional embeddings.
 
 Use `..the default constructor` when constructing to allow for future field additions:
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -439,13 +419,12 @@ Use `..the default constructor` when constructing to allow for future field addi
 
 ---
 
-#### EmbeddingConfig
+### EmbeddingConfig
 
 Embedding configuration for text chunks.
 
 Configures embedding generation using ONNX models via the vendored embedding engine.
 Requires the `embeddings` feature to be enabled.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -459,7 +438,7 @@ Requires the `embeddings` feature to be enabled.
 
 ---
 
-#### TreeSitterConfig
+### TreeSitterConfig
 
 Configuration for tree-sitter language pack integration.
 
@@ -478,7 +457,6 @@ comments = true
 docstrings = true
 ```
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `True` | Enable code intelligence processing (default: true). When `False`, tree-sitter analysis is completely skipped even if the config section is present. |
@@ -495,7 +473,6 @@ Processing options for tree-sitter code analysis.
 
 Controls which analysis features are enabled when extracting code files.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `structure` | `bool` | `True` | Extract structural items (functions, classes, structs, etc.). Default: true. |
@@ -510,7 +487,7 @@ Controls which analysis features are enabled when extracting code files.
 
 ---
 
-#### ServerConfig
+### ServerConfig
 
 API server configuration.
 
@@ -524,7 +501,6 @@ including host/port settings, CORS configuration, and upload limits.
 - `cors_origins`: empty vector (allows all origins)
 - `max_request_body_bytes`: 104_857_600 (100 MB)
 - `max_multipart_field_bytes`: 104_857_600 (100 MB)
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -541,7 +517,6 @@ including host/port settings, CORS configuration, and upload limits.
 Application properties from docProps/app.xml for DOCX
 
 Contains Word-specific document statistics and metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -564,12 +539,11 @@ Contains Word-specific document statistics and metadata.
 
 ---
 
-#### XlsxAppProperties
+### XlsxAppProperties
 
 Application properties from docProps/app.xml for XLSX
 
 Contains Excel-specific document metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -585,12 +559,11 @@ Contains Excel-specific document metadata.
 
 ---
 
-#### PptxAppProperties
+### PptxAppProperties
 
 Application properties from docProps/app.xml for PPTX
 
 Contains PowerPoint-specific document metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -612,13 +585,12 @@ Contains PowerPoint-specific document metadata.
 
 ---
 
-#### CoreProperties
+### CoreProperties
 
 Dublin Core metadata from docProps/core.xml
 
 Contains standard metadata fields defined by the Dublin Core standard
 and Office-specific extensions.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -640,13 +612,12 @@ and Office-specific extensions.
 
 ---
 
-#### SecurityLimits
+### SecurityLimits
 
 Configuration for security limits across extractors.
 
 All limits are intentionally conservative to prevent DoS attacks
 while still supporting legitimate documents.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -654,7 +625,7 @@ while still supporting legitimate documents.
 | `max_compression_ratio` | `int` | `100` | Maximum compression ratio before flagging as potential bomb (100:1) |
 | `max_files_in_archive` | `int` | `10000` | Maximum number of files in archive (10,000) |
 | `max_nesting_depth` | `int` | `1024` | Maximum nesting depth for structures (100) |
-| `max_entity_length` | `int` | `1048576` | Maximum length of any single XML entity / attribute / token (1 MiB). This is a per-token cap, NOT a cumulative cap — billion-laughs class attacks where a single entity expands to hundreds of MB are caught here, while normal long text content (a paragraph, a CDATA block) is caught by `max_content_size` instead. |
+| `max_entity_length` | `int` | `1048576` | Maximum length of any single XML entity / attribute / token (1 MiB). This is a per-token cap, NOT a total cap — billion-laughs class attacks where a single entity expands to hundreds of MB are caught here, while normal long text content (a paragraph, a CDATA block) is caught by `max_content_size` instead. |
 | `max_content_size` | `int` | `104857600` | Maximum string growth per document (100 MB) |
 | `max_iterations` | `int` | `10000000` | Maximum iterations per operation |
 | `max_xml_depth` | `int` | `1024` | Maximum XML depth (100 levels) |
@@ -662,8 +633,7 @@ while still supporting legitimate documents.
 
 ---
 
-#### TokenReductionConfig
-
+### TokenReductionConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -681,7 +651,7 @@ while still supporting legitimate documents.
 
 ---
 
-#### DocumentStructure
+### DocumentStructure
 
 Top-level structured document representation.
 
@@ -693,7 +663,6 @@ to iterate over top-level content by layer.
 
 Call `validate()` after construction to verify all node indices are in bounds
 and parent-child relationships are bidirectionally consistent.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -710,7 +679,6 @@ Structured table grid with cell-level metadata.
 
 Stores row/column dimensions and a flat list of cells with position info.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `rows` | `int` | — | Number of rows in the table. |
@@ -719,12 +687,11 @@ Stores row/column dimensions and a flat list of cells with position info.
 
 ---
 
-#### ExtractionResult
+### ExtractionResult
 
 General extraction result used by the core extraction API.
 
 This is the main result type returned by all extraction functions.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -749,20 +716,19 @@ This is the main result type returned by all extraction functions.
 | `uris` | `list[Uri] \| None` | `[]` | URIs/links discovered during document extraction. Contains hyperlinks, image references, citations, email addresses, and other URI-like references found in the document. Always extracted when present in the source document. |
 | `structured_output` | `dict[str, Any] \| None` | `None` | Structured extraction output from LLM-based JSON schema extraction. When `structured_extraction` is configured in `ExtractionConfig`, the extracted document content is sent to a VLM with the provided JSON schema. The response is parsed and stored here as a JSON value matching the schema. |
 | `code_intelligence` | `dict[str, Any] \| None` | `None` | Code intelligence results from tree-sitter analysis. Populated when extracting source code files with the `tree-sitter` feature. Contains metrics, structural analysis, imports/exports, comments, docstrings, symbols, diagnostics, and optionally chunked code segments. Stored as an opaque JSON value so that all language bindings (Go, Java, C#, …) can deserialize it as a raw JSON object rather than a typed struct. The underlying type is `tree_sitter_language_pack.ProcessResult`. |
-| `llm_usage` | `list[LlmUsage] \| None` | `[]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, and/or LLM embeddings all run during the same extraction. `None` when no LLM was used. |
+| `llm_usage` | `list[LlmUsage] \| None` | `[]` | LLM token usage and cost data for all LLM calls made during this extraction. Contains one entry per LLM call. Multiple entries are produced when VLM OCR, structured extraction, or LLM embeddings run during the same extraction. `None` when no LLM was used. |
 | `formatted_content` | `str \| None` | `None` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
 | `ocr_internal_document` | `str \| None` | `None` | Structured hOCR document for the OCR+layout pipeline. When tesseract produces hOCR output, the parsed `InternalDocument` carries paragraph structure with bounding boxes and confidence scores. The layout classification step enriches these elements before final rendering. |
 
 ---
 
-#### LlmUsage
+### LlmUsage
 
 Token usage and cost data for a single LLM call made during extraction.
 
 Populated when VLM OCR, structured extraction, or LLM-based embeddings
 are used. Multiple entries may be present when multiple LLM calls occur
 within one extraction (e.g. VLM OCR + structured extraction).
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -776,14 +742,26 @@ within one extraction (e.g. VLM OCR + structured extraction).
 
 ---
 
-#### ImagePreprocessingConfig
+### BoundingBox
+
+Bounding box coordinates for element positioning.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `x0` | `float` | — | Left x-coordinate |
+| `y0` | `float` | — | Bottom y-coordinate |
+| `x1` | `float` | — | Right x-coordinate |
+| `y1` | `float` | — | Top y-coordinate |
+
+---
+
+### ImagePreprocessingConfig
 
 Image preprocessing configuration for OCR.
 
 These settings control how images are preprocessed before OCR to improve
 text recognition quality. Different preprocessing strategies work better
 for different document types.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -797,14 +775,13 @@ for different document types.
 
 ---
 
-#### TesseractConfig
+### TesseractConfig
 
 Tesseract OCR configuration.
 
 Provides fine-grained control over Tesseract OCR engine parameters.
 Most users can use the defaults, but these settings allow optimization
 for specific document types (invoices, handwriting, etc.).
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -832,13 +809,12 @@ for specific document types (invoices, handwriting, etc.).
 
 ---
 
-#### Metadata
+### Metadata
 
 Extraction result metadata.
 
 Contains common fields applicable to all formats, format-specific metadata
 via a discriminated union, and additional custom fields from postprocessors.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -867,13 +843,12 @@ via a discriminated union, and additional custom fields from postprocessors.
 
 ---
 
-#### ExcelMetadata
+### ExcelMetadata
 
 Excel/spreadsheet format metadata.
 
 Identifies the document as a spreadsheet source via the `FormatMetadata.Excel`
 discriminant. Sheet count and sheet names are stored inside this struct.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -882,12 +857,11 @@ discriminant. Sheet count and sheet names are stored inside this struct.
 
 ---
 
-#### EmailMetadata
+### EmailMetadata
 
 Email metadata extracted from .eml and .msg files.
 
 Includes sender/recipient information, message ID, and attachment list.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -901,12 +875,11 @@ Includes sender/recipient information, message ID, and attachment list.
 
 ---
 
-#### ArchiveMetadata
+### ArchiveMetadata
 
 Archive (ZIP/TAR/7Z) metadata.
 
 Extracted from compressed archive files containing file lists and size information.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -918,12 +891,11 @@ Extracted from compressed archive files containing file lists and size informati
 
 ---
 
-#### ImageMetadata
+### ImageMetadata
 
 Image metadata extracted from image files.
 
 Includes dimensions, format, and EXIF data.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -934,12 +906,11 @@ Includes dimensions, format, and EXIF data.
 
 ---
 
-#### XmlMetadata
+### XmlMetadata
 
 XML metadata extracted during XML parsing.
 
 Provides statistics about XML document structure.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -948,13 +919,12 @@ Provides statistics about XML document structure.
 
 ---
 
-#### TextMetadata
+### TextMetadata
 
 Text/Markdown metadata.
 
 Extracted from plain text and Markdown files. Includes word counts and,
 for Markdown, structural elements like headers and links.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -962,18 +932,17 @@ for Markdown, structural elements like headers and links.
 | `word_count` | `int` | — | Number of words |
 | `character_count` | `int` | — | Number of characters |
 | `headers` | `list[str] \| None` | `[]` | Markdown headers (headings text only, for Markdown files) |
-| `links` | `list[str] \| None` | `[]` | Markdown links as (text, url) tuples (for Markdown files) |
-| `code_blocks` | `list[str] \| None` | `[]` | Code blocks as (language, code) tuples (for Markdown files) |
+| `links` | `list[list[str]] \| None` | `[]` | Markdown links as (text, url) tuples (for Markdown files) |
+| `code_blocks` | `list[list[str]] \| None` | `[]` | Code blocks as (language, code) tuples (for Markdown files) |
 
 ---
 
-#### HtmlMetadata
+### HtmlMetadata
 
 HTML metadata extracted from HTML documents.
 
 Includes document-level metadata, Open Graph data, Twitter Card metadata,
 and extracted structural elements (headers, links, images, structured data).
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -995,12 +964,11 @@ and extracted structural elements (headers, links, images, structured data).
 
 ---
 
-#### OcrMetadata
+### OcrMetadata
 
 OCR processing metadata.
 
 Captures information about OCR processing configuration and results.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1013,12 +981,11 @@ Captures information about OCR processing configuration and results.
 
 ---
 
-#### PptxMetadata
+### PptxMetadata
 
 PowerPoint presentation metadata.
 
 Extracted from PPTX files containing slide counts and presentation details.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1029,13 +996,12 @@ Extracted from PPTX files containing slide counts and presentation details.
 
 ---
 
-#### DocxMetadata
+### DocxMetadata
 
 Word document metadata.
 
 Extracted from DOCX files using shared Office Open XML metadata extraction.
 Integrates with `office_metadata` module for core/app/custom properties.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1045,10 +1011,9 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 ---
 
-#### CsvMetadata
+### CsvMetadata
 
 CSV/TSV file metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1060,10 +1025,9 @@ CSV/TSV file metadata.
 
 ---
 
-#### BibtexMetadata
+### BibtexMetadata
 
 BibTeX bibliography metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1075,10 +1039,9 @@ BibTeX bibliography metadata.
 
 ---
 
-#### CitationMetadata
+### CitationMetadata
 
 Citation file metadata (RIS, PubMed, EndNote).
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1091,10 +1054,9 @@ Citation file metadata (RIS, PubMed, EndNote).
 
 ---
 
-#### FictionBookMetadata
+### FictionBookMetadata
 
 FictionBook (FB2) metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1104,10 +1066,9 @@ FictionBook (FB2) metadata.
 
 ---
 
-#### DbfMetadata
+### DbfMetadata
 
 dBASE (DBF) file metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1117,10 +1078,9 @@ dBASE (DBF) file metadata.
 
 ---
 
-#### JatsMetadata
+### JatsMetadata
 
 JATS (Journal Article Tag Suite) metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1131,10 +1091,9 @@ JATS (Journal Article Tag Suite) metadata.
 
 ---
 
-#### EpubMetadata
+### EpubMetadata
 
 EPUB metadata (Dublin Core extensions).
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1147,10 +1106,9 @@ EPUB metadata (Dublin Core extensions).
 
 ---
 
-#### PstMetadata
+### PstMetadata
 
 Outlook PST archive metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1158,13 +1116,12 @@ Outlook PST archive metadata.
 
 ---
 
-#### OcrConfidence
+### OcrConfidence
 
 Confidence scores for an OCR element.
 
 Separates detection confidence (how confident that text exists at this location)
 from recognition confidence (how confident about the actual text content).
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1173,13 +1130,12 @@ from recognition confidence (how confident about the actual text content).
 
 ---
 
-#### OcrElement
+### OcrElement
 
 A unified OCR element representing detected text with full metadata.
 
 This is the primary type for structured OCR output, preserving all information
 from both Tesseract and PaddleOCR backends.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1194,12 +1150,11 @@ from both Tesseract and PaddleOCR backends.
 
 ---
 
-#### OcrElementConfig
+### OcrElementConfig
 
 Configuration for OCR element extraction.
 
 Controls how OCR elements are extracted and filtered.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1210,7 +1165,7 @@ Controls how OCR elements are extracted and filtered.
 
 ---
 
-#### LayoutRegion
+### LayoutRegion
 
 A detected layout region on a page.
 
@@ -1218,39 +1173,36 @@ When layout detection is enabled, each page may have layout regions
 identifying different content types (text, pictures, tables, etc.)
 with confidence scores and spatial positions.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `class_name` | `str` | — | Layout class name (e.g. "picture", "table", "text", "section_header"). |
 | `confidence` | `float` | — | Confidence score from the layout detection model (0.0 to 1.0). |
-| `bounding_box` | `str` | — | Bounding box in document coordinate space. |
+| `bounding_box` | `BoundingBox` | — | Bounding box in document coordinate space. |
 | `area_fraction` | `float` | — | Fraction of the page area covered by this region (0.0 to 1.0). |
 
 ---
 
-#### Table
+### Table
 
 Extracted table structure.
 
 Represents a table detected and extracted from a document (PDF, image, etc.).
 Tables are converted to both structured cell data and Markdown format.
 
-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `cells` | `list[list[str]]` | `[]` | Table cells as a 2D vector (rows × columns) |
 | `markdown` | `str` | — | Markdown representation of the table |
 | `page_number` | `int` | — | Page number where the table was found (1-indexed) |
-| `bounding_box` | `str \| None` | `None` | Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted tables when position data is available. |
+| `bounding_box` | `BoundingBox \| None` | `None` | Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top). Only populated for PDF-extracted tables when position data is available. |
 
 ---
 
-#### TableCell
+### TableCell
 
 Individual table cell with content and optional styling.
 
 Future extension point for rich table support with cell-level metadata.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1261,10 +1213,9 @@ Future extension point for rich table support with cell-level metadata.
 
 ---
 
-#### YakeParams
+### YakeParams
 
 YAKE-specific parameters.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1272,10 +1223,9 @@ YAKE-specific parameters.
 
 ---
 
-#### RakeParams
+### RakeParams
 
 RAKE-specific parameters.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1284,10 +1234,9 @@ RAKE-specific parameters.
 
 ---
 
-#### KeywordConfig
+### KeywordConfig
 
 Keyword extraction configuration.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1301,8 +1250,7 @@ Keyword extraction configuration.
 
 ---
 
-#### OcrCacheStats
-
+### OcrCacheStats
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1311,13 +1259,12 @@ Keyword extraction configuration.
 
 ---
 
-#### PaddleOcrConfig
+### PaddleOcrConfig
 
 Configuration for PaddleOCR backend.
 
 Configures PaddleOCR text detection and recognition with multi-language support.
 Uses a builder pattern for convenient configuration.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1336,14 +1283,13 @@ Uses a builder pattern for convenient configuration.
 
 ---
 
-#### PdfMetadata
+### PdfMetadata
 
 PDF-specific metadata.
 
 Contains metadata fields specific to PDF documents that are not in the common
 `Metadata` structure. Common fields like title, authors, keywords, and dates
 are at the `Metadata` level.
-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -1356,9 +1302,9 @@ are at the `Metadata` level.
 
 ---
 
-#### Enums
+### Enums
 
-##### ChunkSizing
+#### ChunkSizing
 
 How chunk size is measured.
 
@@ -1369,7 +1315,6 @@ Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer
 available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
 
-
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Characters` | `characters` | Size measured in Unicode characters (default). |
@@ -1377,7 +1322,7 @@ available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 
 ---
 
-##### ChunkerType
+#### ChunkerType
 
 Type of text chunker to use.
 
@@ -1393,7 +1338,6 @@ Type of text chunker to use.
   blank-line paragraphs) and merges groups into chunks capped at
   `max_characters` (default 1000). `topic_threshold` has no effect in the
   fallback path. For best results, pair with an embedding model.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1411,7 +1355,6 @@ Content rendering mode for code extraction.
 Controls how extracted code content is represented in the `content` field
 of `ExtractionResult`.
 
-
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Chunks` | `chunks` | Use TSLP semantic chunks as content (default). |
@@ -1423,7 +1366,6 @@ of `ExtractionResult`.
 #### EmbeddingModelType
 
 Embedding model types supported by Kreuzberg.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1441,7 +1383,6 @@ ONNX Runtime execution provider type.
 Determines which hardware backend is used for model inference.
 `Auto` (default) selects the best available provider per platform.
 
-
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Auto` | `auto` | Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere. |
@@ -1455,7 +1396,6 @@ Determines which hardware backend is used for model inference.
 ##### ExtractionMethod
 
 How the extracted text was produced.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1471,7 +1411,6 @@ Format-specific metadata (discriminated union).
 
 Only one format type can exist per extraction result. This provides
 type-safe, clean metadata without nested optionals.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1502,7 +1441,6 @@ type-safe, clean metadata without nested optionals.
 
 Built-in HTML theme selection.
 
-
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Default` | `default` | Sensible defaults: system font stack, neutral colours, readable line measure. CSS custom properties (`--kb-*`) are all defined so user CSS can override individual values. |
@@ -1516,7 +1454,6 @@ Built-in HTML theme selection.
 ##### KeywordAlgorithm
 
 Keyword algorithm selection.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1532,7 +1469,6 @@ Bounding geometry for an OCR element.
 Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
 (from PaddleOCR and rotated text detection).
 
-
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Rectangle` | `rectangle` | Axis-aligned bounding box (typical for Tesseract output). — Fields: `left`: `u32`, `top`: `u32`, `width`: `u32`, `height`: `u32` |
@@ -1546,7 +1482,6 @@ Hierarchical level of an OCR element.
 
 Maps to Tesseract's page segmentation hierarchy and provides
 equivalent semantics for PaddleOCR.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1562,11 +1497,10 @@ equivalent semantics for PaddleOCR.
 Output format for extraction results.
 
 Controls the format of the `content` field in `ExtractionResult`.
-When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
-accordingly. `Plain` returns the raw extracted text.
+When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+`Plain` returns the raw extracted text.
 `Structured` returns JSON with full OCR element data including bounding
 boxes and confidence scores.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|
@@ -1581,7 +1515,6 @@ boxes and confidence scores.
 ---
 
 ##### ReductionLevel
-
 
 | Variant | Description |
 |---------|-------------|
@@ -1601,7 +1534,6 @@ Distinct from `OutputFormat` (which controls rendering — Plain, Markdown,
 HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
 blob vs. an element-based decomposition.
 
-
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Unified` | `unified` | Unified format with all content in `content` field |
@@ -1617,7 +1549,6 @@ Controls the model used for table cell detection within layout-detected
 table regions. Wire format is snake_case in all serializers (JSON, TOML,
 YAML).
 
-
 | Variant | Wire value | Description |
 |---------|------------|-------------|
 | `Tatr` | `tatr` | TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection. |
@@ -1632,7 +1563,6 @@ YAML).
 ##### TextDirection
 
 Text direction enumeration for HTML documents.
-
 
 | Variant | Wire value | Description |
 |---------|------------|-------------|

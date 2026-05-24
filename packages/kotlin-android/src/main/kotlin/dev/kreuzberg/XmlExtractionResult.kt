@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * XML extraction result.
  *
- * Contains extracted text content from XML files along with
- * structural statistics about the XML document.
+ * Contains extracted text content from XML files along with structural statistics about the XML
+ * document.
  */
 data class XmlExtractionResult(
     /** Extracted text content (XML structure filtered out) */
@@ -33,5 +34,5 @@ data class XmlExtractionResult(
     /** Total number of XML elements processed */
     val elementCount: Long,
     /** List of unique element names found (sorted) */
-    val uniqueElements: List<String> = emptyList()
+    val uniqueElements: List<String> = emptyList(),
 )

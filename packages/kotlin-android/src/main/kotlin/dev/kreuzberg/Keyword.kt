@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -30,5 +31,5 @@ data class Keyword(
     /** Algorithm that extracted this keyword. */
     val algorithm: KeywordAlgorithm,
     /** Optional positions where keyword appears in text (character offsets). */
-    val positions: List<Long>? = null
+    val positions: List<Long>? = null,
 )

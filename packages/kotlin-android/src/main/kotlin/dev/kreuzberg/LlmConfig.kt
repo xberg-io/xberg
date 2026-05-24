@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Configuration for an LLM provider/model via liter-llm.
  *
- * Each feature (VLM OCR, VLM embeddings, structured extraction) carries
- * its own `LlmConfig`, allowing different providers per feature.
+ * Each feature (VLM OCR, VLM embeddings, structured extraction) carries its own `LlmConfig`,
+ * allowing different providers per feature.
  */
 data class LlmConfig(
     /**
@@ -36,8 +37,8 @@ data class LlmConfig(
      */
     val model: String = "",
     /**
-     * API key for the provider. When `null`, liter-llm falls back to
-     * the provider's standard environment variable (e.g., `OPENAI_API_KEY`).
+     * API key for the provider. When `null`, liter-llm falls back to the provider's standard
+     * environment variable (e.g., `OPENAI_API_KEY`).
      */
     val apiKey: String? = null,
     /** Custom base URL override for the provider endpoint. */
@@ -49,5 +50,5 @@ data class LlmConfig(
     /** Sampling temperature for generation tasks. */
     val temperature: Double? = null,
     /** Maximum tokens to generate. */
-    val maxTokens: Long? = null
+    val maxTokens: Long? = null,
 )

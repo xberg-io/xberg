@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -38,10 +39,9 @@ data class OcrPipelineStage(
     /**
      * Arbitrary per-call options passed through to the backend unchanged.
      *
-     * Backends that support runtime tuning (mode switching, preprocessing
-     * flags, inference parameters, etc.) read this value and deserialize
-     * the keys they care about. Keys unknown to the backend are silently
-     * ignored, so options from different backends can coexist in the same
+     * Backends that support runtime tuning (mode switching, preprocessing flags, inference
+     * parameters, etc.) read this value and deserialize the keys they care about. Keys unknown to
+     * the backend are silently ignored, so options from different backends can coexist in the same
      * config without conflict.
      *
      * Example (custom backend):
@@ -49,5 +49,5 @@ data class OcrPipelineStage(
      * { "mode": "fast", "enable_layout": true }
      * ```
      */
-    val backendOptions: Any? = null
+    val backendOptions: Any? = null,
 )

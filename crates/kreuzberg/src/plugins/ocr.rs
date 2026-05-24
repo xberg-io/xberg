@@ -455,6 +455,40 @@ pub fn clear_ocr_backends() -> crate::Result<()> {
     registry.shutdown_all()
 }
 
+/// Ensure the global OCR backend registry has its built-in backends registered.
+///
+/// The global registry is seeded with the built-in backends (Tesseract,
+/// PaddleOCR, VLM — gated by feature flags) when it is first constructed.
+/// However, [`clear_ocr_backends`] empties the registry, leaving subsequent
+/// OCR operations with no backend to dispatch to.
+///
+/// This function is the self-healing counterpart, mirroring
+/// `crate::extractors::ensure_initialized` for the document extractor registry:
+/// if the registry is empty it re-registers the built-in backends so that
+/// callers always see a usable registry. It is a no-op when the registry
+/// already has at least one backend, so callers may invoke it cheaply before
+/// every OCR dispatch.
+#[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
+pub(crate) fn ensure_ocr_backends_initialized() {
+    use crate::plugins::registry::get_ocr_backend_registry;
+
+    let registry = get_ocr_backend_registry();
+
+    {
+        let registry = registry.read();
+        if !registry.list().is_empty() {
+            return;
+        }
+    }
+
+    let mut registry = registry.write();
+    // Re-check under the write lock: another thread may have re-seeded the
+    // registry between dropping the read lock and acquiring the write lock.
+    if registry.list().is_empty() {
+        registry.register_defaults();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,37 +25,45 @@ package dev.kreuzberg
 /**
  * Bounding geometry for an OCR element.
  *
- * Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
- * (from PaddleOCR and rotated text detection).
+ * Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals (from PaddleOCR
+ * and rotated text detection).
  */
-@com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = OcrBoundingGeometryDeserializer::class)
-@com.fasterxml.jackson.databind.annotation.JsonSerialize(using = OcrBoundingGeometrySerializer::class)
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+    using = OcrBoundingGeometryDeserializer::class
+)
+@com.fasterxml.jackson.databind.annotation.JsonSerialize(
+    using = OcrBoundingGeometrySerializer::class
+)
 sealed class OcrBoundingGeometry {
     /** Axis-aligned bounding box (typical for Tesseract output). */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
-    data class Rectangle(
-        val left: Int,
-        val top: Int,
-        val width: Int,
-        val height: Int
-    ) : OcrBoundingGeometry()
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
+    )
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
+        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
+    )
+    data class Rectangle(val left: Int, val top: Int, val width: Int, val height: Int) :
+        OcrBoundingGeometry()
+
     /**
      * 4-point quadrilateral for rotated/skewed text (PaddleOCR).
      *
-     * Points are in clockwise order starting from top-left:
-     * `[top_left, top_right, bottom_right, bottom_left]`
+     * Points are in clockwise order starting from top-left: `[top_left, top_right, bottom_right,
+     * bottom_left]`
      */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
-    data class Quadrilateral(
-        val points: String
-    ) : OcrBoundingGeometry()
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
+    )
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
+        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
+    )
+    data class Quadrilateral(val points: String) : OcrBoundingGeometry()
 }
 
-private class OcrBoundingGeometryDeserializer : com.fasterxml.jackson.databind.deser.std.StdDeserializer<OcrBoundingGeometry>(
-    OcrBoundingGeometry::class.java
-) {
+private class OcrBoundingGeometryDeserializer :
+    com.fasterxml.jackson.databind.deser.std.StdDeserializer<OcrBoundingGeometry>(
+        OcrBoundingGeometry::class.java
+    ) {
     @Suppress("LongMethod")
     override fun deserialize(
         parser: com.fasterxml.jackson.core.JsonParser,
@@ -63,26 +72,36 @@ private class OcrBoundingGeometryDeserializer : com.fasterxml.jackson.databind.d
         val node = parser.codec.readTree<com.fasterxml.jackson.databind.node.ObjectNode>(parser)
         val tag = node.get("type")?.asText()
         @Suppress("UNCHECKED_CAST")
-        val payload = (node.deepCopy() as com.fasterxml.jackson.databind.node.ObjectNode).apply { remove("type") }
+        val payload =
+            (node.deepCopy() as com.fasterxml.jackson.databind.node.ObjectNode).apply {
+                remove("type")
+            }
         return when (tag) {
-            "rectangle" -> ctx.readTreeAsValue<OcrBoundingGeometry.Rectangle>(payload, OcrBoundingGeometry.Rectangle::class.java)
-            "quadrilateral" -> ctx.readTreeAsValue<OcrBoundingGeometry.Quadrilateral>(
-                payload,
-                OcrBoundingGeometry.Quadrilateral::class.java
-            )
-            else -> throw com.fasterxml.jackson.databind.exc.InvalidFormatException(
-                parser,
-                "Unknown OcrBoundingGeometry tag",
-                tag,
-                OcrBoundingGeometry::class.java,
-            )
+            "rectangle" ->
+                ctx.readTreeAsValue<OcrBoundingGeometry.Rectangle>(
+                    payload,
+                    OcrBoundingGeometry.Rectangle::class.java,
+                )
+            "quadrilateral" ->
+                ctx.readTreeAsValue<OcrBoundingGeometry.Quadrilateral>(
+                    payload,
+                    OcrBoundingGeometry.Quadrilateral::class.java,
+                )
+            else ->
+                throw com.fasterxml.jackson.databind.exc.InvalidFormatException(
+                    parser,
+                    "Unknown OcrBoundingGeometry tag",
+                    tag,
+                    OcrBoundingGeometry::class.java,
+                )
         }
     }
 }
 
-private class OcrBoundingGeometrySerializer : com.fasterxml.jackson.databind.ser.std.StdSerializer<OcrBoundingGeometry>(
-    OcrBoundingGeometry::class.java
-) {
+private class OcrBoundingGeometrySerializer :
+    com.fasterxml.jackson.databind.ser.std.StdSerializer<OcrBoundingGeometry>(
+        OcrBoundingGeometry::class.java
+    ) {
     @Suppress("LongMethod")
     override fun serialize(
         value: OcrBoundingGeometry,
@@ -93,24 +112,27 @@ private class OcrBoundingGeometrySerializer : com.fasterxml.jackson.databind.ser
         val mapper =
             (gen.codec as? com.fasterxml.jackson.databind.ObjectMapper)
                 ?: com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
-        val node: com.fasterxml.jackson.databind.node.ObjectNode = when (value) {
-            is OcrBoundingGeometry.Rectangle -> {
-                @Suppress("UNCHECKED_CAST")
-                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as OcrBoundingGeometry.Rectangle
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
-                n.put("type", "rectangle")
-                n
+        val node: com.fasterxml.jackson.databind.node.ObjectNode =
+            when (value) {
+                is OcrBoundingGeometry.Rectangle -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val n =
+                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
+                            value as OcrBoundingGeometry.Rectangle
+                        ) as com.fasterxml.jackson.databind.node.ObjectNode
+                    n.put("type", "rectangle")
+                    n
+                }
+                is OcrBoundingGeometry.Quadrilateral -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val n =
+                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
+                            value as OcrBoundingGeometry.Quadrilateral
+                        ) as com.fasterxml.jackson.databind.node.ObjectNode
+                    n.put("type", "quadrilateral")
+                    n
+                }
             }
-            is OcrBoundingGeometry.Quadrilateral -> {
-                @Suppress("UNCHECKED_CAST")
-                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                    value as OcrBoundingGeometry.Quadrilateral
-                ) as com.fasterxml.jackson.databind.node.ObjectNode
-                n.put("type", "quadrilateral")
-                n
-            }
-        }
         mapper.writeTree(gen, node)
     }
 }

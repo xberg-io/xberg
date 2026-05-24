@@ -14,9 +14,5 @@
   "tags": [
     "plugin-lifecycle",
     "trait-bridge"
-  ],
-  "skip": {
-    "languages": ["python", "rust", "node", "go", "ruby", "elixir", "wasm", "java", "csharp", "php", "r", "dart", "kotlin_android", "swift", "zig"],
-    "reason": "register/unregister APIs require a host-language Arc<dyn Trait> backend object; the JSON e2e harness cannot synthesize it. Trait-bridge round-trips are exercised in each language native test suite."
-  }
+  ]
 }

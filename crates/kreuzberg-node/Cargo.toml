@@ -21,7 +21,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 async-trait = "0.1"
-kreuzberg = { path = "../kreuzberg", features = [
+kreuzberg = { version = "5.0.0-rc.1", path = "../kreuzberg", features = [
   "full",
   "pdf",
   "ocr",

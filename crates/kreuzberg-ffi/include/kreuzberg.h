@@ -73,6 +73,10 @@ typedef struct KREUZBERGBibtexMetadata KREUZBERGBibtexMetadata;
  */
 typedef struct KREUZBERGBlockType KREUZBERGBlockType;
 /**
+ * Bounding box coordinates for element positioning.
+ */
+typedef struct KREUZBERGBoundingBox KREUZBERGBoundingBox;
+/**
  * A text chunk with optional embedding and metadata.
  *
  * Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
@@ -915,8 +919,8 @@ typedef struct KREUZBERGOrientationResult KREUZBERGOrientationResult;
  * Output format for extraction results.
  *
  * Controls the format of the `content` field in `ExtractionResult`.
- * When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
- * accordingly. `Plain` returns the raw extracted text.
+ * When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+ * `Plain` returns the raw extracted text.
  * `Structured` returns JSON with full OCR element data including bounding
  * boxes and confidence scores.
  */
@@ -4590,6 +4594,13 @@ void kreuzberg_structured_data_result_free(KREUZBERGStructuredDataResult *ptr);
 char *kreuzberg_structured_data_result_content(const KREUZBERGStructuredDataResult *ptr);
 
 /**
+ * Get the `format` field from a `StructuredDataResult`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_structured_data_result_format(const KREUZBERGStructuredDataResult *ptr);
+
+/**
  * Get the `metadata` field from a `StructuredDataResult`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -5358,6 +5369,13 @@ char *kreuzberg_pdf_annotation_content(const KREUZBERGPdfAnnotation *ptr);
 uint32_t kreuzberg_pdf_annotation_page_number(const KREUZBERGPdfAnnotation *ptr);
 
 /**
+ * Get the `bounding_box` field from a `PdfAnnotation`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBoundingBox *kreuzberg_pdf_annotation_bounding_box(const KREUZBERGPdfAnnotation *ptr);
+
+/**
  * Create a `DjotContent` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -5870,6 +5888,13 @@ uint32_t kreuzberg_document_node_page(const KREUZBERGDocumentNode *ptr);
 uint32_t kreuzberg_document_node_page_end(const KREUZBERGDocumentNode *ptr);
 
 /**
+ * Get the `bbox` field from a `DocumentNode`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBoundingBox *kreuzberg_document_node_bbox(const KREUZBERGDocumentNode *ptr);
+
+/**
  * Get the `annotations` field from a `DocumentNode`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -5993,6 +6018,13 @@ uint32_t kreuzberg_grid_cell_col_span(const KREUZBERGGridCell *ptr);
 int32_t kreuzberg_grid_cell_is_header(const KREUZBERGGridCell *ptr);
 
 /**
+ * Get the `bbox` field from a `GridCell`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBoundingBox *kreuzberg_grid_cell_bbox(const KREUZBERGGridCell *ptr);
+
+/**
  * Create a `TextAnnotation` from a JSON string. Returns null on failure.
  * # Safety
  * JSON string must be valid UTF-8 and null-terminated.
@@ -6065,6 +6097,13 @@ void kreuzberg_extraction_result_free(KREUZBERGExtractionResult *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 char *kreuzberg_extraction_result_content(const KREUZBERGExtractionResult *ptr);
+
+/**
+ * Get the `mime_type` field from a `ExtractionResult`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_extraction_result_mime_type(const KREUZBERGExtractionResult *ptr);
 
 /**
  * Get the `metadata` field from a `ExtractionResult`.
@@ -6286,6 +6325,20 @@ char *kreuzberg_processing_warning_to_json(const KREUZBERGProcessingWarning *ptr
  * Pointer must have been returned by this library, or be null.
  */
 void kreuzberg_processing_warning_free(KREUZBERGProcessingWarning *ptr);
+
+/**
+ * Get the `source` field from a `ProcessingWarning`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_processing_warning_source(const KREUZBERGProcessingWarning *ptr);
+
+/**
+ * Get the `message` field from a `ProcessingWarning`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_processing_warning_message(const KREUZBERGProcessingWarning *ptr);
 
 /**
  * Create a `LlmUsage` from a JSON string. Returns null on failure.
@@ -6595,6 +6648,13 @@ uint8_t *kreuzberg_extracted_image_data(const KREUZBERGExtractedImage *ptr,
                                         uintptr_t *out_len);
 
 /**
+ * Get the `format` field from a `ExtractedImage`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_extracted_image_format(const KREUZBERGExtractedImage *ptr);
+
+/**
  * Get the `image_index` field from a `ExtractedImage`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -6658,6 +6718,13 @@ char *kreuzberg_extracted_image_description(const KREUZBERGExtractedImage *ptr);
 KREUZBERGExtractionResult *kreuzberg_extracted_image_ocr_result(const KREUZBERGExtractedImage *ptr);
 
 /**
+ * Get the `bounding_box` field from a `ExtractedImage`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBoundingBox *kreuzberg_extracted_image_bounding_box(const KREUZBERGExtractedImage *ptr);
+
+/**
  * Get the `source_path` field from a `ExtractedImage`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -6684,6 +6751,57 @@ float kreuzberg_extracted_image_kind_confidence(const KREUZBERGExtractedImage *p
  * Pointer must be a valid handle returned by this library.
  */
 uint32_t kreuzberg_extracted_image_cluster_id(const KREUZBERGExtractedImage *ptr);
+
+/**
+ * Create a `BoundingBox` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `kreuzberg_bounding_box_free`.
+ */
+KREUZBERGBoundingBox *kreuzberg_bounding_box_from_json(const char *json);
+
+/**
+ * Serialize a `BoundingBox` to a JSON string. Returns null on failure.
+ * # Safety
+ * `ptr` must be a valid, non-null pointer returned by a `kreuzberg` function.
+ * The returned string must be freed with `kreuzberg_free_string`.
+ */
+char *kreuzberg_bounding_box_to_json(const KREUZBERGBoundingBox *ptr);
+
+/**
+ * Free a `BoundingBox` handle.
+ * # Safety
+ * Pointer must have been returned by this library, or be null.
+ */
+void kreuzberg_bounding_box_free(KREUZBERGBoundingBox *ptr);
+
+/**
+ * Get the `x0` field from a `BoundingBox`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double kreuzberg_bounding_box_x0(const KREUZBERGBoundingBox *ptr);
+
+/**
+ * Get the `y0` field from a `BoundingBox`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double kreuzberg_bounding_box_y0(const KREUZBERGBoundingBox *ptr);
+
+/**
+ * Get the `x1` field from a `BoundingBox`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double kreuzberg_bounding_box_x1(const KREUZBERGBoundingBox *ptr);
+
+/**
+ * Get the `y1` field from a `BoundingBox`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+double kreuzberg_bounding_box_y1(const KREUZBERGBoundingBox *ptr);
 
 /**
  * Create a `ElementMetadata` from a JSON string. Returns null on failure.
@@ -6721,6 +6839,13 @@ uint32_t kreuzberg_element_metadata_page_number(const KREUZBERGElementMetadata *
  * Pointer must be a valid handle returned by this library.
  */
 char *kreuzberg_element_metadata_filename(const KREUZBERGElementMetadata *ptr);
+
+/**
+ * Get the `coordinates` field from a `ElementMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBoundingBox *kreuzberg_element_metadata_coordinates(const KREUZBERGElementMetadata *ptr);
 
 /**
  * Get the `element_index` field from a `ElementMetadata`.
@@ -8065,6 +8190,13 @@ char *kreuzberg_archive_metadata_to_json(const KREUZBERGArchiveMetadata *ptr);
  * Pointer must have been returned by this library, or be null.
  */
 void kreuzberg_archive_metadata_free(KREUZBERGArchiveMetadata *ptr);
+
+/**
+ * Get the `format` field from a `ArchiveMetadata`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_archive_metadata_format(const KREUZBERGArchiveMetadata *ptr);
 
 /**
  * Get the `file_count` field from a `ArchiveMetadata`.
@@ -9783,6 +9915,13 @@ char *kreuzberg_layout_region_class_name(const KREUZBERGLayoutRegion *ptr);
 double kreuzberg_layout_region_confidence(const KREUZBERGLayoutRegion *ptr);
 
 /**
+ * Get the `bounding_box` field from a `LayoutRegion`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBoundingBox *kreuzberg_layout_region_bounding_box(const KREUZBERGLayoutRegion *ptr);
+
+/**
  * Get the `area_fraction` field from a `LayoutRegion`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
@@ -9913,6 +10052,13 @@ char *kreuzberg_table_markdown(const KREUZBERGTable *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 uint32_t kreuzberg_table_page_number(const KREUZBERGTable *ptr);
+
+/**
+ * Get the `bounding_box` field from a `Table`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+KREUZBERGBoundingBox *kreuzberg_table_bounding_box(const KREUZBERGTable *ptr);
 
 /**
  * Create a `TableCell` from a JSON string. Returns null on failure.
@@ -12703,17 +12849,6 @@ char *kreuzberg_get_extensions_for_mime(const char *mime_type);
 uintptr_t kreuzberg_get_extensions_for_mime_len(const char *mime_type);
 
 /**
- * Clear all embedding backends from the global registry.
- *
- * Calls `shutdown()` on every registered backend, then empties the registry.
- * \note - Any error returned by a backend's `shutdown()` method. The first error
- *   encountered stops processing of remaining backends.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_embedding_backends(void);
-
-/**
  * List the names of all registered embedding backends.
  *
  * Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
@@ -12749,17 +12884,6 @@ char *kreuzberg_list_document_extractors(void);
 uintptr_t kreuzberg_list_document_extractors_len(void);
 
 /**
- * Clear all document extractors from the global registry.
- *
- * Calls `shutdown()` on every registered extractor, then empties the registry.
- * \note - Any error returned by an extractor's `shutdown()` method. The first error
- *   encountered stops processing of remaining extractors.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_document_extractors(void);
-
-/**
  * List all registered OCR backends.
  *
  * Returns the names of all OCR backends currently registered in the global registry.
@@ -12784,22 +12908,6 @@ char *kreuzberg_list_ocr_backends(void);
  * \note SAFETY: All pointer parameters obey the same validity rules as `kreuzberg_list_ocr_backends`.
  */
 uintptr_t kreuzberg_list_ocr_backends_len(void);
-
-/**
- * Clear all OCR backends from the global registry.
- *
- * Removes all OCR backends and calls their `shutdown()` methods.
- * \return - `Ok(())` if all backends were cleared successfully
- * - `Err(...)` if any shutdown method failed
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- * \code
- * use kreuzberg::plugins::clear_ocr_backends;
- *
- * clear_ocr_backends()?;
- * \endcode
- */
-int32_t kreuzberg_clear_ocr_backends(void);
 
 /**
  * List all registered post-processor names.
@@ -12831,13 +12939,6 @@ char *kreuzberg_list_post_processors(void);
 uintptr_t kreuzberg_list_post_processors_len(void);
 
 /**
- * Remove all registered post-processors.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_post_processors(void);
-
-/**
  * List names of all registered renderers.
  * \note Returns an error if the registry lock is poisoned.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
@@ -12852,18 +12953,6 @@ char *kreuzberg_list_renderers(void);
  * \note SAFETY: All pointer parameters obey the same validity rules as `kreuzberg_list_renderers`.
  */
 uintptr_t kreuzberg_list_renderers_len(void);
-
-/**
- * Clear all renderers from the global registry.
- *
- * Removes every renderer, including the built-in defaults (markdown, html,
- * djot, plain). After calling this no renderers are registered; re-register
- * as needed.
- * \note Returns an error if the registry lock is poisoned.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
- * freed with the appropriate free function.
- */
-int32_t kreuzberg_clear_renderers(void);
 
 /**
  * List names of all registered validators.
@@ -12881,11 +12970,20 @@ char *kreuzberg_list_validators(void);
 uintptr_t kreuzberg_list_validators_len(void);
 
 /**
- * Remove all registered validators.
+ * Score an extracted text on the closed interval `[0.0, 1.0]`, where higher is better.
+ *
+ * `1.0` is the neutral score for clean prose; penalties (OCR artifacts, embedded
+ * script/style noise, navigation chrome) subtract, structural cues (headings,
+ * punctuation) add. The result is clamped to `[0.0, 1.0]`.
+ *
+ * Pass `metadata` as `None` when the caller has no extraction metadata available;
+ * the metadata bonus simply isn't applied in that case. Texts shorter than
+ * `MIN_TEXT_LENGTH` short-circuit to `0.1` regardless of metadata.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
  */
-int32_t kreuzberg_clear_validators(void);
+double kreuzberg_calculate_quality_score(const char *text,
+                                         const char *metadata);
 
 /**
  * Generate embeddings asynchronously for a list of text strings.

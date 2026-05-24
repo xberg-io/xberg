@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,12 +25,12 @@ package dev.kreuzberg
 /**
  * Excel/spreadsheet format metadata.
  *
- * Identifies the document as a spreadsheet source via the `FormatMetadata.Excel`
- * discriminant. Sheet count and sheet names are stored inside this struct.
+ * Identifies the document as a spreadsheet source via the `FormatMetadata.Excel` discriminant.
+ * Sheet count and sheet names are stored inside this struct.
  */
 data class ExcelMetadata(
     /** Number of sheets in the workbook. */
     val sheetCount: Int? = null,
     /** Names of all sheets in the workbook. */
-    val sheetNames: List<String>? = null
+    val sheetNames: List<String>? = null,
 )

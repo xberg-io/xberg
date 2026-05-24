@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,12 +25,11 @@ package dev.kreuzberg
 /**
  * Excel workbook representation.
  *
- * Contains all sheets from an Excel file (.xlsx, .xls, etc.) with
- * extracted content and metadata.
+ * Contains all sheets from an Excel file (.xlsx, .xls, etc.) with extracted content and metadata.
  */
 data class ExcelWorkbook(
     /** All sheets in the workbook */
     val sheets: List<ExcelSheet> = emptyList(),
     /** Workbook-level metadata (author, creation date, etc.) */
-    val metadata: Map<String, String> = emptyMap()
+    val metadata: Map<String, String> = emptyMap(),
 )

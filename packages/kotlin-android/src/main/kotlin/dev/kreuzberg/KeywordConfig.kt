@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -30,16 +31,15 @@ data class KeywordConfig(
     /**
      * Minimum score threshold (0.0-1.0, default: 0.0).
      *
-     * Keywords with scores below this threshold are filtered out.
-     * Note: Score ranges differ between algorithms.
+     * Keywords with scores below this threshold are filtered out. Note: Score ranges differ between
+     * algorithms.
      */
-    val minScore: Float = 0f,
+    val minScore: Float = 0.0f,
     /**
      * N-gram range for keyword extraction (min, max).
      *
-     * (1, 1) = unigrams only
-     * (1, 2) = unigrams and bigrams
-     * (1, 3) = unigrams, bigrams, and trigrams (default)
+     * (1, 1) = unigrams only (1, 2) = unigrams and bigrams (1, 3) = unigrams, bigrams, and trigrams
+     * (default)
      */
     val ngramRange: List<Long> = emptyList(),
     /**
@@ -51,5 +51,5 @@ data class KeywordConfig(
     /** YAKE-specific tuning parameters. */
     val yakeParams: YakeParams? = null,
     /** RAKE-specific tuning parameters. */
-    val rakeParams: RakeParams? = null
+    val rakeParams: RakeParams? = null,
 )

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -30,10 +31,9 @@ data class ImageExtractionConfig(
     /** Maximum dimension for images (width or height) */
     val maxImageDimension: Int = 4096,
     /**
-     * Whether to inject image reference placeholders into markdown output.
-     * When `true` (default), image references like `![Image 1](embedded:p1_i0)`
-     * are appended to the markdown. Set to `false` to extract images as data
-     * without polluting the markdown output.
+     * Whether to inject image reference placeholders into markdown output. When `true` (default),
+     * image references like `![Image 1](embedded:p1_i0)` are appended to the markdown. Set to
+     * `false` to extract images as data without polluting the markdown output.
      */
     val injectPlaceholders: Boolean = true,
     /** Automatically adjust DPI based on image content */
@@ -45,18 +45,18 @@ data class ImageExtractionConfig(
     /**
      * Maximum number of image objects to extract per PDF page.
      *
-     * Some PDFs (e.g. technical diagrams stored as thousands of raster fragments)
-     * can trigger extremely long or indefinite extraction times when every image
-     * object on a dense page is decoded individually via the PDF extractor. Setting this
-     * limit causes kreuzberg to stop collecting individual images once the count
-     * per page reaches the cap and emit a warning instead.
+     * Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger
+     * extremely long or indefinite extraction times when every image object on a dense page is
+     * decoded individually via the PDF extractor. Setting this limit causes kreuzberg to stop
+     * collecting individual images once the count per page reaches the cap and emit a warning
+     * instead.
      *
      * `null` (default) means no limit — all images are extracted.
      */
     val maxImagesPerPage: Int? = null,
     /**
-     * When `true` (default), extracted images are classified by kind and grouped
-     * into clusters where they appear to belong to one figure.
+     * When `true` (default), extracted images are classified by kind and grouped into clusters
+     * where they appear to belong to one figure.
      */
-    val classify: Boolean = true
+    val classify: Boolean = true,
 )

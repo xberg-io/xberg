@@ -48,12 +48,10 @@ static JS_FUNCTION_PATTERN: Lazy<Regex> = Lazy::new(|| {
 static CSS_RULES_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)\.[a-zA-Z][\w-]*\s*\{[^}]*\}").expect("CSS rules regex pattern is valid and should compile")
 });
-static SCRIPT_TAG_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?is)<script[^>]*>.*?</script>").expect("Script tag regex pattern is valid and should compile")
-});
-static STYLE_TAG_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?is)<style[^>]*>.*?</style>").expect("Style tag regex pattern is valid and should compile")
-});
+// SCRIPT_TAG_PATTERN and STYLE_TAG_PATTERN are replaced by the `count_tag_bytes` memmem scanner
+// below. The `(?is).*?` pattern over large inputs triggers the regex_automata BoundedBacktracker,
+// causing heap spikes (observed ~1.6 MiB combined in staging heap profiles). The scanner is O(n)
+// with zero regex allocation.
 
 static NAV_WORDS_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)\b(?:Skip to main content|Back to top|Main navigation|Site navigation)\b")
@@ -81,10 +79,61 @@ fn sum_match_lengths(text: &str, pattern: &Regex) -> usize {
     pattern.find_iter(text).map(|m| m.len()).sum()
 }
 
-pub(crate) fn calculate_quality_score(
-    text: &str,
-    metadata: Option<&AHashMap<Cow<'static, str>, serde_json::Value>>,
-) -> f64 {
+/// Count the total byte span of all `<open_tag>...</close_tag>` pairs using `memmem` scanners.
+///
+/// The text is lowercased once before scanning so the needles can be lowercase-only, matching
+/// `<script>`, `<SCRIPT>`, `<Script>`, etc. The byte lengths are measured on the lowercased
+/// copy but equal those of the original because the tags are pure ASCII.
+///
+/// This replaces `(?is)<script[^>]*>.*?</script>` and the equivalent style regex.  Those
+/// patterns trigger the `regex_automata` `BoundedBacktracker` on large inputs, causing
+/// multi-MiB transient allocations (observed in staging heap profiles at ~1.6 MiB combined).
+fn count_tag_bytes(text: &str, open_needle: &[u8], close_needle: &[u8]) -> usize {
+    // Lowercase once — ASCII tags only, so byte length is preserved.
+    let lower = text.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+
+    let open_finder = memmem::Finder::new(open_needle);
+    let close_finder = memmem::Finder::new(close_needle);
+
+    let mut total = 0usize;
+    let mut pos = 0usize;
+
+    while pos < bytes.len() {
+        let Some(open_start) = open_finder.find(&bytes[pos..]) else {
+            break;
+        };
+        let open_start = pos + open_start;
+
+        // Find the end of the opening tag (the `>`).
+        let tag_body_start = match bytes[open_start..].iter().position(|&b| b == b'>') {
+            Some(rel) => open_start + rel + 1,
+            // Unclosed opening tag — nothing more to match.
+            None => break,
+        };
+
+        let Some(close_rel) = close_finder.find(&bytes[tag_body_start..]) else {
+            break;
+        };
+        let close_end = tag_body_start + close_rel + close_needle.len();
+
+        total += close_end - open_start;
+        pos = close_end;
+    }
+
+    total
+}
+
+/// Score an extracted text on the closed interval `[0.0, 1.0]`, where higher is better.
+///
+/// `1.0` is the neutral score for clean prose; penalties (OCR artifacts, embedded
+/// script/style noise, navigation chrome) subtract, structural cues (headings,
+/// punctuation) add. The result is clamped to `[0.0, 1.0]`.
+///
+/// Pass `metadata` as `None` when the caller has no extraction metadata available;
+/// the metadata bonus simply isn't applied in that case. Texts shorter than
+/// `MIN_TEXT_LENGTH` short-circuit to `0.1` regardless of metadata.
+pub fn calculate_quality_score(text: &str, metadata: Option<&AHashMap<Cow<'static, str>, serde_json::Value>>) -> f64 {
     if text.is_empty() || text.trim().is_empty() {
         return 0.0;
     }
@@ -157,23 +206,58 @@ fn count_non_table_dash_artifacts(text: &str) -> usize {
     artifact_count
 }
 
+/// Cap applied to `text` before running `JS_FUNCTION_PATTERN` and `CSS_RULES_PATTERN`.
+///
+/// Both patterns use bounded character-class repetition (`[^)]*`, `[^}]*`) that still triggers
+/// the `regex_automata` `BoundedBacktracker` when the input slice is large. Because these are
+/// noise-detection heuristics (not structural parsers), capping at 64 KiB does not meaningfully
+/// change scores for real documents.
+const JS_CSS_PATTERN_INPUT_CAP: usize = 64 * 1024;
+
 #[inline]
 fn calculate_script_penalty(text: &str, total_chars: f64) -> f64 {
     if total_chars == 0.0 {
         return 0.0;
     }
 
-    if memmem::find(text.as_bytes(), b"function").is_none()
-        && memmem::find(text.as_bytes(), b"<script").is_none()
-        && memmem::find(text.as_bytes(), b"<style").is_none()
+    // Fast early-exit using case-insensitive literal scan on a lowercased view.
+    // Avoids allocating the lowercase copy in the common case where no script noise is present.
+    let bytes = text.as_bytes();
+    if memmem::find(bytes, b"function").is_none()
+        && memmem::find(bytes, b"<script").is_none()
+        && memmem::find(bytes, b"<style").is_none()
     {
-        return 0.0;
+        // None of the lowercase forms are present.  Check uppercase to avoid false negatives on
+        // ALL-CAPS inputs, then give up if neither is found.
+        if memmem::find(bytes, b"FUNCTION").is_none()
+            && memmem::find(bytes, b"<SCRIPT").is_none()
+            && memmem::find(bytes, b"<STYLE").is_none()
+        {
+            return 0.0;
+        }
     }
 
-    let script_chars = sum_match_lengths(text, &JS_FUNCTION_PATTERN)
-        + sum_match_lengths(text, &CSS_RULES_PATTERN)
-        + sum_match_lengths(text, &SCRIPT_TAG_PATTERN)
-        + sum_match_lengths(text, &STYLE_TAG_PATTERN);
+    // Truncate for the brace-bounded regex patterns — heuristic noise detection only.
+    let truncated = if text.len() > JS_CSS_PATTERN_INPUT_CAP {
+        // Find a valid UTF-8 boundary at or before the cap.
+        let mut end = JS_CSS_PATTERN_INPUT_CAP;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        &text[..end]
+    } else {
+        text
+    };
+
+    // Asymmetric input lengths are deliberate: JS_FUNCTION/CSS_RULES use the
+    // truncated 64 KiB slice (their backtracker buffers scale with input length
+    // and the patterns are noise heuristics, so JS leakage past 64 KiB is
+    // acceptably under-counted). `count_tag_bytes` walks the full `text` because
+    // its memmem scanner is linear in input length and cheap regardless of size.
+    let script_chars = sum_match_lengths(truncated, &JS_FUNCTION_PATTERN)
+        + sum_match_lengths(truncated, &CSS_RULES_PATTERN)
+        + count_tag_bytes(text, b"<script", b"</script>")
+        + count_tag_bytes(text, b"<style", b"</style>");
 
     (script_chars as f64 / total_chars).min(1.0)
 }

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Dublin Core metadata from docProps/core.xml
  *
- * Contains standard metadata fields defined by the Dublin Core standard
- * and Office-specific extensions.
+ * Contains standard metadata fields defined by the Dublin Core standard and Office-specific
+ * extensions.
  */
 data class CoreProperties(
     /** Document title */
@@ -57,5 +58,5 @@ data class CoreProperties(
     /** Document version */
     val version: String? = null,
     /** Last print timestamp (ISO 8601) */
-    val lastPrinted: String? = null
+    val lastPrinted: String? = null,
 )

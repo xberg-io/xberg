@@ -979,7 +979,7 @@ mod ffi {
         #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
         #[swift_bridge(swift_name = "boundingBox")]
-        fn bounding_box(&self) -> Option<String>;
+        fn bounding_box(&self) -> Option<BoundingBox>;
     }
 
     extern "Rust" {
@@ -1073,7 +1073,7 @@ mod ffi {
         fn page(&self) -> Option<u32>;
         #[swift_bridge(swift_name = "pageEnd")]
         fn page_end(&self) -> Option<u32>;
-        fn bbox(&self) -> Option<String>;
+        fn bbox(&self) -> Option<BoundingBox>;
         fn annotations(&self) -> Vec<TextAnnotation>;
         fn attributes(&self) -> String;
     }
@@ -1098,7 +1098,7 @@ mod ffi {
         fn col_span(&self) -> u32;
         #[swift_bridge(swift_name = "isHeader")]
         fn is_header(&self) -> bool;
-        fn bbox(&self) -> Option<String>;
+        fn bbox(&self) -> Option<BoundingBox>;
     }
 
     extern "Rust" {
@@ -1274,7 +1274,7 @@ mod ffi {
         #[swift_bridge(swift_name = "ocrResult")]
         fn ocr_result(&self) -> Option<ExtractionResult>;
         #[swift_bridge(swift_name = "boundingBox")]
-        fn bounding_box(&self) -> Option<String>;
+        fn bounding_box(&self) -> Option<BoundingBox>;
         #[swift_bridge(swift_name = "sourcePath")]
         fn source_path(&self) -> Option<String>;
         #[swift_bridge(swift_name = "imageKind")]
@@ -1286,11 +1286,21 @@ mod ffi {
     }
 
     extern "Rust" {
+        type BoundingBox;
+        #[swift_bridge(init)]
+        fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> BoundingBox;
+        fn x0(&self) -> f64;
+        fn y0(&self) -> f64;
+        fn x1(&self) -> f64;
+        fn y1(&self) -> f64;
+    }
+
+    extern "Rust" {
         type ElementMetadata;
         #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> Option<u32>;
         fn filename(&self) -> Option<String>;
-        fn coordinates(&self) -> Option<String>;
+        fn coordinates(&self) -> Option<BoundingBox>;
         #[swift_bridge(swift_name = "elementIndex")]
         fn element_index(&self) -> Option<usize>;
         fn additional(&self) -> String;
@@ -1701,8 +1711,8 @@ mod ffi {
             word_count: u32,
             character_count: u32,
             headers: Option<Vec<String>>,
-            links: Option<Vec<String>>,
-            code_blocks: Option<Vec<String>>,
+            links: String,
+            code_blocks: String,
         ) -> TextMetadata;
         #[swift_bridge(swift_name = "lineCount")]
         fn line_count(&self) -> u32;
@@ -2130,12 +2140,12 @@ mod ffi {
     extern "Rust" {
         type LayoutRegion;
         #[swift_bridge(init)]
-        fn new(class_name: String, confidence: f64, bounding_box: String, area_fraction: f64) -> LayoutRegion;
+        fn new(class_name: String, confidence: f64, bounding_box: BoundingBox, area_fraction: f64) -> LayoutRegion;
         #[swift_bridge(swift_name = "className")]
         fn class_name(&self) -> String;
         fn confidence(&self) -> f64;
         #[swift_bridge(swift_name = "boundingBox")]
-        fn bounding_box(&self) -> String;
+        fn bounding_box(&self) -> BoundingBox;
         #[swift_bridge(swift_name = "areaFraction")]
         fn area_fraction(&self) -> f64;
     }
@@ -2159,13 +2169,13 @@ mod ffi {
     extern "Rust" {
         type Table;
         #[swift_bridge(init)]
-        fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<String>) -> Table;
+        fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<BoundingBox>) -> Table;
         fn cells(&self) -> String;
         fn markdown(&self) -> String;
         #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
         #[swift_bridge(swift_name = "boundingBox")]
-        fn bounding_box(&self) -> Option<String>;
+        fn bounding_box(&self) -> Option<BoundingBox>;
     }
 
     extern "Rust" {
@@ -2650,6 +2660,8 @@ mod ffi {
         fn list_renderers() -> Result<Vec<String>, String>;
         #[swift_bridge(swift_name = "listValidators")]
         fn list_validators() -> Result<Vec<String>, String>;
+        #[swift_bridge(swift_name = "calculateQualityScore")]
+        fn calculate_quality_score(text: String, metadata: Option<String>) -> f64;
         #[swift_bridge(swift_name = "embedTextsAsync")]
         fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<String, String>;
         #[swift_bridge(swift_name = "renderPdfPageToPng")]
@@ -2970,6 +2982,8 @@ mod ffi {
         fn chunk_metadata_from_json(json: String) -> Result<ChunkMetadata, String>;
         #[swift_bridge(swift_name = "extractedImageFromJson")]
         fn extracted_image_from_json(json: String) -> Result<ExtractedImage, String>;
+        #[swift_bridge(swift_name = "boundingBoxFromJson")]
+        fn bounding_box_from_json(json: String) -> Result<BoundingBox, String>;
         #[swift_bridge(swift_name = "elementMetadataFromJson")]
         fn element_metadata_from_json(json: String) -> Result<ElementMetadata, String>;
         #[swift_bridge(swift_name = "elementFromJson")]
@@ -5964,8 +5978,8 @@ impl PdfAnnotation {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bounding_box(&self) -> Option<String> {
-        self.0.bounding_box.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bounding_box(&self) -> Option<BoundingBox> {
+        self.0.bounding_box.clone().map(BoundingBox)
     }
 }
 
@@ -6196,8 +6210,8 @@ impl DocumentNode {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn bbox(&self) -> Option<String> {
-        self.0.bbox.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bbox(&self) -> Option<BoundingBox> {
+        self.0.bbox.clone().map(BoundingBox)
     }
     pub fn annotations(&self) -> Vec<TextAnnotation> {
         self.0
@@ -6272,8 +6286,8 @@ impl GridCell {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bbox(&self) -> Option<String> {
-        self.0.bbox.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bbox(&self) -> Option<BoundingBox> {
+        self.0.bbox.clone().map(BoundingBox)
     }
 }
 
@@ -6815,8 +6829,8 @@ impl ExtractedImage {
     pub fn ocr_result(&self) -> Option<ExtractionResult> {
         self.0.ocr_result.clone().map(|w| ExtractionResult(*w))
     }
-    pub fn bounding_box(&self) -> Option<String> {
-        self.0.bounding_box.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bounding_box(&self) -> Option<BoundingBox> {
+        self.0.bounding_box.clone().map(BoundingBox)
     }
     pub fn source_path(&self) -> Option<String> {
         self.0.source_path.clone()
@@ -6840,6 +6854,37 @@ impl ExtractedImage {
     }
 }
 
+pub struct BoundingBox(pub kreuzberg::BoundingBox);
+impl BoundingBox {
+    pub fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> BoundingBox {
+        BoundingBox(kreuzberg::BoundingBox { x0, y0, x1, y1 })
+    }
+    pub fn x0(&self) -> f64 {
+        ::serde_json::to_value(&self.0.x0)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn y0(&self) -> f64 {
+        ::serde_json::to_value(&self.0.y0)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn x1(&self) -> f64 {
+        ::serde_json::to_value(&self.0.x1)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn y1(&self) -> f64 {
+        ::serde_json::to_value(&self.0.y1)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+}
+
 pub struct ElementMetadata(pub kreuzberg::ElementMetadata);
 impl ElementMetadata {
     pub fn page_number(&self) -> Option<u32> {
@@ -6852,8 +6897,8 @@ impl ElementMetadata {
     pub fn filename(&self) -> Option<String> {
         self.0.filename.clone()
     }
-    pub fn coordinates(&self) -> Option<String> {
-        self.0.coordinates.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn coordinates(&self) -> Option<BoundingBox> {
+        self.0.coordinates.clone().map(BoundingBox)
     }
     pub fn element_index(&self) -> Option<usize> {
         self.0.element_index.as_ref().and_then(|v| {
@@ -8065,8 +8110,8 @@ impl TextMetadata {
         word_count: u32,
         character_count: u32,
         headers: Option<Vec<String>>,
-        links: Option<Vec<String>>,
-        code_blocks: Option<Vec<String>>,
+        links: String,
+        code_blocks: String,
     ) -> TextMetadata {
         let mut __target: kreuzberg::TextMetadata = ::std::default::Default::default();
         __target.line_count = line_count;
@@ -8077,8 +8122,16 @@ impl TextMetadata {
                 __target.headers = t;
             }
         }
-        // alef: links — Vec field type may differ from IR in non-serde struct, left at default
-        // alef: code_blocks — Vec field type may differ from IR in non-serde struct, left at default
+        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&links) {
+            if let Ok(t) = ::serde_json::from_value(v) {
+                __target.links = t;
+            }
+        }
+        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&code_blocks) {
+            if let Ok(t) = ::serde_json::from_value(v) {
+                __target.code_blocks = t;
+            }
+        }
         TextMetadata(__target)
     }
     pub fn line_count(&self) -> u32 {
@@ -9299,7 +9352,7 @@ impl PageContent {
 
 pub struct LayoutRegion(pub kreuzberg::LayoutRegion);
 impl LayoutRegion {
-    pub fn new(class_name: String, confidence: f64, bounding_box: String, area_fraction: f64) -> LayoutRegion {
+    pub fn new(class_name: String, confidence: f64, bounding_box: BoundingBox, area_fraction: f64) -> LayoutRegion {
         let mut __target: kreuzberg::LayoutRegion = ::std::default::Default::default();
         {
             // Try JSON parse first (handles enum/object values); on parse failure
@@ -9313,17 +9366,7 @@ impl LayoutRegion {
             }
         }
         __target.confidence = confidence;
-        {
-            // Try JSON parse first (handles enum/object values); on parse failure
-            // treat the raw input as a JSON string scalar so plain `String` /
-            // string-like enum fields don't end up empty for inputs that aren't
-            // valid JSON tokens (e.g. `tts-1`).
-            let __v = ::serde_json::from_str::<::serde_json::Value>(&bounding_box)
-                .unwrap_or(::serde_json::Value::String(bounding_box.clone()));
-            if let Ok(t) = ::serde_json::from_value(__v) {
-                __target.bounding_box = t;
-            }
-        }
+        __target.bounding_box = bounding_box.0;
         __target.area_fraction = area_fraction;
         LayoutRegion(__target)
     }
@@ -9336,8 +9379,8 @@ impl LayoutRegion {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bounding_box(&self) -> String {
-        serde_json::to_string(&self.0.bounding_box).unwrap_or_default()
+    pub fn bounding_box(&self) -> BoundingBox {
+        BoundingBox(self.0.bounding_box.clone())
     }
     pub fn area_fraction(&self) -> f64 {
         ::serde_json::to_value(&self.0.area_fraction)
@@ -9389,7 +9432,7 @@ impl HierarchicalBlock {
 
 pub struct Table(pub kreuzberg::Table);
 impl Table {
-    pub fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<String>) -> Table {
+    pub fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<BoundingBox>) -> Table {
         let mut __target: kreuzberg::Table = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&cells) {
             if let Ok(t) = ::serde_json::from_value(v) {
@@ -9408,15 +9451,8 @@ impl Table {
             }
         }
         __target.page_number = page_number;
-        if let Some(s) = bounding_box {
-            // Try JSON parse first (handles enum/object values); on parse failure
-            // treat the raw input as a JSON string scalar so plain `String` /
-            // string-like enum fields don't end up empty for inputs that aren't
-            // valid JSON tokens (e.g. `tts-1`).
-            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
-            if let Ok(t) = ::serde_json::from_value(__v) {
-                __target.bounding_box = Some(t);
-            }
+        if let Some(w) = bounding_box {
+            __target.bounding_box = Some(w.0);
         }
         Table(__target)
     }
@@ -9432,8 +9468,8 @@ impl Table {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bounding_box(&self) -> Option<String> {
-        self.0.bounding_box.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bounding_box(&self) -> Option<BoundingBox> {
+        self.0.bounding_box.clone().map(BoundingBox)
     }
 }
 
@@ -10059,8 +10095,7 @@ pub enum OutputFormat {
     Html,
     Json,
     Structured,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Custom,
 }
 
 impl From<kreuzberg::OutputFormat> for OutputFormat {
@@ -10072,7 +10107,7 @@ impl From<kreuzberg::OutputFormat> for OutputFormat {
             kreuzberg::OutputFormat::Html => Self::Html,
             kreuzberg::OutputFormat::Json => Self::Json,
             kreuzberg::OutputFormat::Structured => Self::Structured,
-            _ => Self::Unknown,
+            kreuzberg::OutputFormat::Custom(..) => Self::Custom,
         }
     }
 }
@@ -10086,7 +10121,7 @@ impl OutputFormat {
             Self::Html => "html".to_string(),
             Self::Json => "json".to_string(),
             Self::Structured => "structured".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::Custom => "custom".to_string(),
         }
     }
 }
@@ -10189,15 +10224,14 @@ impl ChunkerType {
 
 pub enum ChunkSizing {
     Characters,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Tokenizer,
 }
 
 impl From<kreuzberg::ChunkSizing> for ChunkSizing {
     fn from(val: kreuzberg::ChunkSizing) -> Self {
         match val {
             kreuzberg::ChunkSizing::Characters => Self::Characters,
-            _ => Self::Unknown,
+            kreuzberg::ChunkSizing::Tokenizer { .. } => Self::Tokenizer,
         }
     }
 }
@@ -10206,20 +10240,25 @@ impl ChunkSizing {
     pub fn to_string(&self) -> String {
         match self {
             Self::Characters => "characters".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::Tokenizer => "tokenizer".to_string(),
         }
     }
 }
 
 pub enum EmbeddingModelType {
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Preset,
+    Custom,
+    Llm,
+    Plugin,
 }
 
 impl From<kreuzberg::EmbeddingModelType> for EmbeddingModelType {
     fn from(val: kreuzberg::EmbeddingModelType) -> Self {
         match val {
-            _ => Self::Unknown,
+            kreuzberg::EmbeddingModelType::Preset { .. } => Self::Preset,
+            kreuzberg::EmbeddingModelType::Custom { .. } => Self::Custom,
+            kreuzberg::EmbeddingModelType::Llm { .. } => Self::Llm,
+            kreuzberg::EmbeddingModelType::Plugin { .. } => Self::Plugin,
         }
     }
 }
@@ -10227,7 +10266,10 @@ impl From<kreuzberg::EmbeddingModelType> for EmbeddingModelType {
 impl EmbeddingModelType {
     pub fn to_string(&self) -> String {
         match self {
-            Self::Unknown => "unknown".to_string(),
+            Self::Preset => "preset".to_string(),
+            Self::Custom => "custom".to_string(),
+            Self::Llm => "llm".to_string(),
+            Self::Plugin => "plugin".to_string(),
         }
     }
 }
@@ -10323,13 +10365,13 @@ pub enum OcrBackendType {
     Custom,
 }
 
-impl From<kreuzberg::plugins::OcrBackendType> for OcrBackendType {
-    fn from(val: kreuzberg::plugins::OcrBackendType) -> Self {
+impl From<kreuzberg::OcrBackendType> for OcrBackendType {
+    fn from(val: kreuzberg::OcrBackendType) -> Self {
         match val {
-            kreuzberg::plugins::OcrBackendType::Tesseract => Self::Tesseract,
-            kreuzberg::plugins::OcrBackendType::EasyOCR => Self::EasyOCR,
-            kreuzberg::plugins::OcrBackendType::PaddleOCR => Self::PaddleOCR,
-            kreuzberg::plugins::OcrBackendType::Custom => Self::Custom,
+            kreuzberg::OcrBackendType::Tesseract => Self::Tesseract,
+            kreuzberg::OcrBackendType::EasyOCR => Self::EasyOCR,
+            kreuzberg::OcrBackendType::PaddleOCR => Self::PaddleOCR,
+            kreuzberg::OcrBackendType::Custom => Self::Custom,
         }
     }
 }
@@ -10351,12 +10393,12 @@ pub enum ProcessingStage {
     Late,
 }
 
-impl From<kreuzberg::plugins::ProcessingStage> for ProcessingStage {
-    fn from(val: kreuzberg::plugins::ProcessingStage) -> Self {
+impl From<kreuzberg::ProcessingStage> for ProcessingStage {
+    fn from(val: kreuzberg::ProcessingStage) -> Self {
         match val {
-            kreuzberg::plugins::ProcessingStage::Early => Self::Early,
-            kreuzberg::plugins::ProcessingStage::Middle => Self::Middle,
-            kreuzberg::plugins::ProcessingStage::Late => Self::Late,
+            kreuzberg::ProcessingStage::Early => Self::Early,
+            kreuzberg::ProcessingStage::Middle => Self::Middle,
+            kreuzberg::ProcessingStage::Late => Self::Late,
         }
     }
 }
@@ -10639,20 +10681,51 @@ impl ContentLayer {
 }
 
 pub enum NodeContent {
+    Title,
+    Heading,
+    Paragraph,
+    List,
+    ListItem,
+    Table,
+    Image,
+    Code,
     Quote,
+    Formula,
+    Footnote,
+    Group,
     PageBreak,
+    Slide,
     DefinitionList,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    DefinitionItem,
+    Citation,
+    Admonition,
+    RawBlock,
+    MetadataBlock,
 }
 
 impl From<kreuzberg::NodeContent> for NodeContent {
     fn from(val: kreuzberg::NodeContent) -> Self {
         match val {
+            kreuzberg::NodeContent::Title { .. } => Self::Title,
+            kreuzberg::NodeContent::Heading { .. } => Self::Heading,
+            kreuzberg::NodeContent::Paragraph { .. } => Self::Paragraph,
+            kreuzberg::NodeContent::List { .. } => Self::List,
+            kreuzberg::NodeContent::ListItem { .. } => Self::ListItem,
+            kreuzberg::NodeContent::Table { .. } => Self::Table,
+            kreuzberg::NodeContent::Image { .. } => Self::Image,
+            kreuzberg::NodeContent::Code { .. } => Self::Code,
             kreuzberg::NodeContent::Quote => Self::Quote,
+            kreuzberg::NodeContent::Formula { .. } => Self::Formula,
+            kreuzberg::NodeContent::Footnote { .. } => Self::Footnote,
+            kreuzberg::NodeContent::Group { .. } => Self::Group,
             kreuzberg::NodeContent::PageBreak => Self::PageBreak,
+            kreuzberg::NodeContent::Slide { .. } => Self::Slide,
             kreuzberg::NodeContent::DefinitionList => Self::DefinitionList,
-            _ => Self::Unknown,
+            kreuzberg::NodeContent::DefinitionItem { .. } => Self::DefinitionItem,
+            kreuzberg::NodeContent::Citation { .. } => Self::Citation,
+            kreuzberg::NodeContent::Admonition { .. } => Self::Admonition,
+            kreuzberg::NodeContent::RawBlock { .. } => Self::RawBlock,
+            kreuzberg::NodeContent::MetadataBlock { .. } => Self::MetadataBlock,
         }
     }
 }
@@ -10660,10 +10733,26 @@ impl From<kreuzberg::NodeContent> for NodeContent {
 impl NodeContent {
     pub fn to_string(&self) -> String {
         match self {
+            Self::Title => "title".to_string(),
+            Self::Heading => "heading".to_string(),
+            Self::Paragraph => "paragraph".to_string(),
+            Self::List => "list".to_string(),
+            Self::ListItem => "list_item".to_string(),
+            Self::Table => "table".to_string(),
+            Self::Image => "image".to_string(),
+            Self::Code => "code".to_string(),
             Self::Quote => "quote".to_string(),
+            Self::Formula => "formula".to_string(),
+            Self::Footnote => "footnote".to_string(),
+            Self::Group => "group".to_string(),
             Self::PageBreak => "page_break".to_string(),
+            Self::Slide => "slide".to_string(),
             Self::DefinitionList => "definition_list".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::DefinitionItem => "definition_item".to_string(),
+            Self::Citation => "citation".to_string(),
+            Self::Admonition => "admonition".to_string(),
+            Self::RawBlock => "raw_block".to_string(),
+            Self::MetadataBlock => "metadata_block".to_string(),
         }
     }
 }
@@ -10676,9 +10765,11 @@ pub enum AnnotationKind {
     Code,
     Subscript,
     Superscript,
+    Link,
     Highlight,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Color,
+    FontSize,
+    Custom,
 }
 
 impl From<kreuzberg::AnnotationKind> for AnnotationKind {
@@ -10691,8 +10782,11 @@ impl From<kreuzberg::AnnotationKind> for AnnotationKind {
             kreuzberg::AnnotationKind::Code => Self::Code,
             kreuzberg::AnnotationKind::Subscript => Self::Subscript,
             kreuzberg::AnnotationKind::Superscript => Self::Superscript,
+            kreuzberg::AnnotationKind::Link { .. } => Self::Link,
             kreuzberg::AnnotationKind::Highlight => Self::Highlight,
-            _ => Self::Unknown,
+            kreuzberg::AnnotationKind::Color { .. } => Self::Color,
+            kreuzberg::AnnotationKind::FontSize { .. } => Self::FontSize,
+            kreuzberg::AnnotationKind::Custom { .. } => Self::Custom,
         }
     }
 }
@@ -10707,8 +10801,11 @@ impl AnnotationKind {
             Self::Code => "code".to_string(),
             Self::Subscript => "subscript".to_string(),
             Self::Superscript => "superscript".to_string(),
+            Self::Link => "link".to_string(),
             Self::Highlight => "highlight".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::Color => "color".to_string(),
+            Self::FontSize => "font_size".to_string(),
+            Self::Custom => "custom".to_string(),
         }
     }
 }
@@ -10919,14 +11016,51 @@ impl ElementType {
 }
 
 pub enum FormatMetadata {
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Pdf,
+    Docx,
+    Excel,
+    Email,
+    Pptx,
+    Archive,
+    Image,
+    Xml,
+    Text,
+    Html,
+    Ocr,
+    Csv,
+    Bibtex,
+    Citation,
+    FictionBook,
+    Dbf,
+    Jats,
+    Epub,
+    Pst,
+    Code,
 }
 
 impl From<kreuzberg::FormatMetadata> for FormatMetadata {
     fn from(val: kreuzberg::FormatMetadata) -> Self {
         match val {
-            _ => Self::Unknown,
+            kreuzberg::FormatMetadata::Pdf(..) => Self::Pdf,
+            kreuzberg::FormatMetadata::Docx(..) => Self::Docx,
+            kreuzberg::FormatMetadata::Excel(..) => Self::Excel,
+            kreuzberg::FormatMetadata::Email(..) => Self::Email,
+            kreuzberg::FormatMetadata::Pptx(..) => Self::Pptx,
+            kreuzberg::FormatMetadata::Archive(..) => Self::Archive,
+            kreuzberg::FormatMetadata::Image(..) => Self::Image,
+            kreuzberg::FormatMetadata::Xml(..) => Self::Xml,
+            kreuzberg::FormatMetadata::Text(..) => Self::Text,
+            kreuzberg::FormatMetadata::Html(..) => Self::Html,
+            kreuzberg::FormatMetadata::Ocr(..) => Self::Ocr,
+            kreuzberg::FormatMetadata::Csv(..) => Self::Csv,
+            kreuzberg::FormatMetadata::Bibtex(..) => Self::Bibtex,
+            kreuzberg::FormatMetadata::Citation(..) => Self::Citation,
+            kreuzberg::FormatMetadata::FictionBook(..) => Self::FictionBook,
+            kreuzberg::FormatMetadata::Dbf(..) => Self::Dbf,
+            kreuzberg::FormatMetadata::Jats(..) => Self::Jats,
+            kreuzberg::FormatMetadata::Epub(..) => Self::Epub,
+            kreuzberg::FormatMetadata::Pst(..) => Self::Pst,
+            kreuzberg::FormatMetadata::Code(..) => Self::Code,
         }
     }
 }
@@ -10934,7 +11068,26 @@ impl From<kreuzberg::FormatMetadata> for FormatMetadata {
 impl FormatMetadata {
     pub fn to_string(&self) -> String {
         match self {
-            Self::Unknown => "unknown".to_string(),
+            Self::Pdf => "pdf".to_string(),
+            Self::Docx => "docx".to_string(),
+            Self::Excel => "excel".to_string(),
+            Self::Email => "email".to_string(),
+            Self::Pptx => "pptx".to_string(),
+            Self::Archive => "archive".to_string(),
+            Self::Image => "image".to_string(),
+            Self::Xml => "xml".to_string(),
+            Self::Text => "text".to_string(),
+            Self::Html => "html".to_string(),
+            Self::Ocr => "ocr".to_string(),
+            Self::Csv => "csv".to_string(),
+            Self::Bibtex => "bibtex".to_string(),
+            Self::Citation => "citation".to_string(),
+            Self::FictionBook => "fiction_book".to_string(),
+            Self::Dbf => "dbf".to_string(),
+            Self::Jats => "jats".to_string(),
+            Self::Epub => "epub".to_string(),
+            Self::Pst => "pst".to_string(),
+            Self::Code => "code".to_string(),
         }
     }
 }
@@ -11056,14 +11209,15 @@ impl StructuredDataType {
 }
 
 pub enum OcrBoundingGeometry {
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Rectangle,
+    Quadrilateral,
 }
 
 impl From<kreuzberg::OcrBoundingGeometry> for OcrBoundingGeometry {
     fn from(val: kreuzberg::OcrBoundingGeometry) -> Self {
         match val {
-            _ => Self::Unknown,
+            kreuzberg::OcrBoundingGeometry::Rectangle { .. } => Self::Rectangle,
+            kreuzberg::OcrBoundingGeometry::Quadrilateral { .. } => Self::Quadrilateral,
         }
     }
 }
@@ -11071,7 +11225,8 @@ impl From<kreuzberg::OcrBoundingGeometry> for OcrBoundingGeometry {
 impl OcrBoundingGeometry {
     pub fn to_string(&self) -> String {
         match self {
-            Self::Unknown => "unknown".to_string(),
+            Self::Rectangle => "rectangle".to_string(),
+            Self::Quadrilateral => "quadrilateral".to_string(),
         }
     }
 }
@@ -11508,6 +11663,17 @@ pub fn list_validators() -> Result<Vec<String>, String> {
         .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
 }
 
+pub fn calculate_quality_score(text: String, metadata: Option<String>) -> f64 {
+    let __metadata_ahash = metadata.map(|json_str| {
+        let hm = ::serde_json::from_str::<std::collections::HashMap<String, String>>(&json_str)
+            .expect("valid JSON for metadata");
+        hm.into_iter()
+            .map(|(k, v)| (std::borrow::Cow::Owned(k), serde_json::Value::String(v)))
+            .collect::<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>>()
+    });
+    kreuzberg::text::quality::calculate_quality_score(&text, __metadata_ahash.as_ref())
+}
+
 pub fn embed_texts_async(texts: Vec<String>, config: EmbeddingConfig) -> Result<String, String> {
     crate::__alef_tokio_runtime().block_on(async {
         kreuzberg::embed_texts_async(texts, &config.0)
@@ -11549,7 +11715,7 @@ pub fn list_embedding_presets() -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
-pub struct OcrBackendBox(pub Box<dyn kreuzberg::plugins::OcrBackend + Send + Sync>);
+pub struct OcrBackendBox(pub Box<dyn kreuzberg::OcrBackend + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox> {
     Vec::new()
@@ -11575,7 +11741,7 @@ pub fn ocr_backend_call_backend_type(this: &OcrBackendBox) -> OcrBackendType {
     OcrBackendType::from(this.0.backend_type())
 }
 
-pub struct PostProcessorBox(pub Box<dyn kreuzberg::plugins::PostProcessor + Send + Sync>);
+pub struct PostProcessorBox(pub Box<dyn kreuzberg::PostProcessor + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_post_processor() -> Vec<PostProcessorBox> {
     Vec::new()
@@ -11599,7 +11765,7 @@ pub fn post_processor_call_processing_stage(this: &PostProcessorBox) -> Processi
     ProcessingStage::from(this.0.processing_stage())
 }
 
-pub struct ValidatorBox(pub Box<dyn kreuzberg::plugins::Validator + Send + Sync>);
+pub struct ValidatorBox(pub Box<dyn kreuzberg::Validator + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_validator() -> Vec<ValidatorBox> {
     Vec::new()
@@ -11616,7 +11782,7 @@ pub fn validator_call_validate(this: &ValidatorBox, result: ExtractionResult, co
     })
 }
 
-pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::plugins::EmbeddingBackend + Send + Sync>);
+pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::EmbeddingBackend + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox> {
     Vec::new()
@@ -11639,7 +11805,7 @@ pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<Strin
     })
 }
 
-pub struct DocumentExtractorBox(pub Box<dyn kreuzberg::plugins::DocumentExtractor + Send + Sync>);
+pub struct DocumentExtractorBox(pub Box<dyn kreuzberg::DocumentExtractor + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_document_extractor() -> Vec<DocumentExtractorBox> {
     Vec::new()
@@ -11667,7 +11833,7 @@ pub fn document_extractor_call_supported_mime_types(this: &DocumentExtractorBox)
     this.0.supported_mime_types().iter().map(|s| s.to_string()).collect()
 }
 
-pub struct RendererBox(pub Box<dyn kreuzberg::plugins::Renderer + Send + Sync>);
+pub struct RendererBox(pub Box<dyn kreuzberg::Renderer + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_renderer() -> Vec<RendererBox> {
     Vec::new()
@@ -11761,7 +11927,7 @@ impl kreuzberg::plugins::Plugin for SwiftOcrBackendWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
+impl kreuzberg::OcrBackend for SwiftOcrBackendWrapper {
     async fn process_image(
         &self,
         image_bytes: &[u8],
@@ -11778,9 +11944,9 @@ impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
         self.inner.alef_supports_language(lang)
     }
 
-    fn backend_type(&self) -> kreuzberg::plugins::OcrBackendType {
+    fn backend_type(&self) -> kreuzberg::OcrBackendType {
         let json = self.inner.alef_backend_type();
-        ::serde_json::from_str::<kreuzberg::plugins::OcrBackendType>(&json)
+        ::serde_json::from_str::<kreuzberg::OcrBackendType>(&json)
             .expect("swift ocr_backend.backend_type returned invalid JSON")
     }
 }
@@ -11790,7 +11956,7 @@ impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_ocr_backend(swift_box: ffi::SwiftOcrBackendBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::OcrBackend> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::OcrBackend> =
         ::std::sync::Arc::new(SwiftOcrBackendWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
     let mut guard = registry.write();
@@ -11852,7 +12018,7 @@ impl kreuzberg::plugins::Plugin for SwiftPostProcessorWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
+impl kreuzberg::PostProcessor for SwiftPostProcessorWrapper {
     async fn process(
         &self,
         result: &mut kreuzberg::ExtractionResult,
@@ -11864,9 +12030,9 @@ impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
         decode_inbound_envelope::<()>(&envelope).map(|_| ())
     }
 
-    fn processing_stage(&self) -> kreuzberg::plugins::ProcessingStage {
+    fn processing_stage(&self) -> kreuzberg::ProcessingStage {
         let json = self.inner.alef_processing_stage();
-        ::serde_json::from_str::<kreuzberg::plugins::ProcessingStage>(&json)
+        ::serde_json::from_str::<kreuzberg::ProcessingStage>(&json)
             .expect("swift post_processor.processing_stage returned invalid JSON")
     }
 }
@@ -11876,7 +12042,7 @@ impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_post_processor(swift_box: ffi::SwiftPostProcessorBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::PostProcessor> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::PostProcessor> =
         ::std::sync::Arc::new(SwiftPostProcessorWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_post_processor_registry();
     let mut guard = registry.write();
@@ -11938,7 +12104,7 @@ impl kreuzberg::plugins::Plugin for SwiftValidatorWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::Validator for SwiftValidatorWrapper {
+impl kreuzberg::Validator for SwiftValidatorWrapper {
     async fn validate(
         &self,
         result: &kreuzberg::ExtractionResult,
@@ -11956,8 +12122,7 @@ impl kreuzberg::plugins::Validator for SwiftValidatorWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_validator(swift_box: ffi::SwiftValidatorBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::Validator> =
-        ::std::sync::Arc::new(SwiftValidatorWrapper::new(swift_box));
+    let arc: ::std::sync::Arc<dyn kreuzberg::Validator> = ::std::sync::Arc::new(SwiftValidatorWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_validator_registry();
     let mut guard = registry.write();
     guard.register(arc).map_err(|e| e.to_string())
@@ -12018,7 +12183,7 @@ impl kreuzberg::plugins::Plugin for SwiftEmbeddingBackendWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
+impl kreuzberg::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
     fn dimensions(&self) -> usize {
         self.inner.alef_dimensions()
     }
@@ -12034,7 +12199,7 @@ impl kreuzberg::plugins::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_embedding_backend(swift_box: ffi::SwiftEmbeddingBackendBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::EmbeddingBackend> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::EmbeddingBackend> =
         ::std::sync::Arc::new(SwiftEmbeddingBackendWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_embedding_backend_registry();
     let mut guard = registry.write();
@@ -12096,7 +12261,7 @@ impl kreuzberg::plugins::Plugin for SwiftDocumentExtractorWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::DocumentExtractor for SwiftDocumentExtractorWrapper {
+impl kreuzberg::DocumentExtractor for SwiftDocumentExtractorWrapper {
     async fn extract_bytes(
         &self,
         content: &[u8],
@@ -12125,7 +12290,7 @@ impl kreuzberg::plugins::DocumentExtractor for SwiftDocumentExtractorWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_document_extractor(swift_box: ffi::SwiftDocumentExtractorBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::DocumentExtractor> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::DocumentExtractor> =
         ::std::sync::Arc::new(SwiftDocumentExtractorWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_document_extractor_registry();
     let mut guard = registry.write();
@@ -12186,7 +12351,7 @@ impl kreuzberg::plugins::Plugin for SwiftRendererWrapper {
         decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
     }
 }
-impl kreuzberg::plugins::Renderer for SwiftRendererWrapper {
+impl kreuzberg::Renderer for SwiftRendererWrapper {
     fn render(&self, doc: &kreuzberg::InternalDocument) -> std::result::Result<String, kreuzberg::KreuzbergError> {
         let doc = ::serde_json::to_string(&doc).expect("serializable param doc");
         let envelope = self.inner.alef_render(doc);
@@ -12199,8 +12364,7 @@ impl kreuzberg::plugins::Renderer for SwiftRendererWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_renderer(swift_box: ffi::SwiftRendererBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::Renderer> =
-        ::std::sync::Arc::new(SwiftRendererWrapper::new(swift_box));
+    let arc: ::std::sync::Arc<dyn kreuzberg::Renderer> = ::std::sync::Arc::new(SwiftRendererWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_renderer_registry();
     let mut guard = registry.write();
     guard.register(arc).map_err(|e| e.to_string())
@@ -12512,6 +12676,11 @@ pub fn chunk_metadata_from_json(json: String) -> Result<ChunkMetadata, String> {
 pub fn extracted_image_from_json(json: String) -> Result<ExtractedImage, String> {
     serde_json::from_str::<kreuzberg::ExtractedImage>(&json)
         .map(ExtractedImage)
+        .map_err(|e| e.to_string())
+}
+pub fn bounding_box_from_json(json: String) -> Result<BoundingBox, String> {
+    serde_json::from_str::<kreuzberg::BoundingBox>(&json)
+        .map(BoundingBox)
         .map_err(|e| e.to_string())
 }
 pub fn element_metadata_from_json(json: String) -> Result<ElementMetadata, String> {
@@ -12905,12 +13074,12 @@ pub fn code_content_mode_from_json(json: String) -> Result<CodeContentMode, Stri
         .map_err(|e| e.to_string())
 }
 pub fn ocr_backend_type_from_json(json: String) -> Result<OcrBackendType, String> {
-    serde_json::from_str::<kreuzberg::plugins::OcrBackendType>(&json)
+    serde_json::from_str::<kreuzberg::OcrBackendType>(&json)
         .map(OcrBackendType::from)
         .map_err(|e| e.to_string())
 }
 pub fn processing_stage_from_json(json: String) -> Result<ProcessingStage, String> {
-    serde_json::from_str::<kreuzberg::plugins::ProcessingStage>(&json)
+    serde_json::from_str::<kreuzberg::ProcessingStage>(&json)
         .map(ProcessingStage::from)
         .map_err(|e| e.to_string())
 }

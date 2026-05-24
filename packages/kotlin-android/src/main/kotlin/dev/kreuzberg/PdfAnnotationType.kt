@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,50 +25,45 @@ package dev.kreuzberg
 /** Type of PDF annotation. */
 enum class PdfAnnotationType {
     /** Sticky note / text annotation */
-    @com.fasterxml.jackson.annotation.JsonProperty("text")
-    TEXT,
+    @com.fasterxml.jackson.annotation.JsonProperty("text") TEXT,
     /** Highlighted text region */
-    @com.fasterxml.jackson.annotation.JsonProperty("highlight")
-    HIGHLIGHT,
+    @com.fasterxml.jackson.annotation.JsonProperty("highlight") HIGHLIGHT,
     /** Hyperlink annotation */
-    @com.fasterxml.jackson.annotation.JsonProperty("link")
-    LINK,
+    @com.fasterxml.jackson.annotation.JsonProperty("link") LINK,
     /** Rubber stamp annotation */
-    @com.fasterxml.jackson.annotation.JsonProperty("stamp")
-    STAMP,
+    @com.fasterxml.jackson.annotation.JsonProperty("stamp") STAMP,
     /** Underline text markup */
-    @com.fasterxml.jackson.annotation.JsonProperty("underline")
-    UNDERLINE,
+    @com.fasterxml.jackson.annotation.JsonProperty("underline") UNDERLINE,
     /** Strikeout text markup */
-    @com.fasterxml.jackson.annotation.JsonProperty("strike_out")
-    STRIKE_OUT,
+    @com.fasterxml.jackson.annotation.JsonProperty("strike_out") STRIKE_OUT,
     /** Any other annotation type */
-    @com.fasterxml.jackson.annotation.JsonProperty("other")
-    OTHER;
+    @com.fasterxml.jackson.annotation.JsonProperty("other") OTHER;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String = when (this) {
-        TEXT -> "text"
-        HIGHLIGHT -> "highlight"
-        LINK -> "link"
-        STAMP -> "stamp"
-        UNDERLINE -> "underline"
-        STRIKE_OUT -> "strike_out"
-        OTHER -> "other"
-    }
+    fun toWire(): String =
+        when (this) {
+            TEXT -> "text"
+            HIGHLIGHT -> "highlight"
+            LINK -> "link"
+            STAMP -> "stamp"
+            UNDERLINE -> "underline"
+            STRIKE_OUT -> "strike_out"
+            OTHER -> "other"
+        }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): PdfAnnotationType = when (value) {
-            "text" -> TEXT
-            "highlight" -> HIGHLIGHT
-            "link" -> LINK
-            "stamp" -> STAMP
-            "underline" -> UNDERLINE
-            "strike_out" -> STRIKE_OUT
-            "other" -> OTHER
-            else -> throw IllegalArgumentException("Unknown PdfAnnotationType value: $value")
-        }
+        fun fromWire(value: String): PdfAnnotationType =
+            when (value) {
+                "text" -> TEXT
+                "highlight" -> HIGHLIGHT
+                "link" -> LINK
+                "stamp" -> STAMP
+                "underline" -> UNDERLINE
+                "strike_out" -> STRIKE_OUT
+                "other" -> OTHER
+                else -> throw IllegalArgumentException("Unknown PdfAnnotationType value: $value")
+            }
     }
 }

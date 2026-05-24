@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,9 +25,8 @@ package dev.kreuzberg
 /**
  * Image preprocessing configuration for OCR.
  *
- * These settings control how images are preprocessed before OCR to improve
- * text recognition quality. Different preprocessing strategies work better
- * for different document types.
+ * These settings control how images are preprocessed before OCR to improve text recognition
+ * quality. Different preprocessing strategies work better for different document types.
  */
 data class ImagePreprocessingConfig(
     /** Target DPI for the image (300 is standard, 600 for small text). */
@@ -42,5 +42,5 @@ data class ImagePreprocessingConfig(
     /** Binarization method: "otsu", "sauvola", "adaptive". */
     val binarizationMethod: String = "otsu",
     /** Invert colors (white text on black → black on white). */
-    val invertColors: Boolean = false
+    val invertColors: Boolean = false,
 )

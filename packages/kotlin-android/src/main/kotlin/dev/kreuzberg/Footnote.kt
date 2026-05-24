@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -26,5 +27,5 @@ data class Footnote(
     /** Footnote label */
     val label: String,
     /** Footnote content blocks */
-    val content: List<FormattedBlock> = emptyList()
+    val content: List<FormattedBlock> = emptyList(),
 )

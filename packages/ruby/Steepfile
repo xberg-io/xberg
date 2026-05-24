@@ -1,6 +1,14 @@
 # frozen_string_literal: true
 
 target :lib do
-  signature 'sig'
-  check 'lib'
+  signature "sig"
+  check "lib"
+  # The generated `lib/kreuzberg/native.rb` carries inline Sorbet
+  # `sig { ... }` blocks on tagged-enum variant Data classes. Sorbet's runtime
+  # provides those via `extend T::Sig`, but Steep does not understand the
+  # extension (it relies on RBS, not Sorbet sigs) and reports
+  # `Type `self` does not have method `sig`` on every block. RBS coverage
+  # for the same surface lives in `sig/types.rbs`, so we steer Steep to the
+  # RBS file by ignoring the .rb.
+  ignore "lib/kreuzberg/native.rb"
 end

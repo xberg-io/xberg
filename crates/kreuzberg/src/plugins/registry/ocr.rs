@@ -40,33 +40,32 @@ impl OcrBackendRegistry {
     /// allowing the process to continue with whichever backends are available.
     #[tracing::instrument(name = "ocr_backend_registry_init")]
     pub fn new() -> Self {
-        #[cfg(any(
-            feature = "ocr",
-            feature = "ocr-wasm",
-            feature = "paddle-ocr",
-            all(feature = "liter-llm", not(target_os = "windows"), not(target_arch = "wasm32"))
-        ))]
         let mut registry = Self {
             backends: AHashMap::new(),
         };
+        registry.register_defaults();
+        registry
+    }
 
-        #[cfg(not(any(
-            feature = "ocr",
-            feature = "ocr-wasm",
-            feature = "paddle-ocr",
-            all(feature = "liter-llm", not(target_os = "windows"), not(target_arch = "wasm32"))
-        )))]
-        let registry = Self {
-            backends: AHashMap::new(),
-        };
-
+    /// Register the built-in OCR backends into this registry.
+    ///
+    /// Registers whichever backends the active feature set enables — Tesseract
+    /// (`ocr`/`ocr-wasm`), PaddleOCR (`paddle-ocr`), and the VLM backend
+    /// (`liter-llm`). Each backend is registered independently: if one fails to
+    /// initialize it is skipped with a warning so the remaining backends still
+    /// register.
+    ///
+    /// This is invoked by [`OcrBackendRegistry::new`] at construction and reused
+    /// by the self-healing initialization path so a registry emptied via
+    /// [`clear`](Self::clear) can be re-seeded with the defaults.
+    pub fn register_defaults(&mut self) {
         #[cfg(feature = "ocr")]
         {
             use crate::ocr::tesseract_backend::TesseractBackend;
             tracing::info!("Initializing Tesseract OCR backend");
             match TesseractBackend::new() {
                 Ok(backend) => {
-                    registry.register(Arc::new(backend)).unwrap_or_else(|e| {
+                    self.register(Arc::new(backend)).unwrap_or_else(|e| {
                         tracing::warn!("Failed to register Tesseract backend: {e}");
                     });
                     tracing::info!("Tesseract OCR backend registered successfully");
@@ -86,7 +85,7 @@ impl OcrBackendRegistry {
             tracing::info!("Initializing Tesseract WASM OCR backend");
             match TesseractWasmBackend::new() {
                 Ok(backend) => {
-                    registry.register(Arc::new(backend)).unwrap_or_else(|e| {
+                    self.register(Arc::new(backend)).unwrap_or_else(|e| {
                         tracing::warn!("Failed to register Tesseract WASM backend: {e}");
                     });
                     tracing::info!("Tesseract WASM OCR backend registered successfully");
@@ -103,7 +102,7 @@ impl OcrBackendRegistry {
             tracing::info!("Initializing PaddleOCR backend");
             match PaddleOcrBackend::new() {
                 Ok(backend) => {
-                    registry.register(Arc::new(backend)).unwrap_or_else(|e| {
+                    self.register(Arc::new(backend)).unwrap_or_else(|e| {
                         tracing::warn!("Failed to register PaddleOCR backend: {e}");
                     });
                     tracing::info!("PaddleOCR backend registered successfully");
@@ -121,12 +120,10 @@ impl OcrBackendRegistry {
         {
             use crate::llm::vlm_ocr::VlmOcrBackend;
             tracing::info!("Registering VLM OCR backend");
-            registry.register(Arc::new(VlmOcrBackend)).unwrap_or_else(|e| {
+            self.register(Arc::new(VlmOcrBackend)).unwrap_or_else(|e| {
                 tracing::warn!("Failed to register VLM OCR backend: {e}");
             });
         }
-
-        registry
     }
 
     /// Create a new empty OCR backend registry without default backends.
@@ -340,6 +337,32 @@ mod tests {
     fn test_ocr_backend_registry_new_empty() {
         let registry = OcrBackendRegistry::new_empty();
         assert_eq!(registry.list().len(), 0);
+    }
+
+    #[test]
+    fn should_re_register_default_backends_after_clear() {
+        // `OcrBackendRegistry::new` seeds the built-in backends. Clearing the
+        // registry and calling `register_defaults` must restore them, so a
+        // registry emptied via `clear()` can be self-healed.
+        let mut registry = OcrBackendRegistry::new();
+        let seeded = registry.list();
+        assert!(
+            !seeded.is_empty(),
+            "expected built-in OCR backends to be seeded by `new` with the `ocr` feature enabled"
+        );
+
+        registry.clear().unwrap();
+        assert_eq!(registry.list().len(), 0, "clear should empty the registry");
+
+        registry.register_defaults();
+        let mut restored = registry.list();
+        let mut expected = seeded;
+        restored.sort();
+        expected.sort();
+        assert_eq!(
+            restored, expected,
+            "register_defaults should restore the same built-in backends"
+        );
     }
 
     #[test]

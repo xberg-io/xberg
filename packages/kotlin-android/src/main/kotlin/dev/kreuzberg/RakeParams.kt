@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -26,5 +27,5 @@ data class RakeParams(
     /** Minimum word length to consider (default: 1). */
     val minWordLength: Long = 1L,
     /** Maximum words in a keyword phrase (default: 3). */
-    val maxWordsPerPhrase: Long = 3L
+    val maxWordsPerPhrase: Long = 3L,
 )

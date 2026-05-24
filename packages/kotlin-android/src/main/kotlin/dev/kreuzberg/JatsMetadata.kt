@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -26,5 +27,5 @@ data class JatsMetadata(
     val copyright: String? = null,
     val license: String? = null,
     val historyDates: Map<String, String> = emptyMap(),
-    val contributorRoles: List<ContributorRole> = emptyList()
+    val contributorRoles: List<ContributorRole> = emptyList(),
 )

@@ -7,6 +7,13 @@ High-performance document intelligence for Go backed by the Rust core that power
 > **Version {{ version }}**
 > Report issues at [github.com/kreuzberg-dev/kreuzberg](https://github.com/kreuzberg-dev/kreuzberg/issues).
 
+## What This Package Provides
+
+- **Go module over the Rust core** — context-aware extraction with Go structs and errors.
+- **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings.
+- **Static-link workflow** — build against `kreuzberg-ffi` and ship a self-contained Go binary.
+- **Cross-binding parity** — output matches the Python, Node.js, Ruby, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
+
 ## Install
 
 Kreuzberg Go binaries are **statically linked** — once built, they are self-contained and require no runtime library dependencies. Only the static library is needed at build time.

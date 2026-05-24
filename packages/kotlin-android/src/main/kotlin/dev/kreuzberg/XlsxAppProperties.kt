@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -44,5 +45,5 @@ data class XlsxAppProperties(
     /** Company name */
     val company: String? = null,
     /** Worksheet names */
-    val worksheetNames: List<String> = emptyList()
+    val worksheetNames: List<String> = emptyList(),
 )

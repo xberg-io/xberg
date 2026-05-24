@@ -17,86 +17,73 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
 /** Types of block-level elements in Djot. */
 enum class BlockType {
-    @com.fasterxml.jackson.annotation.JsonProperty("paragraph")
-    PARAGRAPH,
-    @com.fasterxml.jackson.annotation.JsonProperty("heading")
-    HEADING,
-    @com.fasterxml.jackson.annotation.JsonProperty("blockquote")
-    BLOCKQUOTE,
-    @com.fasterxml.jackson.annotation.JsonProperty("code_block")
-    CODE_BLOCK,
-    @com.fasterxml.jackson.annotation.JsonProperty("list_item")
-    LIST_ITEM,
-    @com.fasterxml.jackson.annotation.JsonProperty("ordered_list")
-    ORDERED_LIST,
-    @com.fasterxml.jackson.annotation.JsonProperty("bullet_list")
-    BULLET_LIST,
-    @com.fasterxml.jackson.annotation.JsonProperty("task_list")
-    TASK_LIST,
-    @com.fasterxml.jackson.annotation.JsonProperty("definition_list")
-    DEFINITION_LIST,
-    @com.fasterxml.jackson.annotation.JsonProperty("definition_term")
-    DEFINITION_TERM,
-    @com.fasterxml.jackson.annotation.JsonProperty("definition_description")
-    DEFINITION_DESCRIPTION,
-    @com.fasterxml.jackson.annotation.JsonProperty("div")
-    DIV,
-    @com.fasterxml.jackson.annotation.JsonProperty("section")
-    SECTION,
-    @com.fasterxml.jackson.annotation.JsonProperty("thematic_break")
-    THEMATIC_BREAK,
-    @com.fasterxml.jackson.annotation.JsonProperty("raw_block")
-    RAW_BLOCK,
-    @com.fasterxml.jackson.annotation.JsonProperty("math_display")
-    MATH_DISPLAY;
+    @com.fasterxml.jackson.annotation.JsonProperty("paragraph") PARAGRAPH,
+    @com.fasterxml.jackson.annotation.JsonProperty("heading") HEADING,
+    @com.fasterxml.jackson.annotation.JsonProperty("blockquote") BLOCKQUOTE,
+    @com.fasterxml.jackson.annotation.JsonProperty("code_block") CODE_BLOCK,
+    @com.fasterxml.jackson.annotation.JsonProperty("list_item") LIST_ITEM,
+    @com.fasterxml.jackson.annotation.JsonProperty("ordered_list") ORDERED_LIST,
+    @com.fasterxml.jackson.annotation.JsonProperty("bullet_list") BULLET_LIST,
+    @com.fasterxml.jackson.annotation.JsonProperty("task_list") TASK_LIST,
+    @com.fasterxml.jackson.annotation.JsonProperty("definition_list") DEFINITION_LIST,
+    @com.fasterxml.jackson.annotation.JsonProperty("definition_term") DEFINITION_TERM,
+    @com.fasterxml.jackson.annotation.JsonProperty("definition_description") DEFINITION_DESCRIPTION,
+    @com.fasterxml.jackson.annotation.JsonProperty("div") DIV,
+    @com.fasterxml.jackson.annotation.JsonProperty("section") SECTION,
+    @com.fasterxml.jackson.annotation.JsonProperty("thematic_break") THEMATIC_BREAK,
+    @com.fasterxml.jackson.annotation.JsonProperty("raw_block") RAW_BLOCK,
+    @com.fasterxml.jackson.annotation.JsonProperty("math_display") MATH_DISPLAY;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String = when (this) {
-        PARAGRAPH -> "paragraph"
-        HEADING -> "heading"
-        BLOCKQUOTE -> "blockquote"
-        CODE_BLOCK -> "code_block"
-        LIST_ITEM -> "list_item"
-        ORDERED_LIST -> "ordered_list"
-        BULLET_LIST -> "bullet_list"
-        TASK_LIST -> "task_list"
-        DEFINITION_LIST -> "definition_list"
-        DEFINITION_TERM -> "definition_term"
-        DEFINITION_DESCRIPTION -> "definition_description"
-        DIV -> "div"
-        SECTION -> "section"
-        THEMATIC_BREAK -> "thematic_break"
-        RAW_BLOCK -> "raw_block"
-        MATH_DISPLAY -> "math_display"
-    }
+    fun toWire(): String =
+        when (this) {
+            PARAGRAPH -> "paragraph"
+            HEADING -> "heading"
+            BLOCKQUOTE -> "blockquote"
+            CODE_BLOCK -> "code_block"
+            LIST_ITEM -> "list_item"
+            ORDERED_LIST -> "ordered_list"
+            BULLET_LIST -> "bullet_list"
+            TASK_LIST -> "task_list"
+            DEFINITION_LIST -> "definition_list"
+            DEFINITION_TERM -> "definition_term"
+            DEFINITION_DESCRIPTION -> "definition_description"
+            DIV -> "div"
+            SECTION -> "section"
+            THEMATIC_BREAK -> "thematic_break"
+            RAW_BLOCK -> "raw_block"
+            MATH_DISPLAY -> "math_display"
+        }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): BlockType = when (value) {
-            "paragraph" -> PARAGRAPH
-            "heading" -> HEADING
-            "blockquote" -> BLOCKQUOTE
-            "code_block" -> CODE_BLOCK
-            "list_item" -> LIST_ITEM
-            "ordered_list" -> ORDERED_LIST
-            "bullet_list" -> BULLET_LIST
-            "task_list" -> TASK_LIST
-            "definition_list" -> DEFINITION_LIST
-            "definition_term" -> DEFINITION_TERM
-            "definition_description" -> DEFINITION_DESCRIPTION
-            "div" -> DIV
-            "section" -> SECTION
-            "thematic_break" -> THEMATIC_BREAK
-            "raw_block" -> RAW_BLOCK
-            "math_display" -> MATH_DISPLAY
-            else -> throw IllegalArgumentException("Unknown BlockType value: $value")
-        }
+        fun fromWire(value: String): BlockType =
+            when (value) {
+                "paragraph" -> PARAGRAPH
+                "heading" -> HEADING
+                "blockquote" -> BLOCKQUOTE
+                "code_block" -> CODE_BLOCK
+                "list_item" -> LIST_ITEM
+                "ordered_list" -> ORDERED_LIST
+                "bullet_list" -> BULLET_LIST
+                "task_list" -> TASK_LIST
+                "definition_list" -> DEFINITION_LIST
+                "definition_term" -> DEFINITION_TERM
+                "definition_description" -> DEFINITION_DESCRIPTION
+                "div" -> DIV
+                "section" -> SECTION
+                "thematic_break" -> THEMATIC_BREAK
+                "raw_block" -> RAW_BLOCK
+                "math_display" -> MATH_DISPLAY
+                else -> throw IllegalArgumentException("Unknown BlockType value: $value")
+            }
     }
 }

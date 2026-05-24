@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -34,5 +35,5 @@ data class TableCell(
     /** Column span (number of columns this cell spans) */
     val colSpan: Int = 0,
     /** Whether this is a header cell */
-    val isHeader: Boolean = false
+    val isHeader: Boolean = false,
 )

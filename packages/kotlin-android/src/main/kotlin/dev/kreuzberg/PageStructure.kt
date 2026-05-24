@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Unified page structure for documents.
  *
- * Supports different page types (PDF pages, PPTX slides, Excel sheets)
- * with character offset boundaries for chunk-to-page mapping.
+ * Supports different page types (PDF pages, PPTX slides, Excel sheets) with character offset
+ * boundaries for chunk-to-page mapping.
  */
 data class PageStructure(
     /** Total number of pages/slides/sheets */
@@ -35,10 +36,10 @@ data class PageStructure(
     /**
      * Character offset boundaries for each page
      *
-     * Maps character ranges in the extracted content to page numbers.
-     * Used for chunk page range calculation.
+     * Maps character ranges in the extracted content to page numbers. Used for chunk page range
+     * calculation.
      */
     val boundaries: List<PageBoundary>? = null,
     /** Detailed per-page metadata (optional, only when needed) */
-    val pages: List<PageInfo>? = null
+    val pages: List<PageInfo>? = null,
 )

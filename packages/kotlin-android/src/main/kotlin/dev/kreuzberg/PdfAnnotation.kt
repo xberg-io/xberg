@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -30,5 +31,5 @@ data class PdfAnnotation(
     /** Page number where the annotation appears (1-indexed). */
     val pageNumber: Int,
     /** Bounding box of the annotation on the page. */
-    val boundingBox: String? = null
+    val boundingBox: BoundingBox? = null,
 )
