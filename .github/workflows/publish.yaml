@@ -301,21 +301,26 @@ jobs:
           version: ${{ needs.prepare.outputs.version }}
 
   check-zig:
-    name: Check Zig package presence (tag-based)
+    name: Check Zig package presence
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_zig == 'true' }}
+    if: ${{ (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && needs.prepare.outputs.release_zig == 'true' }}
     runs-on: ubuntu-latest
     outputs:
       exists: ${{ steps.check.outputs.exists }}
     steps:
-      # Zig has no central registry; existence === GitHub release tag exists.
       - id: check
+        # `registry: github-release` (not `registry: zig`) — alef check-registry's
+        # zig path only verifies the release tag exists. On a real release that's
+        # always true, so it short-circuits `publish-zig` to skipped (regression:
+        # v4.x shipped without the zig tarball asset because of this). Verify
+        # the actual asset is present instead.
         uses: kreuzberg-dev/actions/check-registry@v1
         with:
-          registry: zig
-          package: kreuzberg
+          registry: github-release
+          package: kreuzberg-zig-v${{ needs.prepare.outputs.version }}.tar.gz
           version: ${{ needs.prepare.outputs.version }}
           repo: ${{ github.repository }}
+          assets: kreuzberg-zig-v${{ needs.prepare.outputs.version }}.tar.gz
 
   check-homebrew:
     name: Check Homebrew tap for formula
@@ -2057,22 +2062,26 @@ jobs:
 
   publish-zig:
     name: Publish Zig package metadata
-    needs: [prepare, zig-package, check-zig]
-    if: ${{ needs.prepare.outputs.release_zig == 'true' && needs.prepare.outputs.is_tag == 'true' && needs.check-zig.outputs.exists != 'true' }}
+    needs: [prepare, check-zig]
+    if: ${{ needs.prepare.outputs.release_zig == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-zig.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.ref }}
-
           submodules: recursive
+
       - uses: kreuzberg-dev/actions/publish-zig@v1
         with:
           working-directory: packages/zig
           tag: ${{ needs.prepare.outputs.tag }}
-          # build.zig.zon pins `minimum_zig_version = "0.16.0"`; default
-          # action zig-version 0.13.0 rejects the manifest at `zig build --fetch`.
-          zig-version: "0.16.0"
+          # Override the auto-detected package-name (`.kreuzberg` from
+          # build.zig.zon) to match the alef-emitted test_app URL pattern
+          # `{crate-name}-zig-v{version}.tar.gz`. Without this, the asset
+          # uploads as `kreuzberg-v{version}.tar.gz` while test_apps/zig
+          # fetches `kreuzberg-zig-v{version}.tar.gz` → 404 + consumer
+          # build.zig.zon TODO hash.
+          package-name: kreuzberg-zig
           update-release-notes: "true"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
