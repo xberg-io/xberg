@@ -3817,6 +3817,7 @@ dependencies = [
 name = "kreuzberg-php"
 version = "5.0.0-rc.1"
 dependencies = [
+ "ahash",
  "async-trait",
  "ext-php-rs",
  "kreuzberg",

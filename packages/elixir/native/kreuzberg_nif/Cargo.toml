@@ -16,6 +16,7 @@ name = "kreuzberg_nif"
 crate-type = ["cdylib"]
 
 [dependencies]
+ahash = "0.8"
 async-trait = "0.1"
 kreuzberg = { version = "5.0.0-rc.1", path = "../../../../crates/kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 rustler = "0.37"

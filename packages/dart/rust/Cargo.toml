@@ -13,20 +13,20 @@ ignored = ["kreuzberg"]
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-flutter_rust_bridge = "=2.12.0"
 ahash = "0.8"
+async-trait = "0.1"
+flutter_rust_bridge = "=2.12.0"
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread"] }
-async-trait = "0.1"
-
-[target.'cfg(not(any(all(target_os = "android", target_arch = "x86_64"), all(target_os = "ios", target_arch = "x86_64"))))'.dependencies]
-kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
 
 [target.'cfg(all(target_os = "android", target_arch = "x86_64"))'.dependencies]
 kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, features = ["android-target"] }
 
 [target.'cfg(all(target_os = "ios", target_arch = "x86_64"))'.dependencies]
 kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, features = ["android-target"] }
+
+[target.'cfg(not(any(all(target_os = "android", target_arch = "x86_64"), all(target_os = "ios", target_arch = "x86_64"))))'.dependencies]
+kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
 
 [lints.rust]
 # flutter_rust_bridge uses #[cfg(frb_expand)] internally during macro expansion.
