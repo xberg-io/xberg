@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Main extraction configuration.
  *
- * This struct contains all configuration options for the extraction process. It can be loaded from
- * TOML, YAML, or JSON files, or created programmatically.
+ * This struct contains all configuration options for the extraction process.
+ * It can be loaded from TOML, YAML, or JSON files, or created programmatically.
  */
 data class ExtractionConfig(
     /** Enable caching of extraction results */
@@ -40,18 +40,18 @@ data class ExtractionConfig(
     /**
      * Force OCR on specific pages only (1-indexed page numbers, must be >= 1).
      *
-     * When set, only the listed pages are OCR'd regardless of text layer quality. Unlisted pages
-     * use native text extraction. Ignored when `force_ocr` is `true`. Only applies to PDF
-     * documents. Duplicates are automatically deduplicated. An `ocr` config is recommended for
-     * backend/language selection; defaults are used if absent.
+     * When set, only the listed pages are OCR'd regardless of text layer quality.
+     * Unlisted pages use native text extraction. Ignored when `force_ocr` is `true`.
+     * Only applies to PDF documents. Duplicates are automatically deduplicated.
+     * An `ocr` config is recommended for backend/language selection; defaults are used if absent.
      */
     val forceOcrPages: List<Int>? = null,
     /**
      * Disable OCR entirely, even for images.
      *
-     * When `true`, OCR is skipped for all document types. Images return metadata only (dimensions,
-     * format, EXIF) without text extraction. PDFs use only native text extraction without OCR
-     * fallback.
+     * When `true`, OCR is skipped for all document types. Images return metadata
+     * only (dimensions, format, EXIF) without text extraction. PDFs use only
+     * native text extraction without OCR fallback.
      *
      * Cannot be `true` simultaneously with `force_ocr`.
      *
@@ -63,9 +63,9 @@ data class ExtractionConfig(
     /**
      * Content filtering configuration (None = use extractor defaults).
      *
-     * Controls whether document "furniture" (headers, footers, watermarks, repeating text) is
-     * included in or stripped from extraction results. See `ContentFilterConfig` for per-field
-     * documentation.
+     * Controls whether document "furniture" (headers, footers, watermarks,
+     * repeating text) is included in or stripped from extraction results.
+     * See `ContentFilterConfig` for per-field documentation.
      */
     val contentFilter: ContentFilterConfig? = null,
     /** Image extraction configuration (None = no image extraction) */
@@ -85,15 +85,16 @@ data class ExtractionConfig(
     /**
      * HTML to Markdown conversion options (None = use defaults)
      *
-     * Configure how HTML documents are converted to Markdown, including heading styles, list
-     * formatting, code block styles, and preprocessing options.
+     * Configure how HTML documents are converted to Markdown, including heading styles,
+     * list formatting, code block styles, and preprocessing options.
      */
     val htmlOptions: String? = null,
     /**
      * Styled HTML output configuration.
      *
-     * When set alongside `output_format = OutputFormat.Html`, the extraction pipeline uses
-     * `StyledHtmlRenderer` which emits stable `kb-*` CSS class hooks on every structural element
+     * When set alongside `output_format = OutputFormat.Html`, the extraction
+     * pipeline uses `StyledHtmlRenderer`
+     * which emits stable `kb-*` CSS class hooks on every structural element
      * and optionally embeds theme CSS or user-supplied CSS in a `<style>` block.
      *
      * When `null`, the existing plain comrak-based HTML renderer is used.
@@ -102,32 +103,35 @@ data class ExtractionConfig(
     /**
      * Default per-file timeout in seconds for batch extraction.
      *
-     * When set, each file in a batch will be canceled after this duration unless overridden by
-     * `FileExtractionConfig.timeout_secs`. `null` means no timeout (unbounded extraction time).
+     * When set, each file in a batch will be canceled after this duration
+     * unless overridden by `FileExtractionConfig.timeout_secs`.
+     * `null` means no timeout (unbounded extraction time).
      */
     val extractionTimeoutSecs: Long? = null,
     /**
      * Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()).
      *
-     * Limits parallelism to prevent resource exhaustion when processing large batches. Defaults to
-     * (num_cpus × 1.5).ceil() when not set.
+     * Limits parallelism to prevent resource exhaustion when processing
+     * large batches. Defaults to (num_cpus × 1.5).ceil() when not set.
      */
     val maxConcurrentExtractions: Long? = null,
     /**
      * Result structure format
      *
-     * Controls whether results are returned in unified format (default) with all content in the
-     * `content` field, or element-based format with semantic elements (for Unstructured-compatible
-     * output).
+     * Controls whether results are returned in unified format (default) with all
+     * content in the `content` field, or element-based format with semantic
+     * elements (for Unstructured-compatible output).
      */
     val resultFormat: ResultFormat = ResultFormat.UNIFIED,
     /**
      * Security limits for archive extraction.
      *
-     * Controls maximum archive size, compression ratio, file count, and other security thresholds
-     * to prevent decompression bomb attacks. Also caps nesting depth, iteration count, entity /
-     * token length, total content size, and table cell count for every extraction path that ingests
-     * user-controlled bytes. When `null`, default limits are used.
+     * Controls maximum archive size, compression ratio, file count, and other
+     * security thresholds to prevent decompression bomb attacks. Also caps
+     * nesting depth, iteration count, entity / token length, total
+     * content size, and table cell count for every extraction path that
+     * ingests user-controlled bytes.
+     * When `null`, default limits are used.
      */
     val securityLimits: SecurityLimits? = null,
     /**
@@ -140,37 +144,41 @@ data class ExtractionConfig(
      * - `Djot`: Djot markup format (requires djot feature)
      * - `Html`: HTML formatted output
      *
-     * When set to a structured format, extraction results will include formatted output. The
-     * `formatted_content` field may be populated when format conversion is applied.
+     * When set to a structured format, extraction results will include
+     * formatted output. The `formatted_content` field may be populated
+     * when format conversion is applied.
      */
     val outputFormat: OutputFormat = OutputFormat.Plain,
     /**
      * Layout detection configuration (None = layout detection disabled).
      *
-     * When set, PDF pages and images are analyzed for document structure (headings, code, formulas,
-     * tables, figures, etc.) using RT-DETR models via ONNX Runtime. For PDFs, layout hints override
-     * paragraph classification in the markdown pipeline. For images, per-region OCR is performed
-     * with markdown formatting based on detected layout classes. Requires the `layout-detection`
-     * feature to run inference; the field is present whenever the `layout-types` feature is active
-     * (which includes `layout-detection` as well as the no-ORT target groups).
+     * When set, PDF pages and images are analyzed for document structure
+     * (headings, code, formulas, tables, figures, etc.) using RT-DETR models
+     * via ONNX Runtime. For PDFs, layout hints override paragraph classification
+     * in the markdown pipeline. For images, per-region OCR is performed with
+     * markdown formatting based on detected layout classes.
+     * Requires the `layout-detection` feature to run inference; the field is
+     * present whenever the `layout-types` feature is active (which includes
+     * `layout-detection` as well as the no-ORT target groups).
      */
     val layout: LayoutDetectionConfig? = null,
     /**
      * Run layout detection on the non-OCR PDF markdown path.
      *
-     * When `true` and `layout` is `Some(_)`, layout regions inform heading, table, list, and figure
-     * detection in the structure pipeline that would otherwise rely on font-clustering heuristics
-     * alone. Significantly improves SF1 (structural F1) at the cost of inference latency
-     * (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`. Requires the `layout-detection`
-     * feature.
+     * When `true` and `layout` is `Some(_)`, layout regions inform heading,
+     * table, list, and figure detection in the structure pipeline that would
+     * otherwise rely on font-clustering heuristics alone. Significantly
+     * improves SF1 (structural F1) at the cost of inference latency
+     * (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
+     * Requires the `layout-detection` feature.
      */
     val useLayoutForMarkdown: Boolean = false,
     /**
      * Enable structured document tree output.
      *
-     * When true, populates the `document` field on `ExtractionResult` with a hierarchical
-     * `DocumentStructure` containing heading-driven section nesting, table grids, content layer
-     * classification, and inline annotations.
+     * When true, populates the `document` field on `ExtractionResult` with a
+     * hierarchical `DocumentStructure` containing heading-driven section nesting,
+     * table grids, content layer classification, and inline annotations.
      *
      * Independent of `result_format` — can be combined with Unified or ElementBased.
      */
@@ -178,69 +186,72 @@ data class ExtractionConfig(
     /**
      * Hardware acceleration configuration for ONNX Runtime models.
      *
-     * Controls execution provider selection for layout detection and embedding models. When `null`,
-     * uses platform defaults (CoreML on macOS, CUDA on Linux, CPU on Windows).
+     * Controls execution provider selection for layout detection and embedding
+     * models. When `null`, uses platform defaults (CoreML on macOS, CUDA on
+     * Linux, CPU on Windows).
      */
     val acceleration: AccelerationConfig? = null,
     /**
      * Cache namespace for tenant isolation.
      *
-     * When set, cache entries are stored under `{cache_dir}/{namespace}/`. Must be alphanumeric,
-     * hyphens, or underscores only (max 64 chars). Different namespaces have isolated cache spaces
-     * on the same filesystem.
+     * When set, cache entries are stored under `{cache_dir}/{namespace}/`.
+     * Must be alphanumeric, hyphens, or underscores only (max 64 chars).
+     * Different namespaces have isolated cache spaces on the same filesystem.
      */
     val cacheNamespace: String? = null,
     /**
      * Per-request cache TTL in seconds.
      *
-     * Overrides the global `max_age_days` for this specific extraction. When `0`, caching is
-     * completely skipped (no read or write). When `null`, the global TTL applies.
+     * Overrides the global `max_age_days` for this specific extraction.
+     * When `0`, caching is completely skipped (no read or write).
+     * When `null`, the global TTL applies.
      */
     val cacheTtlSecs: Long? = null,
     /**
      * Email extraction configuration (None = use defaults).
      *
-     * Currently supports configuring the fallback codepage for MSG files that do not specify one.
-     * See `EmailConfig` for details.
+     * Currently supports configuring the fallback codepage for MSG files
+     * that do not specify one. See `EmailConfig` for details.
      */
     val email: EmailConfig? = null,
     /**
      * Concurrency limits for constrained environments (None = use defaults).
      *
-     * Controls Rayon thread pool size, ONNX Runtime intra-op threads, and (when
-     * `max_concurrent_extractions` is unset) the batch concurrency semaphore. See
-     * `ConcurrencyConfig` for details.
+     * Controls Rayon thread pool size, ONNX Runtime intra-op threads, and
+     * (when `max_concurrent_extractions` is unset) the batch concurrency
+     * semaphore. See `ConcurrencyConfig` for details.
      */
     val concurrency: String? = null,
     /**
-     * Maximum recursion depth for archive extraction (default: 3). Set to 0 to disable recursive
-     * extraction (legacy behavior).
+     * Maximum recursion depth for archive extraction (default: 3).
+     * Set to 0 to disable recursive extraction (legacy behavior).
      */
     val maxArchiveDepth: Long = 0L,
     /**
      * Tree-sitter language pack configuration (None = tree-sitter disabled).
      *
-     * When set, enables code file extraction using tree-sitter parsers. Controls grammar download
-     * behavior and code analysis options.
+     * When set, enables code file extraction using tree-sitter parsers.
+     * Controls grammar download behavior and code analysis options.
      */
     val treeSitter: TreeSitterConfig? = null,
     /**
      * Structured extraction via LLM (None = disabled).
      *
-     * When set, the extracted document content is sent to an LLM with the provided JSON schema. The
-     * structured response is stored in `ExtractionResult.structured_output`.
+     * When set, the extracted document content is sent to an LLM with the
+     * provided JSON schema. The structured response is stored in
+     * `ExtractionResult.structured_output`.
      */
     val structuredExtraction: StructuredExtractionConfig? = null,
     /**
      * Cancellation token for this extraction (None = no external cancellation).
      *
-     * Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread
-     * / task to abort the extraction in progress. The extractor checks the token at safe
-     * checkpoints (before lock acquisition, between pages, between batch items) and returns
-     * `KreuzbergError.Cancelled` when set.
+     * Pass a `CancellationToken` clone here and call `CancellationToken.cancel`
+     * from another thread / task to abort the extraction in progress. The extractor
+     * checks the token at safe checkpoints (before lock acquisition, between pages,
+     * between batch items) and returns `KreuzbergError.Cancelled` when set.
      *
-     * The field is excluded from serialization because `CancellationToken` is a runtime handle, not
-     * a configuration value.
+     * The field is excluded from serialization because `CancellationToken` is a
+     * runtime handle, not a configuration value.
      */
     val cancelToken: String? = null,
 )

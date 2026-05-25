@@ -29,81 +29,95 @@ package dev.kreuzberg
  */
 enum class PaddleLanguage {
     /** English */
-    @com.fasterxml.jackson.annotation.JsonProperty("English") ENGLISH,
+    @com.fasterxml.jackson.annotation.JsonProperty("English")
+    ENGLISH,
     /** Simplified Chinese */
-    @com.fasterxml.jackson.annotation.JsonProperty("Chinese") CHINESE,
+    @com.fasterxml.jackson.annotation.JsonProperty("Chinese")
+    CHINESE,
     /** Japanese */
-    @com.fasterxml.jackson.annotation.JsonProperty("Japanese") JAPANESE,
+    @com.fasterxml.jackson.annotation.JsonProperty("Japanese")
+    JAPANESE,
     /** Korean */
-    @com.fasterxml.jackson.annotation.JsonProperty("Korean") KOREAN,
+    @com.fasterxml.jackson.annotation.JsonProperty("Korean")
+    KOREAN,
     /** German */
-    @com.fasterxml.jackson.annotation.JsonProperty("German") GERMAN,
+    @com.fasterxml.jackson.annotation.JsonProperty("German")
+    GERMAN,
     /** French */
-    @com.fasterxml.jackson.annotation.JsonProperty("French") FRENCH,
+    @com.fasterxml.jackson.annotation.JsonProperty("French")
+    FRENCH,
     /** Latin script (covers most European languages) */
-    @com.fasterxml.jackson.annotation.JsonProperty("Latin") LATIN,
+    @com.fasterxml.jackson.annotation.JsonProperty("Latin")
+    LATIN,
     /** Cyrillic (Russian and related) */
-    @com.fasterxml.jackson.annotation.JsonProperty("Cyrillic") CYRILLIC,
+    @com.fasterxml.jackson.annotation.JsonProperty("Cyrillic")
+    CYRILLIC,
     /** Traditional Chinese */
-    @com.fasterxml.jackson.annotation.JsonProperty("TraditionalChinese") TRADITIONAL_CHINESE,
+    @com.fasterxml.jackson.annotation.JsonProperty("TraditionalChinese")
+    TRADITIONAL_CHINESE,
     /** Thai */
-    @com.fasterxml.jackson.annotation.JsonProperty("Thai") THAI,
+    @com.fasterxml.jackson.annotation.JsonProperty("Thai")
+    THAI,
     /** Greek */
-    @com.fasterxml.jackson.annotation.JsonProperty("Greek") GREEK,
+    @com.fasterxml.jackson.annotation.JsonProperty("Greek")
+    GREEK,
     /** East Slavic (Russian, Ukrainian, Belarusian) */
-    @com.fasterxml.jackson.annotation.JsonProperty("EastSlavic") EAST_SLAVIC,
+    @com.fasterxml.jackson.annotation.JsonProperty("EastSlavic")
+    EAST_SLAVIC,
     /** Arabic (Arabic, Persian, Urdu) */
-    @com.fasterxml.jackson.annotation.JsonProperty("Arabic") ARABIC,
+    @com.fasterxml.jackson.annotation.JsonProperty("Arabic")
+    ARABIC,
     /** Devanagari (Hindi, Marathi, Sanskrit, Nepali) */
-    @com.fasterxml.jackson.annotation.JsonProperty("Devanagari") DEVANAGARI,
+    @com.fasterxml.jackson.annotation.JsonProperty("Devanagari")
+    DEVANAGARI,
     /** Tamil */
-    @com.fasterxml.jackson.annotation.JsonProperty("Tamil") TAMIL,
+    @com.fasterxml.jackson.annotation.JsonProperty("Tamil")
+    TAMIL,
     /** Telugu */
-    @com.fasterxml.jackson.annotation.JsonProperty("Telugu") TELUGU;
+    @com.fasterxml.jackson.annotation.JsonProperty("Telugu")
+    TELUGU;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            ENGLISH -> "English"
-            CHINESE -> "Chinese"
-            JAPANESE -> "Japanese"
-            KOREAN -> "Korean"
-            GERMAN -> "German"
-            FRENCH -> "French"
-            LATIN -> "Latin"
-            CYRILLIC -> "Cyrillic"
-            TRADITIONAL_CHINESE -> "TraditionalChinese"
-            THAI -> "Thai"
-            GREEK -> "Greek"
-            EAST_SLAVIC -> "EastSlavic"
-            ARABIC -> "Arabic"
-            DEVANAGARI -> "Devanagari"
-            TAMIL -> "Tamil"
-            TELUGU -> "Telugu"
-        }
+    fun toWire(): String = when (this) {
+        ENGLISH -> "English"
+        CHINESE -> "Chinese"
+        JAPANESE -> "Japanese"
+        KOREAN -> "Korean"
+        GERMAN -> "German"
+        FRENCH -> "French"
+        LATIN -> "Latin"
+        CYRILLIC -> "Cyrillic"
+        TRADITIONAL_CHINESE -> "TraditionalChinese"
+        THAI -> "Thai"
+        GREEK -> "Greek"
+        EAST_SLAVIC -> "EastSlavic"
+        ARABIC -> "Arabic"
+        DEVANAGARI -> "Devanagari"
+        TAMIL -> "Tamil"
+        TELUGU -> "Telugu"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): PaddleLanguage =
-            when (value) {
-                "English" -> ENGLISH
-                "Chinese" -> CHINESE
-                "Japanese" -> JAPANESE
-                "Korean" -> KOREAN
-                "German" -> GERMAN
-                "French" -> FRENCH
-                "Latin" -> LATIN
-                "Cyrillic" -> CYRILLIC
-                "TraditionalChinese" -> TRADITIONAL_CHINESE
-                "Thai" -> THAI
-                "Greek" -> GREEK
-                "EastSlavic" -> EAST_SLAVIC
-                "Arabic" -> ARABIC
-                "Devanagari" -> DEVANAGARI
-                "Tamil" -> TAMIL
-                "Telugu" -> TELUGU
-                else -> throw IllegalArgumentException("Unknown PaddleLanguage value: $value")
-            }
+        fun fromWire(value: String): PaddleLanguage = when (value) {
+            "English" -> ENGLISH
+            "Chinese" -> CHINESE
+            "Japanese" -> JAPANESE
+            "Korean" -> KOREAN
+            "German" -> GERMAN
+            "French" -> FRENCH
+            "Latin" -> LATIN
+            "Cyrillic" -> CYRILLIC
+            "TraditionalChinese" -> TRADITIONAL_CHINESE
+            "Thai" -> THAI
+            "Greek" -> GREEK
+            "EastSlavic" -> EAST_SLAVIC
+            "Arabic" -> ARABIC
+            "Devanagari" -> DEVANAGARI
+            "Tamil" -> TAMIL
+            "Telugu" -> TELUGU
+            else -> throw IllegalArgumentException("Unknown PaddleLanguage value: $value")
+        }
     }
 }

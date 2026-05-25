@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Extraction result metadata.
  *
- * Contains common fields applicable to all formats, format-specific metadata via a discriminated
- * union, and additional custom fields from postprocessors.
+ * Contains common fields applicable to all formats, format-specific metadata
+ * via a discriminated union, and additional custom fields from postprocessors.
  */
 data class Metadata(
     /** Document title */
@@ -52,8 +52,8 @@ data class Metadata(
     /**
      * Format-specific metadata (discriminated union)
      *
-     * Contains detailed metadata specific to the document format. Serialized as a nested `"format"`
-     * object with a `format_type` discriminator field.
+     * Contains detailed metadata specific to the document format.
+     * Serialized as a nested `"format"` object with a `format_type` discriminator field.
      */
     @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(`as` = FormatMetadata::class)
     val format: FormatMetadata? = null,
@@ -66,8 +66,8 @@ data class Metadata(
     /**
      * Extraction duration in milliseconds (for benchmarking).
      *
-     * This field is populated by batch extraction to provide per-file timing information. It's
-     * `null` for single-file extraction (which uses external timing).
+     * This field is populated by batch extraction to provide per-file timing
+     * information. It's `null` for single-file extraction (which uses external timing).
      */
     val extractionDurationMs: Long? = null,
     /** Document category (from frontmatter or classification). */
@@ -81,23 +81,23 @@ data class Metadata(
     /**
      * Output format identifier (e.g., "markdown", "html", "text").
      *
-     * Set by the output format pipeline stage when format conversion is applied. Previously stored
-     * in `metadata.additional["output_format"]`.
+     * Set by the output format pipeline stage when format conversion is applied.
+     * Previously stored in `metadata.additional["output_format"]`.
      */
     val outputFormat: String? = null,
     /**
      * Whether OCR was used during extraction.
      *
-     * Set to `true` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM,
-     * etc.) and used that output as the primary or fallback text. `false` means native text
-     * extraction was used exclusively.
+     * Set to `true` whenever the extraction pipeline ran an OCR backend
+     * (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary
+     * or fallback text. `false` means native text extraction was used exclusively.
      */
     val ocrUsed: Boolean = false,
     /**
      * Additional custom fields from postprocessors.
      *
-     * Serialized as a nested `"additional"` object (not flattened at root level). Uses
-     * `Cow<'static, str>` keys so static string keys avoid allocation.
+     * Serialized as a nested `"additional"` object (not flattened at root level).
+     * Uses `Cow<'static, str>` keys so static string keys avoid allocation.
      */
     val additional: Map<String, Any> = emptyMap(),
 )

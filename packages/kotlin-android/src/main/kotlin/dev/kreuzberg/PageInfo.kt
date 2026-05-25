@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Metadata for individual page/slide/sheet.
  *
- * Captures per-page information including dimensions, content counts, and visibility state (for
- * presentations).
+ * Captures per-page information including dimensions, content counts,
+ * and visibility state (for presentations).
  */
 data class PageInfo(
     /** Page number (1-indexed) */
@@ -44,18 +44,19 @@ data class PageInfo(
     /**
      * Whether this page is blank (no meaningful text, no images, no tables)
      *
-     * A page is considered blank if it has fewer than 3 non-whitespace characters and contains no
-     * tables or images. This is useful for filtering out empty pages in scanned documents or PDFs
-     * with blank separator pages.
+     * A page is considered blank if it has fewer than 3 non-whitespace characters
+     * and contains no tables or images. This is useful for filtering out empty pages
+     * in scanned documents or PDFs with blank separator pages.
      */
     val isBlank: Boolean? = null,
     /**
      * Whether this page contains non-trivial vector graphics (paths, shapes, curves)
      *
-     * Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes
-     * (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images`
-     * since they are not embedded as raster XObjects. Set to `true` when path count exceeds a
-     * heuristic threshold, signaling that downstream consumers may want to rasterize the page to
+     * Indicates the presence of vector-drawn content such as charts, diagrams,
+     * or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are
+     * invisible to `ExtractionResult.images` since they are not embedded as raster
+     * XObjects. Set to `true` when path count exceeds a heuristic threshold,
+     * signaling that downstream consumers may want to rasterize the page to
      * capture this content.
      *
      * Only populated for PDFs; `null` for other document types.

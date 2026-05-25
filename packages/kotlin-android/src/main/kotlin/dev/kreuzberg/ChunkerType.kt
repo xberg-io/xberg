@@ -30,38 +30,41 @@ package dev.kreuzberg
  * * `Text` - Generic text splitter, splits on whitespace and punctuation
  * * `Markdown` - Markdown-aware splitter, preserves formatting and structure
  * * `Yaml` - YAML-aware splitter, creates one chunk per top-level key
- * * `Semantic` - Topic-aware chunker. With an `EmbeddingConfig`, splits at embedding-based topic
- *   shifts tuned by `topic_threshold` (default 0.75, lower = more splits). Without an embedding,
- *   falls back to a structural-boundary heuristic (ALL-CAPS headers, numbered sections, blank-line
- *   paragraphs) and merges groups into chunks capped at `max_characters` (default 1000).
- *   `topic_threshold` has no effect in the fallback path. For best results, pair with an embedding
- *   model.
+ * * `Semantic` - Topic-aware chunker. With an `EmbeddingConfig`, splits at
+ *   embedding-based topic shifts tuned by `topic_threshold` (default 0.75,
+ *   lower = more splits). Without an embedding, falls back to a
+ *   structural-boundary heuristic (ALL-CAPS headers, numbered sections,
+ *   blank-line paragraphs) and merges groups into chunks capped at
+ *   `max_characters` (default 1000). `topic_threshold` has no effect in the
+ *   fallback path. For best results, pair with an embedding model.
  */
 enum class ChunkerType {
-    @com.fasterxml.jackson.annotation.JsonProperty("text") TEXT,
-    @com.fasterxml.jackson.annotation.JsonProperty("markdown") MARKDOWN,
-    @com.fasterxml.jackson.annotation.JsonProperty("yaml") YAML,
-    @com.fasterxml.jackson.annotation.JsonProperty("semantic") SEMANTIC;
+    @com.fasterxml.jackson.annotation.JsonProperty("text")
+    TEXT,
+    @com.fasterxml.jackson.annotation.JsonProperty("markdown")
+    MARKDOWN,
+    @com.fasterxml.jackson.annotation.JsonProperty("yaml")
+    YAML,
+    @com.fasterxml.jackson.annotation.JsonProperty("semantic")
+    SEMANTIC;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            TEXT -> "text"
-            MARKDOWN -> "markdown"
-            YAML -> "yaml"
-            SEMANTIC -> "semantic"
-        }
+    fun toWire(): String = when (this) {
+        TEXT -> "text"
+        MARKDOWN -> "markdown"
+        YAML -> "yaml"
+        SEMANTIC -> "semantic"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): ChunkerType =
-            when (value) {
-                "text" -> TEXT
-                "markdown" -> MARKDOWN
-                "yaml" -> YAML
-                "semantic" -> SEMANTIC
-                else -> throw IllegalArgumentException("Unknown ChunkerType value: $value")
-            }
+        fun fromWire(value: String): ChunkerType = when (value) {
+            "text" -> TEXT
+            "markdown" -> MARKDOWN
+            "yaml" -> YAML
+            "semantic" -> SEMANTIC
+            else -> throw IllegalArgumentException("Unknown ChunkerType value: $value")
+        }
     }
 }

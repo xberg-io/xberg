@@ -449,8 +449,9 @@ pub(crate) async fn extract_mixed_ocr_native(
         let batch_end = (batch_start + batch_size).min(total);
         let batch_slice = &page_images[batch_start..batch_end];
 
+        type EncodedPage = (usize, Arc<Vec<u8>>, u32, u32);
         // Encode this batch's images to PNG in parallel (CPU-bound, rayon)
-        let encoded: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = batch_slice
+        let encoded: crate::Result<Vec<EncodedPage>> = batch_slice
             .par_iter()
             .map(|(page_idx, image)| {
                 let rgb = image.to_rgb8();

@@ -25,8 +25,9 @@ package dev.kreuzberg
 /**
  * A URI extracted from a document.
  *
- * Represents any link, reference, or resource pointer found during extraction. The `kind` field
- * classifies the URI semantically, while `label` carries optional human-readable display text.
+ * Represents any link, reference, or resource pointer found during extraction.
+ * The `kind` field classifies the URI semantically, while `label` carries
+ * optional human-readable display text.
  */
 data class Uri(
     /** The URL or path string. */

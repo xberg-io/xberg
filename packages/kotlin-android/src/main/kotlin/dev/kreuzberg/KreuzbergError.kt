@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Main error type for all Kreuzberg operations.
  *
- * All errors in Kreuzberg use this enum, which preserves error chains and provides context for
- * debugging.
+ * All errors in Kreuzberg use this enum, which preserves error chains
+ * and provides context for debugging.
  *
  * # Variants
  *
@@ -45,44 +45,49 @@ package dev.kreuzberg
  */
 sealed class KreuzbergError(message: String) : Exception(message) {
     data class Io(val field0: String) : KreuzbergError("IO error: $field0")
-
-    data class Parsing(override val message: String, val source: String?) :
-        KreuzbergError("Parsing error: {message}")
-
-    data class Ocr(override val message: String, val source: String?) :
-        KreuzbergError("OCR error: {message}")
-
-    data class Validation(override val message: String, val source: String?) :
-        KreuzbergError("Validation error: {message}")
-
-    data class Cache(override val message: String, val source: String?) :
-        KreuzbergError("Cache error: {message}")
-
-    data class ImageProcessing(override val message: String, val source: String?) :
-        KreuzbergError("Image processing error: {message}")
-
-    data class Serialization(override val message: String, val source: String?) :
-        KreuzbergError("Serialization error: {message}")
-
+    data class Parsing(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("Parsing error: {message}")
+    data class Ocr(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("OCR error: {message}")
+    data class Validation(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("Validation error: {message}")
+    data class Cache(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("Cache error: {message}")
+    data class ImageProcessing(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("Image processing error: {message}")
+    data class Serialization(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("Serialization error: {message}")
     data class MissingDependency(val field0: String) : KreuzbergError("Missing dependency: $field0")
-
-    data class Plugin(override val message: String, val pluginName: String) :
-        KreuzbergError("Plugin error in '{plugin_name}': {message}")
-
+    data class Plugin(
+        override val message: String,
+        val pluginName: String,
+    ) : KreuzbergError("Plugin error in '{plugin_name}': {message}")
     data class LockPoisoned(val field0: String) : KreuzbergError("Lock poisoned: $field0")
-
     data class UnsupportedFormat(val field0: String) : KreuzbergError("Unsupported format: $field0")
-
-    data class Embedding(override val message: String, val source: String?) :
-        KreuzbergError("Embedding error: {message}")
-
-    data class Timeout(val elapsedMs: Long, val limitMs: Long) :
-        KreuzbergError("Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)")
-
+    data class Embedding(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("Embedding error: {message}")
+    data class Timeout(
+        val elapsedMs: Long,
+        val limitMs: Long,
+    ) : KreuzbergError("Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)")
     object Cancelled : KreuzbergError("Extraction cancelled")
-
-    data class Security(override val message: String, val source: String?) :
-        KreuzbergError("Security violation: {message}")
-
+    data class Security(
+        override val message: String,
+        val source: String?,
+    ) : KreuzbergError("Security violation: {message}")
     data class Other(val field0: String) : KreuzbergError("$field0")
 }

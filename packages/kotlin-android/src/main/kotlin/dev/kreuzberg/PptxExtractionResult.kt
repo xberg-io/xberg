@@ -51,8 +51,8 @@ data class PptxExtractionResult(
     /**
      * Office metadata extracted from docProps/core.xml and docProps/app.xml.
      *
-     * Contains keys like "title", "author", "created_by", "subject", "keywords", "modified_by",
-     * "created_at", "modified_at", etc.
+     * Contains keys like "title", "author", "created_by", "subject", "keywords",
+     * "modified_by", "created_at", "modified_at", etc.
      */
     val officeMetadata: Map<String, String> = emptyMap(),
 )

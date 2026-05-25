@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * HTML metadata extracted from HTML documents.
  *
- * Includes document-level metadata, Open Graph data, Twitter Card metadata, and extracted
- * structural elements (headers, links, images, structured data).
+ * Includes document-level metadata, Open Graph data, Twitter Card metadata,
+ * and extracted structural elements (headers, links, images, structured data).
  */
 data class HtmlMetadata(
     /** Document title from `<title>` tag */
@@ -46,18 +46,18 @@ data class HtmlMetadata(
     /** Document text direction from `dir` attribute */
     val textDirection: TextDirection? = null,
     /**
-     * Open Graph metadata (og:* properties) for social media Keys like "title", "description",
-     * "image", "url", etc.
+     * Open Graph metadata (og:* properties) for social media
+     * Keys like "title", "description", "image", "url", etc.
      */
     val openGraph: Map<String, String> = emptyMap(),
     /**
-     * Twitter Card metadata (twitter:* properties) Keys like "card", "site", "creator", "title",
-     * "description", "image", etc.
+     * Twitter Card metadata (twitter:* properties)
+     * Keys like "card", "site", "creator", "title", "description", "image", etc.
      */
     val twitterCard: Map<String, String> = emptyMap(),
     /**
-     * Additional meta tags not covered by specific fields Keys are meta name/property attributes,
-     * values are content
+     * Additional meta tags not covered by specific fields
+     * Keys are meta name/property attributes, values are content
      */
     val metaTags: Map<String, String> = emptyMap(),
     /** Extracted header elements with hierarchy */

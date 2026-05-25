@@ -46,8 +46,8 @@ data class TreeSitterConfig(
     /**
      * Enable code intelligence processing (default: true).
      *
-     * When `false`, tree-sitter analysis is completely skipped even if the config section is
-     * present.
+     * When `false`, tree-sitter analysis is completely skipped even if
+     * the config section is present.
      */
     val enabled: Boolean = true,
     /**

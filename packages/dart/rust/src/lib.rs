@@ -464,6 +464,17 @@ pub struct ImageExtractionConfig {
     /// When `true` (default), extracted images are classified by kind and grouped
     /// into clusters where they appear to belong to one figure.
     pub classify: bool,
+    /// When `true`, full-page renders produced during OCR preprocessing are captured
+    /// and returned as `ImageKind::PageRaster` entries in `ExtractionResult.images`.
+    ///
+    /// **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the
+    /// document-level OCR bypass is active (whole-document backend). When OCR is
+    /// enabled and this flag is set but the active backend skips per-page rendering,
+    /// a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`.
+    ///
+    /// Defaults to `false`. Enable when downstream consumers need page thumbnails
+    /// (e.g. citation previews, visual grounding).
+    pub include_page_rasters: bool,
 }
 
 /// Token reduction configuration.
@@ -3739,6 +3750,8 @@ pub enum ImageKind {
     TileFragment,
     /// Mask or transparency map
     Mask,
+    /// Full-page render produced during OCR preprocessing; used as a citation thumbnail.
+    PageRaster,
     /// Could not classify with reasonable confidence
     Unknown,
 }
@@ -4201,6 +4214,7 @@ impl From<kreuzberg::ImageExtractionConfig> for ImageExtractionConfig {
             max_dpi: v.max_dpi as _,
             max_images_per_page: v.max_images_per_page.map(|x| x as _),
             classify: v.classify as _,
+            include_page_rasters: v.include_page_rasters as _,
         }
     }
 }
@@ -6214,6 +6228,7 @@ impl From<kreuzberg::ImageKind> for ImageKind {
             kreuzberg::ImageKind::Icon => ImageKind::Icon,
             kreuzberg::ImageKind::TileFragment => ImageKind::TileFragment,
             kreuzberg::ImageKind::Mask => ImageKind::Mask,
+            kreuzberg::ImageKind::PageRaster => ImageKind::PageRaster,
             kreuzberg::ImageKind::Unknown => ImageKind::Unknown,
         }
     }
@@ -6623,6 +6638,7 @@ impl From<ImageExtractionConfig> for kreuzberg::ImageExtractionConfig {
             max_dpi: v.max_dpi as _,
             max_images_per_page: v.max_images_per_page.map(|x| x as _),
             classify: v.classify as _,
+            include_page_rasters: v.include_page_rasters as _,
         }
     }
 }
@@ -8231,6 +8247,7 @@ impl From<ImageKind> for kreuzberg::ImageKind {
             ImageKind::Icon => kreuzberg::ImageKind::Icon,
             ImageKind::TileFragment => kreuzberg::ImageKind::TileFragment,
             ImageKind::Mask => kreuzberg::ImageKind::Mask,
+            ImageKind::PageRaster => kreuzberg::ImageKind::PageRaster,
             ImageKind::Unknown => kreuzberg::ImageKind::Unknown,
         }
     }

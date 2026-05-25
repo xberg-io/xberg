@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Hardware acceleration configuration for ONNX Runtime models.
  *
- * Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used for inference in layout
- * detection and embedding generation.
+ * Controls which execution provider (CPU, CoreML, CUDA, TensorRT) is used
+ * for inference in layout detection and embedding generation.
  */
 data class AccelerationConfig(
     /** Execution provider to use for ONNX inference. */

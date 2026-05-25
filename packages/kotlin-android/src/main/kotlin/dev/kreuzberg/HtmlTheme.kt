@@ -25,43 +25,47 @@ package dev.kreuzberg
 /** Built-in HTML theme selection. */
 enum class HtmlTheme {
     /**
-     * Sensible defaults: system font stack, neutral colours, readable line measure. CSS custom
-     * properties (`--kb-*`) are all defined so user CSS can override individual values.
+     * Sensible defaults: system font stack, neutral colours, readable line
+     * measure. CSS custom properties (`--kb-*`) are all defined so user CSS
+     * can override individual values.
      */
-    @com.fasterxml.jackson.annotation.JsonProperty("default") DEFAULT,
+    @com.fasterxml.jackson.annotation.JsonProperty("default")
+    DEFAULT,
     /** GitHub Markdown-inspired palette and spacing. */
-    @com.fasterxml.jackson.annotation.JsonProperty("github") GIT_HUB,
+    @com.fasterxml.jackson.annotation.JsonProperty("github")
+    GIT_HUB,
     /** Dark background, light text. */
-    @com.fasterxml.jackson.annotation.JsonProperty("dark") DARK,
+    @com.fasterxml.jackson.annotation.JsonProperty("dark")
+    DARK,
     /** Minimal light theme with generous whitespace. */
-    @com.fasterxml.jackson.annotation.JsonProperty("light") LIGHT,
+    @com.fasterxml.jackson.annotation.JsonProperty("light")
+    LIGHT,
     /**
-     * No built-in stylesheet emitted. CSS custom properties are still defined on `:root` so user
-     * stylesheets can reference `var(--kb-*)` tokens.
+     * No built-in stylesheet emitted. CSS custom properties are still defined
+     * on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
      */
-    @com.fasterxml.jackson.annotation.JsonProperty("unstyled") UNSTYLED;
+    @com.fasterxml.jackson.annotation.JsonProperty("unstyled")
+    UNSTYLED;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            DEFAULT -> "default"
-            GIT_HUB -> "github"
-            DARK -> "dark"
-            LIGHT -> "light"
-            UNSTYLED -> "unstyled"
-        }
+    fun toWire(): String = when (this) {
+        DEFAULT -> "default"
+        GIT_HUB -> "github"
+        DARK -> "dark"
+        LIGHT -> "light"
+        UNSTYLED -> "unstyled"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): HtmlTheme =
-            when (value) {
-                "default" -> DEFAULT
-                "github" -> GIT_HUB
-                "dark" -> DARK
-                "light" -> LIGHT
-                "unstyled" -> UNSTYLED
-                else -> throw IllegalArgumentException("Unknown HtmlTheme value: $value")
-            }
+        fun fromWire(value: String): HtmlTheme = when (value) {
+            "default" -> DEFAULT
+            "github" -> GIT_HUB
+            "dark" -> DARK
+            "light" -> LIGHT
+            "unstyled" -> UNSTYLED
+            else -> throw IllegalArgumentException("Unknown HtmlTheme value: $value")
+        }
     }
 }

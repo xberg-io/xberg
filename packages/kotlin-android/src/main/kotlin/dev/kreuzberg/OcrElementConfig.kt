@@ -49,8 +49,8 @@ data class OcrElementConfig(
     /**
      * Whether to build hierarchical relationships between elements.
      *
-     * When true, `parent_id` fields will be populated based on spatial containment. Only meaningful
-     * for Tesseract output.
+     * When true, `parent_id` fields will be populated based on spatial containment.
+     * Only meaningful for Tesseract output.
      */
     val buildHierarchy: Boolean = false,
 )

@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Image preprocessing metadata.
  *
- * Tracks the transformations applied to an image during OCR preprocessing, including DPI
- * normalization, resizing, and resampling.
+ * Tracks the transformations applied to an image during OCR preprocessing,
+ * including DPI normalization, resizing, and resampling.
  */
 data class ImagePreprocessingMetadata(
     /** Original image dimensions (width, height) in pixels */

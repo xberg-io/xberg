@@ -25,43 +25,45 @@ package dev.kreuzberg
 /**
  * ONNX Runtime execution provider type.
  *
- * Determines which hardware backend is used for model inference. `Auto` (default) selects the best
- * available provider per platform.
+ * Determines which hardware backend is used for model inference.
+ * `Auto` (default) selects the best available provider per platform.
  */
 enum class ExecutionProviderType {
     /** Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere. */
-    @com.fasterxml.jackson.annotation.JsonProperty("auto") AUTO,
+    @com.fasterxml.jackson.annotation.JsonProperty("auto")
+    AUTO,
     /** CPU execution provider (always available). */
-    @com.fasterxml.jackson.annotation.JsonProperty("cpu") CPU,
+    @com.fasterxml.jackson.annotation.JsonProperty("cpu")
+    CPU,
     /** Apple CoreML (macOS/iOS Neural Engine + GPU). */
-    @com.fasterxml.jackson.annotation.JsonProperty("coreml") CORE_ML,
+    @com.fasterxml.jackson.annotation.JsonProperty("coreml")
+    CORE_ML,
     /** NVIDIA CUDA GPU acceleration. */
-    @com.fasterxml.jackson.annotation.JsonProperty("cuda") CUDA,
+    @com.fasterxml.jackson.annotation.JsonProperty("cuda")
+    CUDA,
     /** NVIDIA TensorRT (optimized CUDA inference). */
-    @com.fasterxml.jackson.annotation.JsonProperty("tensorrt") TENSOR_RT;
+    @com.fasterxml.jackson.annotation.JsonProperty("tensorrt")
+    TENSOR_RT;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            AUTO -> "auto"
-            CPU -> "cpu"
-            CORE_ML -> "coreml"
-            CUDA -> "cuda"
-            TENSOR_RT -> "tensorrt"
-        }
+    fun toWire(): String = when (this) {
+        AUTO -> "auto"
+        CPU -> "cpu"
+        CORE_ML -> "coreml"
+        CUDA -> "cuda"
+        TENSOR_RT -> "tensorrt"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): ExecutionProviderType =
-            when (value) {
-                "auto" -> AUTO
-                "cpu" -> CPU
-                "coreml" -> CORE_ML
-                "cuda" -> CUDA
-                "tensorrt" -> TENSOR_RT
-                else ->
-                    throw IllegalArgumentException("Unknown ExecutionProviderType value: $value")
-            }
+        fun fromWire(value: String): ExecutionProviderType = when (value) {
+            "auto" -> AUTO
+            "cpu" -> CPU
+            "coreml" -> CORE_ML
+            "cuda" -> CUDA
+            "tensorrt" -> TENSOR_RT
+            else -> throw IllegalArgumentException("Unknown ExecutionProviderType value: $value")
+        }
     }
 }

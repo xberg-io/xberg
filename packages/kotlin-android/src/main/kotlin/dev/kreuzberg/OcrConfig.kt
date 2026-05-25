@@ -28,8 +28,8 @@ data class OcrConfig(
      * Whether OCR is enabled.
      *
      * Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent
-     * `ExtractionConfig`. Images return metadata only; PDFs use native text extraction without OCR
-     * fallback.
+     * `ExtractionConfig`. Images return
+     * metadata only; PDFs use native text extraction without OCR fallback.
      *
      * Defaults to `true`. When `false`, all other OCR settings are ignored.
      */
@@ -47,15 +47,18 @@ data class OcrConfig(
     /**
      * Arbitrary per-call options passed through to the backend unchanged.
      *
-     * Custom OCR backends and built-in backends that support runtime tuning can read this value and
-     * deserialize the keys they care about. Keys unknown to the backend are silently ignored.
+     * Custom OCR backends and built-in backends that support runtime tuning
+     * can read this value and deserialize the keys they care about. Keys
+     * unknown to the backend are silently ignored.
      *
-     * This is the recommended extension point for per-call parameters that are not covered by the
-     * typed fields above (e.g. mode switching, preprocessing flags, inference batch size).
+     * This is the recommended extension point for per-call parameters that
+     * are not covered by the typed fields above (e.g. mode switching,
+     * preprocessing flags, inference batch size).
      *
-     * **Scope:** when `pipeline` is `null`, this value is propagated to the primary stage of the
-     * auto-constructed pipeline. When `pipeline` is explicitly set, this field has **no effect** —
-     * the caller must set `OcrPipelineStage.backend_options` directly on the relevant stage(s)
+     * **Scope:** when `pipeline` is `null`, this value is propagated to the
+     * primary stage of the auto-constructed pipeline. When `pipeline` is
+     * explicitly set, this field has **no effect** — the caller must set
+     * `OcrPipelineStage.backend_options` directly on the relevant stage(s)
      * instead.
      *
      * Example:
@@ -67,29 +70,30 @@ data class OcrConfig(
     /** OCR element extraction configuration */
     val elementConfig: OcrElementConfig? = null,
     /**
-     * Quality thresholds for the native-text-to-OCR fallback decision. When None, uses compiled
-     * defaults (matching previous hardcoded behavior).
+     * Quality thresholds for the native-text-to-OCR fallback decision.
+     * When None, uses compiled defaults (matching previous hardcoded behavior).
      */
     val qualityThresholds: OcrQualityThresholds? = null,
     /**
-     * Multi-backend OCR pipeline configuration. When set, enables weighted fallback across multiple
-     * OCR backends based on output quality. When None, uses the single `backend` field (same as
-     * today).
+     * Multi-backend OCR pipeline configuration. When set, enables weighted
+     * fallback across multiple OCR backends based on output quality.
+     * When None, uses the single `backend` field (same as today).
      */
     val pipeline: OcrPipelineConfig? = null,
     /**
      * Enable automatic page rotation based on orientation detection.
      *
-     * When enabled, uses Tesseract's `DetectOrientationScript()` to detect page orientation
-     * (0/90/180/270 degrees) before OCR. If the page is rotated with high confidence, the image is
-     * corrected before recognition. This is critical for handling rotated scanned documents.
+     * When enabled, uses Tesseract's `DetectOrientationScript()` to detect
+     * page orientation (0/90/180/270 degrees) before OCR. If the page is
+     * rotated with high confidence, the image is corrected before recognition.
+     * This is critical for handling rotated scanned documents.
      */
     val autoRotate: Boolean = false,
     /**
      * VLM (Vision Language Model) OCR configuration.
      *
-     * Required when `backend` is `"vlm"`. Uses liter-llm to send page images to a vision model for
-     * text extraction.
+     * Required when `backend` is `"vlm"`. Uses liter-llm to send page
+     * images to a vision model for text extraction.
      */
     val vlmConfig: LlmConfig? = null,
     /**
@@ -110,12 +114,14 @@ data class OcrConfig(
     /**
      * Caller-supplied Tesseract `traineddata` bytes per language code.
      *
-     * Primary use case is the WASM build, which has no filesystem and cannot download tessdata at
-     * runtime. Native builds typically rely on `TessdataManager` and ignore this field. When
-     * present, the WASM Tesseract backend prefers these bytes over its compile-time-bundled English
-     * data.
+     * Primary use case is the WASM build, which has no filesystem and cannot
+     * download tessdata at runtime. Native builds typically rely on
+     * `TessdataManager` and ignore this field. When present, the WASM
+     * Tesseract backend prefers these bytes over its compile-time-bundled
+     * English data.
      *
-     * Skipped by serde to keep config files small — supply via the typed API at runtime.
+     * Skipped by serde to keep config files small — supply via the typed API
+     * at runtime.
      */
     val tessdataBytes: Map<String, ByteArray>? = null,
 )

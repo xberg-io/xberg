@@ -21,6 +21,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     sourceSets {
         getByName("test") {
             // Include the AAR-bundled Java facade as test sources
@@ -58,7 +59,6 @@ kotlin {
 dependencies {
     // JNA for loading the native library from java.library.path
     testImplementation("net.java.dev.jna:jna:5.18.1")
-
 
     // Jackson for JSON assertion helpers
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:2.18.2")

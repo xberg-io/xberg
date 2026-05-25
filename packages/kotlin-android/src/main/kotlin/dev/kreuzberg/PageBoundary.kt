@@ -25,9 +25,9 @@ package dev.kreuzberg
 /**
  * Byte offset boundary for a page.
  *
- * Tracks where a specific page's content starts and ends in the main content string, enabling
- * mapping from byte positions to page numbers. Offsets are guaranteed to be at valid UTF-8
- * character boundaries when using standard String methods (push_str, push, etc.).
+ * Tracks where a specific page's content starts and ends in the main content string,
+ * enabling mapping from byte positions to page numbers. Offsets are guaranteed to be
+ * at valid UTF-8 character boundaries when using standard String methods (push_str, push, etc.).
  */
 data class PageBoundary(
     /**

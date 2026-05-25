@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Inline text annotation — byte-range based formatting and links.
  *
- * Annotations reference byte offsets into the node's text content, enabling precise identification
- * of formatted regions.
+ * Annotations reference byte offsets into the node's text content,
+ * enabling precise identification of formatted regions.
  */
 data class TextAnnotation(
     /** Start byte offset in the node's text content (inclusive). */

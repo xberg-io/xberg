@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Configuration for LLM-based structured data extraction.
  *
- * Sends extracted document content to a VLM with a JSON schema, returning structured data that
- * conforms to the schema.
+ * Sends extracted document content to a VLM with a JSON schema,
+ * returning structured data that conforms to the schema.
  */
 data class StructuredExtractionConfig(
     /** JSON Schema defining the desired output structure. */

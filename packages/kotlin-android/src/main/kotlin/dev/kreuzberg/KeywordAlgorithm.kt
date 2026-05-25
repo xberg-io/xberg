@@ -25,25 +25,25 @@ package dev.kreuzberg
 /** Keyword algorithm selection. */
 enum class KeywordAlgorithm {
     /** YAKE (Yet Another Keyword Extractor) - statistical approach */
-    @com.fasterxml.jackson.annotation.JsonProperty("yake") YAKE,
+    @com.fasterxml.jackson.annotation.JsonProperty("yake")
+    YAKE,
     /** RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based */
-    @com.fasterxml.jackson.annotation.JsonProperty("rake") RAKE;
+    @com.fasterxml.jackson.annotation.JsonProperty("rake")
+    RAKE;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            YAKE -> "yake"
-            RAKE -> "rake"
-        }
+    fun toWire(): String = when (this) {
+        YAKE -> "yake"
+        RAKE -> "rake"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): KeywordAlgorithm =
-            when (value) {
-                "yake" -> YAKE
-                "rake" -> RAKE
-                else -> throw IllegalArgumentException("Unknown KeywordAlgorithm value: $value")
-            }
+        fun fromWire(value: String): KeywordAlgorithm = when (value) {
+            "yake" -> YAKE
+            "rake" -> RAKE
+            else -> throw IllegalArgumentException("Unknown KeywordAlgorithm value: $value")
+        }
     }
 }

@@ -25,7 +25,8 @@ package dev.kreuzberg
 /**
  * Excel workbook representation.
  *
- * Contains all sheets from an Excel file (.xlsx, .xls, etc.) with extracted content and metadata.
+ * Contains all sheets from an Excel file (.xlsx, .xls, etc.) with
+ * extracted content and metadata.
  */
 data class ExcelWorkbook(
     /** All sheets in the workbook */

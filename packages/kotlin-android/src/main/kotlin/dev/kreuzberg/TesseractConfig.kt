@@ -25,9 +25,9 @@ package dev.kreuzberg
 /**
  * Tesseract OCR configuration.
  *
- * Provides fine-grained control over Tesseract OCR engine parameters. Most users can use the
- * defaults, but these settings allow optimization for specific document types (invoices,
- * handwriting, etc.).
+ * Provides fine-grained control over Tesseract OCR engine parameters.
+ * Most users can use the defaults, but these settings allow optimization
+ * for specific document types (invoices, handwriting, etc.).
  */
 data class TesseractConfig(
     /** Language code (e.g., "eng", "deu", "fra") */
@@ -62,8 +62,8 @@ data class TesseractConfig(
     /**
      * Image preprocessing configuration.
      *
-     * Controls how images are preprocessed before OCR. Can significantly improve quality for
-     * scanned documents or low-quality images.
+     * Controls how images are preprocessed before OCR. Can significantly
+     * improve quality for scanned documents or low-quality images.
      */
     val preprocessing: ImagePreprocessingConfig? = null,
     /** Enable automatic table detection and reconstruction */

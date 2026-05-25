@@ -25,18 +25,20 @@ package dev.kreuzberg
 /**
  * Cross-extractor content filtering configuration.
  *
- * Controls whether "furniture" content (headers, footers, page numbers, watermarks, repeating text)
- * is included in or stripped from extraction results. Applies across all extractors (PDF, DOCX,
- * RTF, ODT, HTML, etc.) with format-specific implementation.
+ * Controls whether "furniture" content (headers, footers, page numbers,
+ * watermarks, repeating text) is included in or stripped from extraction
+ * results. Applies across all extractors (PDF, DOCX, RTF, ODT, HTML, etc.)
+ * with format-specific implementation.
  *
- * When `null` on `ExtractionConfig`, each extractor uses its current default behavior unchanged.
+ * When `null` on `ExtractionConfig`, each extractor uses its current
+ * default behavior unchanged.
  */
 data class ContentFilterConfig(
     /**
      * Include running headers in extraction output.
      *
-     * - PDF: Disables top-margin furniture stripping and prevents the layout model from treating
-     *   `PageHeader`-classified regions as furniture.
+     * - PDF: Disables top-margin furniture stripping and prevents the layout
+     *   model from treating `PageHeader`-classified regions as furniture.
      *
      * - DOCX: Includes document headers in text output.
      * - RTF/ODT: Headers already included; this is a no-op when true.
@@ -48,8 +50,8 @@ data class ContentFilterConfig(
     /**
      * Include running footers in extraction output.
      *
-     * - PDF: Disables bottom-margin furniture stripping and prevents the layout model from treating
-     *   `PageFooter`-classified regions as furniture.
+     * - PDF: Disables bottom-margin furniture stripping and prevents the layout
+     *   model from treating `PageFooter`-classified regions as furniture.
      *
      * - DOCX: Includes document footers in text output.
      * - RTF/ODT: Footers already included; this is a no-op when true.
@@ -61,14 +63,14 @@ data class ContentFilterConfig(
     /**
      * Enable the heuristic cross-page repeating text detector.
      *
-     * When `true` (default), text that repeats verbatim across a supermajority of pages is
-     * classified as furniture and stripped. Disable this if brand names or repeated headings are
-     * being incorrectly removed by the heuristic.
+     * When `true` (default), text that repeats verbatim across a supermajority
+     * of pages is classified as furniture and stripped.  Disable this if brand
+     * names or repeated headings are being incorrectly removed by the heuristic.
      *
-     * Note: when a layout-detection model is active, the model may independently classify
-     * page-header / page-footer regions as furniture on a per-page basis. To preserve those
-     * regions, set `include_headers = true`, `include_footers = true`, or both, in addition to
-     * disabling this flag.
+     * Note: when a layout-detection model is active, the model may independently
+     * classify page-header / page-footer regions as furniture on a per-page basis.
+     * To preserve those regions, set `include_headers = true`, `include_footers = true`,
+     * or both, in addition to disabling this flag.
      *
      * Primarily affects PDF extraction.
      *

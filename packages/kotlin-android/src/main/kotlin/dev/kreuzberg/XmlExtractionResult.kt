@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * XML extraction result.
  *
- * Contains extracted text content from XML files along with structural statistics about the XML
- * document.
+ * Contains extracted text content from XML files along with
+ * structural statistics about the XML document.
  */
 data class XmlExtractionResult(
     /** Extracted text content (XML structure filtered out) */

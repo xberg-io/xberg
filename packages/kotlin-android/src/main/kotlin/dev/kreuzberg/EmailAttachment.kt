@@ -38,6 +38,9 @@ data class EmailAttachment(
     val size: Long? = null,
     /** Whether this attachment is an image */
     val isImage: Boolean,
-    /** Attachment data (if extracted). Uses `bytes.Bytes` for cheap cloning of large buffers. */
+    /**
+     * Attachment data (if extracted).
+     * Uses `bytes.Bytes` for cheap cloning of large buffers.
+     */
     val data: ByteArray? = null,
 )

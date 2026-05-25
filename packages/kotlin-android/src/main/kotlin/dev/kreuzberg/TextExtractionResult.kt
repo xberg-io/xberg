@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Plain text and Markdown extraction result.
  *
- * Contains the extracted text along with statistics and, for Markdown files, structural elements
- * like headers and links.
+ * Contains the extracted text along with statistics and,
+ * for Markdown files, structural elements like headers and links.
  */
 data class TextExtractionResult(
     /** Extracted text content */

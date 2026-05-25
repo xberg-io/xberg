@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Single Excel worksheet.
  *
- * Represents one sheet from an Excel workbook with its content converted to Markdown format and
- * dimensional statistics.
+ * Represents one sheet from an Excel workbook with its content
+ * converted to Markdown format and dimensional statistics.
  */
 data class ExcelSheet(
     /** Sheet name as it appears in Excel */
@@ -40,8 +40,9 @@ data class ExcelSheet(
     /** Total number of non-empty cells */
     val cellCount: Long,
     /**
-     * Pre-extracted table cells (2D vector of cell values) Populated during markdown generation to
-     * avoid re-parsing markdown. None for empty sheets.
+     * Pre-extracted table cells (2D vector of cell values)
+     * Populated during markdown generation to avoid re-parsing markdown.
+     * None for empty sheets.
      */
     val tableCells: List<List<String>>? = null,
 )

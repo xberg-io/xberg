@@ -25,41 +25,45 @@ package dev.kreuzberg
 /** Link type classification. */
 enum class LinkType {
     /** Anchor link (#section) */
-    @com.fasterxml.jackson.annotation.JsonProperty("anchor") ANCHOR,
+    @com.fasterxml.jackson.annotation.JsonProperty("anchor")
+    ANCHOR,
     /** Internal link (same domain) */
-    @com.fasterxml.jackson.annotation.JsonProperty("internal") INTERNAL,
+    @com.fasterxml.jackson.annotation.JsonProperty("internal")
+    INTERNAL,
     /** External link (different domain) */
-    @com.fasterxml.jackson.annotation.JsonProperty("external") EXTERNAL,
+    @com.fasterxml.jackson.annotation.JsonProperty("external")
+    EXTERNAL,
     /** Email link (mailto:) */
-    @com.fasterxml.jackson.annotation.JsonProperty("email") EMAIL,
+    @com.fasterxml.jackson.annotation.JsonProperty("email")
+    EMAIL,
     /** Phone link (tel:) */
-    @com.fasterxml.jackson.annotation.JsonProperty("phone") PHONE,
+    @com.fasterxml.jackson.annotation.JsonProperty("phone")
+    PHONE,
     /** Other link type */
-    @com.fasterxml.jackson.annotation.JsonProperty("other") OTHER;
+    @com.fasterxml.jackson.annotation.JsonProperty("other")
+    OTHER;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            ANCHOR -> "anchor"
-            INTERNAL -> "internal"
-            EXTERNAL -> "external"
-            EMAIL -> "email"
-            PHONE -> "phone"
-            OTHER -> "other"
-        }
+    fun toWire(): String = when (this) {
+        ANCHOR -> "anchor"
+        INTERNAL -> "internal"
+        EXTERNAL -> "external"
+        EMAIL -> "email"
+        PHONE -> "phone"
+        OTHER -> "other"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): LinkType =
-            when (value) {
-                "anchor" -> ANCHOR
-                "internal" -> INTERNAL
-                "external" -> EXTERNAL
-                "email" -> EMAIL
-                "phone" -> PHONE
-                "other" -> OTHER
-                else -> throw IllegalArgumentException("Unknown LinkType value: $value")
-            }
+        fun fromWire(value: String): LinkType = when (value) {
+            "anchor" -> ANCHOR
+            "internal" -> INTERNAL
+            "external" -> EXTERNAL
+            "email" -> EMAIL
+            "phone" -> PHONE
+            "other" -> OTHER
+            else -> throw IllegalArgumentException("Unknown LinkType value: $value")
+        }
     }
 }

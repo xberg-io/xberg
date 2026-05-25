@@ -27,8 +27,8 @@ import java.nio.file.Path
 /**
  * Batch item for file extraction.
  *
- * Used with `batch_extract_files` and `batch_extract_files_sync` to represent a single file in a
- * batch extraction job.
+ * Used with `batch_extract_files` and `batch_extract_files_sync`
+ * to represent a single file in a batch extraction job.
  */
 data class BatchFileItem(
     /** Path to the file to extract from */

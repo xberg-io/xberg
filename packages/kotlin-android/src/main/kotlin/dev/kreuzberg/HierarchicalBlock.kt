@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * A text block with hierarchy level assignment.
  *
- * Represents a block of text with semantic heading information extracted from font size clustering
- * and hierarchical analysis.
+ * Represents a block of text with semantic heading information extracted from
+ * font size clustering and hierarchical analysis.
  */
 data class HierarchicalBlock(
     /** The text content of this block */

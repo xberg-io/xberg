@@ -27,8 +27,8 @@ import java.nio.file.Path
 /**
  * Embedding configuration for text chunks.
  *
- * Configures embedding generation using ONNX models via the vendored embedding engine. Requires the
- * `embeddings` feature to be enabled.
+ * Configures embedding generation using ONNX models via the vendored embedding engine.
+ * Requires the `embeddings` feature to be enabled.
  */
 data class EmbeddingConfig(
     /** The embedding model to use (defaults to "balanced" preset if not specified) */
@@ -43,27 +43,29 @@ data class EmbeddingConfig(
     /**
      * Custom cache directory for model files
      *
-     * Defaults to `~/.cache/kreuzberg/embeddings/` if not specified. Allows full customization of
-     * model download location.
+     * Defaults to `~/.cache/kreuzberg/embeddings/` if not specified.
+     * Allows full customization of model download location.
      */
     val cacheDir: java.nio.file.Path? = null,
     /**
      * Hardware acceleration for the embedding ONNX model.
      *
-     * When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for
-     * inference. Defaults to `null` (auto-select per platform).
+     * When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
+     * is used for inference. Defaults to `null` (auto-select per platform).
      */
     val acceleration: AccelerationConfig? = null,
     /**
-     * Maximum wall-clock duration (in seconds) for a single `embed()` call when using
-     * `EmbeddingModelType.Plugin`.
+     * Maximum wall-clock duration (in seconds) for a single `embed()` call when
+     * using `EmbeddingModelType.Plugin`.
      *
-     * Applies only to the in-process plugin path — protects against hung host-language backends
-     * (e.g. a Python callback deadlocked on the GIL, a model stuck on CUDA OOM retries, etc.). On
-     * timeout, the dispatcher returns `Plugin` instead of blocking forever.
+     * Applies only to the in-process plugin path — protects against hung
+     * host-language backends (e.g. a Python callback deadlocked on the GIL,
+     * a model stuck on CUDA OOM retries, etc.). On timeout, the dispatcher
+     * returns `Plugin` instead of blocking forever.
      *
-     * `null` disables the timeout. The default (60 seconds) is conservative for common in-process
-     * inference; increase for large batches on slow hardware.
+     * `null` disables the timeout. The default (60 seconds) is conservative
+     * for common in-process inference; increase for large batches on slow
+     * hardware.
      */
     val maxEmbedDurationSecs: Long? = null,
 )

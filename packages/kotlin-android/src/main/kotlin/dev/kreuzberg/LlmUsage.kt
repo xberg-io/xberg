@@ -25,16 +25,16 @@ package dev.kreuzberg
 /**
  * Token usage and cost data for a single LLM call made during extraction.
  *
- * Populated when VLM OCR, structured extraction, or LLM-based embeddings are used. Multiple entries
- * may be present when multiple LLM calls occur within one extraction (e.g. VLM OCR + structured
- * extraction).
+ * Populated when VLM OCR, structured extraction, or LLM-based embeddings
+ * are used. Multiple entries may be present when multiple LLM calls occur
+ * within one extraction (e.g. VLM OCR + structured extraction).
  */
 data class LlmUsage(
     /** The LLM model identifier (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"). */
     val model: String = "",
     /**
-     * The pipeline stage that triggered this LLM call (e.g. "vlm_ocr", "structured_extraction",
-     * "embeddings").
+     * The pipeline stage that triggered this LLM call
+     * (e.g. "vlm_ocr", "structured_extraction", "embeddings").
      */
     val source: String = "",
     /** Number of input/prompt tokens consumed. */

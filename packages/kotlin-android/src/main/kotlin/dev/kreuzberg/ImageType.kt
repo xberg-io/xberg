@@ -25,33 +25,35 @@ package dev.kreuzberg
 /** Image type classification. */
 enum class ImageType {
     /** Data URI image */
-    @com.fasterxml.jackson.annotation.JsonProperty("data-uri") DATA_URI,
+    @com.fasterxml.jackson.annotation.JsonProperty("data-uri")
+    DATA_URI,
     /** Inline SVG */
-    @com.fasterxml.jackson.annotation.JsonProperty("inline-svg") INLINE_SVG,
+    @com.fasterxml.jackson.annotation.JsonProperty("inline-svg")
+    INLINE_SVG,
     /** External image URL */
-    @com.fasterxml.jackson.annotation.JsonProperty("external") EXTERNAL,
+    @com.fasterxml.jackson.annotation.JsonProperty("external")
+    EXTERNAL,
     /** Relative path image */
-    @com.fasterxml.jackson.annotation.JsonProperty("relative") RELATIVE;
+    @com.fasterxml.jackson.annotation.JsonProperty("relative")
+    RELATIVE;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            DATA_URI -> "data-uri"
-            INLINE_SVG -> "inline-svg"
-            EXTERNAL -> "external"
-            RELATIVE -> "relative"
-        }
+    fun toWire(): String = when (this) {
+        DATA_URI -> "data-uri"
+        INLINE_SVG -> "inline-svg"
+        EXTERNAL -> "external"
+        RELATIVE -> "relative"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): ImageType =
-            when (value) {
-                "data-uri" -> DATA_URI
-                "inline-svg" -> INLINE_SVG
-                "external" -> EXTERNAL
-                "relative" -> RELATIVE
-                else -> throw IllegalArgumentException("Unknown ImageType value: $value")
-            }
+        fun fromWire(value: String): ImageType = when (value) {
+            "data-uri" -> DATA_URI
+            "inline-svg" -> INLINE_SVG
+            "external" -> EXTERNAL
+            "relative" -> RELATIVE
+            else -> throw IllegalArgumentException("Unknown ImageType value: $value")
+        }
     }
 }

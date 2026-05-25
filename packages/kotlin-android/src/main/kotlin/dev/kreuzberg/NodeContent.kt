@@ -25,195 +25,148 @@ package dev.kreuzberg
 /**
  * Tagged enum for node content. Each variant carries only type-specific data.
  *
- * Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in Go/Java/TypeScript
- * bindings.
+ * Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
+ * Go/Java/TypeScript bindings.
  */
 @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = NodeContentDeserializer::class)
 @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = NodeContentSerializer::class)
 sealed class NodeContent {
     /** Document title. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Title(val text: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Title(
+        val text: String,
+    ) : NodeContent()
     /** Section heading with level (1-6). */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Heading(val level: Byte, val text: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Heading(
+        val level: Byte,
+        val text: String,
+    ) : NodeContent()
     /** Body text paragraph. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Paragraph(val text: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Paragraph(
+        val text: String,
+    ) : NodeContent()
     /** List container — children are `ListItem` nodes. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class List(val ordered: Boolean) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class List(
+        val ordered: Boolean,
+    ) : NodeContent()
     /** Individual list item. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class ListItem(val text: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class ListItem(
+        val text: String,
+    ) : NodeContent()
     /** Table with structured cell grid. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Table(val grid: TableGrid) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Table(
+        val grid: TableGrid,
+    ) : NodeContent()
     /** Image reference. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Image(val description: String?, val imageIndex: Int?, val src: String?) :
-        NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Image(
+        val description: String?,
+        val imageIndex: Int?,
+        val src: String?,
+    ) : NodeContent()
     /** Code block. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Code(val text: String, val language: String?) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Code(
+        val text: String,
+        val language: String?,
+    ) : NodeContent()
     /** Block quote — container, children carry the quoted content. */
     object Quote : NodeContent()
-
     /** Mathematical formula / equation. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Formula(val text: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Formula(
+        val text: String,
+    ) : NodeContent()
     /** Footnote reference content. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Footnote(val text: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Footnote(
+        val text: String,
+    ) : NodeContent()
     /**
      * Logical grouping container (section, key-value area).
      *
-     * `heading_level` + `heading_text` capture the section heading directly rather than relying on
-     * a first-child positional convention.
+     * `heading_level` + `heading_text` capture the section heading directly
+     * rather than relying on a first-child positional convention.
      */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Group(val label: String?, val headingLevel: Byte?, val headingText: String?) :
-        NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Group(
+        val label: String?,
+        val headingLevel: Byte?,
+        val headingText: String?,
+    ) : NodeContent()
     /** Page break marker. */
     object PageBreak : NodeContent()
-
     /** Presentation slide container — children are the slide's content nodes. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Slide(val number: Int, val title: String?) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Slide(
+        val number: Int,
+        val title: String?,
+    ) : NodeContent()
     /** Definition list container — children are `DefinitionItem` nodes. */
     object DefinitionList : NodeContent()
-
     /** Individual definition list entry with term and definition. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class DefinitionItem(val term: String, val definition: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class DefinitionItem(
+        val term: String,
+        val definition: String,
+    ) : NodeContent()
     /** Citation or bibliographic reference. */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Citation(val key: String, val text: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Citation(
+        val key: String,
+        val text: String,
+    ) : NodeContent()
     /**
      * Admonition / callout container (note, warning, tip, etc.).
      *
      * Children carry the admonition body content.
      */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class Admonition(val kind: String, val title: String?) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class Admonition(
+        val kind: String,
+        val title: String?,
+    ) : NodeContent()
     /**
      * Raw block preserved verbatim from the source format.
      *
-     * Used for content that cannot be mapped to a semantic node type (e.g. JSX in MDX, raw LaTeX in
-     * markdown, embedded HTML).
+     * Used for content that cannot be mapped to a semantic node type
+     * (e.g. JSX in MDX, raw LaTeX in markdown, embedded HTML).
      */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
-    data class RawBlock(val format: String, val content: String) : NodeContent()
-
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
+    data class RawBlock(
+        val format: String,
+        val content: String,
+    ) : NodeContent()
     /** Structured metadata block (email headers, YAML frontmatter, etc.). */
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
-        using = com.fasterxml.jackson.databind.JsonDeserializer.None::class
-    )
-    @com.fasterxml.jackson.databind.annotation.JsonSerialize(
-        using = com.fasterxml.jackson.databind.JsonSerializer.None::class
-    )
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.fasterxml.jackson.databind.JsonDeserializer.None::class)
+    @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.JsonSerializer.None::class)
     data class MetadataBlock(
-        val entries: kotlin.collections.List<kotlin.collections.List<String>>
+        val entries: kotlin.collections.List<kotlin.collections.List<String>>,
     ) : NodeContent()
 }
 
-private class NodeContentDeserializer :
-    com.fasterxml.jackson.databind.deser.std.StdDeserializer<NodeContent>(NodeContent::class.java) {
+private class NodeContentDeserializer : com.fasterxml.jackson.databind.deser.std.StdDeserializer<NodeContent>(NodeContent::class.java) {
     @Suppress("LongMethod")
     override fun deserialize(
         parser: com.fasterxml.jackson.core.JsonParser,
@@ -222,71 +175,36 @@ private class NodeContentDeserializer :
         val node = parser.codec.readTree<com.fasterxml.jackson.databind.node.ObjectNode>(parser)
         val tag = node.get("node_type")?.asText()
         @Suppress("UNCHECKED_CAST")
-        val payload =
-            (node.deepCopy() as com.fasterxml.jackson.databind.node.ObjectNode).apply {
-                remove("node_type")
-            }
+        val payload = (node.deepCopy() as com.fasterxml.jackson.databind.node.ObjectNode).apply { remove("node_type") }
         return when (tag) {
-            "title" ->
-                ctx.readTreeAsValue<NodeContent.Title>(payload, NodeContent.Title::class.java)
-            "heading" ->
-                ctx.readTreeAsValue<NodeContent.Heading>(payload, NodeContent.Heading::class.java)
-            "paragraph" ->
-                ctx.readTreeAsValue<NodeContent.Paragraph>(
-                    payload,
-                    NodeContent.Paragraph::class.java,
-                )
+            "title" -> ctx.readTreeAsValue<NodeContent.Title>(payload, NodeContent.Title::class.java)
+            "heading" -> ctx.readTreeAsValue<NodeContent.Heading>(payload, NodeContent.Heading::class.java)
+            "paragraph" -> ctx.readTreeAsValue<NodeContent.Paragraph>(payload, NodeContent.Paragraph::class.java)
             "list" -> ctx.readTreeAsValue<NodeContent.List>(payload, NodeContent.List::class.java)
-            "list_item" ->
-                ctx.readTreeAsValue<NodeContent.ListItem>(payload, NodeContent.ListItem::class.java)
-            "table" ->
-                ctx.readTreeAsValue<NodeContent.Table>(payload, NodeContent.Table::class.java)
-            "image" ->
-                ctx.readTreeAsValue<NodeContent.Image>(payload, NodeContent.Image::class.java)
+            "list_item" -> ctx.readTreeAsValue<NodeContent.ListItem>(payload, NodeContent.ListItem::class.java)
+            "table" -> ctx.readTreeAsValue<NodeContent.Table>(payload, NodeContent.Table::class.java)
+            "image" -> ctx.readTreeAsValue<NodeContent.Image>(payload, NodeContent.Image::class.java)
             "code" -> ctx.readTreeAsValue<NodeContent.Code>(payload, NodeContent.Code::class.java)
             "quote" -> NodeContent.Quote
-            "formula" ->
-                ctx.readTreeAsValue<NodeContent.Formula>(payload, NodeContent.Formula::class.java)
-            "footnote" ->
-                ctx.readTreeAsValue<NodeContent.Footnote>(payload, NodeContent.Footnote::class.java)
-            "group" ->
-                ctx.readTreeAsValue<NodeContent.Group>(payload, NodeContent.Group::class.java)
+            "formula" -> ctx.readTreeAsValue<NodeContent.Formula>(payload, NodeContent.Formula::class.java)
+            "footnote" -> ctx.readTreeAsValue<NodeContent.Footnote>(payload, NodeContent.Footnote::class.java)
+            "group" -> ctx.readTreeAsValue<NodeContent.Group>(payload, NodeContent.Group::class.java)
             "page_break" -> NodeContent.PageBreak
-            "slide" ->
-                ctx.readTreeAsValue<NodeContent.Slide>(payload, NodeContent.Slide::class.java)
+            "slide" -> ctx.readTreeAsValue<NodeContent.Slide>(payload, NodeContent.Slide::class.java)
             "definition_list" -> NodeContent.DefinitionList
-            "definition_item" ->
-                ctx.readTreeAsValue<NodeContent.DefinitionItem>(
-                    payload,
-                    NodeContent.DefinitionItem::class.java,
-                )
-            "citation" ->
-                ctx.readTreeAsValue<NodeContent.Citation>(payload, NodeContent.Citation::class.java)
-            "admonition" ->
-                ctx.readTreeAsValue<NodeContent.Admonition>(
-                    payload,
-                    NodeContent.Admonition::class.java,
-                )
-            "raw_block" ->
-                ctx.readTreeAsValue<NodeContent.RawBlock>(payload, NodeContent.RawBlock::class.java)
-            "metadata_block" ->
-                ctx.readTreeAsValue<NodeContent.MetadataBlock>(
-                    payload,
-                    NodeContent.MetadataBlock::class.java,
-                )
-            else ->
-                throw com.fasterxml.jackson.databind.exc.InvalidFormatException(
-                    parser,
-                    "Unknown NodeContent tag",
-                    tag,
-                    NodeContent::class.java,
-                )
+            "definition_item" -> ctx.readTreeAsValue<NodeContent.DefinitionItem>(payload, NodeContent.DefinitionItem::class.java)
+            "citation" -> ctx.readTreeAsValue<NodeContent.Citation>(payload, NodeContent.Citation::class.java)
+            "admonition" -> ctx.readTreeAsValue<NodeContent.Admonition>(payload, NodeContent.Admonition::class.java)
+            "raw_block" -> ctx.readTreeAsValue<NodeContent.RawBlock>(payload, NodeContent.RawBlock::class.java)
+            "metadata_block" -> ctx.readTreeAsValue<NodeContent.MetadataBlock>(payload, NodeContent.MetadataBlock::class.java)
+            else -> throw com.fasterxml.jackson.databind.exc.InvalidFormatException(
+                parser, "Unknown NodeContent tag", tag, NodeContent::class.java,
+            )
         }
     }
 }
 
-private class NodeContentSerializer :
-    com.fasterxml.jackson.databind.ser.std.StdSerializer<NodeContent>(NodeContent::class.java) {
+private class NodeContentSerializer : com.fasterxml.jackson.databind.ser.std.StdSerializer<NodeContent>(NodeContent::class.java) {
     @Suppress("LongMethod")
     override fun serialize(
         value: NodeContent,
@@ -294,180 +212,126 @@ private class NodeContentSerializer :
         provider: com.fasterxml.jackson.databind.SerializerProvider,
     ) {
         @Suppress("UNCHECKED_CAST")
-        val mapper =
-            (gen.codec as? com.fasterxml.jackson.databind.ObjectMapper)
-                ?: com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
-        val node: com.fasterxml.jackson.databind.node.ObjectNode =
-            when (value) {
-                is NodeContent.Title -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Title
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "title")
-                    n
-                }
-                is NodeContent.Heading -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Heading
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "heading")
-                    n
-                }
-                is NodeContent.Paragraph -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Paragraph
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "paragraph")
-                    n
-                }
-                is NodeContent.List -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.List
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "list")
-                    n
-                }
-                is NodeContent.ListItem -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.ListItem
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "list_item")
-                    n
-                }
-                is NodeContent.Table -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Table
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "table")
-                    n
-                }
-                is NodeContent.Image -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Image
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "image")
-                    n
-                }
-                is NodeContent.Code -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Code
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "code")
-                    n
-                }
-                is NodeContent.Quote -> {
-                    val n = mapper.createObjectNode()
-                    n.put("node_type", "quote")
-                    n
-                }
-                is NodeContent.Formula -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Formula
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "formula")
-                    n
-                }
-                is NodeContent.Footnote -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Footnote
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "footnote")
-                    n
-                }
-                is NodeContent.Group -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Group
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "group")
-                    n
-                }
-                is NodeContent.PageBreak -> {
-                    val n = mapper.createObjectNode()
-                    n.put("node_type", "page_break")
-                    n
-                }
-                is NodeContent.Slide -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Slide
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "slide")
-                    n
-                }
-                is NodeContent.DefinitionList -> {
-                    val n = mapper.createObjectNode()
-                    n.put("node_type", "definition_list")
-                    n
-                }
-                is NodeContent.DefinitionItem -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.DefinitionItem
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "definition_item")
-                    n
-                }
-                is NodeContent.Citation -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Citation
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "citation")
-                    n
-                }
-                is NodeContent.Admonition -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.Admonition
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "admonition")
-                    n
-                }
-                is NodeContent.RawBlock -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.RawBlock
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "raw_block")
-                    n
-                }
-                is NodeContent.MetadataBlock -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val n =
-                        mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(
-                            value as NodeContent.MetadataBlock
-                        ) as com.fasterxml.jackson.databind.node.ObjectNode
-                    n.put("node_type", "metadata_block")
-                    n
-                }
+        val mapper = (gen.codec as? com.fasterxml.jackson.databind.ObjectMapper) ?: com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
+        val node: com.fasterxml.jackson.databind.node.ObjectNode = when (value) {
+            is NodeContent.Title -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Title) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "title")
+                n
             }
+            is NodeContent.Heading -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Heading) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "heading")
+                n
+            }
+            is NodeContent.Paragraph -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Paragraph) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "paragraph")
+                n
+            }
+            is NodeContent.List -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.List) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "list")
+                n
+            }
+            is NodeContent.ListItem -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.ListItem) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "list_item")
+                n
+            }
+            is NodeContent.Table -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Table) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "table")
+                n
+            }
+            is NodeContent.Image -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Image) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "image")
+                n
+            }
+            is NodeContent.Code -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Code) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "code")
+                n
+            }
+            is NodeContent.Quote -> {
+                val n = mapper.createObjectNode()
+                n.put("node_type", "quote")
+                n
+            }
+            is NodeContent.Formula -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Formula) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "formula")
+                n
+            }
+            is NodeContent.Footnote -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Footnote) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "footnote")
+                n
+            }
+            is NodeContent.Group -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Group) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "group")
+                n
+            }
+            is NodeContent.PageBreak -> {
+                val n = mapper.createObjectNode()
+                n.put("node_type", "page_break")
+                n
+            }
+            is NodeContent.Slide -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Slide) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "slide")
+                n
+            }
+            is NodeContent.DefinitionList -> {
+                val n = mapper.createObjectNode()
+                n.put("node_type", "definition_list")
+                n
+            }
+            is NodeContent.DefinitionItem -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.DefinitionItem) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "definition_item")
+                n
+            }
+            is NodeContent.Citation -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Citation) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "citation")
+                n
+            }
+            is NodeContent.Admonition -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.Admonition) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "admonition")
+                n
+            }
+            is NodeContent.RawBlock -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.RawBlock) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "raw_block")
+                n
+            }
+            is NodeContent.MetadataBlock -> {
+                @Suppress("UNCHECKED_CAST")
+                val n = mapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(value as NodeContent.MetadataBlock) as com.fasterxml.jackson.databind.node.ObjectNode
+                n.put("node_type", "metadata_block")
+                n
+            }
+        }
         mapper.writeTree(gen, node)
     }
 }

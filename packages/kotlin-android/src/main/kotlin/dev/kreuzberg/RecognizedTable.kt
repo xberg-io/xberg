@@ -25,9 +25,10 @@ package dev.kreuzberg
 /**
  * Pre-computed table markdown for a table detection region.
  *
- * Produced by the TATR-based table structure recognizer and surfaced as part of layout-aware OCR
- * results. The struct lives here (under `layout-types`, pure-Rust) so that consumers who do not
- * enable `layout-detection` (ORT) can still reference the type in their own code.
+ * Produced by the TATR-based table structure recognizer and surfaced as part of
+ * layout-aware OCR results.  The struct lives here (under `layout-types`, pure-Rust)
+ * so that consumers who do not enable `layout-detection` (ORT) can still reference
+ * the type in their own code.
  */
 data class RecognizedTable(
     /** Detection bbox that this table corresponds to (for matching). */

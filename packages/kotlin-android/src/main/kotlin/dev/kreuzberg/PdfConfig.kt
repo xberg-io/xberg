@@ -29,10 +29,10 @@ data class PdfConfig(
     /**
      * Extract tables from PDF.
      *
-     * When `true` (default), runs pdf_oxide's native grid detector and, if it finds nothing, falls
-     * back to the heuristic text-layer reconstruction in
-     * `pdf.oxide.table.extract_tables_heuristic`. Set to `false` to skip both passes — `tables`
-     * will then be empty in the result.
+     * When `true` (default), runs pdf_oxide's native grid detector and, if it
+     * finds nothing, falls back to the heuristic text-layer reconstruction in
+     * `pdf.oxide.table.extract_tables_heuristic`. Set to `false` to skip
+     * both passes — `tables` will then be empty in the result.
      */
     val extractTables: Boolean = true,
     /** List of passwords to try when opening encrypted PDFs */
@@ -41,33 +41,38 @@ data class PdfConfig(
     val extractMetadata: Boolean = true,
     /** Hierarchy extraction configuration (None = hierarchy extraction disabled) */
     val hierarchy: HierarchyConfig? = null,
-    /** Extract PDF annotations (text notes, highlights, links, stamps). Default: false */
+    /**
+     * Extract PDF annotations (text notes, highlights, links, stamps).
+     * Default: false
+     */
     val extractAnnotations: Boolean = false,
     /**
-     * Top margin fraction (0.0–1.0) of page height to exclude headers/running heads. Default: 0.06
-     * (6%)
+     * Top margin fraction (0.0–1.0) of page height to exclude headers/running heads.
+     * Default: 0.06 (6%)
      */
     val topMarginFraction: Float? = null,
     /**
-     * Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default:
-     * 0.05 (5%)
+     * Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers.
+     * Default: 0.05 (5%)
      */
     val bottomMarginFraction: Float? = null,
     /**
      * Allow single-column pseudo tables in extraction results.
      *
-     * By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are
-     * rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column
-     * structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters
-     * (density, sparsity, prose detection) still apply.
+     * By default, tables with fewer than 2 columns (layout-guided) or 3 columns
+     * (heuristic) are rejected. When `true`, the minimum column count is relaxed
+     * to 1, allowing single-column structured data (glossaries, itemized lists)
+     * to be emitted as tables. Other quality filters (density, sparsity, prose
+     * detection) still apply.
      */
     val allowSingleColumnTables: Boolean = false,
     /**
-     * Perform OCR on inline images extracted from PDF pages and attach the recognized text to each
-     * `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is
-     * `null` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade
-     * gracefully (the image is returned without OCR text rather than failing the whole extraction).
-     * Default: `false`.
+     * Perform OCR on inline images extracted from PDF pages and attach the
+     * recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract
+     * to be available; if `ExtractionConfig.ocr` is `null` the extractor
+     * falls back to `TesseractConfig.default()`. Per-image failures degrade
+     * gracefully (the image is returned without OCR text rather than failing
+     * the whole extraction). Default: `false`.
      */
     val ocrInlineImages: Boolean = false,
 )

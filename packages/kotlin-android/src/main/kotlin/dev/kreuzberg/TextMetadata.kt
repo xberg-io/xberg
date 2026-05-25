@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Text/Markdown metadata.
  *
- * Extracted from plain text and Markdown files. Includes word counts and, for Markdown, structural
- * elements like headers and links.
+ * Extracted from plain text and Markdown files. Includes word counts and,
+ * for Markdown, structural elements like headers and links.
  */
 data class TextMetadata(
     /** Number of lines in the document */

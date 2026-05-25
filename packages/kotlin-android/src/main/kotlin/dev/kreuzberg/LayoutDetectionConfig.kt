@@ -25,8 +25,9 @@ package dev.kreuzberg
 /**
  * Layout detection configuration.
  *
- * Controls layout detection behavior in the extraction pipeline. When set on `ExtractionConfig`,
- * layout detection is enabled for PDF extraction.
+ * Controls layout detection behavior in the extraction pipeline.
+ * When set on `ExtractionConfig`, layout detection
+ * is enabled for PDF extraction.
  */
 data class LayoutDetectionConfig(
     /** Confidence threshold override (None = use model default). */
@@ -36,15 +37,15 @@ data class LayoutDetectionConfig(
     /**
      * Table structure recognition model.
      *
-     * Controls which model is used for table cell detection within layout-detected table regions.
-     * Defaults to `TableModel.Tatr`.
+     * Controls which model is used for table cell detection within layout-detected
+     * table regions. Defaults to `TableModel.Tatr`.
      */
     val tableModel: TableModel = TableModel.TATR,
     /**
      * Hardware acceleration for ONNX models (layout detection + table structure).
      *
-     * When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for
-     * inference. Defaults to `null` (auto-select per platform).
+     * When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
+     * is used for inference. Defaults to `null` (auto-select per platform).
      */
     val acceleration: AccelerationConfig? = null,
 )

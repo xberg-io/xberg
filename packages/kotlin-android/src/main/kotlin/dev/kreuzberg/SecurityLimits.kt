@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Configuration for security limits across extractors.
  *
- * All limits are intentionally conservative to prevent DoS attacks while still supporting
- * legitimate documents.
+ * All limits are intentionally conservative to prevent DoS attacks
+ * while still supporting legitimate documents.
  */
 data class SecurityLimits(
     /** Maximum uncompressed size for archives (500 MB) */
@@ -38,10 +38,11 @@ data class SecurityLimits(
     /** Maximum nesting depth for structures (100) */
     val maxNestingDepth: Long = 1024L,
     /**
-     * Maximum length of any single XML entity / attribute / token (1 MiB). This is a per-token cap,
-     * NOT a total cap — billion-laughs class attacks where a single entity expands to hundreds of
-     * MB are caught here, while normal long text content (a paragraph, a CDATA block) is caught by
-     * `max_content_size` instead.
+     * Maximum length of any single XML entity / attribute / token (1 MiB).
+     * This is a per-token cap, NOT a total cap — billion-laughs class
+     * attacks where a single entity expands to hundreds of MB are caught
+     * here, while normal long text content (a paragraph, a CDATA block) is
+     * caught by `max_content_size` instead.
      */
     val maxEntityLength: Long = 1048576L,
     /** Maximum string growth per document (100 MB) */

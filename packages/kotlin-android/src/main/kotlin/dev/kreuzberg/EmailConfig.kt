@@ -25,13 +25,13 @@ package dev.kreuzberg
 /** Configuration for email extraction. */
 data class EmailConfig(
     /**
-     * Windows codepage number to use when an MSG file contains no codepage property. Defaults to
-     * `null`, which falls back to windows-1252.
+     * Windows codepage number to use when an MSG file contains no codepage property.
+     * Defaults to `null`, which falls back to windows-1252.
      *
-     * If an unrecognized or invalid codepage number is supplied (including 0), the behavior
-     * silently falls back to windows-1252 — the same as when the MSG file itself contains an
-     * unrecognized codepage. No error or warning is emitted. Users should verify output when
-     * supplying unusual values.
+     * If an unrecognized or invalid codepage number is supplied (including 0),
+     * the behavior silently falls back to windows-1252 — the same as when the
+     * MSG file itself contains an unrecognized codepage. No error or warning is
+     * emitted. Users should verify output when supplying unusual values.
      *
      * Common values:
      *
@@ -42,8 +42,8 @@ data class EmailConfig(
      * - 1254: Turkish
      * - 1255: Hebrew
      * - 1256: Arabic
-     * - 932: Japanese (Shift-JIS)
-     * - 936: Simplified Chinese (GBK)
+     * - 932:  Japanese (Shift-JIS)
+     * - 936:  Simplified Chinese (GBK)
      */
-    val msgFallbackCodepage: Int? = null
+    val msgFallbackCodepage: Int? = null,
 )

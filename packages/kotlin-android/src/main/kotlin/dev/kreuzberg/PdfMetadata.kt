@@ -25,8 +25,9 @@ package dev.kreuzberg
 /**
  * PDF-specific metadata.
  *
- * Contains metadata fields specific to PDF documents that are not in the common `Metadata`
- * structure. Common fields like title, authors, keywords, and dates are at the `Metadata` level.
+ * Contains metadata fields specific to PDF documents that are not in the common
+ * `Metadata` structure. Common fields like title, authors, keywords, and dates
+ * are at the `Metadata` level.
  */
 data class PdfMetadata(
     /** PDF version (e.g., "1.7", "2.0") */

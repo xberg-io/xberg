@@ -274,7 +274,18 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
     /// When `true` (default), extracted images are classified by kind and grouped
     /// into clusters where they appear to belong to one figure.
     public let classify: Bool
-    public init(extractImages: Bool, targetDpi: Int32, maxImageDimension: Int32, injectPlaceholders: Bool, autoAdjustDpi: Bool, minDpi: Int32, maxDpi: Int32, maxImagesPerPage: UInt32? = nil, classify: Bool) {
+    /// When `true`, full-page renders produced during OCR preprocessing are captured
+    /// and returned as `ImageKind::PageRaster` entries in `ExtractionResult.images`.
+    ///
+    /// **PDF + OCR only.** No rasters are captured for non-PDF inputs or when the
+    /// document-level OCR bypass is active (whole-document backend). When OCR is
+    /// enabled and this flag is set but the active backend skips per-page rendering,
+    /// a `ProcessingWarning` is emitted in `ExtractionResult.processing_warnings`.
+    ///
+    /// Defaults to `false`. Enable when downstream consumers need page thumbnails
+    /// (e.g. citation previews, visual grounding).
+    public let includePageRasters: Bool
+    public init(extractImages: Bool, targetDpi: Int32, maxImageDimension: Int32, injectPlaceholders: Bool, autoAdjustDpi: Bool, minDpi: Int32, maxDpi: Int32, maxImagesPerPage: UInt32? = nil, classify: Bool, includePageRasters: Bool) {
         self.extractImages = extractImages
         self.targetDpi = targetDpi
         self.maxImageDimension = maxImageDimension
@@ -284,6 +295,7 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
         self.maxDpi = maxDpi
         self.maxImagesPerPage = maxImagesPerPage
         self.classify = classify
+        self.includePageRasters = includePageRasters
     }
     private enum CodingKeys: String, CodingKey {
         case extractImages = "extract_images"
@@ -295,6 +307,7 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
         case maxDpi = "max_dpi"
         case maxImagesPerPage = "max_images_per_page"
         case classify = "classify"
+        case includePageRasters = "include_page_rasters"
     }
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -307,6 +320,7 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
         self.maxDpi = try container.decodeIfPresent(Int32.self, forKey: .maxDpi) ?? 600
         self.maxImagesPerPage = try container.decodeIfPresent(UInt32.self, forKey: .maxImagesPerPage) ?? nil
         self.classify = try container.decodeIfPresent(Bool.self, forKey: .classify) ?? true
+        self.includePageRasters = try container.decodeIfPresent(Bool.self, forKey: .includePageRasters) ?? false
     }
 }
 
@@ -322,9 +336,10 @@ internal extension ImageExtractionConfig {
         self.maxDpi = rb.maxDpi()
         self.maxImagesPerPage = rb.maxImagesPerPage()
         self.classify = rb.classify()
+        self.includePageRasters = rb.includePageRasters()
     }
     func intoRust() throws -> RustBridge.ImageExtractionConfig {
-        return RustBridge.ImageExtractionConfig(self.extractImages, self.targetDpi, self.maxImageDimension, self.injectPlaceholders, self.autoAdjustDpi, self.minDpi, self.maxDpi, self.maxImagesPerPage, self.classify)
+        return RustBridge.ImageExtractionConfig(self.extractImages, self.targetDpi, self.maxImageDimension, self.injectPlaceholders, self.autoAdjustDpi, self.minDpi, self.maxDpi, self.maxImagesPerPage, self.classify, self.includePageRasters)
     }
 }
 
@@ -5847,6 +5862,8 @@ public enum ImageKind: String, Codable, Sendable, Hashable {
     case tileFragment = "tile_fragment"
     /// Mask or transparency map
     case mask
+    /// Full-page render produced during OCR preprocessing; used as a citation thumbnail.
+    case pageRaster = "page_raster"
     /// Could not classify with reasonable confidence
     case unknown
 }

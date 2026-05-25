@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Email extraction result.
  *
- * Complete representation of an extracted email message (.eml or .msg) including headers, body
- * content, and attachments.
+ * Complete representation of an extracted email message (.eml or .msg)
+ * including headers, body content, and attachments.
  */
 data class EmailExtractionResult(
     /** Email subject line */

@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * A single node in the document tree.
  *
- * Each node has deterministic `id`, typed `content`, optional `parent`/`children` for tree
- * structure, and metadata like page number, bounding box, and content layer.
+ * Each node has deterministic `id`, typed `content`, optional `parent`/`children`
+ * for tree structure, and metadata like page number, bounding box, and content layer.
  */
 data class DocumentNode(
     /** Deterministic identifier (hash of content + position). */
@@ -55,8 +55,8 @@ data class DocumentNode(
     /**
      * Format-specific key-value attributes.
      *
-     * Extensible bag for miscellaneous data without a dedicated typed field: CSS classes, LaTeX
-     * environment names, Excel cell formulas, slide layout names, etc.
+     * Extensible bag for miscellaneous data without a dedicated typed field: CSS classes,
+     * LaTeX environment names, Excel cell formulas, slide layout names, etc.
      */
     val attributes: Map<String, String>? = null,
 )

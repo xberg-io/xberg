@@ -25,11 +25,11 @@ package dev.kreuzberg
 /**
  * Preset configurations for common RAG use cases.
  *
- * Each preset combines chunk size, overlap, and embedding model to provide an optimized
- * configuration for specific scenarios.
+ * Each preset combines chunk size, overlap, and embedding model
+ * to provide an optimized configuration for specific scenarios.
  *
- * All string fields are owned `String` for FFI compatibility — instances are safe to clone and pass
- * across language boundaries.
+ * All string fields are owned `String` for FFI compatibility — instances
+ * are safe to clone and pass across language boundaries.
  */
 data class EmbeddingPreset(
     val name: String,

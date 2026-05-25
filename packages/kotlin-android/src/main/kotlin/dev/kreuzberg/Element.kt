@@ -25,8 +25,8 @@ package dev.kreuzberg
 /**
  * Semantic element extracted from document.
  *
- * Represents a logical unit of content with semantic classification, unique identifier, and
- * metadata for tracking origin and position.
+ * Represents a logical unit of content with semantic classification,
+ * unique identifier, and metadata for tracking origin and position.
  */
 data class Element(
     /** Unique element identifier */

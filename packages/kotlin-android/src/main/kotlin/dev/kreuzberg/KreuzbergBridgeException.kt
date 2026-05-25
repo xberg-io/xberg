@@ -2,7 +2,6 @@
 
 package dev.kreuzberg
 
-class KreuzbergBridgeException(message: String?, cause: Throwable?) :
-    RuntimeException(message, cause) {
+class KreuzbergBridgeException(message: String?, cause: Throwable?) : RuntimeException(message, cause) {
     constructor(message: String?) : this(message, null)
 }

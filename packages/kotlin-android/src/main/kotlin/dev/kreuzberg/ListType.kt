@@ -25,33 +25,35 @@ package dev.kreuzberg
 /** Type of list detection. */
 enum class ListType {
     /** Bullet points (-, *, •, etc.) */
-    @com.fasterxml.jackson.annotation.JsonProperty("Bullet") BULLET,
+    @com.fasterxml.jackson.annotation.JsonProperty("Bullet")
+    BULLET,
     /** Numbered lists (1., 2., etc.) */
-    @com.fasterxml.jackson.annotation.JsonProperty("Numbered") NUMBERED,
+    @com.fasterxml.jackson.annotation.JsonProperty("Numbered")
+    NUMBERED,
     /** Lettered lists (a., b., A., B., etc.) */
-    @com.fasterxml.jackson.annotation.JsonProperty("Lettered") LETTERED,
+    @com.fasterxml.jackson.annotation.JsonProperty("Lettered")
+    LETTERED,
     /** Indented items */
-    @com.fasterxml.jackson.annotation.JsonProperty("Indented") INDENTED;
+    @com.fasterxml.jackson.annotation.JsonProperty("Indented")
+    INDENTED;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            BULLET -> "Bullet"
-            NUMBERED -> "Numbered"
-            LETTERED -> "Lettered"
-            INDENTED -> "Indented"
-        }
+    fun toWire(): String = when (this) {
+        BULLET -> "Bullet"
+        NUMBERED -> "Numbered"
+        LETTERED -> "Lettered"
+        INDENTED -> "Indented"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): ListType =
-            when (value) {
-                "Bullet" -> BULLET
-                "Numbered" -> NUMBERED
-                "Lettered" -> LETTERED
-                "Indented" -> INDENTED
-                else -> throw IllegalArgumentException("Unknown ListType value: $value")
-            }
+        fun fromWire(value: String): ListType = when (value) {
+            "Bullet" -> BULLET
+            "Numbered" -> NUMBERED
+            "Lettered" -> LETTERED
+            "Indented" -> INDENTED
+            else -> throw IllegalArgumentException("Unknown ListType value: $value")
+        }
     }
 }

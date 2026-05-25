@@ -25,74 +25,86 @@ package dev.kreuzberg
 /**
  * Semantic structural classification of a text chunk.
  *
- * Assigned by the heuristic classifier in `chunking.classifier`. Defaults to `Unknown` when no rule
- * matches. Designed to be extended in future versions without breaking changes.
+ * Assigned by the heuristic classifier in `chunking.classifier`.
+ * Defaults to `Unknown` when no rule matches.
+ * Designed to be extended in future versions without breaking changes.
  */
 enum class ChunkType {
     /** Section heading or document title. */
-    @com.fasterxml.jackson.annotation.JsonProperty("heading") HEADING,
+    @com.fasterxml.jackson.annotation.JsonProperty("heading")
+    HEADING,
     /** Party list: names, addresses, and signatories. */
-    @com.fasterxml.jackson.annotation.JsonProperty("party_list") PARTY_LIST,
+    @com.fasterxml.jackson.annotation.JsonProperty("party_list")
+    PARTY_LIST,
     /** Definition clause ("X means…", "X shall mean…"). */
-    @com.fasterxml.jackson.annotation.JsonProperty("definitions") DEFINITIONS,
+    @com.fasterxml.jackson.annotation.JsonProperty("definitions")
+    DEFINITIONS,
     /** Operative clause containing legal/contractual action verbs. */
-    @com.fasterxml.jackson.annotation.JsonProperty("operative_clause") OPERATIVE_CLAUSE,
+    @com.fasterxml.jackson.annotation.JsonProperty("operative_clause")
+    OPERATIVE_CLAUSE,
     /** Signature block with signatures, names, and dates. */
-    @com.fasterxml.jackson.annotation.JsonProperty("signature_block") SIGNATURE_BLOCK,
+    @com.fasterxml.jackson.annotation.JsonProperty("signature_block")
+    SIGNATURE_BLOCK,
     /** Schedule, annex, appendix, or exhibit section. */
-    @com.fasterxml.jackson.annotation.JsonProperty("schedule") SCHEDULE,
+    @com.fasterxml.jackson.annotation.JsonProperty("schedule")
+    SCHEDULE,
     /** Table-like content with aligned columns or repeated patterns. */
-    @com.fasterxml.jackson.annotation.JsonProperty("table_like") TABLE_LIKE,
+    @com.fasterxml.jackson.annotation.JsonProperty("table_like")
+    TABLE_LIKE,
     /** Mathematical formula or equation. */
-    @com.fasterxml.jackson.annotation.JsonProperty("formula") FORMULA,
+    @com.fasterxml.jackson.annotation.JsonProperty("formula")
+    FORMULA,
     /** Code block or preformatted content. */
-    @com.fasterxml.jackson.annotation.JsonProperty("code_block") CODE_BLOCK,
+    @com.fasterxml.jackson.annotation.JsonProperty("code_block")
+    CODE_BLOCK,
     /** Embedded or referenced image content. */
-    @com.fasterxml.jackson.annotation.JsonProperty("image") IMAGE,
+    @com.fasterxml.jackson.annotation.JsonProperty("image")
+    IMAGE,
     /** Organizational chart or hierarchy diagram. */
-    @com.fasterxml.jackson.annotation.JsonProperty("org_chart") ORG_CHART,
+    @com.fasterxml.jackson.annotation.JsonProperty("org_chart")
+    ORG_CHART,
     /** Diagram, figure, or visual illustration. */
-    @com.fasterxml.jackson.annotation.JsonProperty("diagram") DIAGRAM,
+    @com.fasterxml.jackson.annotation.JsonProperty("diagram")
+    DIAGRAM,
     /** Unclassified or mixed content. */
-    @com.fasterxml.jackson.annotation.JsonProperty("unknown") UNKNOWN;
+    @com.fasterxml.jackson.annotation.JsonProperty("unknown")
+    UNKNOWN;
 
     @com.fasterxml.jackson.annotation.JsonValue
-    fun toWire(): String =
-        when (this) {
-            HEADING -> "heading"
-            PARTY_LIST -> "party_list"
-            DEFINITIONS -> "definitions"
-            OPERATIVE_CLAUSE -> "operative_clause"
-            SIGNATURE_BLOCK -> "signature_block"
-            SCHEDULE -> "schedule"
-            TABLE_LIKE -> "table_like"
-            FORMULA -> "formula"
-            CODE_BLOCK -> "code_block"
-            IMAGE -> "image"
-            ORG_CHART -> "org_chart"
-            DIAGRAM -> "diagram"
-            UNKNOWN -> "unknown"
-        }
+    fun toWire(): String = when (this) {
+        HEADING -> "heading"
+        PARTY_LIST -> "party_list"
+        DEFINITIONS -> "definitions"
+        OPERATIVE_CLAUSE -> "operative_clause"
+        SIGNATURE_BLOCK -> "signature_block"
+        SCHEDULE -> "schedule"
+        TABLE_LIKE -> "table_like"
+        FORMULA -> "formula"
+        CODE_BLOCK -> "code_block"
+        IMAGE -> "image"
+        ORG_CHART -> "org_chart"
+        DIAGRAM -> "diagram"
+        UNKNOWN -> "unknown"
+    }
 
     companion object {
         @com.fasterxml.jackson.annotation.JsonCreator
         @JvmStatic
-        fun fromWire(value: String): ChunkType =
-            when (value) {
-                "heading" -> HEADING
-                "party_list" -> PARTY_LIST
-                "definitions" -> DEFINITIONS
-                "operative_clause" -> OPERATIVE_CLAUSE
-                "signature_block" -> SIGNATURE_BLOCK
-                "schedule" -> SCHEDULE
-                "table_like" -> TABLE_LIKE
-                "formula" -> FORMULA
-                "code_block" -> CODE_BLOCK
-                "image" -> IMAGE
-                "org_chart" -> ORG_CHART
-                "diagram" -> DIAGRAM
-                "unknown" -> UNKNOWN
-                else -> throw IllegalArgumentException("Unknown ChunkType value: $value")
-            }
+        fun fromWire(value: String): ChunkType = when (value) {
+            "heading" -> HEADING
+            "party_list" -> PARTY_LIST
+            "definitions" -> DEFINITIONS
+            "operative_clause" -> OPERATIVE_CLAUSE
+            "signature_block" -> SIGNATURE_BLOCK
+            "schedule" -> SCHEDULE
+            "table_like" -> TABLE_LIKE
+            "formula" -> FORMULA
+            "code_block" -> CODE_BLOCK
+            "image" -> IMAGE
+            "org_chart" -> ORG_CHART
+            "diagram" -> DIAGRAM
+            "unknown" -> UNKNOWN
+            else -> throw IllegalArgumentException("Unknown ChunkType value: $value")
+        }
     }
 }

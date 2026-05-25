@@ -25,8 +25,9 @@ package dev.kreuzberg
 /**
  * A detected layout region on a page.
  *
- * When layout detection is enabled, each page may have layout regions identifying different content
- * types (text, pictures, tables, etc.) with confidence scores and spatial positions.
+ * When layout detection is enabled, each page may have layout regions
+ * identifying different content types (text, pictures, tables, etc.)
+ * with confidence scores and spatial positions.
  */
 data class LayoutRegion(
     /** Layout class name (e.g. "picture", "table", "text", "section_header"). */

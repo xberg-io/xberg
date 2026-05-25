@@ -628,6 +628,7 @@ BatchFileItem <- new.env(parent = emptyenv())
 #' @field max_dpi Maximum DPI threshold
 #' @field max_images_per_page Maximum number of image objects to extract per PDF page.
 #' @field classify When `true` (default), extracted images are classified by kind and grouped into clusters where they
+#' @field include_page_rasters When `true`, full-page renders produced during OCR preprocessing are captured and
 #' @export
 ImageExtractionConfig <- new.env(parent = emptyenv())
 ImageExtractionConfig$default <- function() .Call("wrap__ImageExtractionConfig__default", PACKAGE = "kreuzberg")
