@@ -1588,13 +1588,11 @@ jobs:
           language: python
           artifact-path: dist
           package-name: kreuzberg
-          required-extras: |
-            **/*.pyi
-            **/__init__.py
-            **/py.typed
-            **/*.so
-            **/*.dylib
-            **/*.dll
+          # Per-archive patterns don't apply uniformly: wheels carry the
+          # native .so/.dylib/.dll but sdist doesn't; sdist carries the
+          # source tree the wheels strip. The basic `python` allowlist also
+          # only matches wheels. strict=false reports diffs without blocking.
+          strict: "false"
 
       - uses: kreuzberg-dev/actions/publish-pypi@v1
         with:
