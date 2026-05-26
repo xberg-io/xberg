@@ -7,7 +7,7 @@ license = "Elastic-2.0"
 [package.metadata.cargo-machete]
 # Umbrella + sibling crates are pulled in so flutter_rust_bridge can resolve
 # every referenced type, but the generated Rust wrapper only `use`s a subset.
-ignored = ["kreuzberg"]
+ignored = ["kreuzberg", "ahash"]
 
 [lib]
 crate-type = ["cdylib", "staticlib"]

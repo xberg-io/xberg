@@ -82,7 +82,7 @@ pub(crate) fn chunk_text_with_heading_source(
 
     // Yaml creates new content per chunk (key prefix), can't use generic &str splitter.
     if config.chunker_type == ChunkerType::Yaml {
-        return super::yaml_section::chunk_yaml_by_sections(text, config);
+        return super::yaml_section::chunk_yaml_by_sections(text, config, page_boundaries);
     }
 
     // Semantic chunker has its own pipeline (segment → topic detect → merge).
