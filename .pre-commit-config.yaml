@@ -5,7 +5,7 @@ default_stages:
 - pre-commit
 repos:
 - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
-  rev: v1.2.0
+  rev: v1.2.1
   hooks:
   - id: ai-rulez-generate
   - id: trailing-whitespace
