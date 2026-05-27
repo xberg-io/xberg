@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -32,24 +33,24 @@ data class OcrElementConfig(
      *
      * When true, the `ocr_elements` field in `ExtractionResult` will be populated.
      */
-    val includeElements: Boolean,
+    val includeElements: Boolean = false,
     /**
      * Minimum hierarchical level to include.
      *
      * Elements below this level (e.g., words when min_level is Line) will be excluded.
      */
-    val minLevel: OcrElementLevel,
+    val minLevel: OcrElementLevel = OcrElementLevel.LINE,
     /**
      * Minimum recognition confidence threshold (0.0-1.0).
      *
      * Elements with confidence below this threshold will be filtered out.
      */
-    val minConfidence: Double,
+    val minConfidence: Double = 0.0,
     /**
      * Whether to build hierarchical relationships between elements.
      *
-     * When true, `parent_id` fields will be populated based on spatial containment.
-     * Only meaningful for Tesseract output.
+     * When true, `parent_id` fields will be populated based on spatial containment. Only meaningful
+     * for Tesseract output.
      */
-    val buildHierarchy: Boolean
+    val buildHierarchy: Boolean = false,
 )

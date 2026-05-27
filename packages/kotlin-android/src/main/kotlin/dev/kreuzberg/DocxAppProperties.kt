@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,68 +28,36 @@ package dev.kreuzberg
  * Contains Word-specific document statistics and metadata.
  */
 data class DocxAppProperties(
-    /**
-     * Application name (e.g., "Microsoft Office Word")
-     */
-    val application: String?,
-    /**
-     * Application version
-     */
-    val appVersion: String?,
-    /**
-     * Template filename
-     */
-    val template: String?,
-    /**
-     * Total editing time in minutes
-     */
-    val totalTime: Int?,
-    /**
-     * Number of pages
-     */
-    val pages: Int?,
-    /**
-     * Number of words
-     */
-    val words: Int?,
-    /**
-     * Number of characters (excluding spaces)
-     */
-    val characters: Int?,
-    /**
-     * Number of characters (including spaces)
-     */
-    val charactersWithSpaces: Int?,
-    /**
-     * Number of lines
-     */
-    val lines: Int?,
-    /**
-     * Number of paragraphs
-     */
-    val paragraphs: Int?,
-    /**
-     * Company name
-     */
-    val company: String?,
-    /**
-     * Document security level
-     */
-    val docSecurity: Int?,
-    /**
-     * Scale crop flag
-     */
-    val scaleCrop: Boolean?,
-    /**
-     * Links up to date flag
-     */
-    val linksUpToDate: Boolean?,
-    /**
-     * Shared document flag
-     */
-    val sharedDoc: Boolean?,
-    /**
-     * Hyperlinks changed flag
-     */
-    val hyperlinksChanged: Boolean?
+    /** Application name (e.g., "Microsoft Office Word") */
+    val application: String? = null,
+    /** Application version */
+    val appVersion: String? = null,
+    /** Template filename */
+    val template: String? = null,
+    /** Total editing time in minutes */
+    val totalTime: Int? = null,
+    /** Number of pages */
+    val pages: Int? = null,
+    /** Number of words */
+    val words: Int? = null,
+    /** Number of characters (excluding spaces) */
+    val characters: Int? = null,
+    /** Number of characters (including spaces) */
+    val charactersWithSpaces: Int? = null,
+    /** Number of lines */
+    val lines: Int? = null,
+    /** Number of paragraphs */
+    val paragraphs: Int? = null,
+    /** Company name */
+    val company: String? = null,
+    /** Document security level */
+    val docSecurity: Int? = null,
+    /** Scale crop flag */
+    val scaleCrop: Boolean? = null,
+    /** Links up to date flag */
+    val linksUpToDate: Boolean? = null,
+    /** Shared document flag */
+    val sharedDoc: Boolean? = null,
+    /** Hyperlinks changed flag */
+    val hyperlinksChanged: Boolean? = null,
 )

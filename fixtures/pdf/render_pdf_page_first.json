@@ -5,10 +5,9 @@
   "call": "render_pdf_page_to_png",
   "input": {
     "pdf_bytes": "pdf/fake_memo.pdf",
-    "page_index": 0
-  },
-  "skip": {
-    "skip_languages": []
+    "page_index": 0,
+    "dpi": null,
+    "password": null
   },
   "assertions": [
     {

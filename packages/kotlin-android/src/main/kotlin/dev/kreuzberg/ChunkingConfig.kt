@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Chunking configuration.
  *
- * Configures text chunking for document content, including chunk size,
- * overlap, trimming behavior, and optional embeddings.
+ * Configures text chunking for document content, including chunk size, overlap, trimming behavior,
+ * and optional embeddings.
  *
  * Use `..the default constructor` when constructing to allow for future field additions:
  */
@@ -33,63 +34,59 @@ data class ChunkingConfig(
     /**
      * Maximum size per chunk (in units determined by `sizing`).
      *
-     * When `sizing` is `Characters` (default), this is the max character count.
-     * When using token-based sizing, this is the max token count.
+     * When `sizing` is `Characters` (default), this is the max character count. When using
+     * token-based sizing, this is the max token count.
      *
      * Default: 1000
      */
-    val maxCharacters: Long,
+    @com.fasterxml.jackson.annotation.JsonProperty("max_chars") val maxCharacters: Long = 1000L,
     /**
      * Overlap between chunks (in units determined by `sizing`).
      *
      * Default: 200
      */
-    val overlap: Long,
+    @com.fasterxml.jackson.annotation.JsonProperty("max_overlap") val overlap: Long = 200L,
     /**
      * Whether to trim whitespace from chunk boundaries.
      *
      * Default: true
      */
-    val trim: Boolean,
+    val trim: Boolean = true,
     /**
      * Type of chunker to use (Text or Markdown).
      *
      * Default: Text
      */
-    val chunkerType: ChunkerType,
-    /**
-     * Optional embedding configuration for chunk embeddings.
-     */
-    val embedding: EmbeddingConfig?,
-    /**
-     * Use a preset configuration (overrides individual settings if provided).
-     */
-    val preset: String?,
+    val chunkerType: ChunkerType = ChunkerType.TEXT,
+    /** Optional embedding configuration for chunk embeddings. */
+    val embedding: EmbeddingConfig? = null,
+    /** Use a preset configuration (overrides individual settings if provided). */
+    val preset: String? = null,
     /**
      * How to measure chunk size.
      *
-     * Default: `Characters` (Unicode character count).
-     * Enable `chunking-tiktoken` or `chunking-tokenizers` features for token-based sizing.
+     * Default: `Characters` (Unicode character count). Enable `chunking-tiktoken` or
+     * `chunking-tokenizers` features for token-based sizing.
      */
+    @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(`as` = ChunkSizing::class)
     val sizing: ChunkSizing,
     /**
-     * When `true` and `chunker_type` is `Markdown`, prepend the heading hierarchy
-     * path (e.g. `"# Title > ## Section\n\n"`) to each chunk's content string.
+     * When `true` and `chunker_type` is `Markdown`, prepend the heading hierarchy path (e.g. `"#
+     * Title > ## Section\n\n"`) to each chunk's content string.
      *
-     * This is useful for RAG pipelines where each chunk needs self-contained
-     * context about its position in the document structure.
+     * This is useful for RAG pipelines where each chunk needs self-contained context about its
+     * position in the document structure.
      *
      * Default: `false`
      */
-    val prependHeadingContext: Boolean,
+    val prependHeadingContext: Boolean = false,
     /**
      * Optional cosine similarity threshold for semantic topic boundary detection.
      *
-     * Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is
-     * provided. You almost never need to set this. When omitted, defaults to
-     * `0.75` which works well for most documents. Lower values detect more
-     * topic boundaries (more, smaller chunks); higher values detect fewer.
+     * Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is provided. You almost
+     * never need to set this. When omitted, defaults to `0.75` which works well for most documents.
+     * Lower values detect more topic boundaries (more, smaller chunks); higher values detect fewer.
      * Range: `0.0..=1.0`.
      */
-    val topicThreshold: Float?
+    val topicThreshold: Float? = null,
 )

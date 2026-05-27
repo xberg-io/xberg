@@ -221,6 +221,10 @@ pub fn detect_mime_type(path: String, check_exists: bool) -> crate::Result<Strin
 pub use pdf::render::render_pdf_page_to_png;
 
 // ── Plugin Lifecycle — public API ────────────────────────────────────────────
+// Alef extracts plugin-lifecycle fns via the `plugins::{trait_snake}::` alias modules
+// (see plugins/mod.rs) so they emit with their fully-qualified path. Skip this
+// top-level re-export to avoid generating duplicate bindings.
+#[cfg_attr(alef, alef(skip))]
 pub use plugins::{
     clear_document_extractors, clear_embedding_backends, clear_ocr_backends, clear_post_processors, clear_renderers,
     clear_validators, list_document_extractors, list_embedding_backends, list_ocr_backends, list_post_processors,
@@ -228,6 +232,15 @@ pub use plugins::{
     register_post_processor, register_renderer, register_validator, unregister_document_extractor,
     unregister_embedding_backend, unregister_ocr_backend, unregister_post_processor, unregister_renderer,
     unregister_validator,
+};
+
+// ── Plugin Traits — public API (for plugin implementors) ─────────────────────
+// Re-exported at the top level so plugin implementors can write
+// `use kreuzberg::DocumentExtractor` without knowledge of internal module paths.
+#[cfg_attr(alef, alef(skip))]
+pub use plugins::{
+    DocumentExtractor, EmbeddingBackend, OcrBackend, OcrBackendType, PostProcessor, ProcessingStage, Renderer,
+    Validator,
 };
 
 // ── Embeddings — public API (4 functions + 1 type, feature-gated) ────────────
@@ -303,6 +316,7 @@ pub fn list_embedding_presets() -> Vec<String> {
 /// feature is absent, `get_embedding_preset` always returns `None`, so the
 /// stub is never allocated in practice.
 #[cfg(not(feature = "embedding-presets"))]
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EmbeddingPreset {
     pub name: String,

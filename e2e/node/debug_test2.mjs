@@ -2,7 +2,7 @@ import { extractFileSync } from "kreuzberg";
 
 // Test XLSX
 const xlsxResult = extractFileSync(
-  "/Users/naamanhirschfeld/workspace/kreuzberg-dev/kreuzberg/test_documents/xlsx/stanley_cups.xlsx",
+	"/Users/naamanhirschfeld/workspace/kreuzberg-dev/kreuzberg/test_documents/xlsx/stanley_cups.xlsx",
 );
 const fmt = xlsxResult.metadata?.format;
 console.log("format:", fmt);

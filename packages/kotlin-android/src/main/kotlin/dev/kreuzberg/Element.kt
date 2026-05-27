@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,24 +25,16 @@ package dev.kreuzberg
 /**
  * Semantic element extracted from document.
  *
- * Represents a logical unit of content with semantic classification,
- * unique identifier, and metadata for tracking origin and position.
+ * Represents a logical unit of content with semantic classification, unique identifier, and
+ * metadata for tracking origin and position.
  */
 data class Element(
-    /**
-     * Unique element identifier
-     */
+    /** Unique element identifier */
     val elementId: String,
-    /**
-     * Semantic type of this element
-     */
+    /** Semantic type of this element */
     val elementType: ElementType,
-    /**
-     * Text content of the element
-     */
+    /** Text content of the element */
     val text: String,
-    /**
-     * Metadata about the element
-     */
-    val metadata: ElementMetadata
+    /** Metadata about the element */
+    val metadata: ElementMetadata,
 )

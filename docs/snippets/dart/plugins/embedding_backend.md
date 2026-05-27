@@ -1,5 +1,4 @@
 <!-- snippet:skip reason="Dart cannot construct the opaque BoxFn closure types required by createEmbeddingBackendDartImpl — flutter_rust_bridge generates them as RustOpaqueInterface with no Dart-side wrapper. Custom embedding backends must be written in Rust." -->
-
 ```dart title="Dart"
 import 'package:kreuzberg/kreuzberg.dart';
 

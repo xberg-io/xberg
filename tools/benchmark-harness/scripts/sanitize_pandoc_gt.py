@@ -19,6 +19,7 @@ Usage:
     # Batch all GT files (apply):
     python sanitize_pandoc_gt.py --batch test_documents/ground_truth/
 """
+
 import argparse
 import difflib
 import os

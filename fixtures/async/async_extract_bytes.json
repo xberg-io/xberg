@@ -5,7 +5,7 @@
   "tags": ["async", "api", "extract_bytes"],
   "call": "extract_bytes",
   "skip": {
-    "skip_languages": ["wasm"],
+    "languages": ["wasm"],
     "reason": "WASM uses synchronous-only API; async extraction is not available on the wasm target"
   },
   "input": {

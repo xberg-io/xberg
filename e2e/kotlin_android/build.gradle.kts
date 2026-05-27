@@ -1,8 +1,7 @@
-import com.android.build.api.dsl.ManagedVirtualDevice
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("com.android.library") version "8.7.3"
+    id("com.android.library") version "8.13.0"
     kotlin("android") version "2.3.21"
 }
 
@@ -21,7 +20,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
     sourceSets {
         getByName("test") {
             // Include the AAR-bundled Java facade as test sources
@@ -32,16 +30,10 @@ android {
     }
 
     testOptions {
-        // Gradle Managed Virtual Devices for on-device instrumented tests.
-        // Run: ./gradlew pixel6api34DebugAndroidTest
-        managedDevices {
-            devices {
-                create<ManagedVirtualDevice>("pixel6api34") {
-                    device = "Pixel 6"
-                    apiLevel = 34
-                    systemImageSource = "aosp"
-                }
-            }
+        // Host JVM unit tests: no Android device/emulator required.
+        // Tests run against the published AAR and JVM-side deps via `gradle test`.
+        unitTests {
+            isReturnDefaultValues = true
         }
     }
 }
@@ -52,14 +44,11 @@ kotlin {
     }
 }
 
-repositories {
-    mavenCentral()
-    google()
-}
+// Repositories declared in settings.gradle.kts via
+// dependencyResolutionManagement (FAIL_ON_PROJECT_REPOS). Re-declaring them
+// here triggers Gradle "repository was added by build file" errors.
 
 dependencies {
-    // JNA for loading the native library from java.library.path
-    testImplementation("net.java.dev.jna:jna:5.18.1")
 
     // Jackson for JSON assertion helpers
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:2.18.2")
@@ -78,12 +67,16 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
 
     // JUnit 5 API and engine
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.0")
 
 
     // Kotlin stdlib test helpers
     testImplementation(kotlin("test"))
+
+    // JNA for loading the native library from java.library.path
+    testImplementation("net.java.dev.jna:jna:5.18.1")
+
 }
 
 tasks.withType<Test> {

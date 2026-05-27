@@ -27,22 +27,22 @@ import kreuzberg from "kreuzberg";
 const native = kreuzberg as unknown as Record<string, (...args: unknown[]) => unknown>;
 
 function registerDocumentExtractor(obj: unknown): void {
-  (native["registerDocumentExtractor"] as (o: unknown) => void)(obj);
+	(native["registerDocumentExtractor"] as (o: unknown) => void)(obj);
 }
 function unregisterDocumentExtractor(name: string): void {
-  (native["unregisterDocumentExtractor"] as (n: string) => void)(name);
+	(native["unregisterDocumentExtractor"] as (n: string) => void)(name);
 }
 function clearDocumentExtractors(): void {
-  (native["clearDocumentExtractors"] as () => void)();
+	(native["clearDocumentExtractors"] as () => void)();
 }
 function registerRenderer(obj: unknown): void {
-  (native["registerRenderer"] as (o: unknown) => void)(obj);
+	(native["registerRenderer"] as (o: unknown) => void)(obj);
 }
 function unregisterRenderer(name: string): void {
-  (native["unregisterRenderer"] as (n: string) => void)(name);
+	(native["unregisterRenderer"] as (n: string) => void)(name);
 }
 function clearRenderers(): void {
-  (native["clearRenderers"] as () => void)();
+	(native["clearRenderers"] as () => void)();
 }
 
 // ---------------------------------------------------------------------------
@@ -50,40 +50,40 @@ function clearRenderers(): void {
 // ---------------------------------------------------------------------------
 
 function makeExtractor(name: string, mimeType = "application/x-test"): object {
-  return {
-    name: (): string => name,
-    version: (): string => "0.0.1",
-    initialize: (): void => {
-      /* no-op */
-    },
-    shutdown: (): void => {
-      /* no-op */
-    },
-    supported_mime_types: (): string[] => [mimeType],
-    extract_bytes: (_content: Uint8Array, _mimeType: string, _configJson: string): string =>
-      JSON.stringify({
-        source_format: "plain",
-        mime_type: "text/plain",
-        elements: [],
-        relationships: [],
-        images: [],
-        tables: [],
-      }),
-  };
+	return {
+		name: (): string => name,
+		version: (): string => "0.0.1",
+		initialize: (): void => {
+			/* no-op */
+		},
+		shutdown: (): void => {
+			/* no-op */
+		},
+		supported_mime_types: (): string[] => [mimeType],
+		extract_bytes: (_content: Uint8Array, _mimeType: string, _configJson: string): string =>
+			JSON.stringify({
+				source_format: "plain",
+				mime_type: "text/plain",
+				elements: [],
+				relationships: [],
+				images: [],
+				tables: [],
+			}),
+	};
 }
 
 function makeRenderer(name: string): object {
-  return {
-    name: (): string => name,
-    version: (): string => "0.0.1",
-    initialize: (): void => {
-      /* no-op */
-    },
-    shutdown: (): void => {
-      /* no-op */
-    },
-    render: (_docJson: string): string => "rendered",
-  };
+	return {
+		name: (): string => name,
+		version: (): string => "0.0.1",
+		initialize: (): void => {
+			/* no-op */
+		},
+		shutdown: (): void => {
+			/* no-op */
+		},
+		render: (_docJson: string): string => "rendered",
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -91,44 +91,44 @@ function makeRenderer(name: string): object {
 // ---------------------------------------------------------------------------
 
 describe("plugins: document extractor registry", () => {
-  it("register_duplicate_extractor_replaces: second registration silently replaces first", () => {
-    const name = "_test_ts_dup_extractor";
-    try {
-      registerDocumentExtractor(makeExtractor(name, "application/x-ts-dup1"));
-      registerDocumentExtractor(makeExtractor(name, "application/x-ts-dup2"));
-      const listed = listDocumentExtractors();
-      const count = listed.filter((n) => n === name).length;
-      expect(count).toBe(1);
-    } finally {
-      unregisterDocumentExtractor(name);
-    }
-  });
+	it("register_duplicate_extractor_replaces: second registration silently replaces first", () => {
+		const name = "_test_ts_dup_extractor";
+		try {
+			registerDocumentExtractor(makeExtractor(name, "application/x-ts-dup1"));
+			registerDocumentExtractor(makeExtractor(name, "application/x-ts-dup2"));
+			const listed = listDocumentExtractors();
+			const count = listed.filter((n) => n === name).length;
+			expect(count).toBe(1);
+		} finally {
+			unregisterDocumentExtractor(name);
+		}
+	});
 
-  it("unregister_unknown_extractor_returns_ok: unregistering unknown name is a no-op", () => {
-    // Must not throw
-    expect(() => {
-      unregisterDocumentExtractor("_test_ts_never_registered_extractor_xyz");
-    }).not.toThrow();
-  });
+	it("unregister_unknown_extractor_returns_ok: unregistering unknown name is a no-op", () => {
+		// Must not throw
+		expect(() => {
+			unregisterDocumentExtractor("_test_ts_never_registered_extractor_xyz");
+		}).not.toThrow();
+	});
 
-  it("clear_then_list_extractor_empty: list is empty after clear", () => {
-    registerDocumentExtractor(makeExtractor("_test_ts_clear_a", "application/x-ts-clear-a"));
-    registerDocumentExtractor(makeExtractor("_test_ts_clear_b", "application/x-ts-clear-b"));
-    clearDocumentExtractors();
-    const listed = listDocumentExtractors();
-    expect(listed).toEqual([]);
-  });
+	it("clear_then_list_extractor_empty: list is empty after clear", () => {
+		registerDocumentExtractor(makeExtractor("_test_ts_clear_a", "application/x-ts-clear-a"));
+		registerDocumentExtractor(makeExtractor("_test_ts_clear_b", "application/x-ts-clear-b"));
+		clearDocumentExtractors();
+		const listed = listDocumentExtractors();
+		expect(listed).toEqual([]);
+	});
 
-  it("extract_after_unregister_uses_builtin: built-in extractor is used after custom removed", () => {
-    const name = "_test_ts_unreg_plain";
-    registerDocumentExtractor(makeExtractor(name, "text/plain"));
-    unregisterDocumentExtractor(name);
+	it("extract_after_unregister_uses_builtin: built-in extractor is used after custom removed", () => {
+		const name = "_test_ts_unreg_plain";
+		registerDocumentExtractor(makeExtractor(name, "text/plain"));
+		unregisterDocumentExtractor(name);
 
-    // Must not throw; falls back to the built-in plain-text extractor.
-    const encoded = new TextEncoder().encode("hello world");
-    const result = extractBytesSync(encoded, "text/plain", undefined);
-    expect(result).toBeDefined();
-  });
+		// Must not throw; falls back to the built-in plain-text extractor.
+		const encoded = new TextEncoder().encode("hello world");
+		const result = extractBytesSync(encoded, "text/plain", undefined);
+		expect(result).toBeDefined();
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -136,38 +136,38 @@ describe("plugins: document extractor registry", () => {
 // ---------------------------------------------------------------------------
 
 describe("plugins: renderer registry", () => {
-  it("register_duplicate_renderer_replaces: second registration silently replaces first", () => {
-    const name = "_test_ts_dup_renderer";
-    try {
-      registerRenderer(makeRenderer(name));
-      registerRenderer(makeRenderer(name));
-      const listed = listRenderers();
-      const count = listed.filter((n) => n === name).length;
-      expect(count).toBe(1);
-    } finally {
-      unregisterRenderer(name);
-    }
-  });
+	it("register_duplicate_renderer_replaces: second registration silently replaces first", () => {
+		const name = "_test_ts_dup_renderer";
+		try {
+			registerRenderer(makeRenderer(name));
+			registerRenderer(makeRenderer(name));
+			const listed = listRenderers();
+			const count = listed.filter((n) => n === name).length;
+			expect(count).toBe(1);
+		} finally {
+			unregisterRenderer(name);
+		}
+	});
 
-  it("unregister_unknown_renderer_returns_ok: unregistering unknown name is a no-op", () => {
-    expect(() => {
-      unregisterRenderer("_test_ts_never_registered_renderer_xyz");
-    }).not.toThrow();
-  });
+	it("unregister_unknown_renderer_returns_ok: unregistering unknown name is a no-op", () => {
+		expect(() => {
+			unregisterRenderer("_test_ts_never_registered_renderer_xyz");
+		}).not.toThrow();
+	});
 
-  it("clear_then_list_renderer_empty: list is empty after clear", () => {
-    registerRenderer(makeRenderer("_test_ts_renderer_clear_a"));
-    registerRenderer(makeRenderer("_test_ts_renderer_clear_b"));
-    clearRenderers();
-    const listed = listRenderers();
-    expect(listed).toEqual([]);
-  });
+	it("clear_then_list_renderer_empty: list is empty after clear", () => {
+		registerRenderer(makeRenderer("_test_ts_renderer_clear_a"));
+		registerRenderer(makeRenderer("_test_ts_renderer_clear_b"));
+		clearRenderers();
+		const listed = listRenderers();
+		expect(listed).toEqual([]);
+	});
 
-  it("list_renderers_after_unregister_does_not_include_removed: name absent after unregister", () => {
-    const name = "_test_ts_unregister_renderer_check";
-    registerRenderer(makeRenderer(name));
-    expect(listRenderers()).toContain(name);
-    unregisterRenderer(name);
-    expect(listRenderers()).not.toContain(name);
-  });
+	it("list_renderers_after_unregister_does_not_include_removed: name absent after unregister", () => {
+		const name = "_test_ts_unregister_renderer_check";
+		registerRenderer(makeRenderer(name));
+		expect(listRenderers()).toContain(name);
+		unregisterRenderer(name);
+		expect(listRenderers()).not.toContain(name);
+	});
 });

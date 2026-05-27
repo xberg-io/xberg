@@ -17,11 +17,10 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * JATS contributor with role.
- */
-data class ContributorRole(val name: String, val role: String?)
+/** JATS contributor with role. */
+data class ContributorRole(val name: String, val role: String? = null)

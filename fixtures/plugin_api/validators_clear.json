@@ -2,34 +2,16 @@
   "id": "validators_clear",
   "category": "validator_management",
   "description": "Clear all validators and verify list is empty",
-  "tags": ["validators", "plugin_management", "clear", "trait-bridge"],
+  "tags": [
+    "validators",
+    "plugin_management",
+    "clear",
+    "trait-bridge"
+  ],
   "call": "clear_validators",
   "assertions": [
     {
-      "type": "is_empty",
-      "field": "result"
+      "type": "not_error"
     }
-  ],
-  "skip": {
-    "languages": [
-      "rust",
-      "python",
-      "node",
-      "go",
-      "ruby",
-      "php",
-      "java",
-      "csharp",
-      "kotlin",
-      "kotlin_android",
-      "swift",
-      "dart",
-      "wasm",
-      "r",
-      "elixir",
-      "zig",
-      "ffi"
-    ],
-    "reason": "Trait-bridge fixture support deferred to alef-e2e v0.14.5+"
-  }
+  ]
 }

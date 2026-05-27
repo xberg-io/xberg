@@ -12,7 +12,7 @@ These handle multiple document formats -- not just PDFs.
 
 | Library                                               | Language | Formats        | License      | Focus                                                            | Deep Dive                                 |
 | ----------------------------------------------------- | -------- | -------------- | ------------ | ---------------------------------------------------------------- | ----------------------------------------- |
-| **Kreuzberg**                                         | Rust     | 91+            | Elastic-2.0  | High-throughput extraction with native bindings for 17 languages | --                                        |
+| **Kreuzberg**                                         | Rust     | 90+            | Elastic-2.0  | High-throughput extraction with native bindings for 17 languages | --                                        |
 | [Unstructured](https://unstructured.io)               | Python   | ~31            | Apache-2.0   | Element-based output, managed cloud API                          | [Read more](kreuzberg-vs-unstructured.md) |
 | [Docling](https://github.com/docling-project/docling) | Python   | ~38            | MIT          | IBM-backed, ML-powered layout analysis                           | [Read more](kreuzberg-vs-docling.md)      |
 | [Apache Tika](https://tika.apache.org)                | Java     | 1500+ detected | Apache-2.0   | Enterprise standard, broadest format detection                   | [Read more](kreuzberg-vs-tika.md)         |

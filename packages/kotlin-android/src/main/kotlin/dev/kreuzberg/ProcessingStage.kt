@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,38 +25,61 @@ package dev.kreuzberg
 /**
  * Processing stages for post-processors.
  *
- * Post-processors are executed in stage order (Early → Middle → Late).
- * Use stages to control the order of post-processing operations.
+ * Post-processors are executed in stage order (Early → Middle → Late). Use stages to control the
+ * order of post-processing operations.
  */
 enum class ProcessingStage {
     /**
      * Early stage - foundational processing.
      *
      * Use for:
+     *
      * - Language detection
      * - Character encoding normalization
      * - Entity extraction (NER)
      * - Text quality scoring
      */
-    EARLY,
+    @com.fasterxml.jackson.annotation.JsonProperty("Early") EARLY,
     /**
      * Middle stage - content transformation.
      *
      * Use for:
+     *
      * - Keyword extraction
      * - Token reduction
      * - Text summarization
      * - Semantic analysis
      */
-    MIDDLE,
+    @com.fasterxml.jackson.annotation.JsonProperty("Middle") MIDDLE,
     /**
      * Late stage - final enrichment.
      *
      * Use for:
+     *
      * - Custom user hooks
      * - Analytics/logging
      * - Final validation
      * - Output formatting
      */
-    LATE;
+    @com.fasterxml.jackson.annotation.JsonProperty("Late") LATE;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            EARLY -> "Early"
+            MIDDLE -> "Middle"
+            LATE -> "Late"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): ProcessingStage =
+            when (value) {
+                "Early" -> EARLY
+                "Middle" -> MIDDLE
+                "Late" -> LATE
+                else -> throw IllegalArgumentException("Unknown ProcessingStage value: $value")
+            }
+    }
 }

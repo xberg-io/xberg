@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,24 +25,19 @@ package dev.kreuzberg
 /**
  * Page extraction and tracking configuration.
  *
- * Controls how pages are extracted, tracked, and represented in the extraction results.
- * When `null`, page tracking is disabled.
+ * Controls how pages are extracted, tracked, and represented in the extraction results. When
+ * `null`, page tracking is disabled.
  *
- * Page range tracking in chunk metadata (first_page/last_page) is automatically enabled
- * when page boundaries are available and chunking is configured.
+ * Page range tracking in chunk metadata (first_page/last_page) is automatically enabled when page
+ * boundaries are available and chunking is configured.
  */
 data class PageConfig(
+    /** Extract pages as separate array (ExtractionResult.pages) */
+    val extractPages: Boolean = false,
+    /** Insert page markers in main content string */
+    val insertPageMarkers: Boolean = false,
     /**
-     * Extract pages as separate array (ExtractionResult.pages)
+     * Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n"
      */
-    val extractPages: Boolean,
-    /**
-     * Insert page markers in main content string
-     */
-    val insertPageMarkers: Boolean,
-    /**
-     * Page marker format (use {page_num} placeholder)
-     * Default: "\n\n<!-- PAGE {page_num} -->\n\n"
-     */
-    val markerFormat: String
+    val markerFormat: String = "\n\n<!-- PAGE {page_num} -->\n\n",
 )

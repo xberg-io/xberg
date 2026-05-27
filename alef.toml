@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.16.69"
+alef_version = "0.19.20"
 languages = [
   "python",
   "node",
@@ -60,6 +60,9 @@ public_api = true
 [workspace.generate_overrides.wasm]
 async_wrappers = false
 
+[workspace.format]
+enabled = false
+
 # Disable the default format_generated pass for node (pnpm dlx oxfmt .) which runs
 # from the repo root and chokes on vendored HTML fixtures and Helm chart YAML.
 # Post-generation formatting is handled by [crates.lint.node] format command instead.
@@ -103,6 +106,7 @@ sources = [
   "crates/kreuzberg/src/types/formats.rs",
   "crates/kreuzberg/src/types/uri.rs",
   "crates/kreuzberg/src/types/djot.rs",
+  "crates/kreuzberg/src/types/internal.rs",
   # Config types (re-exported via `pub use core::config::*`)
   "crates/kreuzberg/src/core/config/mod.rs",
   "crates/kreuzberg/src/core/config/extraction/types.rs",
@@ -192,6 +196,9 @@ exclude_types = [
   # Arc<Mutex<T>> opaque types — codegen doesn't generate .lock() for methods
   "PooledString",
 ]
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.python.stubs]
 output = "packages/python/kreuzberg/"
@@ -203,6 +210,9 @@ exclude_types = [
   "StreamReader",
   "PooledString",
 ]
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.node.extra_dependencies]
 # Required by alef-emitted #[serde_with::serde_as] attribute on HashMap<_, Vec<u8>>
@@ -211,6 +221,9 @@ serde_with = "3"
 
 [crates.ruby]
 gem_name = "kreuzberg"
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.ruby.stubs]
 output = "packages/ruby/sig/"
@@ -235,6 +248,9 @@ exclude_types = [
   "NodeContent",
   "OcrBoundingGeometry",
 ]
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.elixir]
 app_name = "kreuzberg"
@@ -246,6 +262,7 @@ exclude_functions = [
   "batch_extract_bytes_sync",
   "batch_extract_files",
   "batch_extract_bytes",
+  "calculate_quality_score",
 ]
 exclude_types = [
   # Trait types cannot be FFI-bound
@@ -386,14 +403,31 @@ visitor_callbacks = false
 # variant with two fields and cannot be built via `From<String>`, so we
 # provide the literal here. The placeholder local `msg` carries the message.
 plugin_error_constructor = "kreuzberg::KreuzbergError::Plugin { message: msg, plugin_name: String::new() }"
+exclude_functions = [
+  "calculate_quality_score",
+]
+
+# x86_64-linux-android (emulator) lacks a pyke ORT prebuilt. The C FFI cdylib is
+# embedded into Android app builds via jniLibs/x86_64/, so the kreuzberg-ffi
+# crate must drop ORT-dependent features on that target. All other targets
+# (incl. arm64 Android phones) keep the full ORT-enabled feature set.
+[[crates.ffi.target_dep_overrides]]
+cfg = 'all(target_os = "android", target_arch = "x86_64")'
+features = ["android-target"]
 
 [crates.go]
 module = "github.com/kreuzberg-dev/kreuzberg/v5"
 package_name = "kreuzberg"
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.java]
 package = "dev.kreuzberg"
 ffi_style = "panama"
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.dart]
 pubspec_name = "kreuzberg"
@@ -401,6 +435,9 @@ lib_name = "kreuzberg"
 style = "frb"
 features = ["full"]
 stub_methods = ["batch_extract_bytes", "batch_extract_bytes_sync"]
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 # x86_64-linux-android (emulator) and x86_64-apple-ios (deprecated intel iOS
 # simulator) both lack a pyke ORT prebuilt and there is no path to one short
@@ -409,11 +446,6 @@ stub_methods = ["batch_extract_bytes", "batch_extract_bytes_sync"]
 # the full ORT-enabled feature set.
 [[crates.dart.target_dep_overrides]]
 cfg = 'all(target_os = "android", target_arch = "x86_64")'
-features = ["android-target"]
-default_features = false
-
-[[crates.dart.target_dep_overrides]]
-cfg = 'all(target_os = "ios", target_arch = "x86_64")'
 features = ["android-target"]
 default_features = false
 
@@ -428,6 +460,12 @@ namespace = "dev.kreuzberg"
 artifact_id = "kreuzberg-android"
 group_id = "dev.kreuzberg"
 abis = ["arm64-v8a", "x86_64"]
+exclude_functions = [
+  # embed_texts_async creates naming conflict with suspend wrapper of embed_texts.
+  # Callers should use embedTextsAsync (suspend) from embed_texts instead.
+  "embed_texts_async",
+  "calculate_quality_score",
+]
 
 [crates.swift]
 module_name = "Kreuzberg"
@@ -437,6 +475,7 @@ exclude_fields = ["ExtractionResult.ocr_internal_document", "OcrExtractionResult
 exclude_functions = [
   # Returns Option<&'static EmbeddingPreset> but EmbeddingPreset: !Serialize — cannot JSON-bridge
   "get_preset",
+  "calculate_quality_score",
 ]
 
 [crates.csharp]
@@ -444,12 +483,21 @@ namespace = "Kreuzberg"
 # project_file directs `dotnet format` to the .csproj inside packages/csharp/Kreuzberg/
 # rather than the parent directory (which has no .sln or .csproj at its root).
 project_file = "packages/csharp/Kreuzberg/Kreuzberg.csproj"
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.r]
 package_name = "kreuzberg"
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.zig]
 module_name = "kreuzberg"
+exclude_functions = [
+  "calculate_quality_score",
+]
 
 [crates.output]
 python = "crates/kreuzberg-py/src/"
@@ -460,7 +508,7 @@ ffi = "crates/kreuzberg-ffi/src/"
 go = "packages/go/v5/"
 elixir = "packages/elixir/native/kreuzberg_nif/src/"
 wasm = "crates/kreuzberg-wasm/src/"
-java = "packages/java/src/main/java/"
+java = "packages/java/"
 csharp = "packages/csharp/src/"
 r = "packages/r/src/rust/src/"
 kotlin_android = "packages/kotlin-android/"
@@ -510,8 +558,8 @@ methods = [
 
 [crates.lint.python]
 precondition = "command -v ruff >/dev/null 2>&1"
-before = "cd packages/python && uv sync"
-typecheck = "cd packages/python && uv run mypy ."
+before = "cd packages/python && uv sync --no-install-project --no-install-workspace"
+typecheck = "cd packages/python && uv run --no-sync mypy ."
 
 [crates.lint.node]
 precondition = "command -v pnpm >/dev/null 2>&1"
@@ -540,16 +588,6 @@ check = "cd packages/elixir && mix credo"
 [crates.lint.java]
 precondition = "command -v mvn >/dev/null 2>&1"
 check = "mvn -f packages/java/pom.xml spotless:check -q"
-
-[crates.lint.wasm]
-precondition = "test -d crates/kreuzberg-wasm/typescript"
-format = "pnpm dlx oxfmt crates/kreuzberg-wasm/typescript"
-check = "pnpm dlx oxlint crates/kreuzberg-wasm/typescript"
-
-[crates.lint.ffi]
-precondition = "test -d e2e/c"
-format = "find e2e/c -name '*.c' -o -name '*.h' | xargs clang-format -i"
-check = "find crates/kreuzberg-ffi/include -name '*.h' | xargs clang-format --dry-run --Werror"
 
 [crates.lint.kotlin_android]
 precondition = "command -v gradle >/dev/null 2>&1"
@@ -603,8 +641,13 @@ upgrade = "cd packages/zig && zig build --fetch"
 
 [crates.test.python]
 precondition = "command -v uv >/dev/null 2>&1"
-before = "cd packages/python && maturin develop --release"
-e2e = "cd e2e/python && uv run pytest tests/ -q"
+# `uv run --no-sync` in the e2e step never refreshes the e2e venv, and `uv sync`
+# installs `kreuzberg` as a *copied* (non-editable) snapshot. A stale snapshot
+# built before the wrapper modules were generated leaves the venv with only
+# `_kreuzberg.abi3.so` + `py.typed`, breaking `from kreuzberg import ...`.
+# Force a clean rebuild of that snapshot from current source before testing.
+before = "cd packages/python && maturin develop --release && cd ../../e2e/python && uv sync --reinstall-package kreuzberg"
+e2e = "cd e2e/python && uv run --no-sync pytest tests/ -q"
 
 [crates.test.node]
 precondition = "command -v pnpm >/dev/null 2>&1"
@@ -624,7 +667,7 @@ e2e = "cd e2e/ruby && bundle exec rspec"
 [crates.test.php]
 precondition = "command -v composer >/dev/null 2>&1"
 before = "cargo build --release -p kreuzberg-php && cd e2e/php && composer install && bash ../../scripts/setup-php-ext-ini.sh"
-e2e = "cd e2e/php && php -c php.ini vendor/bin/phpunit"
+e2e = "cd e2e/php && PHP_INI_SCAN_DIR= php -c php.ini vendor/bin/phpunit"
 
 [crates.test.java]
 precondition = "command -v mvn >/dev/null 2>&1"
@@ -692,14 +735,20 @@ e2e = "cd e2e/zig && zig build test"
 core_crate = "crates/kreuzberg"
 
 [crates.publish.languages.ruby]
-vendor_mode = "core-only"
+vendor_mode = "registry"
 
 [crates.publish.languages.elixir]
-vendor_mode = "core-only"
+vendor_mode = "registry"
 nif_versions = ["2.16", "2.17"]
 
 [crates.publish.languages.r]
-vendor_mode = "full"
+vendor_mode = "registry"
+
+[crates.publish.languages.dart]
+# dart/rust/Cargo.toml carries path deps on kreuzberg; rewrite to registry on publish.
+# NOTE: resolve_binding_manifest does not yet resolve the Dart manifest path — the rewrite
+# is a no-op until alef is updated to handle packages/dart/rust/Cargo.toml.
+vendor_mode = "registry"
 
 [crates.publish.languages.ffi]
 pkg_config = true
@@ -724,6 +773,7 @@ languages = [
   "kotlin_android",
   "swift",
   "zig",
+  "homebrew",
 ]
 fields_optional = [
   "metadata.format",
@@ -772,6 +822,11 @@ fields_array = [
   "document.node_types",
 ]
 fields_method_calls = ["metadata.format.excel"]
+result_fields = [
+  "content",
+  "mime_type",
+  "djot_content",
+]
 
 [crates.e2e.call]
 function = "extract_file"
@@ -799,6 +854,7 @@ module = "kreuzberg"
 function = "extractFile"
 options_type = "JsExtractionConfig"
 arg_order = ["path", "config", "mime_type"]
+result_enum_fields = { outputFormat = "OutputFormat", "metadata.format" = "FormatMetadata" }
 
 [crates.e2e.call.overrides.go]
 module = "github.com/kreuzberg-dev/kreuzberg/v5"
@@ -817,17 +873,22 @@ class = "KreuzbergLib"
 function = "ExtractFile"
 options_type = "ExtractionConfig"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
+nested_types = { model = "EmbeddingModelType", embedding = "EmbeddingConfig", keywords = "KeywordConfig", pages = "PageConfig", securityLimits = "SecurityLimits", treeSitter = "TreeSitterConfig" }
 
 [crates.e2e.call.overrides.ruby]
 options_type = "Kreuzberg::ExtractionConfig"
 
 [crates.e2e.call.overrides.elixir]
-options_type = "ExtractionConfig"
-handle_struct_type = "ExtractionConfig"
+# Elixir Rustler facades don't consistently use keyword opts (some use positional defaults),
+# so struct-literal generation causes mismatches. Use JSON strings instead for compatibility.
+# handle_struct_type = "ExtractionConfig"
 
 [crates.e2e.call.overrides.wasm]
 options_type = "WasmExtractionConfig"
 bigint_fields = ["cacheTtlSecs", "extractionTimeoutSecs"]
+
+[crates.e2e.call.overrides.swift]
+unnamed_arg_indices = [0, 1, 2]
 
 [crates.e2e.call.overrides.php]
 class = "Kreuzberg\\Kreuzberg"
@@ -854,6 +915,11 @@ function = "extract_file"
 module = "kreuzberg"
 async = true
 returns_result = true
+# kreuzberg's `chunks` is a plain `Vec<TextChunk>` field on `ExtractionResult`,
+# not a streaming channel. Without this opt-out, alef's streaming auto-detect
+# triggers on any assertion targeting `chunks` / `chunks.length` and emits
+# `range over stream` / `ChatCompletionChunk` codegen.
+streaming = false
 args = [
   { name = "path", field = "input.path", type = "file_path" },
   { name = "mime_type", field = "input.mime_type", type = "string", optional = true },
@@ -866,6 +932,15 @@ args = [
 function = "extract_bytes"
 async = true
 
+[crates.e2e.calls.extract_file.overrides.swift]
+unnamed_arg_indices = [0, 1, 2]
+
+[crates.e2e.calls.extract_file.overrides.zig]
+# Zig binding has no async runtime; redirect to the sync variant and parse JSON.
+function = "extract_file_sync"
+async = false
+result_is_json_struct = true
+
 [crates.e2e.calls.extract_file.overrides.php]
 # PHP facade exposes the async variant under the bare name (`extractFile`);
 # the codegen emits it automatically — no override needed.
@@ -875,6 +950,7 @@ function = "extract_bytes"
 module = "kreuzberg"
 async = true
 returns_result = true
+streaming = false
 args = [
   { name = "content", field = "input.data", type = "bytes" },
   { name = "mime_type", field = "input.mime_type", type = "string" },
@@ -883,7 +959,11 @@ args = [
 
 [crates.e2e.calls.extract_bytes.overrides.csharp]
 options_type = "ExtractionConfig"
+options_via = "from_json"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
+
+[crates.e2e.calls.extract_bytes.overrides.swift]
+unnamed_arg_indices = [0, 1, 2]
 
 [crates.e2e.calls.extract_bytes.overrides.python]
 arg_name_map = { data = "content" }
@@ -891,6 +971,11 @@ options_type = "ExtractionConfig"
 
 [crates.e2e.calls.extract_bytes.overrides.r]
 arg_name_map = { data = "content" }
+
+[crates.e2e.calls.extract_bytes.overrides.elixir]
+# Rustler facade for extract_bytes_async uses positional default style:
+# func(content, mime_type, config \\ nil), not keyword opts.
+# Don't emit keyword form for config arg.
 
 [crates.e2e.calls.extract_bytes.overrides.php]
 # PHP facade exposes the async variant under the bare name (`extractBytes`);
@@ -906,6 +991,7 @@ function = "extract_file_sync"
 module = "kreuzberg"
 async = false
 returns_result = true
+streaming = false
 skip_languages = ["wasm"]
 args = [
   { name = "path", field = "input.path", type = "file_path" },
@@ -919,7 +1005,11 @@ arg_order = ["path", "config", "mime_type"]
 
 [crates.e2e.calls.extract_file_sync.overrides.csharp]
 options_type = "ExtractionConfig"
+options_via = "from_json"
 json_object_types = { chunking = "ChunkingConfig", ocr = "OcrConfig", images = "ImageExtractionConfig", html_output = "HtmlOutputConfig", language_detection = "LanguageDetectionConfig", postprocessor = "PostProcessorConfig", acceleration = "AccelerationConfig", email = "EmailConfig", pages = "PageConfig", pdf_options = "PdfConfig", layout = "LayoutDetectionConfig", tree_sitter = "TreeSitterConfig", structured_extraction = "StructuredExtractionConfig", content_filter = "ContentFilterConfig", token_reduction = "TokenReductionOptions" }
+
+[crates.e2e.calls.extract_file_sync.overrides.swift]
+unnamed_arg_indices = [0, 1, 2]
 
 [crates.e2e.calls.extract_file_sync.overrides.zig]
 function = "extract_file_sync"
@@ -937,6 +1027,7 @@ function = "extract_bytes_sync"
 module = "kreuzberg"
 async = false
 returns_result = true
+streaming = false
 skip_languages = ["wasm"]
 args = [
   { name = "content", field = "input.data", type = "bytes" },
@@ -954,6 +1045,9 @@ options_type = "ExtractionConfig"
 
 [crates.e2e.calls.extract_bytes_sync.overrides.r]
 arg_name_map = { data = "content" }
+
+[crates.e2e.calls.extract_bytes_sync.overrides.swift]
+unnamed_arg_indices = [0, 1, 2]
 
 [crates.e2e.calls.extract_bytes_sync.overrides.zig]
 function = "extract_bytes_sync"
@@ -1044,6 +1138,9 @@ async = false
 returns_result = true
 result_is_simple = true
 args = [{ name = "content", field = "input.data", type = "bytes" }]
+
+[crates.e2e.calls.detect_mime_type_from_bytes.overrides.swift]
+unnamed_arg_indices = [0]
 
 [crates.e2e.calls.validate_chunking_params.overrides.python]
 arg_name_map = { max_characters = "max_chars", overlap = "max_overlap" }
@@ -1178,6 +1275,7 @@ module = "kreuzberg"
 async = false
 returns_result = true
 skip_languages = ["wasm"]
+options_type = "EmbeddingConfig"
 args = [
   { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1186,6 +1284,7 @@ args = [
 [crates.e2e.calls.embed_texts.overrides.csharp]
 result_is_simple = true
 options_type = "EmbeddingConfig"
+nested_types = { embedding_model = "EmbeddingModelType" }
 
 [crates.e2e.calls.embed_texts.overrides.java]
 result_is_simple = true
@@ -1202,6 +1301,9 @@ options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.embed_texts.overrides.dart]
 result_is_simple = true
+options_type = "EmbeddingConfig"
+
+[crates.e2e.calls.embed_texts.overrides.swift]
 options_type = "EmbeddingConfig"
 
 # Zig returns `[]u8` (JSON) for Vec<Vec<f32>>; assertions are rendered against
@@ -1331,7 +1433,68 @@ function = ""
 module = ""
 async = false
 returns_result = false
+returns_void = true
 args = []
+
+[crates.e2e.calls.clear_ocr_backends.overrides.python]
+function = "clear_ocr_backends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.rust]
+function = "clear_ocr_backends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.node]
+function = "clearOcrBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.go]
+function = "ClearOCRBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.ruby]
+function = "clear_ocr_backends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.php]
+function = "clearOcrBackends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.java]
+function = "clearOcrBackends"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.csharp]
+function = "ClearOcrBackends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.kotlin]
+function = "clearOcrBackends"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.swift]
+function = "clearOcrBackends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.dart]
+function = "clearOcrBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.wasm]
+function = "clearOcrBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.r]
+function = "clear_ocr_backends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.elixir]
+function = "clear_ocr_backends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_ocr_backends.overrides.zig]
+function = "clear_ocr_backends"
+module = "kreuzberg"
 
 [crates.e2e.calls.clear_post_processors]
 # Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
@@ -1340,7 +1503,68 @@ function = ""
 module = ""
 async = false
 returns_result = false
+returns_void = true
 args = []
+
+[crates.e2e.calls.clear_post_processors.overrides.python]
+function = "clear_post_processors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.rust]
+function = "clear_post_processors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.node]
+function = "clearPostProcessors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.go]
+function = "ClearPostProcessors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.ruby]
+function = "clear_post_processors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.php]
+function = "clearPostProcessors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.java]
+function = "clearPostProcessors"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.csharp]
+function = "ClearPostProcessors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.kotlin]
+function = "clearPostProcessors"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.swift]
+function = "clearPostProcessors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.dart]
+function = "clearPostProcessors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.wasm]
+function = "clearPostProcessors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.r]
+function = "clear_post_processors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.elixir]
+function = "clear_post_processors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_post_processors.overrides.zig]
+function = "clear_post_processors"
+module = "kreuzberg"
 
 [crates.e2e.calls.clear_validators]
 # Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
@@ -1349,10 +1573,71 @@ function = ""
 module = ""
 async = false
 returns_result = false
+returns_void = true
 args = []
 
+[crates.e2e.calls.clear_validators.overrides.python]
+function = "clear_validators"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.rust]
+function = "clear_validators"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.node]
+function = "clearValidators"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.go]
+function = "ClearValidators"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.ruby]
+function = "clear_validators"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.php]
+function = "clearValidators"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.java]
+function = "clearValidators"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.csharp]
+function = "ClearValidators"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.kotlin]
+function = "clearValidators"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.swift]
+function = "clearValidators"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.dart]
+function = "clearValidators"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.wasm]
+function = "clearValidators"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.r]
+function = "clear_validators"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.elixir]
+function = "clear_validators"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_validators.overrides.zig]
+function = "clear_validators"
+module = "kreuzberg"
+
 [crates.e2e.calls.unregister_ocr_backend]
-# Trait-bridge function — excluded from gen_function surface; fixtures skip all languages.
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 # function/module left empty so alef skips API surface validation.
 result_is_simple = true
 function = ""
@@ -1361,17 +1646,137 @@ async = false
 returns_result = false
 args = [{ name = "name", field = "input.name", type = "string" }]
 
+[crates.e2e.calls.unregister_ocr_backend.overrides.python]
+function = "unregister_ocr_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.rust]
+function = "unregister_ocr_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.node]
+function = "unregisterOcrBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.go]
+function = "UnregisterOCRBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.ruby]
+function = "unregister_ocr_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.php]
+function = "unregisterOcrBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.java]
+function = "unregisterOcrBackend"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.csharp]
+function = "UnregisterOcrBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.kotlin]
+function = "unregisterOcrBackend"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.swift]
+function = "unregisterOcrBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.dart]
+function = "unregisterOcrBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.wasm]
+function = "unregisterOcrBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.r]
+function = "unregister_ocr_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.elixir]
+function = "unregister_ocr_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_ocr_backend.overrides.zig]
+function = "unregister_ocr_backend"
+module = "kreuzberg"
+
 [crates.e2e.calls.unregister_post_processor]
-# Trait-bridge function — excluded from gen_function surface; fixtures skip all languages.
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
 function = ""
 module = ""
 async = false
 returns_result = false
 args = [{ name = "name", field = "input.name", type = "string" }]
+
+[crates.e2e.calls.unregister_post_processor.overrides.python]
+function = "unregister_post_processor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.rust]
+function = "unregister_post_processor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.node]
+function = "unregisterPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.go]
+function = "UnregisterPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.ruby]
+function = "unregister_post_processor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.php]
+function = "unregisterPostProcessor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.java]
+function = "unregisterPostProcessor"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.csharp]
+function = "UnregisterPostProcessor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.kotlin]
+function = "unregisterPostProcessor"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.swift]
+function = "unregisterPostProcessor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.dart]
+function = "unregisterPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.wasm]
+function = "unregisterPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.r]
+function = "unregister_post_processor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.elixir]
+function = "unregister_post_processor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_post_processor.overrides.zig]
+function = "unregister_post_processor"
+module = "kreuzberg"
 
 [crates.e2e.calls.unregister_validator]
-# Trait-bridge function — excluded from gen_function surface; fixtures skip all languages.
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
 function = ""
 module = ""
@@ -1379,17 +1784,137 @@ async = false
 returns_result = false
 args = [{ name = "name", field = "input.name", type = "string" }]
 
+[crates.e2e.calls.unregister_validator.overrides.python]
+function = "unregister_validator"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.rust]
+function = "unregister_validator"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.node]
+function = "unregisterValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.go]
+function = "UnregisterValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.ruby]
+function = "unregister_validator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.php]
+function = "unregisterValidator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.java]
+function = "unregisterValidator"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.csharp]
+function = "UnregisterValidator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.kotlin]
+function = "unregisterValidator"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.swift]
+function = "unregisterValidator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.dart]
+function = "unregisterValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.wasm]
+function = "unregisterValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.r]
+function = "unregister_validator"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.elixir]
+function = "unregister_validator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_validator.overrides.zig]
+function = "unregister_validator"
+module = "kreuzberg"
+
 [crates.e2e.calls.register_ocr_backend]
-# Trait-bridge function — excluded from gen_function surface; fixtures skip all languages.
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
 function = ""
 module = ""
 async = false
 returns_result = false
 args = []
+
+[crates.e2e.calls.register_ocr_backend.overrides.python]
+function = "register_ocr_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.rust]
+function = "register_ocr_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.node]
+function = "registerOcrBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.go]
+function = "RegisterOCRBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.ruby]
+function = "register_ocr_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.php]
+function = "registerOcrBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.java]
+function = "registerOcrBackend"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.csharp]
+function = "RegisterOcrBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.kotlin]
+function = "registerOcrBackend"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.swift]
+function = "registerOcrBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.dart]
+function = "registerOcrBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.wasm]
+function = "registerOcrBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.r]
+function = "register_ocr_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.elixir]
+function = "register_ocr_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_ocr_backend.overrides.zig]
+function = "register_ocr_backend"
+module = "kreuzberg"
 
 [crates.e2e.calls.register_post_processor]
-# Trait-bridge function — excluded from gen_function surface; fixtures skip all languages.
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
 function = ""
 module = ""
@@ -1397,14 +1922,758 @@ async = false
 returns_result = false
 args = []
 
+[crates.e2e.calls.register_post_processor.overrides.python]
+function = "register_post_processor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.rust]
+function = "register_post_processor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.node]
+function = "registerPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.go]
+function = "RegisterPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.ruby]
+function = "register_post_processor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.php]
+function = "registerPostProcessor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.java]
+function = "registerPostProcessor"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.csharp]
+function = "RegisterPostProcessor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.kotlin]
+function = "registerPostProcessor"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.swift]
+function = "registerPostProcessor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.dart]
+function = "registerPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.wasm]
+function = "registerPostProcessor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.r]
+function = "register_post_processor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.elixir]
+function = "register_post_processor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_post_processor.overrides.zig]
+function = "register_post_processor"
+module = "kreuzberg"
+
 [crates.e2e.calls.register_validator]
-# Trait-bridge function — excluded from gen_function surface; fixtures skip all languages.
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
 result_is_simple = true
 function = ""
 module = ""
 async = false
 returns_result = false
 args = []
+
+[crates.e2e.calls.register_validator.overrides.python]
+function = "register_validator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.rust]
+function = "register_validator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.node]
+function = "registerValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.go]
+function = "RegisterValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.ruby]
+function = "register_validator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.php]
+function = "registerValidator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.java]
+function = "registerValidator"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.csharp]
+function = "RegisterValidator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.kotlin]
+function = "registerValidator"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.swift]
+function = "registerValidator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.dart]
+function = "registerValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.wasm]
+function = "registerValidator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.r]
+function = "register_validator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.elixir]
+function = "register_validator"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_validator.overrides.zig]
+function = "register_validator"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+args = []
+
+[crates.e2e.calls.register_embedding_backend.overrides.python]
+function = "register_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.rust]
+function = "register_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.node]
+function = "registerEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.go]
+function = "RegisterEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.ruby]
+function = "register_embedding_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.php]
+function = "registerEmbeddingBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.java]
+function = "registerEmbeddingBackend"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.csharp]
+function = "RegisterEmbeddingBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.kotlin]
+function = "registerEmbeddingBackend"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.swift]
+function = "registerEmbeddingBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.dart]
+function = "registerEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.wasm]
+function = "registerEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.r]
+function = "register_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.elixir]
+function = "register_embedding_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_embedding_backend.overrides.zig]
+function = "register_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+args = [{ name = "name", field = "input.name", type = "string" }]
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.python]
+function = "unregister_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.rust]
+function = "unregister_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.node]
+function = "unregisterEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.go]
+function = "UnregisterEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.ruby]
+function = "unregister_embedding_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.php]
+function = "unregisterEmbeddingBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.java]
+function = "unregisterEmbeddingBackend"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.csharp]
+function = "UnregisterEmbeddingBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.kotlin]
+function = "unregisterEmbeddingBackend"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.swift]
+function = "unregisterEmbeddingBackend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.dart]
+function = "unregisterEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.wasm]
+function = "unregisterEmbeddingBackend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.r]
+function = "unregister_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.elixir]
+function = "unregister_embedding_backend"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_embedding_backend.overrides.zig]
+function = "unregister_embedding_backend"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+returns_void = true
+args = []
+
+[crates.e2e.calls.clear_embedding_backends.overrides.python]
+function = "clear_embedding_backends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.rust]
+function = "clear_embedding_backends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.node]
+function = "clearEmbeddingBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.go]
+function = "ClearEmbeddingBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.ruby]
+function = "clear_embedding_backends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.php]
+function = "clearEmbeddingBackends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.java]
+function = "clearEmbeddingBackends"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.csharp]
+function = "ClearEmbeddingBackends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.kotlin]
+function = "clearEmbeddingBackends"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.swift]
+function = "clearEmbeddingBackends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.dart]
+function = "clearEmbeddingBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.wasm]
+function = "clearEmbeddingBackends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.r]
+function = "clear_embedding_backends"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.elixir]
+function = "clear_embedding_backends"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_embedding_backends.overrides.zig]
+function = "clear_embedding_backends"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+args = []
+
+[crates.e2e.calls.register_document_extractor.overrides.python]
+function = "register_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.rust]
+function = "register_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.node]
+function = "registerDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.go]
+function = "RegisterDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.ruby]
+function = "register_document_extractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.php]
+function = "registerDocumentExtractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.java]
+function = "registerDocumentExtractor"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.csharp]
+function = "RegisterDocumentExtractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.kotlin]
+function = "registerDocumentExtractor"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.swift]
+function = "registerDocumentExtractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.dart]
+function = "registerDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.wasm]
+function = "registerDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.r]
+function = "register_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.elixir]
+function = "register_document_extractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_document_extractor.overrides.zig]
+function = "register_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+args = [{ name = "name", field = "input.name", type = "string" }]
+
+[crates.e2e.calls.unregister_document_extractor.overrides.python]
+function = "unregister_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.rust]
+function = "unregister_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.node]
+function = "unregisterDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.go]
+function = "UnregisterDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.ruby]
+function = "unregister_document_extractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.php]
+function = "unregisterDocumentExtractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.java]
+function = "unregisterDocumentExtractor"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.csharp]
+function = "UnregisterDocumentExtractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.kotlin]
+function = "unregisterDocumentExtractor"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.swift]
+function = "unregisterDocumentExtractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.dart]
+function = "unregisterDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.wasm]
+function = "unregisterDocumentExtractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.r]
+function = "unregister_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.elixir]
+function = "unregister_document_extractor"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_document_extractor.overrides.zig]
+function = "unregister_document_extractor"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+returns_void = true
+args = []
+
+[crates.e2e.calls.clear_document_extractors.overrides.python]
+function = "clear_document_extractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.rust]
+function = "clear_document_extractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.node]
+function = "clearDocumentExtractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.go]
+function = "ClearDocumentExtractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.ruby]
+function = "clear_document_extractors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.php]
+function = "clearDocumentExtractors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.java]
+function = "clearDocumentExtractors"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.csharp]
+function = "ClearDocumentExtractors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.kotlin]
+function = "clearDocumentExtractors"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.swift]
+function = "clearDocumentExtractors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.dart]
+function = "clearDocumentExtractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.wasm]
+function = "clearDocumentExtractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.r]
+function = "clear_document_extractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.elixir]
+function = "clear_document_extractors"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_document_extractors.overrides.zig]
+function = "clear_document_extractors"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+args = []
+
+[crates.e2e.calls.register_renderer.overrides.python]
+function = "register_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.rust]
+function = "register_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.node]
+function = "registerRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.go]
+function = "RegisterRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.ruby]
+function = "register_renderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.php]
+function = "registerRenderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.java]
+function = "registerRenderer"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.csharp]
+function = "RegisterRenderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.kotlin]
+function = "registerRenderer"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.swift]
+function = "registerRenderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.dart]
+function = "registerRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.wasm]
+function = "registerRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.r]
+function = "register_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.elixir]
+function = "register_renderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.register_renderer.overrides.zig]
+function = "register_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+args = [{ name = "name", field = "input.name", type = "string" }]
+
+[crates.e2e.calls.unregister_renderer.overrides.python]
+function = "unregister_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.rust]
+function = "unregister_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.node]
+function = "unregisterRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.go]
+function = "UnregisterRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.ruby]
+function = "unregister_renderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.php]
+function = "unregisterRenderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.java]
+function = "unregisterRenderer"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.csharp]
+function = "UnregisterRenderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.kotlin]
+function = "unregisterRenderer"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.swift]
+function = "unregisterRenderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.dart]
+function = "unregisterRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.wasm]
+function = "unregisterRenderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.r]
+function = "unregister_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.elixir]
+function = "unregister_renderer"
+module = "Kreuzberg"
+
+[crates.e2e.calls.unregister_renderer.overrides.zig]
+function = "unregister_renderer"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers]
+# Trait-bridge function — excluded from gen_function surface; bridges emit it directly.
+result_is_simple = true
+function = ""
+module = ""
+async = false
+returns_result = false
+returns_void = true
+args = []
+
+[crates.e2e.calls.clear_renderers.overrides.python]
+function = "clear_renderers"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.rust]
+function = "clear_renderers"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.node]
+function = "clearRenderers"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.go]
+function = "ClearRenderers"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.ruby]
+function = "clear_renderers"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.php]
+function = "clearRenderers"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.java]
+function = "clearRenderers"
+module = "dev.kreuzberg.Kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.csharp]
+function = "ClearRenderers"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.kotlin]
+function = "clearRenderers"
+module = "dev.kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.swift]
+function = "clearRenderers"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.dart]
+function = "clearRenderers"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.wasm]
+function = "clearRenderers"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.r]
+function = "clear_renderers"
+module = "kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.elixir]
+function = "clear_renderers"
+module = "Kreuzberg"
+
+[crates.e2e.calls.clear_renderers.overrides.zig]
+function = "clear_renderers"
+module = "kreuzberg"
 
 [crates.e2e.calls.embed_texts_async]
 result_is_simple = true
@@ -1413,7 +2682,8 @@ function = "embed_texts_async"
 module = "kreuzberg"
 async = true
 returns_result = true
-skip_languages = ["wasm"]
+skip_languages = ["wasm", "swift"]
+options_type = "EmbeddingConfig"
 args = [
   { name = "texts", field = "input.texts", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
@@ -1422,6 +2692,7 @@ args = [
 [crates.e2e.calls.embed_texts_async.overrides.csharp]
 result_is_simple = true
 options_type = "EmbeddingConfig"
+nested_types = { embedding_model = "EmbeddingModelType" }
 
 [crates.e2e.calls.embed_texts_async.overrides.java]
 result_is_simple = true
@@ -1434,10 +2705,12 @@ options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.embed_texts_async.overrides.php]
 result_is_simple = true
-options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.embed_texts_async.overrides.dart]
 result_is_simple = true
+options_type = "EmbeddingConfig"
+
+[crates.e2e.calls.embed_texts_async.overrides.swift]
 options_type = "EmbeddingConfig"
 
 [crates.e2e.calls.get_embedding_preset]
@@ -1491,6 +2764,32 @@ extra_args = ["None", "None"]
 result_is_bytes = true
 result_is_simple = true
 extra_args = ["null", "null"]
+
+[crates.e2e.calls.render_pdf_page_to_png.overrides.go]
+result_is_bytes = true
+result_is_simple = true
+result_is_array = true
+extra_args = ["nil", "nil"]
+
+[crates.e2e.calls.render_pdf_page_to_png.overrides.java]
+result_is_bytes = true
+result_is_simple = true
+extra_args = ["null", "null"]
+
+[crates.e2e.calls.render_pdf_page_to_png.overrides.zig]
+result_is_bytes = true
+result_is_simple = true
+extra_args = ["null", "null"]
+
+[crates.e2e.calls.render_pdf_page_to_png.overrides.r]
+result_is_bytes = true
+result_is_simple = true
+extra_args = ["NULL", "NULL"]
+
+[crates.e2e.calls.render_pdf_page_to_png.overrides.swift]
+result_is_bytes = true
+result_is_simple = true
+extra_args = ["dpi: nil", "password: nil"]
 
 [crates.e2e.calls.bold.overrides.python]
 function = "bold"
@@ -1683,13 +2982,18 @@ output_pattern = "packages/{language}/README.md"
 discord_url = "https://discord.gg/xt9WY3GnKR"
 banner_url = "https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0"
 
+[crates.readme.languages.rust]
+template = "root.md"
+name = "Kreuzberg"
+output_path = "README.md"
+
 [crates.readme.languages.python]
 template = "python.md"
 name = "Python"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system."
 package_manager = ["pip"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "easyocr", "paddleocr"]
@@ -1703,7 +3007,7 @@ name = "TypeScript (Node.js)"
 package_name = "@kreuzberg/node"
 badge_url = "https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions."
 package_manager = ["pnpm"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, worker_pools = true, config_discovery = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1722,7 +3026,7 @@ name = "Go"
 package_name = "github.com/kreuzberg-dev/kreuzberg/v5"
 badge_url = "https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance."
 package_manager = ["go get"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1735,7 +3039,7 @@ name = "Java"
 package_name = "dev.kreuzberg:kreuzberg"
 badge_url = "https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance."
 package_manager = ["maven", "gradle"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1748,7 +3052,7 @@ name = "PHP"
 package_name = "kreuzberg/kreuzberg"
 badge_url = "https://img.shields.io/packagist/v/kreuzberg/kreuzberg?label=PHP&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API."
 package_manager = ["composer"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1761,7 +3065,7 @@ name = "Ruby"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance."
 package_manager = ["rubygems", "bundler"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1774,7 +3078,7 @@ name = "C#"
 package_name = "Kreuzberg"
 badge_url = "https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility."
 package_manager = ["nuget"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1787,7 +3091,7 @@ name = "Elixir"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API."
 package_manager = ["mix"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1801,7 +3105,7 @@ name = "WebAssembly"
 package_name = "@kreuzberg/wasm"
 badge_url = "https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support."
 package_manager = ["pnpm"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = false, code_intelligence = true }
 ocr_backends = ["tesseract-wasm"]
@@ -1814,7 +3118,7 @@ name = "R"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/badge/R-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. R bindings with native R API, data frame integration, and high-performance document extraction."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. R bindings with native R API, data frame integration, and high-performance document extraction."
 package_manager = ["install.packages"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1828,7 +3132,7 @@ name = "FFI (C/C++)"
 package_name = "kreuzberg-ffi"
 badge_url = "https://img.shields.io/badge/C%2FC%2B%2B-kreuzberg--ffi-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. C/C++ FFI bindings providing a stable ABI for native integration, shared library distribution, and cross-language interop."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. C/C++ FFI bindings providing a stable ABI for native integration, shared library distribution, and cross-language interop."
 package_manager = ["cargo"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 
@@ -1838,7 +3142,7 @@ name = "Kotlin (Android)"
 package_name = "dev.kreuzberg:kreuzberg-android"
 badge_url = "https://img.shields.io/badge/Android-kreuzberg-3DDC84"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Android library (AAR) with bundled jniLibs/arm64-v8a and jniLibs/x86_64 — Gradle automatically picks up the native cdylib for emulator and device builds. Server-side Kotlin/JVM consumers can use the Java binding directly via standard Kotlin/Java interop."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Android library (AAR) with bundled jniLibs/arm64-v8a and jniLibs/x86_64 — Gradle automatically picks up the native cdylib for emulator and device builds. Server-side Kotlin/JVM consumers can use the Java binding directly via standard Kotlin/Java interop."
 package_manager = ["gradle", "maven"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1851,7 +3155,7 @@ name = "Swift"
 package_name = "Kreuzberg"
 badge_url = "https://img.shields.io/badge/Swift-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Swift bindings via swift-bridge for macOS, iOS, and Linux, with native Swift types and async/await support."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Swift bindings via swift-bridge for macOS, iOS, and Linux, with native Swift types and async/await support."
 package_manager = ["spm"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1864,7 +3168,7 @@ name = "Dart / Flutter"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/badge/Dart-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Dart bindings via flutter_rust_bridge for both Flutter apps and pure-Dart server contexts, with isolate-safe Future/Stream APIs."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Dart bindings via flutter_rust_bridge for both Flutter apps and pure-Dart server contexts, with isolate-safe Future/Stream APIs."
 package_manager = ["pub"]
 features = { ocr = true, async = true, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1877,7 +3181,7 @@ name = "Zig"
 package_name = "kreuzberg"
 badge_url = "https://img.shields.io/badge/Zig-kreuzberg-007ec6"
 docs_url = "https://kreuzberg.dev/"
-description = "Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Zig bindings consuming the C FFI surface via @cImport, idiomatic error sets, optional types, and slice-based memory management."
+description = "Extract text, tables, images, and metadata from 90+ file formats and 300+ programming languages including PDF, Office documents, and images. Zig bindings consuming the C FFI surface via @cImport, idiomatic error sets, optional types, and slice-based memory management."
 package_manager = ["zig"]
 features = { ocr = true, async = false, plugin_system = true, embeddings = true, code_intelligence = true }
 ocr_backends = ["tesseract", "paddleocr"]
@@ -1891,6 +3195,7 @@ registry_getter = "kreuzberg::plugins::registry::get_ocr_backend_registry"
 register_fn = "register_ocr_backend"
 unregister_fn = "unregister_ocr_backend"
 clear_fn = "clear_ocr_backends"
+exclude_languages = ["kotlin_android"]
 
 [[crates.trait_bridges]]
 trait_name = "PostProcessor"
@@ -1899,6 +3204,7 @@ registry_getter = "kreuzberg::plugins::registry::get_post_processor_registry"
 register_fn = "register_post_processor"
 unregister_fn = "unregister_post_processor"
 clear_fn = "clear_post_processors"
+exclude_languages = ["kotlin_android"]
 
 [[crates.trait_bridges]]
 trait_name = "Validator"
@@ -1907,6 +3213,7 @@ registry_getter = "kreuzberg::plugins::registry::get_validator_registry"
 register_fn = "register_validator"
 unregister_fn = "unregister_validator"
 clear_fn = "clear_validators"
+exclude_languages = ["kotlin_android"]
 
 [[crates.trait_bridges]]
 trait_name = "EmbeddingBackend"
@@ -1915,6 +3222,7 @@ registry_getter = "kreuzberg::plugins::registry::get_embedding_backend_registry"
 register_fn = "register_embedding_backend"
 unregister_fn = "unregister_embedding_backend"
 clear_fn = "clear_embedding_backends"
+exclude_languages = ["kotlin_android"]
 
 [[crates.trait_bridges]]
 trait_name = "DocumentExtractor"
@@ -1927,6 +3235,7 @@ clear_fn = "clear_document_extractors"
 # cannot traverse the C FFI boundary. Skip it in the FFI vtable and let the default impl
 # (returns None) take over.
 ffi_skip_methods = ["as_sync_extractor"]
+exclude_languages = ["kotlin_android"]
 
 [[crates.trait_bridges]]
 trait_name = "Renderer"
@@ -1935,3 +3244,4 @@ registry_getter = "kreuzberg::plugins::registry::get_renderer_registry"
 register_fn = "register_renderer"
 unregister_fn = "unregister_renderer"
 clear_fn = "clear_renderers"
+exclude_languages = ["kotlin_android"]

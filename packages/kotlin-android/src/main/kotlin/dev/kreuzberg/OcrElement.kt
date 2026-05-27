@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,42 +25,31 @@ package dev.kreuzberg
 /**
  * A unified OCR element representing detected text with full metadata.
  *
- * This is the primary type for structured OCR output, preserving all information
- * from both Tesseract and PaddleOCR backends.
+ * This is the primary type for structured OCR output, preserving all information from both
+ * Tesseract and PaddleOCR backends.
  */
 data class OcrElement(
-    /**
-     * The recognized text content.
-     */
-    val text: String,
-    /**
-     * Bounding geometry (rectangle or quadrilateral).
-     */
+    /** The recognized text content. */
+    val text: String = "",
+    /** Bounding geometry (rectangle or quadrilateral). */
+    @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(
+        `as` = OcrBoundingGeometry::class
+    )
     val geometry: OcrBoundingGeometry,
-    /**
-     * Confidence scores for detection and recognition.
-     */
-    val confidence: OcrConfidence,
-    /**
-     * Hierarchical level (word, line, block, page).
-     */
-    val level: OcrElementLevel,
-    /**
-     * Rotation information (if detected).
-     */
-    val rotation: OcrRotation?,
-    /**
-     * Page number (1-indexed).
-     */
-    val pageNumber: Int,
+    /** Confidence scores for detection and recognition. */
+    val confidence: OcrConfidence = OcrConfidence(),
+    /** Hierarchical level (word, line, block, page). */
+    val level: OcrElementLevel = OcrElementLevel.LINE,
+    /** Rotation information (if detected). */
+    val rotation: OcrRotation? = null,
+    /** Page number (1-indexed). */
+    val pageNumber: Int = 0,
     /**
      * Parent element ID for hierarchical relationships.
      *
      * Only used for Tesseract output which has word -> line -> block hierarchy.
      */
-    val parentId: String?,
-    /**
-     * Backend-specific metadata that doesn't fit the unified schema.
-     */
-    val backendMetadata: Map<String, String>
+    val parentId: String? = null,
+    /** Backend-specific metadata that doesn't fit the unified schema. */
+    val backendMetadata: Map<String, Any> = emptyMap(),
 )

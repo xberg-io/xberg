@@ -17,20 +17,21 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
 data class TokenReductionConfig(
-    val level: ReductionLevel,
-    val languageHint: String?,
-    val preserveMarkdown: Boolean,
-    val preserveCode: Boolean,
-    val semanticThreshold: Float,
-    val enableParallel: Boolean,
-    val useSimd: Boolean,
-    val customStopwords: Map<String, List<String>>?,
-    val preservePatterns: List<String>,
-    val targetReduction: Float?,
-    val enableSemanticClustering: Boolean
+    val level: ReductionLevel = ReductionLevel.MODERATE,
+    val languageHint: String? = null,
+    val preserveMarkdown: Boolean = false,
+    val preserveCode: Boolean = true,
+    val semanticThreshold: Float = 0.3f,
+    val enableParallel: Boolean = true,
+    val useSimd: Boolean = true,
+    val customStopwords: Map<String, List<String>>? = null,
+    val preservePatterns: List<String> = emptyList(),
+    val targetReduction: Float? = null,
+    val enableSemanticClustering: Boolean = false,
 )

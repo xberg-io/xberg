@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -39,7 +39,7 @@ jobs:
           toolchain: "1.95"
 
       - name: Cache Cargo
-        uses: actions/cache@v5.0.5
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -58,7 +58,7 @@ jobs:
           output-name: gpu-acceleration-test
 
       - name: Upload test binary
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: gpu-test-binary
           path: gpu-acceleration-test
@@ -72,7 +72,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 

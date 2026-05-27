@@ -38,6 +38,7 @@ mod ffi {
         #[swift_bridge(init)]
         fn new(provider: ExecutionProviderType, device_id: u32) -> AccelerationConfig;
         fn provider(&self) -> String;
+        #[swift_bridge(swift_name = "deviceId")]
         fn device_id(&self) -> u32;
     }
 
@@ -50,9 +51,13 @@ mod ffi {
             strip_repeating_text: bool,
             include_watermarks: bool,
         ) -> ContentFilterConfig;
+        #[swift_bridge(swift_name = "includeHeaders")]
         fn include_headers(&self) -> bool;
+        #[swift_bridge(swift_name = "includeFooters")]
         fn include_footers(&self) -> bool;
+        #[swift_bridge(swift_name = "stripRepeatingText")]
         fn strip_repeating_text(&self) -> bool;
+        #[swift_bridge(swift_name = "includeWatermarks")]
         fn include_watermarks(&self) -> bool;
     }
 
@@ -60,6 +65,7 @@ mod ffi {
         type EmailConfig;
         #[swift_bridge(init)]
         fn new(msg_fallback_codepage: Option<u32>) -> EmailConfig;
+        #[swift_bridge(swift_name = "msgFallbackCodepage")]
         fn msg_fallback_codepage(&self) -> Option<u32>;
     }
 
@@ -102,39 +108,63 @@ mod ffi {
             structured_extraction: Option<StructuredExtractionConfig>,
             cancel_token: Option<String>,
         ) -> ExtractionConfig;
+        #[swift_bridge(swift_name = "useCache")]
         fn use_cache(&self) -> bool;
+        #[swift_bridge(swift_name = "enableQualityProcessing")]
         fn enable_quality_processing(&self) -> bool;
         fn ocr(&self) -> Option<OcrConfig>;
+        #[swift_bridge(swift_name = "forceOcr")]
         fn force_ocr(&self) -> bool;
+        #[swift_bridge(swift_name = "forceOcrPages")]
         fn force_ocr_pages(&self) -> Option<Vec<u32>>;
+        #[swift_bridge(swift_name = "disableOcr")]
         fn disable_ocr(&self) -> bool;
         fn chunking(&self) -> Option<ChunkingConfig>;
+        #[swift_bridge(swift_name = "contentFilter")]
         fn content_filter(&self) -> Option<ContentFilterConfig>;
         fn images(&self) -> Option<ImageExtractionConfig>;
+        #[swift_bridge(swift_name = "pdfOptions")]
         fn pdf_options(&self) -> Option<PdfConfig>;
+        #[swift_bridge(swift_name = "tokenReduction")]
         fn token_reduction(&self) -> Option<TokenReductionOptions>;
+        #[swift_bridge(swift_name = "languageDetection")]
         fn language_detection(&self) -> Option<LanguageDetectionConfig>;
         fn pages(&self) -> Option<PageConfig>;
         fn keywords(&self) -> Option<KeywordConfig>;
         fn postprocessor(&self) -> Option<PostProcessorConfig>;
+        #[swift_bridge(swift_name = "htmlOptions")]
         fn html_options(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "htmlOutput")]
         fn html_output(&self) -> Option<HtmlOutputConfig>;
+        #[swift_bridge(swift_name = "extractionTimeoutSecs")]
         fn extraction_timeout_secs(&self) -> Option<u64>;
+        #[swift_bridge(swift_name = "maxConcurrentExtractions")]
         fn max_concurrent_extractions(&self) -> Option<usize>;
+        #[swift_bridge(swift_name = "resultFormat")]
         fn result_format(&self) -> String;
+        #[swift_bridge(swift_name = "securityLimits")]
         fn security_limits(&self) -> Option<SecurityLimits>;
+        #[swift_bridge(swift_name = "outputFormat")]
         fn output_format(&self) -> String;
         fn layout(&self) -> Option<LayoutDetectionConfig>;
+        #[swift_bridge(swift_name = "useLayoutForMarkdown")]
         fn use_layout_for_markdown(&self) -> bool;
+        #[swift_bridge(swift_name = "includeDocumentStructure")]
         fn include_document_structure(&self) -> bool;
         fn acceleration(&self) -> Option<AccelerationConfig>;
+        #[swift_bridge(swift_name = "cacheNamespace")]
         fn cache_namespace(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "cacheTtlSecs")]
         fn cache_ttl_secs(&self) -> Option<u64>;
         fn email(&self) -> Option<EmailConfig>;
         fn concurrency(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "maxArchiveDepth")]
         fn max_archive_depth(&self) -> usize;
+        #[swift_bridge(swift_name = "treeSitter")]
         fn tree_sitter(&self) -> Option<TreeSitterConfig>;
+        #[swift_bridge(swift_name = "structuredExtraction")]
         fn structured_extraction(&self) -> Option<StructuredExtractionConfig>;
+        #[swift_bridge(swift_name = "cancelToken")]
         fn cancel_token(&self) -> Option<String>;
     }
 
@@ -165,33 +195,49 @@ mod ffi {
             tree_sitter: Option<TreeSitterConfig>,
             structured_extraction: Option<StructuredExtractionConfig>,
         ) -> FileExtractionConfig;
+        #[swift_bridge(swift_name = "enableQualityProcessing")]
         fn enable_quality_processing(&self) -> Option<bool>;
         fn ocr(&self) -> Option<OcrConfig>;
+        #[swift_bridge(swift_name = "forceOcr")]
         fn force_ocr(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "forceOcrPages")]
         fn force_ocr_pages(&self) -> Option<Vec<u32>>;
+        #[swift_bridge(swift_name = "disableOcr")]
         fn disable_ocr(&self) -> Option<bool>;
         fn chunking(&self) -> Option<ChunkingConfig>;
+        #[swift_bridge(swift_name = "contentFilter")]
         fn content_filter(&self) -> Option<ContentFilterConfig>;
         fn images(&self) -> Option<ImageExtractionConfig>;
+        #[swift_bridge(swift_name = "pdfOptions")]
         fn pdf_options(&self) -> Option<PdfConfig>;
+        #[swift_bridge(swift_name = "tokenReduction")]
         fn token_reduction(&self) -> Option<TokenReductionOptions>;
+        #[swift_bridge(swift_name = "languageDetection")]
         fn language_detection(&self) -> Option<LanguageDetectionConfig>;
         fn pages(&self) -> Option<PageConfig>;
         fn keywords(&self) -> Option<KeywordConfig>;
         fn postprocessor(&self) -> Option<PostProcessorConfig>;
+        #[swift_bridge(swift_name = "htmlOptions")]
         fn html_options(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "resultFormat")]
         fn result_format(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "outputFormat")]
         fn output_format(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "includeDocumentStructure")]
         fn include_document_structure(&self) -> Option<bool>;
         fn layout(&self) -> Option<LayoutDetectionConfig>;
+        #[swift_bridge(swift_name = "timeoutSecs")]
         fn timeout_secs(&self) -> Option<u64>;
+        #[swift_bridge(swift_name = "treeSitter")]
         fn tree_sitter(&self) -> Option<TreeSitterConfig>;
+        #[swift_bridge(swift_name = "structuredExtraction")]
         fn structured_extraction(&self) -> Option<StructuredExtractionConfig>;
     }
 
     extern "Rust" {
         type BatchBytesItem;
         fn content(&self) -> Vec<u8>;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> String;
         fn config(&self) -> Option<FileExtractionConfig>;
     }
@@ -216,13 +262,21 @@ mod ffi {
             max_images_per_page: Option<u32>,
             classify: bool,
         ) -> ImageExtractionConfig;
+        #[swift_bridge(swift_name = "extractImages")]
         fn extract_images(&self) -> bool;
+        #[swift_bridge(swift_name = "targetDpi")]
         fn target_dpi(&self) -> i32;
+        #[swift_bridge(swift_name = "maxImageDimension")]
         fn max_image_dimension(&self) -> i32;
+        #[swift_bridge(swift_name = "injectPlaceholders")]
         fn inject_placeholders(&self) -> bool;
+        #[swift_bridge(swift_name = "autoAdjustDpi")]
         fn auto_adjust_dpi(&self) -> bool;
+        #[swift_bridge(swift_name = "minDpi")]
         fn min_dpi(&self) -> i32;
+        #[swift_bridge(swift_name = "maxDpi")]
         fn max_dpi(&self) -> i32;
+        #[swift_bridge(swift_name = "maxImagesPerPage")]
         fn max_images_per_page(&self) -> Option<u32>;
         fn classify(&self) -> bool;
     }
@@ -232,6 +286,7 @@ mod ffi {
         #[swift_bridge(init)]
         fn new(mode: String, preserve_important_words: bool) -> TokenReductionOptions;
         fn mode(&self) -> String;
+        #[swift_bridge(swift_name = "preserveImportantWords")]
         fn preserve_important_words(&self) -> bool;
     }
 
@@ -240,7 +295,9 @@ mod ffi {
         #[swift_bridge(init)]
         fn new(enabled: bool, min_confidence: f64, detect_multiple: bool) -> LanguageDetectionConfig;
         fn enabled(&self) -> bool;
+        #[swift_bridge(swift_name = "minConfidence")]
         fn min_confidence(&self) -> f64;
+        #[swift_bridge(swift_name = "detectMultiple")]
         fn detect_multiple(&self) -> bool;
     }
 
@@ -255,9 +312,12 @@ mod ffi {
             embed_css: bool,
         ) -> HtmlOutputConfig;
         fn css(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "cssFile")]
         fn css_file(&self) -> Option<String>;
         fn theme(&self) -> String;
+        #[swift_bridge(swift_name = "classPrefix")]
         fn class_prefix(&self) -> String;
+        #[swift_bridge(swift_name = "embedCss")]
         fn embed_css(&self) -> bool;
     }
 
@@ -270,8 +330,11 @@ mod ffi {
             table_model: TableModel,
             acceleration: Option<AccelerationConfig>,
         ) -> LayoutDetectionConfig;
+        #[swift_bridge(swift_name = "confidenceThreshold")]
         fn confidence_threshold(&self) -> Option<f32>;
+        #[swift_bridge(swift_name = "applyHeuristics")]
         fn apply_heuristics(&self) -> bool;
+        #[swift_bridge(swift_name = "tableModel")]
         fn table_model(&self) -> String;
         fn acceleration(&self) -> Option<AccelerationConfig>;
     }
@@ -289,18 +352,25 @@ mod ffi {
             max_tokens: Option<u64>,
         ) -> LlmConfig;
         fn model(&self) -> String;
+        #[swift_bridge(swift_name = "apiKey")]
         fn api_key(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "baseUrl")]
         fn base_url(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "timeoutSecs")]
         fn timeout_secs(&self) -> Option<u64>;
+        #[swift_bridge(swift_name = "maxRetries")]
         fn max_retries(&self) -> Option<u32>;
         fn temperature(&self) -> Option<f64>;
+        #[swift_bridge(swift_name = "maxTokens")]
         fn max_tokens(&self) -> Option<u64>;
     }
 
     extern "Rust" {
         type StructuredExtractionConfig;
         fn schema(&self) -> String;
+        #[swift_bridge(swift_name = "schemaName")]
         fn schema_name(&self) -> String;
+        #[swift_bridge(swift_name = "schemaDescription")]
         fn schema_description(&self) -> Option<String>;
         fn strict(&self) -> bool;
         fn prompt(&self) -> Option<String>;
@@ -328,21 +398,37 @@ mod ffi {
             alnum_ws_ratio_threshold: f64,
             pipeline_min_quality: f64,
         ) -> OcrQualityThresholds;
+        #[swift_bridge(swift_name = "minTotalNonWhitespace")]
         fn min_total_non_whitespace(&self) -> usize;
+        #[swift_bridge(swift_name = "minNonWhitespacePerPage")]
         fn min_non_whitespace_per_page(&self) -> f64;
+        #[swift_bridge(swift_name = "minMeaningfulWordLen")]
         fn min_meaningful_word_len(&self) -> usize;
+        #[swift_bridge(swift_name = "minMeaningfulWords")]
         fn min_meaningful_words(&self) -> usize;
+        #[swift_bridge(swift_name = "minAlnumRatio")]
         fn min_alnum_ratio(&self) -> f64;
+        #[swift_bridge(swift_name = "minGarbageChars")]
         fn min_garbage_chars(&self) -> usize;
+        #[swift_bridge(swift_name = "maxFragmentedWordRatio")]
         fn max_fragmented_word_ratio(&self) -> f64;
+        #[swift_bridge(swift_name = "criticalFragmentedWordRatio")]
         fn critical_fragmented_word_ratio(&self) -> f64;
+        #[swift_bridge(swift_name = "minAvgWordLength")]
         fn min_avg_word_length(&self) -> f64;
+        #[swift_bridge(swift_name = "minWordsForAvgLengthCheck")]
         fn min_words_for_avg_length_check(&self) -> usize;
+        #[swift_bridge(swift_name = "minConsecutiveRepeatRatio")]
         fn min_consecutive_repeat_ratio(&self) -> f64;
+        #[swift_bridge(swift_name = "minWordsForRepeatCheck")]
         fn min_words_for_repeat_check(&self) -> usize;
+        #[swift_bridge(swift_name = "substantiveMinChars")]
         fn substantive_min_chars(&self) -> usize;
+        #[swift_bridge(swift_name = "nonTextMinChars")]
         fn non_text_min_chars(&self) -> usize;
+        #[swift_bridge(swift_name = "alnumWsRatioThreshold")]
         fn alnum_ws_ratio_threshold(&self) -> f64;
+        #[swift_bridge(swift_name = "pipelineMinQuality")]
         fn pipeline_min_quality(&self) -> f64;
     }
 
@@ -351,15 +437,20 @@ mod ffi {
         fn backend(&self) -> String;
         fn priority(&self) -> u32;
         fn language(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "tesseractConfig")]
         fn tesseract_config(&self) -> Option<TesseractConfig>;
+        #[swift_bridge(swift_name = "paddleOcrConfig")]
         fn paddle_ocr_config(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "vlmConfig")]
         fn vlm_config(&self) -> Option<LlmConfig>;
+        #[swift_bridge(swift_name = "backendOptions")]
         fn backend_options(&self) -> Option<String>;
     }
 
     extern "Rust" {
         type OcrPipelineConfig;
         fn stages(&self) -> Vec<OcrPipelineStage>;
+        #[swift_bridge(swift_name = "qualityThresholds")]
         fn quality_thresholds(&self) -> OcrQualityThresholds;
     }
 
@@ -386,17 +477,27 @@ mod ffi {
         fn enabled(&self) -> bool;
         fn backend(&self) -> String;
         fn language(&self) -> String;
+        #[swift_bridge(swift_name = "tesseractConfig")]
         fn tesseract_config(&self) -> Option<TesseractConfig>;
+        #[swift_bridge(swift_name = "outputFormat")]
         fn output_format(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "paddleOcrConfig")]
         fn paddle_ocr_config(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "backendOptions")]
         fn backend_options(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "elementConfig")]
         fn element_config(&self) -> Option<OcrElementConfig>;
+        #[swift_bridge(swift_name = "qualityThresholds")]
         fn quality_thresholds(&self) -> Option<OcrQualityThresholds>;
         fn pipeline(&self) -> Option<OcrPipelineConfig>;
+        #[swift_bridge(swift_name = "autoRotate")]
         fn auto_rotate(&self) -> bool;
+        #[swift_bridge(swift_name = "vlmConfig")]
         fn vlm_config(&self) -> Option<LlmConfig>;
+        #[swift_bridge(swift_name = "vlmPrompt")]
         fn vlm_prompt(&self) -> Option<String>;
         fn acceleration(&self) -> Option<AccelerationConfig>;
+        #[swift_bridge(swift_name = "tessdataBytes")]
         fn tessdata_bytes(&self) -> String;
     }
 
@@ -404,8 +505,11 @@ mod ffi {
         type PageConfig;
         #[swift_bridge(init)]
         fn new(extract_pages: bool, insert_page_markers: bool, marker_format: String) -> PageConfig;
+        #[swift_bridge(swift_name = "extractPages")]
         fn extract_pages(&self) -> bool;
+        #[swift_bridge(swift_name = "insertPageMarkers")]
         fn insert_page_markers(&self) -> bool;
+        #[swift_bridge(swift_name = "markerFormat")]
         fn marker_format(&self) -> String;
     }
 
@@ -424,15 +528,23 @@ mod ffi {
             allow_single_column_tables: bool,
             ocr_inline_images: bool,
         ) -> PdfConfig;
+        #[swift_bridge(swift_name = "extractImages")]
         fn extract_images(&self) -> bool;
+        #[swift_bridge(swift_name = "extractTables")]
         fn extract_tables(&self) -> bool;
         fn passwords(&self) -> Option<Vec<String>>;
+        #[swift_bridge(swift_name = "extractMetadata")]
         fn extract_metadata(&self) -> bool;
         fn hierarchy(&self) -> Option<HierarchyConfig>;
+        #[swift_bridge(swift_name = "extractAnnotations")]
         fn extract_annotations(&self) -> bool;
+        #[swift_bridge(swift_name = "topMarginFraction")]
         fn top_margin_fraction(&self) -> Option<f32>;
+        #[swift_bridge(swift_name = "bottomMarginFraction")]
         fn bottom_margin_fraction(&self) -> Option<f32>;
+        #[swift_bridge(swift_name = "allowSingleColumnTables")]
         fn allow_single_column_tables(&self) -> bool;
+        #[swift_bridge(swift_name = "ocrInlineImages")]
         fn ocr_inline_images(&self) -> bool;
     }
 
@@ -446,8 +558,11 @@ mod ffi {
             ocr_coverage_threshold: Option<f32>,
         ) -> HierarchyConfig;
         fn enabled(&self) -> bool;
+        #[swift_bridge(swift_name = "kClusters")]
         fn k_clusters(&self) -> usize;
+        #[swift_bridge(swift_name = "includeBbox")]
         fn include_bbox(&self) -> bool;
+        #[swift_bridge(swift_name = "ocrCoverageThreshold")]
         fn ocr_coverage_threshold(&self) -> Option<f32>;
     }
 
@@ -458,14 +573,18 @@ mod ffi {
             enabled: bool,
             enabled_processors: Option<Vec<String>>,
             disabled_processors: Option<Vec<String>>,
-            enabled_set: Option<String>,
-            disabled_set: Option<String>,
+            enabled_set: Option<Vec<String>>,
+            disabled_set: Option<Vec<String>>,
         ) -> PostProcessorConfig;
         fn enabled(&self) -> bool;
+        #[swift_bridge(swift_name = "enabledProcessors")]
         fn enabled_processors(&self) -> Option<Vec<String>>;
+        #[swift_bridge(swift_name = "disabledProcessors")]
         fn disabled_processors(&self) -> Option<Vec<String>>;
-        fn enabled_set(&self) -> Option<String>;
-        fn disabled_set(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "enabledSet")]
+        fn enabled_set(&self) -> Option<Vec<String>>;
+        #[swift_bridge(swift_name = "disabledSet")]
+        fn disabled_set(&self) -> Option<Vec<String>>;
     }
 
     extern "Rust" {
@@ -482,14 +601,18 @@ mod ffi {
             prepend_heading_context: bool,
             topic_threshold: Option<f32>,
         ) -> ChunkingConfig;
+        #[swift_bridge(swift_name = "maxCharacters")]
         fn max_characters(&self) -> usize;
         fn overlap(&self) -> usize;
         fn trim(&self) -> bool;
+        #[swift_bridge(swift_name = "chunkerType")]
         fn chunker_type(&self) -> String;
         fn embedding(&self) -> Option<EmbeddingConfig>;
         fn preset(&self) -> Option<String>;
         fn sizing(&self) -> String;
+        #[swift_bridge(swift_name = "prependHeadingContext")]
         fn prepend_heading_context(&self) -> bool;
+        #[swift_bridge(swift_name = "topicThreshold")]
         fn topic_threshold(&self) -> Option<f32>;
     }
 
@@ -507,10 +630,14 @@ mod ffi {
         ) -> EmbeddingConfig;
         fn model(&self) -> String;
         fn normalize(&self) -> bool;
+        #[swift_bridge(swift_name = "batchSize")]
         fn batch_size(&self) -> usize;
+        #[swift_bridge(swift_name = "showDownloadProgress")]
         fn show_download_progress(&self) -> bool;
+        #[swift_bridge(swift_name = "cacheDir")]
         fn cache_dir(&self) -> Option<String>;
         fn acceleration(&self) -> Option<AccelerationConfig>;
+        #[swift_bridge(swift_name = "maxEmbedDurationSecs")]
         fn max_embed_duration_secs(&self) -> Option<u64>;
     }
 
@@ -525,6 +652,7 @@ mod ffi {
             process: TreeSitterProcessConfig,
         ) -> TreeSitterConfig;
         fn enabled(&self) -> bool;
+        #[swift_bridge(swift_name = "cacheDir")]
         fn cache_dir(&self) -> Option<String>;
         fn languages(&self) -> Option<Vec<String>>;
         fn groups(&self) -> Option<Vec<String>>;
@@ -552,13 +680,16 @@ mod ffi {
         fn docstrings(&self) -> bool;
         fn symbols(&self) -> bool;
         fn diagnostics(&self) -> bool;
+        #[swift_bridge(swift_name = "chunkMaxSize")]
         fn chunk_max_size(&self) -> Option<usize>;
+        #[swift_bridge(swift_name = "contentMode")]
         fn content_mode(&self) -> String;
     }
 
     extern "Rust" {
         type SupportedFormat;
         fn extension_(&self) -> String;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> String;
     }
 
@@ -574,8 +705,11 @@ mod ffi {
         ) -> ServerConfig;
         fn host(&self) -> String;
         fn port(&self) -> u16;
+        #[swift_bridge(swift_name = "corsOrigins")]
         fn cors_origins(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "maxRequestBodyBytes")]
         fn max_request_body_bytes(&self) -> usize;
+        #[swift_bridge(swift_name = "maxMultipartFieldBytes")]
         fn max_multipart_field_bytes(&self) -> usize;
     }
 
@@ -584,6 +718,7 @@ mod ffi {
         fn content(&self) -> String;
         fn format(&self) -> String;
         fn metadata(&self) -> String;
+        #[swift_bridge(swift_name = "textFields")]
         fn text_fields(&self) -> Vec<String>;
     }
 
@@ -592,6 +727,7 @@ mod ffi {
         fn width(&self) -> u32;
         fn height(&self) -> u32;
         fn format(&self) -> String;
+        #[swift_bridge(swift_name = "exifData")]
         fn exif_data(&self) -> String;
     }
 
@@ -617,20 +753,28 @@ mod ffi {
             hyperlinks_changed: Option<bool>,
         ) -> DocxAppProperties;
         fn application(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "appVersion")]
         fn app_version(&self) -> Option<String>;
         fn template(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "totalTime")]
         fn total_time(&self) -> Option<i32>;
         fn pages(&self) -> Option<i32>;
         fn words(&self) -> Option<i32>;
         fn characters(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "charactersWithSpaces")]
         fn characters_with_spaces(&self) -> Option<i32>;
         fn lines(&self) -> Option<i32>;
         fn paragraphs(&self) -> Option<i32>;
         fn company(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "docSecurity")]
         fn doc_security(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "scaleCrop")]
         fn scale_crop(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "linksUpToDate")]
         fn links_up_to_date(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "sharedDoc")]
         fn shared_doc(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "hyperlinksChanged")]
         fn hyperlinks_changed(&self) -> Option<bool>;
     }
 
@@ -649,13 +793,20 @@ mod ffi {
             worksheet_names: Vec<String>,
         ) -> XlsxAppProperties;
         fn application(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "appVersion")]
         fn app_version(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "docSecurity")]
         fn doc_security(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "scaleCrop")]
         fn scale_crop(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "linksUpToDate")]
         fn links_up_to_date(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "sharedDoc")]
         fn shared_doc(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "hyperlinksChanged")]
         fn hyperlinks_changed(&self) -> Option<bool>;
         fn company(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "worksheetNames")]
         fn worksheet_names(&self) -> Vec<String>;
     }
 
@@ -680,19 +831,30 @@ mod ffi {
             slide_titles: Vec<String>,
         ) -> PptxAppProperties;
         fn application(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "appVersion")]
         fn app_version(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "totalTime")]
         fn total_time(&self) -> Option<i32>;
         fn company(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "docSecurity")]
         fn doc_security(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "scaleCrop")]
         fn scale_crop(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "linksUpToDate")]
         fn links_up_to_date(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "sharedDoc")]
         fn shared_doc(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "hyperlinksChanged")]
         fn hyperlinks_changed(&self) -> Option<bool>;
         fn slides(&self) -> Option<i32>;
         fn notes(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "hiddenSlides")]
         fn hidden_slides(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "multimediaClips")]
         fn multimedia_clips(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "presentationFormat")]
         fn presentation_format(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "slideTitles")]
         fn slide_titles(&self) -> Vec<String>;
     }
 
@@ -721,15 +883,18 @@ mod ffi {
         fn creator(&self) -> Option<String>;
         fn keywords(&self) -> Option<String>;
         fn description(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "lastModifiedBy")]
         fn last_modified_by(&self) -> Option<String>;
         fn revision(&self) -> Option<String>;
         fn created(&self) -> Option<String>;
         fn modified(&self) -> Option<String>;
         fn category(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "contentStatus")]
         fn content_status(&self) -> Option<String>;
         fn language(&self) -> Option<String>;
         fn identifier(&self) -> Option<String>;
         fn version(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "lastPrinted")]
         fn last_printed(&self) -> Option<String>;
     }
 
@@ -747,14 +912,23 @@ mod ffi {
             max_xml_depth: usize,
             max_table_cells: usize,
         ) -> SecurityLimits;
+        #[swift_bridge(swift_name = "maxArchiveSize")]
         fn max_archive_size(&self) -> usize;
+        #[swift_bridge(swift_name = "maxCompressionRatio")]
         fn max_compression_ratio(&self) -> usize;
+        #[swift_bridge(swift_name = "maxFilesInArchive")]
         fn max_files_in_archive(&self) -> usize;
+        #[swift_bridge(swift_name = "maxNestingDepth")]
         fn max_nesting_depth(&self) -> usize;
+        #[swift_bridge(swift_name = "maxEntityLength")]
         fn max_entity_length(&self) -> usize;
+        #[swift_bridge(swift_name = "maxContentSize")]
         fn max_content_size(&self) -> usize;
+        #[swift_bridge(swift_name = "maxIterations")]
         fn max_iterations(&self) -> usize;
+        #[swift_bridge(swift_name = "maxXmlDepth")]
         fn max_xml_depth(&self) -> usize;
+        #[swift_bridge(swift_name = "maxTableCells")]
         fn max_table_cells(&self) -> usize;
     }
 
@@ -775,28 +949,42 @@ mod ffi {
             enable_semantic_clustering: bool,
         ) -> TokenReductionConfig;
         fn level(&self) -> String;
+        #[swift_bridge(swift_name = "languageHint")]
         fn language_hint(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "preserveMarkdown")]
         fn preserve_markdown(&self) -> bool;
+        #[swift_bridge(swift_name = "preserveCode")]
         fn preserve_code(&self) -> bool;
+        #[swift_bridge(swift_name = "semanticThreshold")]
         fn semantic_threshold(&self) -> f32;
+        #[swift_bridge(swift_name = "enableParallel")]
         fn enable_parallel(&self) -> bool;
+        #[swift_bridge(swift_name = "useSimd")]
         fn use_simd(&self) -> bool;
+        #[swift_bridge(swift_name = "customStopwords")]
         fn custom_stopwords(&self) -> String;
+        #[swift_bridge(swift_name = "preservePatterns")]
         fn preserve_patterns(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "targetReduction")]
         fn target_reduction(&self) -> Option<f32>;
+        #[swift_bridge(swift_name = "enableSemanticClustering")]
         fn enable_semantic_clustering(&self) -> bool;
     }
 
     extern "Rust" {
         type PdfAnnotation;
+        #[swift_bridge(swift_name = "annotationType")]
         fn annotation_type(&self) -> String;
         fn content(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
-        fn bounding_box(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "boundingBox")]
+        fn bounding_box(&self) -> Option<BoundingBox>;
     }
 
     extern "Rust" {
         type DjotContent;
+        #[swift_bridge(swift_name = "plainText")]
         fn plain_text(&self) -> String;
         fn blocks(&self) -> Vec<FormattedBlock>;
         fn metadata(&self) -> Metadata;
@@ -808,8 +996,10 @@ mod ffi {
 
     extern "Rust" {
         type FormattedBlock;
+        #[swift_bridge(swift_name = "blockType")]
         fn block_type(&self) -> String;
         fn level(&self) -> Option<usize>;
+        #[swift_bridge(swift_name = "inlineContent")]
         fn inline_content(&self) -> Vec<InlineElement>;
         fn attributes(&self) -> Option<String>;
         fn language(&self) -> Option<String>;
@@ -819,6 +1009,7 @@ mod ffi {
 
     extern "Rust" {
         type InlineElement;
+        #[swift_bridge(swift_name = "elementType")]
         fn element_type(&self) -> String;
         fn content(&self) -> String;
         fn attributes(&self) -> Option<String>;
@@ -857,8 +1048,10 @@ mod ffi {
             node_types: Vec<String>,
         ) -> DocumentStructure;
         fn nodes(&self) -> Vec<DocumentNode>;
+        #[swift_bridge(swift_name = "sourceFormat")]
         fn source_format(&self) -> Option<String>;
         fn relationships(&self) -> Vec<DocumentRelationship>;
+        #[swift_bridge(swift_name = "nodeTypes")]
         fn node_types(&self) -> Vec<String>;
     }
 
@@ -875,10 +1068,12 @@ mod ffi {
         fn content(&self) -> String;
         fn parent(&self) -> Option<u32>;
         fn children(&self) -> Vec<u32>;
+        #[swift_bridge(swift_name = "contentLayer")]
         fn content_layer(&self) -> String;
         fn page(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "pageEnd")]
         fn page_end(&self) -> Option<u32>;
-        fn bbox(&self) -> Option<String>;
+        fn bbox(&self) -> Option<BoundingBox>;
         fn annotations(&self) -> Vec<TextAnnotation>;
         fn attributes(&self) -> String;
     }
@@ -897,10 +1092,13 @@ mod ffi {
         fn content(&self) -> String;
         fn row(&self) -> u32;
         fn col(&self) -> u32;
+        #[swift_bridge(swift_name = "rowSpan")]
         fn row_span(&self) -> u32;
+        #[swift_bridge(swift_name = "colSpan")]
         fn col_span(&self) -> u32;
+        #[swift_bridge(swift_name = "isHeader")]
         fn is_header(&self) -> bool;
-        fn bbox(&self) -> Option<String>;
+        fn bbox(&self) -> Option<BoundingBox>;
     }
 
     extern "Rust" {
@@ -939,33 +1137,46 @@ mod ffi {
             formatted_content: Option<String>,
         ) -> ExtractionResult;
         fn content(&self) -> String;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> String;
         fn metadata(&self) -> Metadata;
+        #[swift_bridge(swift_name = "extractionMethod")]
         fn extraction_method(&self) -> Option<String>;
         fn tables(&self) -> Vec<Table>;
+        #[swift_bridge(swift_name = "detectedLanguages")]
         fn detected_languages(&self) -> Option<Vec<String>>;
         fn chunks(&self) -> Option<Vec<Chunk>>;
         fn images(&self) -> Option<Vec<ExtractedImage>>;
         fn pages(&self) -> Option<Vec<PageContent>>;
         fn elements(&self) -> Option<Vec<Element>>;
+        #[swift_bridge(swift_name = "djotContent")]
         fn djot_content(&self) -> Option<DjotContent>;
+        #[swift_bridge(swift_name = "ocrElements")]
         fn ocr_elements(&self) -> Option<Vec<OcrElement>>;
         fn document(&self) -> Option<DocumentStructure>;
+        #[swift_bridge(swift_name = "extractedKeywords")]
         fn extracted_keywords(&self) -> Option<Vec<Keyword>>;
+        #[swift_bridge(swift_name = "qualityScore")]
         fn quality_score(&self) -> Option<f64>;
+        #[swift_bridge(swift_name = "processingWarnings")]
         fn processing_warnings(&self) -> Vec<ProcessingWarning>;
         fn annotations(&self) -> Option<Vec<PdfAnnotation>>;
         fn children(&self) -> Option<Vec<ArchiveEntry>>;
         fn uris(&self) -> Option<Vec<Uri>>;
+        #[swift_bridge(swift_name = "structuredOutput")]
         fn structured_output(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "codeIntelligence")]
         fn code_intelligence(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "llmUsage")]
         fn llm_usage(&self) -> Option<Vec<LlmUsage>>;
+        #[swift_bridge(swift_name = "formattedContent")]
         fn formatted_content(&self) -> Option<String>;
     }
 
     extern "Rust" {
         type ArchiveEntry;
         fn path(&self) -> String;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> String;
         fn result(&self) -> ExtractionResult;
     }
@@ -990,16 +1201,22 @@ mod ffi {
         ) -> LlmUsage;
         fn model(&self) -> String;
         fn source(&self) -> String;
+        #[swift_bridge(swift_name = "inputTokens")]
         fn input_tokens(&self) -> Option<u64>;
+        #[swift_bridge(swift_name = "outputTokens")]
         fn output_tokens(&self) -> Option<u64>;
+        #[swift_bridge(swift_name = "totalTokens")]
         fn total_tokens(&self) -> Option<u64>;
+        #[swift_bridge(swift_name = "estimatedCost")]
         fn estimated_cost(&self) -> Option<f64>;
+        #[swift_bridge(swift_name = "finishReason")]
         fn finish_reason(&self) -> Option<String>;
     }
 
     extern "Rust" {
         type Chunk;
         fn content(&self) -> String;
+        #[swift_bridge(swift_name = "chunkType")]
         fn chunk_type(&self) -> String;
         fn embedding(&self) -> Option<Vec<f32>>;
         fn metadata(&self) -> ChunkMetadata;
@@ -1018,14 +1235,23 @@ mod ffi {
 
     extern "Rust" {
         type ChunkMetadata;
+        #[swift_bridge(swift_name = "byteStart")]
         fn byte_start(&self) -> usize;
+        #[swift_bridge(swift_name = "byteEnd")]
         fn byte_end(&self) -> usize;
+        #[swift_bridge(swift_name = "tokenCount")]
         fn token_count(&self) -> Option<usize>;
+        #[swift_bridge(swift_name = "chunkIndex")]
         fn chunk_index(&self) -> usize;
+        #[swift_bridge(swift_name = "totalChunks")]
         fn total_chunks(&self) -> usize;
+        #[swift_bridge(swift_name = "firstPage")]
         fn first_page(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "lastPage")]
         fn last_page(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "headingContext")]
         fn heading_context(&self) -> Option<HeadingContext>;
+        #[swift_bridge(swift_name = "imageIndices")]
         fn image_indices(&self) -> Vec<u32>;
     }
 
@@ -1033,34 +1259,58 @@ mod ffi {
         type ExtractedImage;
         fn data(&self) -> Vec<u8>;
         fn format(&self) -> String;
+        #[swift_bridge(swift_name = "imageIndex")]
         fn image_index(&self) -> u32;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> Option<u32>;
         fn width(&self) -> Option<u32>;
         fn height(&self) -> Option<u32>;
         fn colorspace(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "bitsPerComponent")]
         fn bits_per_component(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "isMask")]
         fn is_mask(&self) -> bool;
         fn description(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "ocrResult")]
         fn ocr_result(&self) -> Option<ExtractionResult>;
-        fn bounding_box(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "boundingBox")]
+        fn bounding_box(&self) -> Option<BoundingBox>;
+        #[swift_bridge(swift_name = "sourcePath")]
         fn source_path(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "imageKind")]
         fn image_kind(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "kindConfidence")]
         fn kind_confidence(&self) -> Option<f32>;
+        #[swift_bridge(swift_name = "clusterId")]
         fn cluster_id(&self) -> Option<u32>;
     }
 
     extern "Rust" {
+        type BoundingBox;
+        #[swift_bridge(init)]
+        fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> BoundingBox;
+        fn x0(&self) -> f64;
+        fn y0(&self) -> f64;
+        fn x1(&self) -> f64;
+        fn y1(&self) -> f64;
+    }
+
+    extern "Rust" {
         type ElementMetadata;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> Option<u32>;
         fn filename(&self) -> Option<String>;
-        fn coordinates(&self) -> Option<String>;
+        fn coordinates(&self) -> Option<BoundingBox>;
+        #[swift_bridge(swift_name = "elementIndex")]
         fn element_index(&self) -> Option<usize>;
         fn additional(&self) -> String;
     }
 
     extern "Rust" {
         type Element;
+        #[swift_bridge(swift_name = "elementId")]
         fn element_id(&self) -> String;
+        #[swift_bridge(swift_name = "elementType")]
         fn element_type(&self) -> String;
         fn text(&self) -> String;
         fn metadata(&self) -> ElementMetadata;
@@ -1076,24 +1326,33 @@ mod ffi {
         type ExcelSheet;
         fn name(&self) -> String;
         fn markdown(&self) -> String;
+        #[swift_bridge(swift_name = "rowCount")]
         fn row_count(&self) -> usize;
+        #[swift_bridge(swift_name = "colCount")]
         fn col_count(&self) -> usize;
+        #[swift_bridge(swift_name = "cellCount")]
         fn cell_count(&self) -> usize;
+        #[swift_bridge(swift_name = "tableCells")]
         fn table_cells(&self) -> String;
     }
 
     extern "Rust" {
         type XmlExtractionResult;
         fn content(&self) -> String;
+        #[swift_bridge(swift_name = "elementCount")]
         fn element_count(&self) -> usize;
+        #[swift_bridge(swift_name = "uniqueElements")]
         fn unique_elements(&self) -> Vec<String>;
     }
 
     extern "Rust" {
         type TextExtractionResult;
         fn content(&self) -> String;
+        #[swift_bridge(swift_name = "lineCount")]
         fn line_count(&self) -> usize;
+        #[swift_bridge(swift_name = "wordCount")]
         fn word_count(&self) -> usize;
+        #[swift_bridge(swift_name = "characterCount")]
         fn character_count(&self) -> usize;
         fn headers(&self) -> Option<Vec<String>>;
     }
@@ -1102,26 +1361,39 @@ mod ffi {
         type PptxExtractionResult;
         fn content(&self) -> String;
         fn metadata(&self) -> PptxMetadata;
+        #[swift_bridge(swift_name = "slideCount")]
         fn slide_count(&self) -> usize;
+        #[swift_bridge(swift_name = "imageCount")]
         fn image_count(&self) -> usize;
+        #[swift_bridge(swift_name = "tableCount")]
         fn table_count(&self) -> usize;
         fn images(&self) -> Vec<ExtractedImage>;
+        #[swift_bridge(swift_name = "pageStructure")]
         fn page_structure(&self) -> Option<PageStructure>;
+        #[swift_bridge(swift_name = "pageContents")]
         fn page_contents(&self) -> Option<Vec<PageContent>>;
         fn document(&self) -> Option<DocumentStructure>;
+        #[swift_bridge(swift_name = "officeMetadata")]
         fn office_metadata(&self) -> String;
     }
 
     extern "Rust" {
         type EmailExtractionResult;
         fn subject(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "fromEmail")]
         fn from_email(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "toEmails")]
         fn to_emails(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "ccEmails")]
         fn cc_emails(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "bccEmails")]
         fn bcc_emails(&self) -> Vec<String>;
         fn date(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "messageId")]
         fn message_id(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "plainText")]
         fn plain_text(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "htmlContent")]
         fn html_content(&self) -> Option<String>;
         fn content(&self) -> String;
         fn attachments(&self) -> Vec<EmailAttachment>;
@@ -1132,8 +1404,10 @@ mod ffi {
         type EmailAttachment;
         fn name(&self) -> Option<String>;
         fn filename(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> Option<String>;
         fn size(&self) -> Option<usize>;
+        #[swift_bridge(swift_name = "isImage")]
         fn is_image(&self) -> bool;
         fn data(&self) -> Option<Vec<u8>>;
     }
@@ -1141,9 +1415,11 @@ mod ffi {
     extern "Rust" {
         type OcrExtractionResult;
         fn content(&self) -> String;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> String;
         fn metadata(&self) -> String;
         fn tables(&self) -> Vec<OcrTable>;
+        #[swift_bridge(swift_name = "ocrElements")]
         fn ocr_elements(&self) -> Option<Vec<OcrElement>>;
     }
 
@@ -1151,7 +1427,9 @@ mod ffi {
         type OcrTable;
         fn cells(&self) -> String;
         fn markdown(&self) -> String;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
+        #[swift_bridge(swift_name = "boundingBox")]
         fn bounding_box(&self) -> Option<OcrTableBoundingBox>;
     }
 
@@ -1177,12 +1455,17 @@ mod ffi {
             binarization_method: String,
             invert_colors: bool,
         ) -> ImagePreprocessingConfig;
+        #[swift_bridge(swift_name = "targetDpi")]
         fn target_dpi(&self) -> i32;
+        #[swift_bridge(swift_name = "autoRotate")]
         fn auto_rotate(&self) -> bool;
         fn deskew(&self) -> bool;
         fn denoise(&self) -> bool;
+        #[swift_bridge(swift_name = "contrastEnhance")]
         fn contrast_enhance(&self) -> bool;
+        #[swift_bridge(swift_name = "binarizationMethod")]
         fn binarization_method(&self) -> String;
+        #[swift_bridge(swift_name = "invertColors")]
         fn invert_colors(&self) -> bool;
     }
 
@@ -1214,40 +1497,69 @@ mod ffi {
         ) -> TesseractConfig;
         fn language(&self) -> String;
         fn psm(&self) -> i32;
+        #[swift_bridge(swift_name = "outputFormat")]
         fn output_format(&self) -> String;
         fn oem(&self) -> i32;
+        #[swift_bridge(swift_name = "minConfidence")]
         fn min_confidence(&self) -> f64;
         fn preprocessing(&self) -> Option<ImagePreprocessingConfig>;
+        #[swift_bridge(swift_name = "enableTableDetection")]
         fn enable_table_detection(&self) -> bool;
+        #[swift_bridge(swift_name = "tableMinConfidence")]
         fn table_min_confidence(&self) -> f64;
+        #[swift_bridge(swift_name = "tableColumnThreshold")]
         fn table_column_threshold(&self) -> i32;
+        #[swift_bridge(swift_name = "tableRowThresholdRatio")]
         fn table_row_threshold_ratio(&self) -> f64;
+        #[swift_bridge(swift_name = "useCache")]
         fn use_cache(&self) -> bool;
+        #[swift_bridge(swift_name = "classifyUsePreAdaptedTemplates")]
         fn classify_use_pre_adapted_templates(&self) -> bool;
+        #[swift_bridge(swift_name = "languageModelNgramOn")]
         fn language_model_ngram_on(&self) -> bool;
+        #[swift_bridge(swift_name = "tesseditDontBlkrejGoodWds")]
         fn tessedit_dont_blkrej_good_wds(&self) -> bool;
+        #[swift_bridge(swift_name = "tesseditDontRowrejGoodWds")]
         fn tessedit_dont_rowrej_good_wds(&self) -> bool;
+        #[swift_bridge(swift_name = "tesseditEnableDictCorrection")]
         fn tessedit_enable_dict_correction(&self) -> bool;
+        #[swift_bridge(swift_name = "tesseditCharWhitelist")]
         fn tessedit_char_whitelist(&self) -> String;
+        #[swift_bridge(swift_name = "tesseditCharBlacklist")]
         fn tessedit_char_blacklist(&self) -> String;
+        #[swift_bridge(swift_name = "tesseditUsePrimaryParamsModel")]
         fn tessedit_use_primary_params_model(&self) -> bool;
+        #[swift_bridge(swift_name = "textordSpaceSizeIsVariable")]
         fn textord_space_size_is_variable(&self) -> bool;
+        #[swift_bridge(swift_name = "thresholdingMethod")]
         fn thresholding_method(&self) -> bool;
     }
 
     extern "Rust" {
         type ImagePreprocessingMetadata;
+        #[swift_bridge(swift_name = "originalDimensions")]
         fn original_dimensions(&self) -> Vec<usize>;
+        #[swift_bridge(swift_name = "originalDpi")]
         fn original_dpi(&self) -> Vec<f64>;
+        #[swift_bridge(swift_name = "targetDpi")]
         fn target_dpi(&self) -> i32;
+        #[swift_bridge(swift_name = "scaleFactor")]
         fn scale_factor(&self) -> f64;
+        #[swift_bridge(swift_name = "autoAdjusted")]
         fn auto_adjusted(&self) -> bool;
+        #[swift_bridge(swift_name = "finalDpi")]
         fn final_dpi(&self) -> i32;
+        #[swift_bridge(swift_name = "newDimensions")]
         fn new_dimensions(&self) -> Option<Vec<usize>>;
+        #[swift_bridge(swift_name = "resampleMethod")]
         fn resample_method(&self) -> String;
+        #[swift_bridge(swift_name = "dimensionClamped")]
         fn dimension_clamped(&self) -> bool;
+        #[swift_bridge(swift_name = "calculatedDpi")]
         fn calculated_dpi(&self) -> Option<i32>;
+        #[swift_bridge(swift_name = "skippedResize")]
         fn skipped_resize(&self) -> bool;
+        #[swift_bridge(swift_name = "resizeError")]
         fn resize_error(&self) -> Option<String>;
     }
 
@@ -1283,21 +1595,32 @@ mod ffi {
         fn authors(&self) -> Option<Vec<String>>;
         fn keywords(&self) -> Option<Vec<String>>;
         fn language(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "createdAt")]
         fn created_at(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "modifiedAt")]
         fn modified_at(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "createdBy")]
         fn created_by(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "modifiedBy")]
         fn modified_by(&self) -> Option<String>;
         fn pages(&self) -> Option<PageStructure>;
         fn format(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "imagePreprocessing")]
         fn image_preprocessing(&self) -> Option<ImagePreprocessingMetadata>;
+        #[swift_bridge(swift_name = "jsonSchema")]
         fn json_schema(&self) -> Option<String>;
         fn error(&self) -> Option<ErrorMetadata>;
+        #[swift_bridge(swift_name = "extractionDurationMs")]
         fn extraction_duration_ms(&self) -> Option<u64>;
         fn category(&self) -> Option<String>;
         fn tags(&self) -> Option<Vec<String>>;
+        #[swift_bridge(swift_name = "documentVersion")]
         fn document_version(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "abstractText")]
         fn abstract_text(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "outputFormat")]
         fn output_format(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "ocrUsed")]
         fn ocr_used(&self) -> bool;
         fn additional(&self) -> String;
     }
@@ -1306,7 +1629,9 @@ mod ffi {
         type ExcelMetadata;
         #[swift_bridge(init)]
         fn new(sheet_count: Option<u32>, sheet_names: Option<Vec<String>>) -> ExcelMetadata;
+        #[swift_bridge(swift_name = "sheetCount")]
         fn sheet_count(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "sheetNames")]
         fn sheet_names(&self) -> Option<Vec<String>>;
     }
 
@@ -1322,11 +1647,17 @@ mod ffi {
             message_id: Option<String>,
             attachments: Vec<String>,
         ) -> EmailMetadata;
+        #[swift_bridge(swift_name = "fromEmail")]
         fn from_email(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "fromName")]
         fn from_name(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "toEmails")]
         fn to_emails(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "ccEmails")]
         fn cc_emails(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "bccEmails")]
         fn bcc_emails(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "messageId")]
         fn message_id(&self) -> Option<String>;
         fn attachments(&self) -> Vec<String>;
     }
@@ -1342,9 +1673,13 @@ mod ffi {
             compressed_size: Option<u64>,
         ) -> ArchiveMetadata;
         fn format(&self) -> String;
+        #[swift_bridge(swift_name = "fileCount")]
         fn file_count(&self) -> u32;
+        #[swift_bridge(swift_name = "fileList")]
         fn file_list(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "totalSize")]
         fn total_size(&self) -> u64;
+        #[swift_bridge(swift_name = "compressedSize")]
         fn compressed_size(&self) -> Option<u64>;
     }
 
@@ -1362,7 +1697,9 @@ mod ffi {
         type XmlMetadata;
         #[swift_bridge(init)]
         fn new(element_count: u32, unique_elements: Vec<String>) -> XmlMetadata;
+        #[swift_bridge(swift_name = "elementCount")]
         fn element_count(&self) -> u32;
+        #[swift_bridge(swift_name = "uniqueElements")]
         fn unique_elements(&self) -> Vec<String>;
     }
 
@@ -1374,11 +1711,14 @@ mod ffi {
             word_count: u32,
             character_count: u32,
             headers: Option<Vec<String>>,
-            links: Option<Vec<String>>,
-            code_blocks: Option<Vec<String>>,
+            links: String,
+            code_blocks: String,
         ) -> TextMetadata;
+        #[swift_bridge(swift_name = "lineCount")]
         fn line_count(&self) -> u32;
+        #[swift_bridge(swift_name = "wordCount")]
         fn word_count(&self) -> u32;
+        #[swift_bridge(swift_name = "characterCount")]
         fn character_count(&self) -> u32;
         fn headers(&self) -> Option<Vec<String>>;
     }
@@ -1389,6 +1729,7 @@ mod ffi {
         fn text(&self) -> String;
         fn id(&self) -> Option<String>;
         fn depth(&self) -> u32;
+        #[swift_bridge(swift_name = "htmlOffset")]
         fn html_offset(&self) -> u32;
     }
 
@@ -1397,6 +1738,7 @@ mod ffi {
         fn href(&self) -> String;
         fn text(&self) -> String;
         fn title(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "linkType")]
         fn link_type(&self) -> String;
         fn rel(&self) -> Vec<String>;
     }
@@ -1407,13 +1749,17 @@ mod ffi {
         fn alt(&self) -> Option<String>;
         fn title(&self) -> Option<String>;
         fn dimensions(&self) -> Option<Vec<u32>>;
+        #[swift_bridge(swift_name = "imageType")]
         fn image_type(&self) -> String;
     }
 
     extern "Rust" {
         type StructuredData;
+        #[swift_bridge(swift_name = "dataType")]
         fn data_type(&self) -> String;
+        #[swift_bridge(swift_name = "rawJson")]
         fn raw_json(&self) -> String;
+        #[swift_bridge(swift_name = "schemaType")]
         fn schema_type(&self) -> Option<String>;
     }
 
@@ -1441,16 +1787,23 @@ mod ffi {
         fn description(&self) -> Option<String>;
         fn keywords(&self) -> Vec<String>;
         fn author(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "canonicalUrl")]
         fn canonical_url(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "baseHref")]
         fn base_href(&self) -> Option<String>;
         fn language(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "textDirection")]
         fn text_direction(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "openGraph")]
         fn open_graph(&self) -> String;
+        #[swift_bridge(swift_name = "twitterCard")]
         fn twitter_card(&self) -> String;
+        #[swift_bridge(swift_name = "metaTags")]
         fn meta_tags(&self) -> String;
         fn headers(&self) -> Vec<HeaderMetadata>;
         fn links(&self) -> Vec<LinkMetadata>;
         fn images(&self) -> Vec<ImageMetadataType>;
+        #[swift_bridge(swift_name = "structuredData")]
         fn structured_data(&self) -> Vec<StructuredData>;
     }
 
@@ -1467,14 +1820,19 @@ mod ffi {
         ) -> OcrMetadata;
         fn language(&self) -> String;
         fn psm(&self) -> i32;
+        #[swift_bridge(swift_name = "outputFormat")]
         fn output_format(&self) -> String;
+        #[swift_bridge(swift_name = "tableCount")]
         fn table_count(&self) -> u32;
+        #[swift_bridge(swift_name = "tableRows")]
         fn table_rows(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "tableCols")]
         fn table_cols(&self) -> Option<u32>;
     }
 
     extern "Rust" {
         type ErrorMetadata;
+        #[swift_bridge(swift_name = "errorType")]
         fn error_type(&self) -> String;
         fn message(&self) -> String;
     }
@@ -1488,9 +1846,13 @@ mod ffi {
             image_count: Option<u32>,
             table_count: Option<u32>,
         ) -> PptxMetadata;
+        #[swift_bridge(swift_name = "slideCount")]
         fn slide_count(&self) -> u32;
+        #[swift_bridge(swift_name = "slideNames")]
         fn slide_names(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "imageCount")]
         fn image_count(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "tableCount")]
         fn table_count(&self) -> Option<u32>;
     }
 
@@ -1502,8 +1864,11 @@ mod ffi {
             app_properties: Option<DocxAppProperties>,
             custom_properties: String,
         ) -> DocxMetadata;
+        #[swift_bridge(swift_name = "coreProperties")]
         fn core_properties(&self) -> Option<CoreProperties>;
+        #[swift_bridge(swift_name = "appProperties")]
         fn app_properties(&self) -> Option<DocxAppProperties>;
+        #[swift_bridge(swift_name = "customProperties")]
         fn custom_properties(&self) -> String;
     }
 
@@ -1517,10 +1882,14 @@ mod ffi {
             has_header: bool,
             column_types: Option<Vec<String>>,
         ) -> CsvMetadata;
+        #[swift_bridge(swift_name = "rowCount")]
         fn row_count(&self) -> u32;
+        #[swift_bridge(swift_name = "columnCount")]
         fn column_count(&self) -> u32;
         fn delimiter(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "hasHeader")]
         fn has_header(&self) -> bool;
+        #[swift_bridge(swift_name = "columnTypes")]
         fn column_types(&self) -> Option<Vec<String>>;
     }
 
@@ -1534,10 +1903,14 @@ mod ffi {
             year_range: Option<YearRange>,
             entry_types: String,
         ) -> BibtexMetadata;
+        #[swift_bridge(swift_name = "entryCount")]
         fn entry_count(&self) -> usize;
+        #[swift_bridge(swift_name = "citationKeys")]
         fn citation_keys(&self) -> Vec<String>;
         fn authors(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "yearRange")]
         fn year_range(&self) -> Option<YearRange>;
+        #[swift_bridge(swift_name = "entryTypes")]
         fn entry_types(&self) -> String;
     }
 
@@ -1552,9 +1925,11 @@ mod ffi {
             dois: Vec<String>,
             keywords: Vec<String>,
         ) -> CitationMetadata;
+        #[swift_bridge(swift_name = "citationCount")]
         fn citation_count(&self) -> usize;
         fn format(&self) -> Option<String>;
         fn authors(&self) -> Vec<String>;
+        #[swift_bridge(swift_name = "yearRange")]
         fn year_range(&self) -> Option<YearRange>;
         fn dois(&self) -> Vec<String>;
         fn keywords(&self) -> Vec<String>;
@@ -1580,7 +1955,9 @@ mod ffi {
         type DbfMetadata;
         #[swift_bridge(init)]
         fn new(record_count: usize, field_count: usize, fields: Vec<DbfFieldInfo>) -> DbfMetadata;
+        #[swift_bridge(swift_name = "recordCount")]
         fn record_count(&self) -> usize;
+        #[swift_bridge(swift_name = "fieldCount")]
         fn field_count(&self) -> usize;
         fn fields(&self) -> Vec<DbfFieldInfo>;
     }
@@ -1588,6 +1965,7 @@ mod ffi {
     extern "Rust" {
         type DbfFieldInfo;
         fn name(&self) -> String;
+        #[swift_bridge(swift_name = "fieldType")]
         fn field_type(&self) -> String;
     }
 
@@ -1602,7 +1980,9 @@ mod ffi {
         ) -> JatsMetadata;
         fn copyright(&self) -> Option<String>;
         fn license(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "historyDates")]
         fn history_dates(&self) -> String;
+        #[swift_bridge(swift_name = "contributorRoles")]
         fn contributor_roles(&self) -> Vec<ContributorRole>;
     }
 
@@ -1624,10 +2004,13 @@ mod ffi {
             cover_image: Option<String>,
         ) -> EpubMetadata;
         fn coverage(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "dcFormat")]
         fn dc_format(&self) -> Option<String>;
         fn relation(&self) -> Option<String>;
         fn source(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "dcType")]
         fn dc_type(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "coverImage")]
         fn cover_image(&self) -> Option<String>;
     }
 
@@ -1635,6 +2018,7 @@ mod ffi {
         type PstMetadata;
         #[swift_bridge(init)]
         fn new(message_count: usize) -> PstMetadata;
+        #[swift_bridge(swift_name = "messageCount")]
         fn message_count(&self) -> usize;
     }
 
@@ -1650,6 +2034,7 @@ mod ffi {
         type OcrRotation;
         #[swift_bridge(init)]
         fn new(angle_degrees: f64, confidence: Option<f64>) -> OcrRotation;
+        #[swift_bridge(swift_name = "angleDegrees")]
         fn angle_degrees(&self) -> f64;
         fn confidence(&self) -> Option<f64>;
     }
@@ -1672,8 +2057,11 @@ mod ffi {
         fn confidence(&self) -> OcrConfidence;
         fn level(&self) -> String;
         fn rotation(&self) -> Option<OcrRotation>;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
+        #[swift_bridge(swift_name = "parentId")]
         fn parent_id(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "backendMetadata")]
         fn backend_metadata(&self) -> String;
     }
 
@@ -1686,15 +2074,21 @@ mod ffi {
             min_confidence: f64,
             build_hierarchy: bool,
         ) -> OcrElementConfig;
+        #[swift_bridge(swift_name = "includeElements")]
         fn include_elements(&self) -> bool;
+        #[swift_bridge(swift_name = "minLevel")]
         fn min_level(&self) -> String;
+        #[swift_bridge(swift_name = "minConfidence")]
         fn min_confidence(&self) -> f64;
+        #[swift_bridge(swift_name = "buildHierarchy")]
         fn build_hierarchy(&self) -> bool;
     }
 
     extern "Rust" {
         type PageStructure;
+        #[swift_bridge(swift_name = "totalCount")]
         fn total_count(&self) -> u32;
+        #[swift_bridge(swift_name = "unitType")]
         fn unit_type(&self) -> String;
         fn boundaries(&self) -> Option<Vec<PageBoundary>>;
         fn pages(&self) -> Option<Vec<PageInfo>>;
@@ -1704,8 +2098,11 @@ mod ffi {
         type PageBoundary;
         #[swift_bridge(init)]
         fn new(byte_start: usize, byte_end: usize, page_number: u32) -> PageBoundary;
+        #[swift_bridge(swift_name = "byteStart")]
         fn byte_start(&self) -> usize;
+        #[swift_bridge(swift_name = "byteEnd")]
         fn byte_end(&self) -> usize;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
     }
 
@@ -1714,36 +2111,48 @@ mod ffi {
         fn number(&self) -> u32;
         fn title(&self) -> Option<String>;
         fn dimensions(&self) -> Option<Vec<f64>>;
+        #[swift_bridge(swift_name = "imageCount")]
         fn image_count(&self) -> Option<u32>;
+        #[swift_bridge(swift_name = "tableCount")]
         fn table_count(&self) -> Option<u32>;
         fn hidden(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "isBlank")]
         fn is_blank(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "hasVectorGraphics")]
         fn has_vector_graphics(&self) -> bool;
     }
 
     extern "Rust" {
         type PageContent;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
         fn content(&self) -> String;
         fn tables(&self) -> Vec<Table>;
+        #[swift_bridge(swift_name = "imageIndices")]
         fn image_indices(&self) -> Vec<u32>;
         fn hierarchy(&self) -> Option<PageHierarchy>;
+        #[swift_bridge(swift_name = "isBlank")]
         fn is_blank(&self) -> Option<bool>;
+        #[swift_bridge(swift_name = "layoutRegions")]
         fn layout_regions(&self) -> Option<Vec<LayoutRegion>>;
     }
 
     extern "Rust" {
         type LayoutRegion;
         #[swift_bridge(init)]
-        fn new(class_name: String, confidence: f64, bounding_box: String, area_fraction: f64) -> LayoutRegion;
+        fn new(class_name: String, confidence: f64, bounding_box: BoundingBox, area_fraction: f64) -> LayoutRegion;
+        #[swift_bridge(swift_name = "className")]
         fn class_name(&self) -> String;
         fn confidence(&self) -> f64;
-        fn bounding_box(&self) -> String;
+        #[swift_bridge(swift_name = "boundingBox")]
+        fn bounding_box(&self) -> BoundingBox;
+        #[swift_bridge(swift_name = "areaFraction")]
         fn area_fraction(&self) -> f64;
     }
 
     extern "Rust" {
         type PageHierarchy;
+        #[swift_bridge(swift_name = "blockCount")]
         fn block_count(&self) -> u32;
         fn blocks(&self) -> Vec<HierarchicalBlock>;
     }
@@ -1751,6 +2160,7 @@ mod ffi {
     extern "Rust" {
         type HierarchicalBlock;
         fn text(&self) -> String;
+        #[swift_bridge(swift_name = "fontSize")]
         fn font_size(&self) -> f32;
         fn level(&self) -> String;
         fn bbox(&self) -> Option<Vec<f32>>;
@@ -1759,11 +2169,13 @@ mod ffi {
     extern "Rust" {
         type Table;
         #[swift_bridge(init)]
-        fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<String>) -> Table;
+        fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<BoundingBox>) -> Table;
         fn cells(&self) -> String;
         fn markdown(&self) -> String;
+        #[swift_bridge(swift_name = "pageNumber")]
         fn page_number(&self) -> u32;
-        fn bounding_box(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "boundingBox")]
+        fn bounding_box(&self) -> Option<BoundingBox>;
     }
 
     extern "Rust" {
@@ -1771,8 +2183,11 @@ mod ffi {
         #[swift_bridge(init)]
         fn new(content: String, row_span: u32, col_span: u32, is_header: bool) -> TableCell;
         fn content(&self) -> String;
+        #[swift_bridge(swift_name = "rowSpan")]
         fn row_span(&self) -> u32;
+        #[swift_bridge(swift_name = "colSpan")]
         fn col_span(&self) -> u32;
+        #[swift_bridge(swift_name = "isHeader")]
         fn is_header(&self) -> bool;
     }
 
@@ -1786,6 +2201,7 @@ mod ffi {
 
     extern "Rust" {
         type DetectResponse;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> String;
         fn filename(&self) -> Option<String>;
     }
@@ -1793,10 +2209,13 @@ mod ffi {
     extern "Rust" {
         type EmbeddingPreset;
         fn name(&self) -> String;
+        #[swift_bridge(swift_name = "chunkSize")]
         fn chunk_size(&self) -> usize;
         fn overlap(&self) -> usize;
+        #[swift_bridge(swift_name = "modelRepo")]
         fn model_repo(&self) -> String;
         fn pooling(&self) -> String;
+        #[swift_bridge(swift_name = "modelFile")]
         fn model_file(&self) -> String;
         fn dimensions(&self) -> usize;
         fn description(&self) -> String;
@@ -1806,6 +2225,7 @@ mod ffi {
         type YakeParams;
         #[swift_bridge(init)]
         fn new(window_size: usize) -> YakeParams;
+        #[swift_bridge(swift_name = "windowSize")]
         fn window_size(&self) -> usize;
     }
 
@@ -1813,7 +2233,9 @@ mod ffi {
         type RakeParams;
         #[swift_bridge(init)]
         fn new(min_word_length: usize, max_words_per_phrase: usize) -> RakeParams;
+        #[swift_bridge(swift_name = "minWordLength")]
         fn min_word_length(&self) -> usize;
+        #[swift_bridge(swift_name = "maxWordsPerPhrase")]
         fn max_words_per_phrase(&self) -> usize;
     }
 
@@ -1830,11 +2252,16 @@ mod ffi {
             rake_params: Option<RakeParams>,
         ) -> KeywordConfig;
         fn algorithm(&self) -> String;
+        #[swift_bridge(swift_name = "maxKeywords")]
         fn max_keywords(&self) -> usize;
+        #[swift_bridge(swift_name = "minScore")]
         fn min_score(&self) -> f32;
+        #[swift_bridge(swift_name = "ngramRange")]
         fn ngram_range(&self) -> Vec<usize>;
         fn language(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "yakeParams")]
         fn yake_params(&self) -> Option<YakeParams>;
+        #[swift_bridge(swift_name = "rakeParams")]
         fn rake_params(&self) -> Option<RakeParams>;
     }
 
@@ -1850,7 +2277,9 @@ mod ffi {
         type OcrCacheStats;
         #[swift_bridge(init)]
         fn new(total_files: usize, total_size_mb: f64) -> OcrCacheStats;
+        #[swift_bridge(swift_name = "totalFiles")]
         fn total_files(&self) -> usize;
+        #[swift_bridge(swift_name = "totalSizeMb")]
         fn total_size_mb(&self) -> f64;
     }
 
@@ -1872,24 +2301,38 @@ mod ffi {
             model_tier: String,
         ) -> PaddleOcrConfig;
         fn language(&self) -> String;
+        #[swift_bridge(swift_name = "cacheDir")]
         fn cache_dir(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "useAngleCls")]
         fn use_angle_cls(&self) -> bool;
+        #[swift_bridge(swift_name = "enableTableDetection")]
         fn enable_table_detection(&self) -> bool;
+        #[swift_bridge(swift_name = "detDbThresh")]
         fn det_db_thresh(&self) -> f32;
+        #[swift_bridge(swift_name = "detDbBoxThresh")]
         fn det_db_box_thresh(&self) -> f32;
+        #[swift_bridge(swift_name = "detDbUnclipRatio")]
         fn det_db_unclip_ratio(&self) -> f32;
+        #[swift_bridge(swift_name = "detLimitSideLen")]
         fn det_limit_side_len(&self) -> u32;
+        #[swift_bridge(swift_name = "recBatchNum")]
         fn rec_batch_num(&self) -> u32;
         fn padding(&self) -> u32;
+        #[swift_bridge(swift_name = "dropScore")]
         fn drop_score(&self) -> f32;
+        #[swift_bridge(swift_name = "modelTier")]
         fn model_tier(&self) -> String;
     }
 
     extern "Rust" {
         type ModelPaths;
+        #[swift_bridge(swift_name = "detModel")]
         fn det_model(&self) -> String;
+        #[swift_bridge(swift_name = "clsModel")]
         fn cls_model(&self) -> String;
+        #[swift_bridge(swift_name = "recModel")]
         fn rec_model(&self) -> String;
+        #[swift_bridge(swift_name = "dictFile")]
         fn dict_file(&self) -> String;
     }
 
@@ -1913,6 +2356,7 @@ mod ffi {
 
     extern "Rust" {
         type LayoutDetection;
+        #[swift_bridge(swift_name = "className")]
         fn class_name(&self) -> String;
         fn confidence(&self) -> f32;
         fn bbox(&self) -> BBox;
@@ -1920,6 +2364,7 @@ mod ffi {
 
     extern "Rust" {
         type RecognizedTable;
+        #[swift_bridge(swift_name = "detectionBbox")]
         fn detection_bbox(&self) -> BBox;
         fn cells(&self) -> String;
         fn markdown(&self) -> String;
@@ -1927,7 +2372,9 @@ mod ffi {
 
     extern "Rust" {
         type DetectionResult;
+        #[swift_bridge(swift_name = "pageWidth")]
         fn page_width(&self) -> u32;
+        #[swift_bridge(swift_name = "pageHeight")]
         fn page_height(&self) -> u32;
         fn detections(&self) -> Vec<LayoutDetection>;
     }
@@ -1936,6 +2383,7 @@ mod ffi {
         type EmbeddedFile;
         fn name(&self) -> String;
         fn data(&self) -> Vec<u8>;
+        #[swift_bridge(swift_name = "mimeType")]
         fn mime_type(&self) -> Option<String>;
     }
 
@@ -1950,11 +2398,14 @@ mod ffi {
             height: Option<i64>,
             page_count: Option<u32>,
         ) -> PdfMetadata;
+        #[swift_bridge(swift_name = "pdfVersion")]
         fn pdf_version(&self) -> Option<String>;
         fn producer(&self) -> Option<String>;
+        #[swift_bridge(swift_name = "isEncrypted")]
         fn is_encrypted(&self) -> Option<bool>;
         fn width(&self) -> Option<i64>;
         fn height(&self) -> Option<i64>;
+        #[swift_bridge(swift_name = "pageCount")]
         fn page_count(&self) -> Option<u32>;
     }
 
@@ -2000,11 +2451,6 @@ mod ffi {
 
     extern "Rust" {
         type ListType;
-        fn to_string(&self) -> String;
-    }
-
-    extern "Rust" {
-        type DrawingType;
         fn to_string(&self) -> String;
     }
 
@@ -2418,9 +2864,6 @@ mod ffi {
         fn batch_bytes_item_from_json(json: String) -> Result<BatchBytesItem, String>;
         #[swift_bridge(swift_name = "batchFileItemFromJson")]
         fn batch_file_item_from_json(json: String) -> Result<BatchFileItem, String>;
-    }
-    extern "Rust" {
-
         #[swift_bridge(swift_name = "ocrConfigFromJson")]
         fn ocr_config_from_json(json: String) -> Result<OcrConfig, String>;
         #[swift_bridge(swift_name = "embeddingConfigFromJson")]
@@ -2429,21 +2872,69 @@ mod ffi {
         fn extraction_result_from_json(json: String) -> Result<ExtractionResult, String>;
         #[swift_bridge(swift_name = "ocrExtractionResultFromJson")]
         fn ocr_extraction_result_from_json(json: String) -> Result<OcrExtractionResult, String>;
-        #[swift_bridge(swift_name = "htmlMetadataFromJson")]
-        fn html_metadata_from_json(json: String) -> Result<HtmlMetadata, String>;
     }
     extern "Rust" {
 
+        #[swift_bridge(swift_name = "accelerationConfigFromJson")]
+        fn acceleration_config_from_json(json: String) -> Result<AccelerationConfig, String>;
+        #[swift_bridge(swift_name = "contentFilterConfigFromJson")]
+        fn content_filter_config_from_json(json: String) -> Result<ContentFilterConfig, String>;
+        #[swift_bridge(swift_name = "emailConfigFromJson")]
+        fn email_config_from_json(json: String) -> Result<EmailConfig, String>;
+        #[swift_bridge(swift_name = "fileExtractionConfigFromJson")]
+        fn file_extraction_config_from_json(json: String) -> Result<FileExtractionConfig, String>;
+        #[swift_bridge(swift_name = "imageExtractionConfigFromJson")]
+        fn image_extraction_config_from_json(json: String) -> Result<ImageExtractionConfig, String>;
+        #[swift_bridge(swift_name = "tokenReductionOptionsFromJson")]
+        fn token_reduction_options_from_json(json: String) -> Result<TokenReductionOptions, String>;
+        #[swift_bridge(swift_name = "languageDetectionConfigFromJson")]
+        fn language_detection_config_from_json(json: String) -> Result<LanguageDetectionConfig, String>;
+        #[swift_bridge(swift_name = "htmlOutputConfigFromJson")]
+        fn html_output_config_from_json(json: String) -> Result<HtmlOutputConfig, String>;
+        #[swift_bridge(swift_name = "layoutDetectionConfigFromJson")]
+        fn layout_detection_config_from_json(json: String) -> Result<LayoutDetectionConfig, String>;
+        #[swift_bridge(swift_name = "llmConfigFromJson")]
+        fn llm_config_from_json(json: String) -> Result<LlmConfig, String>;
         #[swift_bridge(swift_name = "structuredExtractionConfigFromJson")]
         fn structured_extraction_config_from_json(json: String) -> Result<StructuredExtractionConfig, String>;
+        #[swift_bridge(swift_name = "ocrQualityThresholdsFromJson")]
+        fn ocr_quality_thresholds_from_json(json: String) -> Result<OcrQualityThresholds, String>;
         #[swift_bridge(swift_name = "ocrPipelineStageFromJson")]
         fn ocr_pipeline_stage_from_json(json: String) -> Result<OcrPipelineStage, String>;
         #[swift_bridge(swift_name = "ocrPipelineConfigFromJson")]
         fn ocr_pipeline_config_from_json(json: String) -> Result<OcrPipelineConfig, String>;
+        #[swift_bridge(swift_name = "pageConfigFromJson")]
+        fn page_config_from_json(json: String) -> Result<PageConfig, String>;
+        #[swift_bridge(swift_name = "pdfConfigFromJson")]
+        fn pdf_config_from_json(json: String) -> Result<PdfConfig, String>;
+        #[swift_bridge(swift_name = "hierarchyConfigFromJson")]
+        fn hierarchy_config_from_json(json: String) -> Result<HierarchyConfig, String>;
+        #[swift_bridge(swift_name = "postProcessorConfigFromJson")]
+        fn post_processor_config_from_json(json: String) -> Result<PostProcessorConfig, String>;
+        #[swift_bridge(swift_name = "chunkingConfigFromJson")]
+        fn chunking_config_from_json(json: String) -> Result<ChunkingConfig, String>;
+        #[swift_bridge(swift_name = "treeSitterConfigFromJson")]
+        fn tree_sitter_config_from_json(json: String) -> Result<TreeSitterConfig, String>;
+        #[swift_bridge(swift_name = "treeSitterProcessConfigFromJson")]
+        fn tree_sitter_process_config_from_json(json: String) -> Result<TreeSitterProcessConfig, String>;
         #[swift_bridge(swift_name = "supportedFormatFromJson")]
         fn supported_format_from_json(json: String) -> Result<SupportedFormat, String>;
+        #[swift_bridge(swift_name = "serverConfigFromJson")]
+        fn server_config_from_json(json: String) -> Result<ServerConfig, String>;
         #[swift_bridge(swift_name = "structuredDataResultFromJson")]
         fn structured_data_result_from_json(json: String) -> Result<StructuredDataResult, String>;
+        #[swift_bridge(swift_name = "docxAppPropertiesFromJson")]
+        fn docx_app_properties_from_json(json: String) -> Result<DocxAppProperties, String>;
+        #[swift_bridge(swift_name = "xlsxAppPropertiesFromJson")]
+        fn xlsx_app_properties_from_json(json: String) -> Result<XlsxAppProperties, String>;
+        #[swift_bridge(swift_name = "pptxAppPropertiesFromJson")]
+        fn pptx_app_properties_from_json(json: String) -> Result<PptxAppProperties, String>;
+        #[swift_bridge(swift_name = "corePropertiesFromJson")]
+        fn core_properties_from_json(json: String) -> Result<CoreProperties, String>;
+        #[swift_bridge(swift_name = "securityLimitsFromJson")]
+        fn security_limits_from_json(json: String) -> Result<SecurityLimits, String>;
+        #[swift_bridge(swift_name = "tokenReductionConfigFromJson")]
+        fn token_reduction_config_from_json(json: String) -> Result<TokenReductionConfig, String>;
         #[swift_bridge(swift_name = "pdfAnnotationFromJson")]
         fn pdf_annotation_from_json(json: String) -> Result<PdfAnnotation, String>;
         #[swift_bridge(swift_name = "djotContentFromJson")]
@@ -2458,10 +2949,14 @@ mod ffi {
         fn djot_link_from_json(json: String) -> Result<DjotLink, String>;
         #[swift_bridge(swift_name = "footnoteFromJson")]
         fn footnote_from_json(json: String) -> Result<Footnote, String>;
+        #[swift_bridge(swift_name = "documentStructureFromJson")]
+        fn document_structure_from_json(json: String) -> Result<DocumentStructure, String>;
         #[swift_bridge(swift_name = "documentRelationshipFromJson")]
         fn document_relationship_from_json(json: String) -> Result<DocumentRelationship, String>;
         #[swift_bridge(swift_name = "documentNodeFromJson")]
         fn document_node_from_json(json: String) -> Result<DocumentNode, String>;
+        #[swift_bridge(swift_name = "tableGridFromJson")]
+        fn table_grid_from_json(json: String) -> Result<TableGrid, String>;
         #[swift_bridge(swift_name = "gridCellFromJson")]
         fn grid_cell_from_json(json: String) -> Result<GridCell, String>;
         #[swift_bridge(swift_name = "textAnnotationFromJson")]
@@ -2470,6 +2965,8 @@ mod ffi {
         fn archive_entry_from_json(json: String) -> Result<ArchiveEntry, String>;
         #[swift_bridge(swift_name = "processingWarningFromJson")]
         fn processing_warning_from_json(json: String) -> Result<ProcessingWarning, String>;
+        #[swift_bridge(swift_name = "llmUsageFromJson")]
+        fn llm_usage_from_json(json: String) -> Result<LlmUsage, String>;
         #[swift_bridge(swift_name = "chunkFromJson")]
         fn chunk_from_json(json: String) -> Result<Chunk, String>;
         #[swift_bridge(swift_name = "headingContextFromJson")]
@@ -2480,6 +2977,8 @@ mod ffi {
         fn chunk_metadata_from_json(json: String) -> Result<ChunkMetadata, String>;
         #[swift_bridge(swift_name = "extractedImageFromJson")]
         fn extracted_image_from_json(json: String) -> Result<ExtractedImage, String>;
+        #[swift_bridge(swift_name = "boundingBoxFromJson")]
+        fn bounding_box_from_json(json: String) -> Result<BoundingBox, String>;
         #[swift_bridge(swift_name = "elementMetadataFromJson")]
         fn element_metadata_from_json(json: String) -> Result<ElementMetadata, String>;
         #[swift_bridge(swift_name = "elementFromJson")]
@@ -2500,8 +2999,28 @@ mod ffi {
         fn email_attachment_from_json(json: String) -> Result<EmailAttachment, String>;
         #[swift_bridge(swift_name = "ocrTableFromJson")]
         fn ocr_table_from_json(json: String) -> Result<OcrTable, String>;
+        #[swift_bridge(swift_name = "ocrTableBoundingBoxFromJson")]
+        fn ocr_table_bounding_box_from_json(json: String) -> Result<OcrTableBoundingBox, String>;
+        #[swift_bridge(swift_name = "imagePreprocessingConfigFromJson")]
+        fn image_preprocessing_config_from_json(json: String) -> Result<ImagePreprocessingConfig, String>;
+        #[swift_bridge(swift_name = "tesseractConfigFromJson")]
+        fn tesseract_config_from_json(json: String) -> Result<TesseractConfig, String>;
         #[swift_bridge(swift_name = "imagePreprocessingMetadataFromJson")]
         fn image_preprocessing_metadata_from_json(json: String) -> Result<ImagePreprocessingMetadata, String>;
+        #[swift_bridge(swift_name = "metadataFromJson")]
+        fn metadata_from_json(json: String) -> Result<Metadata, String>;
+        #[swift_bridge(swift_name = "excelMetadataFromJson")]
+        fn excel_metadata_from_json(json: String) -> Result<ExcelMetadata, String>;
+        #[swift_bridge(swift_name = "emailMetadataFromJson")]
+        fn email_metadata_from_json(json: String) -> Result<EmailMetadata, String>;
+        #[swift_bridge(swift_name = "archiveMetadataFromJson")]
+        fn archive_metadata_from_json(json: String) -> Result<ArchiveMetadata, String>;
+        #[swift_bridge(swift_name = "imageMetadataFromJson")]
+        fn image_metadata_from_json(json: String) -> Result<ImageMetadata, String>;
+        #[swift_bridge(swift_name = "xmlMetadataFromJson")]
+        fn xml_metadata_from_json(json: String) -> Result<XmlMetadata, String>;
+        #[swift_bridge(swift_name = "textMetadataFromJson")]
+        fn text_metadata_from_json(json: String) -> Result<TextMetadata, String>;
         #[swift_bridge(swift_name = "headerMetadataFromJson")]
         fn header_metadata_from_json(json: String) -> Result<HeaderMetadata, String>;
         #[swift_bridge(swift_name = "linkMetadataFromJson")]
@@ -2510,34 +3029,86 @@ mod ffi {
         fn image_metadata_type_from_json(json: String) -> Result<ImageMetadataType, String>;
         #[swift_bridge(swift_name = "structuredDataFromJson")]
         fn structured_data_from_json(json: String) -> Result<StructuredData, String>;
+        #[swift_bridge(swift_name = "htmlMetadataFromJson")]
+        fn html_metadata_from_json(json: String) -> Result<HtmlMetadata, String>;
+        #[swift_bridge(swift_name = "ocrMetadataFromJson")]
+        fn ocr_metadata_from_json(json: String) -> Result<OcrMetadata, String>;
         #[swift_bridge(swift_name = "errorMetadataFromJson")]
         fn error_metadata_from_json(json: String) -> Result<ErrorMetadata, String>;
+        #[swift_bridge(swift_name = "pptxMetadataFromJson")]
+        fn pptx_metadata_from_json(json: String) -> Result<PptxMetadata, String>;
+        #[swift_bridge(swift_name = "docxMetadataFromJson")]
+        fn docx_metadata_from_json(json: String) -> Result<DocxMetadata, String>;
+        #[swift_bridge(swift_name = "csvMetadataFromJson")]
+        fn csv_metadata_from_json(json: String) -> Result<CsvMetadata, String>;
+        #[swift_bridge(swift_name = "bibtexMetadataFromJson")]
+        fn bibtex_metadata_from_json(json: String) -> Result<BibtexMetadata, String>;
+        #[swift_bridge(swift_name = "citationMetadataFromJson")]
+        fn citation_metadata_from_json(json: String) -> Result<CitationMetadata, String>;
         #[swift_bridge(swift_name = "yearRangeFromJson")]
         fn year_range_from_json(json: String) -> Result<YearRange, String>;
+        #[swift_bridge(swift_name = "fictionBookMetadataFromJson")]
+        fn fiction_book_metadata_from_json(json: String) -> Result<FictionBookMetadata, String>;
+        #[swift_bridge(swift_name = "dbfMetadataFromJson")]
+        fn dbf_metadata_from_json(json: String) -> Result<DbfMetadata, String>;
         #[swift_bridge(swift_name = "dbfFieldInfoFromJson")]
         fn dbf_field_info_from_json(json: String) -> Result<DbfFieldInfo, String>;
+        #[swift_bridge(swift_name = "jatsMetadataFromJson")]
+        fn jats_metadata_from_json(json: String) -> Result<JatsMetadata, String>;
         #[swift_bridge(swift_name = "contributorRoleFromJson")]
         fn contributor_role_from_json(json: String) -> Result<ContributorRole, String>;
+        #[swift_bridge(swift_name = "epubMetadataFromJson")]
+        fn epub_metadata_from_json(json: String) -> Result<EpubMetadata, String>;
+        #[swift_bridge(swift_name = "pstMetadataFromJson")]
+        fn pst_metadata_from_json(json: String) -> Result<PstMetadata, String>;
+        #[swift_bridge(swift_name = "ocrConfidenceFromJson")]
+        fn ocr_confidence_from_json(json: String) -> Result<OcrConfidence, String>;
+        #[swift_bridge(swift_name = "ocrRotationFromJson")]
+        fn ocr_rotation_from_json(json: String) -> Result<OcrRotation, String>;
+        #[swift_bridge(swift_name = "ocrElementFromJson")]
+        fn ocr_element_from_json(json: String) -> Result<OcrElement, String>;
+        #[swift_bridge(swift_name = "ocrElementConfigFromJson")]
+        fn ocr_element_config_from_json(json: String) -> Result<OcrElementConfig, String>;
         #[swift_bridge(swift_name = "pageStructureFromJson")]
         fn page_structure_from_json(json: String) -> Result<PageStructure, String>;
+        #[swift_bridge(swift_name = "pageBoundaryFromJson")]
+        fn page_boundary_from_json(json: String) -> Result<PageBoundary, String>;
         #[swift_bridge(swift_name = "pageInfoFromJson")]
         fn page_info_from_json(json: String) -> Result<PageInfo, String>;
         #[swift_bridge(swift_name = "pageContentFromJson")]
         fn page_content_from_json(json: String) -> Result<PageContent, String>;
+        #[swift_bridge(swift_name = "layoutRegionFromJson")]
+        fn layout_region_from_json(json: String) -> Result<LayoutRegion, String>;
         #[swift_bridge(swift_name = "pageHierarchyFromJson")]
         fn page_hierarchy_from_json(json: String) -> Result<PageHierarchy, String>;
         #[swift_bridge(swift_name = "hierarchicalBlockFromJson")]
         fn hierarchical_block_from_json(json: String) -> Result<HierarchicalBlock, String>;
+        #[swift_bridge(swift_name = "tableFromJson")]
+        fn table_from_json(json: String) -> Result<Table, String>;
+        #[swift_bridge(swift_name = "tableCellFromJson")]
+        fn table_cell_from_json(json: String) -> Result<TableCell, String>;
         #[swift_bridge(swift_name = "uriFromJson")]
         fn uri_from_json(json: String) -> Result<Uri, String>;
         #[swift_bridge(swift_name = "detectResponseFromJson")]
         fn detect_response_from_json(json: String) -> Result<DetectResponse, String>;
         #[swift_bridge(swift_name = "embeddingPresetFromJson")]
         fn embedding_preset_from_json(json: String) -> Result<EmbeddingPreset, String>;
+        #[swift_bridge(swift_name = "yakeParamsFromJson")]
+        fn yake_params_from_json(json: String) -> Result<YakeParams, String>;
+        #[swift_bridge(swift_name = "rakeParamsFromJson")]
+        fn rake_params_from_json(json: String) -> Result<RakeParams, String>;
+        #[swift_bridge(swift_name = "keywordConfigFromJson")]
+        fn keyword_config_from_json(json: String) -> Result<KeywordConfig, String>;
         #[swift_bridge(swift_name = "keywordFromJson")]
         fn keyword_from_json(json: String) -> Result<Keyword, String>;
+        #[swift_bridge(swift_name = "paddleOcrConfigFromJson")]
+        fn paddle_ocr_config_from_json(json: String) -> Result<PaddleOcrConfig, String>;
         #[swift_bridge(swift_name = "modelPathsFromJson")]
         fn model_paths_from_json(json: String) -> Result<ModelPaths, String>;
+        #[swift_bridge(swift_name = "orientationResultFromJson")]
+        fn orientation_result_from_json(json: String) -> Result<OrientationResult, String>;
+        #[swift_bridge(swift_name = "bBoxFromJson")]
+        fn b_box_from_json(json: String) -> Result<BBox, String>;
         #[swift_bridge(swift_name = "layoutDetectionFromJson")]
         fn layout_detection_from_json(json: String) -> Result<LayoutDetection, String>;
         #[swift_bridge(swift_name = "recognizedTableFromJson")]
@@ -2546,6 +3117,83 @@ mod ffi {
         fn detection_result_from_json(json: String) -> Result<DetectionResult, String>;
         #[swift_bridge(swift_name = "embeddedFileFromJson")]
         fn embedded_file_from_json(json: String) -> Result<EmbeddedFile, String>;
+        #[swift_bridge(swift_name = "pdfMetadataFromJson")]
+        fn pdf_metadata_from_json(json: String) -> Result<PdfMetadata, String>;
+    }
+    extern "Rust" {
+
+        #[swift_bridge(swift_name = "executionProviderTypeFromJson")]
+        fn execution_provider_type_from_json(json: String) -> Result<ExecutionProviderType, String>;
+        #[swift_bridge(swift_name = "outputFormatFromJson")]
+        fn output_format_from_json(json: String) -> Result<OutputFormat, String>;
+        #[swift_bridge(swift_name = "htmlThemeFromJson")]
+        fn html_theme_from_json(json: String) -> Result<HtmlTheme, String>;
+        #[swift_bridge(swift_name = "tableModelFromJson")]
+        fn table_model_from_json(json: String) -> Result<TableModel, String>;
+        #[swift_bridge(swift_name = "chunkerTypeFromJson")]
+        fn chunker_type_from_json(json: String) -> Result<ChunkerType, String>;
+        #[swift_bridge(swift_name = "chunkSizingFromJson")]
+        fn chunk_sizing_from_json(json: String) -> Result<ChunkSizing, String>;
+        #[swift_bridge(swift_name = "embeddingModelTypeFromJson")]
+        fn embedding_model_type_from_json(json: String) -> Result<EmbeddingModelType, String>;
+        #[swift_bridge(swift_name = "codeContentModeFromJson")]
+        fn code_content_mode_from_json(json: String) -> Result<CodeContentMode, String>;
+        #[swift_bridge(swift_name = "ocrBackendTypeFromJson")]
+        fn ocr_backend_type_from_json(json: String) -> Result<OcrBackendType, String>;
+        #[swift_bridge(swift_name = "processingStageFromJson")]
+        fn processing_stage_from_json(json: String) -> Result<ProcessingStage, String>;
+        #[swift_bridge(swift_name = "reductionLevelFromJson")]
+        fn reduction_level_from_json(json: String) -> Result<ReductionLevel, String>;
+        #[swift_bridge(swift_name = "pdfAnnotationTypeFromJson")]
+        fn pdf_annotation_type_from_json(json: String) -> Result<PdfAnnotationType, String>;
+        #[swift_bridge(swift_name = "blockTypeFromJson")]
+        fn block_type_from_json(json: String) -> Result<BlockType, String>;
+        #[swift_bridge(swift_name = "inlineTypeFromJson")]
+        fn inline_type_from_json(json: String) -> Result<InlineType, String>;
+        #[swift_bridge(swift_name = "relationshipKindFromJson")]
+        fn relationship_kind_from_json(json: String) -> Result<RelationshipKind, String>;
+        #[swift_bridge(swift_name = "contentLayerFromJson")]
+        fn content_layer_from_json(json: String) -> Result<ContentLayer, String>;
+        #[swift_bridge(swift_name = "nodeContentFromJson")]
+        fn node_content_from_json(json: String) -> Result<NodeContent, String>;
+        #[swift_bridge(swift_name = "annotationKindFromJson")]
+        fn annotation_kind_from_json(json: String) -> Result<AnnotationKind, String>;
+        #[swift_bridge(swift_name = "extractionMethodFromJson")]
+        fn extraction_method_from_json(json: String) -> Result<ExtractionMethod, String>;
+        #[swift_bridge(swift_name = "chunkTypeFromJson")]
+        fn chunk_type_from_json(json: String) -> Result<ChunkType, String>;
+        #[swift_bridge(swift_name = "imageKindFromJson")]
+        fn image_kind_from_json(json: String) -> Result<ImageKind, String>;
+        #[swift_bridge(swift_name = "resultFormatFromJson")]
+        fn result_format_from_json(json: String) -> Result<ResultFormat, String>;
+        #[swift_bridge(swift_name = "elementTypeFromJson")]
+        fn element_type_from_json(json: String) -> Result<ElementType, String>;
+        #[swift_bridge(swift_name = "formatMetadataFromJson")]
+        fn format_metadata_from_json(json: String) -> Result<FormatMetadata, String>;
+        #[swift_bridge(swift_name = "textDirectionFromJson")]
+        fn text_direction_from_json(json: String) -> Result<TextDirection, String>;
+        #[swift_bridge(swift_name = "linkTypeFromJson")]
+        fn link_type_from_json(json: String) -> Result<LinkType, String>;
+        #[swift_bridge(swift_name = "imageTypeFromJson")]
+        fn image_type_from_json(json: String) -> Result<ImageType, String>;
+        #[swift_bridge(swift_name = "structuredDataTypeFromJson")]
+        fn structured_data_type_from_json(json: String) -> Result<StructuredDataType, String>;
+        #[swift_bridge(swift_name = "ocrBoundingGeometryFromJson")]
+        fn ocr_bounding_geometry_from_json(json: String) -> Result<OcrBoundingGeometry, String>;
+        #[swift_bridge(swift_name = "ocrElementLevelFromJson")]
+        fn ocr_element_level_from_json(json: String) -> Result<OcrElementLevel, String>;
+        #[swift_bridge(swift_name = "pageUnitTypeFromJson")]
+        fn page_unit_type_from_json(json: String) -> Result<PageUnitType, String>;
+        #[swift_bridge(swift_name = "uriKindFromJson")]
+        fn uri_kind_from_json(json: String) -> Result<UriKind, String>;
+        #[swift_bridge(swift_name = "keywordAlgorithmFromJson")]
+        fn keyword_algorithm_from_json(json: String) -> Result<KeywordAlgorithm, String>;
+        #[swift_bridge(swift_name = "psmModeFromJson")]
+        fn psm_mode_from_json(json: String) -> Result<PSMMode, String>;
+        #[swift_bridge(swift_name = "paddleLanguageFromJson")]
+        fn paddle_language_from_json(json: String) -> Result<PaddleLanguage, String>;
+        #[swift_bridge(swift_name = "layoutClassFromJson")]
+        fn layout_class_from_json(json: String) -> Result<LayoutClass, String>;
     }
 }
 
@@ -2702,10 +3350,13 @@ impl ExtractionConfig {
             __target.postprocessor = Some(w.0);
         }
         if let Some(s) = html_options {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.html_options = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.html_options = Some(t);
             }
         }
         if let Some(w) = html_output {
@@ -2727,10 +3378,13 @@ impl ExtractionConfig {
             __target.acceleration = Some(w.0);
         }
         if let Some(s) = cache_namespace {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.cache_namespace = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.cache_namespace = Some(t);
             }
         }
         __target.cache_ttl_secs = cache_ttl_secs;
@@ -2738,10 +3392,13 @@ impl ExtractionConfig {
             __target.email = Some(w.0);
         }
         if let Some(s) = concurrency {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.concurrency = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.concurrency = Some(t);
             }
         }
         __target.max_archive_depth = max_archive_depth;
@@ -2752,10 +3409,13 @@ impl ExtractionConfig {
             __target.structured_extraction = Some(w.0);
         }
         if let Some(s) = cancel_token {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.cancel_token = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.cancel_token = Some(t);
             }
         }
         ExtractionConfig(__target)
@@ -2967,10 +3627,13 @@ impl FileExtractionConfig {
             __target.postprocessor = Some(w.0);
         }
         if let Some(s) = html_options {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.html_options = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.html_options = Some(t);
             }
         }
         // alef: result_format (ResultFormat) is an enum; reverse From not generated — left at default
@@ -3189,8 +3852,14 @@ pub struct TokenReductionOptions(pub kreuzberg::TokenReductionOptions);
 impl TokenReductionOptions {
     pub fn new(mode: String, preserve_important_words: bool) -> TokenReductionOptions {
         let mut __target: kreuzberg::TokenReductionOptions = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&mode) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&mode)
+                .unwrap_or(::serde_json::Value::String(mode.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.mode = t;
             }
         }
@@ -3248,22 +3917,34 @@ impl HtmlOutputConfig {
     ) -> HtmlOutputConfig {
         let mut __target: kreuzberg::HtmlOutputConfig = ::std::default::Default::default();
         if let Some(s) = css {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.css = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.css = Some(t);
             }
         }
         if let Some(s) = css_file {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.css_file = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.css_file = Some(t);
             }
         }
         // alef: theme (HtmlTheme) is an enum; reverse From not generated — left at default
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&class_prefix) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&class_prefix)
+                .unwrap_or(::serde_json::Value::String(class_prefix.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.class_prefix = t;
             }
         }
@@ -3340,23 +4021,35 @@ impl LlmConfig {
         max_tokens: Option<u64>,
     ) -> LlmConfig {
         let mut __target: kreuzberg::LlmConfig = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&model) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&model)
+                .unwrap_or(::serde_json::Value::String(model.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.model = t;
             }
         }
         if let Some(s) = api_key {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.api_key = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.api_key = Some(t);
             }
         }
         if let Some(s) = base_url {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.base_url = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.base_url = Some(t);
             }
         }
         __target.timeout_secs = timeout_secs;
@@ -3635,13 +4328,25 @@ impl OcrConfig {
     ) -> OcrConfig {
         let mut __target: kreuzberg::OcrConfig = ::std::default::Default::default();
         __target.enabled = enabled;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&backend) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&backend)
+                .unwrap_or(::serde_json::Value::String(backend.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.backend = t;
             }
         }
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&language) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&language)
+                .unwrap_or(::serde_json::Value::String(language.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.language = t;
             }
         }
@@ -3650,17 +4355,23 @@ impl OcrConfig {
         }
         // alef: output_format (OutputFormat) is an enum; reverse From not generated — left at default
         if let Some(s) = paddle_ocr_config {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.paddle_ocr_config = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.paddle_ocr_config = Some(t);
             }
         }
         if let Some(s) = backend_options {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.backend_options = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.backend_options = Some(t);
             }
         }
         if let Some(w) = element_config {
@@ -3677,10 +4388,13 @@ impl OcrConfig {
             __target.vlm_config = Some(w.0);
         }
         if let Some(s) = vlm_prompt {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.vlm_prompt = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.vlm_prompt = Some(t);
             }
         }
         if let Some(w) = acceleration {
@@ -3758,8 +4472,14 @@ impl PageConfig {
         let mut __target: kreuzberg::PageConfig = ::std::default::Default::default();
         __target.extract_pages = extract_pages;
         __target.insert_page_markers = insert_page_markers;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&marker_format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&marker_format)
+                .unwrap_or(::serde_json::Value::String(marker_format.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.marker_format = t;
             }
         }
@@ -3925,8 +4645,8 @@ impl PostProcessorConfig {
         enabled: bool,
         enabled_processors: Option<Vec<String>>,
         disabled_processors: Option<Vec<String>>,
-        enabled_set: Option<String>,
-        disabled_set: Option<String>,
+        enabled_set: Option<Vec<String>>,
+        disabled_set: Option<Vec<String>>,
     ) -> PostProcessorConfig {
         let mut __target: kreuzberg::PostProcessorConfig = ::std::default::Default::default();
         __target.enabled = enabled;
@@ -3940,18 +4660,14 @@ impl PostProcessorConfig {
                 __target.disabled_processors = t;
             }
         }
-        if let Some(s) = enabled_set {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.enabled_set = Some(t);
-                }
+        if let Ok(__v) = ::serde_json::to_value(enabled_set) {
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.enabled_set = t;
             }
         }
-        if let Some(s) = disabled_set {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.disabled_set = Some(t);
-                }
+        if let Ok(__v) = ::serde_json::to_value(disabled_set) {
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.disabled_set = t;
             }
         }
         PostProcessorConfig(__target)
@@ -3976,11 +4692,19 @@ impl PostProcessorConfig {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn enabled_set(&self) -> Option<String> {
-        self.0.enabled_set.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn enabled_set(&self) -> Option<Vec<String>> {
+        self.0.enabled_set.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
     }
-    pub fn disabled_set(&self) -> Option<String> {
-        self.0.disabled_set.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn disabled_set(&self) -> Option<Vec<String>> {
+        self.0.disabled_set.as_ref().and_then(|v| {
+            ::serde_json::to_value(v)
+                .ok()
+                .and_then(|j| ::serde_json::from_value(j).ok())
+        })
     }
 }
 
@@ -4006,10 +4730,13 @@ impl ChunkingConfig {
             __target.embedding = Some(w.0);
         }
         if let Some(s) = preset {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.preset = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.preset = Some(t);
             }
         }
         // alef: sizing (ChunkSizing) is an enum; reverse From not generated — left at default
@@ -4079,10 +4806,13 @@ impl EmbeddingConfig {
         __target.batch_size = batch_size;
         __target.show_download_progress = show_download_progress;
         if let Some(s) = cache_dir {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.cache_dir = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.cache_dir = Some(t);
             }
         }
         if let Some(w) = acceleration {
@@ -4139,10 +4869,13 @@ impl TreeSitterConfig {
         let mut __target: kreuzberg::TreeSitterConfig = ::std::default::Default::default();
         __target.enabled = enabled;
         if let Some(s) = cache_dir {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.cache_dir = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.cache_dir = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(languages) {
@@ -4285,8 +5018,14 @@ impl ServerConfig {
         max_multipart_field_bytes: usize,
     ) -> ServerConfig {
         let mut __target: kreuzberg::ServerConfig = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&host) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&host)
+                .unwrap_or(::serde_json::Value::String(host.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.host = t;
             }
         }
@@ -4386,24 +5125,33 @@ impl DocxAppProperties {
     ) -> DocxAppProperties {
         let mut __target: kreuzberg::DocxAppProperties = ::std::default::Default::default();
         if let Some(s) = application {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.application = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.application = Some(t);
             }
         }
         if let Some(s) = app_version {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.app_version = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.app_version = Some(t);
             }
         }
         if let Some(s) = template {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.template = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.template = Some(t);
             }
         }
         __target.total_time = total_time;
@@ -4414,10 +5162,13 @@ impl DocxAppProperties {
         __target.lines = lines;
         __target.paragraphs = paragraphs;
         if let Some(s) = company {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.company = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.company = Some(t);
             }
         }
         __target.doc_security = doc_security;
@@ -4541,17 +5292,23 @@ impl XlsxAppProperties {
         let mut __target: kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties =
             ::std::default::Default::default();
         if let Some(s) = application {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.application = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.application = Some(t);
             }
         }
         if let Some(s) = app_version {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.app_version = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.app_version = Some(t);
             }
         }
         __target.doc_security = doc_security;
@@ -4560,10 +5317,13 @@ impl XlsxAppProperties {
         __target.shared_doc = shared_doc;
         __target.hyperlinks_changed = hyperlinks_changed;
         if let Some(s) = company {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.company = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.company = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(worksheet_names) {
@@ -4647,25 +5407,34 @@ impl PptxAppProperties {
         let mut __target: kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties =
             ::std::default::Default::default();
         if let Some(s) = application {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.application = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.application = Some(t);
             }
         }
         if let Some(s) = app_version {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.app_version = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.app_version = Some(t);
             }
         }
         __target.total_time = total_time;
         if let Some(s) = company {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.company = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.company = Some(t);
             }
         }
         __target.doc_security = doc_security;
@@ -4678,10 +5447,13 @@ impl PptxAppProperties {
         __target.hidden_slides = hidden_slides;
         __target.multimedia_clips = multimedia_clips;
         if let Some(s) = presentation_format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.presentation_format = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.presentation_format = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(slide_titles) {
@@ -4802,108 +5574,153 @@ impl CoreProperties {
     ) -> CoreProperties {
         let mut __target: kreuzberg::CoreProperties = ::std::default::Default::default();
         if let Some(s) = title {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.title = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.title = Some(t);
             }
         }
         if let Some(s) = subject {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.subject = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.subject = Some(t);
             }
         }
         if let Some(s) = creator {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.creator = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.creator = Some(t);
             }
         }
         if let Some(s) = keywords {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.keywords = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.keywords = Some(t);
             }
         }
         if let Some(s) = description {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.description = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.description = Some(t);
             }
         }
         if let Some(s) = last_modified_by {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.last_modified_by = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.last_modified_by = Some(t);
             }
         }
         if let Some(s) = revision {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.revision = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.revision = Some(t);
             }
         }
         if let Some(s) = created {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.created = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.created = Some(t);
             }
         }
         if let Some(s) = modified {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.modified = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.modified = Some(t);
             }
         }
         if let Some(s) = category {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.category = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.category = Some(t);
             }
         }
         if let Some(s) = content_status {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.content_status = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.content_status = Some(t);
             }
         }
         if let Some(s) = language {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.language = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.language = Some(t);
             }
         }
         if let Some(s) = identifier {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.identifier = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.identifier = Some(t);
             }
         }
         if let Some(s) = version {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.version = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.version = Some(t);
             }
         }
         if let Some(s) = last_printed {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.last_printed = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.last_printed = Some(t);
             }
         }
         CoreProperties(__target)
@@ -5054,10 +5871,13 @@ impl TokenReductionConfig {
         let mut __target: kreuzberg::TokenReductionConfig = ::std::default::Default::default();
         // alef: level (ReductionLevel) is an enum; reverse From not generated — left at default
         if let Some(s) = language_hint {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.language_hint = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.language_hint = Some(t);
             }
         }
         __target.preserve_markdown = preserve_markdown;
@@ -5153,8 +5973,8 @@ impl PdfAnnotation {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bounding_box(&self) -> Option<String> {
-        self.0.bounding_box.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bounding_box(&self) -> Option<BoundingBox> {
+        self.0.bounding_box.clone().map(BoundingBox)
     }
 }
 
@@ -5290,10 +6110,13 @@ impl DocumentStructure {
         let mut __target: kreuzberg::DocumentStructure = ::std::default::Default::default();
         __target.nodes = nodes.into_iter().map(|w| w.0).collect();
         if let Some(s) = source_format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.source_format = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.source_format = Some(t);
             }
         }
         __target.relationships = relationships.into_iter().map(|w| w.0).collect();
@@ -5382,8 +6205,8 @@ impl DocumentNode {
                 .and_then(|j| ::serde_json::from_value(j).ok())
         })
     }
-    pub fn bbox(&self) -> Option<String> {
-        self.0.bbox.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bbox(&self) -> Option<BoundingBox> {
+        self.0.bbox.clone().map(BoundingBox)
     }
     pub fn annotations(&self) -> Vec<TextAnnotation> {
         self.0
@@ -5458,8 +6281,8 @@ impl GridCell {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bbox(&self) -> Option<String> {
-        self.0.bbox.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bbox(&self) -> Option<BoundingBox> {
+        self.0.bbox.clone().map(BoundingBox)
     }
 }
 
@@ -5510,13 +6333,25 @@ impl ExtractionResult {
         formatted_content: Option<String>,
     ) -> ExtractionResult {
         let mut __target: kreuzberg::ExtractionResult = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&content) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&content)
+                .unwrap_or(::serde_json::Value::String(content.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.content = t;
             }
         }
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&mime_type) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&mime_type)
+                .unwrap_or(::serde_json::Value::String(mime_type.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.mime_type = t;
             }
         }
@@ -5564,27 +6399,36 @@ impl ExtractionResult {
             __target.uris = Some(v.into_iter().map(|w| w.0).collect());
         }
         if let Some(s) = structured_output {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.structured_output = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.structured_output = Some(t);
             }
         }
         if let Some(s) = code_intelligence {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.code_intelligence = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.code_intelligence = Some(t);
             }
         }
         if let Some(v) = llm_usage {
             __target.llm_usage = Some(v.into_iter().map(|w| w.0).collect());
         }
         if let Some(s) = formatted_content {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.formatted_content = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.formatted_content = Some(t);
             }
         }
         // alef: excluded field `ocr_internal_document` — actual type is not serializable, left at default
@@ -5748,13 +6592,25 @@ impl LlmUsage {
         finish_reason: Option<String>,
     ) -> LlmUsage {
         let mut __target: kreuzberg::LlmUsage = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&model) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&model)
+                .unwrap_or(::serde_json::Value::String(model.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.model = t;
             }
         }
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&source) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&source)
+                .unwrap_or(::serde_json::Value::String(source.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.source = t;
             }
         }
@@ -5763,10 +6619,13 @@ impl LlmUsage {
         __target.total_tokens = total_tokens;
         __target.estimated_cost = estimated_cost;
         if let Some(s) = finish_reason {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.finish_reason = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.finish_reason = Some(t);
             }
         }
         LlmUsage(__target)
@@ -5965,8 +6824,8 @@ impl ExtractedImage {
     pub fn ocr_result(&self) -> Option<ExtractionResult> {
         self.0.ocr_result.clone().map(|w| ExtractionResult(*w))
     }
-    pub fn bounding_box(&self) -> Option<String> {
-        self.0.bounding_box.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bounding_box(&self) -> Option<BoundingBox> {
+        self.0.bounding_box.clone().map(BoundingBox)
     }
     pub fn source_path(&self) -> Option<String> {
         self.0.source_path.clone()
@@ -5990,6 +6849,37 @@ impl ExtractedImage {
     }
 }
 
+pub struct BoundingBox(pub kreuzberg::BoundingBox);
+impl BoundingBox {
+    pub fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> BoundingBox {
+        BoundingBox(kreuzberg::BoundingBox { x0, y0, x1, y1 })
+    }
+    pub fn x0(&self) -> f64 {
+        ::serde_json::to_value(&self.0.x0)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn y0(&self) -> f64 {
+        ::serde_json::to_value(&self.0.y0)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn x1(&self) -> f64 {
+        ::serde_json::to_value(&self.0.x1)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn y1(&self) -> f64 {
+        ::serde_json::to_value(&self.0.y1)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+}
+
 pub struct ElementMetadata(pub kreuzberg::ElementMetadata);
 impl ElementMetadata {
     pub fn page_number(&self) -> Option<u32> {
@@ -6002,8 +6892,8 @@ impl ElementMetadata {
     pub fn filename(&self) -> Option<String> {
         self.0.filename.clone()
     }
-    pub fn coordinates(&self) -> Option<String> {
-        self.0.coordinates.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn coordinates(&self) -> Option<BoundingBox> {
+        self.0.coordinates.clone().map(BoundingBox)
     }
     pub fn element_index(&self) -> Option<usize> {
         self.0.element_index.as_ref().and_then(|v| {
@@ -6351,8 +7241,14 @@ impl ImagePreprocessingConfig {
         __target.deskew = deskew;
         __target.denoise = denoise;
         __target.contrast_enhance = contrast_enhance;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&binarization_method) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&binarization_method)
+                .unwrap_or(::serde_json::Value::String(binarization_method.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.binarization_method = t;
             }
         }
@@ -6426,14 +7322,26 @@ impl TesseractConfig {
         thresholding_method: bool,
     ) -> TesseractConfig {
         let mut __target: kreuzberg::TesseractConfig = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&language) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&language)
+                .unwrap_or(::serde_json::Value::String(language.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.language = t;
             }
         }
         __target.psm = psm;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&output_format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&output_format)
+                .unwrap_or(::serde_json::Value::String(output_format.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.output_format = t;
             }
         }
@@ -6452,13 +7360,25 @@ impl TesseractConfig {
         __target.tessedit_dont_blkrej_good_wds = tessedit_dont_blkrej_good_wds;
         __target.tessedit_dont_rowrej_good_wds = tessedit_dont_rowrej_good_wds;
         __target.tessedit_enable_dict_correction = tessedit_enable_dict_correction;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&tessedit_char_whitelist) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&tessedit_char_whitelist)
+                .unwrap_or(::serde_json::Value::String(tessedit_char_whitelist.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.tessedit_char_whitelist = t;
             }
         }
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&tessedit_char_blacklist) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&tessedit_char_blacklist)
+                .unwrap_or(::serde_json::Value::String(tessedit_char_blacklist.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.tessedit_char_blacklist = t;
             }
         }
@@ -6680,17 +7600,23 @@ impl Metadata {
     ) -> Metadata {
         let mut __target: kreuzberg::Metadata = ::std::default::Default::default();
         if let Some(s) = title {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.title = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.title = Some(t);
             }
         }
         if let Some(s) = subject {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.subject = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.subject = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(authors) {
@@ -6704,38 +7630,53 @@ impl Metadata {
             }
         }
         if let Some(s) = language {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.language = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.language = Some(t);
             }
         }
         if let Some(s) = created_at {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.created_at = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.created_at = Some(t);
             }
         }
         if let Some(s) = modified_at {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.modified_at = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.modified_at = Some(t);
             }
         }
         if let Some(s) = created_by {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.created_by = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.created_by = Some(t);
             }
         }
         if let Some(s) = modified_by {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.modified_by = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.modified_by = Some(t);
             }
         }
         if let Some(w) = pages {
@@ -6746,10 +7687,13 @@ impl Metadata {
             __target.image_preprocessing = Some(w.0);
         }
         if let Some(s) = json_schema {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.json_schema = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.json_schema = Some(t);
             }
         }
         if let Some(w) = error {
@@ -6757,10 +7701,13 @@ impl Metadata {
         }
         __target.extraction_duration_ms = extraction_duration_ms;
         if let Some(s) = category {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.category = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.category = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(tags) {
@@ -6769,24 +7716,33 @@ impl Metadata {
             }
         }
         if let Some(s) = document_version {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.document_version = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.document_version = Some(t);
             }
         }
         if let Some(s) = abstract_text {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.abstract_text = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.abstract_text = Some(t);
             }
         }
         if let Some(s) = output_format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.output_format = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.output_format = Some(t);
             }
         }
         __target.ocr_used = ocr_used;
@@ -6925,17 +7881,23 @@ impl EmailMetadata {
     ) -> EmailMetadata {
         let mut __target: kreuzberg::EmailMetadata = ::std::default::Default::default();
         if let Some(s) = from_email {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.from_email = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.from_email = Some(t);
             }
         }
         if let Some(s) = from_name {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.from_name = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.from_name = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(to_emails) {
@@ -6954,10 +7916,13 @@ impl EmailMetadata {
             }
         }
         if let Some(s) = message_id {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.message_id = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.message_id = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(attachments) {
@@ -7012,8 +7977,14 @@ impl ArchiveMetadata {
         compressed_size: Option<u64>,
     ) -> ArchiveMetadata {
         let mut __target: kreuzberg::ArchiveMetadata = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&format)
+                .unwrap_or(::serde_json::Value::String(format.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.format = t;
             }
         }
@@ -7063,8 +8034,14 @@ impl ImageMetadata {
         let mut __target: kreuzberg::ImageMetadata = ::std::default::Default::default();
         __target.width = width;
         __target.height = height;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&format)
+                .unwrap_or(::serde_json::Value::String(format.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.format = t;
             }
         }
@@ -7128,8 +8105,8 @@ impl TextMetadata {
         word_count: u32,
         character_count: u32,
         headers: Option<Vec<String>>,
-        links: Option<Vec<String>>,
-        code_blocks: Option<Vec<String>>,
+        links: String,
+        code_blocks: String,
     ) -> TextMetadata {
         let mut __target: kreuzberg::TextMetadata = ::std::default::Default::default();
         __target.line_count = line_count;
@@ -7140,8 +8117,16 @@ impl TextMetadata {
                 __target.headers = t;
             }
         }
-        // alef: links — Vec field type may differ from IR in non-serde struct, left at default
-        // alef: code_blocks — Vec field type may differ from IR in non-serde struct, left at default
+        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&links) {
+            if let Ok(t) = ::serde_json::from_value(v) {
+                __target.links = t;
+            }
+        }
+        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&code_blocks) {
+            if let Ok(t) = ::serde_json::from_value(v) {
+                __target.code_blocks = t;
+            }
+        }
         TextMetadata(__target)
     }
     pub fn line_count(&self) -> u32 {
@@ -7282,17 +8267,23 @@ impl HtmlMetadata {
     ) -> HtmlMetadata {
         let mut __target: kreuzberg::HtmlMetadata = ::std::default::Default::default();
         if let Some(s) = title {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.title = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.title = Some(t);
             }
         }
         if let Some(s) = description {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.description = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.description = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(keywords) {
@@ -7301,31 +8292,43 @@ impl HtmlMetadata {
             }
         }
         if let Some(s) = author {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.author = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.author = Some(t);
             }
         }
         if let Some(s) = canonical_url {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.canonical_url = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.canonical_url = Some(t);
             }
         }
         if let Some(s) = base_href {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.base_href = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.base_href = Some(t);
             }
         }
         if let Some(s) = language {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.language = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.language = Some(t);
             }
         }
         // alef: text_direction (TextDirection) is an enum; reverse From not generated — left at default
@@ -7422,14 +8425,26 @@ impl OcrMetadata {
         table_cols: Option<u32>,
     ) -> OcrMetadata {
         let mut __target: kreuzberg::OcrMetadata = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&language) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&language)
+                .unwrap_or(::serde_json::Value::String(language.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.language = t;
             }
         }
         __target.psm = psm;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&output_format) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&output_format)
+                .unwrap_or(::serde_json::Value::String(output_format.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.output_format = t;
             }
         }
@@ -7574,10 +8589,13 @@ impl CsvMetadata {
         __target.row_count = row_count;
         __target.column_count = column_count;
         if let Some(s) = delimiter {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.delimiter = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.delimiter = Some(t);
             }
         }
         __target.has_header = has_header;
@@ -7688,10 +8706,13 @@ impl CitationMetadata {
         let mut __target: kreuzberg::CitationMetadata = ::std::default::Default::default();
         __target.citation_count = citation_count;
         if let Some(s) = format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.format = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.format = Some(t);
             }
         }
         if let Ok(__v) = ::serde_json::to_value(authors) {
@@ -7785,10 +8806,13 @@ impl FictionBookMetadata {
             }
         }
         if let Some(s) = annotation {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.annotation = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.annotation = Some(t);
             }
         }
         FictionBookMetadata(__target)
@@ -7856,17 +8880,23 @@ impl JatsMetadata {
     ) -> JatsMetadata {
         let mut __target: kreuzberg::JatsMetadata = ::std::default::Default::default();
         if let Some(s) = copyright {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.copyright = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.copyright = Some(t);
             }
         }
         if let Some(s) = license {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.license = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.license = Some(t);
             }
         }
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&history_dates) {
@@ -7917,45 +8947,63 @@ impl EpubMetadata {
     ) -> EpubMetadata {
         let mut __target: kreuzberg::EpubMetadata = ::std::default::Default::default();
         if let Some(s) = coverage {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.coverage = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.coverage = Some(t);
             }
         }
         if let Some(s) = dc_format {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.dc_format = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.dc_format = Some(t);
             }
         }
         if let Some(s) = relation {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.relation = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.relation = Some(t);
             }
         }
         if let Some(s) = source {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.source = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.source = Some(t);
             }
         }
         if let Some(s) = dc_type {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.dc_type = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.dc_type = Some(t);
             }
         }
         if let Some(s) = cover_image {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.cover_image = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.cover_image = Some(t);
             }
         }
         EpubMetadata(__target)
@@ -8049,8 +9097,14 @@ impl OcrElement {
         backend_metadata: String,
     ) -> OcrElement {
         let mut __target: kreuzberg::OcrElement = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&text) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&text)
+                .unwrap_or(::serde_json::Value::String(text.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.text = t;
             }
         }
@@ -8062,10 +9116,13 @@ impl OcrElement {
         }
         __target.page_number = page_number;
         if let Some(s) = parent_id {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.parent_id = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.parent_id = Some(t);
             }
         }
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&backend_metadata) {
@@ -8290,19 +9347,21 @@ impl PageContent {
 
 pub struct LayoutRegion(pub kreuzberg::LayoutRegion);
 impl LayoutRegion {
-    pub fn new(class_name: String, confidence: f64, bounding_box: String, area_fraction: f64) -> LayoutRegion {
+    pub fn new(class_name: String, confidence: f64, bounding_box: BoundingBox, area_fraction: f64) -> LayoutRegion {
         let mut __target: kreuzberg::LayoutRegion = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&class_name) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&class_name)
+                .unwrap_or(::serde_json::Value::String(class_name.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.class_name = t;
             }
         }
         __target.confidence = confidence;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&bounding_box) {
-            if let Ok(t) = ::serde_json::from_value(v) {
-                __target.bounding_box = t;
-            }
-        }
+        __target.bounding_box = bounding_box.0;
         __target.area_fraction = area_fraction;
         LayoutRegion(__target)
     }
@@ -8315,8 +9374,8 @@ impl LayoutRegion {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bounding_box(&self) -> String {
-        serde_json::to_string(&self.0.bounding_box).unwrap_or_default()
+    pub fn bounding_box(&self) -> BoundingBox {
+        BoundingBox(self.0.bounding_box.clone())
     }
     pub fn area_fraction(&self) -> f64 {
         ::serde_json::to_value(&self.0.area_fraction)
@@ -8368,25 +9427,27 @@ impl HierarchicalBlock {
 
 pub struct Table(pub kreuzberg::Table);
 impl Table {
-    pub fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<String>) -> Table {
+    pub fn new(cells: String, markdown: String, page_number: u32, bounding_box: Option<BoundingBox>) -> Table {
         let mut __target: kreuzberg::Table = ::std::default::Default::default();
         if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&cells) {
             if let Ok(t) = ::serde_json::from_value(v) {
                 __target.cells = t;
             }
         }
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&markdown) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&markdown)
+                .unwrap_or(::serde_json::Value::String(markdown.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.markdown = t;
             }
         }
         __target.page_number = page_number;
-        if let Some(s) = bounding_box {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.bounding_box = Some(t);
-                }
-            }
+        if let Some(w) = bounding_box {
+            __target.bounding_box = Some(w.0);
         }
         Table(__target)
     }
@@ -8402,8 +9463,8 @@ impl Table {
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()
     }
-    pub fn bounding_box(&self) -> Option<String> {
-        self.0.bounding_box.as_ref().and_then(|v| serde_json::to_string(v).ok())
+    pub fn bounding_box(&self) -> Option<BoundingBox> {
+        self.0.bounding_box.clone().map(BoundingBox)
     }
 }
 
@@ -8411,8 +9472,14 @@ pub struct TableCell(pub kreuzberg::TableCell);
 impl TableCell {
     pub fn new(content: String, row_span: u32, col_span: u32, is_header: bool) -> TableCell {
         let mut __target: kreuzberg::TableCell = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&content) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&content)
+                .unwrap_or(::serde_json::Value::String(content.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.content = t;
             }
         }
@@ -8567,10 +9634,13 @@ impl KeywordConfig {
             }
         }
         if let Some(s) = language {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.language = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.language = Some(t);
             }
         }
         if let Some(w) = yake_params {
@@ -8669,16 +9739,25 @@ impl PaddleOcrConfig {
         model_tier: String,
     ) -> PaddleOcrConfig {
         let mut __target: kreuzberg::PaddleOcrConfig = ::std::default::Default::default();
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&language) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&language)
+                .unwrap_or(::serde_json::Value::String(language.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.language = t;
             }
         }
         if let Some(s) = cache_dir {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.cache_dir = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.cache_dir = Some(t);
             }
         }
         __target.use_angle_cls = use_angle_cls;
@@ -8690,8 +9769,14 @@ impl PaddleOcrConfig {
         __target.rec_batch_num = rec_batch_num;
         __target.padding = padding;
         __target.drop_score = drop_score;
-        if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&model_tier) {
-            if let Ok(t) = ::serde_json::from_value(v) {
+        {
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&model_tier)
+                .unwrap_or(::serde_json::Value::String(model_tier.clone()));
+            if let Ok(t) = ::serde_json::from_value(__v) {
                 __target.model_tier = t;
             }
         }
@@ -8905,17 +9990,23 @@ impl PdfMetadata {
     ) -> PdfMetadata {
         let mut __target: kreuzberg::pdf::metadata::PdfMetadata = ::std::default::Default::default();
         if let Some(s) = pdf_version {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.pdf_version = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.pdf_version = Some(t);
             }
         }
         if let Some(s) = producer {
-            if let Ok(v) = ::serde_json::from_str::<::serde_json::Value>(&s) {
-                if let Ok(t) = ::serde_json::from_value(v) {
-                    __target.producer = Some(t);
-                }
+            // Try JSON parse first (handles enum/object values); on parse failure
+            // treat the raw input as a JSON string scalar so plain `String` /
+            // string-like enum fields don't end up empty for inputs that aren't
+            // valid JSON tokens (e.g. `tts-1`).
+            let __v = ::serde_json::from_str::<::serde_json::Value>(&s).unwrap_or(::serde_json::Value::String(s));
+            if let Ok(t) = ::serde_json::from_value(__v) {
+                __target.producer = Some(t);
             }
         }
         __target.is_encrypted = is_encrypted;
@@ -8999,8 +10090,7 @@ pub enum OutputFormat {
     Html,
     Json,
     Structured,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Custom,
 }
 
 impl From<kreuzberg::OutputFormat> for OutputFormat {
@@ -9012,7 +10102,7 @@ impl From<kreuzberg::OutputFormat> for OutputFormat {
             kreuzberg::OutputFormat::Html => Self::Html,
             kreuzberg::OutputFormat::Json => Self::Json,
             kreuzberg::OutputFormat::Structured => Self::Structured,
-            _ => Self::Unknown,
+            kreuzberg::OutputFormat::Custom(..) => Self::Custom,
         }
     }
 }
@@ -9026,7 +10116,7 @@ impl OutputFormat {
             Self::Html => "html".to_string(),
             Self::Json => "json".to_string(),
             Self::Structured => "structured".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::Custom => "custom".to_string(),
         }
     }
 }
@@ -9129,15 +10219,14 @@ impl ChunkerType {
 
 pub enum ChunkSizing {
     Characters,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Tokenizer,
 }
 
 impl From<kreuzberg::ChunkSizing> for ChunkSizing {
     fn from(val: kreuzberg::ChunkSizing) -> Self {
         match val {
             kreuzberg::ChunkSizing::Characters => Self::Characters,
-            _ => Self::Unknown,
+            kreuzberg::ChunkSizing::Tokenizer { .. } => Self::Tokenizer,
         }
     }
 }
@@ -9146,20 +10235,25 @@ impl ChunkSizing {
     pub fn to_string(&self) -> String {
         match self {
             Self::Characters => "characters".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::Tokenizer => "tokenizer".to_string(),
         }
     }
 }
 
 pub enum EmbeddingModelType {
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Preset,
+    Custom,
+    Llm,
+    Plugin,
 }
 
 impl From<kreuzberg::EmbeddingModelType> for EmbeddingModelType {
     fn from(val: kreuzberg::EmbeddingModelType) -> Self {
         match val {
-            _ => Self::Unknown,
+            kreuzberg::EmbeddingModelType::Preset { .. } => Self::Preset,
+            kreuzberg::EmbeddingModelType::Custom { .. } => Self::Custom,
+            kreuzberg::EmbeddingModelType::Llm { .. } => Self::Llm,
+            kreuzberg::EmbeddingModelType::Plugin { .. } => Self::Plugin,
         }
     }
 }
@@ -9167,7 +10261,10 @@ impl From<kreuzberg::EmbeddingModelType> for EmbeddingModelType {
 impl EmbeddingModelType {
     pub fn to_string(&self) -> String {
         match self {
-            Self::Unknown => "unknown".to_string(),
+            Self::Preset => "preset".to_string(),
+            Self::Custom => "custom".to_string(),
+            Self::Llm => "llm".to_string(),
+            Self::Plugin => "plugin".to_string(),
         }
     }
 }
@@ -9227,30 +10324,6 @@ impl ListType {
     }
 }
 
-pub enum DrawingType {
-    Inline,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
-}
-
-impl From<kreuzberg::extraction::docx::drawing::DrawingType> for DrawingType {
-    fn from(val: kreuzberg::extraction::docx::drawing::DrawingType) -> Self {
-        match val {
-            kreuzberg::extraction::docx::drawing::DrawingType::Inline => Self::Inline,
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl DrawingType {
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Inline => "Inline".to_string(),
-            Self::Unknown => "unknown".to_string(),
-        }
-    }
-}
-
 pub enum FracType {
     Bar,
     NoBar,
@@ -9287,13 +10360,13 @@ pub enum OcrBackendType {
     Custom,
 }
 
-impl From<kreuzberg::plugins::OcrBackendType> for OcrBackendType {
-    fn from(val: kreuzberg::plugins::OcrBackendType) -> Self {
+impl From<kreuzberg::OcrBackendType> for OcrBackendType {
+    fn from(val: kreuzberg::OcrBackendType) -> Self {
         match val {
-            kreuzberg::plugins::OcrBackendType::Tesseract => Self::Tesseract,
-            kreuzberg::plugins::OcrBackendType::EasyOCR => Self::EasyOCR,
-            kreuzberg::plugins::OcrBackendType::PaddleOCR => Self::PaddleOCR,
-            kreuzberg::plugins::OcrBackendType::Custom => Self::Custom,
+            kreuzberg::OcrBackendType::Tesseract => Self::Tesseract,
+            kreuzberg::OcrBackendType::EasyOCR => Self::EasyOCR,
+            kreuzberg::OcrBackendType::PaddleOCR => Self::PaddleOCR,
+            kreuzberg::OcrBackendType::Custom => Self::Custom,
         }
     }
 }
@@ -9315,12 +10388,12 @@ pub enum ProcessingStage {
     Late,
 }
 
-impl From<kreuzberg::plugins::ProcessingStage> for ProcessingStage {
-    fn from(val: kreuzberg::plugins::ProcessingStage) -> Self {
+impl From<kreuzberg::ProcessingStage> for ProcessingStage {
+    fn from(val: kreuzberg::ProcessingStage) -> Self {
         match val {
-            kreuzberg::plugins::ProcessingStage::Early => Self::Early,
-            kreuzberg::plugins::ProcessingStage::Middle => Self::Middle,
-            kreuzberg::plugins::ProcessingStage::Late => Self::Late,
+            kreuzberg::ProcessingStage::Early => Self::Early,
+            kreuzberg::ProcessingStage::Middle => Self::Middle,
+            kreuzberg::ProcessingStage::Late => Self::Late,
         }
     }
 }
@@ -9603,20 +10676,51 @@ impl ContentLayer {
 }
 
 pub enum NodeContent {
+    Title,
+    Heading,
+    Paragraph,
+    List,
+    ListItem,
+    Table,
+    Image,
+    Code,
     Quote,
+    Formula,
+    Footnote,
+    Group,
     PageBreak,
+    Slide,
     DefinitionList,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    DefinitionItem,
+    Citation,
+    Admonition,
+    RawBlock,
+    MetadataBlock,
 }
 
 impl From<kreuzberg::NodeContent> for NodeContent {
     fn from(val: kreuzberg::NodeContent) -> Self {
         match val {
+            kreuzberg::NodeContent::Title { .. } => Self::Title,
+            kreuzberg::NodeContent::Heading { .. } => Self::Heading,
+            kreuzberg::NodeContent::Paragraph { .. } => Self::Paragraph,
+            kreuzberg::NodeContent::List { .. } => Self::List,
+            kreuzberg::NodeContent::ListItem { .. } => Self::ListItem,
+            kreuzberg::NodeContent::Table { .. } => Self::Table,
+            kreuzberg::NodeContent::Image { .. } => Self::Image,
+            kreuzberg::NodeContent::Code { .. } => Self::Code,
             kreuzberg::NodeContent::Quote => Self::Quote,
+            kreuzberg::NodeContent::Formula { .. } => Self::Formula,
+            kreuzberg::NodeContent::Footnote { .. } => Self::Footnote,
+            kreuzberg::NodeContent::Group { .. } => Self::Group,
             kreuzberg::NodeContent::PageBreak => Self::PageBreak,
+            kreuzberg::NodeContent::Slide { .. } => Self::Slide,
             kreuzberg::NodeContent::DefinitionList => Self::DefinitionList,
-            _ => Self::Unknown,
+            kreuzberg::NodeContent::DefinitionItem { .. } => Self::DefinitionItem,
+            kreuzberg::NodeContent::Citation { .. } => Self::Citation,
+            kreuzberg::NodeContent::Admonition { .. } => Self::Admonition,
+            kreuzberg::NodeContent::RawBlock { .. } => Self::RawBlock,
+            kreuzberg::NodeContent::MetadataBlock { .. } => Self::MetadataBlock,
         }
     }
 }
@@ -9624,10 +10728,26 @@ impl From<kreuzberg::NodeContent> for NodeContent {
 impl NodeContent {
     pub fn to_string(&self) -> String {
         match self {
+            Self::Title => "title".to_string(),
+            Self::Heading => "heading".to_string(),
+            Self::Paragraph => "paragraph".to_string(),
+            Self::List => "list".to_string(),
+            Self::ListItem => "list_item".to_string(),
+            Self::Table => "table".to_string(),
+            Self::Image => "image".to_string(),
+            Self::Code => "code".to_string(),
             Self::Quote => "quote".to_string(),
+            Self::Formula => "formula".to_string(),
+            Self::Footnote => "footnote".to_string(),
+            Self::Group => "group".to_string(),
             Self::PageBreak => "page_break".to_string(),
+            Self::Slide => "slide".to_string(),
             Self::DefinitionList => "definition_list".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::DefinitionItem => "definition_item".to_string(),
+            Self::Citation => "citation".to_string(),
+            Self::Admonition => "admonition".to_string(),
+            Self::RawBlock => "raw_block".to_string(),
+            Self::MetadataBlock => "metadata_block".to_string(),
         }
     }
 }
@@ -9640,9 +10760,11 @@ pub enum AnnotationKind {
     Code,
     Subscript,
     Superscript,
+    Link,
     Highlight,
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Color,
+    FontSize,
+    Custom,
 }
 
 impl From<kreuzberg::AnnotationKind> for AnnotationKind {
@@ -9655,8 +10777,11 @@ impl From<kreuzberg::AnnotationKind> for AnnotationKind {
             kreuzberg::AnnotationKind::Code => Self::Code,
             kreuzberg::AnnotationKind::Subscript => Self::Subscript,
             kreuzberg::AnnotationKind::Superscript => Self::Superscript,
+            kreuzberg::AnnotationKind::Link { .. } => Self::Link,
             kreuzberg::AnnotationKind::Highlight => Self::Highlight,
-            _ => Self::Unknown,
+            kreuzberg::AnnotationKind::Color { .. } => Self::Color,
+            kreuzberg::AnnotationKind::FontSize { .. } => Self::FontSize,
+            kreuzberg::AnnotationKind::Custom { .. } => Self::Custom,
         }
     }
 }
@@ -9671,8 +10796,11 @@ impl AnnotationKind {
             Self::Code => "code".to_string(),
             Self::Subscript => "subscript".to_string(),
             Self::Superscript => "superscript".to_string(),
+            Self::Link => "link".to_string(),
             Self::Highlight => "highlight".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::Color => "color".to_string(),
+            Self::FontSize => "font_size".to_string(),
+            Self::Custom => "custom".to_string(),
         }
     }
 }
@@ -9883,14 +11011,51 @@ impl ElementType {
 }
 
 pub enum FormatMetadata {
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Pdf,
+    Docx,
+    Excel,
+    Email,
+    Pptx,
+    Archive,
+    Image,
+    Xml,
+    Text,
+    Html,
+    Ocr,
+    Csv,
+    Bibtex,
+    Citation,
+    FictionBook,
+    Dbf,
+    Jats,
+    Epub,
+    Pst,
+    Code,
 }
 
 impl From<kreuzberg::FormatMetadata> for FormatMetadata {
     fn from(val: kreuzberg::FormatMetadata) -> Self {
         match val {
-            _ => Self::Unknown,
+            kreuzberg::FormatMetadata::Pdf(..) => Self::Pdf,
+            kreuzberg::FormatMetadata::Docx(..) => Self::Docx,
+            kreuzberg::FormatMetadata::Excel(..) => Self::Excel,
+            kreuzberg::FormatMetadata::Email(..) => Self::Email,
+            kreuzberg::FormatMetadata::Pptx(..) => Self::Pptx,
+            kreuzberg::FormatMetadata::Archive(..) => Self::Archive,
+            kreuzberg::FormatMetadata::Image(..) => Self::Image,
+            kreuzberg::FormatMetadata::Xml(..) => Self::Xml,
+            kreuzberg::FormatMetadata::Text(..) => Self::Text,
+            kreuzberg::FormatMetadata::Html(..) => Self::Html,
+            kreuzberg::FormatMetadata::Ocr(..) => Self::Ocr,
+            kreuzberg::FormatMetadata::Csv(..) => Self::Csv,
+            kreuzberg::FormatMetadata::Bibtex(..) => Self::Bibtex,
+            kreuzberg::FormatMetadata::Citation(..) => Self::Citation,
+            kreuzberg::FormatMetadata::FictionBook(..) => Self::FictionBook,
+            kreuzberg::FormatMetadata::Dbf(..) => Self::Dbf,
+            kreuzberg::FormatMetadata::Jats(..) => Self::Jats,
+            kreuzberg::FormatMetadata::Epub(..) => Self::Epub,
+            kreuzberg::FormatMetadata::Pst(..) => Self::Pst,
+            kreuzberg::FormatMetadata::Code(..) => Self::Code,
         }
     }
 }
@@ -9898,7 +11063,26 @@ impl From<kreuzberg::FormatMetadata> for FormatMetadata {
 impl FormatMetadata {
     pub fn to_string(&self) -> String {
         match self {
-            Self::Unknown => "unknown".to_string(),
+            Self::Pdf => "pdf".to_string(),
+            Self::Docx => "docx".to_string(),
+            Self::Excel => "excel".to_string(),
+            Self::Email => "email".to_string(),
+            Self::Pptx => "pptx".to_string(),
+            Self::Archive => "archive".to_string(),
+            Self::Image => "image".to_string(),
+            Self::Xml => "xml".to_string(),
+            Self::Text => "text".to_string(),
+            Self::Html => "html".to_string(),
+            Self::Ocr => "ocr".to_string(),
+            Self::Csv => "csv".to_string(),
+            Self::Bibtex => "bibtex".to_string(),
+            Self::Citation => "citation".to_string(),
+            Self::FictionBook => "fiction_book".to_string(),
+            Self::Dbf => "dbf".to_string(),
+            Self::Jats => "jats".to_string(),
+            Self::Epub => "epub".to_string(),
+            Self::Pst => "pst".to_string(),
+            Self::Code => "code".to_string(),
         }
     }
 }
@@ -10020,14 +11204,15 @@ impl StructuredDataType {
 }
 
 pub enum OcrBoundingGeometry {
-    /// Data variants not directly bridgeable — represented as Unknown.
-    Unknown,
+    Rectangle,
+    Quadrilateral,
 }
 
 impl From<kreuzberg::OcrBoundingGeometry> for OcrBoundingGeometry {
     fn from(val: kreuzberg::OcrBoundingGeometry) -> Self {
         match val {
-            _ => Self::Unknown,
+            kreuzberg::OcrBoundingGeometry::Rectangle { .. } => Self::Rectangle,
+            kreuzberg::OcrBoundingGeometry::Quadrilateral { .. } => Self::Quadrilateral,
         }
     }
 }
@@ -10035,7 +11220,8 @@ impl From<kreuzberg::OcrBoundingGeometry> for OcrBoundingGeometry {
 impl OcrBoundingGeometry {
     pub fn to_string(&self) -> String {
         match self {
-            Self::Unknown => "unknown".to_string(),
+            Self::Rectangle => "rectangle".to_string(),
+            Self::Quadrilateral => "quadrilateral".to_string(),
         }
     }
 }
@@ -10513,7 +11699,7 @@ pub fn list_embedding_presets() -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
-pub struct OcrBackendBox(pub Box<dyn kreuzberg::plugins::OcrBackend + Send + Sync>);
+pub struct OcrBackendBox(pub Box<dyn kreuzberg::OcrBackend + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_ocr_backend() -> Vec<OcrBackendBox> {
     Vec::new()
@@ -10539,7 +11725,7 @@ pub fn ocr_backend_call_backend_type(this: &OcrBackendBox) -> OcrBackendType {
     OcrBackendType::from(this.0.backend_type())
 }
 
-pub struct PostProcessorBox(pub Box<dyn kreuzberg::plugins::PostProcessor + Send + Sync>);
+pub struct PostProcessorBox(pub Box<dyn kreuzberg::PostProcessor + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_post_processor() -> Vec<PostProcessorBox> {
     Vec::new()
@@ -10563,7 +11749,7 @@ pub fn post_processor_call_processing_stage(this: &PostProcessorBox) -> Processi
     ProcessingStage::from(this.0.processing_stage())
 }
 
-pub struct ValidatorBox(pub Box<dyn kreuzberg::plugins::Validator + Send + Sync>);
+pub struct ValidatorBox(pub Box<dyn kreuzberg::Validator + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_validator() -> Vec<ValidatorBox> {
     Vec::new()
@@ -10580,7 +11766,7 @@ pub fn validator_call_validate(this: &ValidatorBox, result: ExtractionResult, co
     })
 }
 
-pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::plugins::EmbeddingBackend + Send + Sync>);
+pub struct EmbeddingBackendBox(pub Box<dyn kreuzberg::EmbeddingBackend + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_embedding_backend() -> Vec<EmbeddingBackendBox> {
     Vec::new()
@@ -10603,7 +11789,7 @@ pub fn embedding_backend_call_embed(this: &EmbeddingBackendBox, texts: Vec<Strin
     })
 }
 
-pub struct DocumentExtractorBox(pub Box<dyn kreuzberg::plugins::DocumentExtractor + Send + Sync>);
+pub struct DocumentExtractorBox(pub Box<dyn kreuzberg::DocumentExtractor + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_document_extractor() -> Vec<DocumentExtractorBox> {
     Vec::new()
@@ -10631,7 +11817,7 @@ pub fn document_extractor_call_supported_mime_types(this: &DocumentExtractorBox)
     this.0.supported_mime_types().iter().map(|s| s.to_string()).collect()
 }
 
-pub struct RendererBox(pub Box<dyn kreuzberg::plugins::Renderer + Send + Sync>);
+pub struct RendererBox(pub Box<dyn kreuzberg::Renderer + Send + Sync>);
 #[doc(hidden)]
 pub fn alef_phantom_vec_renderer() -> Vec<RendererBox> {
     Vec::new()
@@ -10639,7 +11825,7 @@ pub fn alef_phantom_vec_renderer() -> Vec<RendererBox> {
 pub fn renderer_call_render(this: &RendererBox, doc: String) -> String {
     match this
         .0
-        .render(&serde_json::from_str::<kreuzberg::internal::InternalDocument>(&doc).expect("valid JSON for doc"))
+        .render(&serde_json::from_str::<kreuzberg::InternalDocument>(&doc).expect("valid JSON for doc"))
     {
         Ok(v) => format!(
             "{{\"ok\": {}}}",
@@ -10725,7 +11911,7 @@ impl kreuzberg::plugins::Plugin for SwiftOcrBackendWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
+impl kreuzberg::OcrBackend for SwiftOcrBackendWrapper {
     async fn process_image(
         &self,
         image_bytes: &[u8],
@@ -10742,9 +11928,9 @@ impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
         self.inner.alef_supports_language(lang)
     }
 
-    fn backend_type(&self) -> kreuzberg::plugins::OcrBackendType {
+    fn backend_type(&self) -> kreuzberg::OcrBackendType {
         let json = self.inner.alef_backend_type();
-        ::serde_json::from_str::<kreuzberg::plugins::OcrBackendType>(&json)
+        ::serde_json::from_str::<kreuzberg::OcrBackendType>(&json)
             .expect("swift ocr_backend.backend_type returned invalid JSON")
     }
 }
@@ -10754,7 +11940,7 @@ impl kreuzberg::plugins::OcrBackend for SwiftOcrBackendWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_ocr_backend(swift_box: ffi::SwiftOcrBackendBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::OcrBackend> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::OcrBackend> =
         ::std::sync::Arc::new(SwiftOcrBackendWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
     let mut guard = registry.write();
@@ -10816,7 +12002,7 @@ impl kreuzberg::plugins::Plugin for SwiftPostProcessorWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
+impl kreuzberg::PostProcessor for SwiftPostProcessorWrapper {
     async fn process(
         &self,
         result: &mut kreuzberg::ExtractionResult,
@@ -10828,9 +12014,9 @@ impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
         decode_inbound_envelope::<()>(&envelope).map(|_| ())
     }
 
-    fn processing_stage(&self) -> kreuzberg::plugins::ProcessingStage {
+    fn processing_stage(&self) -> kreuzberg::ProcessingStage {
         let json = self.inner.alef_processing_stage();
-        ::serde_json::from_str::<kreuzberg::plugins::ProcessingStage>(&json)
+        ::serde_json::from_str::<kreuzberg::ProcessingStage>(&json)
             .expect("swift post_processor.processing_stage returned invalid JSON")
     }
 }
@@ -10840,7 +12026,7 @@ impl kreuzberg::plugins::PostProcessor for SwiftPostProcessorWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_post_processor(swift_box: ffi::SwiftPostProcessorBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::PostProcessor> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::PostProcessor> =
         ::std::sync::Arc::new(SwiftPostProcessorWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_post_processor_registry();
     let mut guard = registry.write();
@@ -10902,7 +12088,7 @@ impl kreuzberg::plugins::Plugin for SwiftValidatorWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::Validator for SwiftValidatorWrapper {
+impl kreuzberg::Validator for SwiftValidatorWrapper {
     async fn validate(
         &self,
         result: &kreuzberg::ExtractionResult,
@@ -10920,8 +12106,7 @@ impl kreuzberg::plugins::Validator for SwiftValidatorWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_validator(swift_box: ffi::SwiftValidatorBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::Validator> =
-        ::std::sync::Arc::new(SwiftValidatorWrapper::new(swift_box));
+    let arc: ::std::sync::Arc<dyn kreuzberg::Validator> = ::std::sync::Arc::new(SwiftValidatorWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_validator_registry();
     let mut guard = registry.write();
     guard.register(arc).map_err(|e| e.to_string())
@@ -10982,7 +12167,7 @@ impl kreuzberg::plugins::Plugin for SwiftEmbeddingBackendWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
+impl kreuzberg::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
     fn dimensions(&self) -> usize {
         self.inner.alef_dimensions()
     }
@@ -10998,7 +12183,7 @@ impl kreuzberg::plugins::EmbeddingBackend for SwiftEmbeddingBackendWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_embedding_backend(swift_box: ffi::SwiftEmbeddingBackendBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::EmbeddingBackend> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::EmbeddingBackend> =
         ::std::sync::Arc::new(SwiftEmbeddingBackendWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_embedding_backend_registry();
     let mut guard = registry.write();
@@ -11060,18 +12245,18 @@ impl kreuzberg::plugins::Plugin for SwiftDocumentExtractorWrapper {
     }
 }
 #[async_trait::async_trait]
-impl kreuzberg::plugins::DocumentExtractor for SwiftDocumentExtractorWrapper {
+impl kreuzberg::DocumentExtractor for SwiftDocumentExtractorWrapper {
     async fn extract_bytes(
         &self,
         content: &[u8],
         mime_type: &str,
         config: &kreuzberg::ExtractionConfig,
-    ) -> std::result::Result<kreuzberg::internal::InternalDocument, kreuzberg::KreuzbergError> {
+    ) -> std::result::Result<kreuzberg::InternalDocument, kreuzberg::KreuzbergError> {
         let content = content.to_vec();
         let mime_type = mime_type.to_string();
         let config = ::serde_json::to_string(&config).expect("serializable param config");
         let envelope = self.inner.alef_extract_bytes(content, mime_type, config);
-        decode_inbound_envelope::<kreuzberg::internal::InternalDocument>(&envelope)
+        decode_inbound_envelope::<kreuzberg::InternalDocument>(&envelope)
     }
 
     fn supported_mime_types(&self) -> &'static [&'static str] {
@@ -11089,7 +12274,7 @@ impl kreuzberg::plugins::DocumentExtractor for SwiftDocumentExtractorWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_document_extractor(swift_box: ffi::SwiftDocumentExtractorBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::DocumentExtractor> =
+    let arc: ::std::sync::Arc<dyn kreuzberg::DocumentExtractor> =
         ::std::sync::Arc::new(SwiftDocumentExtractorWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_document_extractor_registry();
     let mut guard = registry.write();
@@ -11150,11 +12335,8 @@ impl kreuzberg::plugins::Plugin for SwiftRendererWrapper {
         decode_inbound_envelope::<()>(&self.inner.alef_shutdown()).map(|_| ())
     }
 }
-impl kreuzberg::plugins::Renderer for SwiftRendererWrapper {
-    fn render(
-        &self,
-        doc: &kreuzberg::internal::InternalDocument,
-    ) -> std::result::Result<String, kreuzberg::KreuzbergError> {
+impl kreuzberg::Renderer for SwiftRendererWrapper {
+    fn render(&self, doc: &kreuzberg::InternalDocument) -> std::result::Result<String, kreuzberg::KreuzbergError> {
         let doc = ::serde_json::to_string(&doc).expect("serializable param doc");
         let envelope = self.inner.alef_render(doc);
         decode_inbound_envelope::<String>(&envelope)
@@ -11166,8 +12348,7 @@ impl kreuzberg::plugins::Renderer for SwiftRendererWrapper {
 /// Wraps the Swift handle in `Arc<SwiftXxxWrapper>` and inserts it into the host registry.
 /// Errors from the registry are stringified for swift-bridge transport.
 pub fn register_renderer(swift_box: ffi::SwiftRendererBox) -> Result<(), String> {
-    let arc: ::std::sync::Arc<dyn kreuzberg::plugins::Renderer> =
-        ::std::sync::Arc::new(SwiftRendererWrapper::new(swift_box));
+    let arc: ::std::sync::Arc<dyn kreuzberg::Renderer> = ::std::sync::Arc::new(SwiftRendererWrapper::new(swift_box));
     let registry = kreuzberg::plugins::registry::get_renderer_registry();
     let mut guard = registry.write();
     guard.register(arc).map_err(|e| e.to_string())
@@ -11186,388 +12367,828 @@ pub fn clear_renderers() -> Result<(), String> {
     guard.clear().map_err(|e| e.to_string())
 }
 
-// JSON factory shims for e2e test layer.
-// These let generated tests deserialise fixture JSON into opaque swift-bridge types.
-
 pub fn extraction_config_from_json(json: String) -> Result<ExtractionConfig, String> {
     serde_json::from_str::<kreuzberg::ExtractionConfig>(&json)
-        .map_err(|e| e.to_string())
         .map(ExtractionConfig)
+        .map_err(|e| e.to_string())
 }
-
 pub fn batch_bytes_item_from_json(json: String) -> Result<BatchBytesItem, String> {
     serde_json::from_str::<kreuzberg::BatchBytesItem>(&json)
-        .map_err(|e| e.to_string())
         .map(BatchBytesItem)
+        .map_err(|e| e.to_string())
 }
-
 pub fn batch_file_item_from_json(json: String) -> Result<BatchFileItem, String> {
     serde_json::from_str::<kreuzberg::BatchFileItem>(&json)
-        .map_err(|e| e.to_string())
         .map(BatchFileItem)
+        .map_err(|e| e.to_string())
 }
 pub fn ocr_config_from_json(json: String) -> Result<OcrConfig, String> {
     serde_json::from_str::<kreuzberg::OcrConfig>(&json)
         .map(OcrConfig)
         .map_err(|e| e.to_string())
 }
-
 pub fn embedding_config_from_json(json: String) -> Result<EmbeddingConfig, String> {
     serde_json::from_str::<kreuzberg::EmbeddingConfig>(&json)
         .map(EmbeddingConfig)
         .map_err(|e| e.to_string())
 }
-
 pub fn extraction_result_from_json(json: String) -> Result<ExtractionResult, String> {
     serde_json::from_str::<kreuzberg::ExtractionResult>(&json)
         .map(ExtractionResult)
         .map_err(|e| e.to_string())
 }
-
 pub fn ocr_extraction_result_from_json(json: String) -> Result<OcrExtractionResult, String> {
     serde_json::from_str::<kreuzberg::OcrExtractionResult>(&json)
         .map(OcrExtractionResult)
         .map_err(|e| e.to_string())
 }
-
-pub fn html_metadata_from_json(json: String) -> Result<HtmlMetadata, String> {
-    serde_json::from_str::<kreuzberg::HtmlMetadata>(&json)
-        .map(HtmlMetadata)
+pub fn acceleration_config_from_json(json: String) -> Result<AccelerationConfig, String> {
+    serde_json::from_str::<kreuzberg::AccelerationConfig>(&json)
+        .map(AccelerationConfig)
         .map_err(|e| e.to_string())
 }
-
+pub fn content_filter_config_from_json(json: String) -> Result<ContentFilterConfig, String> {
+    serde_json::from_str::<kreuzberg::ContentFilterConfig>(&json)
+        .map(ContentFilterConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn email_config_from_json(json: String) -> Result<EmailConfig, String> {
+    serde_json::from_str::<kreuzberg::EmailConfig>(&json)
+        .map(EmailConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn file_extraction_config_from_json(json: String) -> Result<FileExtractionConfig, String> {
+    serde_json::from_str::<kreuzberg::FileExtractionConfig>(&json)
+        .map(FileExtractionConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn image_extraction_config_from_json(json: String) -> Result<ImageExtractionConfig, String> {
+    serde_json::from_str::<kreuzberg::ImageExtractionConfig>(&json)
+        .map(ImageExtractionConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn token_reduction_options_from_json(json: String) -> Result<TokenReductionOptions, String> {
+    serde_json::from_str::<kreuzberg::TokenReductionOptions>(&json)
+        .map(TokenReductionOptions)
+        .map_err(|e| e.to_string())
+}
+pub fn language_detection_config_from_json(json: String) -> Result<LanguageDetectionConfig, String> {
+    serde_json::from_str::<kreuzberg::LanguageDetectionConfig>(&json)
+        .map(LanguageDetectionConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn html_output_config_from_json(json: String) -> Result<HtmlOutputConfig, String> {
+    serde_json::from_str::<kreuzberg::HtmlOutputConfig>(&json)
+        .map(HtmlOutputConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn layout_detection_config_from_json(json: String) -> Result<LayoutDetectionConfig, String> {
+    serde_json::from_str::<kreuzberg::LayoutDetectionConfig>(&json)
+        .map(LayoutDetectionConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn llm_config_from_json(json: String) -> Result<LlmConfig, String> {
+    serde_json::from_str::<kreuzberg::LlmConfig>(&json)
+        .map(LlmConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn structured_extraction_config_from_json(json: String) -> Result<StructuredExtractionConfig, String> {
     serde_json::from_str::<kreuzberg::StructuredExtractionConfig>(&json)
         .map(StructuredExtractionConfig)
         .map_err(|e| e.to_string())
 }
-
+pub fn ocr_quality_thresholds_from_json(json: String) -> Result<OcrQualityThresholds, String> {
+    serde_json::from_str::<kreuzberg::OcrQualityThresholds>(&json)
+        .map(OcrQualityThresholds)
+        .map_err(|e| e.to_string())
+}
 pub fn ocr_pipeline_stage_from_json(json: String) -> Result<OcrPipelineStage, String> {
     serde_json::from_str::<kreuzberg::OcrPipelineStage>(&json)
         .map(OcrPipelineStage)
         .map_err(|e| e.to_string())
 }
-
 pub fn ocr_pipeline_config_from_json(json: String) -> Result<OcrPipelineConfig, String> {
     serde_json::from_str::<kreuzberg::OcrPipelineConfig>(&json)
         .map(OcrPipelineConfig)
         .map_err(|e| e.to_string())
 }
-
+pub fn page_config_from_json(json: String) -> Result<PageConfig, String> {
+    serde_json::from_str::<kreuzberg::PageConfig>(&json)
+        .map(PageConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn pdf_config_from_json(json: String) -> Result<PdfConfig, String> {
+    serde_json::from_str::<kreuzberg::PdfConfig>(&json)
+        .map(PdfConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn hierarchy_config_from_json(json: String) -> Result<HierarchyConfig, String> {
+    serde_json::from_str::<kreuzberg::HierarchyConfig>(&json)
+        .map(HierarchyConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn post_processor_config_from_json(json: String) -> Result<PostProcessorConfig, String> {
+    serde_json::from_str::<kreuzberg::PostProcessorConfig>(&json)
+        .map(PostProcessorConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn chunking_config_from_json(json: String) -> Result<ChunkingConfig, String> {
+    serde_json::from_str::<kreuzberg::ChunkingConfig>(&json)
+        .map(ChunkingConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn tree_sitter_config_from_json(json: String) -> Result<TreeSitterConfig, String> {
+    serde_json::from_str::<kreuzberg::TreeSitterConfig>(&json)
+        .map(TreeSitterConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn tree_sitter_process_config_from_json(json: String) -> Result<TreeSitterProcessConfig, String> {
+    serde_json::from_str::<kreuzberg::TreeSitterProcessConfig>(&json)
+        .map(TreeSitterProcessConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn supported_format_from_json(json: String) -> Result<SupportedFormat, String> {
     serde_json::from_str::<kreuzberg::SupportedFormat>(&json)
         .map(SupportedFormat)
         .map_err(|e| e.to_string())
 }
-
+pub fn server_config_from_json(json: String) -> Result<ServerConfig, String> {
+    serde_json::from_str::<kreuzberg::ServerConfig>(&json)
+        .map(ServerConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn structured_data_result_from_json(json: String) -> Result<StructuredDataResult, String> {
     serde_json::from_str::<kreuzberg::extraction::structured::StructuredDataResult>(&json)
         .map(StructuredDataResult)
         .map_err(|e| e.to_string())
 }
-
+pub fn docx_app_properties_from_json(json: String) -> Result<DocxAppProperties, String> {
+    serde_json::from_str::<kreuzberg::DocxAppProperties>(&json)
+        .map(DocxAppProperties)
+        .map_err(|e| e.to_string())
+}
+pub fn xlsx_app_properties_from_json(json: String) -> Result<XlsxAppProperties, String> {
+    serde_json::from_str::<kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties>(&json)
+        .map(XlsxAppProperties)
+        .map_err(|e| e.to_string())
+}
+pub fn pptx_app_properties_from_json(json: String) -> Result<PptxAppProperties, String> {
+    serde_json::from_str::<kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties>(&json)
+        .map(PptxAppProperties)
+        .map_err(|e| e.to_string())
+}
+pub fn core_properties_from_json(json: String) -> Result<CoreProperties, String> {
+    serde_json::from_str::<kreuzberg::CoreProperties>(&json)
+        .map(CoreProperties)
+        .map_err(|e| e.to_string())
+}
+pub fn security_limits_from_json(json: String) -> Result<SecurityLimits, String> {
+    serde_json::from_str::<kreuzberg::SecurityLimits>(&json)
+        .map(SecurityLimits)
+        .map_err(|e| e.to_string())
+}
+pub fn token_reduction_config_from_json(json: String) -> Result<TokenReductionConfig, String> {
+    serde_json::from_str::<kreuzberg::TokenReductionConfig>(&json)
+        .map(TokenReductionConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn pdf_annotation_from_json(json: String) -> Result<PdfAnnotation, String> {
     serde_json::from_str::<kreuzberg::PdfAnnotation>(&json)
         .map(PdfAnnotation)
         .map_err(|e| e.to_string())
 }
-
 pub fn djot_content_from_json(json: String) -> Result<DjotContent, String> {
     serde_json::from_str::<kreuzberg::DjotContent>(&json)
         .map(DjotContent)
         .map_err(|e| e.to_string())
 }
-
 pub fn formatted_block_from_json(json: String) -> Result<FormattedBlock, String> {
     serde_json::from_str::<kreuzberg::FormattedBlock>(&json)
         .map(FormattedBlock)
         .map_err(|e| e.to_string())
 }
-
 pub fn inline_element_from_json(json: String) -> Result<InlineElement, String> {
     serde_json::from_str::<kreuzberg::InlineElement>(&json)
         .map(InlineElement)
         .map_err(|e| e.to_string())
 }
-
 pub fn djot_image_from_json(json: String) -> Result<DjotImage, String> {
     serde_json::from_str::<kreuzberg::DjotImage>(&json)
         .map(DjotImage)
         .map_err(|e| e.to_string())
 }
-
 pub fn djot_link_from_json(json: String) -> Result<DjotLink, String> {
     serde_json::from_str::<kreuzberg::DjotLink>(&json)
         .map(DjotLink)
         .map_err(|e| e.to_string())
 }
-
 pub fn footnote_from_json(json: String) -> Result<Footnote, String> {
     serde_json::from_str::<kreuzberg::Footnote>(&json)
         .map(Footnote)
         .map_err(|e| e.to_string())
 }
-
+pub fn document_structure_from_json(json: String) -> Result<DocumentStructure, String> {
+    serde_json::from_str::<kreuzberg::DocumentStructure>(&json)
+        .map(DocumentStructure)
+        .map_err(|e| e.to_string())
+}
 pub fn document_relationship_from_json(json: String) -> Result<DocumentRelationship, String> {
     serde_json::from_str::<kreuzberg::DocumentRelationship>(&json)
         .map(DocumentRelationship)
         .map_err(|e| e.to_string())
 }
-
 pub fn document_node_from_json(json: String) -> Result<DocumentNode, String> {
     serde_json::from_str::<kreuzberg::DocumentNode>(&json)
         .map(DocumentNode)
         .map_err(|e| e.to_string())
 }
-
+pub fn table_grid_from_json(json: String) -> Result<TableGrid, String> {
+    serde_json::from_str::<kreuzberg::TableGrid>(&json)
+        .map(TableGrid)
+        .map_err(|e| e.to_string())
+}
 pub fn grid_cell_from_json(json: String) -> Result<GridCell, String> {
     serde_json::from_str::<kreuzberg::GridCell>(&json)
         .map(GridCell)
         .map_err(|e| e.to_string())
 }
-
 pub fn text_annotation_from_json(json: String) -> Result<TextAnnotation, String> {
     serde_json::from_str::<kreuzberg::TextAnnotation>(&json)
         .map(TextAnnotation)
         .map_err(|e| e.to_string())
 }
-
 pub fn archive_entry_from_json(json: String) -> Result<ArchiveEntry, String> {
     serde_json::from_str::<kreuzberg::ArchiveEntry>(&json)
         .map(ArchiveEntry)
         .map_err(|e| e.to_string())
 }
-
 pub fn processing_warning_from_json(json: String) -> Result<ProcessingWarning, String> {
     serde_json::from_str::<kreuzberg::ProcessingWarning>(&json)
         .map(ProcessingWarning)
         .map_err(|e| e.to_string())
 }
-
+pub fn llm_usage_from_json(json: String) -> Result<LlmUsage, String> {
+    serde_json::from_str::<kreuzberg::LlmUsage>(&json)
+        .map(LlmUsage)
+        .map_err(|e| e.to_string())
+}
 pub fn chunk_from_json(json: String) -> Result<Chunk, String> {
     serde_json::from_str::<kreuzberg::Chunk>(&json)
         .map(Chunk)
         .map_err(|e| e.to_string())
 }
-
 pub fn heading_context_from_json(json: String) -> Result<HeadingContext, String> {
     serde_json::from_str::<kreuzberg::HeadingContext>(&json)
         .map(HeadingContext)
         .map_err(|e| e.to_string())
 }
-
 pub fn heading_level_from_json(json: String) -> Result<HeadingLevel, String> {
     serde_json::from_str::<kreuzberg::HeadingLevel>(&json)
         .map(HeadingLevel)
         .map_err(|e| e.to_string())
 }
-
 pub fn chunk_metadata_from_json(json: String) -> Result<ChunkMetadata, String> {
     serde_json::from_str::<kreuzberg::ChunkMetadata>(&json)
         .map(ChunkMetadata)
         .map_err(|e| e.to_string())
 }
-
 pub fn extracted_image_from_json(json: String) -> Result<ExtractedImage, String> {
     serde_json::from_str::<kreuzberg::ExtractedImage>(&json)
         .map(ExtractedImage)
         .map_err(|e| e.to_string())
 }
-
+pub fn bounding_box_from_json(json: String) -> Result<BoundingBox, String> {
+    serde_json::from_str::<kreuzberg::BoundingBox>(&json)
+        .map(BoundingBox)
+        .map_err(|e| e.to_string())
+}
 pub fn element_metadata_from_json(json: String) -> Result<ElementMetadata, String> {
     serde_json::from_str::<kreuzberg::ElementMetadata>(&json)
         .map(ElementMetadata)
         .map_err(|e| e.to_string())
 }
-
 pub fn element_from_json(json: String) -> Result<Element, String> {
     serde_json::from_str::<kreuzberg::Element>(&json)
         .map(Element)
         .map_err(|e| e.to_string())
 }
-
 pub fn excel_workbook_from_json(json: String) -> Result<ExcelWorkbook, String> {
     serde_json::from_str::<kreuzberg::ExcelWorkbook>(&json)
         .map(ExcelWorkbook)
         .map_err(|e| e.to_string())
 }
-
 pub fn excel_sheet_from_json(json: String) -> Result<ExcelSheet, String> {
     serde_json::from_str::<kreuzberg::ExcelSheet>(&json)
         .map(ExcelSheet)
         .map_err(|e| e.to_string())
 }
-
 pub fn xml_extraction_result_from_json(json: String) -> Result<XmlExtractionResult, String> {
     serde_json::from_str::<kreuzberg::XmlExtractionResult>(&json)
         .map(XmlExtractionResult)
         .map_err(|e| e.to_string())
 }
-
 pub fn text_extraction_result_from_json(json: String) -> Result<TextExtractionResult, String> {
     serde_json::from_str::<kreuzberg::TextExtractionResult>(&json)
         .map(TextExtractionResult)
         .map_err(|e| e.to_string())
 }
-
 pub fn pptx_extraction_result_from_json(json: String) -> Result<PptxExtractionResult, String> {
     serde_json::from_str::<kreuzberg::PptxExtractionResult>(&json)
         .map(PptxExtractionResult)
         .map_err(|e| e.to_string())
 }
-
 pub fn email_extraction_result_from_json(json: String) -> Result<EmailExtractionResult, String> {
     serde_json::from_str::<kreuzberg::EmailExtractionResult>(&json)
         .map(EmailExtractionResult)
         .map_err(|e| e.to_string())
 }
-
 pub fn email_attachment_from_json(json: String) -> Result<EmailAttachment, String> {
     serde_json::from_str::<kreuzberg::EmailAttachment>(&json)
         .map(EmailAttachment)
         .map_err(|e| e.to_string())
 }
-
 pub fn ocr_table_from_json(json: String) -> Result<OcrTable, String> {
     serde_json::from_str::<kreuzberg::OcrTable>(&json)
         .map(OcrTable)
         .map_err(|e| e.to_string())
 }
-
+pub fn ocr_table_bounding_box_from_json(json: String) -> Result<OcrTableBoundingBox, String> {
+    serde_json::from_str::<kreuzberg::OcrTableBoundingBox>(&json)
+        .map(OcrTableBoundingBox)
+        .map_err(|e| e.to_string())
+}
+pub fn image_preprocessing_config_from_json(json: String) -> Result<ImagePreprocessingConfig, String> {
+    serde_json::from_str::<kreuzberg::ImagePreprocessingConfig>(&json)
+        .map(ImagePreprocessingConfig)
+        .map_err(|e| e.to_string())
+}
+pub fn tesseract_config_from_json(json: String) -> Result<TesseractConfig, String> {
+    serde_json::from_str::<kreuzberg::TesseractConfig>(&json)
+        .map(TesseractConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn image_preprocessing_metadata_from_json(json: String) -> Result<ImagePreprocessingMetadata, String> {
     serde_json::from_str::<kreuzberg::ImagePreprocessingMetadata>(&json)
         .map(ImagePreprocessingMetadata)
         .map_err(|e| e.to_string())
 }
-
+pub fn metadata_from_json(json: String) -> Result<Metadata, String> {
+    serde_json::from_str::<kreuzberg::Metadata>(&json)
+        .map(Metadata)
+        .map_err(|e| e.to_string())
+}
+pub fn excel_metadata_from_json(json: String) -> Result<ExcelMetadata, String> {
+    serde_json::from_str::<kreuzberg::ExcelMetadata>(&json)
+        .map(ExcelMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn email_metadata_from_json(json: String) -> Result<EmailMetadata, String> {
+    serde_json::from_str::<kreuzberg::EmailMetadata>(&json)
+        .map(EmailMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn archive_metadata_from_json(json: String) -> Result<ArchiveMetadata, String> {
+    serde_json::from_str::<kreuzberg::ArchiveMetadata>(&json)
+        .map(ArchiveMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn image_metadata_from_json(json: String) -> Result<ImageMetadata, String> {
+    serde_json::from_str::<kreuzberg::ImageMetadata>(&json)
+        .map(ImageMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn xml_metadata_from_json(json: String) -> Result<XmlMetadata, String> {
+    serde_json::from_str::<kreuzberg::XmlMetadata>(&json)
+        .map(XmlMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn text_metadata_from_json(json: String) -> Result<TextMetadata, String> {
+    serde_json::from_str::<kreuzberg::TextMetadata>(&json)
+        .map(TextMetadata)
+        .map_err(|e| e.to_string())
+}
 pub fn header_metadata_from_json(json: String) -> Result<HeaderMetadata, String> {
     serde_json::from_str::<kreuzberg::HeaderMetadata>(&json)
         .map(HeaderMetadata)
         .map_err(|e| e.to_string())
 }
-
 pub fn link_metadata_from_json(json: String) -> Result<LinkMetadata, String> {
     serde_json::from_str::<kreuzberg::LinkMetadata>(&json)
         .map(LinkMetadata)
         .map_err(|e| e.to_string())
 }
-
 pub fn image_metadata_type_from_json(json: String) -> Result<ImageMetadataType, String> {
     serde_json::from_str::<kreuzberg::ImageMetadataType>(&json)
         .map(ImageMetadataType)
         .map_err(|e| e.to_string())
 }
-
 pub fn structured_data_from_json(json: String) -> Result<StructuredData, String> {
     serde_json::from_str::<kreuzberg::StructuredData>(&json)
         .map(StructuredData)
         .map_err(|e| e.to_string())
 }
-
+pub fn html_metadata_from_json(json: String) -> Result<HtmlMetadata, String> {
+    serde_json::from_str::<kreuzberg::HtmlMetadata>(&json)
+        .map(HtmlMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_metadata_from_json(json: String) -> Result<OcrMetadata, String> {
+    serde_json::from_str::<kreuzberg::OcrMetadata>(&json)
+        .map(OcrMetadata)
+        .map_err(|e| e.to_string())
+}
 pub fn error_metadata_from_json(json: String) -> Result<ErrorMetadata, String> {
     serde_json::from_str::<kreuzberg::ErrorMetadata>(&json)
         .map(ErrorMetadata)
         .map_err(|e| e.to_string())
 }
-
+pub fn pptx_metadata_from_json(json: String) -> Result<PptxMetadata, String> {
+    serde_json::from_str::<kreuzberg::PptxMetadata>(&json)
+        .map(PptxMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn docx_metadata_from_json(json: String) -> Result<DocxMetadata, String> {
+    serde_json::from_str::<kreuzberg::DocxMetadata>(&json)
+        .map(DocxMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn csv_metadata_from_json(json: String) -> Result<CsvMetadata, String> {
+    serde_json::from_str::<kreuzberg::CsvMetadata>(&json)
+        .map(CsvMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn bibtex_metadata_from_json(json: String) -> Result<BibtexMetadata, String> {
+    serde_json::from_str::<kreuzberg::BibtexMetadata>(&json)
+        .map(BibtexMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn citation_metadata_from_json(json: String) -> Result<CitationMetadata, String> {
+    serde_json::from_str::<kreuzberg::CitationMetadata>(&json)
+        .map(CitationMetadata)
+        .map_err(|e| e.to_string())
+}
 pub fn year_range_from_json(json: String) -> Result<YearRange, String> {
     serde_json::from_str::<kreuzberg::YearRange>(&json)
         .map(YearRange)
         .map_err(|e| e.to_string())
 }
-
+pub fn fiction_book_metadata_from_json(json: String) -> Result<FictionBookMetadata, String> {
+    serde_json::from_str::<kreuzberg::FictionBookMetadata>(&json)
+        .map(FictionBookMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn dbf_metadata_from_json(json: String) -> Result<DbfMetadata, String> {
+    serde_json::from_str::<kreuzberg::DbfMetadata>(&json)
+        .map(DbfMetadata)
+        .map_err(|e| e.to_string())
+}
 pub fn dbf_field_info_from_json(json: String) -> Result<DbfFieldInfo, String> {
     serde_json::from_str::<kreuzberg::DbfFieldInfo>(&json)
         .map(DbfFieldInfo)
         .map_err(|e| e.to_string())
 }
-
+pub fn jats_metadata_from_json(json: String) -> Result<JatsMetadata, String> {
+    serde_json::from_str::<kreuzberg::JatsMetadata>(&json)
+        .map(JatsMetadata)
+        .map_err(|e| e.to_string())
+}
 pub fn contributor_role_from_json(json: String) -> Result<ContributorRole, String> {
     serde_json::from_str::<kreuzberg::ContributorRole>(&json)
         .map(ContributorRole)
         .map_err(|e| e.to_string())
 }
-
+pub fn epub_metadata_from_json(json: String) -> Result<EpubMetadata, String> {
+    serde_json::from_str::<kreuzberg::EpubMetadata>(&json)
+        .map(EpubMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn pst_metadata_from_json(json: String) -> Result<PstMetadata, String> {
+    serde_json::from_str::<kreuzberg::PstMetadata>(&json)
+        .map(PstMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_confidence_from_json(json: String) -> Result<OcrConfidence, String> {
+    serde_json::from_str::<kreuzberg::OcrConfidence>(&json)
+        .map(OcrConfidence)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_rotation_from_json(json: String) -> Result<OcrRotation, String> {
+    serde_json::from_str::<kreuzberg::OcrRotation>(&json)
+        .map(OcrRotation)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_element_from_json(json: String) -> Result<OcrElement, String> {
+    serde_json::from_str::<kreuzberg::OcrElement>(&json)
+        .map(OcrElement)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_element_config_from_json(json: String) -> Result<OcrElementConfig, String> {
+    serde_json::from_str::<kreuzberg::OcrElementConfig>(&json)
+        .map(OcrElementConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn page_structure_from_json(json: String) -> Result<PageStructure, String> {
     serde_json::from_str::<kreuzberg::PageStructure>(&json)
         .map(PageStructure)
         .map_err(|e| e.to_string())
 }
-
+pub fn page_boundary_from_json(json: String) -> Result<PageBoundary, String> {
+    serde_json::from_str::<kreuzberg::PageBoundary>(&json)
+        .map(PageBoundary)
+        .map_err(|e| e.to_string())
+}
 pub fn page_info_from_json(json: String) -> Result<PageInfo, String> {
     serde_json::from_str::<kreuzberg::PageInfo>(&json)
         .map(PageInfo)
         .map_err(|e| e.to_string())
 }
-
 pub fn page_content_from_json(json: String) -> Result<PageContent, String> {
     serde_json::from_str::<kreuzberg::PageContent>(&json)
         .map(PageContent)
         .map_err(|e| e.to_string())
 }
-
+pub fn layout_region_from_json(json: String) -> Result<LayoutRegion, String> {
+    serde_json::from_str::<kreuzberg::LayoutRegion>(&json)
+        .map(LayoutRegion)
+        .map_err(|e| e.to_string())
+}
 pub fn page_hierarchy_from_json(json: String) -> Result<PageHierarchy, String> {
     serde_json::from_str::<kreuzberg::PageHierarchy>(&json)
         .map(PageHierarchy)
         .map_err(|e| e.to_string())
 }
-
 pub fn hierarchical_block_from_json(json: String) -> Result<HierarchicalBlock, String> {
     serde_json::from_str::<kreuzberg::HierarchicalBlock>(&json)
         .map(HierarchicalBlock)
         .map_err(|e| e.to_string())
 }
-
+pub fn table_from_json(json: String) -> Result<Table, String> {
+    serde_json::from_str::<kreuzberg::Table>(&json)
+        .map(Table)
+        .map_err(|e| e.to_string())
+}
+pub fn table_cell_from_json(json: String) -> Result<TableCell, String> {
+    serde_json::from_str::<kreuzberg::TableCell>(&json)
+        .map(TableCell)
+        .map_err(|e| e.to_string())
+}
 pub fn uri_from_json(json: String) -> Result<Uri, String> {
     serde_json::from_str::<kreuzberg::Uri>(&json)
         .map(Uri)
         .map_err(|e| e.to_string())
 }
-
 pub fn detect_response_from_json(json: String) -> Result<DetectResponse, String> {
     serde_json::from_str::<kreuzberg::api::DetectResponse>(&json)
         .map(DetectResponse)
         .map_err(|e| e.to_string())
 }
-
 pub fn embedding_preset_from_json(json: String) -> Result<EmbeddingPreset, String> {
     serde_json::from_str::<kreuzberg::EmbeddingPreset>(&json)
         .map(EmbeddingPreset)
         .map_err(|e| e.to_string())
 }
-
+pub fn yake_params_from_json(json: String) -> Result<YakeParams, String> {
+    serde_json::from_str::<kreuzberg::YakeParams>(&json)
+        .map(YakeParams)
+        .map_err(|e| e.to_string())
+}
+pub fn rake_params_from_json(json: String) -> Result<RakeParams, String> {
+    serde_json::from_str::<kreuzberg::RakeParams>(&json)
+        .map(RakeParams)
+        .map_err(|e| e.to_string())
+}
+pub fn keyword_config_from_json(json: String) -> Result<KeywordConfig, String> {
+    serde_json::from_str::<kreuzberg::KeywordConfig>(&json)
+        .map(KeywordConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn keyword_from_json(json: String) -> Result<Keyword, String> {
     serde_json::from_str::<kreuzberg::Keyword>(&json)
         .map(Keyword)
         .map_err(|e| e.to_string())
 }
-
+pub fn paddle_ocr_config_from_json(json: String) -> Result<PaddleOcrConfig, String> {
+    serde_json::from_str::<kreuzberg::PaddleOcrConfig>(&json)
+        .map(PaddleOcrConfig)
+        .map_err(|e| e.to_string())
+}
 pub fn model_paths_from_json(json: String) -> Result<ModelPaths, String> {
     serde_json::from_str::<kreuzberg::ModelPaths>(&json)
         .map(ModelPaths)
         .map_err(|e| e.to_string())
 }
-
+pub fn orientation_result_from_json(json: String) -> Result<OrientationResult, String> {
+    serde_json::from_str::<kreuzberg::OrientationResult>(&json)
+        .map(OrientationResult)
+        .map_err(|e| e.to_string())
+}
+pub fn b_box_from_json(json: String) -> Result<BBox, String> {
+    serde_json::from_str::<kreuzberg::BBox>(&json)
+        .map(BBox)
+        .map_err(|e| e.to_string())
+}
 pub fn layout_detection_from_json(json: String) -> Result<LayoutDetection, String> {
     serde_json::from_str::<kreuzberg::LayoutDetection>(&json)
         .map(LayoutDetection)
         .map_err(|e| e.to_string())
 }
-
 pub fn recognized_table_from_json(json: String) -> Result<RecognizedTable, String> {
     serde_json::from_str::<kreuzberg::RecognizedTable>(&json)
         .map(RecognizedTable)
         .map_err(|e| e.to_string())
 }
-
 pub fn detection_result_from_json(json: String) -> Result<DetectionResult, String> {
     serde_json::from_str::<kreuzberg::DetectionResult>(&json)
         .map(DetectionResult)
         .map_err(|e| e.to_string())
 }
-
 pub fn embedded_file_from_json(json: String) -> Result<EmbeddedFile, String> {
     serde_json::from_str::<kreuzberg::pdf::embedded_files::EmbeddedFile>(&json)
         .map(EmbeddedFile)
+        .map_err(|e| e.to_string())
+}
+pub fn pdf_metadata_from_json(json: String) -> Result<PdfMetadata, String> {
+    serde_json::from_str::<kreuzberg::pdf::metadata::PdfMetadata>(&json)
+        .map(PdfMetadata)
+        .map_err(|e| e.to_string())
+}
+pub fn execution_provider_type_from_json(json: String) -> Result<ExecutionProviderType, String> {
+    serde_json::from_str::<kreuzberg::ExecutionProviderType>(&json)
+        .map(ExecutionProviderType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn output_format_from_json(json: String) -> Result<OutputFormat, String> {
+    serde_json::from_str::<kreuzberg::OutputFormat>(&json)
+        .map(OutputFormat::from)
+        .map_err(|e| e.to_string())
+}
+pub fn html_theme_from_json(json: String) -> Result<HtmlTheme, String> {
+    serde_json::from_str::<kreuzberg::HtmlTheme>(&json)
+        .map(HtmlTheme::from)
+        .map_err(|e| e.to_string())
+}
+pub fn table_model_from_json(json: String) -> Result<TableModel, String> {
+    serde_json::from_str::<kreuzberg::TableModel>(&json)
+        .map(TableModel::from)
+        .map_err(|e| e.to_string())
+}
+pub fn chunker_type_from_json(json: String) -> Result<ChunkerType, String> {
+    serde_json::from_str::<kreuzberg::ChunkerType>(&json)
+        .map(ChunkerType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn chunk_sizing_from_json(json: String) -> Result<ChunkSizing, String> {
+    serde_json::from_str::<kreuzberg::ChunkSizing>(&json)
+        .map(ChunkSizing::from)
+        .map_err(|e| e.to_string())
+}
+pub fn embedding_model_type_from_json(json: String) -> Result<EmbeddingModelType, String> {
+    serde_json::from_str::<kreuzberg::EmbeddingModelType>(&json)
+        .map(EmbeddingModelType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn code_content_mode_from_json(json: String) -> Result<CodeContentMode, String> {
+    serde_json::from_str::<kreuzberg::CodeContentMode>(&json)
+        .map(CodeContentMode::from)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_backend_type_from_json(json: String) -> Result<OcrBackendType, String> {
+    serde_json::from_str::<kreuzberg::OcrBackendType>(&json)
+        .map(OcrBackendType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn processing_stage_from_json(json: String) -> Result<ProcessingStage, String> {
+    serde_json::from_str::<kreuzberg::ProcessingStage>(&json)
+        .map(ProcessingStage::from)
+        .map_err(|e| e.to_string())
+}
+pub fn reduction_level_from_json(json: String) -> Result<ReductionLevel, String> {
+    serde_json::from_str::<kreuzberg::ReductionLevel>(&json)
+        .map(ReductionLevel::from)
+        .map_err(|e| e.to_string())
+}
+pub fn pdf_annotation_type_from_json(json: String) -> Result<PdfAnnotationType, String> {
+    serde_json::from_str::<kreuzberg::PdfAnnotationType>(&json)
+        .map(PdfAnnotationType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn block_type_from_json(json: String) -> Result<BlockType, String> {
+    serde_json::from_str::<kreuzberg::BlockType>(&json)
+        .map(BlockType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn inline_type_from_json(json: String) -> Result<InlineType, String> {
+    serde_json::from_str::<kreuzberg::InlineType>(&json)
+        .map(InlineType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn relationship_kind_from_json(json: String) -> Result<RelationshipKind, String> {
+    serde_json::from_str::<kreuzberg::RelationshipKind>(&json)
+        .map(RelationshipKind::from)
+        .map_err(|e| e.to_string())
+}
+pub fn content_layer_from_json(json: String) -> Result<ContentLayer, String> {
+    serde_json::from_str::<kreuzberg::ContentLayer>(&json)
+        .map(ContentLayer::from)
+        .map_err(|e| e.to_string())
+}
+pub fn node_content_from_json(json: String) -> Result<NodeContent, String> {
+    serde_json::from_str::<kreuzberg::NodeContent>(&json)
+        .map(NodeContent::from)
+        .map_err(|e| e.to_string())
+}
+pub fn annotation_kind_from_json(json: String) -> Result<AnnotationKind, String> {
+    serde_json::from_str::<kreuzberg::AnnotationKind>(&json)
+        .map(AnnotationKind::from)
+        .map_err(|e| e.to_string())
+}
+pub fn extraction_method_from_json(json: String) -> Result<ExtractionMethod, String> {
+    serde_json::from_str::<kreuzberg::ExtractionMethod>(&json)
+        .map(ExtractionMethod::from)
+        .map_err(|e| e.to_string())
+}
+pub fn chunk_type_from_json(json: String) -> Result<ChunkType, String> {
+    serde_json::from_str::<kreuzberg::ChunkType>(&json)
+        .map(ChunkType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn image_kind_from_json(json: String) -> Result<ImageKind, String> {
+    serde_json::from_str::<kreuzberg::ImageKind>(&json)
+        .map(ImageKind::from)
+        .map_err(|e| e.to_string())
+}
+pub fn result_format_from_json(json: String) -> Result<ResultFormat, String> {
+    serde_json::from_str::<kreuzberg::ResultFormat>(&json)
+        .map(ResultFormat::from)
+        .map_err(|e| e.to_string())
+}
+pub fn element_type_from_json(json: String) -> Result<ElementType, String> {
+    serde_json::from_str::<kreuzberg::ElementType>(&json)
+        .map(ElementType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn format_metadata_from_json(json: String) -> Result<FormatMetadata, String> {
+    serde_json::from_str::<kreuzberg::FormatMetadata>(&json)
+        .map(FormatMetadata::from)
+        .map_err(|e| e.to_string())
+}
+pub fn text_direction_from_json(json: String) -> Result<TextDirection, String> {
+    serde_json::from_str::<kreuzberg::TextDirection>(&json)
+        .map(TextDirection::from)
+        .map_err(|e| e.to_string())
+}
+pub fn link_type_from_json(json: String) -> Result<LinkType, String> {
+    serde_json::from_str::<kreuzberg::LinkType>(&json)
+        .map(LinkType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn image_type_from_json(json: String) -> Result<ImageType, String> {
+    serde_json::from_str::<kreuzberg::ImageType>(&json)
+        .map(ImageType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn structured_data_type_from_json(json: String) -> Result<StructuredDataType, String> {
+    serde_json::from_str::<kreuzberg::StructuredDataType>(&json)
+        .map(StructuredDataType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_bounding_geometry_from_json(json: String) -> Result<OcrBoundingGeometry, String> {
+    serde_json::from_str::<kreuzberg::OcrBoundingGeometry>(&json)
+        .map(OcrBoundingGeometry::from)
+        .map_err(|e| e.to_string())
+}
+pub fn ocr_element_level_from_json(json: String) -> Result<OcrElementLevel, String> {
+    serde_json::from_str::<kreuzberg::OcrElementLevel>(&json)
+        .map(OcrElementLevel::from)
+        .map_err(|e| e.to_string())
+}
+pub fn page_unit_type_from_json(json: String) -> Result<PageUnitType, String> {
+    serde_json::from_str::<kreuzberg::PageUnitType>(&json)
+        .map(PageUnitType::from)
+        .map_err(|e| e.to_string())
+}
+pub fn uri_kind_from_json(json: String) -> Result<UriKind, String> {
+    serde_json::from_str::<kreuzberg::UriKind>(&json)
+        .map(UriKind::from)
+        .map_err(|e| e.to_string())
+}
+pub fn keyword_algorithm_from_json(json: String) -> Result<KeywordAlgorithm, String> {
+    serde_json::from_str::<kreuzberg::KeywordAlgorithm>(&json)
+        .map(KeywordAlgorithm::from)
+        .map_err(|e| e.to_string())
+}
+pub fn psm_mode_from_json(json: String) -> Result<PSMMode, String> {
+    serde_json::from_str::<kreuzberg::PSMMode>(&json)
+        .map(PSMMode::from)
+        .map_err(|e| e.to_string())
+}
+pub fn paddle_language_from_json(json: String) -> Result<PaddleLanguage, String> {
+    serde_json::from_str::<kreuzberg::PaddleLanguage>(&json)
+        .map(PaddleLanguage::from)
+        .map_err(|e| e.to_string())
+}
+pub fn layout_class_from_json(json: String) -> Result<LayoutClass, String> {
+    serde_json::from_str::<kreuzberg::LayoutClass>(&json)
+        .map(LayoutClass::from)
         .map_err(|e| e.to_string())
 }

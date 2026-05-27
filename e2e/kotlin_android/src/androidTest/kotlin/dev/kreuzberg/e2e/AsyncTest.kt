@@ -17,6 +17,13 @@ class AsyncTest {
     }
 
     @Test
+    fun test_async_extract_bytes() {
+        val client = Kreuzberg()
+        val result = client.extract_file(/* fixture: async_extract_bytes */)
+        // TODO: assert result is not an error
+    }
+
+    @Test
     fun test_async_extract_bytes_empty_mime() {
         val client = Kreuzberg()
         val result = client.extract_file(/* fixture: async_extract_bytes_empty_mime */)

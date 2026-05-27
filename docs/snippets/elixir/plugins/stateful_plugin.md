@@ -1,5 +1,4 @@
 <!-- snippet:skip reason="Elixir Rustler NIFs cannot host async Send + Sync + 'static Rust trait objects via callbacks; the BEAM actor-model boundary requires plugin work to live in the Rust core. The alef-generated Elixir trait_call macro additionally has a backslash/encoding bug (separate alef-codegen ticket). Custom plugins must be implemented in Rust." -->
-
 Stateful plugin implementation is not available in the Elixir binding. Stateful plugins must be implemented in Rust using `Arc<Mutex<>>` or `Arc<RwLock<>>` for thread-safe state management.
 
 To implement a stateful plugin in Rust:

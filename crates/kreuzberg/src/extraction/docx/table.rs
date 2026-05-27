@@ -127,6 +127,7 @@ pub struct CellShading {
 }
 
 /// Column widths from `<w:tblGrid>`.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct TableGrid {
     pub columns: Vec<i32>, // column widths in twips

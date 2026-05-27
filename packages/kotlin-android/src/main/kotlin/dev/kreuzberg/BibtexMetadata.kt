@@ -17,20 +17,17 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * BibTeX bibliography metadata.
- */
+/** BibTeX bibliography metadata. */
 data class BibtexMetadata(
-    /**
-     * Number of entries in the bibliography.
-     */
-    val entryCount: Long,
-    val citationKeys: List<String>,
-    val authors: List<String>,
-    val yearRange: YearRange?,
-    val entryTypes: Map<String, Long>?
+    /** Number of entries in the bibliography. */
+    val entryCount: Long = 0L,
+    val citationKeys: List<String> = emptyList(),
+    val authors: List<String> = emptyList(),
+    val yearRange: YearRange? = null,
+    val entryTypes: Map<String, Long>? = null,
 )

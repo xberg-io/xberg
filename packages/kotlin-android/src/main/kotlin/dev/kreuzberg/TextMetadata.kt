@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,32 +25,20 @@ package dev.kreuzberg
 /**
  * Text/Markdown metadata.
  *
- * Extracted from plain text and Markdown files. Includes word counts and,
- * for Markdown, structural elements like headers and links.
+ * Extracted from plain text and Markdown files. Includes word counts and, for Markdown, structural
+ * elements like headers and links.
  */
 data class TextMetadata(
-    /**
-     * Number of lines in the document
-     */
-    val lineCount: Int,
-    /**
-     * Number of words
-     */
-    val wordCount: Int,
-    /**
-     * Number of characters
-     */
-    val characterCount: Int,
-    /**
-     * Markdown headers (headings text only, for Markdown files)
-     */
-    val headers: List<String>?,
-    /**
-     * Markdown links as (text, url) tuples (for Markdown files)
-     */
-    val links: List<String>?,
-    /**
-     * Code blocks as (language, code) tuples (for Markdown files)
-     */
-    val codeBlocks: List<String>?
+    /** Number of lines in the document */
+    val lineCount: Int = 0,
+    /** Number of words */
+    val wordCount: Int = 0,
+    /** Number of characters */
+    val characterCount: Int = 0,
+    /** Markdown headers (headings text only, for Markdown files) */
+    val headers: List<String>? = null,
+    /** Markdown links as (text, url) tuples (for Markdown files) */
+    val links: List<List<String>>? = null,
+    /** Code blocks as (language, code) tuples (for Markdown files) */
+    val codeBlocks: List<List<String>>? = null,
 )

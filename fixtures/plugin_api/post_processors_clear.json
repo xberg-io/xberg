@@ -2,33 +2,16 @@
   "id": "post_processors_clear",
   "category": "post_processor_management",
   "description": "Clear all post-processors and verify list is empty",
-  "tags": ["post_processors", "plugin_management", "clear", "trait-bridge"],
+  "tags": [
+    "post_processors",
+    "plugin_management",
+    "clear",
+    "trait-bridge"
+  ],
   "call": "clear_post_processors",
   "assertions": [
     {
       "type": "not_error"
     }
-  ],
-  "skip": {
-    "languages": [
-      "rust",
-      "python",
-      "node",
-      "go",
-      "ruby",
-      "php",
-      "java",
-      "csharp",
-      "kotlin",
-      "kotlin_android",
-      "swift",
-      "dart",
-      "wasm",
-      "r",
-      "elixir",
-      "zig",
-      "ffi"
-    ],
-    "reason": "Trait-bridge fixture support deferred to alef-e2e v0.14.5+"
-  }
+  ]
 }

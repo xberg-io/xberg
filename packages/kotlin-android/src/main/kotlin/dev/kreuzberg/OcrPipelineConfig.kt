@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,17 +25,13 @@ package dev.kreuzberg
 /**
  * Multi-backend OCR pipeline with quality-based fallback.
  *
- * Backends are tried in priority order (highest first). After each backend
- * produces output, quality is evaluated. If it meets `quality_thresholds.pipeline_min_quality`,
- * the result is accepted. Otherwise the next backend is tried.
+ * Backends are tried in priority order (highest first). After each backend produces output, quality
+ * is evaluated. If it meets `quality_thresholds.pipeline_min_quality`, the result is accepted.
+ * Otherwise the next backend is tried.
  */
 data class OcrPipelineConfig(
-    /**
-     * Ordered list of backends to try. Sorted by priority (descending) at runtime.
-     */
-    val stages: List<OcrPipelineStage>,
-    /**
-     * Quality thresholds for deciding whether to accept a result or try the next backend.
-     */
-    val qualityThresholds: OcrQualityThresholds
+    /** Ordered list of backends to try. Sorted by priority (descending) at runtime. */
+    val stages: List<OcrPipelineStage> = emptyList(),
+    /** Quality thresholds for deciding whether to accept a result or try the next backend. */
+    val qualityThresholds: OcrQualityThresholds,
 )

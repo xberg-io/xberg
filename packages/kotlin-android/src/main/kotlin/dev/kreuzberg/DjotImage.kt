@@ -17,28 +17,19 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Image element in Djot.
- */
+/** Image element in Djot. */
 data class DjotImage(
-    /**
-     * Image source URL or path
-     */
+    /** Image source URL or path */
     val src: String,
-    /**
-     * Alternative text
-     */
+    /** Alternative text */
     val alt: String,
-    /**
-     * Optional title
-     */
-    val title: String?,
-    /**
-     * Element attributes
-     */
-    val attributes: String?
+    /** Optional title */
+    val title: String? = null,
+    /** Element attributes */
+    val attributes: String? = null,
 )

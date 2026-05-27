@@ -40,7 +40,7 @@ runs:
 
     - name: Cache kreuzberg-tesseract build cache
       if: inputs.enable-cache == 'true'
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@v5
       with:
         path: |
           .tesseract-cache/${{ inputs.label }}

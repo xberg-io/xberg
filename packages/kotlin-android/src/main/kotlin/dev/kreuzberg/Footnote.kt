@@ -17,20 +17,15 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Footnote in Djot.
- */
+/** Footnote in Djot. */
 data class Footnote(
-    /**
-     * Footnote label
-     */
+    /** Footnote label */
     val label: String,
-    /**
-     * Footnote content blocks
-     */
-    val content: List<FormattedBlock>
+    /** Footnote content blocks */
+    val content: List<FormattedBlock> = emptyList(),
 )

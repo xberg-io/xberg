@@ -1,16 +1,12 @@
 # Kreuzberg
 
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 20px 0;">
-  <!-- Built with -->
   <a href="https://github.com/kreuzberg-dev/alef">
-    <img src="https://img.shields.io/badge/built%20with-alef%20%D7%90-007ec6" alt="Built with alef">
+    <img src="https://img.shields.io/badge/Bindings-alef%20%D7%90-007ec6" alt="Bindings">
   </a>
   <!-- Language Bindings -->
   <a href="https://crates.io/crates/kreuzberg">
     <img src="https://img.shields.io/crates/v/kreuzberg?label=Rust&color=007ec6" alt="Rust">
-  </a>
-  <a href="https://hex.pm/packages/kreuzberg">
-    <img src="https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6" alt="Elixir">
   </a>
   <a href="https://pypi.org/project/kreuzberg/">
     <img src="https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6" alt="Python">
@@ -21,11 +17,10 @@
   <a href="https://www.npmjs.com/package/@kreuzberg/wasm">
     <img src="https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
-
   <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg">
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5">
     <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v5*" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
@@ -37,50 +32,69 @@
   <a href="https://rubygems.org/gems/kreuzberg">
     <img src="https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6" alt="Ruby">
   </a>
+  <a href="https://hex.pm/packages/kreuzberg">
+    <img src="https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6" alt="Elixir">
+  </a>
   <a href="https://kreuzberg-dev.r-universe.dev/kreuzberg">
     <img src="https://img.shields.io/badge/R-kreuzberg-007ec6" alt="R">
   </a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
-    <img src="https://img.shields.io/badge/Docker-007ec6?logo=docker&logoColor=white" alt="Docker">
+  <a href="https://pub.dev/packages/kreuzberg">
+    <img src="https://img.shields.io/pub/v/kreuzberg?label=Dart&color=007ec6" alt="Dart">
+  </a>
+  <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg-android">
+    <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg-android?label=Kotlin&color=007ec6" alt="Kotlin">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/swift">
+    <img src="https://img.shields.io/badge/Swift-SPM-007ec6" alt="Swift">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/zig">
+    <img src="https://img.shields.io/badge/Zig-package-007ec6" alt="Zig">
   </a>
   <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
-    <img src="https://img.shields.io/badge/C-FFI-007ec6" alt="C">
+    <img src="https://img.shields.io/badge/C-FFI-007ec6" alt="C FFI">
   </a>
-  <a href="https://artifacthub.io/packages/search?repo=kreuzberg">
-    <img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/kreuzberg" alt="Artifact Hub">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
+    <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/charts%2Fkreuzberg">
+    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
   </a>
 
   <!-- Project Info -->
   <a href="https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-Elastic--2.0-blue.svg" alt="License">
+    <img src="https://img.shields.io/badge/License-Elastic--2.0-007ec6" alt="License">
   </a>
   <a href="https://docs.kreuzberg.dev">
-    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
-  </a>
-  <a href="https://docs.kreuzberg.dev/demo.html">
-    <img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Live_Demo-007ec6" alt="Live Demo">
+    <img src="https://img.shields.io/badge/Docs-kreuzberg-007ec6" alt="Documentation">
   </a>
   <a href="https://huggingface.co/Kreuzberg">
-    <img src="https://img.shields.io/badge/%F0%9F%A4%97_Hugging_Face-007ec6" alt="Hugging Face">
+    <img src="https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6" alt="Hugging Face">
   </a>
 </div>
 
-<img width="3384" height="573" alt="Linkedin- Banner" src="https://github.com/user-attachments/assets/1b6c6ad7-3b6d-4171-b1c9-f2026cc9deb8" />
+<div align="center" style="margin: 24px 0 0;">
+  <a href="https://kreuzberg.dev">
+    <img alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+  </a>
+</div>
 
-<div align="center" style="margin-top: 20px;">
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
-      <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-7289da?logo=discord&logoColor=white" alt="Discord">
+    <img height="22" src="https://img.shields.io/badge/Discord-Chat-007ec6?logo=discord&logoColor=white" alt="Join Discord">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img height="22" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
 </div>
 
-Extract text, metadata, and code intelligence from 91+ file formats and 306 programming languages at native speeds without needing a GPU.
+Extract text, metadata, and code intelligence from 90+ file formats and 300+ programming languages at native speeds without needing a GPU.
 
 ## Key Features
 
-- **Code intelligence** – Extract functions, classes, imports, symbols, and docstrings from [306 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter. Results in `ExtractionResult.code_intelligence` with semantic chunking
+- **Code intelligence** – Extract functions, classes, imports, symbols, and docstrings from [300+ programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter. Results in `ExtractionResult.code_intelligence` with semantic chunking
 - **Extensible architecture** – Plugin system for custom OCR backends, validators, post-processors, document extractors, and renderers
 - **Polyglot** – Native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, and C
-- **91+ file formats** – PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
+- **90+ file formats** – PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
 - **LLM intelligence** – VLM OCR (GPT-4o, Claude, Gemini, Ollama), structured JSON extraction with schema constraints, and provider-hosted embeddings via 143 LLM providers (including local engines: Ollama, LM Studio, vLLM, llama.cpp) through [liter-llm](https://github.com/kreuzberg-dev/liter-llm)
 - **OCR support** – Tesseract (all bindings, including Tesseract-WASM for browsers), PaddleOCR (all native bindings), EasyOCR (Python), VLM OCR (143 vision model providers including local engines), extensible via plugin API
 - **High performance** – Rust core with pure-Rust PDF, SIMD optimizations and full parallelism
@@ -108,13 +122,13 @@ Each language binding provides comprehensive documentation with examples and bes
 **JavaScript/TypeScript:**
 
 - **[@kreuzberg/node](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-node)** – Native NAPI-RS bindings for Node.js/Bun, fastest performance
-- **[@kreuzberg/wasm](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/typescript)** – WebAssembly for browsers/Deno/Cloudflare Workers, comprehensive format and OCR support (PDF, Excel, archives, all office formats, real Tesseract via the WASI build) — only ORT-dependent features (paddle-ocr, layout detection, embeddings, auto-rotate) and server modes (api/mcp/cli) are excluded
+- **[@kreuzberg/wasm](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-wasm)** – WebAssembly for browsers/Deno/Cloudflare Workers, comprehensive format and OCR support (PDF, Excel, archives, all office formats, real Tesseract via the WASI build) — only ORT-dependent features (paddle-ocr, layout detection, embeddings, auto-rotate) and server modes (api/mcp/cli) are excluded
 
 **Compiled Languages:**
 
 - **[Go](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5)** – Go module with FFI bindings, context-aware async
 - **[Java](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/java)** – Maven Central, Foreign Function & Memory API
-- **[Kotlin](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/kotlin)** – Maven Central, Kotlin/JVM with idiomatic data classes, sealed enums, and coroutine-based async
+- **[Kotlin](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/kotlin-android)** – Maven Central, Kotlin/JVM with idiomatic data classes, sealed enums, and coroutine-based async
 - **[C#](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/csharp)** – NuGet package, .NET 6.0+, full async/await support
 - **[Swift](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/swift)** – Swift Package Manager, macOS 13+/iOS 16+, native Swift types and async/await
 
@@ -193,7 +207,7 @@ To use embeddings functionality:
 
 ## Supported Formats
 
-91+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
+90+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
 
 ### Office Documents
 
@@ -241,7 +255,7 @@ To use embeddings functionality:
 
 **[Complete Format Reference →](https://docs.kreuzberg.dev/reference/formats/)**
 
-### Code Intelligence (306 Languages)
+### Code Intelligence (300+ Languages)
 
 | Feature                    | Description                                                   |
 | -------------------------- | ------------------------------------------------------------- |
@@ -340,15 +354,16 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 ## License
 
 Elastic License 2.0 (ELv2) - see [LICENSE](LICENSE) for details. See [https://www.elastic.co/licensing/elastic-license](https://www.elastic.co/licensing/elastic-license) for the full license text.
+
 ## FAQ
 
 ### What is Kreuzberg?
 
-Kreuzberg is a polyglot document intelligence framework with a Rust core. It extracts text, metadata, and code intelligence from 91+ file formats and 306 programming languages at native speeds without needing a GPU. It provides native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, and C.
+Kreuzberg is a polyglot document intelligence framework with a Rust core. It extracts text, metadata, and code intelligence from 90+ file formats and 300+ programming languages at native speeds without needing a GPU. It provides native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, and C.
 
 ### How does Kreuzberg differ from other document extraction tools?
 
-- **Kreuzberg**: Rust core, 91+ formats, 306 languages, polyglot bindings, code intelligence via tree-sitter, VLM OCR, native speeds, no GPU needed
+- **Kreuzberg**: Rust core, 90+ formats, 300+ languages, polyglot bindings, code intelligence via tree-sitter, VLM OCR, native speeds, no GPU needed
 - **Apache Tika**: Java-based, broader format support, but slower, no code intelligence, no VLM OCR
 - **pdfplumber**: Python-only, PDF focus, slower, no code intelligence
 - **unstructured**: Python-based, good format coverage, but slower, requires more dependencies
@@ -357,10 +372,10 @@ Kreuzberg's Rust core with SIMD optimizations and parallelism delivers 10-100x f
 
 ### What are Kreuzberg's key features?
 
-- **Code intelligence** — Extract functions, classes, imports, symbols, docstrings from 306 languages via tree-sitter
+- **Code intelligence** — Extract functions, classes, imports, symbols, docstrings from 300+ languages via tree-sitter
 - **Extensible architecture** — Plugin system for custom OCR backends, validators, post-processors, document extractors, renderers
 - **Polyglot bindings** — Native bindings for 14+ languages (Rust, Python, Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, C)
-- **91+ file formats** — PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
+- **90+ file formats** — PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
 - **LLM intelligence** — VLM OCR (GPT-4o, Claude, Gemini, Ollama), structured JSON extraction, embeddings via 143 LLM providers
 - **OCR support** — Tesseract (all bindings including WASM for browsers), PaddleOCR, EasyOCR, VLM OCR, extensible via plugin API
 - **High performance** — Rust core with pure-Rust PDF, SIMD optimizations, full parallelism
@@ -371,47 +386,57 @@ Kreuzberg's Rust core with SIMD optimizations and parallelism delivers 10-100x f
 
 ### What file formats does Kreuzberg support?
 
-8 categories covering 91+ formats:
-- **Documents** — PDF, DOCX, DOC, ODT, RTF, WPD
-- **Office** — XLSX, XLS, PPTX, PPT, ODS, ODP
+8 categories covering 90+ formats:
+
+- **Documents** — PDF, DOCX, DOC, ODT, RTF, Hangul
+- **Office** — XLSX, XLS, PPTX, PPT, ODS, iWork
 - **Images** — PNG, JPEG, TIFF, BMP, GIF, WebP
-- **Web** — HTML, XML, XHTML, MHTML
+- **Web** — HTML, XML, XHTML, SVG
 - **Emails** — MSG, EML, PST
-- **Archives** — ZIP, TAR, GZ, RAR, 7Z
+- **Archives** — ZIP, TAR, GZ, TGZ, 7Z
 - **Academic** — LaTeX, BibTeX, RIS
-- **Code** — 306 programming languages via tree-sitter
+- **Code** — 300+ programming languages via tree-sitter
 
 ### How do I get started?
 
 Choose your platform:
 
 **Python:**
+
 ```bash
 pip install kreuzberg
 ```
+
 See [Python docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/python)
 
 **Node.js:**
+
 ```bash
 npm install @kreuzberg/node
 ```
+
 See [Node.js docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-node)
 
 **Rust:**
+
 ```bash
 cargo add kreuzberg
 ```
+
 See [Rust docs](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg)
 
 **Docker:**
+
 ```bash
 docker pull ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
+
 See [Docker docs](https://docs.kreuzberg.dev/guides/docker/)
 
 ### What LLM/VLM providers are supported?
 
 143 providers including:
+
 - **OpenAI** — GPT-4o (vision), text models
 - **Anthropic** — Claude (vision), Claude 3.5 Sonnet
 - **Google** — Gemini (vision), Gemini 2.0 Flash
@@ -430,6 +455,7 @@ See [Docker docs](https://docs.kreuzberg.dev/guides/docker/)
 ### What is the TOON wire format?
 
 TOON is Kreuzberg's token-efficient serialization format for LLM/RAG pipelines. It uses ~30-50% fewer tokens than JSON, making it ideal for:
+
 - Large document processing
 - RAG system integration
 - LLM context window optimization
@@ -438,6 +464,7 @@ TOON is Kreuzberg's token-efficient serialization format for LLM/RAG pipelines. 
 ### What is code intelligence extraction?
 
 Kreuzberg extracts semantic code information via tree-sitter:
+
 - **Functions** — Names, parameters, return types, docstrings
 - **Classes** — Names, methods, inheritance, properties
 - **Imports** — Module names, import paths
@@ -449,6 +476,7 @@ Results in `ExtractionResult.code_intelligence` with semantic chunking.
 ### Does Kreuzberg work in browsers?
 
 Yes! The WASM package (`@kreuzberg/wasm`) supports browsers, Deno, and Cloudflare Workers with:
+
 - PDF, Excel, archives, all office formats
 - Real Tesseract OCR via WASI build
 - Only ORT-dependent features excluded (PaddleOCR, layout detection, embeddings, auto-rotate)
@@ -485,6 +513,7 @@ Yes! The WASM package (`@kreuzberg/wasm`) supports browsers, Deno, and Cloudflar
 ### What platforms are supported?
 
 All bindings support:
+
 - **Linux** — x86_64 and aarch64
 - **macOS** — ARM64
 - **Windows** — x64 (most bindings)
@@ -502,4 +531,3 @@ Elastic-2.0 License — open-source with commercial use restrictions. See [LICEN
 - **Discord**: [discord.gg/xt9WY3GnKR](https://discord.gg/xt9WY3GnKR)
 - **Hugging Face**: [huggingface.co/Kreuzberg](https://huggingface.co/Kreuzberg)
 - **GitHub Issues**: [github.com/kreuzberg-dev/kreuzberg/issues](https://github.com/kreuzberg-dev/kreuzberg/issues)
-

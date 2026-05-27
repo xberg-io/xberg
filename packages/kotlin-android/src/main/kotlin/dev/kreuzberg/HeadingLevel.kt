@@ -17,20 +17,15 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * A single heading in the hierarchy.
- */
+/** A single heading in the hierarchy. */
 data class HeadingLevel(
-    /**
-     * Heading depth (1 = h1, 2 = h2, etc.)
-     */
+    /** Heading depth (1 = h1, 2 = h2, etc.) */
     val level: Byte,
-    /**
-     * The text content of the heading.
-     */
-    val text: String
+    /** The text content of the heading. */
+    val text: String,
 )

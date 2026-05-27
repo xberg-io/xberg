@@ -26,6 +26,7 @@
     }
   ],
   "skip": {
+    "languages": ["python", "rust", "node", "go", "ruby", "elixir", "wasm", "java", "csharp", "php", "r", "dart", "kotlin_android", "swift", "zig"],
     "reason": "EmbeddingModelType::Plugin requires a host-language backend registered via register_embedding_backend before dispatch; the e2e harness cannot register one. This fixture validates config round-trip (the {\"type\":\"plugin\",\"name\":...} shape is accepted by every binding's EmbeddingConfig)."
   }
 }

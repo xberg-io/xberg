@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const test_step = b.step("test", "Run tests");
-    const ffi_path = b.option([]const u8, "ffi_path", "Path to directory containing libkreuzberg_ffi") orelse "../../target/debug";
+    const ffi_path = b.option([]const u8, "ffi_path", "Path to directory containing libkreuzberg_ffi") orelse "../../target/release";
     const ffi_include = b.option([]const u8, "ffi_include_path", "Path to directory containing FFI header") orelse "../../crates/kreuzberg-ffi/include";
 
     const kreuzberg_module = b.addModule("kreuzberg", .{
@@ -49,6 +49,22 @@ pub fn build(b: *std.Build) void {
     batch_run.setCwd(b.path("../../test_documents"));
     test_step.dependOn(&batch_run.step);
 
+    const code_module = b.createModule(.{
+        .root_source_file = b.path("src/code_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    code_module.addImport("kreuzberg", kreuzberg_module);
+    const code_tests = b.addTest(.{
+        .name = "code_test",
+        .root_module = code_module,
+        .use_llvm = true,
+    });
+    const code_run = b.addRunArtifact(code_tests);
+    code_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&code_run.step);
+
     const contract_module = b.createModule(.{
         .root_source_file = b.path("src/contract_test.zig"),
         .target = target,
@@ -80,6 +96,70 @@ pub fn build(b: *std.Build) void {
     const detection_run = b.addRunArtifact(detection_tests);
     detection_run.setCwd(b.path("../../test_documents"));
     test_step.dependOn(&detection_run.step);
+
+    const document_extractor_management_module = b.createModule(.{
+        .root_source_file = b.path("src/document_extractor_management_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    document_extractor_management_module.addImport("kreuzberg", kreuzberg_module);
+    const document_extractor_management_tests = b.addTest(.{
+        .name = "document_extractor_management_test",
+        .root_module = document_extractor_management_module,
+        .use_llvm = true,
+    });
+    const document_extractor_management_run = b.addRunArtifact(document_extractor_management_tests);
+    document_extractor_management_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&document_extractor_management_run.step);
+
+    const embed_async_pending_module = b.createModule(.{
+        .root_source_file = b.path("src/embed_async_pending_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    embed_async_pending_module.addImport("kreuzberg", kreuzberg_module);
+    const embed_async_pending_tests = b.addTest(.{
+        .name = "embed_async_pending_test",
+        .root_module = embed_async_pending_module,
+        .use_llvm = true,
+    });
+    const embed_async_pending_run = b.addRunArtifact(embed_async_pending_tests);
+    embed_async_pending_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&embed_async_pending_run.step);
+
+    const embed_extra_module = b.createModule(.{
+        .root_source_file = b.path("src/embed_extra_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    embed_extra_module.addImport("kreuzberg", kreuzberg_module);
+    const embed_extra_tests = b.addTest(.{
+        .name = "embed_extra_test",
+        .root_module = embed_extra_module,
+        .use_llvm = true,
+    });
+    const embed_extra_run = b.addRunArtifact(embed_extra_tests);
+    embed_extra_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&embed_extra_run.step);
+
+    const embedding_backend_management_module = b.createModule(.{
+        .root_source_file = b.path("src/embedding_backend_management_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    embedding_backend_management_module.addImport("kreuzberg", kreuzberg_module);
+    const embedding_backend_management_tests = b.addTest(.{
+        .name = "embedding_backend_management_test",
+        .root_module = embedding_backend_management_module,
+        .use_llvm = true,
+    });
+    const embedding_backend_management_run = b.addRunArtifact(embedding_backend_management_tests);
+    embedding_backend_management_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&embedding_backend_management_run.step);
 
     const embeddings_module = b.createModule(.{
         .root_source_file = b.path("src/embeddings_test.zig"),
@@ -129,6 +209,86 @@ pub fn build(b: *std.Build) void {
     format_specific_run.setCwd(b.path("../../test_documents"));
     test_step.dependOn(&format_specific_run.step);
 
+    const mime_utilities_module = b.createModule(.{
+        .root_source_file = b.path("src/mime_utilities_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    mime_utilities_module.addImport("kreuzberg", kreuzberg_module);
+    const mime_utilities_tests = b.addTest(.{
+        .name = "mime_utilities_test",
+        .root_module = mime_utilities_module,
+        .use_llvm = true,
+    });
+    const mime_utilities_run = b.addRunArtifact(mime_utilities_tests);
+    mime_utilities_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&mime_utilities_run.step);
+
+    const ocr_backend_management_module = b.createModule(.{
+        .root_source_file = b.path("src/ocr_backend_management_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    ocr_backend_management_module.addImport("kreuzberg", kreuzberg_module);
+    const ocr_backend_management_tests = b.addTest(.{
+        .name = "ocr_backend_management_test",
+        .root_module = ocr_backend_management_module,
+        .use_llvm = true,
+    });
+    const ocr_backend_management_run = b.addRunArtifact(ocr_backend_management_tests);
+    ocr_backend_management_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&ocr_backend_management_run.step);
+
+    const pdf_module = b.createModule(.{
+        .root_source_file = b.path("src/pdf_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    pdf_module.addImport("kreuzberg", kreuzberg_module);
+    const pdf_tests = b.addTest(.{
+        .name = "pdf_test",
+        .root_module = pdf_module,
+        .use_llvm = true,
+    });
+    const pdf_run = b.addRunArtifact(pdf_tests);
+    pdf_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&pdf_run.step);
+
+    const plugin_api_module = b.createModule(.{
+        .root_source_file = b.path("src/plugin_api_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    plugin_api_module.addImport("kreuzberg", kreuzberg_module);
+    const plugin_api_tests = b.addTest(.{
+        .name = "plugin_api_test",
+        .root_module = plugin_api_module,
+        .use_llvm = true,
+    });
+    const plugin_api_run = b.addRunArtifact(plugin_api_tests);
+    plugin_api_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&plugin_api_run.step);
+
+    const post_processor_management_module = b.createModule(.{
+        .root_source_file = b.path("src/post_processor_management_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    post_processor_management_module.addImport("kreuzberg", kreuzberg_module);
+    const post_processor_management_tests = b.addTest(.{
+        .name = "post_processor_management_test",
+        .root_module = post_processor_management_module,
+        .use_llvm = true,
+    });
+    const post_processor_management_run = b.addRunArtifact(post_processor_management_tests);
+    post_processor_management_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&post_processor_management_run.step);
+
     const registry_module = b.createModule(.{
         .root_source_file = b.path("src/registry_test.zig"),
         .target = target,
@@ -161,6 +321,22 @@ pub fn build(b: *std.Build) void {
     registry_operations_run.setCwd(b.path("../../test_documents"));
     test_step.dependOn(&registry_operations_run.step);
 
+    const renderer_management_module = b.createModule(.{
+        .root_source_file = b.path("src/renderer_management_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    renderer_management_module.addImport("kreuzberg", kreuzberg_module);
+    const renderer_management_tests = b.addTest(.{
+        .name = "renderer_management_test",
+        .root_module = renderer_management_module,
+        .use_llvm = true,
+    });
+    const renderer_management_run = b.addRunArtifact(renderer_management_tests);
+    renderer_management_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&renderer_management_run.step);
+
     const smoke_module = b.createModule(.{
         .root_source_file = b.path("src/smoke_test.zig"),
         .target = target,
@@ -176,5 +352,21 @@ pub fn build(b: *std.Build) void {
     const smoke_run = b.addRunArtifact(smoke_tests);
     smoke_run.setCwd(b.path("../../test_documents"));
     test_step.dependOn(&smoke_run.step);
+
+    const validator_management_module = b.createModule(.{
+        .root_source_file = b.path("src/validator_management_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    validator_management_module.addImport("kreuzberg", kreuzberg_module);
+    const validator_management_tests = b.addTest(.{
+        .name = "validator_management_test",
+        .root_module = validator_management_module,
+        .use_llvm = true,
+    });
+    const validator_management_run = b.addRunArtifact(validator_management_tests);
+    validator_management_run.setCwd(b.path("../../test_documents"));
+    test_step.dependOn(&validator_management_run.step);
 
 }

@@ -27,12 +27,15 @@ tasks:
   lint:links:
     desc: Check links with lychee
     cmds:
-      - lychee --offline docs/ README.md
+      # docs/overrides/main.html contains Jinja template variables (e.g.
+      # `{{ page.edit_url }}`) that lychee interprets as broken local file
+      # links — skip that path; the rendered site is link-checked separately.
+      - lychee --offline --root-dir "$PWD/docs" --exclude-path "docs/overrides" docs/ README.md
 
   lint:prose:
-    desc: Lint prose with textlint
+    desc: Lint prose with textlint (via prek hook)
     cmds:
-      - npx textlint 'docs/**/*.md'
+      - prek run textlint --all-files
 
   snippets:install:
     desc: Install alef CLI (which now includes the snippets subcommand) if missing
@@ -45,13 +48,13 @@ tasks:
 
   snippets:validate:
     desc: Validate all docs/snippets via `alef snippets` (syntax level)
-    deps: [snippets:install]
+    deps: ["snippets:install"]
     cmds:
       - alef snippets validate --snippets docs/snippets --level syntax --timeout 120 -j 4
 
   snippets:validate:lang:
     desc: "Validate snippets for one language (set LANG=dart|kotlin|swift|...)"
-    deps: [snippets:install]
+    deps: ["snippets:install"]
     cmds:
       - alef snippets validate --snippets docs/snippets --level syntax --languages {{.LANG}} --timeout 120 -j 4
     requires:
@@ -59,18 +62,18 @@ tasks:
 
   snippets:list:
     desc: List all snippets discovered under docs/snippets
-    deps: [snippets:install]
+    deps: ["snippets:install"]
     cmds:
       - alef snippets list --snippets docs/snippets
 
   snippets:audit:
     desc: Audit snippet metadata and coverage
-    deps: [snippets:install]
+    deps: ["snippets:install"]
     cmds:
       - alef snippets audit --snippets docs/snippets
 
   snippets:gaps:
     desc: Report missing snippet variants across languages
-    deps: [snippets:install]
+    deps: ["snippets:install"]
     cmds:
       - alef snippets gaps --snippets docs/snippets

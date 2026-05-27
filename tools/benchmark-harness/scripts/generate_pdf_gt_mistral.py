@@ -14,6 +14,7 @@ Usage:
     # Pilot batch (first N):
     python generate_pdf_gt_mistral.py --limit 10
 """
+
 import argparse
 import base64
 import json
@@ -85,7 +86,8 @@ def call_mistral_ocr(pdf_path: str) -> str:
 
 def find_fixtures_needing_gt() -> list[tuple[str, str, str]]:
     """Find PDF fixtures that don't have markdown GT.
-    Returns list of (fixture_path, pdf_path, gt_md_path)."""
+    Returns list of (fixture_path, pdf_path, gt_md_path).
+    """
     fixtures_dir = Path("tools/benchmark-harness/fixtures/pdf")
     results = []
 
@@ -135,6 +137,7 @@ def process_fixture(fixture_path: str, pdf_path: str, gt_md_path: str, dry_run: 
 
         # Sanitize
         from sanitize_pandoc_gt import sanitize
+
         markdown = sanitize(markdown)
 
         # Write GT file
@@ -188,7 +191,7 @@ def main():
     print(f"Found {len(fixtures)} PDF fixtures needing markdown GT")
 
     if args.limit > 0:
-        fixtures = fixtures[:args.limit]
+        fixtures = fixtures[: args.limit]
         print(f"Processing first {args.limit}")
 
     success = 0

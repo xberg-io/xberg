@@ -23,7 +23,36 @@ import RustBridge
 ///     ..Default::default()
 /// };
 /// ```
-public typealias AccelerationConfig = RustBridge.AccelerationConfig
+public struct AccelerationConfig: Codable, Sendable, Hashable {
+    /// Execution provider to use for ONNX inference.
+    public let provider: ExecutionProviderType
+    /// GPU device ID (for CUDA/TensorRT). Ignored for CPU/CoreML/Auto.
+    public let deviceId: UInt32
+    public init(provider: ExecutionProviderType, deviceId: UInt32) {
+        self.provider = provider
+        self.deviceId = deviceId
+    }
+    private enum CodingKeys: String, CodingKey {
+        case provider = "provider"
+        case deviceId = "device_id"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.provider = try container.decode(ExecutionProviderType.self, forKey: .provider)
+        self.deviceId = try container.decodeIfPresent(UInt32.self, forKey: .deviceId) ?? 0
+    }
+}
+
+// MARK: - Internal FFI conversions for AccelerationConfig
+internal extension AccelerationConfig {
+    init(_ rb: RustBridge.AccelerationConfigRef) throws {
+        self.provider = ExecutionProviderType(rawValue: rb.provider().toString()) ?? { fatalError("Unknown ExecutionProviderType: \(rb.provider().toString())") }()
+        self.deviceId = rb.deviceId()
+    }
+    func intoRust() throws -> RustBridge.AccelerationConfig {
+        return RustBridge.AccelerationConfig(try self.provider.intoRust(), self.deviceId)
+    }
+}
 
 /// Cross-extractor content filtering configuration.
 ///
@@ -63,8 +92,8 @@ public struct ContentFilterConfig: Codable, Sendable, Hashable {
     ///
     /// Note: when a layout-detection model is active, the model may independently
     /// classify page-header / page-footer regions as furniture on a per-page basis.
-    /// To preserve those regions, set `include_headers = true` and/or
-    /// `include_footers = true` in addition to disabling this flag.
+    /// To preserve those regions, set `include_headers = true`, `include_footers = true`,
+    /// or both, in addition to disabling this flag.
     ///
     /// Primarily affects PDF extraction.
     ///
@@ -89,15 +118,22 @@ public struct ContentFilterConfig: Codable, Sendable, Hashable {
         case stripRepeatingText = "strip_repeating_text"
         case includeWatermarks = "include_watermarks"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.includeHeaders = try container.decodeIfPresent(Bool.self, forKey: .includeHeaders) ?? false
+        self.includeFooters = try container.decodeIfPresent(Bool.self, forKey: .includeFooters) ?? false
+        self.stripRepeatingText = try container.decodeIfPresent(Bool.self, forKey: .stripRepeatingText) ?? true
+        self.includeWatermarks = try container.decodeIfPresent(Bool.self, forKey: .includeWatermarks) ?? false
+    }
 }
 
 // MARK: - Internal FFI conversions for ContentFilterConfig
 internal extension ContentFilterConfig {
-    init(_ rb: RustBridge.ContentFilterConfig) throws {
-        self.includeHeaders = rb.include_headers()
-        self.includeFooters = rb.include_footers()
-        self.stripRepeatingText = rb.strip_repeating_text()
-        self.includeWatermarks = rb.include_watermarks()
+    init(_ rb: RustBridge.ContentFilterConfigRef) throws {
+        self.includeHeaders = rb.includeHeaders()
+        self.includeFooters = rb.includeFooters()
+        self.stripRepeatingText = rb.stripRepeatingText()
+        self.includeWatermarks = rb.includeWatermarks()
     }
     func intoRust() throws -> RustBridge.ContentFilterConfig {
         return RustBridge.ContentFilterConfig(self.includeHeaders, self.includeFooters, self.stripRepeatingText, self.includeWatermarks)
@@ -131,12 +167,16 @@ public struct EmailConfig: Codable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case msgFallbackCodepage = "msg_fallback_codepage"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.msgFallbackCodepage = try container.decodeIfPresent(UInt32.self, forKey: .msgFallbackCodepage) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for EmailConfig
 internal extension EmailConfig {
-    init(_ rb: RustBridge.EmailConfig) throws {
-        self.msgFallbackCodepage = rb.msg_fallback_codepage()
+    init(_ rb: RustBridge.EmailConfigRef) throws {
+        self.msgFallbackCodepage = rb.msgFallbackCodepage()
     }
     func intoRust() throws -> RustBridge.EmailConfig {
         return RustBridge.EmailConfig(self.msgFallbackCodepage)
@@ -256,19 +296,31 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
         case maxImagesPerPage = "max_images_per_page"
         case classify = "classify"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.extractImages = try container.decodeIfPresent(Bool.self, forKey: .extractImages) ?? true
+        self.targetDpi = try container.decodeIfPresent(Int32.self, forKey: .targetDpi) ?? 300
+        self.maxImageDimension = try container.decodeIfPresent(Int32.self, forKey: .maxImageDimension) ?? 4096
+        self.injectPlaceholders = try container.decodeIfPresent(Bool.self, forKey: .injectPlaceholders) ?? true
+        self.autoAdjustDpi = try container.decodeIfPresent(Bool.self, forKey: .autoAdjustDpi) ?? true
+        self.minDpi = try container.decodeIfPresent(Int32.self, forKey: .minDpi) ?? 72
+        self.maxDpi = try container.decodeIfPresent(Int32.self, forKey: .maxDpi) ?? 600
+        self.maxImagesPerPage = try container.decodeIfPresent(UInt32.self, forKey: .maxImagesPerPage) ?? nil
+        self.classify = try container.decodeIfPresent(Bool.self, forKey: .classify) ?? true
+    }
 }
 
 // MARK: - Internal FFI conversions for ImageExtractionConfig
 internal extension ImageExtractionConfig {
-    init(_ rb: RustBridge.ImageExtractionConfig) throws {
-        self.extractImages = rb.extract_images()
-        self.targetDpi = rb.target_dpi()
-        self.maxImageDimension = rb.max_image_dimension()
-        self.injectPlaceholders = rb.inject_placeholders()
-        self.autoAdjustDpi = rb.auto_adjust_dpi()
-        self.minDpi = rb.min_dpi()
-        self.maxDpi = rb.max_dpi()
-        self.maxImagesPerPage = rb.max_images_per_page()
+    init(_ rb: RustBridge.ImageExtractionConfigRef) throws {
+        self.extractImages = rb.extractImages()
+        self.targetDpi = rb.targetDpi()
+        self.maxImageDimension = rb.maxImageDimension()
+        self.injectPlaceholders = rb.injectPlaceholders()
+        self.autoAdjustDpi = rb.autoAdjustDpi()
+        self.minDpi = rb.minDpi()
+        self.maxDpi = rb.maxDpi()
+        self.maxImagesPerPage = rb.maxImagesPerPage()
         self.classify = rb.classify()
     }
     func intoRust() throws -> RustBridge.ImageExtractionConfig {
@@ -290,16 +342,21 @@ public struct TokenReductionOptions: Codable, Sendable, Hashable {
         case mode = "mode"
         case preserveImportantWords = "preserve_important_words"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.mode = try container.decodeIfPresent(String.self, forKey: .mode) ?? ""
+        self.preserveImportantWords = try container.decodeIfPresent(Bool.self, forKey: .preserveImportantWords) ?? true
+    }
 }
 
 // MARK: - Internal FFI conversions for TokenReductionOptions
 internal extension TokenReductionOptions {
-    init(_ rb: RustBridge.TokenReductionOptions) throws {
+    init(_ rb: RustBridge.TokenReductionOptionsRef) throws {
         self.mode = rb.mode().toString()
-        self.preserveImportantWords = rb.preserve_important_words()
+        self.preserveImportantWords = rb.preserveImportantWords()
     }
     func intoRust() throws -> RustBridge.TokenReductionOptions {
-        return RustBridge.TokenReductionOptions(self.mode, self.preserveImportantWords)
+        return RustBridge.TokenReductionOptions(RustString(self.mode), self.preserveImportantWords)
     }
 }
 
@@ -321,14 +378,20 @@ public struct LanguageDetectionConfig: Codable, Sendable, Hashable {
         case minConfidence = "min_confidence"
         case detectMultiple = "detect_multiple"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        self.minConfidence = try container.decodeIfPresent(Double.self, forKey: .minConfidence) ?? 0.8
+        self.detectMultiple = try container.decodeIfPresent(Bool.self, forKey: .detectMultiple) ?? false
+    }
 }
 
 // MARK: - Internal FFI conversions for LanguageDetectionConfig
 internal extension LanguageDetectionConfig {
-    init(_ rb: RustBridge.LanguageDetectionConfig) throws {
+    init(_ rb: RustBridge.LanguageDetectionConfigRef) throws {
         self.enabled = rb.enabled()
-        self.minConfidence = rb.min_confidence()
-        self.detectMultiple = rb.detect_multiple()
+        self.minConfidence = rb.minConfidence()
+        self.detectMultiple = rb.detectMultiple()
     }
     func intoRust() throws -> RustBridge.LanguageDetectionConfig {
         return RustBridge.LanguageDetectionConfig(self.enabled, self.minConfidence, self.detectMultiple)
@@ -360,7 +423,56 @@ public typealias HtmlOutputConfig = RustBridge.HtmlOutputConfig
 /// Controls layout detection behavior in the extraction pipeline.
 /// When set on [`ExtractionConfig`](super::ExtractionConfig), layout detection
 /// is enabled for PDF extraction.
-public typealias LayoutDetectionConfig = RustBridge.LayoutDetectionConfig
+public struct LayoutDetectionConfig: Codable, Sendable, Hashable {
+    /// Confidence threshold override (None = use model default).
+    public let confidenceThreshold: Float?
+    /// Whether to apply postprocessing heuristics (default: true).
+    public let applyHeuristics: Bool
+    /// Table structure recognition model.
+    ///
+    /// Controls which model is used for table cell detection within layout-detected
+    /// table regions. Defaults to [`TableModel::Tatr`].
+    public let tableModel: TableModel
+    /// Hardware acceleration for ONNX models (layout detection + table structure).
+    ///
+    /// When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
+    /// is used for inference. Defaults to `None` (auto-select per platform).
+    public let acceleration: AccelerationConfig?
+    public init(confidenceThreshold: Float? = nil, applyHeuristics: Bool, tableModel: TableModel, acceleration: AccelerationConfig? = nil) {
+        self.confidenceThreshold = confidenceThreshold
+        self.applyHeuristics = applyHeuristics
+        self.tableModel = tableModel
+        self.acceleration = acceleration
+    }
+    private enum CodingKeys: String, CodingKey {
+        case confidenceThreshold = "confidence_threshold"
+        case applyHeuristics = "apply_heuristics"
+        case tableModel = "table_model"
+        case acceleration = "acceleration"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.confidenceThreshold = try container.decodeIfPresent(Float.self, forKey: .confidenceThreshold) ?? nil
+        self.applyHeuristics = try container.decodeIfPresent(Bool.self, forKey: .applyHeuristics) ?? true
+        self.tableModel = try container.decode(TableModel.self, forKey: .tableModel)
+        self.acceleration = try container.decodeIfPresent(AccelerationConfig.self, forKey: .acceleration) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for LayoutDetectionConfig
+internal extension LayoutDetectionConfig {
+    init(_ rb: RustBridge.LayoutDetectionConfigRef) throws {
+        self.confidenceThreshold = rb.confidenceThreshold()
+        self.applyHeuristics = rb.applyHeuristics()
+        self.tableModel = TableModel(rawValue: rb.tableModel().toString()) ?? { fatalError("Unknown TableModel: \(rb.tableModel().toString())") }()
+        self.acceleration = try rb.acceleration().map { try AccelerationConfig($0) }
+    }
+    func intoRust() throws -> RustBridge.LayoutDetectionConfig {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.layoutDetectionConfigFromJson(json)
+    }
+}
 
 /// Configuration for an LLM provider/model via liter-llm.
 ///
@@ -411,21 +523,31 @@ public struct LlmConfig: Codable, Sendable, Hashable {
         case temperature = "temperature"
         case maxTokens = "max_tokens"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
+        self.apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? nil
+        self.baseUrl = try container.decodeIfPresent(String.self, forKey: .baseUrl) ?? nil
+        self.timeoutSecs = try container.decodeIfPresent(UInt64.self, forKey: .timeoutSecs) ?? nil
+        self.maxRetries = try container.decodeIfPresent(UInt32.self, forKey: .maxRetries) ?? nil
+        self.temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? nil
+        self.maxTokens = try container.decodeIfPresent(UInt64.self, forKey: .maxTokens) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for LlmConfig
 internal extension LlmConfig {
-    init(_ rb: RustBridge.LlmConfig) throws {
+    init(_ rb: RustBridge.LlmConfigRef) throws {
         self.model = rb.model().toString()
-        self.apiKey = rb.api_key()?.toString()
-        self.baseUrl = rb.base_url()?.toString()
-        self.timeoutSecs = rb.timeout_secs()
-        self.maxRetries = rb.max_retries()
+        self.apiKey = rb.apiKey()?.toString()
+        self.baseUrl = rb.baseUrl()?.toString()
+        self.timeoutSecs = rb.timeoutSecs()
+        self.maxRetries = rb.maxRetries()
         self.temperature = rb.temperature()
-        self.maxTokens = rb.max_tokens()
+        self.maxTokens = rb.maxTokens()
     }
     func intoRust() throws -> RustBridge.LlmConfig {
-        return RustBridge.LlmConfig(self.model, self.apiKey, self.baseUrl, self.timeoutSecs, self.maxRetries, self.temperature, self.maxTokens)
+        return RustBridge.LlmConfig(RustString(self.model), self.apiKey.map(RustString.init), self.baseUrl.map(RustString.init), self.timeoutSecs, self.maxRetries, self.temperature, self.maxTokens)
     }
 }
 
@@ -527,27 +649,46 @@ public struct OcrQualityThresholds: Codable, Sendable, Hashable {
         case alnumWsRatioThreshold = "alnum_ws_ratio_threshold"
         case pipelineMinQuality = "pipeline_min_quality"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.minTotalNonWhitespace = try container.decodeIfPresent(UInt.self, forKey: .minTotalNonWhitespace) ?? 64
+        self.minNonWhitespacePerPage = try container.decodeIfPresent(Double.self, forKey: .minNonWhitespacePerPage) ?? 32.0
+        self.minMeaningfulWordLen = try container.decodeIfPresent(UInt.self, forKey: .minMeaningfulWordLen) ?? 4
+        self.minMeaningfulWords = try container.decodeIfPresent(UInt.self, forKey: .minMeaningfulWords) ?? 3
+        self.minAlnumRatio = try container.decodeIfPresent(Double.self, forKey: .minAlnumRatio) ?? 0.3
+        self.minGarbageChars = try container.decodeIfPresent(UInt.self, forKey: .minGarbageChars) ?? 5
+        self.maxFragmentedWordRatio = try container.decodeIfPresent(Double.self, forKey: .maxFragmentedWordRatio) ?? 0.6
+        self.criticalFragmentedWordRatio = try container.decodeIfPresent(Double.self, forKey: .criticalFragmentedWordRatio) ?? 0.8
+        self.minAvgWordLength = try container.decodeIfPresent(Double.self, forKey: .minAvgWordLength) ?? 2.0
+        self.minWordsForAvgLengthCheck = try container.decodeIfPresent(UInt.self, forKey: .minWordsForAvgLengthCheck) ?? 50
+        self.minConsecutiveRepeatRatio = try container.decodeIfPresent(Double.self, forKey: .minConsecutiveRepeatRatio) ?? 0.08
+        self.minWordsForRepeatCheck = try container.decodeIfPresent(UInt.self, forKey: .minWordsForRepeatCheck) ?? 50
+        self.substantiveMinChars = try container.decodeIfPresent(UInt.self, forKey: .substantiveMinChars) ?? 100
+        self.nonTextMinChars = try container.decodeIfPresent(UInt.self, forKey: .nonTextMinChars) ?? 20
+        self.alnumWsRatioThreshold = try container.decodeIfPresent(Double.self, forKey: .alnumWsRatioThreshold) ?? 0.4
+        self.pipelineMinQuality = try container.decodeIfPresent(Double.self, forKey: .pipelineMinQuality) ?? 0.5
+    }
 }
 
 // MARK: - Internal FFI conversions for OcrQualityThresholds
 internal extension OcrQualityThresholds {
-    init(_ rb: RustBridge.OcrQualityThresholds) throws {
-        self.minTotalNonWhitespace = rb.min_total_non_whitespace()
-        self.minNonWhitespacePerPage = rb.min_non_whitespace_per_page()
-        self.minMeaningfulWordLen = rb.min_meaningful_word_len()
-        self.minMeaningfulWords = rb.min_meaningful_words()
-        self.minAlnumRatio = rb.min_alnum_ratio()
-        self.minGarbageChars = rb.min_garbage_chars()
-        self.maxFragmentedWordRatio = rb.max_fragmented_word_ratio()
-        self.criticalFragmentedWordRatio = rb.critical_fragmented_word_ratio()
-        self.minAvgWordLength = rb.min_avg_word_length()
-        self.minWordsForAvgLengthCheck = rb.min_words_for_avg_length_check()
-        self.minConsecutiveRepeatRatio = rb.min_consecutive_repeat_ratio()
-        self.minWordsForRepeatCheck = rb.min_words_for_repeat_check()
-        self.substantiveMinChars = rb.substantive_min_chars()
-        self.nonTextMinChars = rb.non_text_min_chars()
-        self.alnumWsRatioThreshold = rb.alnum_ws_ratio_threshold()
-        self.pipelineMinQuality = rb.pipeline_min_quality()
+    init(_ rb: RustBridge.OcrQualityThresholdsRef) throws {
+        self.minTotalNonWhitespace = rb.minTotalNonWhitespace()
+        self.minNonWhitespacePerPage = rb.minNonWhitespacePerPage()
+        self.minMeaningfulWordLen = rb.minMeaningfulWordLen()
+        self.minMeaningfulWords = rb.minMeaningfulWords()
+        self.minAlnumRatio = rb.minAlnumRatio()
+        self.minGarbageChars = rb.minGarbageChars()
+        self.maxFragmentedWordRatio = rb.maxFragmentedWordRatio()
+        self.criticalFragmentedWordRatio = rb.criticalFragmentedWordRatio()
+        self.minAvgWordLength = rb.minAvgWordLength()
+        self.minWordsForAvgLengthCheck = rb.minWordsForAvgLengthCheck()
+        self.minConsecutiveRepeatRatio = rb.minConsecutiveRepeatRatio()
+        self.minWordsForRepeatCheck = rb.minWordsForRepeatCheck()
+        self.substantiveMinChars = rb.substantiveMinChars()
+        self.nonTextMinChars = rb.nonTextMinChars()
+        self.alnumWsRatioThreshold = rb.alnumWsRatioThreshold()
+        self.pipelineMinQuality = rb.pipelineMinQuality()
     }
     func intoRust() throws -> RustBridge.OcrQualityThresholds {
         return RustBridge.OcrQualityThresholds(self.minTotalNonWhitespace, self.minNonWhitespacePerPage, self.minMeaningfulWordLen, self.minMeaningfulWords, self.minAlnumRatio, self.minGarbageChars, self.maxFragmentedWordRatio, self.criticalFragmentedWordRatio, self.minAvgWordLength, self.minWordsForAvgLengthCheck, self.minConsecutiveRepeatRatio, self.minWordsForRepeatCheck, self.substantiveMinChars, self.nonTextMinChars, self.alnumWsRatioThreshold, self.pipelineMinQuality)
@@ -592,22 +733,126 @@ public struct PageConfig: Codable, Sendable, Hashable {
         case insertPageMarkers = "insert_page_markers"
         case markerFormat = "marker_format"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.extractPages = try container.decodeIfPresent(Bool.self, forKey: .extractPages) ?? false
+        self.insertPageMarkers = try container.decodeIfPresent(Bool.self, forKey: .insertPageMarkers) ?? false
+        self.markerFormat = try container.decodeIfPresent(String.self, forKey: .markerFormat) ?? "\n\n<!-- PAGE {page_num} -->\n\n"
+    }
 }
 
 // MARK: - Internal FFI conversions for PageConfig
 internal extension PageConfig {
-    init(_ rb: RustBridge.PageConfig) throws {
-        self.extractPages = rb.extract_pages()
-        self.insertPageMarkers = rb.insert_page_markers()
-        self.markerFormat = rb.marker_format().toString()
+    init(_ rb: RustBridge.PageConfigRef) throws {
+        self.extractPages = rb.extractPages()
+        self.insertPageMarkers = rb.insertPageMarkers()
+        self.markerFormat = rb.markerFormat().toString()
     }
     func intoRust() throws -> RustBridge.PageConfig {
-        return RustBridge.PageConfig(self.extractPages, self.insertPageMarkers, self.markerFormat)
+        return RustBridge.PageConfig(self.extractPages, self.insertPageMarkers, RustString(self.markerFormat))
     }
 }
 
 /// PDF-specific configuration.
-public typealias PdfConfig = RustBridge.PdfConfig
+public struct PdfConfig: Codable, Sendable, Hashable {
+    /// Extract images from PDF
+    public let extractImages: Bool
+    /// Extract tables from PDF.
+    ///
+    /// When `true` (default), runs pdf_oxide's native grid detector and, if it
+    /// finds nothing, falls back to the heuristic text-layer reconstruction in
+    /// `pdf::oxide::table::extract_tables_heuristic`. Set to `false` to skip
+    /// both passes — `tables` will then be empty in the result.
+    public let extractTables: Bool
+    /// List of passwords to try when opening encrypted PDFs
+    public let passwords: [String]?
+    /// Extract PDF metadata
+    public let extractMetadata: Bool
+    /// Hierarchy extraction configuration (None = hierarchy extraction disabled)
+    public let hierarchy: HierarchyConfig?
+    /// Extract PDF annotations (text notes, highlights, links, stamps).
+    /// Default: false
+    public let extractAnnotations: Bool
+    /// Top margin fraction (0.0–1.0) of page height to exclude headers/running heads.
+    /// Default: 0.06 (6%)
+    public let topMarginFraction: Float?
+    /// Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers.
+    /// Default: 0.05 (5%)
+    public let bottomMarginFraction: Float?
+    /// Allow single-column pseudo tables in extraction results.
+    ///
+    /// By default, tables with fewer than 2 columns (layout-guided) or 3 columns
+    /// (heuristic) are rejected. When `true`, the minimum column count is relaxed
+    /// to 1, allowing single-column structured data (glossaries, itemized lists)
+    /// to be emitted as tables. Other quality filters (density, sparsity, prose
+    /// detection) still apply.
+    public let allowSingleColumnTables: Bool
+    /// Perform OCR on inline images extracted from PDF pages and attach the
+    /// recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract
+    /// to be available; if `ExtractionConfig.ocr` is `None` the extractor
+    /// falls back to `TesseractConfig::default()`. Per-image failures degrade
+    /// gracefully (the image is returned without OCR text rather than failing
+    /// the whole extraction). Default: `false`.
+    public let ocrInlineImages: Bool
+    public init(extractImages: Bool, extractTables: Bool, passwords: [String]? = nil, extractMetadata: Bool, hierarchy: HierarchyConfig? = nil, extractAnnotations: Bool, topMarginFraction: Float? = nil, bottomMarginFraction: Float? = nil, allowSingleColumnTables: Bool, ocrInlineImages: Bool) {
+        self.extractImages = extractImages
+        self.extractTables = extractTables
+        self.passwords = passwords
+        self.extractMetadata = extractMetadata
+        self.hierarchy = hierarchy
+        self.extractAnnotations = extractAnnotations
+        self.topMarginFraction = topMarginFraction
+        self.bottomMarginFraction = bottomMarginFraction
+        self.allowSingleColumnTables = allowSingleColumnTables
+        self.ocrInlineImages = ocrInlineImages
+    }
+    private enum CodingKeys: String, CodingKey {
+        case extractImages = "extract_images"
+        case extractTables = "extract_tables"
+        case passwords = "passwords"
+        case extractMetadata = "extract_metadata"
+        case hierarchy = "hierarchy"
+        case extractAnnotations = "extract_annotations"
+        case topMarginFraction = "top_margin_fraction"
+        case bottomMarginFraction = "bottom_margin_fraction"
+        case allowSingleColumnTables = "allow_single_column_tables"
+        case ocrInlineImages = "ocr_inline_images"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.extractImages = try container.decodeIfPresent(Bool.self, forKey: .extractImages) ?? false
+        self.extractTables = try container.decodeIfPresent(Bool.self, forKey: .extractTables) ?? true
+        self.passwords = try container.decodeIfPresent([String].self, forKey: .passwords) ?? nil
+        self.extractMetadata = try container.decodeIfPresent(Bool.self, forKey: .extractMetadata) ?? true
+        self.hierarchy = try container.decodeIfPresent(HierarchyConfig.self, forKey: .hierarchy) ?? nil
+        self.extractAnnotations = try container.decodeIfPresent(Bool.self, forKey: .extractAnnotations) ?? false
+        self.topMarginFraction = try container.decodeIfPresent(Float.self, forKey: .topMarginFraction) ?? nil
+        self.bottomMarginFraction = try container.decodeIfPresent(Float.self, forKey: .bottomMarginFraction) ?? nil
+        self.allowSingleColumnTables = try container.decodeIfPresent(Bool.self, forKey: .allowSingleColumnTables) ?? false
+        self.ocrInlineImages = try container.decodeIfPresent(Bool.self, forKey: .ocrInlineImages) ?? false
+    }
+}
+
+// MARK: - Internal FFI conversions for PdfConfig
+internal extension PdfConfig {
+    init(_ rb: RustBridge.PdfConfigRef) throws {
+        self.extractImages = rb.extractImages()
+        self.extractTables = rb.extractTables()
+        self.passwords = rb.passwords()?.map { $0.as_str().toString() }
+        self.extractMetadata = rb.extractMetadata()
+        self.hierarchy = try rb.hierarchy().map { try HierarchyConfig($0) }
+        self.extractAnnotations = rb.extractAnnotations()
+        self.topMarginFraction = rb.topMarginFraction()
+        self.bottomMarginFraction = rb.bottomMarginFraction()
+        self.allowSingleColumnTables = rb.allowSingleColumnTables()
+        self.ocrInlineImages = rb.ocrInlineImages()
+    }
+    func intoRust() throws -> RustBridge.PdfConfig {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.pdfConfigFromJson(json)
+    }
+}
 
 /// Hierarchy extraction configuration for PDF text structure analysis.
 ///
@@ -642,15 +887,22 @@ public struct HierarchyConfig: Codable, Sendable, Hashable {
         case includeBbox = "include_bbox"
         case ocrCoverageThreshold = "ocr_coverage_threshold"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        self.kClusters = try container.decodeIfPresent(UInt.self, forKey: .kClusters) ?? 3
+        self.includeBbox = try container.decodeIfPresent(Bool.self, forKey: .includeBbox) ?? true
+        self.ocrCoverageThreshold = try container.decodeIfPresent(Float.self, forKey: .ocrCoverageThreshold) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for HierarchyConfig
 internal extension HierarchyConfig {
-    init(_ rb: RustBridge.HierarchyConfig) throws {
+    init(_ rb: RustBridge.HierarchyConfigRef) throws {
         self.enabled = rb.enabled()
-        self.kClusters = rb.k_clusters()
-        self.includeBbox = rb.include_bbox()
-        self.ocrCoverageThreshold = rb.ocr_coverage_threshold()
+        self.kClusters = rb.kClusters()
+        self.includeBbox = rb.includeBbox()
+        self.ocrCoverageThreshold = rb.ocrCoverageThreshold()
     }
     func intoRust() throws -> RustBridge.HierarchyConfig {
         return RustBridge.HierarchyConfig(self.enabled, self.kClusters, self.includeBbox, self.ocrCoverageThreshold)
@@ -658,7 +910,56 @@ internal extension HierarchyConfig {
 }
 
 /// Post-processor configuration.
-public typealias PostProcessorConfig = RustBridge.PostProcessorConfig
+public struct PostProcessorConfig: Codable, Sendable, Hashable {
+    /// Enable post-processors
+    public let enabled: Bool
+    /// Whitelist of processor names to run (None = all enabled)
+    public let enabledProcessors: [String]?
+    /// Blacklist of processor names to skip (None = none disabled)
+    public let disabledProcessors: [String]?
+    /// Pre-computed AHashSet for O(1) enabled processor lookup
+    public let enabledSet: [String]?
+    /// Pre-computed AHashSet for O(1) disabled processor lookup
+    public let disabledSet: [String]?
+    public init(enabled: Bool, enabledProcessors: [String]? = nil, disabledProcessors: [String]? = nil, enabledSet: [String]? = nil, disabledSet: [String]? = nil) {
+        self.enabled = enabled
+        self.enabledProcessors = enabledProcessors
+        self.disabledProcessors = disabledProcessors
+        self.enabledSet = enabledSet
+        self.disabledSet = disabledSet
+    }
+    private enum CodingKeys: String, CodingKey {
+        case enabled = "enabled"
+        case enabledProcessors = "enabled_processors"
+        case disabledProcessors = "disabled_processors"
+        case enabledSet = "enabled_set"
+        case disabledSet = "disabled_set"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        self.enabledProcessors = try container.decodeIfPresent([String].self, forKey: .enabledProcessors) ?? nil
+        self.disabledProcessors = try container.decodeIfPresent([String].self, forKey: .disabledProcessors) ?? nil
+        self.enabledSet = try container.decodeIfPresent([String].self, forKey: .enabledSet) ?? nil
+        self.disabledSet = try container.decodeIfPresent([String].self, forKey: .disabledSet) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for PostProcessorConfig
+internal extension PostProcessorConfig {
+    init(_ rb: RustBridge.PostProcessorConfigRef) throws {
+        self.enabled = rb.enabled()
+        self.enabledProcessors = rb.enabledProcessors()?.map { $0.as_str().toString() }
+        self.disabledProcessors = rb.disabledProcessors()?.map { $0.as_str().toString() }
+        self.enabledSet = rb.enabledSet()?.map { $0.as_str().toString() }
+        self.disabledSet = rb.disabledSet()?.map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.PostProcessorConfig {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.postProcessorConfigFromJson(json)
+    }
+}
 
 /// Chunking configuration.
 ///
@@ -701,12 +1002,109 @@ public typealias TreeSitterConfig = RustBridge.TreeSitterConfig
 /// Processing options for tree-sitter code analysis.
 ///
 /// Controls which analysis features are enabled when extracting code files.
-public typealias TreeSitterProcessConfig = RustBridge.TreeSitterProcessConfig
+public struct TreeSitterProcessConfig: Codable, Sendable, Hashable {
+    /// Extract structural items (functions, classes, structs, etc.). Default: true.
+    public let structure: Bool
+    /// Extract import statements. Default: true.
+    public let imports: Bool
+    /// Extract export statements. Default: true.
+    public let exports: Bool
+    /// Extract comments. Default: false.
+    public let comments: Bool
+    /// Extract docstrings. Default: false.
+    public let docstrings: Bool
+    /// Extract symbol definitions. Default: false.
+    public let symbols: Bool
+    /// Include parse diagnostics. Default: false.
+    public let diagnostics: Bool
+    /// Maximum chunk size in bytes. `None` disables chunking.
+    public let chunkMaxSize: UInt?
+    /// Content rendering mode for code extraction.
+    public let contentMode: CodeContentMode
+    public init(structure: Bool, imports: Bool, exports: Bool, comments: Bool, docstrings: Bool, symbols: Bool, diagnostics: Bool, chunkMaxSize: UInt? = nil, contentMode: CodeContentMode) {
+        self.structure = structure
+        self.imports = imports
+        self.exports = exports
+        self.comments = comments
+        self.docstrings = docstrings
+        self.symbols = symbols
+        self.diagnostics = diagnostics
+        self.chunkMaxSize = chunkMaxSize
+        self.contentMode = contentMode
+    }
+    private enum CodingKeys: String, CodingKey {
+        case structure = "structure"
+        case imports = "imports"
+        case exports = "exports"
+        case comments = "comments"
+        case docstrings = "docstrings"
+        case symbols = "symbols"
+        case diagnostics = "diagnostics"
+        case chunkMaxSize = "chunk_max_size"
+        case contentMode = "content_mode"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.structure = try container.decodeIfPresent(Bool.self, forKey: .structure) ?? true
+        self.imports = try container.decodeIfPresent(Bool.self, forKey: .imports) ?? true
+        self.exports = try container.decodeIfPresent(Bool.self, forKey: .exports) ?? true
+        self.comments = try container.decodeIfPresent(Bool.self, forKey: .comments) ?? false
+        self.docstrings = try container.decodeIfPresent(Bool.self, forKey: .docstrings) ?? false
+        self.symbols = try container.decodeIfPresent(Bool.self, forKey: .symbols) ?? false
+        self.diagnostics = try container.decodeIfPresent(Bool.self, forKey: .diagnostics) ?? false
+        self.chunkMaxSize = try container.decodeIfPresent(UInt.self, forKey: .chunkMaxSize) ?? nil
+        self.contentMode = try container.decode(CodeContentMode.self, forKey: .contentMode)
+    }
+}
+
+// MARK: - Internal FFI conversions for TreeSitterProcessConfig
+internal extension TreeSitterProcessConfig {
+    init(_ rb: RustBridge.TreeSitterProcessConfigRef) throws {
+        self.structure = rb.structure()
+        self.imports = rb.imports()
+        self.exports = rb.exports()
+        self.comments = rb.comments()
+        self.docstrings = rb.docstrings()
+        self.symbols = rb.symbols()
+        self.diagnostics = rb.diagnostics()
+        self.chunkMaxSize = rb.chunkMaxSize()
+        self.contentMode = CodeContentMode(rawValue: rb.contentMode().toString()) ?? { fatalError("Unknown CodeContentMode: \(rb.contentMode().toString())") }()
+    }
+    func intoRust() throws -> RustBridge.TreeSitterProcessConfig {
+        return RustBridge.TreeSitterProcessConfig(self.structure, self.imports, self.exports, self.comments, self.docstrings, self.symbols, self.diagnostics, self.chunkMaxSize, try self.contentMode.intoRust())
+    }
+}
 
 /// A supported document format entry.
 ///
 /// Represents a file extension and its corresponding MIME type that Kreuzberg can process.
-public typealias SupportedFormat = RustBridge.SupportedFormat
+public struct SupportedFormat: Codable, Sendable, Hashable {
+    /// File extension (without leading dot), e.g., "pdf", "docx"
+    public let `extension`: String
+    /// MIME type string, e.g., "application/pdf"
+    public let mimeType: String
+    public init(`extension`: String, mimeType: String) {
+        self.`extension` = `extension`
+        self.mimeType = mimeType
+    }
+    private enum CodingKeys: String, CodingKey {
+        case `extension` = "extension"
+        case mimeType = "mime_type"
+    }
+}
+
+// MARK: - Internal FFI conversions for SupportedFormat
+internal extension SupportedFormat {
+    init(_ rb: RustBridge.SupportedFormatRef) throws {
+        self.`extension` = rb.extension_().toString()
+        self.mimeType = rb.mimeType().toString()
+    }
+    func intoRust() throws -> RustBridge.SupportedFormat {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.supportedFormatFromJson(json)
+    }
+}
 
 /// API server configuration.
 ///
@@ -720,7 +1118,60 @@ public typealias SupportedFormat = RustBridge.SupportedFormat
 /// - `cors_origins`: empty vector (allows all origins)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
-public typealias ServerConfig = RustBridge.ServerConfig
+public struct ServerConfig: Codable, Sendable, Hashable {
+    /// Server host address (e.g., "127.0.0.1", "0.0.0.0")
+    public let host: String
+    /// Server port number
+    public let port: UInt16
+    /// CORS allowed origins. Empty vector means allow all origins.
+    ///
+    /// If this is an empty vector, the server will accept requests from any origin.
+    /// If populated with specific origins (e.g., `"https://example.com"`), only
+    /// those origins will be allowed.
+    public let corsOrigins: [String]
+    /// Maximum size of request body in bytes (default: 100 MB)
+    public let maxRequestBodyBytes: UInt
+    /// Maximum size of multipart fields in bytes (default: 100 MB)
+    public let maxMultipartFieldBytes: UInt
+    public init(host: String, port: UInt16, corsOrigins: [String], maxRequestBodyBytes: UInt, maxMultipartFieldBytes: UInt) {
+        self.host = host
+        self.port = port
+        self.corsOrigins = corsOrigins
+        self.maxRequestBodyBytes = maxRequestBodyBytes
+        self.maxMultipartFieldBytes = maxMultipartFieldBytes
+    }
+    private enum CodingKeys: String, CodingKey {
+        case host = "host"
+        case port = "port"
+        case corsOrigins = "cors_origins"
+        case maxRequestBodyBytes = "max_request_body_bytes"
+        case maxMultipartFieldBytes = "max_multipart_field_bytes"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.host = try container.decodeIfPresent(String.self, forKey: .host) ?? ""
+        self.port = try container.decodeIfPresent(UInt16.self, forKey: .port) ?? 0
+        self.corsOrigins = try container.decodeIfPresent([String].self, forKey: .corsOrigins) ?? []
+        self.maxRequestBodyBytes = try container.decodeIfPresent(UInt.self, forKey: .maxRequestBodyBytes) ?? 0
+        self.maxMultipartFieldBytes = try container.decodeIfPresent(UInt.self, forKey: .maxMultipartFieldBytes) ?? 0
+    }
+}
+
+// MARK: - Internal FFI conversions for ServerConfig
+internal extension ServerConfig {
+    init(_ rb: RustBridge.ServerConfigRef) throws {
+        self.host = rb.host().toString()
+        self.port = rb.port()
+        self.corsOrigins = rb.corsOrigins().map { $0.as_str().toString() }
+        self.maxRequestBodyBytes = rb.maxRequestBodyBytes()
+        self.maxMultipartFieldBytes = rb.maxMultipartFieldBytes()
+    }
+    func intoRust() throws -> RustBridge.ServerConfig {
+        let __corsOrigins = RustVec<RustString>()
+        for __elem in self.corsOrigins { __corsOrigins.push(value: RustString(__elem)) }
+        return RustBridge.ServerConfig(RustString(self.host), self.port, __corsOrigins, self.maxRequestBodyBytes, self.maxMultipartFieldBytes)
+    }
+}
 
 public typealias StructuredDataResult = RustBridge.StructuredDataResult
 
@@ -799,42 +1250,243 @@ public struct DocxAppProperties: Codable, Sendable, Hashable {
         case sharedDoc = "shared_doc"
         case hyperlinksChanged = "hyperlinks_changed"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.application = try container.decodeIfPresent(String.self, forKey: .application) ?? nil
+        self.appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? nil
+        self.template = try container.decodeIfPresent(String.self, forKey: .template) ?? nil
+        self.totalTime = try container.decodeIfPresent(Int32.self, forKey: .totalTime) ?? nil
+        self.pages = try container.decodeIfPresent(Int32.self, forKey: .pages) ?? nil
+        self.words = try container.decodeIfPresent(Int32.self, forKey: .words) ?? nil
+        self.characters = try container.decodeIfPresent(Int32.self, forKey: .characters) ?? nil
+        self.charactersWithSpaces = try container.decodeIfPresent(Int32.self, forKey: .charactersWithSpaces) ?? nil
+        self.lines = try container.decodeIfPresent(Int32.self, forKey: .lines) ?? nil
+        self.paragraphs = try container.decodeIfPresent(Int32.self, forKey: .paragraphs) ?? nil
+        self.company = try container.decodeIfPresent(String.self, forKey: .company) ?? nil
+        self.docSecurity = try container.decodeIfPresent(Int32.self, forKey: .docSecurity) ?? nil
+        self.scaleCrop = try container.decodeIfPresent(Bool.self, forKey: .scaleCrop) ?? nil
+        self.linksUpToDate = try container.decodeIfPresent(Bool.self, forKey: .linksUpToDate) ?? nil
+        self.sharedDoc = try container.decodeIfPresent(Bool.self, forKey: .sharedDoc) ?? nil
+        self.hyperlinksChanged = try container.decodeIfPresent(Bool.self, forKey: .hyperlinksChanged) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for DocxAppProperties
 internal extension DocxAppProperties {
-    init(_ rb: RustBridge.DocxAppProperties) throws {
+    init(_ rb: RustBridge.DocxAppPropertiesRef) throws {
         self.application = rb.application()?.toString()
-        self.appVersion = rb.app_version()?.toString()
+        self.appVersion = rb.appVersion()?.toString()
         self.template = rb.template()?.toString()
-        self.totalTime = rb.total_time()
+        self.totalTime = rb.totalTime()
         self.pages = rb.pages()
         self.words = rb.words()
         self.characters = rb.characters()
-        self.charactersWithSpaces = rb.characters_with_spaces()
+        self.charactersWithSpaces = rb.charactersWithSpaces()
         self.lines = rb.lines()
         self.paragraphs = rb.paragraphs()
         self.company = rb.company()?.toString()
-        self.docSecurity = rb.doc_security()
-        self.scaleCrop = rb.scale_crop()
-        self.linksUpToDate = rb.links_up_to_date()
-        self.sharedDoc = rb.shared_doc()
-        self.hyperlinksChanged = rb.hyperlinks_changed()
+        self.docSecurity = rb.docSecurity()
+        self.scaleCrop = rb.scaleCrop()
+        self.linksUpToDate = rb.linksUpToDate()
+        self.sharedDoc = rb.sharedDoc()
+        self.hyperlinksChanged = rb.hyperlinksChanged()
     }
     func intoRust() throws -> RustBridge.DocxAppProperties {
-        return RustBridge.DocxAppProperties(self.application, self.appVersion, self.template, self.totalTime, self.pages, self.words, self.characters, self.charactersWithSpaces, self.lines, self.paragraphs, self.company, self.docSecurity, self.scaleCrop, self.linksUpToDate, self.sharedDoc, self.hyperlinksChanged)
+        return RustBridge.DocxAppProperties(self.application.map(RustString.init), self.appVersion.map(RustString.init), self.template.map(RustString.init), self.totalTime, self.pages, self.words, self.characters, self.charactersWithSpaces, self.lines, self.paragraphs, self.company.map(RustString.init), self.docSecurity, self.scaleCrop, self.linksUpToDate, self.sharedDoc, self.hyperlinksChanged)
     }
 }
 
 /// Application properties from docProps/app.xml for XLSX
 ///
 /// Contains Excel-specific document metadata.
-public typealias XlsxAppProperties = RustBridge.XlsxAppProperties
+public struct XlsxAppProperties: Codable, Sendable, Hashable {
+    /// Application name (e.g., "Microsoft Excel")
+    public let application: String?
+    /// Application version
+    public let appVersion: String?
+    /// Document security level
+    public let docSecurity: Int32?
+    /// Scale crop flag
+    public let scaleCrop: Bool?
+    /// Links up to date flag
+    public let linksUpToDate: Bool?
+    /// Shared document flag
+    public let sharedDoc: Bool?
+    /// Hyperlinks changed flag
+    public let hyperlinksChanged: Bool?
+    /// Company name
+    public let company: String?
+    /// Worksheet names
+    public let worksheetNames: [String]
+    public init(application: String? = nil, appVersion: String? = nil, docSecurity: Int32? = nil, scaleCrop: Bool? = nil, linksUpToDate: Bool? = nil, sharedDoc: Bool? = nil, hyperlinksChanged: Bool? = nil, company: String? = nil, worksheetNames: [String]) {
+        self.application = application
+        self.appVersion = appVersion
+        self.docSecurity = docSecurity
+        self.scaleCrop = scaleCrop
+        self.linksUpToDate = linksUpToDate
+        self.sharedDoc = sharedDoc
+        self.hyperlinksChanged = hyperlinksChanged
+        self.company = company
+        self.worksheetNames = worksheetNames
+    }
+    private enum CodingKeys: String, CodingKey {
+        case application = "application"
+        case appVersion = "app_version"
+        case docSecurity = "doc_security"
+        case scaleCrop = "scale_crop"
+        case linksUpToDate = "links_up_to_date"
+        case sharedDoc = "shared_doc"
+        case hyperlinksChanged = "hyperlinks_changed"
+        case company = "company"
+        case worksheetNames = "worksheet_names"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.application = try container.decodeIfPresent(String.self, forKey: .application) ?? nil
+        self.appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? nil
+        self.docSecurity = try container.decodeIfPresent(Int32.self, forKey: .docSecurity) ?? nil
+        self.scaleCrop = try container.decodeIfPresent(Bool.self, forKey: .scaleCrop) ?? nil
+        self.linksUpToDate = try container.decodeIfPresent(Bool.self, forKey: .linksUpToDate) ?? nil
+        self.sharedDoc = try container.decodeIfPresent(Bool.self, forKey: .sharedDoc) ?? nil
+        self.hyperlinksChanged = try container.decodeIfPresent(Bool.self, forKey: .hyperlinksChanged) ?? nil
+        self.company = try container.decodeIfPresent(String.self, forKey: .company) ?? nil
+        self.worksheetNames = try container.decodeIfPresent([String].self, forKey: .worksheetNames) ?? []
+    }
+}
+
+// MARK: - Internal FFI conversions for XlsxAppProperties
+internal extension XlsxAppProperties {
+    init(_ rb: RustBridge.XlsxAppPropertiesRef) throws {
+        self.application = rb.application()?.toString()
+        self.appVersion = rb.appVersion()?.toString()
+        self.docSecurity = rb.docSecurity()
+        self.scaleCrop = rb.scaleCrop()
+        self.linksUpToDate = rb.linksUpToDate()
+        self.sharedDoc = rb.sharedDoc()
+        self.hyperlinksChanged = rb.hyperlinksChanged()
+        self.company = rb.company()?.toString()
+        self.worksheetNames = rb.worksheetNames().map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.XlsxAppProperties {
+        let __worksheetNames = RustVec<RustString>()
+        for __elem in self.worksheetNames { __worksheetNames.push(value: RustString(__elem)) }
+        return RustBridge.XlsxAppProperties(self.application.map(RustString.init), self.appVersion.map(RustString.init), self.docSecurity, self.scaleCrop, self.linksUpToDate, self.sharedDoc, self.hyperlinksChanged, self.company.map(RustString.init), __worksheetNames)
+    }
+}
 
 /// Application properties from docProps/app.xml for PPTX
 ///
 /// Contains PowerPoint-specific document metadata.
-public typealias PptxAppProperties = RustBridge.PptxAppProperties
+public struct PptxAppProperties: Codable, Sendable, Hashable {
+    /// Application name (e.g., "Microsoft Office PowerPoint")
+    public let application: String?
+    /// Application version
+    public let appVersion: String?
+    /// Total editing time in minutes
+    public let totalTime: Int32?
+    /// Company name
+    public let company: String?
+    /// Document security level
+    public let docSecurity: Int32?
+    /// Scale crop flag
+    public let scaleCrop: Bool?
+    /// Links up to date flag
+    public let linksUpToDate: Bool?
+    /// Shared document flag
+    public let sharedDoc: Bool?
+    /// Hyperlinks changed flag
+    public let hyperlinksChanged: Bool?
+    /// Number of slides
+    public let slides: Int32?
+    /// Number of notes
+    public let notes: Int32?
+    /// Number of hidden slides
+    public let hiddenSlides: Int32?
+    /// Number of multimedia clips
+    public let multimediaClips: Int32?
+    /// Presentation format (e.g., "Widescreen", "Standard")
+    public let presentationFormat: String?
+    /// Slide titles
+    public let slideTitles: [String]
+    public init(application: String? = nil, appVersion: String? = nil, totalTime: Int32? = nil, company: String? = nil, docSecurity: Int32? = nil, scaleCrop: Bool? = nil, linksUpToDate: Bool? = nil, sharedDoc: Bool? = nil, hyperlinksChanged: Bool? = nil, slides: Int32? = nil, notes: Int32? = nil, hiddenSlides: Int32? = nil, multimediaClips: Int32? = nil, presentationFormat: String? = nil, slideTitles: [String]) {
+        self.application = application
+        self.appVersion = appVersion
+        self.totalTime = totalTime
+        self.company = company
+        self.docSecurity = docSecurity
+        self.scaleCrop = scaleCrop
+        self.linksUpToDate = linksUpToDate
+        self.sharedDoc = sharedDoc
+        self.hyperlinksChanged = hyperlinksChanged
+        self.slides = slides
+        self.notes = notes
+        self.hiddenSlides = hiddenSlides
+        self.multimediaClips = multimediaClips
+        self.presentationFormat = presentationFormat
+        self.slideTitles = slideTitles
+    }
+    private enum CodingKeys: String, CodingKey {
+        case application = "application"
+        case appVersion = "app_version"
+        case totalTime = "total_time"
+        case company = "company"
+        case docSecurity = "doc_security"
+        case scaleCrop = "scale_crop"
+        case linksUpToDate = "links_up_to_date"
+        case sharedDoc = "shared_doc"
+        case hyperlinksChanged = "hyperlinks_changed"
+        case slides = "slides"
+        case notes = "notes"
+        case hiddenSlides = "hidden_slides"
+        case multimediaClips = "multimedia_clips"
+        case presentationFormat = "presentation_format"
+        case slideTitles = "slide_titles"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.application = try container.decodeIfPresent(String.self, forKey: .application) ?? nil
+        self.appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? nil
+        self.totalTime = try container.decodeIfPresent(Int32.self, forKey: .totalTime) ?? nil
+        self.company = try container.decodeIfPresent(String.self, forKey: .company) ?? nil
+        self.docSecurity = try container.decodeIfPresent(Int32.self, forKey: .docSecurity) ?? nil
+        self.scaleCrop = try container.decodeIfPresent(Bool.self, forKey: .scaleCrop) ?? nil
+        self.linksUpToDate = try container.decodeIfPresent(Bool.self, forKey: .linksUpToDate) ?? nil
+        self.sharedDoc = try container.decodeIfPresent(Bool.self, forKey: .sharedDoc) ?? nil
+        self.hyperlinksChanged = try container.decodeIfPresent(Bool.self, forKey: .hyperlinksChanged) ?? nil
+        self.slides = try container.decodeIfPresent(Int32.self, forKey: .slides) ?? nil
+        self.notes = try container.decodeIfPresent(Int32.self, forKey: .notes) ?? nil
+        self.hiddenSlides = try container.decodeIfPresent(Int32.self, forKey: .hiddenSlides) ?? nil
+        self.multimediaClips = try container.decodeIfPresent(Int32.self, forKey: .multimediaClips) ?? nil
+        self.presentationFormat = try container.decodeIfPresent(String.self, forKey: .presentationFormat) ?? nil
+        self.slideTitles = try container.decodeIfPresent([String].self, forKey: .slideTitles) ?? []
+    }
+}
+
+// MARK: - Internal FFI conversions for PptxAppProperties
+internal extension PptxAppProperties {
+    init(_ rb: RustBridge.PptxAppPropertiesRef) throws {
+        self.application = rb.application()?.toString()
+        self.appVersion = rb.appVersion()?.toString()
+        self.totalTime = rb.totalTime()
+        self.company = rb.company()?.toString()
+        self.docSecurity = rb.docSecurity()
+        self.scaleCrop = rb.scaleCrop()
+        self.linksUpToDate = rb.linksUpToDate()
+        self.sharedDoc = rb.sharedDoc()
+        self.hyperlinksChanged = rb.hyperlinksChanged()
+        self.slides = rb.slides()
+        self.notes = rb.notes()
+        self.hiddenSlides = rb.hiddenSlides()
+        self.multimediaClips = rb.multimediaClips()
+        self.presentationFormat = rb.presentationFormat()?.toString()
+        self.slideTitles = rb.slideTitles().map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.PptxAppProperties {
+        let __slideTitles = RustVec<RustString>()
+        for __elem in self.slideTitles { __slideTitles.push(value: RustString(__elem)) }
+        return RustBridge.PptxAppProperties(self.application.map(RustString.init), self.appVersion.map(RustString.init), self.totalTime, self.company.map(RustString.init), self.docSecurity, self.scaleCrop, self.linksUpToDate, self.sharedDoc, self.hyperlinksChanged, self.slides, self.notes, self.hiddenSlides, self.multimediaClips, self.presentationFormat.map(RustString.init), __slideTitles)
+    }
+}
 
 /// Dublin Core metadata from docProps/core.xml
 ///
@@ -905,29 +1557,47 @@ public struct CoreProperties: Codable, Sendable, Hashable {
         case version = "version"
         case lastPrinted = "last_printed"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.title = try container.decodeIfPresent(String.self, forKey: .title) ?? nil
+        self.subject = try container.decodeIfPresent(String.self, forKey: .subject) ?? nil
+        self.creator = try container.decodeIfPresent(String.self, forKey: .creator) ?? nil
+        self.keywords = try container.decodeIfPresent(String.self, forKey: .keywords) ?? nil
+        self.description = try container.decodeIfPresent(String.self, forKey: .description) ?? nil
+        self.lastModifiedBy = try container.decodeIfPresent(String.self, forKey: .lastModifiedBy) ?? nil
+        self.revision = try container.decodeIfPresent(String.self, forKey: .revision) ?? nil
+        self.created = try container.decodeIfPresent(String.self, forKey: .created) ?? nil
+        self.modified = try container.decodeIfPresent(String.self, forKey: .modified) ?? nil
+        self.category = try container.decodeIfPresent(String.self, forKey: .category) ?? nil
+        self.contentStatus = try container.decodeIfPresent(String.self, forKey: .contentStatus) ?? nil
+        self.language = try container.decodeIfPresent(String.self, forKey: .language) ?? nil
+        self.identifier = try container.decodeIfPresent(String.self, forKey: .identifier) ?? nil
+        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? nil
+        self.lastPrinted = try container.decodeIfPresent(String.self, forKey: .lastPrinted) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for CoreProperties
 internal extension CoreProperties {
-    init(_ rb: RustBridge.CoreProperties) throws {
+    init(_ rb: RustBridge.CorePropertiesRef) throws {
         self.title = rb.title()?.toString()
         self.subject = rb.subject()?.toString()
         self.creator = rb.creator()?.toString()
         self.keywords = rb.keywords()?.toString()
         self.description = rb.description()?.toString()
-        self.lastModifiedBy = rb.last_modified_by()?.toString()
+        self.lastModifiedBy = rb.lastModifiedBy()?.toString()
         self.revision = rb.revision()?.toString()
         self.created = rb.created()?.toString()
         self.modified = rb.modified()?.toString()
         self.category = rb.category()?.toString()
-        self.contentStatus = rb.content_status()?.toString()
+        self.contentStatus = rb.contentStatus()?.toString()
         self.language = rb.language()?.toString()
         self.identifier = rb.identifier()?.toString()
         self.version = rb.version()?.toString()
-        self.lastPrinted = rb.last_printed()?.toString()
+        self.lastPrinted = rb.lastPrinted()?.toString()
     }
     func intoRust() throws -> RustBridge.CoreProperties {
-        return RustBridge.CoreProperties(self.title, self.subject, self.creator, self.keywords, self.description, self.lastModifiedBy, self.revision, self.created, self.modified, self.category, self.contentStatus, self.language, self.identifier, self.version, self.lastPrinted)
+        return RustBridge.CoreProperties(self.title.map(RustString.init), self.subject.map(RustString.init), self.creator.map(RustString.init), self.keywords.map(RustString.init), self.description.map(RustString.init), self.lastModifiedBy.map(RustString.init), self.revision.map(RustString.init), self.created.map(RustString.init), self.modified.map(RustString.init), self.category.map(RustString.init), self.contentStatus.map(RustString.init), self.language.map(RustString.init), self.identifier.map(RustString.init), self.version.map(RustString.init), self.lastPrinted.map(RustString.init))
     }
 }
 
@@ -945,7 +1615,7 @@ public struct SecurityLimits: Codable, Sendable, Hashable {
     /// Maximum nesting depth for structures (100)
     public let maxNestingDepth: UInt
     /// Maximum length of any single XML entity / attribute / token (1 MiB).
-    /// This is a per-token cap, NOT a cumulative cap — billion-laughs class
+    /// This is a per-token cap, NOT a total cap — billion-laughs class
     /// attacks where a single entity expands to hundreds of MB are caught
     /// here, while normal long text content (a paragraph, a CDATA block) is
     /// caught by `max_content_size` instead.
@@ -980,20 +1650,32 @@ public struct SecurityLimits: Codable, Sendable, Hashable {
         case maxXmlDepth = "max_xml_depth"
         case maxTableCells = "max_table_cells"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.maxArchiveSize = try container.decodeIfPresent(UInt.self, forKey: .maxArchiveSize) ?? 524288000
+        self.maxCompressionRatio = try container.decodeIfPresent(UInt.self, forKey: .maxCompressionRatio) ?? 100
+        self.maxFilesInArchive = try container.decodeIfPresent(UInt.self, forKey: .maxFilesInArchive) ?? 10000
+        self.maxNestingDepth = try container.decodeIfPresent(UInt.self, forKey: .maxNestingDepth) ?? 1024
+        self.maxEntityLength = try container.decodeIfPresent(UInt.self, forKey: .maxEntityLength) ?? 1048576
+        self.maxContentSize = try container.decodeIfPresent(UInt.self, forKey: .maxContentSize) ?? 104857600
+        self.maxIterations = try container.decodeIfPresent(UInt.self, forKey: .maxIterations) ?? 10000000
+        self.maxXmlDepth = try container.decodeIfPresent(UInt.self, forKey: .maxXmlDepth) ?? 1024
+        self.maxTableCells = try container.decodeIfPresent(UInt.self, forKey: .maxTableCells) ?? 100000
+    }
 }
 
 // MARK: - Internal FFI conversions for SecurityLimits
 internal extension SecurityLimits {
-    init(_ rb: RustBridge.SecurityLimits) throws {
-        self.maxArchiveSize = rb.max_archive_size()
-        self.maxCompressionRatio = rb.max_compression_ratio()
-        self.maxFilesInArchive = rb.max_files_in_archive()
-        self.maxNestingDepth = rb.max_nesting_depth()
-        self.maxEntityLength = rb.max_entity_length()
-        self.maxContentSize = rb.max_content_size()
-        self.maxIterations = rb.max_iterations()
-        self.maxXmlDepth = rb.max_xml_depth()
-        self.maxTableCells = rb.max_table_cells()
+    init(_ rb: RustBridge.SecurityLimitsRef) throws {
+        self.maxArchiveSize = rb.maxArchiveSize()
+        self.maxCompressionRatio = rb.maxCompressionRatio()
+        self.maxFilesInArchive = rb.maxFilesInArchive()
+        self.maxNestingDepth = rb.maxNestingDepth()
+        self.maxEntityLength = rb.maxEntityLength()
+        self.maxContentSize = rb.maxContentSize()
+        self.maxIterations = rb.maxIterations()
+        self.maxXmlDepth = rb.maxXmlDepth()
+        self.maxTableCells = rb.maxTableCells()
     }
     func intoRust() throws -> RustBridge.SecurityLimits {
         return RustBridge.SecurityLimits(self.maxArchiveSize, self.maxCompressionRatio, self.maxFilesInArchive, self.maxNestingDepth, self.maxEntityLength, self.maxContentSize, self.maxIterations, self.maxXmlDepth, self.maxTableCells)
@@ -1003,7 +1685,43 @@ internal extension SecurityLimits {
 public typealias TokenReductionConfig = RustBridge.TokenReductionConfig
 
 /// A PDF annotation extracted from a document page.
-public typealias PdfAnnotation = RustBridge.PdfAnnotation
+public struct PdfAnnotation: Codable, Sendable, Hashable {
+    /// The type of annotation.
+    public let annotationType: PdfAnnotationType
+    /// Text content of the annotation (e.g., comment text, link URL).
+    public let content: String?
+    /// Page number where the annotation appears (1-indexed).
+    public let pageNumber: UInt32
+    /// Bounding box of the annotation on the page.
+    public let boundingBox: BoundingBox?
+    public init(annotationType: PdfAnnotationType, content: String? = nil, pageNumber: UInt32, boundingBox: BoundingBox? = nil) {
+        self.annotationType = annotationType
+        self.content = content
+        self.pageNumber = pageNumber
+        self.boundingBox = boundingBox
+    }
+    private enum CodingKeys: String, CodingKey {
+        case annotationType = "annotation_type"
+        case content = "content"
+        case pageNumber = "page_number"
+        case boundingBox = "bounding_box"
+    }
+}
+
+// MARK: - Internal FFI conversions for PdfAnnotation
+internal extension PdfAnnotation {
+    init(_ rb: RustBridge.PdfAnnotationRef) throws {
+        self.annotationType = PdfAnnotationType(rawValue: rb.annotationType().toString()) ?? { fatalError("Unknown PdfAnnotationType: \(rb.annotationType().toString())") }()
+        self.content = rb.content()?.toString()
+        self.pageNumber = rb.pageNumber()
+        self.boundingBox = try rb.boundingBox().map { try BoundingBox($0) }
+    }
+    func intoRust() throws -> RustBridge.PdfAnnotation {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.pdfAnnotationFromJson(json)
+    }
+}
 
 /// Comprehensive Djot document structure with semantic preservation.
 ///
@@ -1029,10 +1747,70 @@ public typealias FormattedBlock = RustBridge.FormattedBlock
 public typealias InlineElement = RustBridge.InlineElement
 
 /// Image element in Djot.
-public typealias DjotImage = RustBridge.DjotImage
+public struct DjotImage: Codable, Sendable, Hashable {
+    /// Image source URL or path
+    public let src: String
+    /// Alternative text
+    public let alt: String
+    /// Optional title
+    public let title: String?
+    /// Element attributes
+    public let attributes: String?
+    public init(src: String, alt: String, title: String? = nil, attributes: String? = nil) {
+        self.src = src
+        self.alt = alt
+        self.title = title
+        self.attributes = attributes
+    }
+}
+
+// MARK: - Internal FFI conversions for DjotImage
+internal extension DjotImage {
+    init(_ rb: RustBridge.DjotImageRef) throws {
+        self.src = rb.src().toString()
+        self.alt = rb.alt().toString()
+        self.title = rb.title()?.toString()
+        self.attributes = rb.attributes()?.toString()
+    }
+    func intoRust() throws -> RustBridge.DjotImage {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.djotImageFromJson(json)
+    }
+}
 
 /// Link element in Djot.
-public typealias DjotLink = RustBridge.DjotLink
+public struct DjotLink: Codable, Sendable, Hashable {
+    /// Link URL
+    public let url: String
+    /// Link text content
+    public let text: String
+    /// Optional title
+    public let title: String?
+    /// Element attributes
+    public let attributes: String?
+    public init(url: String, text: String, title: String? = nil, attributes: String? = nil) {
+        self.url = url
+        self.text = text
+        self.title = title
+        self.attributes = attributes
+    }
+}
+
+// MARK: - Internal FFI conversions for DjotLink
+internal extension DjotLink {
+    init(_ rb: RustBridge.DjotLinkRef) throws {
+        self.url = rb.url().toString()
+        self.text = rb.text().toString()
+        self.title = rb.title()?.toString()
+        self.attributes = rb.attributes()?.toString()
+    }
+    func intoRust() throws -> RustBridge.DjotLink {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.djotLinkFromJson(json)
+    }
+}
 
 /// Footnote in Djot.
 public typealias Footnote = RustBridge.Footnote
@@ -1050,7 +1828,33 @@ public typealias Footnote = RustBridge.Footnote
 public typealias DocumentStructure = RustBridge.DocumentStructure
 
 /// A resolved relationship between two nodes in the document tree.
-public typealias DocumentRelationship = RustBridge.DocumentRelationship
+public struct DocumentRelationship: Codable, Sendable, Hashable {
+    /// Source node index (the referencing node).
+    public let source: UInt32
+    /// Target node index (the referenced node).
+    public let target: UInt32
+    /// Semantic kind of the relationship.
+    public let kind: RelationshipKind
+    public init(source: UInt32, target: UInt32, kind: RelationshipKind) {
+        self.source = source
+        self.target = target
+        self.kind = kind
+    }
+}
+
+// MARK: - Internal FFI conversions for DocumentRelationship
+internal extension DocumentRelationship {
+    init(_ rb: RustBridge.DocumentRelationshipRef) throws {
+        self.source = rb.source()
+        self.target = rb.target()
+        self.kind = RelationshipKind(rawValue: rb.kind().toString()) ?? { fatalError("Unknown RelationshipKind: \(rb.kind().toString())") }()
+    }
+    func intoRust() throws -> RustBridge.DocumentRelationship {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.documentRelationshipFromJson(json)
+    }
+}
 
 /// A single node in the document tree.
 ///
@@ -1061,16 +1865,130 @@ public typealias DocumentNode = RustBridge.DocumentNode
 /// Structured table grid with cell-level metadata.
 ///
 /// Stores row/column dimensions and a flat list of cells with position info.
-public typealias TableGrid = RustBridge.TableGrid
+public struct TableGrid: Codable, Sendable, Hashable {
+    /// Number of rows in the table.
+    public let rows: UInt32
+    /// Number of columns in the table.
+    public let cols: UInt32
+    /// All cells in row-major order.
+    public let cells: [GridCell]
+    public init(rows: UInt32, cols: UInt32, cells: [GridCell]) {
+        self.rows = rows
+        self.cols = cols
+        self.cells = cells
+    }
+    private enum CodingKeys: String, CodingKey {
+        case rows = "rows"
+        case cols = "cols"
+        case cells = "cells"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.rows = try container.decodeIfPresent(UInt32.self, forKey: .rows) ?? 0
+        self.cols = try container.decodeIfPresent(UInt32.self, forKey: .cols) ?? 0
+        self.cells = try container.decodeIfPresent([GridCell].self, forKey: .cells) ?? []
+    }
+}
+
+// MARK: - Internal FFI conversions for TableGrid
+internal extension TableGrid {
+    init(_ rb: RustBridge.TableGridRef) throws {
+        self.rows = rb.rows()
+        self.cols = rb.cols()
+        self.cells = try rb.cells().map { try GridCell($0) }
+    }
+    func intoRust() throws -> RustBridge.TableGrid {
+        let __cells = RustVec<RustBridge.GridCell>()
+        for __elem in self.cells { __cells.push(value: try __elem.intoRust()) }
+        return RustBridge.TableGrid(self.rows, self.cols, __cells)
+    }
+}
 
 /// Individual grid cell with position and span metadata.
-public typealias GridCell = RustBridge.GridCell
+public struct GridCell: Codable, Sendable, Hashable {
+    /// Cell text content.
+    public let content: String
+    /// Zero-indexed row position.
+    public let row: UInt32
+    /// Zero-indexed column position.
+    public let col: UInt32
+    /// Number of rows this cell spans.
+    public let rowSpan: UInt32
+    /// Number of columns this cell spans.
+    public let colSpan: UInt32
+    /// Whether this is a header cell.
+    public let isHeader: Bool
+    /// Bounding box for this cell (if available).
+    public let bbox: BoundingBox?
+    public init(content: String, row: UInt32, col: UInt32, rowSpan: UInt32, colSpan: UInt32, isHeader: Bool, bbox: BoundingBox? = nil) {
+        self.content = content
+        self.row = row
+        self.col = col
+        self.rowSpan = rowSpan
+        self.colSpan = colSpan
+        self.isHeader = isHeader
+        self.bbox = bbox
+    }
+    private enum CodingKeys: String, CodingKey {
+        case content = "content"
+        case row = "row"
+        case col = "col"
+        case rowSpan = "row_span"
+        case colSpan = "col_span"
+        case isHeader = "is_header"
+        case bbox = "bbox"
+    }
+}
+
+// MARK: - Internal FFI conversions for GridCell
+internal extension GridCell {
+    init(_ rb: RustBridge.GridCellRef) throws {
+        self.content = rb.content().toString()
+        self.row = rb.row()
+        self.col = rb.col()
+        self.rowSpan = rb.rowSpan()
+        self.colSpan = rb.colSpan()
+        self.isHeader = rb.isHeader()
+        self.bbox = try rb.bbox().map { try BoundingBox($0) }
+    }
+    func intoRust() throws -> RustBridge.GridCell {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.gridCellFromJson(json)
+    }
+}
 
 /// Inline text annotation — byte-range based formatting and links.
 ///
 /// Annotations reference byte offsets into the node's text content,
 /// enabling precise identification of formatted regions.
-public typealias TextAnnotation = RustBridge.TextAnnotation
+public struct TextAnnotation: Codable, Sendable, Hashable {
+    /// Start byte offset in the node's text content (inclusive).
+    public let start: UInt32
+    /// End byte offset in the node's text content (exclusive).
+    public let end: UInt32
+    /// Annotation type.
+    public let kind: AnnotationKind
+    public init(start: UInt32, end: UInt32, kind: AnnotationKind) {
+        self.start = start
+        self.end = end
+        self.kind = kind
+    }
+}
+
+// MARK: - Internal FFI conversions for TextAnnotation
+internal extension TextAnnotation {
+    init(_ rb: RustBridge.TextAnnotationRef) throws {
+        self.start = rb.start()
+        self.end = rb.end()
+        self.kind = try JSONDecoder().decode(AnnotationKind.self, from: (rb.kind().toString().data(using: .utf8) ?? Data("null".utf8)))
+    }
+    func intoRust() throws -> RustBridge.TextAnnotation {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.textAnnotationFromJson(json)
+    }
+}
 
 /// General extraction result used by the core extraction API.
 ///
@@ -1087,7 +2005,30 @@ public typealias ArchiveEntry = RustBridge.ArchiveEntry
 ///
 /// Captures errors from optional features that don't prevent extraction
 /// but may indicate degraded results.
-public typealias ProcessingWarning = RustBridge.ProcessingWarning
+public struct ProcessingWarning: Codable, Sendable, Hashable {
+    /// The pipeline stage or feature that produced this warning
+    /// (e.g., "embedding", "chunking", "language_detection", "output_format").
+    public let source: String
+    /// Human-readable description of what went wrong.
+    public let message: String
+    public init(source: String, message: String) {
+        self.source = source
+        self.message = message
+    }
+}
+
+// MARK: - Internal FFI conversions for ProcessingWarning
+internal extension ProcessingWarning {
+    init(_ rb: RustBridge.ProcessingWarningRef) throws {
+        self.source = rb.source().toString()
+        self.message = rb.message().toString()
+    }
+    func intoRust() throws -> RustBridge.ProcessingWarning {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.processingWarningFromJson(json)
+    }
+}
 
 /// Token usage and cost data for a single LLM call made during extraction.
 ///
@@ -1128,21 +2069,31 @@ public struct LlmUsage: Codable, Sendable, Hashable {
         case estimatedCost = "estimated_cost"
         case finishReason = "finish_reason"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
+        self.source = try container.decodeIfPresent(String.self, forKey: .source) ?? ""
+        self.inputTokens = try container.decodeIfPresent(UInt64.self, forKey: .inputTokens) ?? nil
+        self.outputTokens = try container.decodeIfPresent(UInt64.self, forKey: .outputTokens) ?? nil
+        self.totalTokens = try container.decodeIfPresent(UInt64.self, forKey: .totalTokens) ?? nil
+        self.estimatedCost = try container.decodeIfPresent(Double.self, forKey: .estimatedCost) ?? nil
+        self.finishReason = try container.decodeIfPresent(String.self, forKey: .finishReason) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for LlmUsage
 internal extension LlmUsage {
-    init(_ rb: RustBridge.LlmUsage) throws {
+    init(_ rb: RustBridge.LlmUsageRef) throws {
         self.model = rb.model().toString()
         self.source = rb.source().toString()
-        self.inputTokens = rb.input_tokens()
-        self.outputTokens = rb.output_tokens()
-        self.totalTokens = rb.total_tokens()
-        self.estimatedCost = rb.estimated_cost()
-        self.finishReason = rb.finish_reason()?.toString()
+        self.inputTokens = rb.inputTokens()
+        self.outputTokens = rb.outputTokens()
+        self.totalTokens = rb.totalTokens()
+        self.estimatedCost = rb.estimatedCost()
+        self.finishReason = rb.finishReason()?.toString()
     }
     func intoRust() throws -> RustBridge.LlmUsage {
-        return RustBridge.LlmUsage(self.model, self.source, self.inputTokens, self.outputTokens, self.totalTokens, self.estimatedCost, self.finishReason)
+        return RustBridge.LlmUsage(RustString(self.model), RustString(self.source), self.inputTokens, self.outputTokens, self.totalTokens, self.estimatedCost, self.finishReason.map(RustString.init))
     }
 }
 
@@ -1151,18 +2102,175 @@ internal extension LlmUsage {
 /// Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
 /// contains the text content, optional embedding vector (if embedding generation
 /// is configured), and metadata about its position in the document.
-public typealias Chunk = RustBridge.Chunk
+public struct Chunk: Codable, Sendable, Hashable {
+    /// The text content of this chunk.
+    public let content: String
+    /// Semantic structural classification of this chunk.
+    ///
+    /// Assigned by the heuristic classifier based on content patterns and
+    /// heading context. Defaults to `ChunkType::Unknown` when no rule matches.
+    public let chunkType: ChunkType
+    /// Optional embedding vector for this chunk.
+    ///
+    /// Only populated when `EmbeddingConfig` is provided in chunking configuration.
+    /// The dimensionality depends on the chosen embedding model.
+    public let embedding: [Float]?
+    /// Metadata about this chunk's position and properties.
+    public let metadata: ChunkMetadata
+    public init(content: String, chunkType: ChunkType, embedding: [Float]? = nil, metadata: ChunkMetadata) {
+        self.content = content
+        self.chunkType = chunkType
+        self.embedding = embedding
+        self.metadata = metadata
+    }
+    private enum CodingKeys: String, CodingKey {
+        case content = "content"
+        case chunkType = "chunk_type"
+        case embedding = "embedding"
+        case metadata = "metadata"
+    }
+}
+
+// MARK: - Internal FFI conversions for Chunk
+internal extension Chunk {
+    init(_ rb: RustBridge.ChunkRef) throws {
+        self.content = rb.content().toString()
+        self.chunkType = ChunkType(rawValue: rb.chunkType().toString()) ?? { fatalError("Unknown ChunkType: \(rb.chunkType().toString())") }()
+        self.embedding = rb.embedding().map { Array($0) }
+        self.metadata = try ChunkMetadata(rb.metadata())
+    }
+    func intoRust() throws -> RustBridge.Chunk {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.chunkFromJson(json)
+    }
+}
 
 /// Heading context for a chunk within a Markdown document.
 ///
 /// Contains the heading hierarchy from document root to this chunk's section.
-public typealias HeadingContext = RustBridge.HeadingContext
+public struct HeadingContext: Codable, Sendable, Hashable {
+    /// The heading hierarchy from document root to this chunk's section.
+    /// Index 0 is the outermost (h1), last element is the most specific.
+    public let headings: [HeadingLevel]
+    public init(headings: [HeadingLevel]) {
+        self.headings = headings
+    }
+}
+
+// MARK: - Internal FFI conversions for HeadingContext
+internal extension HeadingContext {
+    init(_ rb: RustBridge.HeadingContextRef) throws {
+        self.headings = try rb.headings().map { try HeadingLevel($0) }
+    }
+    func intoRust() throws -> RustBridge.HeadingContext {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.headingContextFromJson(json)
+    }
+}
 
 /// A single heading in the hierarchy.
-public typealias HeadingLevel = RustBridge.HeadingLevel
+public struct HeadingLevel: Codable, Sendable, Hashable {
+    /// Heading depth (1 = h1, 2 = h2, etc.)
+    public let level: UInt8
+    /// The text content of the heading.
+    public let text: String
+    public init(level: UInt8, text: String) {
+        self.level = level
+        self.text = text
+    }
+}
+
+// MARK: - Internal FFI conversions for HeadingLevel
+internal extension HeadingLevel {
+    init(_ rb: RustBridge.HeadingLevelRef) throws {
+        self.level = rb.level()
+        self.text = rb.text().toString()
+    }
+    func intoRust() throws -> RustBridge.HeadingLevel {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.headingLevelFromJson(json)
+    }
+}
 
 /// Metadata about a chunk's position in the original document.
-public typealias ChunkMetadata = RustBridge.ChunkMetadata
+public struct ChunkMetadata: Codable, Sendable, Hashable {
+    /// Byte offset where this chunk starts in the original text (UTF-8 valid boundary).
+    public let byteStart: UInt
+    /// Byte offset where this chunk ends in the original text (UTF-8 valid boundary).
+    public let byteEnd: UInt
+    /// Number of tokens in this chunk (if available).
+    ///
+    /// This is calculated by the embedding model's tokenizer if embeddings are enabled.
+    public let tokenCount: UInt?
+    /// Zero-based index of this chunk in the document.
+    public let chunkIndex: UInt
+    /// Total number of chunks in the document.
+    public let totalChunks: UInt
+    /// First page number this chunk spans (1-indexed).
+    ///
+    /// Only populated when page tracking is enabled in extraction configuration.
+    public let firstPage: UInt32?
+    /// Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks).
+    ///
+    /// Only populated when page tracking is enabled in extraction configuration.
+    public let lastPage: UInt32?
+    /// Heading context when using Markdown chunker.
+    ///
+    /// Contains the heading hierarchy this chunk falls under.
+    /// Only populated when `ChunkerType::Markdown` is used.
+    public let headingContext: HeadingContext?
+    /// Indices into `ExtractionResult.images` for images on pages covered by this chunk.
+    ///
+    /// Contains zero-based indices into the top-level `images` collection for every
+    /// image whose `page_number` falls within `[first_page, last_page]`.
+    /// Empty when image extraction is disabled or the chunk spans no pages with images.
+    public let imageIndices: [UInt32]
+    public init(byteStart: UInt, byteEnd: UInt, tokenCount: UInt? = nil, chunkIndex: UInt, totalChunks: UInt, firstPage: UInt32? = nil, lastPage: UInt32? = nil, headingContext: HeadingContext? = nil, imageIndices: [UInt32]) {
+        self.byteStart = byteStart
+        self.byteEnd = byteEnd
+        self.tokenCount = tokenCount
+        self.chunkIndex = chunkIndex
+        self.totalChunks = totalChunks
+        self.firstPage = firstPage
+        self.lastPage = lastPage
+        self.headingContext = headingContext
+        self.imageIndices = imageIndices
+    }
+    private enum CodingKeys: String, CodingKey {
+        case byteStart = "byte_start"
+        case byteEnd = "byte_end"
+        case tokenCount = "token_count"
+        case chunkIndex = "chunk_index"
+        case totalChunks = "total_chunks"
+        case firstPage = "first_page"
+        case lastPage = "last_page"
+        case headingContext = "heading_context"
+        case imageIndices = "image_indices"
+    }
+}
+
+// MARK: - Internal FFI conversions for ChunkMetadata
+internal extension ChunkMetadata {
+    init(_ rb: RustBridge.ChunkMetadataRef) throws {
+        self.byteStart = rb.byteStart()
+        self.byteEnd = rb.byteEnd()
+        self.tokenCount = rb.tokenCount()
+        self.chunkIndex = rb.chunkIndex()
+        self.totalChunks = rb.totalChunks()
+        self.firstPage = rb.firstPage()
+        self.lastPage = rb.lastPage()
+        self.headingContext = try rb.headingContext().map { try HeadingContext($0) }
+        self.imageIndices = Array(rb.imageIndices())
+    }
+    func intoRust() throws -> RustBridge.ChunkMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.chunkMetadataFromJson(json)
+    }
+}
 
 /// Extracted image from a document.
 ///
@@ -1170,6 +2278,50 @@ public typealias ChunkMetadata = RustBridge.ChunkMetadata
 /// Raw bytes allow cross-language compatibility - users can convert to
 /// PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 public typealias ExtractedImage = RustBridge.ExtractedImage
+
+/// Bounding box coordinates for element positioning.
+public struct BoundingBox: Codable, Sendable, Hashable {
+    /// Left x-coordinate
+    public let x0: Double
+    /// Bottom y-coordinate
+    public let y0: Double
+    /// Right x-coordinate
+    public let x1: Double
+    /// Top y-coordinate
+    public let y1: Double
+    public init(x0: Double, y0: Double, x1: Double, y1: Double) {
+        self.x0 = x0
+        self.y0 = y0
+        self.x1 = x1
+        self.y1 = y1
+    }
+    private enum CodingKeys: String, CodingKey {
+        case x0 = "x0"
+        case y0 = "y0"
+        case x1 = "x1"
+        case y1 = "y1"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.x0 = try container.decodeIfPresent(Double.self, forKey: .x0) ?? 0
+        self.y0 = try container.decodeIfPresent(Double.self, forKey: .y0) ?? 0
+        self.x1 = try container.decodeIfPresent(Double.self, forKey: .x1) ?? 0
+        self.y1 = try container.decodeIfPresent(Double.self, forKey: .y1) ?? 0
+    }
+}
+
+// MARK: - Internal FFI conversions for BoundingBox
+internal extension BoundingBox {
+    init(_ rb: RustBridge.BoundingBoxRef) throws {
+        self.x0 = rb.x0()
+        self.y0 = rb.y0()
+        self.x1 = rb.x1()
+        self.y1 = rb.y1()
+    }
+    func intoRust() throws -> RustBridge.BoundingBox {
+        return RustBridge.BoundingBox(self.x0, self.y0, self.x1, self.y1)
+    }
+}
 
 /// Metadata for a semantic element.
 public typealias ElementMetadata = RustBridge.ElementMetadata
@@ -1190,19 +2342,149 @@ public typealias ExcelWorkbook = RustBridge.ExcelWorkbook
 ///
 /// Represents one sheet from an Excel workbook with its content
 /// converted to Markdown format and dimensional statistics.
-public typealias ExcelSheet = RustBridge.ExcelSheet
+public struct ExcelSheet: Codable, Sendable, Hashable {
+    /// Sheet name as it appears in Excel
+    public let name: String
+    /// Sheet content converted to Markdown tables
+    public let markdown: String
+    /// Number of rows
+    public let rowCount: UInt
+    /// Number of columns
+    public let colCount: UInt
+    /// Total number of non-empty cells
+    public let cellCount: UInt
+    /// Pre-extracted table cells (2D vector of cell values)
+    /// Populated during markdown generation to avoid re-parsing markdown.
+    /// None for empty sheets.
+    public let tableCells: [[String]]?
+    public init(name: String, markdown: String, rowCount: UInt, colCount: UInt, cellCount: UInt, tableCells: [[String]]? = nil) {
+        self.name = name
+        self.markdown = markdown
+        self.rowCount = rowCount
+        self.colCount = colCount
+        self.cellCount = cellCount
+        self.tableCells = tableCells
+    }
+    private enum CodingKeys: String, CodingKey {
+        case name = "name"
+        case markdown = "markdown"
+        case rowCount = "row_count"
+        case colCount = "col_count"
+        case cellCount = "cell_count"
+        case tableCells = "table_cells"
+    }
+}
+
+// MARK: - Internal FFI conversions for ExcelSheet
+internal extension ExcelSheet {
+    init(_ rb: RustBridge.ExcelSheetRef) throws {
+        self.name = rb.name().toString()
+        self.markdown = rb.markdown().toString()
+        self.rowCount = rb.rowCount()
+        self.colCount = rb.colCount()
+        self.cellCount = rb.cellCount()
+        self.tableCells = try JSONDecoder().decode([[String]]?.self, from: (rb.tableCells().toString().data(using: .utf8) ?? Data("null".utf8)))
+    }
+    func intoRust() throws -> RustBridge.ExcelSheet {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.excelSheetFromJson(json)
+    }
+}
 
 /// XML extraction result.
 ///
 /// Contains extracted text content from XML files along with
 /// structural statistics about the XML document.
-public typealias XmlExtractionResult = RustBridge.XmlExtractionResult
+public struct XmlExtractionResult: Codable, Sendable, Hashable {
+    /// Extracted text content (XML structure filtered out)
+    public let content: String
+    /// Total number of XML elements processed
+    public let elementCount: UInt
+    /// List of unique element names found (sorted)
+    public let uniqueElements: [String]
+    public init(content: String, elementCount: UInt, uniqueElements: [String]) {
+        self.content = content
+        self.elementCount = elementCount
+        self.uniqueElements = uniqueElements
+    }
+    private enum CodingKeys: String, CodingKey {
+        case content = "content"
+        case elementCount = "element_count"
+        case uniqueElements = "unique_elements"
+    }
+}
+
+// MARK: - Internal FFI conversions for XmlExtractionResult
+internal extension XmlExtractionResult {
+    init(_ rb: RustBridge.XmlExtractionResultRef) throws {
+        self.content = rb.content().toString()
+        self.elementCount = rb.elementCount()
+        self.uniqueElements = rb.uniqueElements().map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.XmlExtractionResult {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.xmlExtractionResultFromJson(json)
+    }
+}
 
 /// Plain text and Markdown extraction result.
 ///
 /// Contains the extracted text along with statistics and,
 /// for Markdown files, structural elements like headers and links.
-public typealias TextExtractionResult = RustBridge.TextExtractionResult
+public struct TextExtractionResult: Codable, Sendable, Hashable {
+    /// Extracted text content
+    public let content: String
+    /// Number of lines
+    public let lineCount: UInt
+    /// Number of words
+    public let wordCount: UInt
+    /// Number of characters
+    public let characterCount: UInt
+    /// Markdown headers (text only, Markdown files only)
+    public let headers: [String]?
+    /// Markdown links as (text, URL) tuples (Markdown files only)
+    public let links: [[String]]?
+    /// Code blocks as (language, code) tuples (Markdown files only)
+    public let codeBlocks: [[String]]?
+    public init(content: String, lineCount: UInt, wordCount: UInt, characterCount: UInt, headers: [String]? = nil, links: [[String]]? = nil, codeBlocks: [[String]]? = nil) {
+        self.content = content
+        self.lineCount = lineCount
+        self.wordCount = wordCount
+        self.characterCount = characterCount
+        self.headers = headers
+        self.links = links
+        self.codeBlocks = codeBlocks
+    }
+    private enum CodingKeys: String, CodingKey {
+        case content = "content"
+        case lineCount = "line_count"
+        case wordCount = "word_count"
+        case characterCount = "character_count"
+        case headers = "headers"
+        case links = "links"
+        case codeBlocks = "code_blocks"
+    }
+}
+
+// MARK: - Internal FFI conversions for TextExtractionResult
+internal extension TextExtractionResult {
+    init(_ rb: RustBridge.TextExtractionResultRef) throws {
+        self.content = rb.content().toString()
+        self.lineCount = rb.lineCount()
+        self.wordCount = rb.wordCount()
+        self.characterCount = rb.characterCount()
+        self.headers = rb.headers()?.map { $0.as_str().toString() }
+        self.links = nil
+        self.codeBlocks = nil
+    }
+    func intoRust() throws -> RustBridge.TextExtractionResult {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.textExtractionResultFromJson(json)
+    }
+}
 
 /// PowerPoint (PPTX) extraction result.
 ///
@@ -1229,7 +2511,43 @@ public typealias OcrExtractionResult = RustBridge.OcrExtractionResult
 /// Table detected via OCR.
 ///
 /// Represents a table structure recognized during OCR processing.
-public typealias OcrTable = RustBridge.OcrTable
+public struct OcrTable: Codable, Sendable, Hashable {
+    /// Table cells as a 2D vector (rows × columns)
+    public let cells: [[String]]
+    /// Markdown representation of the table
+    public let markdown: String
+    /// Page number where the table was found (1-indexed)
+    public let pageNumber: UInt32
+    /// Bounding box of the table in pixel coordinates (from OCR word positions).
+    public let boundingBox: OcrTableBoundingBox?
+    public init(cells: [[String]], markdown: String, pageNumber: UInt32, boundingBox: OcrTableBoundingBox? = nil) {
+        self.cells = cells
+        self.markdown = markdown
+        self.pageNumber = pageNumber
+        self.boundingBox = boundingBox
+    }
+    private enum CodingKeys: String, CodingKey {
+        case cells = "cells"
+        case markdown = "markdown"
+        case pageNumber = "page_number"
+        case boundingBox = "bounding_box"
+    }
+}
+
+// MARK: - Internal FFI conversions for OcrTable
+internal extension OcrTable {
+    init(_ rb: RustBridge.OcrTableRef) throws {
+        self.cells = try JSONDecoder().decode([[String]].self, from: (rb.cells().toString().data(using: .utf8) ?? Data("null".utf8)))
+        self.markdown = rb.markdown().toString()
+        self.pageNumber = rb.pageNumber()
+        self.boundingBox = try rb.boundingBox().map { try OcrTableBoundingBox($0) }
+    }
+    func intoRust() throws -> RustBridge.OcrTable {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.ocrTableFromJson(json)
+    }
+}
 
 /// Bounding box for an OCR-detected table in pixel coordinates.
 public struct OcrTableBoundingBox: Codable, Sendable, Hashable {
@@ -1251,7 +2569,7 @@ public struct OcrTableBoundingBox: Codable, Sendable, Hashable {
 
 // MARK: - Internal FFI conversions for OcrTableBoundingBox
 internal extension OcrTableBoundingBox {
-    init(_ rb: RustBridge.OcrTableBoundingBox) throws {
+    init(_ rb: RustBridge.OcrTableBoundingBoxRef) throws {
         self.left = rb.left()
         self.top = rb.top()
         self.right = rb.right()
@@ -1300,21 +2618,31 @@ public struct ImagePreprocessingConfig: Codable, Sendable, Hashable {
         case binarizationMethod = "binarization_method"
         case invertColors = "invert_colors"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.targetDpi = try container.decodeIfPresent(Int32.self, forKey: .targetDpi) ?? 300
+        self.autoRotate = try container.decodeIfPresent(Bool.self, forKey: .autoRotate) ?? true
+        self.deskew = try container.decodeIfPresent(Bool.self, forKey: .deskew) ?? true
+        self.denoise = try container.decodeIfPresent(Bool.self, forKey: .denoise) ?? false
+        self.contrastEnhance = try container.decodeIfPresent(Bool.self, forKey: .contrastEnhance) ?? false
+        self.binarizationMethod = try container.decodeIfPresent(String.self, forKey: .binarizationMethod) ?? "otsu"
+        self.invertColors = try container.decodeIfPresent(Bool.self, forKey: .invertColors) ?? false
+    }
 }
 
 // MARK: - Internal FFI conversions for ImagePreprocessingConfig
 internal extension ImagePreprocessingConfig {
-    init(_ rb: RustBridge.ImagePreprocessingConfig) throws {
-        self.targetDpi = rb.target_dpi()
-        self.autoRotate = rb.auto_rotate()
+    init(_ rb: RustBridge.ImagePreprocessingConfigRef) throws {
+        self.targetDpi = rb.targetDpi()
+        self.autoRotate = rb.autoRotate()
         self.deskew = rb.deskew()
         self.denoise = rb.denoise()
-        self.contrastEnhance = rb.contrast_enhance()
-        self.binarizationMethod = rb.binarization_method().toString()
-        self.invertColors = rb.invert_colors()
+        self.contrastEnhance = rb.contrastEnhance()
+        self.binarizationMethod = rb.binarizationMethod().toString()
+        self.invertColors = rb.invertColors()
     }
     func intoRust() throws -> RustBridge.ImagePreprocessingConfig {
-        return RustBridge.ImagePreprocessingConfig(self.targetDpi, self.autoRotate, self.deskew, self.denoise, self.contrastEnhance, self.binarizationMethod, self.invertColors)
+        return RustBridge.ImagePreprocessingConfig(self.targetDpi, self.autoRotate, self.deskew, self.denoise, self.contrastEnhance, RustString(self.binarizationMethod), self.invertColors)
     }
 }
 
@@ -1323,13 +2651,249 @@ internal extension ImagePreprocessingConfig {
 /// Provides fine-grained control over Tesseract OCR engine parameters.
 /// Most users can use the defaults, but these settings allow optimization
 /// for specific document types (invoices, handwriting, etc.).
-public typealias TesseractConfig = RustBridge.TesseractConfig
+public struct TesseractConfig: Codable, Sendable, Hashable {
+    /// Language code (e.g., "eng", "deu", "fra")
+    public let language: String
+    /// Page Segmentation Mode (0-13).
+    ///
+    /// Common values:
+    /// - 3: Fully automatic page segmentation (native default)
+    /// - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang)
+    /// - 11: Sparse text with no particular order
+    public let psm: Int32
+    /// Output format ("text" or "markdown")
+    public let outputFormat: String
+    /// OCR Engine Mode (0-3).
+    ///
+    /// - 0: Legacy engine only
+    /// - 1: Neural nets (LSTM) only (usually best)
+    /// - 2: Legacy + LSTM
+    /// - 3: Default (based on what's available)
+    public let oem: Int32
+    /// Minimum confidence threshold (0.0-100.0).
+    ///
+    /// Words with confidence below this threshold may be rejected or flagged.
+    public let minConfidence: Double
+    /// Image preprocessing configuration.
+    ///
+    /// Controls how images are preprocessed before OCR. Can significantly
+    /// improve quality for scanned documents or low-quality images.
+    public let preprocessing: ImagePreprocessingConfig?
+    /// Enable automatic table detection and reconstruction
+    public let enableTableDetection: Bool
+    /// Minimum confidence threshold for table detection (0.0-1.0)
+    public let tableMinConfidence: Double
+    /// Column threshold for table detection (pixels)
+    public let tableColumnThreshold: Int32
+    /// Row threshold ratio for table detection (0.0-1.0)
+    public let tableRowThresholdRatio: Double
+    /// Enable OCR result caching
+    public let useCache: Bool
+    /// Use pre-adapted templates for character classification
+    public let classifyUsePreAdaptedTemplates: Bool
+    /// Enable N-gram language model
+    public let languageModelNgramOn: Bool
+    /// Don't reject good words during block-level processing
+    public let tesseditDontBlkrejGoodWds: Bool
+    /// Don't reject good words during row-level processing
+    public let tesseditDontRowrejGoodWds: Bool
+    /// Enable dictionary correction
+    public let tesseditEnableDictCorrection: Bool
+    /// Whitelist of allowed characters (empty = all allowed)
+    public let tesseditCharWhitelist: String
+    /// Blacklist of forbidden characters (empty = none forbidden)
+    public let tesseditCharBlacklist: String
+    /// Use primary language params model
+    public let tesseditUsePrimaryParamsModel: Bool
+    /// Variable-width space detection
+    public let textordSpaceSizeIsVariable: Bool
+    /// Use adaptive thresholding method
+    public let thresholdingMethod: Bool
+    public init(language: String, psm: Int32, outputFormat: String, oem: Int32, minConfidence: Double, preprocessing: ImagePreprocessingConfig? = nil, enableTableDetection: Bool, tableMinConfidence: Double, tableColumnThreshold: Int32, tableRowThresholdRatio: Double, useCache: Bool, classifyUsePreAdaptedTemplates: Bool, languageModelNgramOn: Bool, tesseditDontBlkrejGoodWds: Bool, tesseditDontRowrejGoodWds: Bool, tesseditEnableDictCorrection: Bool, tesseditCharWhitelist: String, tesseditCharBlacklist: String, tesseditUsePrimaryParamsModel: Bool, textordSpaceSizeIsVariable: Bool, thresholdingMethod: Bool) {
+        self.language = language
+        self.psm = psm
+        self.outputFormat = outputFormat
+        self.oem = oem
+        self.minConfidence = minConfidence
+        self.preprocessing = preprocessing
+        self.enableTableDetection = enableTableDetection
+        self.tableMinConfidence = tableMinConfidence
+        self.tableColumnThreshold = tableColumnThreshold
+        self.tableRowThresholdRatio = tableRowThresholdRatio
+        self.useCache = useCache
+        self.classifyUsePreAdaptedTemplates = classifyUsePreAdaptedTemplates
+        self.languageModelNgramOn = languageModelNgramOn
+        self.tesseditDontBlkrejGoodWds = tesseditDontBlkrejGoodWds
+        self.tesseditDontRowrejGoodWds = tesseditDontRowrejGoodWds
+        self.tesseditEnableDictCorrection = tesseditEnableDictCorrection
+        self.tesseditCharWhitelist = tesseditCharWhitelist
+        self.tesseditCharBlacklist = tesseditCharBlacklist
+        self.tesseditUsePrimaryParamsModel = tesseditUsePrimaryParamsModel
+        self.textordSpaceSizeIsVariable = textordSpaceSizeIsVariable
+        self.thresholdingMethod = thresholdingMethod
+    }
+    private enum CodingKeys: String, CodingKey {
+        case language = "language"
+        case psm = "psm"
+        case outputFormat = "output_format"
+        case oem = "oem"
+        case minConfidence = "min_confidence"
+        case preprocessing = "preprocessing"
+        case enableTableDetection = "enable_table_detection"
+        case tableMinConfidence = "table_min_confidence"
+        case tableColumnThreshold = "table_column_threshold"
+        case tableRowThresholdRatio = "table_row_threshold_ratio"
+        case useCache = "use_cache"
+        case classifyUsePreAdaptedTemplates = "classify_use_pre_adapted_templates"
+        case languageModelNgramOn = "language_model_ngram_on"
+        case tesseditDontBlkrejGoodWds = "tessedit_dont_blkrej_good_wds"
+        case tesseditDontRowrejGoodWds = "tessedit_dont_rowrej_good_wds"
+        case tesseditEnableDictCorrection = "tessedit_enable_dict_correction"
+        case tesseditCharWhitelist = "tessedit_char_whitelist"
+        case tesseditCharBlacklist = "tessedit_char_blacklist"
+        case tesseditUsePrimaryParamsModel = "tessedit_use_primary_params_model"
+        case textordSpaceSizeIsVariable = "textord_space_size_is_variable"
+        case thresholdingMethod = "thresholding_method"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.language = try container.decodeIfPresent(String.self, forKey: .language) ?? "eng"
+        self.psm = try container.decodeIfPresent(Int32.self, forKey: .psm) ?? 3
+        self.outputFormat = try container.decodeIfPresent(String.self, forKey: .outputFormat) ?? "markdown"
+        self.oem = try container.decodeIfPresent(Int32.self, forKey: .oem) ?? 3
+        self.minConfidence = try container.decodeIfPresent(Double.self, forKey: .minConfidence) ?? 0.0
+        self.preprocessing = try container.decodeIfPresent(ImagePreprocessingConfig.self, forKey: .preprocessing) ?? nil
+        self.enableTableDetection = try container.decodeIfPresent(Bool.self, forKey: .enableTableDetection) ?? true
+        self.tableMinConfidence = try container.decodeIfPresent(Double.self, forKey: .tableMinConfidence) ?? 0.0
+        self.tableColumnThreshold = try container.decodeIfPresent(Int32.self, forKey: .tableColumnThreshold) ?? 50
+        self.tableRowThresholdRatio = try container.decodeIfPresent(Double.self, forKey: .tableRowThresholdRatio) ?? 0.5
+        self.useCache = try container.decodeIfPresent(Bool.self, forKey: .useCache) ?? true
+        self.classifyUsePreAdaptedTemplates = try container.decodeIfPresent(Bool.self, forKey: .classifyUsePreAdaptedTemplates) ?? true
+        self.languageModelNgramOn = try container.decodeIfPresent(Bool.self, forKey: .languageModelNgramOn) ?? false
+        self.tesseditDontBlkrejGoodWds = try container.decodeIfPresent(Bool.self, forKey: .tesseditDontBlkrejGoodWds) ?? true
+        self.tesseditDontRowrejGoodWds = try container.decodeIfPresent(Bool.self, forKey: .tesseditDontRowrejGoodWds) ?? true
+        self.tesseditEnableDictCorrection = try container.decodeIfPresent(Bool.self, forKey: .tesseditEnableDictCorrection) ?? true
+        self.tesseditCharWhitelist = try container.decodeIfPresent(String.self, forKey: .tesseditCharWhitelist) ?? ""
+        self.tesseditCharBlacklist = try container.decodeIfPresent(String.self, forKey: .tesseditCharBlacklist) ?? ""
+        self.tesseditUsePrimaryParamsModel = try container.decodeIfPresent(Bool.self, forKey: .tesseditUsePrimaryParamsModel) ?? true
+        self.textordSpaceSizeIsVariable = try container.decodeIfPresent(Bool.self, forKey: .textordSpaceSizeIsVariable) ?? true
+        self.thresholdingMethod = try container.decodeIfPresent(Bool.self, forKey: .thresholdingMethod) ?? false
+    }
+}
+
+// MARK: - Internal FFI conversions for TesseractConfig
+internal extension TesseractConfig {
+    init(_ rb: RustBridge.TesseractConfigRef) throws {
+        self.language = rb.language().toString()
+        self.psm = rb.psm()
+        self.outputFormat = rb.outputFormat().toString()
+        self.oem = rb.oem()
+        self.minConfidence = rb.minConfidence()
+        self.preprocessing = try rb.preprocessing().map { try ImagePreprocessingConfig($0) }
+        self.enableTableDetection = rb.enableTableDetection()
+        self.tableMinConfidence = rb.tableMinConfidence()
+        self.tableColumnThreshold = rb.tableColumnThreshold()
+        self.tableRowThresholdRatio = rb.tableRowThresholdRatio()
+        self.useCache = rb.useCache()
+        self.classifyUsePreAdaptedTemplates = rb.classifyUsePreAdaptedTemplates()
+        self.languageModelNgramOn = rb.languageModelNgramOn()
+        self.tesseditDontBlkrejGoodWds = rb.tesseditDontBlkrejGoodWds()
+        self.tesseditDontRowrejGoodWds = rb.tesseditDontRowrejGoodWds()
+        self.tesseditEnableDictCorrection = rb.tesseditEnableDictCorrection()
+        self.tesseditCharWhitelist = rb.tesseditCharWhitelist().toString()
+        self.tesseditCharBlacklist = rb.tesseditCharBlacklist().toString()
+        self.tesseditUsePrimaryParamsModel = rb.tesseditUsePrimaryParamsModel()
+        self.textordSpaceSizeIsVariable = rb.textordSpaceSizeIsVariable()
+        self.thresholdingMethod = rb.thresholdingMethod()
+    }
+    func intoRust() throws -> RustBridge.TesseractConfig {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.tesseractConfigFromJson(json)
+    }
+}
 
 /// Image preprocessing metadata.
 ///
 /// Tracks the transformations applied to an image during OCR preprocessing,
 /// including DPI normalization, resizing, and resampling.
-public typealias ImagePreprocessingMetadata = RustBridge.ImagePreprocessingMetadata
+public struct ImagePreprocessingMetadata: Codable, Sendable, Hashable {
+    /// Original image dimensions (width, height) in pixels
+    public let originalDimensions: [UInt]
+    /// Original image DPI (horizontal, vertical)
+    public let originalDpi: [Double]
+    /// Target DPI from configuration
+    public let targetDpi: Int32
+    /// Scaling factor applied to the image
+    public let scaleFactor: Double
+    /// Whether DPI was auto-adjusted based on content
+    public let autoAdjusted: Bool
+    /// Final DPI after processing
+    public let finalDpi: Int32
+    /// New dimensions after resizing (if resized)
+    public let newDimensions: [UInt]?
+    /// Resampling algorithm used ("LANCZOS3", "CATMULLROM", etc.)
+    public let resampleMethod: String
+    /// Whether dimensions were clamped to max_image_dimension
+    public let dimensionClamped: Bool
+    /// Calculated optimal DPI (if auto_adjust_dpi enabled)
+    public let calculatedDpi: Int32?
+    /// Whether resize was skipped (dimensions already optimal)
+    public let skippedResize: Bool
+    /// Error message if resize failed
+    public let resizeError: String?
+    public init(originalDimensions: [UInt], originalDpi: [Double], targetDpi: Int32, scaleFactor: Double, autoAdjusted: Bool, finalDpi: Int32, newDimensions: [UInt]? = nil, resampleMethod: String, dimensionClamped: Bool, calculatedDpi: Int32? = nil, skippedResize: Bool, resizeError: String? = nil) {
+        self.originalDimensions = originalDimensions
+        self.originalDpi = originalDpi
+        self.targetDpi = targetDpi
+        self.scaleFactor = scaleFactor
+        self.autoAdjusted = autoAdjusted
+        self.finalDpi = finalDpi
+        self.newDimensions = newDimensions
+        self.resampleMethod = resampleMethod
+        self.dimensionClamped = dimensionClamped
+        self.calculatedDpi = calculatedDpi
+        self.skippedResize = skippedResize
+        self.resizeError = resizeError
+    }
+    private enum CodingKeys: String, CodingKey {
+        case originalDimensions = "original_dimensions"
+        case originalDpi = "original_dpi"
+        case targetDpi = "target_dpi"
+        case scaleFactor = "scale_factor"
+        case autoAdjusted = "auto_adjusted"
+        case finalDpi = "final_dpi"
+        case newDimensions = "new_dimensions"
+        case resampleMethod = "resample_method"
+        case dimensionClamped = "dimension_clamped"
+        case calculatedDpi = "calculated_dpi"
+        case skippedResize = "skipped_resize"
+        case resizeError = "resize_error"
+    }
+}
+
+// MARK: - Internal FFI conversions for ImagePreprocessingMetadata
+internal extension ImagePreprocessingMetadata {
+    init(_ rb: RustBridge.ImagePreprocessingMetadataRef) throws {
+        self.originalDimensions = Array(rb.originalDimensions())
+        self.originalDpi = Array(rb.originalDpi())
+        self.targetDpi = rb.targetDpi()
+        self.scaleFactor = rb.scaleFactor()
+        self.autoAdjusted = rb.autoAdjusted()
+        self.finalDpi = rb.finalDpi()
+        self.newDimensions = rb.newDimensions().map { Array($0) }
+        self.resampleMethod = rb.resampleMethod().toString()
+        self.dimensionClamped = rb.dimensionClamped()
+        self.calculatedDpi = rb.calculatedDpi()
+        self.skippedResize = rb.skippedResize()
+        self.resizeError = rb.resizeError()?.toString()
+    }
+    func intoRust() throws -> RustBridge.ImagePreprocessingMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.imagePreprocessingMetadataFromJson(json)
+    }
+}
 
 /// Extraction result metadata.
 ///
@@ -1341,17 +2905,164 @@ public typealias Metadata = RustBridge.Metadata
 ///
 /// Identifies the document as a spreadsheet source via the `FormatMetadata::Excel`
 /// discriminant. Sheet count and sheet names are stored inside this struct.
-public typealias ExcelMetadata = RustBridge.ExcelMetadata
+public struct ExcelMetadata: Codable, Sendable, Hashable {
+    /// Number of sheets in the workbook.
+    public let sheetCount: UInt32?
+    /// Names of all sheets in the workbook.
+    public let sheetNames: [String]?
+    public init(sheetCount: UInt32? = nil, sheetNames: [String]? = nil) {
+        self.sheetCount = sheetCount
+        self.sheetNames = sheetNames
+    }
+    private enum CodingKeys: String, CodingKey {
+        case sheetCount = "sheet_count"
+        case sheetNames = "sheet_names"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.sheetCount = try container.decodeIfPresent(UInt32.self, forKey: .sheetCount) ?? nil
+        self.sheetNames = try container.decodeIfPresent([String].self, forKey: .sheetNames) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for ExcelMetadata
+internal extension ExcelMetadata {
+    init(_ rb: RustBridge.ExcelMetadataRef) throws {
+        self.sheetCount = rb.sheetCount()
+        self.sheetNames = rb.sheetNames()?.map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.ExcelMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.excelMetadataFromJson(json)
+    }
+}
 
 /// Email metadata extracted from .eml and .msg files.
 ///
 /// Includes sender/recipient information, message ID, and attachment list.
-public typealias EmailMetadata = RustBridge.EmailMetadata
+public struct EmailMetadata: Codable, Sendable, Hashable {
+    /// Sender's email address
+    public let fromEmail: String?
+    /// Sender's display name
+    public let fromName: String?
+    /// Primary recipients
+    public let toEmails: [String]
+    /// CC recipients
+    public let ccEmails: [String]
+    /// BCC recipients
+    public let bccEmails: [String]
+    /// Message-ID header value
+    public let messageId: String?
+    /// List of attachment filenames
+    public let attachments: [String]
+    public init(fromEmail: String? = nil, fromName: String? = nil, toEmails: [String], ccEmails: [String], bccEmails: [String], messageId: String? = nil, attachments: [String]) {
+        self.fromEmail = fromEmail
+        self.fromName = fromName
+        self.toEmails = toEmails
+        self.ccEmails = ccEmails
+        self.bccEmails = bccEmails
+        self.messageId = messageId
+        self.attachments = attachments
+    }
+    private enum CodingKeys: String, CodingKey {
+        case fromEmail = "from_email"
+        case fromName = "from_name"
+        case toEmails = "to_emails"
+        case ccEmails = "cc_emails"
+        case bccEmails = "bcc_emails"
+        case messageId = "message_id"
+        case attachments = "attachments"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.fromEmail = try container.decodeIfPresent(String.self, forKey: .fromEmail) ?? nil
+        self.fromName = try container.decodeIfPresent(String.self, forKey: .fromName) ?? nil
+        self.toEmails = try container.decodeIfPresent([String].self, forKey: .toEmails) ?? []
+        self.ccEmails = try container.decodeIfPresent([String].self, forKey: .ccEmails) ?? []
+        self.bccEmails = try container.decodeIfPresent([String].self, forKey: .bccEmails) ?? []
+        self.messageId = try container.decodeIfPresent(String.self, forKey: .messageId) ?? nil
+        self.attachments = try container.decodeIfPresent([String].self, forKey: .attachments) ?? []
+    }
+}
+
+// MARK: - Internal FFI conversions for EmailMetadata
+internal extension EmailMetadata {
+    init(_ rb: RustBridge.EmailMetadataRef) throws {
+        self.fromEmail = rb.fromEmail()?.toString()
+        self.fromName = rb.fromName()?.toString()
+        self.toEmails = rb.toEmails().map { $0.as_str().toString() }
+        self.ccEmails = rb.ccEmails().map { $0.as_str().toString() }
+        self.bccEmails = rb.bccEmails().map { $0.as_str().toString() }
+        self.messageId = rb.messageId()?.toString()
+        self.attachments = rb.attachments().map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.EmailMetadata {
+        let __toEmails = RustVec<RustString>()
+        for __elem in self.toEmails { __toEmails.push(value: RustString(__elem)) }
+        let __ccEmails = RustVec<RustString>()
+        for __elem in self.ccEmails { __ccEmails.push(value: RustString(__elem)) }
+        let __bccEmails = RustVec<RustString>()
+        for __elem in self.bccEmails { __bccEmails.push(value: RustString(__elem)) }
+        let __attachments = RustVec<RustString>()
+        for __elem in self.attachments { __attachments.push(value: RustString(__elem)) }
+        return RustBridge.EmailMetadata(self.fromEmail.map(RustString.init), self.fromName.map(RustString.init), __toEmails, __ccEmails, __bccEmails, self.messageId.map(RustString.init), __attachments)
+    }
+}
 
 /// Archive (ZIP/TAR/7Z) metadata.
 ///
 /// Extracted from compressed archive files containing file lists and size information.
-public typealias ArchiveMetadata = RustBridge.ArchiveMetadata
+public struct ArchiveMetadata: Codable, Sendable, Hashable {
+    /// Archive format ("ZIP", "TAR", "7Z", etc.)
+    public let format: String
+    /// Total number of files in the archive
+    public let fileCount: UInt32
+    /// List of file paths within the archive
+    public let fileList: [String]
+    /// Total uncompressed size in bytes
+    public let totalSize: UInt64
+    /// Compressed size in bytes (if available)
+    public let compressedSize: UInt64?
+    public init(format: String, fileCount: UInt32, fileList: [String], totalSize: UInt64, compressedSize: UInt64? = nil) {
+        self.format = format
+        self.fileCount = fileCount
+        self.fileList = fileList
+        self.totalSize = totalSize
+        self.compressedSize = compressedSize
+    }
+    private enum CodingKeys: String, CodingKey {
+        case format = "format"
+        case fileCount = "file_count"
+        case fileList = "file_list"
+        case totalSize = "total_size"
+        case compressedSize = "compressed_size"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.format = try container.decodeIfPresent(String.self, forKey: .format) ?? ""
+        self.fileCount = try container.decodeIfPresent(UInt32.self, forKey: .fileCount) ?? 0
+        self.fileList = try container.decodeIfPresent([String].self, forKey: .fileList) ?? []
+        self.totalSize = try container.decodeIfPresent(UInt64.self, forKey: .totalSize) ?? 0
+        self.compressedSize = try container.decodeIfPresent(UInt64.self, forKey: .compressedSize) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for ArchiveMetadata
+internal extension ArchiveMetadata {
+    init(_ rb: RustBridge.ArchiveMetadataRef) throws {
+        self.format = rb.format().toString()
+        self.fileCount = rb.fileCount()
+        self.fileList = rb.fileList().map { $0.as_str().toString() }
+        self.totalSize = rb.totalSize()
+        self.compressedSize = rb.compressedSize()
+    }
+    func intoRust() throws -> RustBridge.ArchiveMetadata {
+        let __fileList = RustVec<RustString>()
+        for __elem in self.fileList { __fileList.push(value: RustString(__elem)) }
+        return RustBridge.ArchiveMetadata(RustString(self.format), self.fileCount, __fileList, self.totalSize, self.compressedSize)
+    }
+}
 
 /// Image metadata extracted from image files.
 ///
@@ -1361,25 +3072,275 @@ public typealias ImageMetadata = RustBridge.ImageMetadata
 /// XML metadata extracted during XML parsing.
 ///
 /// Provides statistics about XML document structure.
-public typealias XmlMetadata = RustBridge.XmlMetadata
+public struct XmlMetadata: Codable, Sendable, Hashable {
+    /// Total number of XML elements processed
+    public let elementCount: UInt32
+    /// List of unique element tag names (sorted)
+    public let uniqueElements: [String]
+    public init(elementCount: UInt32, uniqueElements: [String]) {
+        self.elementCount = elementCount
+        self.uniqueElements = uniqueElements
+    }
+    private enum CodingKeys: String, CodingKey {
+        case elementCount = "element_count"
+        case uniqueElements = "unique_elements"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.elementCount = try container.decodeIfPresent(UInt32.self, forKey: .elementCount) ?? 0
+        self.uniqueElements = try container.decodeIfPresent([String].self, forKey: .uniqueElements) ?? []
+    }
+}
+
+// MARK: - Internal FFI conversions for XmlMetadata
+internal extension XmlMetadata {
+    init(_ rb: RustBridge.XmlMetadataRef) throws {
+        self.elementCount = rb.elementCount()
+        self.uniqueElements = rb.uniqueElements().map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.XmlMetadata {
+        let __uniqueElements = RustVec<RustString>()
+        for __elem in self.uniqueElements { __uniqueElements.push(value: RustString(__elem)) }
+        return RustBridge.XmlMetadata(self.elementCount, __uniqueElements)
+    }
+}
 
 /// Text/Markdown metadata.
 ///
 /// Extracted from plain text and Markdown files. Includes word counts and,
 /// for Markdown, structural elements like headers and links.
-public typealias TextMetadata = RustBridge.TextMetadata
+public struct TextMetadata: Codable, Sendable, Hashable {
+    /// Number of lines in the document
+    public let lineCount: UInt32
+    /// Number of words
+    public let wordCount: UInt32
+    /// Number of characters
+    public let characterCount: UInt32
+    /// Markdown headers (headings text only, for Markdown files)
+    public let headers: [String]?
+    /// Markdown links as (text, url) tuples (for Markdown files)
+    public let links: [[String]]?
+    /// Code blocks as (language, code) tuples (for Markdown files)
+    public let codeBlocks: [[String]]?
+    public init(lineCount: UInt32, wordCount: UInt32, characterCount: UInt32, headers: [String]? = nil, links: [[String]]? = nil, codeBlocks: [[String]]? = nil) {
+        self.lineCount = lineCount
+        self.wordCount = wordCount
+        self.characterCount = characterCount
+        self.headers = headers
+        self.links = links
+        self.codeBlocks = codeBlocks
+    }
+    private enum CodingKeys: String, CodingKey {
+        case lineCount = "line_count"
+        case wordCount = "word_count"
+        case characterCount = "character_count"
+        case headers = "headers"
+        case links = "links"
+        case codeBlocks = "code_blocks"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.lineCount = try container.decodeIfPresent(UInt32.self, forKey: .lineCount) ?? 0
+        self.wordCount = try container.decodeIfPresent(UInt32.self, forKey: .wordCount) ?? 0
+        self.characterCount = try container.decodeIfPresent(UInt32.self, forKey: .characterCount) ?? 0
+        self.headers = try container.decodeIfPresent([String].self, forKey: .headers) ?? nil
+        self.links = try container.decodeIfPresent([[String]].self, forKey: .links) ?? nil
+        self.codeBlocks = try container.decodeIfPresent([[String]].self, forKey: .codeBlocks) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for TextMetadata
+internal extension TextMetadata {
+    init(_ rb: RustBridge.TextMetadataRef) throws {
+        self.lineCount = rb.lineCount()
+        self.wordCount = rb.wordCount()
+        self.characterCount = rb.characterCount()
+        self.headers = rb.headers()?.map { $0.as_str().toString() }
+        self.links = nil
+        self.codeBlocks = nil
+    }
+    func intoRust() throws -> RustBridge.TextMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.textMetadataFromJson(json)
+    }
+}
 
 /// Header/heading element metadata.
-public typealias HeaderMetadata = RustBridge.HeaderMetadata
+public struct HeaderMetadata: Codable, Sendable, Hashable {
+    /// Header level: 1 (h1) through 6 (h6)
+    public let level: UInt8
+    /// Normalized text content of the header
+    public let text: String
+    /// HTML id attribute if present
+    public let id: String?
+    /// Document tree depth at the header element
+    public let depth: UInt32
+    /// Byte offset in original HTML document
+    public let htmlOffset: UInt32
+    public init(level: UInt8, text: String, id: String? = nil, depth: UInt32, htmlOffset: UInt32) {
+        self.level = level
+        self.text = text
+        self.id = id
+        self.depth = depth
+        self.htmlOffset = htmlOffset
+    }
+    private enum CodingKeys: String, CodingKey {
+        case level = "level"
+        case text = "text"
+        case id = "id"
+        case depth = "depth"
+        case htmlOffset = "html_offset"
+    }
+}
+
+// MARK: - Internal FFI conversions for HeaderMetadata
+internal extension HeaderMetadata {
+    init(_ rb: RustBridge.HeaderMetadataRef) throws {
+        self.level = rb.level()
+        self.text = rb.text().toString()
+        self.id = rb.id()?.toString()
+        self.depth = rb.depth()
+        self.htmlOffset = rb.htmlOffset()
+    }
+    func intoRust() throws -> RustBridge.HeaderMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.headerMetadataFromJson(json)
+    }
+}
 
 /// Link element metadata.
-public typealias LinkMetadata = RustBridge.LinkMetadata
+public struct LinkMetadata: Codable, Sendable, Hashable {
+    /// The href URL value
+    public let href: String
+    /// Link text content (normalized)
+    public let text: String
+    /// Optional title attribute
+    public let title: String?
+    /// Link type classification
+    public let linkType: LinkType
+    /// Rel attribute values
+    public let rel: [String]
+    /// Additional attributes as key-value pairs
+    public let attributes: [[String]]
+    public init(href: String, text: String, title: String? = nil, linkType: LinkType, rel: [String], attributes: [[String]]) {
+        self.href = href
+        self.text = text
+        self.title = title
+        self.linkType = linkType
+        self.rel = rel
+        self.attributes = attributes
+    }
+    private enum CodingKeys: String, CodingKey {
+        case href = "href"
+        case text = "text"
+        case title = "title"
+        case linkType = "link_type"
+        case rel = "rel"
+        case attributes = "attributes"
+    }
+}
+
+// MARK: - Internal FFI conversions for LinkMetadata
+internal extension LinkMetadata {
+    init(_ rb: RustBridge.LinkMetadataRef) throws {
+        self.href = rb.href().toString()
+        self.text = rb.text().toString()
+        self.title = rb.title()?.toString()
+        self.linkType = LinkType(rawValue: rb.linkType().toString()) ?? { fatalError("Unknown LinkType: \(rb.linkType().toString())") }()
+        self.rel = rb.rel().map { $0.as_str().toString() }
+        self.attributes = try JSONDecoder().decode([[String]].self, from: Data("null".utf8))
+    }
+    func intoRust() throws -> RustBridge.LinkMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.linkMetadataFromJson(json)
+    }
+}
 
 /// Image element metadata.
-public typealias ImageMetadataType = RustBridge.ImageMetadataType
+public struct ImageMetadataType: Codable, Sendable, Hashable {
+    /// Image source (URL, data URI, or SVG content)
+    public let src: String
+    /// Alternative text from alt attribute
+    public let alt: String?
+    /// Title attribute
+    public let title: String?
+    /// Image dimensions as (width, height) if available
+    public let dimensions: [UInt32]?
+    /// Image type classification
+    public let imageType: ImageType
+    /// Additional attributes as key-value pairs
+    public let attributes: [[String]]
+    public init(src: String, alt: String? = nil, title: String? = nil, dimensions: [UInt32]? = nil, imageType: ImageType, attributes: [[String]]) {
+        self.src = src
+        self.alt = alt
+        self.title = title
+        self.dimensions = dimensions
+        self.imageType = imageType
+        self.attributes = attributes
+    }
+    private enum CodingKeys: String, CodingKey {
+        case src = "src"
+        case alt = "alt"
+        case title = "title"
+        case dimensions = "dimensions"
+        case imageType = "image_type"
+        case attributes = "attributes"
+    }
+}
+
+// MARK: - Internal FFI conversions for ImageMetadataType
+internal extension ImageMetadataType {
+    init(_ rb: RustBridge.ImageMetadataTypeRef) throws {
+        self.src = rb.src().toString()
+        self.alt = rb.alt()?.toString()
+        self.title = rb.title()?.toString()
+        self.dimensions = rb.dimensions().map { Array($0) }
+        self.imageType = ImageType(rawValue: rb.imageType().toString()) ?? { fatalError("Unknown ImageType: \(rb.imageType().toString())") }()
+        self.attributes = try JSONDecoder().decode([[String]].self, from: Data("null".utf8))
+    }
+    func intoRust() throws -> RustBridge.ImageMetadataType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.imageMetadataTypeFromJson(json)
+    }
+}
 
 /// Structured data (Schema.org, microdata, RDFa) block.
-public typealias StructuredData = RustBridge.StructuredData
+public struct StructuredData: Codable, Sendable, Hashable {
+    /// Type of structured data
+    public let dataType: StructuredDataType
+    /// Raw JSON string representation
+    public let rawJson: String
+    /// Schema type if detectable (e.g., "Article", "Event", "Product")
+    public let schemaType: String?
+    public init(dataType: StructuredDataType, rawJson: String, schemaType: String? = nil) {
+        self.dataType = dataType
+        self.rawJson = rawJson
+        self.schemaType = schemaType
+    }
+    private enum CodingKeys: String, CodingKey {
+        case dataType = "data_type"
+        case rawJson = "raw_json"
+        case schemaType = "schema_type"
+    }
+}
+
+// MARK: - Internal FFI conversions for StructuredData
+internal extension StructuredData {
+    init(_ rb: RustBridge.StructuredDataRef) throws {
+        self.dataType = StructuredDataType(rawValue: rb.dataType().toString()) ?? { fatalError("Unknown StructuredDataType: \(rb.dataType().toString())") }()
+        self.rawJson = rb.rawJson().toString()
+        self.schemaType = rb.schemaType()?.toString()
+    }
+    func intoRust() throws -> RustBridge.StructuredData {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.structuredDataFromJson(json)
+    }
+}
 
 /// HTML metadata extracted from HTML documents.
 ///
@@ -1417,30 +3378,106 @@ public struct OcrMetadata: Codable, Sendable, Hashable {
         case tableRows = "table_rows"
         case tableCols = "table_cols"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.language = try container.decodeIfPresent(String.self, forKey: .language) ?? ""
+        self.psm = try container.decodeIfPresent(Int32.self, forKey: .psm) ?? 0
+        self.outputFormat = try container.decodeIfPresent(String.self, forKey: .outputFormat) ?? ""
+        self.tableCount = try container.decodeIfPresent(UInt32.self, forKey: .tableCount) ?? 0
+        self.tableRows = try container.decodeIfPresent(UInt32.self, forKey: .tableRows) ?? nil
+        self.tableCols = try container.decodeIfPresent(UInt32.self, forKey: .tableCols) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for OcrMetadata
 internal extension OcrMetadata {
-    init(_ rb: RustBridge.OcrMetadata) throws {
+    init(_ rb: RustBridge.OcrMetadataRef) throws {
         self.language = rb.language().toString()
         self.psm = rb.psm()
-        self.outputFormat = rb.output_format().toString()
-        self.tableCount = rb.table_count()
-        self.tableRows = rb.table_rows()
-        self.tableCols = rb.table_cols()
+        self.outputFormat = rb.outputFormat().toString()
+        self.tableCount = rb.tableCount()
+        self.tableRows = rb.tableRows()
+        self.tableCols = rb.tableCols()
     }
     func intoRust() throws -> RustBridge.OcrMetadata {
-        return RustBridge.OcrMetadata(self.language, self.psm, self.outputFormat, self.tableCount, self.tableRows, self.tableCols)
+        return RustBridge.OcrMetadata(RustString(self.language), self.psm, RustString(self.outputFormat), self.tableCount, self.tableRows, self.tableCols)
     }
 }
 
 /// Error metadata (for batch operations).
-public typealias ErrorMetadata = RustBridge.ErrorMetadata
+public struct ErrorMetadata: Codable, Sendable, Hashable {
+    public let errorType: String
+    public let message: String
+    public init(errorType: String, message: String) {
+        self.errorType = errorType
+        self.message = message
+    }
+    private enum CodingKeys: String, CodingKey {
+        case errorType = "error_type"
+        case message = "message"
+    }
+}
+
+// MARK: - Internal FFI conversions for ErrorMetadata
+internal extension ErrorMetadata {
+    init(_ rb: RustBridge.ErrorMetadataRef) throws {
+        self.errorType = rb.errorType().toString()
+        self.message = rb.message().toString()
+    }
+    func intoRust() throws -> RustBridge.ErrorMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.errorMetadataFromJson(json)
+    }
+}
 
 /// PowerPoint presentation metadata.
 ///
 /// Extracted from PPTX files containing slide counts and presentation details.
-public typealias PptxMetadata = RustBridge.PptxMetadata
+public struct PptxMetadata: Codable, Sendable, Hashable {
+    /// Total number of slides in the presentation
+    public let slideCount: UInt32
+    /// Names of slides (if available)
+    public let slideNames: [String]
+    /// Number of embedded images
+    public let imageCount: UInt32?
+    /// Number of tables
+    public let tableCount: UInt32?
+    public init(slideCount: UInt32, slideNames: [String], imageCount: UInt32? = nil, tableCount: UInt32? = nil) {
+        self.slideCount = slideCount
+        self.slideNames = slideNames
+        self.imageCount = imageCount
+        self.tableCount = tableCount
+    }
+    private enum CodingKeys: String, CodingKey {
+        case slideCount = "slide_count"
+        case slideNames = "slide_names"
+        case imageCount = "image_count"
+        case tableCount = "table_count"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.slideCount = try container.decodeIfPresent(UInt32.self, forKey: .slideCount) ?? 0
+        self.slideNames = try container.decodeIfPresent([String].self, forKey: .slideNames) ?? []
+        self.imageCount = try container.decodeIfPresent(UInt32.self, forKey: .imageCount) ?? nil
+        self.tableCount = try container.decodeIfPresent(UInt32.self, forKey: .tableCount) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for PptxMetadata
+internal extension PptxMetadata {
+    init(_ rb: RustBridge.PptxMetadataRef) throws {
+        self.slideCount = rb.slideCount()
+        self.slideNames = rb.slideNames().map { $0.as_str().toString() }
+        self.imageCount = rb.imageCount()
+        self.tableCount = rb.tableCount()
+    }
+    func intoRust() throws -> RustBridge.PptxMetadata {
+        let __slideNames = RustVec<RustString>()
+        for __elem in self.slideNames { __slideNames.push(value: RustString(__elem)) }
+        return RustBridge.PptxMetadata(self.slideCount, __slideNames, self.imageCount, self.tableCount)
+    }
+}
 
 /// Word document metadata.
 ///
@@ -1449,31 +3486,261 @@ public typealias PptxMetadata = RustBridge.PptxMetadata
 public typealias DocxMetadata = RustBridge.DocxMetadata
 
 /// CSV/TSV file metadata.
-public typealias CsvMetadata = RustBridge.CsvMetadata
+public struct CsvMetadata: Codable, Sendable, Hashable {
+    public let rowCount: UInt32
+    public let columnCount: UInt32
+    public let delimiter: String?
+    public let hasHeader: Bool
+    public let columnTypes: [String]?
+    public init(rowCount: UInt32, columnCount: UInt32, delimiter: String? = nil, hasHeader: Bool, columnTypes: [String]? = nil) {
+        self.rowCount = rowCount
+        self.columnCount = columnCount
+        self.delimiter = delimiter
+        self.hasHeader = hasHeader
+        self.columnTypes = columnTypes
+    }
+    private enum CodingKeys: String, CodingKey {
+        case rowCount = "row_count"
+        case columnCount = "column_count"
+        case delimiter = "delimiter"
+        case hasHeader = "has_header"
+        case columnTypes = "column_types"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.rowCount = try container.decodeIfPresent(UInt32.self, forKey: .rowCount) ?? 0
+        self.columnCount = try container.decodeIfPresent(UInt32.self, forKey: .columnCount) ?? 0
+        self.delimiter = try container.decodeIfPresent(String.self, forKey: .delimiter) ?? nil
+        self.hasHeader = try container.decodeIfPresent(Bool.self, forKey: .hasHeader) ?? false
+        self.columnTypes = try container.decodeIfPresent([String].self, forKey: .columnTypes) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for CsvMetadata
+internal extension CsvMetadata {
+    init(_ rb: RustBridge.CsvMetadataRef) throws {
+        self.rowCount = rb.rowCount()
+        self.columnCount = rb.columnCount()
+        self.delimiter = rb.delimiter()?.toString()
+        self.hasHeader = rb.hasHeader()
+        self.columnTypes = rb.columnTypes()?.map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.CsvMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.csvMetadataFromJson(json)
+    }
+}
 
 /// BibTeX bibliography metadata.
 public typealias BibtexMetadata = RustBridge.BibtexMetadata
 
 /// Citation file metadata (RIS, PubMed, EndNote).
-public typealias CitationMetadata = RustBridge.CitationMetadata
+public struct CitationMetadata: Codable, Sendable, Hashable {
+    public let citationCount: UInt
+    public let format: String?
+    public let authors: [String]
+    public let yearRange: YearRange?
+    public let dois: [String]
+    public let keywords: [String]
+    public init(citationCount: UInt, format: String? = nil, authors: [String], yearRange: YearRange? = nil, dois: [String], keywords: [String]) {
+        self.citationCount = citationCount
+        self.format = format
+        self.authors = authors
+        self.yearRange = yearRange
+        self.dois = dois
+        self.keywords = keywords
+    }
+    private enum CodingKeys: String, CodingKey {
+        case citationCount = "citation_count"
+        case format = "format"
+        case authors = "authors"
+        case yearRange = "year_range"
+        case dois = "dois"
+        case keywords = "keywords"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.citationCount = try container.decodeIfPresent(UInt.self, forKey: .citationCount) ?? 0
+        self.format = try container.decodeIfPresent(String.self, forKey: .format) ?? nil
+        self.authors = try container.decodeIfPresent([String].self, forKey: .authors) ?? []
+        self.yearRange = try container.decodeIfPresent(YearRange.self, forKey: .yearRange) ?? nil
+        self.dois = try container.decodeIfPresent([String].self, forKey: .dois) ?? []
+        self.keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
+    }
+}
+
+// MARK: - Internal FFI conversions for CitationMetadata
+internal extension CitationMetadata {
+    init(_ rb: RustBridge.CitationMetadataRef) throws {
+        self.citationCount = rb.citationCount()
+        self.format = rb.format()?.toString()
+        self.authors = rb.authors().map { $0.as_str().toString() }
+        self.yearRange = try rb.yearRange().map { try YearRange($0) }
+        self.dois = rb.dois().map { $0.as_str().toString() }
+        self.keywords = rb.keywords().map { $0.as_str().toString() }
+    }
+    func intoRust() throws -> RustBridge.CitationMetadata {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.citationMetadataFromJson(json)
+    }
+}
 
 /// Year range for bibliographic metadata.
-public typealias YearRange = RustBridge.YearRange
+public struct YearRange: Codable, Sendable, Hashable {
+    public let min: UInt32?
+    public let max: UInt32?
+    public let years: [UInt32]
+    public init(min: UInt32? = nil, max: UInt32? = nil, years: [UInt32]) {
+        self.min = min
+        self.max = max
+        self.years = years
+    }
+}
+
+// MARK: - Internal FFI conversions for YearRange
+internal extension YearRange {
+    init(_ rb: RustBridge.YearRangeRef) throws {
+        self.min = rb.min()
+        self.max = rb.max()
+        self.years = Array(rb.years())
+    }
+    func intoRust() throws -> RustBridge.YearRange {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.yearRangeFromJson(json)
+    }
+}
 
 /// FictionBook (FB2) metadata.
-public typealias FictionBookMetadata = RustBridge.FictionBookMetadata
+public struct FictionBookMetadata: Codable, Sendable, Hashable {
+    public let genres: [String]
+    public let sequences: [String]
+    public let annotation: String?
+    public init(genres: [String], sequences: [String], annotation: String? = nil) {
+        self.genres = genres
+        self.sequences = sequences
+        self.annotation = annotation
+    }
+    private enum CodingKeys: String, CodingKey {
+        case genres = "genres"
+        case sequences = "sequences"
+        case annotation = "annotation"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.genres = try container.decodeIfPresent([String].self, forKey: .genres) ?? []
+        self.sequences = try container.decodeIfPresent([String].self, forKey: .sequences) ?? []
+        self.annotation = try container.decodeIfPresent(String.self, forKey: .annotation) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for FictionBookMetadata
+internal extension FictionBookMetadata {
+    init(_ rb: RustBridge.FictionBookMetadataRef) throws {
+        self.genres = rb.genres().map { $0.as_str().toString() }
+        self.sequences = rb.sequences().map { $0.as_str().toString() }
+        self.annotation = rb.annotation()?.toString()
+    }
+    func intoRust() throws -> RustBridge.FictionBookMetadata {
+        let __genres = RustVec<RustString>()
+        for __elem in self.genres { __genres.push(value: RustString(__elem)) }
+        let __sequences = RustVec<RustString>()
+        for __elem in self.sequences { __sequences.push(value: RustString(__elem)) }
+        return RustBridge.FictionBookMetadata(__genres, __sequences, self.annotation.map(RustString.init))
+    }
+}
 
 /// dBASE (DBF) file metadata.
-public typealias DbfMetadata = RustBridge.DbfMetadata
+public struct DbfMetadata: Codable, Sendable, Hashable {
+    public let recordCount: UInt
+    public let fieldCount: UInt
+    public let fields: [DbfFieldInfo]
+    public init(recordCount: UInt, fieldCount: UInt, fields: [DbfFieldInfo]) {
+        self.recordCount = recordCount
+        self.fieldCount = fieldCount
+        self.fields = fields
+    }
+    private enum CodingKeys: String, CodingKey {
+        case recordCount = "record_count"
+        case fieldCount = "field_count"
+        case fields = "fields"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.recordCount = try container.decodeIfPresent(UInt.self, forKey: .recordCount) ?? 0
+        self.fieldCount = try container.decodeIfPresent(UInt.self, forKey: .fieldCount) ?? 0
+        self.fields = try container.decodeIfPresent([DbfFieldInfo].self, forKey: .fields) ?? []
+    }
+}
+
+// MARK: - Internal FFI conversions for DbfMetadata
+internal extension DbfMetadata {
+    init(_ rb: RustBridge.DbfMetadataRef) throws {
+        self.recordCount = rb.recordCount()
+        self.fieldCount = rb.fieldCount()
+        self.fields = try rb.fields().map { try DbfFieldInfo($0) }
+    }
+    func intoRust() throws -> RustBridge.DbfMetadata {
+        let __fields = RustVec<RustBridge.DbfFieldInfo>()
+        for __elem in self.fields { __fields.push(value: try __elem.intoRust()) }
+        return RustBridge.DbfMetadata(self.recordCount, self.fieldCount, __fields)
+    }
+}
 
 /// dBASE field information.
-public typealias DbfFieldInfo = RustBridge.DbfFieldInfo
+public struct DbfFieldInfo: Codable, Sendable, Hashable {
+    public let name: String
+    public let fieldType: String
+    public init(name: String, fieldType: String) {
+        self.name = name
+        self.fieldType = fieldType
+    }
+    private enum CodingKeys: String, CodingKey {
+        case name = "name"
+        case fieldType = "field_type"
+    }
+}
+
+// MARK: - Internal FFI conversions for DbfFieldInfo
+internal extension DbfFieldInfo {
+    init(_ rb: RustBridge.DbfFieldInfoRef) throws {
+        self.name = rb.name().toString()
+        self.fieldType = rb.fieldType().toString()
+    }
+    func intoRust() throws -> RustBridge.DbfFieldInfo {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.dbfFieldInfoFromJson(json)
+    }
+}
 
 /// JATS (Journal Article Tag Suite) metadata.
 public typealias JatsMetadata = RustBridge.JatsMetadata
 
 /// JATS contributor with role.
-public typealias ContributorRole = RustBridge.ContributorRole
+public struct ContributorRole: Codable, Sendable, Hashable {
+    public let name: String
+    public let role: String?
+    public init(name: String, role: String? = nil) {
+        self.name = name
+        self.role = role
+    }
+}
+
+// MARK: - Internal FFI conversions for ContributorRole
+internal extension ContributorRole {
+    init(_ rb: RustBridge.ContributorRoleRef) throws {
+        self.name = rb.name().toString()
+        self.role = rb.role()?.toString()
+    }
+    func intoRust() throws -> RustBridge.ContributorRole {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.contributorRoleFromJson(json)
+    }
+}
 
 /// EPUB metadata (Dublin Core extensions).
 public struct EpubMetadata: Codable, Sendable, Hashable {
@@ -1499,20 +3766,29 @@ public struct EpubMetadata: Codable, Sendable, Hashable {
         case dcType = "dc_type"
         case coverImage = "cover_image"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.coverage = try container.decodeIfPresent(String.self, forKey: .coverage) ?? nil
+        self.dcFormat = try container.decodeIfPresent(String.self, forKey: .dcFormat) ?? nil
+        self.relation = try container.decodeIfPresent(String.self, forKey: .relation) ?? nil
+        self.source = try container.decodeIfPresent(String.self, forKey: .source) ?? nil
+        self.dcType = try container.decodeIfPresent(String.self, forKey: .dcType) ?? nil
+        self.coverImage = try container.decodeIfPresent(String.self, forKey: .coverImage) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for EpubMetadata
 internal extension EpubMetadata {
-    init(_ rb: RustBridge.EpubMetadata) throws {
+    init(_ rb: RustBridge.EpubMetadataRef) throws {
         self.coverage = rb.coverage()?.toString()
-        self.dcFormat = rb.dc_format()?.toString()
+        self.dcFormat = rb.dcFormat()?.toString()
         self.relation = rb.relation()?.toString()
         self.source = rb.source()?.toString()
-        self.dcType = rb.dc_type()?.toString()
-        self.coverImage = rb.cover_image()?.toString()
+        self.dcType = rb.dcType()?.toString()
+        self.coverImage = rb.coverImage()?.toString()
     }
     func intoRust() throws -> RustBridge.EpubMetadata {
-        return RustBridge.EpubMetadata(self.coverage, self.dcFormat, self.relation, self.source, self.dcType, self.coverImage)
+        return RustBridge.EpubMetadata(self.coverage.map(RustString.init), self.dcFormat.map(RustString.init), self.relation.map(RustString.init), self.source.map(RustString.init), self.dcType.map(RustString.init), self.coverImage.map(RustString.init))
     }
 }
 
@@ -1525,12 +3801,16 @@ public struct PstMetadata: Codable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case messageCount = "message_count"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.messageCount = try container.decodeIfPresent(UInt.self, forKey: .messageCount) ?? 0
+    }
 }
 
 // MARK: - Internal FFI conversions for PstMetadata
 internal extension PstMetadata {
-    init(_ rb: RustBridge.PstMetadata) throws {
-        self.messageCount = rb.message_count()
+    init(_ rb: RustBridge.PstMetadataRef) throws {
+        self.messageCount = rb.messageCount()
     }
     func intoRust() throws -> RustBridge.PstMetadata {
         return RustBridge.PstMetadata(self.messageCount)
@@ -1555,11 +3835,20 @@ public struct OcrConfidence: Codable, Sendable, Hashable {
         self.detection = detection
         self.recognition = recognition
     }
+    private enum CodingKeys: String, CodingKey {
+        case detection = "detection"
+        case recognition = "recognition"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.detection = try container.decodeIfPresent(Double.self, forKey: .detection) ?? nil
+        self.recognition = try container.decodeIfPresent(Double.self, forKey: .recognition) ?? 0
+    }
 }
 
 // MARK: - Internal FFI conversions for OcrConfidence
 internal extension OcrConfidence {
-    init(_ rb: RustBridge.OcrConfidence) throws {
+    init(_ rb: RustBridge.OcrConfidenceRef) throws {
         self.detection = rb.detection()
         self.recognition = rb.recognition()
     }
@@ -1586,8 +3875,8 @@ public struct OcrRotation: Codable, Sendable, Hashable {
 
 // MARK: - Internal FFI conversions for OcrRotation
 internal extension OcrRotation {
-    init(_ rb: RustBridge.OcrRotation) throws {
-        self.angleDegrees = rb.angle_degrees()
+    init(_ rb: RustBridge.OcrRotationRef) throws {
+        self.angleDegrees = rb.angleDegrees()
         self.confidence = rb.confidence()
     }
     func intoRust() throws -> RustBridge.OcrRotation {
@@ -1604,13 +3893,102 @@ public typealias OcrElement = RustBridge.OcrElement
 /// Configuration for OCR element extraction.
 ///
 /// Controls how OCR elements are extracted and filtered.
-public typealias OcrElementConfig = RustBridge.OcrElementConfig
+public struct OcrElementConfig: Codable, Sendable, Hashable {
+    /// Whether to include OCR elements in the extraction result.
+    ///
+    /// When true, the `ocr_elements` field in `ExtractionResult` will be populated.
+    public let includeElements: Bool
+    /// Minimum hierarchical level to include.
+    ///
+    /// Elements below this level (e.g., words when min_level is Line) will be excluded.
+    public let minLevel: OcrElementLevel
+    /// Minimum recognition confidence threshold (0.0-1.0).
+    ///
+    /// Elements with confidence below this threshold will be filtered out.
+    public let minConfidence: Double
+    /// Whether to build hierarchical relationships between elements.
+    ///
+    /// When true, `parent_id` fields will be populated based on spatial containment.
+    /// Only meaningful for Tesseract output.
+    public let buildHierarchy: Bool
+    public init(includeElements: Bool, minLevel: OcrElementLevel, minConfidence: Double, buildHierarchy: Bool) {
+        self.includeElements = includeElements
+        self.minLevel = minLevel
+        self.minConfidence = minConfidence
+        self.buildHierarchy = buildHierarchy
+    }
+    private enum CodingKeys: String, CodingKey {
+        case includeElements = "include_elements"
+        case minLevel = "min_level"
+        case minConfidence = "min_confidence"
+        case buildHierarchy = "build_hierarchy"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.includeElements = try container.decodeIfPresent(Bool.self, forKey: .includeElements) ?? false
+        self.minLevel = try container.decode(OcrElementLevel.self, forKey: .minLevel)
+        self.minConfidence = try container.decodeIfPresent(Double.self, forKey: .minConfidence) ?? 0
+        self.buildHierarchy = try container.decodeIfPresent(Bool.self, forKey: .buildHierarchy) ?? false
+    }
+}
+
+// MARK: - Internal FFI conversions for OcrElementConfig
+internal extension OcrElementConfig {
+    init(_ rb: RustBridge.OcrElementConfigRef) throws {
+        self.includeElements = rb.includeElements()
+        self.minLevel = OcrElementLevel(rawValue: rb.minLevel().toString()) ?? { fatalError("Unknown OcrElementLevel: \(rb.minLevel().toString())") }()
+        self.minConfidence = rb.minConfidence()
+        self.buildHierarchy = rb.buildHierarchy()
+    }
+    func intoRust() throws -> RustBridge.OcrElementConfig {
+        return RustBridge.OcrElementConfig(self.includeElements, try self.minLevel.intoRust(), self.minConfidence, self.buildHierarchy)
+    }
+}
 
 /// Unified page structure for documents.
 ///
 /// Supports different page types (PDF pages, PPTX slides, Excel sheets)
 /// with character offset boundaries for chunk-to-page mapping.
-public typealias PageStructure = RustBridge.PageStructure
+public struct PageStructure: Codable, Sendable, Hashable {
+    /// Total number of pages/slides/sheets
+    public let totalCount: UInt32
+    /// Type of paginated unit
+    public let unitType: PageUnitType
+    /// Character offset boundaries for each page
+    ///
+    /// Maps character ranges in the extracted content to page numbers.
+    /// Used for chunk page range calculation.
+    public let boundaries: [PageBoundary]?
+    /// Detailed per-page metadata (optional, only when needed)
+    public let pages: [PageInfo]?
+    public init(totalCount: UInt32, unitType: PageUnitType, boundaries: [PageBoundary]? = nil, pages: [PageInfo]? = nil) {
+        self.totalCount = totalCount
+        self.unitType = unitType
+        self.boundaries = boundaries
+        self.pages = pages
+    }
+    private enum CodingKeys: String, CodingKey {
+        case totalCount = "total_count"
+        case unitType = "unit_type"
+        case boundaries = "boundaries"
+        case pages = "pages"
+    }
+}
+
+// MARK: - Internal FFI conversions for PageStructure
+internal extension PageStructure {
+    init(_ rb: RustBridge.PageStructureRef) throws {
+        self.totalCount = rb.totalCount()
+        self.unitType = PageUnitType(rawValue: rb.unitType().toString()) ?? { fatalError("Unknown PageUnitType: \(rb.unitType().toString())") }()
+        self.boundaries = try rb.boundaries()?.map { try PageBoundary($0) }
+        self.pages = try rb.pages()?.map { try PageInfo($0) }
+    }
+    func intoRust() throws -> RustBridge.PageStructure {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.pageStructureFromJson(json)
+    }
+}
 
 /// Byte offset boundary for a page.
 ///
@@ -1638,10 +4016,10 @@ public struct PageBoundary: Codable, Sendable, Hashable {
 
 // MARK: - Internal FFI conversions for PageBoundary
 internal extension PageBoundary {
-    init(_ rb: RustBridge.PageBoundary) throws {
-        self.byteStart = rb.byte_start()
-        self.byteEnd = rb.byte_end()
-        self.pageNumber = rb.page_number()
+    init(_ rb: RustBridge.PageBoundaryRef) throws {
+        self.byteStart = rb.byteStart()
+        self.byteEnd = rb.byteEnd()
+        self.pageNumber = rb.pageNumber()
     }
     func intoRust() throws -> RustBridge.PageBoundary {
         return RustBridge.PageBoundary(self.byteStart, self.byteEnd, self.pageNumber)
@@ -1652,7 +4030,76 @@ internal extension PageBoundary {
 ///
 /// Captures per-page information including dimensions, content counts,
 /// and visibility state (for presentations).
-public typealias PageInfo = RustBridge.PageInfo
+public struct PageInfo: Codable, Sendable, Hashable {
+    /// Page number (1-indexed)
+    public let number: UInt32
+    /// Page title (usually for presentations)
+    public let title: String?
+    /// Dimensions in points (PDF) or pixels (images): (width, height)
+    public let dimensions: [Double]?
+    /// Number of images on this page
+    public let imageCount: UInt32?
+    /// Number of tables on this page
+    public let tableCount: UInt32?
+    /// Whether this page is hidden (e.g., in presentations)
+    public let hidden: Bool?
+    /// Whether this page is blank (no meaningful text, no images, no tables)
+    ///
+    /// A page is considered blank if it has fewer than 3 non-whitespace characters
+    /// and contains no tables or images. This is useful for filtering out empty pages
+    /// in scanned documents or PDFs with blank separator pages.
+    public let isBlank: Bool?
+    /// Whether this page contains non-trivial vector graphics (paths, shapes, curves)
+    ///
+    /// Indicates the presence of vector-drawn content such as charts, diagrams,
+    /// or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are
+    /// invisible to `ExtractionResult.images` since they are not embedded as raster
+    /// XObjects. Set to `true` when path count exceeds a heuristic threshold,
+    /// signaling that downstream consumers may want to rasterize the page to
+    /// capture this content.
+    ///
+    /// Only populated for PDFs; `None` for other document types.
+    public let hasVectorGraphics: Bool
+    public init(number: UInt32, title: String? = nil, dimensions: [Double]? = nil, imageCount: UInt32? = nil, tableCount: UInt32? = nil, hidden: Bool? = nil, isBlank: Bool? = nil, hasVectorGraphics: Bool) {
+        self.number = number
+        self.title = title
+        self.dimensions = dimensions
+        self.imageCount = imageCount
+        self.tableCount = tableCount
+        self.hidden = hidden
+        self.isBlank = isBlank
+        self.hasVectorGraphics = hasVectorGraphics
+    }
+    private enum CodingKeys: String, CodingKey {
+        case number = "number"
+        case title = "title"
+        case dimensions = "dimensions"
+        case imageCount = "image_count"
+        case tableCount = "table_count"
+        case hidden = "hidden"
+        case isBlank = "is_blank"
+        case hasVectorGraphics = "has_vector_graphics"
+    }
+}
+
+// MARK: - Internal FFI conversions for PageInfo
+internal extension PageInfo {
+    init(_ rb: RustBridge.PageInfoRef) throws {
+        self.number = rb.number()
+        self.title = rb.title()?.toString()
+        self.dimensions = rb.dimensions().map { Array($0) }
+        self.imageCount = rb.imageCount()
+        self.tableCount = rb.tableCount()
+        self.hidden = rb.hidden()
+        self.isBlank = rb.isBlank()
+        self.hasVectorGraphics = rb.hasVectorGraphics()
+    }
+    func intoRust() throws -> RustBridge.PageInfo {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.pageInfoFromJson(json)
+    }
+}
 
 /// Content for a single page/slide.
 ///
@@ -1668,7 +4115,73 @@ public typealias PageInfo = RustBridge.PageInfo
 ///
 /// This reduces memory overhead for documents with shared tables/images
 /// by avoiding redundant copies during serialization.
-public typealias PageContent = RustBridge.PageContent
+public struct PageContent: Codable, Sendable, Hashable {
+    /// Page number (1-indexed)
+    public let pageNumber: UInt32
+    /// Text content for this page
+    public let content: String
+    /// Tables found on this page (uses Arc for memory efficiency)
+    ///
+    /// Serializes as Vec<Table> for JSON compatibility while maintaining
+    /// Arc semantics in-memory for zero-copy sharing.
+    public let tables: [Table]
+    /// Indices into `ExtractionResult.images` for images found on this page.
+    ///
+    /// Each value is a zero-based index into the top-level `images` collection.
+    /// Only populated when `extract_images = true` in the extraction config.
+    public let imageIndices: [UInt32]
+    /// Hierarchy information for the page (when hierarchy extraction is enabled)
+    ///
+    /// Contains text hierarchy levels (H1-H6) extracted from the page content.
+    public let hierarchy: PageHierarchy?
+    /// Whether this page is blank (no meaningful text content)
+    ///
+    /// Determined during extraction based on text content analysis.
+    /// A page is blank if it has fewer than 3 non-whitespace characters
+    /// and contains no tables or images.
+    public let isBlank: Bool?
+    /// Layout detection regions for this page (when layout detection is enabled).
+    ///
+    /// Contains detected layout regions with class, confidence, bounding box,
+    /// and area fraction. Only populated when layout detection is configured.
+    public let layoutRegions: [LayoutRegion]?
+    public init(pageNumber: UInt32, content: String, tables: [Table], imageIndices: [UInt32], hierarchy: PageHierarchy? = nil, isBlank: Bool? = nil, layoutRegions: [LayoutRegion]? = nil) {
+        self.pageNumber = pageNumber
+        self.content = content
+        self.tables = tables
+        self.imageIndices = imageIndices
+        self.hierarchy = hierarchy
+        self.isBlank = isBlank
+        self.layoutRegions = layoutRegions
+    }
+    private enum CodingKeys: String, CodingKey {
+        case pageNumber = "page_number"
+        case content = "content"
+        case tables = "tables"
+        case imageIndices = "image_indices"
+        case hierarchy = "hierarchy"
+        case isBlank = "is_blank"
+        case layoutRegions = "layout_regions"
+    }
+}
+
+// MARK: - Internal FFI conversions for PageContent
+internal extension PageContent {
+    init(_ rb: RustBridge.PageContentRef) throws {
+        self.pageNumber = rb.pageNumber()
+        self.content = rb.content().toString()
+        self.tables = try rb.tables().map { try Table($0) }
+        self.imageIndices = Array(rb.imageIndices())
+        self.hierarchy = try rb.hierarchy().map { try PageHierarchy($0) }
+        self.isBlank = rb.isBlank()
+        self.layoutRegions = try rb.layoutRegions()?.map { try LayoutRegion($0) }
+    }
+    func intoRust() throws -> RustBridge.PageContent {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.pageContentFromJson(json)
+    }
+}
 
 /// A detected layout region on a page.
 ///
@@ -1681,10 +4194,10 @@ public struct LayoutRegion: Codable, Sendable, Hashable {
     /// Confidence score from the layout detection model (0.0 to 1.0).
     public let confidence: Double
     /// Bounding box in document coordinate space.
-    public let boundingBox: String
+    public let boundingBox: BoundingBox
     /// Fraction of the page area covered by this region (0.0 to 1.0).
     public let areaFraction: Double
-    public init(className: String, confidence: Double, boundingBox: String, areaFraction: Double) {
+    public init(className: String, confidence: Double, boundingBox: BoundingBox, areaFraction: Double) {
         self.className = className
         self.confidence = confidence
         self.boundingBox = boundingBox
@@ -1696,18 +4209,25 @@ public struct LayoutRegion: Codable, Sendable, Hashable {
         case boundingBox = "bounding_box"
         case areaFraction = "area_fraction"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.className = try container.decodeIfPresent(String.self, forKey: .className) ?? ""
+        self.confidence = try container.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
+        self.boundingBox = try container.decode(BoundingBox.self, forKey: .boundingBox)
+        self.areaFraction = try container.decodeIfPresent(Double.self, forKey: .areaFraction) ?? 0
+    }
 }
 
 // MARK: - Internal FFI conversions for LayoutRegion
 internal extension LayoutRegion {
-    init(_ rb: RustBridge.LayoutRegion) throws {
-        self.className = rb.class_name().toString()
+    init(_ rb: RustBridge.LayoutRegionRef) throws {
+        self.className = rb.className().toString()
         self.confidence = rb.confidence()
-        self.boundingBox = rb.bounding_box().toString()
-        self.areaFraction = rb.area_fraction()
+        self.boundingBox = try BoundingBox(rb.boundingBox())
+        self.areaFraction = rb.areaFraction()
     }
     func intoRust() throws -> RustBridge.LayoutRegion {
-        return RustBridge.LayoutRegion(self.className, self.confidence, self.boundingBox, self.areaFraction)
+        return RustBridge.LayoutRegion(RustString(self.className), self.confidence, try self.boundingBox.intoRust(), self.areaFraction)
     }
 }
 
@@ -1715,19 +4235,136 @@ internal extension LayoutRegion {
 ///
 /// Used when PDF text hierarchy extraction is enabled. Contains hierarchical
 /// blocks with heading levels (H1-H6) for semantic document structure.
-public typealias PageHierarchy = RustBridge.PageHierarchy
+public struct PageHierarchy: Codable, Sendable, Hashable {
+    /// Number of hierarchy blocks on this page
+    public let blockCount: UInt32
+    /// Hierarchical blocks with heading levels
+    public let blocks: [HierarchicalBlock]
+    public init(blockCount: UInt32, blocks: [HierarchicalBlock]) {
+        self.blockCount = blockCount
+        self.blocks = blocks
+    }
+    private enum CodingKeys: String, CodingKey {
+        case blockCount = "block_count"
+        case blocks = "blocks"
+    }
+}
+
+// MARK: - Internal FFI conversions for PageHierarchy
+internal extension PageHierarchy {
+    init(_ rb: RustBridge.PageHierarchyRef) throws {
+        self.blockCount = rb.blockCount()
+        self.blocks = try rb.blocks().map { try HierarchicalBlock($0) }
+    }
+    func intoRust() throws -> RustBridge.PageHierarchy {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.pageHierarchyFromJson(json)
+    }
+}
 
 /// A text block with hierarchy level assignment.
 ///
 /// Represents a block of text with semantic heading information extracted from
 /// font size clustering and hierarchical analysis.
-public typealias HierarchicalBlock = RustBridge.HierarchicalBlock
+public struct HierarchicalBlock: Codable, Sendable, Hashable {
+    /// The text content of this block
+    public let text: String
+    /// The font size of the text in this block
+    public let fontSize: Float
+    /// The hierarchy level of this block (H1-H6 or Body)
+    ///
+    /// Levels correspond to HTML heading tags:
+    /// - "h1": Top-level heading
+    /// - "h2": Secondary heading
+    /// - "h3": Tertiary heading
+    /// - "h4": Quaternary heading
+    /// - "h5": Quinary heading
+    /// - "h6": Senary heading
+    /// - "body": Body text (no heading level)
+    public let level: String
+    /// Bounding box information for the block
+    ///
+    /// Contains coordinates as (left, top, right, bottom) in PDF units.
+    public let bbox: [Float]?
+    public init(text: String, fontSize: Float, level: String, bbox: [Float]? = nil) {
+        self.text = text
+        self.fontSize = fontSize
+        self.level = level
+        self.bbox = bbox
+    }
+    private enum CodingKeys: String, CodingKey {
+        case text = "text"
+        case fontSize = "font_size"
+        case level = "level"
+        case bbox = "bbox"
+    }
+}
+
+// MARK: - Internal FFI conversions for HierarchicalBlock
+internal extension HierarchicalBlock {
+    init(_ rb: RustBridge.HierarchicalBlockRef) throws {
+        self.text = rb.text().toString()
+        self.fontSize = rb.fontSize()
+        self.level = rb.level().toString()
+        self.bbox = rb.bbox().map { Array($0) }
+    }
+    func intoRust() throws -> RustBridge.HierarchicalBlock {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.hierarchicalBlockFromJson(json)
+    }
+}
 
 /// Extracted table structure.
 ///
 /// Represents a table detected and extracted from a document (PDF, image, etc.).
 /// Tables are converted to both structured cell data and Markdown format.
-public typealias Table = RustBridge.Table
+public struct Table: Codable, Sendable, Hashable {
+    /// Table cells as a 2D vector (rows × columns)
+    public let cells: [[String]]
+    /// Markdown representation of the table
+    public let markdown: String
+    /// Page number where the table was found (1-indexed)
+    public let pageNumber: UInt32
+    /// Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
+    /// Only populated for PDF-extracted tables when position data is available.
+    public let boundingBox: BoundingBox?
+    public init(cells: [[String]], markdown: String, pageNumber: UInt32, boundingBox: BoundingBox? = nil) {
+        self.cells = cells
+        self.markdown = markdown
+        self.pageNumber = pageNumber
+        self.boundingBox = boundingBox
+    }
+    private enum CodingKeys: String, CodingKey {
+        case cells = "cells"
+        case markdown = "markdown"
+        case pageNumber = "page_number"
+        case boundingBox = "bounding_box"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.cells = try container.decodeIfPresent([[String]].self, forKey: .cells) ?? []
+        self.markdown = try container.decodeIfPresent(String.self, forKey: .markdown) ?? ""
+        self.pageNumber = try container.decodeIfPresent(UInt32.self, forKey: .pageNumber) ?? 0
+        self.boundingBox = try container.decodeIfPresent(BoundingBox.self, forKey: .boundingBox) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for Table
+internal extension Table {
+    init(_ rb: RustBridge.TableRef) throws {
+        self.cells = try JSONDecoder().decode([[String]].self, from: (rb.cells().toString().data(using: .utf8) ?? Data("null".utf8)))
+        self.markdown = rb.markdown().toString()
+        self.pageNumber = rb.pageNumber()
+        self.boundingBox = try rb.boundingBox().map { try BoundingBox($0) }
+    }
+    func intoRust() throws -> RustBridge.Table {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.tableFromJson(json)
+    }
+}
 
 /// Individual table cell with content and optional styling.
 ///
@@ -1753,18 +4390,25 @@ public struct TableCell: Codable, Sendable, Hashable {
         case colSpan = "col_span"
         case isHeader = "is_header"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.content = try container.decodeIfPresent(String.self, forKey: .content) ?? ""
+        self.rowSpan = try container.decodeIfPresent(UInt32.self, forKey: .rowSpan) ?? 0
+        self.colSpan = try container.decodeIfPresent(UInt32.self, forKey: .colSpan) ?? 0
+        self.isHeader = try container.decodeIfPresent(Bool.self, forKey: .isHeader) ?? false
+    }
 }
 
 // MARK: - Internal FFI conversions for TableCell
 internal extension TableCell {
-    init(_ rb: RustBridge.TableCell) throws {
+    init(_ rb: RustBridge.TableCellRef) throws {
         self.content = rb.content().toString()
-        self.rowSpan = rb.row_span()
-        self.colSpan = rb.col_span()
-        self.isHeader = rb.is_header()
+        self.rowSpan = rb.rowSpan()
+        self.colSpan = rb.colSpan()
+        self.isHeader = rb.isHeader()
     }
     func intoRust() throws -> RustBridge.TableCell {
-        return RustBridge.TableCell(self.content, self.rowSpan, self.colSpan, self.isHeader)
+        return RustBridge.TableCell(RustString(self.content), self.rowSpan, self.colSpan, self.isHeader)
     }
 }
 
@@ -1773,10 +4417,66 @@ internal extension TableCell {
 /// Represents any link, reference, or resource pointer found during extraction.
 /// The `kind` field classifies the URI semantically, while `label` carries
 /// optional human-readable display text.
-public typealias Uri = RustBridge.Uri
+public struct Uri: Codable, Sendable, Hashable {
+    /// The URL or path string.
+    public let url: String
+    /// Optional display text / label for the link.
+    public let label: String?
+    /// Optional page number where the URI was found (1-indexed).
+    public let page: UInt32?
+    /// Semantic classification of the URI.
+    public let kind: UriKind
+    public init(url: String, label: String? = nil, page: UInt32? = nil, kind: UriKind) {
+        self.url = url
+        self.label = label
+        self.page = page
+        self.kind = kind
+    }
+}
+
+// MARK: - Internal FFI conversions for Uri
+internal extension Uri {
+    init(_ rb: RustBridge.UriRef) throws {
+        self.url = rb.url().toString()
+        self.label = rb.label()?.toString()
+        self.page = rb.page()
+        self.kind = UriKind(rawValue: rb.kind().toString()) ?? { fatalError("Unknown UriKind: \(rb.kind().toString())") }()
+    }
+    func intoRust() throws -> RustBridge.Uri {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.uriFromJson(json)
+    }
+}
 
 /// MIME type detection response.
-public typealias DetectResponse = RustBridge.DetectResponse
+public struct DetectResponse: Codable, Sendable, Hashable {
+    /// Detected MIME type
+    public let mimeType: String
+    /// Original filename (if provided)
+    public let filename: String?
+    public init(mimeType: String, filename: String? = nil) {
+        self.mimeType = mimeType
+        self.filename = filename
+    }
+    private enum CodingKeys: String, CodingKey {
+        case mimeType = "mime_type"
+        case filename = "filename"
+    }
+}
+
+// MARK: - Internal FFI conversions for DetectResponse
+internal extension DetectResponse {
+    init(_ rb: RustBridge.DetectResponseRef) throws {
+        self.mimeType = rb.mimeType().toString()
+        self.filename = rb.filename()?.toString()
+    }
+    func intoRust() throws -> RustBridge.DetectResponse {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.detectResponseFromJson(json)
+    }
+}
 
 /// Preset configurations for common RAG use cases.
 ///
@@ -1785,7 +4485,58 @@ public typealias DetectResponse = RustBridge.DetectResponse
 ///
 /// All string fields are owned `String` for FFI compatibility — instances
 /// are safe to clone and pass across language boundaries.
-public typealias EmbeddingPreset = RustBridge.EmbeddingPreset
+public struct EmbeddingPreset: Codable, Sendable, Hashable {
+    public let name: String
+    public let chunkSize: UInt
+    public let overlap: UInt
+    /// HuggingFace repository name for the model.
+    public let modelRepo: String
+    /// Pooling strategy: "cls" or "mean".
+    public let pooling: String
+    /// Path to the ONNX model file within the repo.
+    public let modelFile: String
+    public let dimensions: UInt
+    public let description: String
+    public init(name: String, chunkSize: UInt, overlap: UInt, modelRepo: String, pooling: String, modelFile: String, dimensions: UInt, description: String) {
+        self.name = name
+        self.chunkSize = chunkSize
+        self.overlap = overlap
+        self.modelRepo = modelRepo
+        self.pooling = pooling
+        self.modelFile = modelFile
+        self.dimensions = dimensions
+        self.description = description
+    }
+    private enum CodingKeys: String, CodingKey {
+        case name = "name"
+        case chunkSize = "chunk_size"
+        case overlap = "overlap"
+        case modelRepo = "model_repo"
+        case pooling = "pooling"
+        case modelFile = "model_file"
+        case dimensions = "dimensions"
+        case description = "description"
+    }
+}
+
+// MARK: - Internal FFI conversions for EmbeddingPreset
+internal extension EmbeddingPreset {
+    init(_ rb: RustBridge.EmbeddingPresetRef) throws {
+        self.name = rb.name().toString()
+        self.chunkSize = rb.chunkSize()
+        self.overlap = rb.overlap()
+        self.modelRepo = rb.modelRepo().toString()
+        self.pooling = rb.pooling().toString()
+        self.modelFile = rb.modelFile().toString()
+        self.dimensions = rb.dimensions()
+        self.description = rb.description().toString()
+    }
+    func intoRust() throws -> RustBridge.EmbeddingPreset {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.embeddingPresetFromJson(json)
+    }
+}
 
 /// YAKE-specific parameters.
 public struct YakeParams: Codable, Sendable, Hashable {
@@ -1799,12 +4550,16 @@ public struct YakeParams: Codable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case windowSize = "window_size"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.windowSize = try container.decodeIfPresent(UInt.self, forKey: .windowSize) ?? 2
+    }
 }
 
 // MARK: - Internal FFI conversions for YakeParams
 internal extension YakeParams {
-    init(_ rb: RustBridge.YakeParams) throws {
-        self.windowSize = rb.window_size()
+    init(_ rb: RustBridge.YakeParamsRef) throws {
+        self.windowSize = rb.windowSize()
     }
     func intoRust() throws -> RustBridge.YakeParams {
         return RustBridge.YakeParams(self.windowSize)
@@ -1825,13 +4580,18 @@ public struct RakeParams: Codable, Sendable, Hashable {
         case minWordLength = "min_word_length"
         case maxWordsPerPhrase = "max_words_per_phrase"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.minWordLength = try container.decodeIfPresent(UInt.self, forKey: .minWordLength) ?? 1
+        self.maxWordsPerPhrase = try container.decodeIfPresent(UInt.self, forKey: .maxWordsPerPhrase) ?? 3
+    }
 }
 
 // MARK: - Internal FFI conversions for RakeParams
 internal extension RakeParams {
-    init(_ rb: RustBridge.RakeParams) throws {
-        self.minWordLength = rb.min_word_length()
-        self.maxWordsPerPhrase = rb.max_words_per_phrase()
+    init(_ rb: RustBridge.RakeParamsRef) throws {
+        self.minWordLength = rb.minWordLength()
+        self.maxWordsPerPhrase = rb.maxWordsPerPhrase()
     }
     func intoRust() throws -> RustBridge.RakeParams {
         return RustBridge.RakeParams(self.minWordLength, self.maxWordsPerPhrase)
@@ -1839,10 +4599,110 @@ internal extension RakeParams {
 }
 
 /// Keyword extraction configuration.
-public typealias KeywordConfig = RustBridge.KeywordConfig
+public struct KeywordConfig: Codable, Sendable, Hashable {
+    /// Algorithm to use for extraction.
+    public let algorithm: KeywordAlgorithm
+    /// Maximum number of keywords to extract (default: 10).
+    public let maxKeywords: UInt
+    /// Minimum score threshold (0.0-1.0, default: 0.0).
+    ///
+    /// Keywords with scores below this threshold are filtered out.
+    /// Note: Score ranges differ between algorithms.
+    public let minScore: Float
+    /// N-gram range for keyword extraction (min, max).
+    ///
+    /// (1, 1) = unigrams only
+    /// (1, 2) = unigrams and bigrams
+    /// (1, 3) = unigrams, bigrams, and trigrams (default)
+    public let ngramRange: [UInt]
+    /// Language code for stopword filtering (e.g., "en", "de", "fr").
+    ///
+    /// If None, no stopword filtering is applied.
+    public let language: String?
+    /// YAKE-specific tuning parameters.
+    public let yakeParams: YakeParams?
+    /// RAKE-specific tuning parameters.
+    public let rakeParams: RakeParams?
+    public init(algorithm: KeywordAlgorithm, maxKeywords: UInt, minScore: Float, ngramRange: [UInt], language: String? = nil, yakeParams: YakeParams? = nil, rakeParams: RakeParams? = nil) {
+        self.algorithm = algorithm
+        self.maxKeywords = maxKeywords
+        self.minScore = minScore
+        self.ngramRange = ngramRange
+        self.language = language
+        self.yakeParams = yakeParams
+        self.rakeParams = rakeParams
+    }
+    private enum CodingKeys: String, CodingKey {
+        case algorithm = "algorithm"
+        case maxKeywords = "max_keywords"
+        case minScore = "min_score"
+        case ngramRange = "ngram_range"
+        case language = "language"
+        case yakeParams = "yake_params"
+        case rakeParams = "rake_params"
+    }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.algorithm = try container.decode(KeywordAlgorithm.self, forKey: .algorithm)
+        self.maxKeywords = try container.decodeIfPresent(UInt.self, forKey: .maxKeywords) ?? 10
+        self.minScore = try container.decodeIfPresent(Float.self, forKey: .minScore) ?? 0.0
+        self.ngramRange = try container.decodeIfPresent([UInt].self, forKey: .ngramRange) ?? []
+        self.language = try container.decodeIfPresent(String.self, forKey: .language) ?? nil
+        self.yakeParams = try container.decodeIfPresent(YakeParams.self, forKey: .yakeParams) ?? nil
+        self.rakeParams = try container.decodeIfPresent(RakeParams.self, forKey: .rakeParams) ?? nil
+    }
+}
+
+// MARK: - Internal FFI conversions for KeywordConfig
+internal extension KeywordConfig {
+    init(_ rb: RustBridge.KeywordConfigRef) throws {
+        self.algorithm = KeywordAlgorithm(rawValue: rb.algorithm().toString()) ?? { fatalError("Unknown KeywordAlgorithm: \(rb.algorithm().toString())") }()
+        self.maxKeywords = rb.maxKeywords()
+        self.minScore = rb.minScore()
+        self.ngramRange = Array(rb.ngramRange())
+        self.language = rb.language()?.toString()
+        self.yakeParams = try rb.yakeParams().map { try YakeParams($0) }
+        self.rakeParams = try rb.rakeParams().map { try RakeParams($0) }
+    }
+    func intoRust() throws -> RustBridge.KeywordConfig {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.keywordConfigFromJson(json)
+    }
+}
 
 /// Extracted keyword with metadata.
-public typealias Keyword = RustBridge.Keyword
+public struct Keyword: Codable, Sendable, Hashable {
+    /// The keyword text.
+    public let text: String
+    /// Relevance score (higher is better, algorithm-specific range).
+    public let score: Float
+    /// Algorithm that extracted this keyword.
+    public let algorithm: KeywordAlgorithm
+    /// Optional positions where keyword appears in text (character offsets).
+    public let positions: [UInt]?
+    public init(text: String, score: Float, algorithm: KeywordAlgorithm, positions: [UInt]? = nil) {
+        self.text = text
+        self.score = score
+        self.algorithm = algorithm
+        self.positions = positions
+    }
+}
+
+// MARK: - Internal FFI conversions for Keyword
+internal extension Keyword {
+    init(_ rb: RustBridge.KeywordRef) throws {
+        self.text = rb.text().toString()
+        self.score = rb.score()
+        self.algorithm = KeywordAlgorithm(rawValue: rb.algorithm().toString()) ?? { fatalError("Unknown KeywordAlgorithm: \(rb.algorithm().toString())") }()
+        self.positions = rb.positions().map { Array($0) }
+    }
+    func intoRust() throws -> RustBridge.Keyword {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.keywordFromJson(json)
+    }
+}
 
 public typealias OcrCacheStats = RustBridge.OcrCacheStats
 
@@ -1886,7 +4746,7 @@ public struct OrientationResult: Codable, Sendable, Hashable {
 
 // MARK: - Internal FFI conversions for OrientationResult
 internal extension OrientationResult {
-    init(_ rb: RustBridge.OrientationResult) throws {
+    init(_ rb: RustBridge.OrientationResultRef) throws {
         self.degrees = rb.degrees()
         self.confidence = rb.confidence()
     }
@@ -1911,7 +4771,7 @@ public struct BBox: Codable, Sendable, Hashable {
 
 // MARK: - Internal FFI conversions for BBox
 internal extension BBox {
-    init(_ rb: RustBridge.BBox) throws {
+    init(_ rb: RustBridge.BBoxRef) throws {
         self.x1 = rb.x1()
         self.y1 = rb.y1()
         self.x2 = rb.x2()
@@ -1923,7 +4783,35 @@ internal extension BBox {
 }
 
 /// A single layout detection result.
-public typealias LayoutDetection = RustBridge.LayoutDetection
+public struct LayoutDetection: Codable, Sendable, Hashable {
+    public let className: LayoutClass
+    public let confidence: Float
+    public let bbox: BBox
+    public init(className: LayoutClass, confidence: Float, bbox: BBox) {
+        self.className = className
+        self.confidence = confidence
+        self.bbox = bbox
+    }
+    private enum CodingKeys: String, CodingKey {
+        case className = "class_name"
+        case confidence = "confidence"
+        case bbox = "bbox"
+    }
+}
+
+// MARK: - Internal FFI conversions for LayoutDetection
+internal extension LayoutDetection {
+    init(_ rb: RustBridge.LayoutDetectionRef) throws {
+        self.className = LayoutClass(rawValue: rb.className().toString()) ?? { fatalError("Unknown LayoutClass: \(rb.className().toString())") }()
+        self.confidence = rb.confidence()
+        self.bbox = try BBox(rb.bbox())
+    }
+    func intoRust() throws -> RustBridge.LayoutDetection {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.layoutDetectionFromJson(json)
+    }
+}
 
 /// Pre-computed table markdown for a table detection region.
 ///
@@ -1931,10 +4819,69 @@ public typealias LayoutDetection = RustBridge.LayoutDetection
 /// layout-aware OCR results.  The struct lives here (under `layout-types`, pure-Rust)
 /// so that consumers who do not enable `layout-detection` (ORT) can still reference
 /// the type in their own code.
-public typealias RecognizedTable = RustBridge.RecognizedTable
+public struct RecognizedTable: Codable, Sendable, Hashable {
+    /// Detection bbox that this table corresponds to (for matching).
+    public let detectionBbox: BBox
+    /// Table cells as a 2D vector (rows × columns).
+    public let cells: [[String]]
+    /// Rendered markdown table.
+    public let markdown: String
+    public init(detectionBbox: BBox, cells: [[String]], markdown: String) {
+        self.detectionBbox = detectionBbox
+        self.cells = cells
+        self.markdown = markdown
+    }
+    private enum CodingKeys: String, CodingKey {
+        case detectionBbox = "detection_bbox"
+        case cells = "cells"
+        case markdown = "markdown"
+    }
+}
+
+// MARK: - Internal FFI conversions for RecognizedTable
+internal extension RecognizedTable {
+    init(_ rb: RustBridge.RecognizedTableRef) throws {
+        self.detectionBbox = try BBox(rb.detectionBbox())
+        self.cells = try JSONDecoder().decode([[String]].self, from: (rb.cells().toString().data(using: .utf8) ?? Data("null".utf8)))
+        self.markdown = rb.markdown().toString()
+    }
+    func intoRust() throws -> RustBridge.RecognizedTable {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.recognizedTableFromJson(json)
+    }
+}
 
 /// Page-level detection result containing all detections and page metadata.
-public typealias DetectionResult = RustBridge.DetectionResult
+public struct DetectionResult: Codable, Sendable, Hashable {
+    public let pageWidth: UInt32
+    public let pageHeight: UInt32
+    public let detections: [LayoutDetection]
+    public init(pageWidth: UInt32, pageHeight: UInt32, detections: [LayoutDetection]) {
+        self.pageWidth = pageWidth
+        self.pageHeight = pageHeight
+        self.detections = detections
+    }
+    private enum CodingKeys: String, CodingKey {
+        case pageWidth = "page_width"
+        case pageHeight = "page_height"
+        case detections = "detections"
+    }
+}
+
+// MARK: - Internal FFI conversions for DetectionResult
+internal extension DetectionResult {
+    init(_ rb: RustBridge.DetectionResultRef) throws {
+        self.pageWidth = rb.pageWidth()
+        self.pageHeight = rb.pageHeight()
+        self.detections = try rb.detections().map { try LayoutDetection($0) }
+    }
+    func intoRust() throws -> RustBridge.DetectionResult {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return try RustBridge.detectionResultFromJson(json)
+    }
+}
 
 /// Embedded file descriptor extracted from the PDF name tree.
 public typealias EmbeddedFile = RustBridge.EmbeddedFile
@@ -1973,20 +4920,29 @@ public struct PdfMetadata: Codable, Sendable, Hashable {
         case height = "height"
         case pageCount = "page_count"
     }
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.pdfVersion = try container.decodeIfPresent(String.self, forKey: .pdfVersion) ?? nil
+        self.producer = try container.decodeIfPresent(String.self, forKey: .producer) ?? nil
+        self.isEncrypted = try container.decodeIfPresent(Bool.self, forKey: .isEncrypted) ?? nil
+        self.width = try container.decodeIfPresent(Int64.self, forKey: .width) ?? nil
+        self.height = try container.decodeIfPresent(Int64.self, forKey: .height) ?? nil
+        self.pageCount = try container.decodeIfPresent(UInt32.self, forKey: .pageCount) ?? nil
+    }
 }
 
 // MARK: - Internal FFI conversions for PdfMetadata
 internal extension PdfMetadata {
-    init(_ rb: RustBridge.PdfMetadata) throws {
-        self.pdfVersion = rb.pdf_version()?.toString()
+    init(_ rb: RustBridge.PdfMetadataRef) throws {
+        self.pdfVersion = rb.pdfVersion()?.toString()
         self.producer = rb.producer()?.toString()
-        self.isEncrypted = rb.is_encrypted()
+        self.isEncrypted = rb.isEncrypted()
         self.width = rb.width()
         self.height = rb.height()
-        self.pageCount = rb.page_count()
+        self.pageCount = rb.pageCount()
     }
     func intoRust() throws -> RustBridge.PdfMetadata {
-        return RustBridge.PdfMetadata(self.pdfVersion, self.producer, self.isEncrypted, self.width, self.height, self.pageCount)
+        return RustBridge.PdfMetadata(self.pdfVersion.map(RustString.init), self.producer.map(RustString.init), self.isEncrypted, self.width, self.height, self.pageCount)
     }
 }
 
@@ -1994,27 +4950,34 @@ internal extension PdfMetadata {
 ///
 /// Determines which hardware backend is used for model inference.
 /// `Auto` (default) selects the best available provider per platform.
-public enum ExecutionProviderType {
+public enum ExecutionProviderType: String, Codable, Sendable, Hashable {
     /// Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere.
     case auto
     /// CPU execution provider (always available).
     case cpu
     /// Apple CoreML (macOS/iOS Neural Engine + GPU).
-    case coreMl
+    case coreMl = "coreml"
     /// NVIDIA CUDA GPU acceleration.
     case cuda
     /// NVIDIA TensorRT (optimized CUDA inference).
-    case tensorRt
+    case tensorRt = "tensorrt"
+}
+extension ExecutionProviderType {
+    func intoRust() throws -> RustBridge.ExecutionProviderType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.executionProviderTypeFromJson(json)
+    }
 }
 
 /// Output format for extraction results.
 ///
 /// Controls the format of the `content` field in `ExtractionResult`.
-/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
-/// accordingly. `Plain` returns the raw extracted text.
+/// When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+/// `Plain` returns the raw extracted text.
 /// `Structured` returns JSON with full OCR element data including bounding
 /// boxes and confidence scores.
-public enum OutputFormat {
+public enum OutputFormat: Codable, Sendable, Hashable {
     /// Plain text content only (default)
     case plain
     /// Markdown format
@@ -2031,15 +4994,22 @@ public enum OutputFormat {
     /// The string is the renderer name (e.g., "docx", "latex").
     case custom(field0: String)
 }
+extension OutputFormat {
+    func intoRust() throws -> RustBridge.OutputFormat {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.outputFormatFromJson(json)
+    }
+}
 
 /// Built-in HTML theme selection.
-public enum HtmlTheme {
+public enum HtmlTheme: String, Codable, Sendable, Hashable {
     /// Sensible defaults: system font stack, neutral colours, readable line
     /// measure. CSS custom properties (`--kb-*`) are all defined so user CSS
     /// can override individual values.
     case `default`
     /// GitHub Markdown-inspired palette and spacing.
-    case gitHub
+    case gitHub = "github"
     /// Dark background, light text.
     case dark
     /// Minimal light theme with generous whitespace.
@@ -2048,26 +5018,40 @@ public enum HtmlTheme {
     /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
     case unstyled
 }
+extension HtmlTheme {
+    func intoRust() throws -> RustBridge.HtmlTheme {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.htmlThemeFromJson(json)
+    }
+}
 
 /// Which table structure recognition model to use.
 ///
 /// Controls the model used for table cell detection within layout-detected
 /// table regions. Wire format is snake_case in all serializers (JSON, TOML,
 /// YAML).
-public enum TableModel {
+public enum TableModel: String, Codable, Sendable, Hashable {
     /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
     case tatr
     /// SLANeXT wired variant -- 365MB, optimized for bordered tables.
-    case slanetWired
+    case slanetWired = "slanet_wired"
     /// SLANeXT wireless variant -- 365MB, optimized for borderless tables.
-    case slanetWireless
+    case slanetWireless = "slanet_wireless"
     /// SLANet-plus -- 7.78MB, lightweight general-purpose.
-    case slanetPlus
+    case slanetPlus = "slanet_plus"
     /// Classifier-routed SLANeXT: auto-select wired/wireless per table.
     /// Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
-    case slanetAuto
+    case slanetAuto = "slanet_auto"
     /// Disable table structure model inference entirely; use heuristic path only.
     case disabled
+}
+extension TableModel {
+    func intoRust() throws -> RustBridge.TableModel {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.tableModelFromJson(json)
+    }
 }
 
 /// Type of text chunker to use.
@@ -2084,11 +5068,18 @@ public enum TableModel {
 ///   blank-line paragraphs) and merges groups into chunks capped at
 ///   `max_characters` (default 1000). `topic_threshold` has no effect in the
 ///   fallback path. For best results, pair with an embedding model.
-public enum ChunkerType {
+public enum ChunkerType: String, Codable, Sendable, Hashable {
     case text
     case markdown
     case yaml
     case semantic
+}
+extension ChunkerType {
+    func intoRust() throws -> RustBridge.ChunkerType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.chunkerTypeFromJson(json)
+    }
 }
 
 /// How chunk size is measured.
@@ -2099,15 +5090,57 @@ public enum ChunkerType {
 /// Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer
 /// available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 /// (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
-public enum ChunkSizing {
+public enum ChunkSizing: Codable, Sendable, Hashable {
     /// Size measured in Unicode characters (default).
     case characters
     /// Size measured in tokens from a HuggingFace tokenizer.
     case tokenizer(model: String, cacheDir: URL?)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case cacheDir = "cache_dir"
+        case model
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "characters":
+            self = .characters
+        case "tokenizer":
+            self = .tokenizer(model: try container.decode(String.self, forKey: .model), cacheDir: try container.decodeIfPresent(URL.self, forKey: .cacheDir))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown ChunkSizing type: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .characters:
+            try container.encode("characters", forKey: .type)
+        case .tokenizer(let model, let cacheDir):
+            try container.encode("tokenizer", forKey: .type)
+            try container.encode(model, forKey: .model)
+            try container.encodeIfPresent(cacheDir, forKey: .cacheDir)
+        }
+    }
+}
+extension ChunkSizing {
+    func intoRust() throws -> RustBridge.ChunkSizing {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.chunkSizingFromJson(json)
+    }
 }
 
 /// Embedding model types supported by Kreuzberg.
-public enum EmbeddingModelType {
+public enum EmbeddingModelType: Codable, Sendable, Hashable {
     /// Use a preset model configuration (recommended)
     case preset(name: String)
     /// Use a custom ONNX model from HuggingFace
@@ -2137,13 +5170,68 @@ public enum EmbeddingModelType {
     ///
     /// See `register_embedding_backend`.
     case plugin(name: String)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case dimensions
+        case llm
+        case modelId = "model_id"
+        case name
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "preset":
+            self = .preset(name: try container.decode(String.self, forKey: .name))
+        case "custom":
+            self = .custom(modelId: try container.decode(String.self, forKey: .modelId), dimensions: try container.decode(UInt.self, forKey: .dimensions))
+        case "llm":
+            self = .llm(llm: try container.decode(LlmConfig.self, forKey: .llm))
+        case "plugin":
+            self = .plugin(name: try container.decode(String.self, forKey: .name))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown EmbeddingModelType type: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .preset(let name):
+            try container.encode("preset", forKey: .type)
+            try container.encode(name, forKey: .name)
+        case .custom(let modelId, let dimensions):
+            try container.encode("custom", forKey: .type)
+            try container.encode(modelId, forKey: .modelId)
+            try container.encode(dimensions, forKey: .dimensions)
+        case .llm(let llm):
+            try container.encode("llm", forKey: .type)
+            try container.encode(llm, forKey: .llm)
+        case .plugin(let name):
+            try container.encode("plugin", forKey: .type)
+            try container.encode(name, forKey: .name)
+        }
+    }
+}
+extension EmbeddingModelType {
+    func intoRust() throws -> RustBridge.EmbeddingModelType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.embeddingModelTypeFromJson(json)
+    }
 }
 
 /// Content rendering mode for code extraction.
 ///
 /// Controls how extracted code content is represented in the `content` field
 /// of `ExtractionResult`.
-public enum CodeContentMode {
+public enum CodeContentMode: String, Codable, Sendable, Hashable {
     /// Use TSLP semantic chunks as content (default).
     case chunks
     /// Use raw source code as content.
@@ -2151,35 +5239,43 @@ public enum CodeContentMode {
     /// Emit function/class headings + docstrings (no code bodies).
     case structure
 }
+extension CodeContentMode {
+    func intoRust() throws -> RustBridge.CodeContentMode {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.codeContentModeFromJson(json)
+    }
+}
 
 /// Type of list detection.
 public typealias ListType = RustBridge.ListType
 
-/// Whether the drawing is inline or anchored.
-public enum DrawingType {
-    case inline
-    case anchored(field0: String)
-}
-
 public typealias FracType = RustBridge.FracType
 
 /// OCR backend types.
-public enum OcrBackendType {
+public enum OcrBackendType: String, Codable, Sendable, Hashable {
     /// Tesseract OCR (native Rust binding)
-    case tesseract
+    case tesseract = "Tesseract"
     /// EasyOCR (Python-based, via FFI)
-    case easyOcr
+    case easyOcr = "EasyOCR"
     /// PaddleOCR (Python-based, via FFI)
-    case paddleOcr
+    case paddleOcr = "PaddleOCR"
     /// Custom/third-party OCR backend
-    case custom
+    case custom = "Custom"
+}
+extension OcrBackendType {
+    func intoRust() throws -> RustBridge.OcrBackendType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.ocrBackendTypeFromJson(json)
+    }
 }
 
 /// Processing stages for post-processors.
 ///
 /// Post-processors are executed in stage order (Early → Middle → Late).
 /// Use stages to control the order of post-processing operations.
-public enum ProcessingStage {
+public enum ProcessingStage: String, Codable, Sendable, Hashable {
     /// Early stage - foundational processing.
     ///
     /// Use for:
@@ -2187,7 +5283,7 @@ public enum ProcessingStage {
     /// - Character encoding normalization
     /// - Entity extraction (NER)
     /// - Text quality scoring
-    case early
+    case early = "Early"
     /// Middle stage - content transformation.
     ///
     /// Use for:
@@ -2195,7 +5291,7 @@ public enum ProcessingStage {
     /// - Token reduction
     /// - Text summarization
     /// - Semantic analysis
-    case middle
+    case middle = "Middle"
     /// Late stage - final enrichment.
     ///
     /// Use for:
@@ -2203,19 +5299,33 @@ public enum ProcessingStage {
     /// - Analytics/logging
     /// - Final validation
     /// - Output formatting
-    case late
+    case late = "Late"
+}
+extension ProcessingStage {
+    func intoRust() throws -> RustBridge.ProcessingStage {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.processingStageFromJson(json)
+    }
 }
 
-public enum ReductionLevel {
-    case off
-    case light
-    case moderate
-    case aggressive
-    case maximum
+public enum ReductionLevel: String, Codable, Sendable, Hashable {
+    case off = "Off"
+    case light = "Light"
+    case moderate = "Moderate"
+    case aggressive = "Aggressive"
+    case maximum = "Maximum"
+}
+extension ReductionLevel {
+    func intoRust() throws -> RustBridge.ReductionLevel {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.reductionLevelFromJson(json)
+    }
 }
 
 /// Type of PDF annotation.
-public enum PdfAnnotationType {
+public enum PdfAnnotationType: String, Codable, Sendable, Hashable {
     /// Sticky note / text annotation
     case text
     /// Highlighted text region
@@ -2227,33 +5337,47 @@ public enum PdfAnnotationType {
     /// Underline text markup
     case underline
     /// Strikeout text markup
-    case strikeOut
+    case strikeOut = "strike_out"
     /// Any other annotation type
     case other
 }
+extension PdfAnnotationType {
+    func intoRust() throws -> RustBridge.PdfAnnotationType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.pdfAnnotationTypeFromJson(json)
+    }
+}
 
 /// Types of block-level elements in Djot.
-public enum BlockType {
+public enum BlockType: String, Codable, Sendable, Hashable {
     case paragraph
     case heading
     case blockquote
-    case codeBlock
-    case listItem
-    case orderedList
-    case bulletList
-    case taskList
-    case definitionList
-    case definitionTerm
-    case definitionDescription
+    case codeBlock = "code_block"
+    case listItem = "list_item"
+    case orderedList = "ordered_list"
+    case bulletList = "bullet_list"
+    case taskList = "task_list"
+    case definitionList = "definition_list"
+    case definitionTerm = "definition_term"
+    case definitionDescription = "definition_description"
     case div
     case section
-    case thematicBreak
-    case rawBlock
-    case mathDisplay
+    case thematicBreak = "thematic_break"
+    case rawBlock = "raw_block"
+    case mathDisplay = "math_display"
+}
+extension BlockType {
+    func intoRust() throws -> RustBridge.BlockType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.blockTypeFromJson(json)
+    }
 }
 
 /// Types of inline elements in Djot.
-public enum InlineType {
+public enum InlineType: String, Codable, Sendable, Hashable {
     case text
     case strong
     case emphasis
@@ -2267,33 +5391,47 @@ public enum InlineType {
     case image
     case span
     case math
-    case rawInline
-    case footnoteRef
+    case rawInline = "raw_inline"
+    case footnoteRef = "footnote_ref"
     case symbol
+}
+extension InlineType {
+    func intoRust() throws -> RustBridge.InlineType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.inlineTypeFromJson(json)
+    }
 }
 
 /// Semantic kind of a relationship between document elements.
-public enum RelationshipKind {
+public enum RelationshipKind: String, Codable, Sendable, Hashable {
     /// Footnote marker -> footnote definition.
-    case footnoteReference
+    case footnoteReference = "footnote_reference"
     /// Citation marker -> bibliography entry.
-    case citationReference
+    case citationReference = "citation_reference"
     /// Internal anchor link (`#id`) -> target heading/element.
-    case internalLink
+    case internalLink = "internal_link"
     /// Caption paragraph -> figure/table it describes.
     case caption
     /// Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`).
     case label
     /// TOC entry -> target section.
-    case tocEntry
+    case tocEntry = "toc_entry"
     /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
-    case crossReference
+    case crossReference = "cross_reference"
+}
+extension RelationshipKind {
+    func intoRust() throws -> RustBridge.RelationshipKind {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.relationshipKindFromJson(json)
+    }
 }
 
 /// Content layer classification for document nodes.
 ///
 /// Replaces separate body/furniture arrays with per-node granularity.
-public enum ContentLayer {
+public enum ContentLayer: String, Codable, Sendable, Hashable {
     /// Main document body content.
     case body
     /// Page/section header (running header).
@@ -2303,12 +5441,19 @@ public enum ContentLayer {
     /// Footnote content.
     case footnote
 }
+extension ContentLayer {
+    func intoRust() throws -> RustBridge.ContentLayer {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.contentLayerFromJson(json)
+    }
+}
 
 /// Tagged enum for node content. Each variant carries only type-specific data.
 ///
 /// Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
 /// Go/Java/TypeScript bindings.
-public enum NodeContent {
+public enum NodeContent: Codable, Sendable, Hashable {
     /// Document title.
     case title(text: String)
     /// Section heading with level (1-6).
@@ -2356,11 +5501,169 @@ public enum NodeContent {
     /// (e.g. JSX in MDX, raw LaTeX in markdown, embedded HTML).
     case rawBlock(format: String, content: String)
     /// Structured metadata block (email headers, YAML frontmatter, etc.).
-    case metadataBlock(entries: [String])
+    case metadataBlock(entries: [[String]])
+
+    private enum CodingKeys: String, CodingKey {
+        case node_type
+        case content
+        case definition
+        case description
+        case entries
+        case format
+        case grid
+        case headingLevel = "heading_level"
+        case headingText = "heading_text"
+        case imageIndex = "image_index"
+        case key
+        case kind
+        case label
+        case language
+        case level
+        case number
+        case ordered
+        case src
+        case term
+        case text
+        case title
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .node_type)
+        switch type {
+        case "title":
+            self = .title(text: try container.decode(String.self, forKey: .text))
+        case "heading":
+            self = .heading(level: try container.decode(UInt8.self, forKey: .level), text: try container.decode(String.self, forKey: .text))
+        case "paragraph":
+            self = .paragraph(text: try container.decode(String.self, forKey: .text))
+        case "list":
+            self = .list(ordered: try container.decode(Bool.self, forKey: .ordered))
+        case "list_item":
+            self = .listItem(text: try container.decode(String.self, forKey: .text))
+        case "table":
+            self = .table(grid: try container.decode(TableGrid.self, forKey: .grid))
+        case "image":
+            self = .image(description: try container.decodeIfPresent(String.self, forKey: .description), imageIndex: try container.decodeIfPresent(UInt32.self, forKey: .imageIndex), src: try container.decodeIfPresent(String.self, forKey: .src))
+        case "code":
+            self = .code(text: try container.decode(String.self, forKey: .text), language: try container.decodeIfPresent(String.self, forKey: .language))
+        case "quote":
+            self = .quote
+        case "formula":
+            self = .formula(text: try container.decode(String.self, forKey: .text))
+        case "footnote":
+            self = .footnote(text: try container.decode(String.self, forKey: .text))
+        case "group":
+            self = .group(label: try container.decodeIfPresent(String.self, forKey: .label), headingLevel: try container.decodeIfPresent(UInt8.self, forKey: .headingLevel), headingText: try container.decodeIfPresent(String.self, forKey: .headingText))
+        case "page_break":
+            self = .pageBreak
+        case "slide":
+            self = .slide(number: try container.decode(UInt32.self, forKey: .number), title: try container.decodeIfPresent(String.self, forKey: .title))
+        case "definition_list":
+            self = .definitionList
+        case "definition_item":
+            self = .definitionItem(term: try container.decode(String.self, forKey: .term), definition: try container.decode(String.self, forKey: .definition))
+        case "citation":
+            self = .citation(key: try container.decode(String.self, forKey: .key), text: try container.decode(String.self, forKey: .text))
+        case "admonition":
+            self = .admonition(kind: try container.decode(String.self, forKey: .kind), title: try container.decodeIfPresent(String.self, forKey: .title))
+        case "raw_block":
+            self = .rawBlock(format: try container.decode(String.self, forKey: .format), content: try container.decode(String.self, forKey: .content))
+        case "metadata_block":
+            self = .metadataBlock(entries: try container.decode([[String]].self, forKey: .entries))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .node_type,
+                in: container,
+                debugDescription: "Unknown NodeContent type: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .title(let text):
+            try container.encode("title", forKey: .node_type)
+            try container.encode(text, forKey: .text)
+        case .heading(let level, let text):
+            try container.encode("heading", forKey: .node_type)
+            try container.encode(level, forKey: .level)
+            try container.encode(text, forKey: .text)
+        case .paragraph(let text):
+            try container.encode("paragraph", forKey: .node_type)
+            try container.encode(text, forKey: .text)
+        case .list(let ordered):
+            try container.encode("list", forKey: .node_type)
+            try container.encode(ordered, forKey: .ordered)
+        case .listItem(let text):
+            try container.encode("list_item", forKey: .node_type)
+            try container.encode(text, forKey: .text)
+        case .table(let grid):
+            try container.encode("table", forKey: .node_type)
+            try container.encode(grid, forKey: .grid)
+        case .image(let description, let imageIndex, let src):
+            try container.encode("image", forKey: .node_type)
+            try container.encodeIfPresent(description, forKey: .description)
+            try container.encodeIfPresent(imageIndex, forKey: .imageIndex)
+            try container.encodeIfPresent(src, forKey: .src)
+        case .code(let text, let language):
+            try container.encode("code", forKey: .node_type)
+            try container.encode(text, forKey: .text)
+            try container.encodeIfPresent(language, forKey: .language)
+        case .quote:
+            try container.encode("quote", forKey: .node_type)
+        case .formula(let text):
+            try container.encode("formula", forKey: .node_type)
+            try container.encode(text, forKey: .text)
+        case .footnote(let text):
+            try container.encode("footnote", forKey: .node_type)
+            try container.encode(text, forKey: .text)
+        case .group(let label, let headingLevel, let headingText):
+            try container.encode("group", forKey: .node_type)
+            try container.encodeIfPresent(label, forKey: .label)
+            try container.encodeIfPresent(headingLevel, forKey: .headingLevel)
+            try container.encodeIfPresent(headingText, forKey: .headingText)
+        case .pageBreak:
+            try container.encode("page_break", forKey: .node_type)
+        case .slide(let number, let title):
+            try container.encode("slide", forKey: .node_type)
+            try container.encode(number, forKey: .number)
+            try container.encodeIfPresent(title, forKey: .title)
+        case .definitionList:
+            try container.encode("definition_list", forKey: .node_type)
+        case .definitionItem(let term, let definition):
+            try container.encode("definition_item", forKey: .node_type)
+            try container.encode(term, forKey: .term)
+            try container.encode(definition, forKey: .definition)
+        case .citation(let key, let text):
+            try container.encode("citation", forKey: .node_type)
+            try container.encode(key, forKey: .key)
+            try container.encode(text, forKey: .text)
+        case .admonition(let kind, let title):
+            try container.encode("admonition", forKey: .node_type)
+            try container.encode(kind, forKey: .kind)
+            try container.encodeIfPresent(title, forKey: .title)
+        case .rawBlock(let format, let content):
+            try container.encode("raw_block", forKey: .node_type)
+            try container.encode(format, forKey: .format)
+            try container.encode(content, forKey: .content)
+        case .metadataBlock(let entries):
+            try container.encode("metadata_block", forKey: .node_type)
+            try container.encode(entries, forKey: .entries)
+        }
+    }
+}
+extension NodeContent {
+    func intoRust() throws -> RustBridge.NodeContent {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.nodeContentFromJson(json)
+    }
 }
 
 /// Types of inline text annotations.
-public enum AnnotationKind {
+public enum AnnotationKind: Codable, Sendable, Hashable {
     case bold
     case italic
     case underline
@@ -2377,13 +5680,108 @@ public enum AnnotationKind {
     case fontSize(value: String)
     /// Extensible annotation for format-specific styling.
     case custom(name: String, value: String?)
+
+    private enum CodingKeys: String, CodingKey {
+        case annotation_type
+        case name
+        case title
+        case url
+        case value
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .annotation_type)
+        switch type {
+        case "bold":
+            self = .bold
+        case "italic":
+            self = .italic
+        case "underline":
+            self = .underline
+        case "strikethrough":
+            self = .strikethrough
+        case "code":
+            self = .code
+        case "subscript":
+            self = .`subscript`
+        case "superscript":
+            self = .superscript
+        case "link":
+            self = .link(url: try container.decode(String.self, forKey: .url), title: try container.decodeIfPresent(String.self, forKey: .title))
+        case "highlight":
+            self = .highlight
+        case "color":
+            self = .color(value: try container.decode(String.self, forKey: .value))
+        case "font_size":
+            self = .fontSize(value: try container.decode(String.self, forKey: .value))
+        case "custom":
+            self = .custom(name: try container.decode(String.self, forKey: .name), value: try container.decodeIfPresent(String.self, forKey: .value))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .annotation_type,
+                in: container,
+                debugDescription: "Unknown AnnotationKind type: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .bold:
+            try container.encode("bold", forKey: .annotation_type)
+        case .italic:
+            try container.encode("italic", forKey: .annotation_type)
+        case .underline:
+            try container.encode("underline", forKey: .annotation_type)
+        case .strikethrough:
+            try container.encode("strikethrough", forKey: .annotation_type)
+        case .code:
+            try container.encode("code", forKey: .annotation_type)
+        case .`subscript`:
+            try container.encode("subscript", forKey: .annotation_type)
+        case .superscript:
+            try container.encode("superscript", forKey: .annotation_type)
+        case .link(let url, let title):
+            try container.encode("link", forKey: .annotation_type)
+            try container.encode(url, forKey: .url)
+            try container.encodeIfPresent(title, forKey: .title)
+        case .highlight:
+            try container.encode("highlight", forKey: .annotation_type)
+        case .color(let value):
+            try container.encode("color", forKey: .annotation_type)
+            try container.encode(value, forKey: .value)
+        case .fontSize(let value):
+            try container.encode("font_size", forKey: .annotation_type)
+            try container.encode(value, forKey: .value)
+        case .custom(let name, let value):
+            try container.encode("custom", forKey: .annotation_type)
+            try container.encode(name, forKey: .name)
+            try container.encodeIfPresent(value, forKey: .value)
+        }
+    }
+}
+extension AnnotationKind {
+    func intoRust() throws -> RustBridge.AnnotationKind {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.annotationKindFromJson(json)
+    }
 }
 
 /// How the extracted text was produced.
-public enum ExtractionMethod {
+public enum ExtractionMethod: String, Codable, Sendable, Hashable {
     case native
     case ocr
     case mixed
+}
+extension ExtractionMethod {
+    func intoRust() throws -> RustBridge.ExtractionMethod {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.extractionMethodFromJson(json)
+    }
 }
 
 /// Semantic structural classification of a text chunk.
@@ -2391,37 +5789,44 @@ public enum ExtractionMethod {
 /// Assigned by the heuristic classifier in `chunking::classifier`.
 /// Defaults to `Unknown` when no rule matches.
 /// Designed to be extended in future versions without breaking changes.
-public enum ChunkType {
+public enum ChunkType: String, Codable, Sendable, Hashable {
     /// Section heading or document title.
     case heading
     /// Party list: names, addresses, and signatories.
-    case partyList
+    case partyList = "party_list"
     /// Definition clause ("X means…", "X shall mean…").
     case definitions
     /// Operative clause containing legal/contractual action verbs.
-    case operativeClause
+    case operativeClause = "operative_clause"
     /// Signature block with signatures, names, and dates.
-    case signatureBlock
+    case signatureBlock = "signature_block"
     /// Schedule, annex, appendix, or exhibit section.
     case schedule
     /// Table-like content with aligned columns or repeated patterns.
-    case tableLike
+    case tableLike = "table_like"
     /// Mathematical formula or equation.
     case formula
     /// Code block or preformatted content.
-    case codeBlock
+    case codeBlock = "code_block"
     /// Embedded or referenced image content.
     case image
     /// Organizational chart or hierarchy diagram.
-    case orgChart
+    case orgChart = "org_chart"
     /// Diagram, figure, or visual illustration.
     case diagram
     /// Unclassified or mixed content.
     case unknown
 }
+extension ChunkType {
+    func intoRust() throws -> RustBridge.ChunkType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.chunkTypeFromJson(json)
+    }
+}
 
 /// Heuristic classification of what an image likely depicts.
-public enum ImageKind {
+public enum ImageKind: String, Codable, Sendable, Hashable {
     /// Photographic image (natural scene, photograph)
     case photograph
     /// Technical or schematic diagram
@@ -2431,7 +5836,7 @@ public enum ImageKind {
     /// Freehand or technical drawing
     case drawing
     /// Text-heavy image (scanned text, document)
-    case textBlock
+    case textBlock = "text_block"
     /// Decorative element or border
     case decoration
     /// Logo or brand mark
@@ -2439,11 +5844,18 @@ public enum ImageKind {
     /// Small icon
     case icon
     /// Fragment of a larger tiled image (tile of a technical drawing)
-    case tileFragment
+    case tileFragment = "tile_fragment"
     /// Mask or transparency map
     case mask
     /// Could not classify with reasonable confidence
     case unknown
+}
+extension ImageKind {
+    func intoRust() throws -> RustBridge.ImageKind {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.imageKindFromJson(json)
+    }
 }
 
 /// Result-shape selection for extraction results.
@@ -2451,81 +5863,81 @@ public enum ImageKind {
 /// Distinct from `OutputFormat` (which controls rendering — Plain, Markdown,
 /// HTML, etc.). `ResultFormat` controls the *shape* of the result: a unified content
 /// blob vs. an element-based decomposition.
-public enum ResultFormat {
+public enum ResultFormat: String, Codable, Sendable, Hashable {
     /// Unified format with all content in `content` field
     case unified
     /// Element-based format with semantic element extraction
-    case elementBased
+    case elementBased = "element_based"
+}
+extension ResultFormat {
+    func intoRust() throws -> RustBridge.ResultFormat {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.resultFormatFromJson(json)
+    }
 }
 
 /// Semantic element type classification.
 ///
 /// Categorizes text content into semantic units for downstream processing.
 /// Supports the element types commonly found in Unstructured documents.
-public enum ElementType {
+public enum ElementType: String, Codable, Sendable, Hashable {
     /// Document title
     case title
     /// Main narrative text body
-    case narrativeText
+    case narrativeText = "narrative_text"
     /// Section heading
     case heading
     /// List item (bullet, numbered, etc.)
-    case listItem
+    case listItem = "list_item"
     /// Table element
     case table
     /// Image element
     case image
     /// Page break marker
-    case pageBreak
+    case pageBreak = "page_break"
     /// Code block
-    case codeBlock
+    case codeBlock = "code_block"
     /// Block quote
-    case blockQuote
+    case blockQuote = "block_quote"
     /// Footer text
     case footer
     /// Header text
     case header
+}
+extension ElementType {
+    func intoRust() throws -> RustBridge.ElementType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.elementTypeFromJson(json)
+    }
 }
 
 /// Format-specific metadata (discriminated union).
 ///
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
-public enum FormatMetadata {
-    case pdf(field0: PdfMetadata)
-    case docx(field0: DocxMetadata)
-    case excel(field0: ExcelMetadata)
-    case email(field0: EmailMetadata)
-    case pptx(field0: PptxMetadata)
-    case archive(field0: ArchiveMetadata)
-    case image(field0: ImageMetadata)
-    case xml(field0: XmlMetadata)
-    case text(field0: TextMetadata)
-    case html(field0: HtmlMetadata)
-    case ocr(field0: OcrMetadata)
-    case csv(field0: CsvMetadata)
-    case bibtex(field0: BibtexMetadata)
-    case citation(field0: CitationMetadata)
-    case fictionBook(field0: FictionBookMetadata)
-    case dbf(field0: DbfMetadata)
-    case jats(field0: JatsMetadata)
-    case epub(field0: EpubMetadata)
-    case pst(field0: PstMetadata)
-    case code(field0: String)
-}
+public typealias FormatMetadata = RustBridge.FormatMetadata
 
 /// Text direction enumeration for HTML documents.
-public enum TextDirection {
+public enum TextDirection: String, Codable, Sendable, Hashable {
     /// Left-to-right text direction
-    case leftToRight
+    case leftToRight = "ltr"
     /// Right-to-left text direction
-    case rightToLeft
+    case rightToLeft = "rtl"
     /// Automatic text direction detection
     case auto
 }
+extension TextDirection {
+    func intoRust() throws -> RustBridge.TextDirection {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.textDirectionFromJson(json)
+    }
+}
 
 /// Link type classification.
-public enum LinkType {
+public enum LinkType: String, Codable, Sendable, Hashable {
     /// Anchor link (#section)
     case anchor
     /// Internal link (same domain)
@@ -2539,34 +5951,55 @@ public enum LinkType {
     /// Other link type
     case other
 }
+extension LinkType {
+    func intoRust() throws -> RustBridge.LinkType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.linkTypeFromJson(json)
+    }
+}
 
 /// Image type classification.
-public enum ImageType {
+public enum ImageType: String, Codable, Sendable, Hashable {
     /// Data URI image
-    case dataUri
+    case dataUri = "data-uri"
     /// Inline SVG
-    case inlineSvg
+    case inlineSvg = "inline-svg"
     /// External image URL
     case external
     /// Relative path image
     case relative
 }
+extension ImageType {
+    func intoRust() throws -> RustBridge.ImageType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.imageTypeFromJson(json)
+    }
+}
 
 /// Structured data type classification.
-public enum StructuredDataType {
+public enum StructuredDataType: String, Codable, Sendable, Hashable {
     /// JSON-LD structured data
-    case jsonLd
+    case jsonLd = "json-ld"
     /// Microdata
     case microdata
     /// RDFa
-    case rdFa
+    case rdFa = "rdfa"
+}
+extension StructuredDataType {
+    func intoRust() throws -> RustBridge.StructuredDataType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.structuredDataTypeFromJson(json)
+    }
 }
 
 /// Bounding geometry for an OCR element.
 ///
 /// Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
 /// (from PaddleOCR and rotated text detection).
-public enum OcrBoundingGeometry {
+public enum OcrBoundingGeometry: Codable, Sendable, Hashable {
     /// Axis-aligned bounding box (typical for Tesseract output).
     case rectangle(left: UInt32, top: UInt32, width: UInt32, height: UInt32)
     /// 4-point quadrilateral for rotated/skewed text (PaddleOCR).
@@ -2574,13 +6007,61 @@ public enum OcrBoundingGeometry {
     /// Points are in clockwise order starting from top-left:
     /// `[top_left, top_right, bottom_right, bottom_left]`
     case quadrilateral(points: String)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case height
+        case left
+        case points
+        case top
+        case width
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "rectangle":
+            self = .rectangle(left: try container.decode(UInt32.self, forKey: .left), top: try container.decode(UInt32.self, forKey: .top), width: try container.decode(UInt32.self, forKey: .width), height: try container.decode(UInt32.self, forKey: .height))
+        case "quadrilateral":
+            self = .quadrilateral(points: try container.decode(String.self, forKey: .points))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown OcrBoundingGeometry type: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .rectangle(let left, let top, let width, let height):
+            try container.encode("rectangle", forKey: .type)
+            try container.encode(left, forKey: .left)
+            try container.encode(top, forKey: .top)
+            try container.encode(width, forKey: .width)
+            try container.encode(height, forKey: .height)
+        case .quadrilateral(let points):
+            try container.encode("quadrilateral", forKey: .type)
+            try container.encode(points, forKey: .points)
+        }
+    }
+}
+extension OcrBoundingGeometry {
+    func intoRust() throws -> RustBridge.OcrBoundingGeometry {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.ocrBoundingGeometryFromJson(json)
+    }
 }
 
 /// Hierarchical level of an OCR element.
 ///
 /// Maps to Tesseract's page segmentation hierarchy and provides
 /// equivalent semantics for PaddleOCR.
-public enum OcrElementLevel {
+public enum OcrElementLevel: String, Codable, Sendable, Hashable {
     /// Individual word
     case word
     /// Line of text (default for PaddleOCR)
@@ -2590,11 +6071,18 @@ public enum OcrElementLevel {
     /// Page-level element
     case page
 }
+extension OcrElementLevel {
+    func intoRust() throws -> RustBridge.OcrElementLevel {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.ocrElementLevelFromJson(json)
+    }
+}
 
 /// Type of paginated unit in a document.
 ///
 /// Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet sheets).
-public enum PageUnitType {
+public enum PageUnitType: String, Codable, Sendable, Hashable {
     /// Standard document pages (PDF, DOCX, images)
     case page
     /// Presentation slides (PPTX, ODP)
@@ -2602,9 +6090,16 @@ public enum PageUnitType {
     /// Spreadsheet sheets (XLSX, ODS)
     case sheet
 }
+extension PageUnitType {
+    func intoRust() throws -> RustBridge.PageUnitType {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.pageUnitTypeFromJson(json)
+    }
+}
 
 /// Semantic classification of an extracted URI.
-public enum UriKind {
+public enum UriKind: String, Codable, Sendable, Hashable {
     /// A clickable hyperlink (web URL, file link).
     case hyperlink
     /// An image or media resource reference.
@@ -2618,66 +6113,94 @@ public enum UriKind {
     /// An email address (`mailto:` link or bare email).
     case email
 }
+extension UriKind {
+    func intoRust() throws -> RustBridge.UriKind {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.uriKindFromJson(json)
+    }
+}
 
 /// Keyword algorithm selection.
-public enum KeywordAlgorithm {
+public enum KeywordAlgorithm: String, Codable, Sendable, Hashable {
     /// YAKE (Yet Another Keyword Extractor) - statistical approach
     case yake
     /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
     case rake
 }
+extension KeywordAlgorithm {
+    func intoRust() throws -> RustBridge.KeywordAlgorithm {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.keywordAlgorithmFromJson(json)
+    }
+}
 
 /// Page Segmentation Mode for Tesseract OCR
-public enum PSMMode {
-    case osdOnly
-    case autoOsd
-    case autoOnly
-    case auto
-    case singleColumn
-    case singleBlockVertical
-    case singleBlock
-    case singleLine
-    case singleWord
-    case circleWord
-    case singleChar
+public enum PSMMode: String, Codable, Sendable, Hashable {
+    case osdOnly = "OsdOnly"
+    case autoOsd = "AutoOsd"
+    case autoOnly = "AutoOnly"
+    case auto = "Auto"
+    case singleColumn = "SingleColumn"
+    case singleBlockVertical = "SingleBlockVertical"
+    case singleBlock = "SingleBlock"
+    case singleLine = "SingleLine"
+    case singleWord = "SingleWord"
+    case circleWord = "CircleWord"
+    case singleChar = "SingleChar"
+}
+extension PSMMode {
+    func intoRust() throws -> RustBridge.PSMMode {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.psmModeFromJson(json)
+    }
 }
 
 /// Supported languages in PaddleOCR.
 ///
 /// Maps user-friendly language codes to paddle-ocr-rs language identifiers.
-public enum PaddleLanguage {
+public enum PaddleLanguage: String, Codable, Sendable, Hashable {
     /// English
-    case english
+    case english = "English"
     /// Simplified Chinese
-    case chinese
+    case chinese = "Chinese"
     /// Japanese
-    case japanese
+    case japanese = "Japanese"
     /// Korean
-    case korean
+    case korean = "Korean"
     /// German
-    case german
+    case german = "German"
     /// French
-    case french
+    case french = "French"
     /// Latin script (covers most European languages)
-    case latin
+    case latin = "Latin"
     /// Cyrillic (Russian and related)
-    case cyrillic
+    case cyrillic = "Cyrillic"
     /// Traditional Chinese
-    case traditionalChinese
+    case traditionalChinese = "TraditionalChinese"
     /// Thai
-    case thai
+    case thai = "Thai"
     /// Greek
-    case greek
+    case greek = "Greek"
     /// East Slavic (Russian, Ukrainian, Belarusian)
-    case eastSlavic
+    case eastSlavic = "EastSlavic"
     /// Arabic (Arabic, Persian, Urdu)
-    case arabic
+    case arabic = "Arabic"
     /// Devanagari (Hindi, Marathi, Sanskrit, Nepali)
-    case devanagari
+    case devanagari = "Devanagari"
     /// Tamil
-    case tamil
+    case tamil = "Tamil"
     /// Telugu
-    case telugu
+    case telugu = "Telugu"
+}
+extension PaddleLanguage {
+    func intoRust() throws -> RustBridge.PaddleLanguage {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.paddleLanguageFromJson(json)
+    }
 }
 
 /// The 17 canonical document layout classes.
@@ -2687,24 +6210,31 @@ public enum PaddleLanguage {
 /// map to the closest equivalent.
 ///
 /// Wire format is snake_case in all serializers (JSON, TOML, YAML).
-public enum LayoutClass {
+public enum LayoutClass: String, Codable, Sendable, Hashable {
     case caption
     case footnote
     case formula
-    case listItem
-    case pageFooter
-    case pageHeader
+    case listItem = "list_item"
+    case pageFooter = "page_footer"
+    case pageHeader = "page_header"
     case picture
-    case sectionHeader
+    case sectionHeader = "section_header"
     case table
     case text
     case title
-    case documentIndex
+    case documentIndex = "document_index"
     case code
-    case checkboxSelected
-    case checkboxUnselected
+    case checkboxSelected = "checkbox_selected"
+    case checkboxUnselected = "checkbox_unselected"
     case form
-    case keyValueRegion
+    case keyValueRegion = "key_value_region"
+}
+extension LayoutClass {
+    func intoRust() throws -> RustBridge.LayoutClass {
+        let data = try JSONEncoder().encode(self)
+        let json = String(data: data, encoding: .utf8) ?? "null"
+        return try RustBridge.layoutClassFromJson(json)
+    }
 }
 
 /// Main error type for all Kreuzberg operations.
@@ -2797,159 +6327,1417 @@ public func extractFile(
 , config
 )
 }
-// MARK: - E2e Test Convenience Wrappers
-// JSON-config and file-loading wrappers used exclusively by the generated e2e tests.
-
-private func resolveFixturePath(_ name: String) -> URL {
-    if let dir = ProcessInfo.processInfo.environment["FIXTURES_DIR"] {
-        return URL(fileURLWithPath: dir).appendingPathComponent(name)
-    }
-    return URL(fileURLWithPath: name)
-}
-
-/// E2e wrapper: reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
-public func extractBytesSync(
-    _ filePath: String,
-    _ mimeType: String,
-    _ configJson: String
-) throws -> ExtractionResult {
-    let url = resolveFixturePath(filePath)
-    let data = try Data(contentsOf: url)
-    let config = try extractionConfigFromJson(configJson)
-    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
-}
-
-/// E2e wrapper (async): reads `filePath` into bytes, deserialises `configJson` -> ExtractionConfig.
-public func extractBytes(
-    _ filePath: String,
-    _ mimeType: String,
-    _ configJson: String
-) async throws -> ExtractionResult {
-    let url = resolveFixturePath(filePath)
-    let data = try Data(contentsOf: url)
-    let config = try extractionConfigFromJson(configJson)
-    return try extractBytesSync(makeByteVec(data.map { $0 }), mimeType, config)
-}
-
-/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
-public func extractFileSync(
-    _ path: String,
-    _ mimeType: String?,
-    _ configJson: String
-) throws -> ExtractionResult {
-    let resolvedPath = resolveFixturePath(path).path
-    let config = try extractionConfigFromJson(configJson)
-    return try extractFileSync(resolvedPath, mimeType, config)
-}
-
-/// E2e wrapper: resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
-public func extractFileSync(
-    _ path: String,
-    _ configJson: String
-) throws -> ExtractionResult {
-    let resolvedPath = resolveFixturePath(path).path
-    let config = try extractionConfigFromJson(configJson)
-    return try extractFileSync(resolvedPath, nil, config)
-}
-
-/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, then calls extractFileSync.
-public func extractFile(
-    _ path: String,
-    _ mimeType: String?,
-    _ configJson: String
-) async throws -> ExtractionResult {
-    let resolvedPath = resolveFixturePath(path).path
-    let config = try extractionConfigFromJson(configJson)
-    return try extractFileSync(resolvedPath, mimeType, config)
-}
-
-/// E2e wrapper (async): resolves fixture path, deserialises `configJson` -> ExtractionConfig, nil mimeType.
-public func extractFile(
-    _ path: String,
-    _ configJson: String
-) async throws -> ExtractionResult {
-    let resolvedPath = resolveFixturePath(path).path
-    let config = try extractionConfigFromJson(configJson)
-    return try extractFileSync(resolvedPath, nil, config)
-}
-
-/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchBytesItem.
-public func batchExtractBytesSync(
-    _ jsonItems: [String]
-) throws -> [ExtractionResultRef] {
-    var items = RustVec<BatchBytesItem>()
-    for json in jsonItems {
-        items.push(value: try batchBytesItemFromJson(json))
-    }
-    let config = try extractionConfigFromJson("{}")
-    return try batchExtractBytesSync(items, config).map { $0 }
-}
-
-/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchBytesItem.
-public func batchExtractBytes(
-    _ jsonItems: [String]
-) async throws -> [ExtractionResultRef] {
-    var items = RustVec<BatchBytesItem>()
-    for json in jsonItems {
-        items.push(value: try batchBytesItemFromJson(json))
-    }
-    let config = try extractionConfigFromJson("{}")
-    return try batchExtractBytesSync(items, config).map { $0 }
-}
-
-/// E2e wrapper: deserialises each JSON string in `jsonItems` -> BatchFileItem.
-public func batchExtractFilesSync(
-    _ jsonItems: [String]
-) throws -> [ExtractionResultRef] {
-    var items = RustVec<BatchFileItem>()
-    for json in jsonItems {
-        items.push(value: try batchFileItemFromJson(json))
-    }
-    let config = try extractionConfigFromJson("{}")
-    return try batchExtractFilesSync(items, config).map { $0 }
-}
-
-/// E2e wrapper (async): deserialises each JSON string in `jsonItems` -> BatchFileItem.
-public func batchExtractFiles(
-    _ jsonItems: [String]
-) async throws -> [ExtractionResultRef] {
-    var items = RustVec<BatchFileItem>()
-    for json in jsonItems {
-        items.push(value: try batchFileItemFromJson(json))
-    }
-    let config = try extractionConfigFromJson("{}")
-    return try batchExtractFilesSync(items, config).map { $0 }
-}
-
-/// E2e wrapper: reads `filePath` into bytes and calls detectMimeTypeFromBytes.
-public func detectMimeTypeFromBytes(
-    _ filePath: String
-) throws -> String {
-    let url = resolveFixturePath(filePath)
-    let data = try Data(contentsOf: url)
-    return try detectMimeTypeFromBytes(makeByteVec(data.map { $0 })).toString()
-}
 // MARK: - From-JSON Helpers
 // Public helpers that decode JSON into first-class Swift types.
 // First-class struct types (Codable) use JSONDecoder directly.
 // Opaque RustBridge types forward to RustBridge.
 
+public func accelerationConfigFromJson(_ json: String) throws -> AccelerationConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(AccelerationConfig.self, from: data)
+}
+
+public func contentFilterConfigFromJson(_ json: String) throws -> ContentFilterConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ContentFilterConfig.self, from: data)
+}
+
+public func emailConfigFromJson(_ json: String) throws -> EmailConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(EmailConfig.self, from: data)
+}
+
+public func extractionConfigFromJson(_ json: String) throws -> ExtractionConfig {
+    return try RustBridge.extractionConfigFromJson(json)
+}
+
+public func fileExtractionConfigFromJson(_ json: String) throws -> FileExtractionConfig {
+    return try RustBridge.fileExtractionConfigFromJson(json)
+}
+
+public func batchBytesItemFromJson(_ json: String) throws -> BatchBytesItem {
+    return try RustBridge.batchBytesItemFromJson(json)
+}
+
+public func batchFileItemFromJson(_ json: String) throws -> BatchFileItem {
+    return try RustBridge.batchFileItemFromJson(json)
+}
+
+public func imageExtractionConfigFromJson(_ json: String) throws -> ImageExtractionConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ImageExtractionConfig.self, from: data)
+}
+
+public func tokenReductionOptionsFromJson(_ json: String) throws -> TokenReductionOptions {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TokenReductionOptions.self, from: data)
+}
+
+public func languageDetectionConfigFromJson(_ json: String) throws -> LanguageDetectionConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LanguageDetectionConfig.self, from: data)
+}
+
+public func htmlOutputConfigFromJson(_ json: String) throws -> HtmlOutputConfig {
+    return try RustBridge.htmlOutputConfigFromJson(json)
+}
+
+public func layoutDetectionConfigFromJson(_ json: String) throws -> LayoutDetectionConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LayoutDetectionConfig.self, from: data)
+}
+
+public func llmConfigFromJson(_ json: String) throws -> LlmConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LlmConfig.self, from: data)
+}
+
+public func structuredExtractionConfigFromJson(_ json: String) throws -> StructuredExtractionConfig {
+    return try RustBridge.structuredExtractionConfigFromJson(json)
+}
+
+public func ocrQualityThresholdsFromJson(_ json: String) throws -> OcrQualityThresholds {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrQualityThresholds.self, from: data)
+}
+
+public func ocrPipelineStageFromJson(_ json: String) throws -> OcrPipelineStage {
+    return try RustBridge.ocrPipelineStageFromJson(json)
+}
+
+public func ocrPipelineConfigFromJson(_ json: String) throws -> OcrPipelineConfig {
+    return try RustBridge.ocrPipelineConfigFromJson(json)
+}
+
 public func ocrConfigFromJson(_ json: String) throws -> OcrConfig {
     return try RustBridge.ocrConfigFromJson(json)
+}
+
+public func pageConfigFromJson(_ json: String) throws -> PageConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PageConfig.self, from: data)
+}
+
+public func pdfConfigFromJson(_ json: String) throws -> PdfConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PdfConfig.self, from: data)
+}
+
+public func hierarchyConfigFromJson(_ json: String) throws -> HierarchyConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(HierarchyConfig.self, from: data)
+}
+
+public func postProcessorConfigFromJson(_ json: String) throws -> PostProcessorConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PostProcessorConfig.self, from: data)
+}
+
+public func chunkingConfigFromJson(_ json: String) throws -> ChunkingConfig {
+    return try RustBridge.chunkingConfigFromJson(json)
 }
 
 public func embeddingConfigFromJson(_ json: String) throws -> EmbeddingConfig {
     return try RustBridge.embeddingConfigFromJson(json)
 }
 
+public func treeSitterConfigFromJson(_ json: String) throws -> TreeSitterConfig {
+    return try RustBridge.treeSitterConfigFromJson(json)
+}
+
+public func treeSitterProcessConfigFromJson(_ json: String) throws -> TreeSitterProcessConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TreeSitterProcessConfig.self, from: data)
+}
+
+public func supportedFormatFromJson(_ json: String) throws -> SupportedFormat {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(SupportedFormat.self, from: data)
+}
+
+public func serverConfigFromJson(_ json: String) throws -> ServerConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ServerConfig.self, from: data)
+}
+
+public func structuredDataResultFromJson(_ json: String) throws -> StructuredDataResult {
+    return try RustBridge.structuredDataResultFromJson(json)
+}
+
+public func docxAppPropertiesFromJson(_ json: String) throws -> DocxAppProperties {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DocxAppProperties.self, from: data)
+}
+
+public func xlsxAppPropertiesFromJson(_ json: String) throws -> XlsxAppProperties {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(XlsxAppProperties.self, from: data)
+}
+
+public func pptxAppPropertiesFromJson(_ json: String) throws -> PptxAppProperties {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PptxAppProperties.self, from: data)
+}
+
+public func corePropertiesFromJson(_ json: String) throws -> CoreProperties {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(CoreProperties.self, from: data)
+}
+
+public func securityLimitsFromJson(_ json: String) throws -> SecurityLimits {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(SecurityLimits.self, from: data)
+}
+
+public func tokenReductionConfigFromJson(_ json: String) throws -> TokenReductionConfig {
+    return try RustBridge.tokenReductionConfigFromJson(json)
+}
+
+public func pdfAnnotationFromJson(_ json: String) throws -> PdfAnnotation {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PdfAnnotation.self, from: data)
+}
+
+public func djotContentFromJson(_ json: String) throws -> DjotContent {
+    return try RustBridge.djotContentFromJson(json)
+}
+
+public func formattedBlockFromJson(_ json: String) throws -> FormattedBlock {
+    return try RustBridge.formattedBlockFromJson(json)
+}
+
+public func inlineElementFromJson(_ json: String) throws -> InlineElement {
+    return try RustBridge.inlineElementFromJson(json)
+}
+
+public func djotImageFromJson(_ json: String) throws -> DjotImage {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DjotImage.self, from: data)
+}
+
+public func djotLinkFromJson(_ json: String) throws -> DjotLink {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DjotLink.self, from: data)
+}
+
+public func footnoteFromJson(_ json: String) throws -> Footnote {
+    return try RustBridge.footnoteFromJson(json)
+}
+
+public func documentStructureFromJson(_ json: String) throws -> DocumentStructure {
+    return try RustBridge.documentStructureFromJson(json)
+}
+
+public func documentRelationshipFromJson(_ json: String) throws -> DocumentRelationship {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DocumentRelationship.self, from: data)
+}
+
+public func documentNodeFromJson(_ json: String) throws -> DocumentNode {
+    return try RustBridge.documentNodeFromJson(json)
+}
+
+public func tableGridFromJson(_ json: String) throws -> TableGrid {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TableGrid.self, from: data)
+}
+
+public func gridCellFromJson(_ json: String) throws -> GridCell {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(GridCell.self, from: data)
+}
+
+public func textAnnotationFromJson(_ json: String) throws -> TextAnnotation {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TextAnnotation.self, from: data)
+}
+
 public func extractionResultFromJson(_ json: String) throws -> ExtractionResult {
     return try RustBridge.extractionResultFromJson(json)
+}
+
+public func archiveEntryFromJson(_ json: String) throws -> ArchiveEntry {
+    return try RustBridge.archiveEntryFromJson(json)
+}
+
+public func processingWarningFromJson(_ json: String) throws -> ProcessingWarning {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ProcessingWarning.self, from: data)
+}
+
+public func llmUsageFromJson(_ json: String) throws -> LlmUsage {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LlmUsage.self, from: data)
+}
+
+public func chunkFromJson(_ json: String) throws -> Chunk {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(Chunk.self, from: data)
+}
+
+public func headingContextFromJson(_ json: String) throws -> HeadingContext {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(HeadingContext.self, from: data)
+}
+
+public func headingLevelFromJson(_ json: String) throws -> HeadingLevel {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(HeadingLevel.self, from: data)
+}
+
+public func chunkMetadataFromJson(_ json: String) throws -> ChunkMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ChunkMetadata.self, from: data)
+}
+
+public func extractedImageFromJson(_ json: String) throws -> ExtractedImage {
+    return try RustBridge.extractedImageFromJson(json)
+}
+
+public func boundingBoxFromJson(_ json: String) throws -> BoundingBox {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(BoundingBox.self, from: data)
+}
+
+public func elementMetadataFromJson(_ json: String) throws -> ElementMetadata {
+    return try RustBridge.elementMetadataFromJson(json)
+}
+
+public func elementFromJson(_ json: String) throws -> Element {
+    return try RustBridge.elementFromJson(json)
+}
+
+public func excelWorkbookFromJson(_ json: String) throws -> ExcelWorkbook {
+    return try RustBridge.excelWorkbookFromJson(json)
+}
+
+public func excelSheetFromJson(_ json: String) throws -> ExcelSheet {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ExcelSheet.self, from: data)
+}
+
+public func xmlExtractionResultFromJson(_ json: String) throws -> XmlExtractionResult {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(XmlExtractionResult.self, from: data)
+}
+
+public func textExtractionResultFromJson(_ json: String) throws -> TextExtractionResult {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TextExtractionResult.self, from: data)
+}
+
+public func pptxExtractionResultFromJson(_ json: String) throws -> PptxExtractionResult {
+    return try RustBridge.pptxExtractionResultFromJson(json)
+}
+
+public func emailExtractionResultFromJson(_ json: String) throws -> EmailExtractionResult {
+    return try RustBridge.emailExtractionResultFromJson(json)
+}
+
+public func emailAttachmentFromJson(_ json: String) throws -> EmailAttachment {
+    return try RustBridge.emailAttachmentFromJson(json)
 }
 
 public func ocrExtractionResultFromJson(_ json: String) throws -> OcrExtractionResult {
     return try RustBridge.ocrExtractionResultFromJson(json)
 }
 
+public func ocrTableFromJson(_ json: String) throws -> OcrTable {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrTable.self, from: data)
+}
+
+public func ocrTableBoundingBoxFromJson(_ json: String) throws -> OcrTableBoundingBox {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrTableBoundingBox.self, from: data)
+}
+
+public func imagePreprocessingConfigFromJson(_ json: String) throws -> ImagePreprocessingConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ImagePreprocessingConfig.self, from: data)
+}
+
+public func tesseractConfigFromJson(_ json: String) throws -> TesseractConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TesseractConfig.self, from: data)
+}
+
+public func imagePreprocessingMetadataFromJson(_ json: String) throws -> ImagePreprocessingMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ImagePreprocessingMetadata.self, from: data)
+}
+
+public func metadataFromJson(_ json: String) throws -> Metadata {
+    return try RustBridge.metadataFromJson(json)
+}
+
+public func excelMetadataFromJson(_ json: String) throws -> ExcelMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ExcelMetadata.self, from: data)
+}
+
+public func emailMetadataFromJson(_ json: String) throws -> EmailMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(EmailMetadata.self, from: data)
+}
+
+public func archiveMetadataFromJson(_ json: String) throws -> ArchiveMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ArchiveMetadata.self, from: data)
+}
+
+public func imageMetadataFromJson(_ json: String) throws -> ImageMetadata {
+    return try RustBridge.imageMetadataFromJson(json)
+}
+
+public func xmlMetadataFromJson(_ json: String) throws -> XmlMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(XmlMetadata.self, from: data)
+}
+
+public func textMetadataFromJson(_ json: String) throws -> TextMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TextMetadata.self, from: data)
+}
+
+public func headerMetadataFromJson(_ json: String) throws -> HeaderMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(HeaderMetadata.self, from: data)
+}
+
+public func linkMetadataFromJson(_ json: String) throws -> LinkMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LinkMetadata.self, from: data)
+}
+
+public func imageMetadataTypeFromJson(_ json: String) throws -> ImageMetadataType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ImageMetadataType.self, from: data)
+}
+
+public func structuredDataFromJson(_ json: String) throws -> StructuredData {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(StructuredData.self, from: data)
+}
+
 public func htmlMetadataFromJson(_ json: String) throws -> HtmlMetadata {
     return try RustBridge.htmlMetadataFromJson(json)
 }
+
+public func ocrMetadataFromJson(_ json: String) throws -> OcrMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrMetadata.self, from: data)
+}
+
+public func errorMetadataFromJson(_ json: String) throws -> ErrorMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ErrorMetadata.self, from: data)
+}
+
+public func pptxMetadataFromJson(_ json: String) throws -> PptxMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PptxMetadata.self, from: data)
+}
+
+public func docxMetadataFromJson(_ json: String) throws -> DocxMetadata {
+    return try RustBridge.docxMetadataFromJson(json)
+}
+
+public func csvMetadataFromJson(_ json: String) throws -> CsvMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(CsvMetadata.self, from: data)
+}
+
+public func bibtexMetadataFromJson(_ json: String) throws -> BibtexMetadata {
+    return try RustBridge.bibtexMetadataFromJson(json)
+}
+
+public func citationMetadataFromJson(_ json: String) throws -> CitationMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(CitationMetadata.self, from: data)
+}
+
+public func yearRangeFromJson(_ json: String) throws -> YearRange {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(YearRange.self, from: data)
+}
+
+public func fictionBookMetadataFromJson(_ json: String) throws -> FictionBookMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(FictionBookMetadata.self, from: data)
+}
+
+public func dbfMetadataFromJson(_ json: String) throws -> DbfMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DbfMetadata.self, from: data)
+}
+
+public func dbfFieldInfoFromJson(_ json: String) throws -> DbfFieldInfo {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DbfFieldInfo.self, from: data)
+}
+
+public func jatsMetadataFromJson(_ json: String) throws -> JatsMetadata {
+    return try RustBridge.jatsMetadataFromJson(json)
+}
+
+public func contributorRoleFromJson(_ json: String) throws -> ContributorRole {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ContributorRole.self, from: data)
+}
+
+public func epubMetadataFromJson(_ json: String) throws -> EpubMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(EpubMetadata.self, from: data)
+}
+
+public func pstMetadataFromJson(_ json: String) throws -> PstMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PstMetadata.self, from: data)
+}
+
+public func ocrConfidenceFromJson(_ json: String) throws -> OcrConfidence {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrConfidence.self, from: data)
+}
+
+public func ocrRotationFromJson(_ json: String) throws -> OcrRotation {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrRotation.self, from: data)
+}
+
+public func ocrElementFromJson(_ json: String) throws -> OcrElement {
+    return try RustBridge.ocrElementFromJson(json)
+}
+
+public func ocrElementConfigFromJson(_ json: String) throws -> OcrElementConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrElementConfig.self, from: data)
+}
+
+public func pageStructureFromJson(_ json: String) throws -> PageStructure {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PageStructure.self, from: data)
+}
+
+public func pageBoundaryFromJson(_ json: String) throws -> PageBoundary {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PageBoundary.self, from: data)
+}
+
+public func pageInfoFromJson(_ json: String) throws -> PageInfo {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PageInfo.self, from: data)
+}
+
+public func pageContentFromJson(_ json: String) throws -> PageContent {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PageContent.self, from: data)
+}
+
+public func layoutRegionFromJson(_ json: String) throws -> LayoutRegion {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LayoutRegion.self, from: data)
+}
+
+public func pageHierarchyFromJson(_ json: String) throws -> PageHierarchy {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PageHierarchy.self, from: data)
+}
+
+public func hierarchicalBlockFromJson(_ json: String) throws -> HierarchicalBlock {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(HierarchicalBlock.self, from: data)
+}
+
+public func tableFromJson(_ json: String) throws -> Table {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(Table.self, from: data)
+}
+
+public func tableCellFromJson(_ json: String) throws -> TableCell {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TableCell.self, from: data)
+}
+
+public func uriFromJson(_ json: String) throws -> Uri {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(Uri.self, from: data)
+}
+
+public func detectResponseFromJson(_ json: String) throws -> DetectResponse {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DetectResponse.self, from: data)
+}
+
+public func embeddingPresetFromJson(_ json: String) throws -> EmbeddingPreset {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(EmbeddingPreset.self, from: data)
+}
+
+public func yakeParamsFromJson(_ json: String) throws -> YakeParams {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(YakeParams.self, from: data)
+}
+
+public func rakeParamsFromJson(_ json: String) throws -> RakeParams {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(RakeParams.self, from: data)
+}
+
+public func keywordConfigFromJson(_ json: String) throws -> KeywordConfig {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(KeywordConfig.self, from: data)
+}
+
+public func keywordFromJson(_ json: String) throws -> Keyword {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(Keyword.self, from: data)
+}
+
+public func paddleOcrConfigFromJson(_ json: String) throws -> PaddleOcrConfig {
+    return try RustBridge.paddleOcrConfigFromJson(json)
+}
+
+public func modelPathsFromJson(_ json: String) throws -> ModelPaths {
+    return try RustBridge.modelPathsFromJson(json)
+}
+
+public func orientationResultFromJson(_ json: String) throws -> OrientationResult {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OrientationResult.self, from: data)
+}
+
+public func bBoxFromJson(_ json: String) throws -> BBox {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(BBox.self, from: data)
+}
+
+public func layoutDetectionFromJson(_ json: String) throws -> LayoutDetection {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LayoutDetection.self, from: data)
+}
+
+public func recognizedTableFromJson(_ json: String) throws -> RecognizedTable {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(RecognizedTable.self, from: data)
+}
+
+public func detectionResultFromJson(_ json: String) throws -> DetectionResult {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(DetectionResult.self, from: data)
+}
+
+public func embeddedFileFromJson(_ json: String) throws -> EmbeddedFile {
+    return try RustBridge.embeddedFileFromJson(json)
+}
+
+public func pdfMetadataFromJson(_ json: String) throws -> PdfMetadata {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PdfMetadata.self, from: data)
+}
+
+public func executionProviderTypeFromJson(_ json: String) throws -> ExecutionProviderType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ExecutionProviderType.self, from: data)
+}
+
+public func outputFormatFromJson(_ json: String) throws -> OutputFormat {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OutputFormat.self, from: data)
+}
+
+public func htmlThemeFromJson(_ json: String) throws -> HtmlTheme {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(HtmlTheme.self, from: data)
+}
+
+public func tableModelFromJson(_ json: String) throws -> TableModel {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TableModel.self, from: data)
+}
+
+public func chunkerTypeFromJson(_ json: String) throws -> ChunkerType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ChunkerType.self, from: data)
+}
+
+public func chunkSizingFromJson(_ json: String) throws -> ChunkSizing {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ChunkSizing.self, from: data)
+}
+
+public func embeddingModelTypeFromJson(_ json: String) throws -> EmbeddingModelType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(EmbeddingModelType.self, from: data)
+}
+
+public func codeContentModeFromJson(_ json: String) throws -> CodeContentMode {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(CodeContentMode.self, from: data)
+}
+
+public func ocrBackendTypeFromJson(_ json: String) throws -> OcrBackendType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrBackendType.self, from: data)
+}
+
+public func processingStageFromJson(_ json: String) throws -> ProcessingStage {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ProcessingStage.self, from: data)
+}
+
+public func reductionLevelFromJson(_ json: String) throws -> ReductionLevel {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ReductionLevel.self, from: data)
+}
+
+public func pdfAnnotationTypeFromJson(_ json: String) throws -> PdfAnnotationType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PdfAnnotationType.self, from: data)
+}
+
+public func blockTypeFromJson(_ json: String) throws -> BlockType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(BlockType.self, from: data)
+}
+
+public func inlineTypeFromJson(_ json: String) throws -> InlineType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(InlineType.self, from: data)
+}
+
+public func relationshipKindFromJson(_ json: String) throws -> RelationshipKind {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(RelationshipKind.self, from: data)
+}
+
+public func contentLayerFromJson(_ json: String) throws -> ContentLayer {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ContentLayer.self, from: data)
+}
+
+public func nodeContentFromJson(_ json: String) throws -> NodeContent {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(NodeContent.self, from: data)
+}
+
+public func annotationKindFromJson(_ json: String) throws -> AnnotationKind {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(AnnotationKind.self, from: data)
+}
+
+public func extractionMethodFromJson(_ json: String) throws -> ExtractionMethod {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ExtractionMethod.self, from: data)
+}
+
+public func chunkTypeFromJson(_ json: String) throws -> ChunkType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ChunkType.self, from: data)
+}
+
+public func imageKindFromJson(_ json: String) throws -> ImageKind {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ImageKind.self, from: data)
+}
+
+public func resultFormatFromJson(_ json: String) throws -> ResultFormat {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ResultFormat.self, from: data)
+}
+
+public func elementTypeFromJson(_ json: String) throws -> ElementType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ElementType.self, from: data)
+}
+
+public func formatMetadataFromJson(_ json: String) throws -> FormatMetadata {
+    return try RustBridge.formatMetadataFromJson(json)
+}
+
+public func textDirectionFromJson(_ json: String) throws -> TextDirection {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(TextDirection.self, from: data)
+}
+
+public func linkTypeFromJson(_ json: String) throws -> LinkType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LinkType.self, from: data)
+}
+
+public func imageTypeFromJson(_ json: String) throws -> ImageType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(ImageType.self, from: data)
+}
+
+public func structuredDataTypeFromJson(_ json: String) throws -> StructuredDataType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(StructuredDataType.self, from: data)
+}
+
+public func ocrBoundingGeometryFromJson(_ json: String) throws -> OcrBoundingGeometry {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrBoundingGeometry.self, from: data)
+}
+
+public func ocrElementLevelFromJson(_ json: String) throws -> OcrElementLevel {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(OcrElementLevel.self, from: data)
+}
+
+public func pageUnitTypeFromJson(_ json: String) throws -> PageUnitType {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PageUnitType.self, from: data)
+}
+
+public func uriKindFromJson(_ json: String) throws -> UriKind {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(UriKind.self, from: data)
+}
+
+public func keywordAlgorithmFromJson(_ json: String) throws -> KeywordAlgorithm {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(KeywordAlgorithm.self, from: data)
+}
+
+public func psmModeFromJson(_ json: String) throws -> PSMMode {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PSMMode.self, from: data)
+}
+
+public func paddleLanguageFromJson(_ json: String) throws -> PaddleLanguage {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(PaddleLanguage.self, from: data)
+}
+
+public func layoutClassFromJson(_ json: String) throws -> LayoutClass {
+    let data = json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode(LayoutClass.self, from: data)
+}
+
+// MARK: - Free-function Forwarders
+// Re-export every public free function on the source Rust crate as a
+// top-level `public func` on the host module so consumers do not need to
+// `import RustBridge` directly. Forwarders take Swift-native parameter
+// types and convert to the swift-bridge runtime types internally.
+
+/// Synchronous wrapper for `extract_file`.
+///
+/// This is a convenience function that blocks the current thread until extraction completes.
+/// For async code, use `extract_file` directly.
+///
+/// Uses the global Tokio runtime for 100x+ performance improvement over creating
+/// a new runtime per call. Always uses the global runtime to avoid nested runtime issues.
+///
+/// This function is only available with the `tokio-runtime` feature. For WASM targets,
+/// use a truly synchronous extraction approach instead.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::extract_file_sync;
+/// use kreuzberg::core::config::ExtractionConfig;
+///
+/// let config = ExtractionConfig::default();
+/// let result = extract_file_sync("document.pdf", None, &config)?;
+/// println!("Content: {}", result.content);
+/// ```
+public func extractFileSync(path: String, mimeType: String?, config: ExtractionConfig) throws -> ExtractionResult {
+    return try RustBridge.extractFileSync(path, mimeType, config)
+}
+
+/// Synchronous wrapper for `extract_bytes`.
+///
+/// Uses the global Tokio runtime for 100x+ performance improvement over creating
+/// a new runtime per call.
+///
+/// With the `tokio-runtime` feature, this blocks the current thread using the global
+/// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::extract_bytes_sync;
+/// use kreuzberg::core::config::ExtractionConfig;
+///
+/// let config = ExtractionConfig::default();
+/// let bytes = b"Hello, world!";
+/// let result = extract_bytes_sync(bytes, "text/plain", &config)?;
+/// println!("Content: {}", result.content);
+/// ```
+public func extractBytesSync(content: [UInt8], mimeType: String, config: ExtractionConfig) throws -> ExtractionResult {
+    let _rb_content: RustVec<UInt8> = { let v = RustVec<UInt8>(); for b in content { v.push(value: b) }; return v }()
+    return try RustBridge.extractBytesSync(_rb_content, mimeType, config)
+}
+
+/// Synchronous wrapper for `batch_extract_files`.
+///
+/// Uses the global Tokio runtime for optimal performance.
+/// Only available with `tokio-runtime` (WASM has no filesystem).
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::batch_extract_files_sync;
+/// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
+///
+/// let config = ExtractionConfig::default();
+/// let items = vec![
+///     BatchFileItem {
+///         path: "doc1.pdf".into(),
+///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+///     },
+///     BatchFileItem { path: "doc2.pdf".into(), config: None },
+/// ];
+/// let results = batch_extract_files_sync(items, &config)?;
+/// ```
+public func batchExtractFilesSync(items: [BatchFileItem], config: ExtractionConfig) throws -> [ExtractionResult] {
+    return try RustBridge.batchExtractFilesSync(items, config)
+}
+
+/// Synchronous wrapper for `batch_extract_bytes`.
+///
+/// Uses the global Tokio runtime for optimal performance.
+/// With the `tokio-runtime` feature, this blocks the current thread using the global
+/// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation
+/// that iterates through items and calls `extract_bytes_sync()`.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::batch_extract_bytes_sync;
+/// use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem, FileExtractionConfig};
+///
+/// let config = ExtractionConfig::default();
+/// let items = vec![
+///     BatchBytesItem { content: b"content".to_vec(), mime_type: "text/plain".to_string(), config: None },
+///     BatchBytesItem {
+///         content: b"other".to_vec(),
+///         mime_type: "text/plain".to_string(),
+///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+///     },
+/// ];
+/// let results = batch_extract_bytes_sync(items, &config)?;
+/// ```
+public func batchExtractBytesSync(items: [BatchBytesItem], config: ExtractionConfig) throws -> [ExtractionResult] {
+    return try RustBridge.batchExtractBytesSync(items, config)
+}
+
+/// Extract content from multiple files concurrently.
+///
+/// This function processes multiple files in parallel, automatically managing
+/// concurrency to prevent resource exhaustion. The concurrency limit can be
+/// configured via `ExtractionConfig::max_concurrent_extractions` or defaults
+/// to `(num_cpus * 1.5).ceil()`.
+///
+/// Each file can optionally specify a [`FileExtractionConfig`] that overrides specific
+/// fields from the batch-level `config`. Pass `None` for a file to use the batch defaults.
+/// Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
+/// taken from the batch-level `config`.
+///
+/// # Arguments
+///
+/// * `items` - Vector of `BatchFileItem` structs, each containing a path and optional
+///   per-file configuration overrides.
+/// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
+///
+/// # Returns
+///
+/// A vector of `ExtractionResult` in the same order as the input items.
+///
+/// # Errors
+///
+/// Individual file errors are captured in the result metadata. System errors
+/// (IO, RuntimeError equivalents) will bubble up and fail the entire batch.
+///
+/// # Examples
+///
+/// Simple usage with no per-file overrides:
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::batch_extract_files;
+/// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem};
+/// use std::path::PathBuf;
+///
+/// let config = ExtractionConfig::default();
+/// let items = vec![
+///     BatchFileItem { path: "doc1.pdf".into(), config: None },
+///     BatchFileItem { path: "doc2.pdf".into(), config: None },
+/// ];
+/// let results = batch_extract_files(items, &config).await?;
+/// println!("Processed {} files", results.len());
+/// ```
+///
+/// Per-file configuration overrides:
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::batch_extract_files;
+/// use kreuzberg::core::config::{ExtractionConfig, BatchFileItem, FileExtractionConfig};
+/// use std::path::PathBuf;
+///
+/// let config = ExtractionConfig::default();
+/// let items = vec![
+///     BatchFileItem {
+///         path: "scan.pdf".into(),
+///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+///     },
+///     BatchFileItem { path: "notes.txt".into(), config: None },
+/// ];
+/// let results = batch_extract_files(items, &config).await?;
+/// ```
+public func batchExtractFiles(items: [BatchFileItem], config: ExtractionConfig) async throws -> [ExtractionResult] {
+    return try await Task.detached(priority: .userInitiated) {
+        let result = try RustBridge.batchExtractFiles(items, config)
+        return result
+    }.value
+}
+
+/// Extract content from multiple byte arrays concurrently.
+///
+/// This function processes multiple byte arrays in parallel, automatically managing
+/// concurrency to prevent resource exhaustion. The concurrency limit can be
+/// configured via `ExtractionConfig::max_concurrent_extractions` or defaults
+/// to `(num_cpus * 1.5).ceil()`.
+///
+/// Each item can optionally specify a [`FileExtractionConfig`] that overrides specific
+/// fields from the batch-level `config`. Pass `None` as the config to use
+/// the batch-level defaults for that item.
+///
+/// # Arguments
+///
+/// * `items` - Vector of `BatchBytesItem` structs, each containing content bytes,
+///   MIME type, and optional per-item configuration overrides.
+/// * `config` - Batch-level extraction configuration
+///
+/// # Returns
+///
+/// A vector of `ExtractionResult` in the same order as the input items.
+///
+/// # Examples
+///
+/// Simple usage with no per-item overrides:
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::batch_extract_bytes;
+/// use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem};
+///
+/// let config = ExtractionConfig::default();
+/// let items = vec![
+///     BatchBytesItem { content: b"content 1".to_vec(), mime_type: "text/plain".to_string(), config: None },
+///     BatchBytesItem { content: b"content 2".to_vec(), mime_type: "text/plain".to_string(), config: None },
+/// ];
+/// let results = batch_extract_bytes(items, &config).await?;
+/// println!("Processed {} items", results.len());
+/// ```
+///
+/// Per-item configuration overrides:
+///
+/// ```rust,no_run
+/// use kreuzberg::core::extractor::batch_extract_bytes;
+/// use kreuzberg::core::config::{ExtractionConfig, BatchBytesItem, FileExtractionConfig};
+///
+/// let config = ExtractionConfig::default();
+/// let items = vec![
+///     BatchBytesItem { content: b"content".to_vec(), mime_type: "text/plain".to_string(), config: None },
+///     BatchBytesItem {
+///         content: b"<html>test</html>".to_vec(),
+///         mime_type: "text/html".to_string(),
+///         config: Some(FileExtractionConfig { force_ocr: Some(true), ..Default::default() }),
+///     },
+/// ];
+/// let results = batch_extract_bytes(items, &config).await?;
+/// ```
+public func batchExtractBytes(items: [BatchBytesItem], config: ExtractionConfig) async throws -> [ExtractionResult] {
+    return try await Task.detached(priority: .userInitiated) {
+        let result = try RustBridge.batchExtractBytes(items, config)
+        return result
+    }.value
+}
+
+/// Detect MIME type from raw file bytes.
+///
+/// Uses magic byte signatures to detect file type from content.
+/// Falls back to `infer` crate for comprehensive detection.
+///
+/// For ZIP-based files, inspects contents to distinguish Office Open XML
+/// formats (DOCX, XLSX, PPTX) from plain ZIP archives.
+///
+/// # Arguments
+///
+/// * `content` - Raw file bytes
+///
+/// # Returns
+///
+/// The detected MIME type string.
+///
+/// # Errors
+///
+/// Returns `KreuzbergError::UnsupportedFormat` if MIME type cannot be determined.
+public func detectMimeTypeFromBytes(content: [UInt8]) throws -> String {
+    let _rb_content: RustVec<UInt8> = { let v = RustVec<UInt8>(); for b in content { v.push(value: b) }; return v }()
+    return try RustBridge.detectMimeTypeFromBytes(_rb_content).toString()
+}
+
+/// Get file extensions for a given MIME type.
+///
+/// Returns all known file extensions that map to the specified MIME type.
+///
+/// # Arguments
+///
+/// * `mime_type` - The MIME type to look up
+///
+/// # Returns
+///
+/// A vector of file extensions (without leading dot) for the MIME type.
+///
+/// # Example
+///
+/// ```
+/// use kreuzberg::core::mime::get_extensions_for_mime;
+///
+/// let extensions = get_extensions_for_mime("application/pdf").unwrap();
+/// assert_eq!(extensions, vec!["pdf"]);
+///
+/// let doc_extensions = get_extensions_for_mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document").unwrap();
+/// assert!(doc_extensions.contains(&"docx".to_string()));
+/// ```
+public func getExtensionsForMime(mimeType: String) throws -> [String] {
+    return try RustBridge.getExtensionsForMime(mimeType).map { $0.as_str().toString() }
+}
+
+/// List the names of all registered embedding backends.
+///
+/// Used by `kreuzberg-cli` and the api/mcp endpoints; excluded from the
+/// language bindings via `alef.toml [exclude].functions`.
+public func listEmbeddingBackends() throws -> [String] {
+    return try RustBridge.listEmbeddingBackends().map { $0.as_str().toString() }
+}
+
+/// List names of all registered document extractors.
+public func listDocumentExtractors() throws -> [String] {
+    return try RustBridge.listDocumentExtractors().map { $0.as_str().toString() }
+}
+
+/// List all registered OCR backends.
+///
+/// Returns the names of all OCR backends currently registered in the global registry.
+///
+/// # Returns
+///
+/// A vector of OCR backend names.
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::plugins::list_ocr_backends;
+///
+/// let backends = list_ocr_backends()?;
+/// for name in backends {
+///     println!("Registered OCR backend: {}", name);
+/// }
+/// ```
+public func listOcrBackends() throws -> [String] {
+    return try RustBridge.listOcrBackends().map { $0.as_str().toString() }
+}
+
+/// List all registered post-processor names.
+///
+/// Returns a vector of all post-processor names currently registered in the
+/// global registry.
+///
+/// # Returns
+///
+/// - `Ok(Vec<String>)` - Vector of post-processor names
+/// - `Err(...)` if the registry lock is poisoned
+///
+/// # Example
+///
+/// ```rust
+/// use kreuzberg::plugins::list_post_processors;
+///
+/// let processors = list_post_processors()?;
+/// for name in processors {
+///     println!("Registered post-processor: {}", name);
+/// }
+/// ```
+public func listPostProcessors() throws -> [String] {
+    return try RustBridge.listPostProcessors().map { $0.as_str().toString() }
+}
+
+/// List names of all registered renderers.
+///
+/// # Errors
+///
+/// Returns an error if the registry lock is poisoned.
+public func listRenderers() throws -> [String] {
+    return try RustBridge.listRenderers().map { $0.as_str().toString() }
+}
+
+/// List names of all registered validators.
+public func listValidators() throws -> [String] {
+    return try RustBridge.listValidators().map { $0.as_str().toString() }
+}
+
+/// Generate embeddings asynchronously for a list of text strings.
+///
+/// This is the async counterpart to [`embed_texts`]. It offloads the blocking
+/// ONNX inference work to a dedicated blocking thread pool via Tokio's
+/// `spawn_blocking`, keeping the async executor free.
+///
+/// Returns one embedding vector per input text in the same order.
+///
+/// # Arguments
+///
+/// * `texts` - Vec of strings to embed (owned, sent to blocking thread)
+/// * `config` - Embedding configuration specifying model, batch size, and normalization
+///
+/// # Errors
+///
+/// - `KreuzbergError::MissingDependency` if ONNX Runtime is not installed
+/// - `KreuzbergError::Embedding` if the preset name is unknown, model download fails,
+///   or the blocking inference task panics
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use kreuzberg::{embed_texts_async, EmbeddingConfig};
+///
+/// let embeddings = embed_texts_async(
+///     vec!["Hello!".to_string()],
+///     &EmbeddingConfig::default(),
+/// ).await?;
+/// ```
+public func embedTextsAsync(texts: [String], config: EmbeddingConfig) async throws -> [[Float]] {
+    let _rb_texts: RustVec<RustString> = { let v = RustVec<RustString>(); for s in texts { v.push(value: RustString(s)) }; return v }()
+    return try await Task.detached(priority: .userInitiated) {
+        let result = try RustBridge.embedTextsAsync(_rb_texts, config)
+        return result
+    }.value
+}
+
+/// Render a single PDF page to PNG bytes.
+///
+/// Returns raw PNG-encoded bytes for the specified page at the given DPI.
+/// Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+///
+/// # Arguments
+///
+/// * `pdf_bytes` - Raw PDF file bytes
+/// * `page_index` - Zero-based page index
+/// * `dpi` - Resolution in dots per inch (default: 150)
+/// * `password` - Optional password for encrypted PDFs
+///
+/// # Errors
+///
+/// Returns `KreuzbergError::Parsing` if the PDF cannot be opened, authenticated,
+/// or rendered, or if `page_index` is out of range.
+public func renderPdfPageToPng(pdfBytes: [UInt8], pageIndex: UInt, dpi: Int32?, password: String?) throws -> [UInt8] {
+    let _rb_pdfBytes: RustVec<UInt8> = { let v = RustVec<UInt8>(); for b in pdfBytes { v.push(value: b) }; return v }()
+    return try RustBridge.renderPdfPageToPng(_rb_pdfBytes, pageIndex, dpi, password).map { $0 }
+}
+
+/// Detect the MIME type of a file at the given path.
+///
+/// Uses the file extension and optionally the file content to determine the MIME type.
+/// Set `check_exists` to `true` to verify the file exists before detection.
+public func detectMimeType(path: String, checkExists: Bool) throws -> String {
+    return try RustBridge.detectMimeType(path, checkExists).toString()
+}
+
+/// Embed a list of texts using the configured embedding model.
+///
+/// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
+public func embedTexts(texts: [String], config: EmbeddingConfig) throws -> [[Float]] {
+    let _rb_texts: RustVec<RustString> = { let v = RustVec<RustString>(); for s in texts { v.push(value: RustString(s)) }; return v }()
+    let _rb_json = try RustBridge.embedTexts(_rb_texts, config).toString()
+    let _rb_data = _rb_json.data(using: .utf8) ?? Data()
+    return try JSONDecoder().decode([[Float]].self, from: _rb_data)
+}
+
+/// Get an embedding preset by name.
+///
+/// Returns `None` if no preset with the given name exists. Returns an owned
+/// clone so the value is safe to pass across FFI boundaries.
+public func getEmbeddingPreset(name: String) throws -> EmbeddingPreset? {
+    return try RustBridge.getEmbeddingPreset(name).map { try EmbeddingPreset($0) }
+}
+
+/// List the names of all available embedding presets.
+///
+/// Returns owned `String`s so the values are safe to pass across FFI boundaries.
+public func listEmbeddingPresets() -> [String] {
+    return RustBridge.listEmbeddingPresets().map { $0.as_str().toString() }
+}
+
+// MARK: - Trait Bridge Registration Forwarders
+// Top-level `public func` re-exports of the swift-bridge–generated
+// `register_*` / `unregister_*` / `clear_*` plugin registration entry
+// points so consumers do not need to `import RustBridge` for plugin work.
+
+/// Register an inbound `OcrBackend` plugin implementation. The Swift
+/// host wraps a `OcrBackend` conformer in a `SwiftOcrBackendBox` adapter
+/// (see `Sources/RustBridge/Plugins.swift`); pass the wrapped instance to
+/// register the plugin in the global registry.
+public func registerOcrBackend(_ swiftBox: SwiftOcrBackendBox) throws {
+    try RustBridge.registerOcrBackend(swiftBox)
+}
+
+/// Unregister a previously-registered `OcrBackend` plugin by name.
+public func unregisterOcrBackend(_ name: String) throws {
+    try RustBridge.unregisterOcrBackend(name)
+}
+
+/// Remove every registered `OcrBackend` plugin. Typically used in test teardown.
+public func clearOcrBackends() throws {
+    try RustBridge.clearOcrBackends()
+}
+
+/// Register an inbound `PostProcessor` plugin implementation. The Swift
+/// host wraps a `PostProcessor` conformer in a `SwiftPostProcessorBox` adapter
+/// (see `Sources/RustBridge/Plugins.swift`); pass the wrapped instance to
+/// register the plugin in the global registry.
+public func registerPostProcessor(_ swiftBox: SwiftPostProcessorBox) throws {
+    try RustBridge.registerPostProcessor(swiftBox)
+}
+
+/// Unregister a previously-registered `PostProcessor` plugin by name.
+public func unregisterPostProcessor(_ name: String) throws {
+    try RustBridge.unregisterPostProcessor(name)
+}
+
+/// Remove every registered `PostProcessor` plugin. Typically used in test teardown.
+public func clearPostProcessors() throws {
+    try RustBridge.clearPostProcessors()
+}
+
+/// Register an inbound `Validator` plugin implementation. The Swift
+/// host wraps a `Validator` conformer in a `SwiftValidatorBox` adapter
+/// (see `Sources/RustBridge/Plugins.swift`); pass the wrapped instance to
+/// register the plugin in the global registry.
+public func registerValidator(_ swiftBox: SwiftValidatorBox) throws {
+    try RustBridge.registerValidator(swiftBox)
+}
+
+/// Unregister a previously-registered `Validator` plugin by name.
+public func unregisterValidator(_ name: String) throws {
+    try RustBridge.unregisterValidator(name)
+}
+
+/// Remove every registered `Validator` plugin. Typically used in test teardown.
+public func clearValidators() throws {
+    try RustBridge.clearValidators()
+}
+
+/// Register an inbound `EmbeddingBackend` plugin implementation. The Swift
+/// host wraps a `EmbeddingBackend` conformer in a `SwiftEmbeddingBackendBox` adapter
+/// (see `Sources/RustBridge/Plugins.swift`); pass the wrapped instance to
+/// register the plugin in the global registry.
+public func registerEmbeddingBackend(_ swiftBox: SwiftEmbeddingBackendBox) throws {
+    try RustBridge.registerEmbeddingBackend(swiftBox)
+}
+
+/// Unregister a previously-registered `EmbeddingBackend` plugin by name.
+public func unregisterEmbeddingBackend(_ name: String) throws {
+    try RustBridge.unregisterEmbeddingBackend(name)
+}
+
+/// Remove every registered `EmbeddingBackend` plugin. Typically used in test teardown.
+public func clearEmbeddingBackends() throws {
+    try RustBridge.clearEmbeddingBackends()
+}
+
+/// Register an inbound `DocumentExtractor` plugin implementation. The Swift
+/// host wraps a `DocumentExtractor` conformer in a `SwiftDocumentExtractorBox` adapter
+/// (see `Sources/RustBridge/Plugins.swift`); pass the wrapped instance to
+/// register the plugin in the global registry.
+public func registerDocumentExtractor(_ swiftBox: SwiftDocumentExtractorBox) throws {
+    try RustBridge.registerDocumentExtractor(swiftBox)
+}
+
+/// Unregister a previously-registered `DocumentExtractor` plugin by name.
+public func unregisterDocumentExtractor(_ name: String) throws {
+    try RustBridge.unregisterDocumentExtractor(name)
+}
+
+/// Remove every registered `DocumentExtractor` plugin. Typically used in test teardown.
+public func clearDocumentExtractors() throws {
+    try RustBridge.clearDocumentExtractors()
+}
+
+/// Register an inbound `Renderer` plugin implementation. The Swift
+/// host wraps a `Renderer` conformer in a `SwiftRendererBox` adapter
+/// (see `Sources/RustBridge/Plugins.swift`); pass the wrapped instance to
+/// register the plugin in the global registry.
+public func registerRenderer(_ swiftBox: SwiftRendererBox) throws {
+    try RustBridge.registerRenderer(swiftBox)
+}
+
+/// Unregister a previously-registered `Renderer` plugin by name.
+public func unregisterRenderer(_ name: String) throws {
+    try RustBridge.unregisterRenderer(name)
+}
+
+/// Remove every registered `Renderer` plugin. Typically used in test teardown.
+public func clearRenderers() throws {
+    try RustBridge.clearRenderers()
+}
+
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.ContentFilterConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.ExtractionConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.ImageExtractionConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.TokenReductionOptions: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.LanguageDetectionConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.HtmlOutputConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.LayoutDetectionConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.OcrQualityThresholds: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.OcrConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.PageConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.PdfConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.HierarchyConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.PostProcessorConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.ChunkingConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.EmbeddingConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.TreeSitterConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.TreeSitterProcessConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.ServerConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.SecurityLimits: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.TokenReductionConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.DocumentStructure: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.ExtractionResult: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.ImagePreprocessingConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.TesseractConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.EmbeddingPreset: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.YakeParams: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.RakeParams: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.KeywordConfig: @unchecked Sendable {}
+// swift-bridge opaque type used across Task.detached boundaries — Rust type is Send + Sync.
+extension RustBridge.PaddleOcrConfig: @unchecked Sendable {}

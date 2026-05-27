@@ -52,18 +52,22 @@ def extract_batch(file_paths: list[str]) -> list[dict[str, Any]]:
     for file_path in file_paths:
         try:
             content = extract_text(file_path)
-            results.append({
-                "content": content,
-                "metadata": {"framework": "pdfminer"},
-            })
+            results.append(
+                {
+                    "content": content,
+                    "metadata": {"framework": "pdfminer"},
+                }
+            )
         except Exception as e:
-            results.append({
-                "content": "",
-                "metadata": {
-                    "framework": "pdfminer",
-                    "error": str(e),
-                },
-            })
+            results.append(
+                {
+                    "content": "",
+                    "metadata": {
+                        "framework": "pdfminer",
+                        "error": str(e),
+                    },
+                }
+            )
 
     total_duration_ms = (time.perf_counter() - start) * 1000.0
     per_file_duration_ms = total_duration_ms / len(file_paths) if file_paths else 0
@@ -181,7 +185,10 @@ def main() -> None:
             args.append(arg)
 
     if len(args) < 1:
-        print("Usage: pdfminer_extract.py [--ocr|--no-ocr] [--timeout=SECS] <mode> <file_path> [additional_files...]", file=sys.stderr)
+        print(
+            "Usage: pdfminer_extract.py [--ocr|--no-ocr] [--timeout=SECS] <mode> <file_path> [additional_files...]",
+            file=sys.stderr,
+        )
         print("Modes: sync, batch, server", file=sys.stderr)
         sys.exit(1)
 

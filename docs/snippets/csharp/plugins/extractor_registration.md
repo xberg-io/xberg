@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var extractor = new JsonDocumentExtractor();
+KreuzbergLib.RegisterDocumentExtractor(extractor);
+
 public class JsonDocumentExtractor : IDocumentExtractor
 {
     public string Name => "json-extractor";
@@ -45,7 +48,4 @@ public class JsonDocumentExtractor : IDocumentExtractor
         return 50;
     }
 }
-
-var extractor = new JsonDocumentExtractor();
-KreuzbergLib.RegisterDocumentExtractor(extractor);
 ```

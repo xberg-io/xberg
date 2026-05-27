@@ -45,6 +45,12 @@ public class CloudOcrBackend : IOcrBackend
     public void Shutdown() { }
 }
 
-var backend = new CloudOcrBackend(apiKey: "your-api-key");
-KreuzbergLib.RegisterOcrBackend(backend);
+class Program
+{
+    static void Main()
+    {
+        var backend = new CloudOcrBackend(apiKey: "your-api-key");
+        KreuzbergLib.RegisterOcrBackend(backend);
+    }
+}
 ```

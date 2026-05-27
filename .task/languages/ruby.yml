@@ -15,5 +15,6 @@ tasks:
     silent: false
     cmds:
       - cmd: |
+          command -v bundle >/dev/null 2>&1 || { echo "Bundle not found, skipping Ruby upgrade"; exit 0; }
           cd packages/ruby && bundle update
         ignore_error: false

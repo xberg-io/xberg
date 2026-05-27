@@ -8,7 +8,7 @@ const testDocumentsDir = join(__dirname, "..", "..", "test_documents");
 process.chdir(testDocumentsDir);
 
 const result = extractFileSync("docx/fake.docx", undefined, {
-  includeDocumentStructure: true,
+	includeDocumentStructure: true,
 });
 
 console.log("result.document:", result.document);

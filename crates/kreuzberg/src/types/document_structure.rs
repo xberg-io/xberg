@@ -255,7 +255,7 @@ pub struct DocumentNode {
 
     /// Format-specific key-value attributes.
     ///
-    /// Extensible bag for data that doesn't warrant a typed field: CSS classes,
+    /// Extensible bag for miscellaneous data without a dedicated typed field: CSS classes,
     /// LaTeX environment names, Excel cell formulas, slide layout names, etc.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attributes: Option<HashMap<String, String>>,

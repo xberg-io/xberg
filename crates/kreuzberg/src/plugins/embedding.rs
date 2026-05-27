@@ -148,7 +148,6 @@ pub fn unregister_embedding_backend(name: &str) -> Result<()> {
 ///
 /// - Any error returned by a backend's `shutdown()` method. The first error
 ///   encountered stops processing of remaining backends.
-#[cfg_attr(alef, alef(skip))]
 pub fn clear_embedding_backends() -> Result<()> {
     use crate::plugins::registry::get_embedding_backend_registry;
 

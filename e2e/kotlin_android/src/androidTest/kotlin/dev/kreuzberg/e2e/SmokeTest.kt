@@ -38,6 +38,13 @@ class SmokeTest {
     }
 
     @Test
+    fun test_smoke_image_png() {
+        val client = Kreuzberg()
+        val result = client.extract_file(/* fixture: smoke_image_png */)
+        // TODO: assert result is not an error
+    }
+
+    @Test
     fun test_smoke_json_basic() {
         val client = Kreuzberg()
         val result = client.extract_file(/* fixture: smoke_json_basic */)

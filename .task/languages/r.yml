@@ -15,5 +15,6 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd packages/r && Rscript -e "update.packages(ask = FALSE)"
+          command -v Rscript >/dev/null 2>&1 || { echo "R not found, skipping R upgrade"; exit 0; }
+          cd packages/r && Rscript -e 'options(repos = c(CRAN = "https://cloud.r-project.org")); update.packages(ask = FALSE)'
         ignore_error: false

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * Configuration for an LLM provider/model via liter-llm.
  *
- * Each feature (VLM OCR, VLM embeddings, structured extraction) carries
- * its own `LlmConfig`, allowing different providers per feature.
+ * Each feature (VLM OCR, VLM embeddings, structured extraction) carries its own `LlmConfig`,
+ * allowing different providers per feature.
  */
 data class LlmConfig(
     /**
@@ -34,30 +35,20 @@ data class LlmConfig(
      * Examples: `"openai/gpt-4o"`, `"anthropic/claude-sonnet-4-20250514"`,
      * `"groq/llama-3.1-70b-versatile"`.
      */
-    val model: String,
+    val model: String = "",
     /**
-     * API key for the provider. When `null`, liter-llm falls back to
-     * the provider's standard environment variable (e.g., `OPENAI_API_KEY`).
+     * API key for the provider. When `null`, liter-llm falls back to the provider's standard
+     * environment variable (e.g., `OPENAI_API_KEY`).
      */
-    val apiKey: String?,
-    /**
-     * Custom base URL override for the provider endpoint.
-     */
-    val baseUrl: String?,
-    /**
-     * Request timeout in seconds (default: 60).
-     */
-    val timeoutSecs: Long?,
-    /**
-     * Maximum retry attempts (default: 3).
-     */
-    val maxRetries: Int?,
-    /**
-     * Sampling temperature for generation tasks.
-     */
-    val temperature: Double?,
-    /**
-     * Maximum tokens to generate.
-     */
-    val maxTokens: Long?
+    val apiKey: String? = null,
+    /** Custom base URL override for the provider endpoint. */
+    val baseUrl: String? = null,
+    /** Request timeout in seconds (default: 60). */
+    val timeoutSecs: Long? = null,
+    /** Maximum retry attempts (default: 3). */
+    val maxRetries: Int? = null,
+    /** Sampling temperature for generation tasks. */
+    val temperature: Double? = null,
+    /** Maximum tokens to generate. */
+    val maxTokens: Long? = null,
 )

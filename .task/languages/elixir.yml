@@ -15,5 +15,6 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd packages/elixir && mix hex.outdated --all && mix deps.update --all
+          command -v mix >/dev/null 2>&1 || { echo "Elixir not found, skipping Elixir upgrade"; exit 0; }
+          cd packages/elixir && mix hex.outdated --all || true && mix deps.update --all
         ignore_error: false

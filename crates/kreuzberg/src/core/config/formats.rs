@@ -10,8 +10,8 @@ use std::str::FromStr;
 /// Output format for extraction results.
 ///
 /// Controls the format of the `content` field in `ExtractionResult`.
-/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
-/// accordingly. `Plain` returns the raw extracted text.
+/// When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+/// `Plain` returns the raw extracted text.
 /// `Structured` returns JSON with full OCR element data including bounding
 /// boxes and confidence scores.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

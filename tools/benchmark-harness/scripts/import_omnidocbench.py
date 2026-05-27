@@ -26,7 +26,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-
 # OmniDocBench category types that map to content we want in ground truth
 CONTENT_CATEGORIES = {
     "title",
@@ -67,9 +66,7 @@ def html_table_to_markdown(html_str: str) -> str:
     for row_match in re.finditer(r"<tr[^>]*>(.*?)</tr>", html_str, re.DOTALL):
         row_html = row_match.group(1)
         cells: list[str] = []
-        for cell_match in re.finditer(
-            r"<t[dh][^>]*>(.*?)</t[dh]>", row_html, re.DOTALL
-        ):
+        for cell_match in re.finditer(r"<t[dh][^>]*>(.*?)</t[dh]>", row_html, re.DOTALL):
             cell_text = re.sub(r"<[^>]+>", "", cell_match.group(1)).strip()
             cells.append(cell_text)
         if cells:
@@ -116,7 +113,7 @@ def annotation_to_markdown(ann: dict) -> str | None:
         return None
 
     if cat == "text_block":
-        return text if text else None
+        return text or None
 
     if cat == "table":
         # Prefer HTML representation for tables
@@ -124,13 +121,13 @@ def annotation_to_markdown(ann: dict) -> str | None:
         if html_str:
             return html_table_to_markdown(html_str)
         # Fallback to text
-        return text if text else None
+        return text or None
 
     if cat == "equation_isolated":
         latex = ann.get("latex", "")
         if latex:
             return f"$$\n{latex}\n$$"
-        return text if text else None
+        return text or None
 
     if cat == "code_txt":
         if text:
@@ -138,13 +135,13 @@ def annotation_to_markdown(ann: dict) -> str | None:
         return None
 
     if cat in ("figure_caption", "table_caption", "equation_caption", "code_txt_caption"):
-        return text if text else None
+        return text or None
 
     if cat == "reference":
-        return text if text else None
+        return text or None
 
     # Unknown category — include text if present
-    return text if text else None
+    return text or None
 
 
 def page_to_markdown(page: dict) -> str:
@@ -254,9 +251,7 @@ def group_pages_by_pdf(pages: list[dict]) -> dict[str, list[dict]]:
     return groups
 
 
-def find_pdf_for_document(
-    pdf_name: str, pages: list[dict], ori_pdfs_dir: Path
-) -> Path | None:
+def find_pdf_for_document(pdf_name: str, pages: list[dict], ori_pdfs_dir: Path) -> Path | None:
     """Find the original PDF file for a document group."""
     if not ori_pdfs_dir.exists():
         return None
@@ -281,9 +276,7 @@ def find_pdf_for_document(
             subdir_path = ori_pdfs_dir / subdir
             if subdir_path.exists():
                 for pdf_file in subdir_path.glob("*.pdf"):
-                    if pdf_name.startswith(pdf_file.stem) or pdf_file.stem.startswith(
-                        pdf_name
-                    ):
+                    if pdf_name.startswith(pdf_file.stem) or pdf_file.stem.startswith(pdf_name):
                         return pdf_file
 
     return None
@@ -401,7 +394,7 @@ def main() -> None:
         if created % 50 == 0:
             print(f"  {created} fixtures created...", file=sys.stderr)
 
-    print(f"\nDone:", file=sys.stderr)
+    print("\nDone:", file=sys.stderr)
     print(f"  Created: {created}", file=sys.stderr)
     print(f"  Skipped (already exists): {skipped_exists}", file=sys.stderr)
     print(f"  Skipped (no PDF found): {skipped_no_pdf}", file=sys.stderr)

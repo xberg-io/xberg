@@ -12,6 +12,12 @@ public class PdfOnlyProcessor : IPostProcessor
         => result.MimeType == "application/pdf";
 }
 
-var processor = new PdfOnlyProcessor();
-KreuzbergLib.RegisterPostProcessor(processor);
+class Program
+{
+    static void Main()
+    {
+        var processor = new PdfOnlyProcessor();
+        KreuzbergLib.RegisterPostProcessor(processor);
+    }
+}
 ```

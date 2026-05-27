@@ -17,11 +17,10 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Year range for bibliographic metadata.
- */
-data class YearRange(val min: Int?, val max: Int?, val years: List<Int>)
+/** Year range for bibliographic metadata. */
+data class YearRange(val min: Int? = null, val max: Int? = null, val years: List<Int> = emptyList())

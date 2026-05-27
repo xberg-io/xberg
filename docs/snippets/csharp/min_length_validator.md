@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var validator = new MinLengthValidator(minLength: 100);
+KreuzbergLib.RegisterValidator(validator);
+
 public class MinLengthValidator : IValidator
 {
     private readonly int _minLength;
@@ -25,7 +28,4 @@ public class MinLengthValidator : IValidator
     public void Initialize() { }
     public void Shutdown() { }
 }
-
-var validator = new MinLengthValidator(minLength: 100);
-KreuzbergLib.RegisterValidator(validator);
 ```

@@ -30,7 +30,7 @@ pub struct SecurityLimits {
     pub max_nesting_depth: usize,
 
     /// Maximum length of any single XML entity / attribute / token (1 MiB).
-    /// This is a per-token cap, NOT a cumulative cap — billion-laughs class
+    /// This is a per-token cap, NOT a total cap — billion-laughs class
     /// attacks where a single entity expands to hundreds of MB are caught
     /// here, while normal long text content (a paragraph, a CDATA block) is
     /// caught by `max_content_size` instead.
@@ -231,7 +231,7 @@ impl ZipBombValidator {
     }
 }
 
-/// Helper struct for tracking and validating cumulative string growth during extraction.
+/// Helper struct for tracking and validating aggregate string growth during extraction.
 ///
 /// Use this when an extractor accumulates user-controlled content into a `String`
 /// or `Vec<u8>`. Call `check_append(len)` *before* pushing each chunk so the producer
@@ -256,7 +256,7 @@ impl StringGrowthValidator {
 
     /// Account for `len` more bytes about to be appended.
     ///
-    /// Returns `Err(SecurityError::ContentTooLarge)` when the cumulative total exceeds
+    /// Returns `Err(SecurityError::ContentTooLarge)` when the running total exceeds
     /// `max_size`. Counter is updated using saturating arithmetic so a malicious caller
     /// cannot wrap to zero.
     pub(crate) fn check_append(&mut self, len: usize) -> Result<(), SecurityError> {
@@ -389,7 +389,7 @@ impl EntityValidator {
     }
 }
 
-/// Helper struct for capping cumulative table-cell counts across a document.
+/// Helper struct for capping aggregate table-cell counts across a document.
 ///
 /// Use in CSV/XLSX/HTML table extraction to prevent a malicious document
 /// from claiming billions of empty cells and exhausting memory. Call
@@ -411,7 +411,7 @@ impl TableValidator {
     }
 
     /// Account for `count` more cells. Returns `Err(SecurityError::TooManyCells)`
-    /// once the cumulative total exceeds `max_cells`. Saturating arithmetic.
+    /// once the running total exceeds `max_cells`. Saturating arithmetic.
     pub(crate) fn add_cells(&mut self, count: usize) -> Result<(), SecurityError> {
         self.current_cells = self.current_cells.saturating_add(count);
         if self.current_cells > self.max_cells {
@@ -492,7 +492,7 @@ impl SecurityBudget {
     }
 
     /// Account for `len` bytes of emitted text. Returns `Err(ContentTooLarge)`
-    /// once cumulative output exceeds `max_content_size`.
+    /// once total output exceeds `max_content_size`.
     pub(crate) fn account_text(&mut self, len: usize) -> Result<(), SecurityError> {
         self.growth.check_append(len)
     }
@@ -509,7 +509,7 @@ impl SecurityBudget {
     }
 
     /// Account for `count` more table cells. Returns `Err(TooManyCells)` once
-    /// cumulative cells exceed `max_table_cells`.
+    /// the running total of cells exceeds `max_table_cells`.
     pub(crate) fn add_cells(&mut self, count: usize) -> Result<(), SecurityError> {
         self.table.add_cells(count)
     }

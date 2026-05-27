@@ -21,9 +21,5 @@
     {
       "type": "not_error"
     }
-  ],
-  "skip": {
-    "languages": [],
-    "reason": "Tests plugin_api call surface that isn't re-exported at the kreuzberg crate root \u2014 skipped everywhere until Rust public API or codegen module path is updated."
-  }
+  ]
 }

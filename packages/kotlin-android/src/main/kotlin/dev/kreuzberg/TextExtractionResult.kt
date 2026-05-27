@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,36 +25,22 @@ package dev.kreuzberg
 /**
  * Plain text and Markdown extraction result.
  *
- * Contains the extracted text along with statistics and,
- * for Markdown files, structural elements like headers and links.
+ * Contains the extracted text along with statistics and, for Markdown files, structural elements
+ * like headers and links.
  */
 data class TextExtractionResult(
-    /**
-     * Extracted text content
-     */
+    /** Extracted text content */
     val content: String,
-    /**
-     * Number of lines
-     */
+    /** Number of lines */
     val lineCount: Long,
-    /**
-     * Number of words
-     */
+    /** Number of words */
     val wordCount: Long,
-    /**
-     * Number of characters
-     */
+    /** Number of characters */
     val characterCount: Long,
-    /**
-     * Markdown headers (text only, Markdown files only)
-     */
-    val headers: List<String>?,
-    /**
-     * Markdown links as (text, URL) tuples (Markdown files only)
-     */
-    val links: List<String>?,
-    /**
-     * Code blocks as (language, code) tuples (Markdown files only)
-     */
-    val codeBlocks: List<String>?
+    /** Markdown headers (text only, Markdown files only) */
+    val headers: List<String>? = null,
+    /** Markdown links as (text, URL) tuples (Markdown files only) */
+    val links: List<List<String>>? = null,
+    /** Code blocks as (language, code) tuples (Markdown files only) */
+    val codeBlocks: List<List<String>>? = null,
 )

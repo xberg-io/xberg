@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 class McpServer
@@ -23,9 +25,6 @@ class McpServer
         await Task.Delay(Timeout.Infinite);
     }
 }
-
-using System.Net.Http;
-using System.Text.Json;
 
 class McpServerProgram
 {

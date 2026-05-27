@@ -2,13 +2,13 @@
 
 A map of what Kreuzberg can do. Each section links to the guide or reference page with configuration details and code examples.
 
-![Kreuzberg features overview -- 91+ input formats flow through extraction, OCR, and processing to produce text, tables, chunks, and metadata](assets/feature-overview.png)
+![Kreuzberg features overview -- 90+ input formats flow through extraction, OCR, and processing to produce text, tables, chunks, and metadata](assets/feature-overview.png)
 
 ---
 
 ## Format Support
 
-91+ file formats handled by native Rust extractors — no LibreOffice or other external tools required.
+90+ file formats handled by native Rust extractors — no LibreOffice or other external tools required.
 
 === "Documents"
 
@@ -262,7 +262,7 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 
 ### For Code
 
-**Code Intelligence** -- Extract functions, classes, imports, exports, symbols, docstrings, and diagnostics from 306 programming languages via tree-sitter. Results are available in `ExtractionResult.code_intelligence` as a `ProcessResult`. Code files produce semantic chunks (function/class-aware) that bypass the text-splitter entirely. Configure content mode with `CodeContentMode`: `chunks` (default, semantic TSLP chunks), `raw` (source as-is), or `structure` (headings + docstrings only).
+**Code Intelligence** -- Extract functions, classes, imports, exports, symbols, docstrings, and diagnostics from 300+ programming languages via tree-sitter. Results are available in `ExtractionResult.code_intelligence` as a `ProcessResult`. Code files produce semantic chunks (function/class-aware) that bypass the text-splitter entirely. Configure content mode with `CodeContentMode`: `chunks` (default, semantic TSLP chunks), `raw` (source as-is), or `structure` (headings + docstrings only).
 
 ### For Data Quality
 

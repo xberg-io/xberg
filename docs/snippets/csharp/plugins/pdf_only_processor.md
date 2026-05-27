@@ -43,6 +43,12 @@ public class PdfOnlyProcessor : IPostProcessor
     }
 }
 
-var processor = new PdfOnlyProcessor();
-PostProcessorRegistry.Register(processor);
+class Program
+{
+    static void Main()
+    {
+        var processor = new PdfOnlyProcessor();
+        PostProcessorRegistry.Register(processor);
+    }
+}
 ```

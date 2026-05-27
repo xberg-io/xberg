@@ -19,6 +19,7 @@ pub struct Drawing {
 }
 
 /// Whether the drawing is inline or anchored.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub enum DrawingType {
     #[default]

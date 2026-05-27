@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,28 +25,75 @@ package dev.kreuzberg
 /**
  * The 17 canonical document layout classes.
  *
- * All model backends (RT-DETR, YOLO, etc.) map their native class IDs
- * to this shared set. Models with fewer classes (DocLayNet: 11, PubLayNet: 5)
- * map to the closest equivalent.
+ * All model backends (RT-DETR, YOLO, etc.) map their native class IDs to this shared set. Models
+ * with fewer classes (DocLayNet: 11, PubLayNet: 5) map to the closest equivalent.
  *
  * Wire format is snake_case in all serializers (JSON, TOML, YAML).
  */
 enum class LayoutClass {
-    CAPTION,
-    FOOTNOTE,
-    FORMULA,
-    LIST_ITEM,
-    PAGE_FOOTER,
-    PAGE_HEADER,
-    PICTURE,
-    SECTION_HEADER,
-    TABLE,
-    TEXT,
-    TITLE,
-    DOCUMENT_INDEX,
-    CODE,
-    CHECKBOX_SELECTED,
-    CHECKBOX_UNSELECTED,
-    FORM,
-    KEY_VALUE_REGION;
+    @com.fasterxml.jackson.annotation.JsonProperty("caption") CAPTION,
+    @com.fasterxml.jackson.annotation.JsonProperty("footnote") FOOTNOTE,
+    @com.fasterxml.jackson.annotation.JsonProperty("formula") FORMULA,
+    @com.fasterxml.jackson.annotation.JsonProperty("list_item") LIST_ITEM,
+    @com.fasterxml.jackson.annotation.JsonProperty("page_footer") PAGE_FOOTER,
+    @com.fasterxml.jackson.annotation.JsonProperty("page_header") PAGE_HEADER,
+    @com.fasterxml.jackson.annotation.JsonProperty("picture") PICTURE,
+    @com.fasterxml.jackson.annotation.JsonProperty("section_header") SECTION_HEADER,
+    @com.fasterxml.jackson.annotation.JsonProperty("table") TABLE,
+    @com.fasterxml.jackson.annotation.JsonProperty("text") TEXT,
+    @com.fasterxml.jackson.annotation.JsonProperty("title") TITLE,
+    @com.fasterxml.jackson.annotation.JsonProperty("document_index") DOCUMENT_INDEX,
+    @com.fasterxml.jackson.annotation.JsonProperty("code") CODE,
+    @com.fasterxml.jackson.annotation.JsonProperty("checkbox_selected") CHECKBOX_SELECTED,
+    @com.fasterxml.jackson.annotation.JsonProperty("checkbox_unselected") CHECKBOX_UNSELECTED,
+    @com.fasterxml.jackson.annotation.JsonProperty("form") FORM,
+    @com.fasterxml.jackson.annotation.JsonProperty("key_value_region") KEY_VALUE_REGION;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            CAPTION -> "caption"
+            FOOTNOTE -> "footnote"
+            FORMULA -> "formula"
+            LIST_ITEM -> "list_item"
+            PAGE_FOOTER -> "page_footer"
+            PAGE_HEADER -> "page_header"
+            PICTURE -> "picture"
+            SECTION_HEADER -> "section_header"
+            TABLE -> "table"
+            TEXT -> "text"
+            TITLE -> "title"
+            DOCUMENT_INDEX -> "document_index"
+            CODE -> "code"
+            CHECKBOX_SELECTED -> "checkbox_selected"
+            CHECKBOX_UNSELECTED -> "checkbox_unselected"
+            FORM -> "form"
+            KEY_VALUE_REGION -> "key_value_region"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): LayoutClass =
+            when (value) {
+                "caption" -> CAPTION
+                "footnote" -> FOOTNOTE
+                "formula" -> FORMULA
+                "list_item" -> LIST_ITEM
+                "page_footer" -> PAGE_FOOTER
+                "page_header" -> PAGE_HEADER
+                "picture" -> PICTURE
+                "section_header" -> SECTION_HEADER
+                "table" -> TABLE
+                "text" -> TEXT
+                "title" -> TITLE
+                "document_index" -> DOCUMENT_INDEX
+                "code" -> CODE
+                "checkbox_selected" -> CHECKBOX_SELECTED
+                "checkbox_unselected" -> CHECKBOX_UNSELECTED
+                "form" -> FORM
+                "key_value_region" -> KEY_VALUE_REGION
+                else -> throw IllegalArgumentException("Unknown LayoutClass value: $value")
+            }
+    }
 }

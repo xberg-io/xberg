@@ -17,8 +17,9 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-data class OcrCacheStats(val totalFiles: Long, val totalSizeMb: Double)
+data class OcrCacheStats(val totalFiles: Long = 0L, val totalSizeMb: Double = 0.0)

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,71 +25,47 @@ package dev.kreuzberg
 /**
  * HTML metadata extracted from HTML documents.
  *
- * Includes document-level metadata, Open Graph data, Twitter Card metadata,
- * and extracted structural elements (headers, links, images, structured data).
+ * Includes document-level metadata, Open Graph data, Twitter Card metadata, and extracted
+ * structural elements (headers, links, images, structured data).
  */
 data class HtmlMetadata(
+    /** Document title from `<title>` tag */
+    val title: String? = null,
+    /** Document description from `<meta name="description">` tag */
+    val description: String? = null,
+    /** Document keywords from `<meta name="keywords">` tag, split on commas */
+    val keywords: List<String> = emptyList(),
+    /** Document author from `<meta name="author">` tag */
+    val author: String? = null,
+    /** Canonical URL from `<link rel="canonical">` tag */
+    val canonicalUrl: String? = null,
+    /** Base URL from `<base href="">` tag for resolving relative URLs */
+    val baseHref: String? = null,
+    /** Document language from `lang` attribute */
+    val language: String? = null,
+    /** Document text direction from `dir` attribute */
+    val textDirection: TextDirection? = null,
     /**
-     * Document title from `<title>` tag
+     * Open Graph metadata (og:* properties) for social media Keys like "title", "description",
+     * "image", "url", etc.
      */
-    val title: String?,
+    val openGraph: Map<String, String> = emptyMap(),
     /**
-     * Document description from `<meta name="description">` tag
+     * Twitter Card metadata (twitter:* properties) Keys like "card", "site", "creator", "title",
+     * "description", "image", etc.
      */
-    val description: String?,
+    val twitterCard: Map<String, String> = emptyMap(),
     /**
-     * Document keywords from `<meta name="keywords">` tag, split on commas
+     * Additional meta tags not covered by specific fields Keys are meta name/property attributes,
+     * values are content
      */
-    val keywords: List<String>,
-    /**
-     * Document author from `<meta name="author">` tag
-     */
-    val author: String?,
-    /**
-     * Canonical URL from `<link rel="canonical">` tag
-     */
-    val canonicalUrl: String?,
-    /**
-     * Base URL from `<base href="">` tag for resolving relative URLs
-     */
-    val baseHref: String?,
-    /**
-     * Document language from `lang` attribute
-     */
-    val language: String?,
-    /**
-     * Document text direction from `dir` attribute
-     */
-    val textDirection: TextDirection?,
-    /**
-     * Open Graph metadata (og:* properties) for social media
-     * Keys like "title", "description", "image", "url", etc.
-     */
-    val openGraph: Map<String, String>,
-    /**
-     * Twitter Card metadata (twitter:* properties)
-     * Keys like "card", "site", "creator", "title", "description", "image", etc.
-     */
-    val twitterCard: Map<String, String>,
-    /**
-     * Additional meta tags not covered by specific fields
-     * Keys are meta name/property attributes, values are content
-     */
-    val metaTags: Map<String, String>,
-    /**
-     * Extracted header elements with hierarchy
-     */
-    val headers: List<HeaderMetadata>,
-    /**
-     * Extracted hyperlinks with type classification
-     */
-    val links: List<LinkMetadata>,
-    /**
-     * Extracted images with source and dimensions
-     */
-    val images: List<ImageMetadataType>,
-    /**
-     * Extracted structured data blocks
-     */
-    val structuredData: List<StructuredData>
+    val metaTags: Map<String, String> = emptyMap(),
+    /** Extracted header elements with hierarchy */
+    val headers: List<HeaderMetadata> = emptyList(),
+    /** Extracted hyperlinks with type classification */
+    val links: List<LinkMetadata> = emptyList(),
+    /** Extracted images with source and dimensions */
+    val images: List<ImageMetadataType> = emptyList(),
+    /** Extracted structured data blocks */
+    val structuredData: List<StructuredData> = emptyList(),
 )

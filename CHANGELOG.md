@@ -9,7 +9,227 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **deps**: bump alef pin v0.19.14 → v0.19.20. v0.19.15-v0.19.20 ship generator fixes addressing the systemic trait-bridge stub regressions surfaced by v5.0.0-rc.3 CI E2E (11 of 14 lang jobs failing on plugin_api stubs missing super-trait methods, wrong return types, internal type leakage, missing PHP interface emission, etc.) — plus the v0.19.20 hotfix that registers the new PHP interface Jinja templates in alef's embedded `TEMPLATES` array. Affects every binding (`crates/kreuzberg-{node,wasm,ffi}`, `packages/*`) and every e2e suite under `e2e/`.
+
+## [5.0.0-rc.3] - 2026-05-26
+
+### Changed
+
+- **deps**: bump alef pin to v0.19.14 — bundles all v0.19.12 + v0.19.13 + v0.19.14 generator fixes across every language emitter (Rust e2e unused result, Go missing `encoding/json` import, Zig undeclared types + `callconv(.c)`, Python e2e `initialize()` stub, PHP e2e interface FQN, C# `Bridge.Register(impl)`, Elixir `unregister_*` public wrappers, dart `.as_ref()` for `Option<HashMap>`, dart unit-variant default ctor parens, Swift `RustStr` typedef in placeholder, Ruby cargo-machete metadata, Java duplicate-method dedup, Kotlin Android e2e ExtractionConfig inference + `.size` for ByteArray + EmbeddingConfig model, dart RID-aware FRB native lib loader, kotlin streaming virtual fields gating, csharp per-binding exception class, go arch name mapping for FFI download, elixir always-include `:jason` dep).
+- **e2e**: add `homebrew` to `[crates.e2e].languages` — registry-mode test_app validates CLI + FFI Homebrew formulae post-publish.
+
 ### Fixed
+
+- **publish (workflow)**: `release-finalize` job now declares `prepare` in its `needs:` list. The job referenced `needs.prepare.outputs.is_tag`, `dry_run`, `tag`, `is_prerelease` but did not depend on `prepare`, producing an `actionlint` failure that gated CI Lint.
+- **publish (ruby)**: exclude `ext/*/native/target/` and `ext/*/native/tmp/` directories from gem files list. The gemspec was including the entire Rust build artifact tree (compiled `.rlib`, `.rmeta`, `.dylib` files), bloating the .gem from 33 MB to 388 MB, causing `gem spec` to reject it as invalid due to size constraints. Now filters out build directories via `reject { |f| f.include?("/native/target/") || f.include?("/native/tmp/") }`.
+- **publish (workflow ordering)**: add new `finalize-github-release-after-uploads` job that publishes the GitHub Release from draft to final state immediately after all native artifact uploads complete, but before `publish-hex` and `publish-zig` jobs run. Hex.pm and Zig package registries fetch asset URLs from the release page, which fails with 404 when the release is in DRAFT state. Now, `publish-hex` and `publish-zig` depend on the early finalize job, ensuring the release is already published before they attempt to download assets. The final `release-finalize` job runs after all publishes for post-publish validation and idempotently handles the Go module tag creation.
+- **dart (ios)**: use `wasm-target` feature set for iOS x86_64 simulator build instead of `android-target`. The x86_64-apple-ios target was pulling in Android ABI pre-built binaries (pdfium, ort) with mismatched CPU types, causing lipo failures during XCFramework assembly. `wasm-target` is ORT-free and cross-compiles cleanly for all iOS simulators.
+
+## [5.0.0-rc.2] (skipped) - 2026-05-25
+
+rc.2 was tagged + partially published (5/13 registries) on 2026-05-25 then superseded by rc.3. The fixes listed below were carried forward.
+
+### Changed
+
+- **deps**: bump alef pin to v0.19.10 (C# `KreuzbergLib.Register*`/`Unregister*` plugin forwarders + `*Bridge.Register*(impl)` static factories; C# trait-bridge stubs emit sync methods with real return types; Kotlin Android test-app switched to JUnit unit tests + correct Maven coordinate `dev.kreuzberg:kreuzberg-android`; Swift dead-code removal of legacy e2e helpers; PHP/Elixir `ahash` machete-ignore; Java output path aligned with pom.xml; Go test-app `go.mod` registry pin; pnpm-workspace allow-builds; Dart `FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR` env var support; homebrew + php-ext codegen generalized from kreuzberg-specific defaults).
+
+### Fixed
+
+- **publish (zig)**: mirror html-to-markdown's `check-zig` + `publish-zig` pattern (uses `registry: github-release` with full tarball asset name + `package-name` override matching alef-emitted test_app URL pattern + dependency on `check-zig` for idempotent reruns on already-published versions).
+- **publish (pub.dev)**: add `force_republish` check to `trigger-pubdev` condition matching html-to-markdown pattern so already-published versions reroll cleanly when needed.
+- **publish (ruby + elixir + r + dart)**: explicit `vendor_mode = "registry"` in `alef.toml` so `path = "../../crates/kreuzberg"` deps inside inner Rust crates are rewritten to crates.io version deps at publish time. rc.1 ruby gem failed at install with `failed to read .../kreuzberg/Cargo.toml` for exactly this reason.
+- **publish (pypi)**: verify non-strict (sdist/wheel allowlist mismatch was aborting publish in rc.1).
+- **publish (node-platform)**: verify non-strict (NAPI stub sub-packages don't contain `.node` binaries for unbuilt platforms; was aborting node publish in rc.1).
+- **publish (wasm)**: bound build timeout (90 min) + dedicated cache key to survive GitHub runner preemption that cancelled rc.1's WASM build at ~12 min.
+- **publish (elixir)**: NIF matrix expansion (Elixir NIF matrix `include` without standalone `os` key was silently overwriting and only producing the Windows NIF; now produces all 12 NIFs across linux + macOS + windows + arm).
+
+- **java**: align alef output path to pom.xml `<sourceDirectory>`. The alef backend appends `dev/kreuzberg/` to the configured output; the previous setting produced files at `packages/java/src/main/java/dev/kreuzberg/*.java` but pom.xml's `sourceDirectory=${project.basedir}` expects `packages/java/dev/kreuzberg/*.java`. This fixes Maven compilation failures where the rc.1 JAR was missing generated classes like `JsonUtil` and the plugin registration methods. (`alef.toml`) The alef backend appends the package path (`dev/kreuzberg/`) to the configured output, so `packages/java/src/main/java/` generated files to `packages/java/src/main/java/dev/kreuzberg/*.java`, but pom.xml's `sourceDirectory=${project.basedir}` expects files at `packages/java/dev/kreuzberg/*.java`. This fixes Maven compilation failures where the JAR was missing generated classes like `JsonUtil` and plugin registration methods. The pom.xml layout already matches the FFI-style bindings (Go, C#, Dart, etc.), so aligning Java to the same convention restores consistency. (`alef.toml`)
+
+### Changed
+
+- **deps**: bump alef pin to v0.19.5 (bundles AHashMap binding fixes for FFI/Dart/Swift/Elixir/Ruby/PHP and WASM emitter dedup + collect + From-impl + sub-config deserialize fixes).
+
+### Fixed
+
+- **bindings**: Stop emitting `calculate_quality_score` in language bindings — was made `pub(crate)` in commit `088168665a`, exposing an internal detail of `text::quality` module that was never part of the public API. The function's signature (`Option<&AHashMap<Cow<'static, str>, Value>>` → `f64`) references non-public generic types that don't FFI-convert cleanly (specifically, `as_deref()` failed on `Option<HashMap>` which doesn't implement `Deref`). Added `calculate_quality_score` to `exclude_functions` in `alef.toml` for all languages (Python, Node, Ruby, PHP, Go, Java, Dart, Kotlin Android, Swift, C#, R, Zig, Elixir, FFI) so the function is not exposed in any generated binding. All library builds now succeed without type-checking failures. (`alef.toml`)
+
+- **swift**: Regenerate `packages/swift/rust/src/lib.rs` and `packages/swift/rust/Cargo.toml` with alef v0.19.5 fixes for `AHashMap<Cow, _>` param types. The prior generated code for `calculate_quality_score` attempted `&serde_json::from_str::<HashMap<String, String>>(&metadata).expect("...")` on an `Option<String>` parameter, producing two compile errors: (1) `HashMap` does not implement `Deref` so `.as_deref()` was not available, and (2) the deserialized `HashMap<String, V>` did not match the core function's expected `Option<&AHashMap<Cow<'static, str>, Value>>`. Fixed by alef v0.19.5: the Swift shim now emits a pre-call `let __metadata_ahash` binding that deserializes the JSON string into `HashMap<String, String>`, converts to `AHashMap<Cow::Owned, Value::String>`, and passes `.as_ref()` to the core. Added unconditional `ahash = "0.8"` to `packages/swift/rust/Cargo.toml` so generated Swift crates reference `ahash::AHashMap` without manual additions. (`packages/swift/rust/src/lib.rs`, `packages/swift/rust/Cargo.toml`)
+
+- **ffi + dart**: Regenerate `crates/kreuzberg-ffi/src/lib.rs` and `packages/dart/rust/src/lib.rs` with alef v0.19.5 fixes for `AHashMap<Cow, _>` param types. In the FFI shim, the prior generated code emitted `serde_json::from_str::<HashMap<String, V>>` and `.as_deref()` for the `metadata` parameter of `kreuzberg_calculate_quality_score`, producing two compile errors: `HashMap` does not implement `Deref` (so `.as_deref()` fails) and the deserialized `HashMap<String, V>` did not match the core function's expected `Option<&AHashMap<Cow<'static, str>, Value>>`. In the Dart FRB bridge, the prior code attempted `&metadata` where `metadata: Option<HashMap<String, String>>`, which also fails to type-check against the core. Both are fixed by alef v0.19.5: the FFI emitter now deserializes into `ahash::AHashMap<Cow<'static, str>, Value>` and uses `.as_ref()`; the Dart bridge emits a pre-call `let __metadata_ahash` binding that converts `HashMap<String, String>` to `AHashMap<Cow, Value>` before borrowing. Added `ahash = "0.8"` to `crates/kreuzberg-ffi/Cargo.toml` and `packages/dart/rust/Cargo.toml` since both generated files reference `ahash::AHashMap` directly. (`crates/kreuzberg-ffi/src/lib.rs`, `crates/kreuzberg-ffi/Cargo.toml`, `packages/dart/rust/src/lib.rs`, `packages/dart/rust/Cargo.toml`)
+
+- **dart**: Regenerated `packages/dart/rust/src/frb_generated.rs` via `flutter_rust_bridge_codegen generate` to pick up type changes from alef v0.19.4 regen. The stale codegen file expected `Option<String>` for bbox fields (`DocumentNode.bbox`, `ElementMetadata.coordinates`, `ExtractedImage.bounding_box`, `GridCell.bbox`, `LayoutRegion.bounding_box`, `PdfAnnotation.bounding_box`, `Table.bounding_box`) and `Vec<String>` for attribute fields, but kreuzberg's recent type updates now expose `BoundingBox` as a concrete struct and attributes as nested vectors. The regenerated file now correctly type-checks against the current Rust core. Also fixed a type mismatch in the `calculate_quality_score` wrapper: the FFI-friendly signature takes `Option<HashMap<String, String>>` but the core function expects `Option<&AHashMap<Cow, Value>>`, so the wrapper now converts the Dart-friendly types to the Rust core format. Added `ahash = "0.8"` dependency to `packages/dart/rust/Cargo.toml` to support the conversion. Fixes macOS arm64 CI build failures. (`packages/dart/rust/src/frb_generated.rs`, `packages/dart/rust/src/lib.rs`, `packages/dart/rust/Cargo.toml`)
+
+- **ci**: `.github/workflows/ci-docs.yaml` `lint-docs` job pinned `alef-ref` to `v0.16.69`, so the docs linter ran against a stale alef while generated bindings were produced by the current version (v0.19.4). The version skew caused the docs validation to fail on the first regen push. Bumped to `v0.19.4` to match `alef.toml`. (`.github/workflows/ci-docs.yaml`)
+
+- **python**: `_to_rust_chunking_config` no longer passes `sizing=None` to the PyO3 `ChunkingConfig` constructor, which raised `TypeError: argument 'sizing': 'None' is not an instance of 'ChunkSizing'`. The constructor's PyO3 signature provides `ChunkSizing::default()` when `sizing` is omitted, so the Python wrapper now omits the key from kwargs when the user-facing field is `None`, allowing the Rust default to apply. Fixes `test_config_chunking_prepend_heading_context` in the Python e2e suite. (`packages/python/kreuzberg/api.py`)
+
+- **bindings**: Expose `BoundingBox` in all alef-generated bindings (Java, C#, Go, Dart, Swift, Kotlin Android, etc.) by removing `#[cfg_attr(alef, alef(skip))]` from `crates/kreuzberg/src/types/extraction.rs`. The type appears as a field on `Table`, `OcrElement`, `ElementMetadata`, `Annotation`, and `Page`; with the type skipped alef fell back to opaque `String`/`Object` mappings, breaking Jackson/JSON deserialization (Java e2e `testConfigSecurityLimits` failed with `Cannot deserialize value of type 'java.lang.String' from Object value` for `Table.boundingBox`). Exposing the type generates a proper record/struct everywhere and unblocks the full Java e2e suite (88/88). (`crates/kreuzberg/src/types/extraction.rs`)
+
+- **embeddings**: Serialize concurrent first-time model downloads across processes. `hf-hub`'s own download lock is non-blocking and retries for only ~5s — far shorter than a 100MB+ sentence-transformer model download — so racing processes (e.g. parallel e2e workers) failed outright with `ApiError::LockAcquisition`. `download_model_files` now holds a blocking `flock(LOCK_EX)` on a kreuzberg-owned lock file (`<cache>/models--<repo>/.kbz-download.lock`) for the full download; other processes block until release, then find the model already cached. The lock is released on drop or by the OS on process exit. Non-unix targets fall back to the prior `hf-hub` behavior. (`crates/kreuzberg/src/embeddings/mod.rs`)
+
+- **core**: The global OCR backend registry now self-heals after `clear_ocr_backends`. `OcrBackendRegistry` is the only plugin registry seeded with built-in backends (Tesseract/PaddleOCR/VLM) at construction, and the image extractor looks them up by name with no fallback — so calling `clear_ocr_backends()` permanently broke OCR for the rest of the process. This caused a test-pollution failure in the cross-language e2e suites: the `ocr_backend_management` category (which runs `clear_ocr_backends`) sorts before `smoke`, so the OCR smoke test then failed with `OCR backend 'tesseract' not registered. Available backends: []`. The built-in registration logic is now factored into `OcrBackendRegistry::register_defaults`, and a new crate-internal `ensure_ocr_backends_initialized` re-seeds the registry when it is empty — mirroring the existing `extractors::ensure_initialized` self-heal for the document extractor registry. The image extractor calls it before every OCR dispatch. (`crates/kreuzberg/src/plugins/registry/ocr.rs`, `crates/kreuzberg/src/plugins/ocr.rs`, `crates/kreuzberg/src/plugins/mod.rs`, `crates/kreuzberg/src/extractors/image.rs`)
+
+- **kotlin-android**: Exclude trait bridge interfaces from code generation by adding `exclude_languages = ["kotlin_android"]` to all trait bridge definitions in `alef.toml` (`OcrBackend`, `PostProcessor`, `Validator`, `EmbeddingBackend`, `DocumentExtractor`, `Renderer`). The alef-backend-java emits trait bridge classes with Java Panama FFM imports (`java.lang.foreign.*`), which are not available on Android. Kotlin-Android is JNI-only (no trait bridge support yet) and doesn't need these interfaces. This prevents compilation errors in `packages/kotlin-android/src/main/java/` from missing Panama FFM API classes.
+
+- **swift**: Added `render_pdf_page_to_png` Swift call override in `alef.toml` with explicit argument definitions including optional `dpi` and `password` parameters, plus updated PDF fixtures to include null values for these fields. Resolved compilation errors in `e2e/swift_e2e/Tests/KreuzbergE2ETests/PdfTests.swift` where the generated function calls were missing the required named arguments. Also added `swift` to `skip_languages` for `embed_texts_async` call since async function naming conflicts prevent the binding from generating `embedTextsAsync()` — Callers should use the async wrapper from `embed_texts` instead. This resolves all 7 Swift compilation errors and reduces test failures to 1 (OCR backend registration runtime issue). (`alef.toml`, `fixtures/pdf/`, `e2e/swift_e2e/`)
+
+- **kotlin-android**: Added `crates/kreuzberg/src/types/internal.rs` to alef.toml sources list so `InternalDocument` is extracted and generated for Kotlin bindings. The type is used in trait bridge method signatures (e.g., `IRenderer::render(doc: InternalDocument)`) and must be available for the generated interface to compile. Previously the generated Kotlin code referenced `InternalDocument` but the type was never extracted (missing source file), causing "Unresolved reference" errors. The skip attribute was already removed in pass-2 (`bf80c2fce7`); this completes the fix by ensuring the type is extracted. (`alef.toml`)
+
+- **kotlin-android**: Added `embed_texts_async` to `exclude_functions` in `alef.toml`. The function creates a naming conflict with the suspend wrapper of `embed_texts` — both generate `suspend fun embedTextsAsync()` in Kotlin, causing overload ambiguity. Callers should use the suspend function from `embed_texts` instead. This resolves duplicate function declaration errors in the generated `Kreuzberg.kt`. (`alef.toml`)
+
+### Changed
+
+- **alef**: bumped to v0.17.24. Regenerated all bindings and e2e tests. v0.17.24 includes: conditional `#[php(prop)]` for Prop-compatible types only (fixes E0277 errors for non-Prop fields), Kotlin/Android codegen fixes (named struct field default-construction, sealed-class field annotations, JNI single-param `is_optional` propagation), Dart pubspec single-caret version constraint, alef-e2e/zig module_name path fix, valid `build.zig.zon` declarations, scaffold wasm filename underscore conversion, alef-e2e/csharp synthetic chunk assertion inline predicates (`chunks_have_heading_context`, `first_chunk_starts_with_heading`), alef-e2e/python equivalent. Known regression: `e2e/csharp/tests/ContractTests.cs` is no longer emitted by the C# e2e generator; other languages still emit their contract test file (tracked for upstream fix). (`alef.toml`, ~935 regenerated files)
+
+- **ci**: Split pub.dev publishing into a dedicated `publish-pubdev.yaml` workflow. pub.dev OIDC trusted publishing rejects tokens from `release` events; only `push` and `workflow_dispatch` are accepted. The Dart package embeds platform-specific native binaries (Android JNI, iOS XCFramework, server libs), so the main workflow now assembles them into a `dart-package-assembled` artifact and dispatches `publish-pubdev.yaml` via `workflow_dispatch` with the run ID; that workflow downloads the artifact and publishes. One-time setup required: configure pub.dev → kreuzberg package → Admin → Automated publishing with workflow path `.github/workflows/publish-pubdev.yaml`.
+
+### Fixed
+
+- **demo**: WASM extraction now runs in a per-file Web Worker, keeping the main thread unblocked throughout. Fixes page freeze on repeated use, stale output visible during a new extraction, and the 30s timeout that could never fire when the main-thread event loop was blocked. The `ArrayBuffer` is transferred (not copied) to halve peak memory on large files. Dead `importmap` entries (`tesseract-wasm`, `comlink`) and the top-level `initWasm`/`enableOcr` call were removed; WASM initialisation now happens inside the Worker. All `console.error` calls are replaced by the `[kreuzberg/wasm]`-prefixed `log` helper so DevTools filtering works. (`docs/demo.html`, #992)
+
+- **e2e/csharp**: Added `nested_types` mappings and `options_via = "from_json"` overrides to `alef.toml` C# call configurations. When fixture values are sealed-union or complex config types (EmbeddingModelType, EmbeddingConfig, ChunkingConfig, KeywordConfig, etc.), the codegen now emits `JsonSerializer.Deserialize<T>(json, ConfigOptions)!` instead of raw string literals, eliminating type-mismatch compile errors. Top-level nested_types apply across all calls; per-call overrides refine for specific functions. Reduces e2e/csharp compile errors from 11 to 3 (remaining: `metadata.Format.Trim()` sealed-union bug and `chunks_have_heading_context` synthetic predicate routing — tracked for upstream alef codegen fixes).
+
+- **Taskfile**: `kotlin:e2e` now passes `--lang kotlin_android` to `alef test`, matching the language key declared in `alef.toml`. Previously the task invoked `alef test --e2e --lang kotlin` which produced `Language 'kotlin' not in config languages list or test configuration`. (`Taskfile.yml`)
+
+- **core**: `EmbeddingModelType::default()` now returns `Preset { name: "balanced" }` instead of `Preset { name: "" }`. Language binding mirror structs (Ruby, PHP, and others) have their own `EmbeddingModelType` with a derived or hand-written `Default` that calls `String::default()` (empty) for the `name` field; when that flows through `From<EmbeddingModelType>` into `kreuzberg::embed_texts_async`, `get_preset("")` returns `None`, causing "Unknown embedding preset: " errors. All defaults across the codebase converge on "balanced", so the `Default` impl is now consistent with `default_model()` and `EmbeddingConfig::default()`. Added a unit test `test_embedding_model_type_default_is_balanced` to lock this in. (`crates/kreuzberg/src/core/config/processing.rs`)
+
+- **e2e/elixir**: Regenerated with alef v0.17.19, which fixes a keyword-opts threshold bug in the Elixir e2e codegen. When a call had 2+ trailing optional parameters (e.g., `mime_type`, `config`), the codegen now emits all optional args in keyword form (`mime_type: "...", config: "..."`), not mixed positional and keyword (`mime_type: "...", "{}"`). This respects Elixir's syntax requirement that all positional args come before keyword args. Fixes smoke_test and other e2e test compile errors. (`alef.toml`, `e2e/elixir/test/*_test.exs`)
+
+- **e2e/r**: Marked the `config` argument of `embed_texts_async` as `optional = true` in `alef.toml` so generated e2e tests for languages whose fixtures omit a config (R, Python, Node) no longer call the binding without it. Previously the R wrapper signature `function(texts, config)` had no default and the empty/happy fixtures failed with `argument "config" is missing, with no default`. Regenerated all per-language `embed_async_pending` test suites via `alef generate`. Brings R e2e from 155/158 PASS to 159/160 PASS; the only remaining failure (`test_smoke.R` tesseract OCR backend) is environmental. (`alef.toml`, `e2e/*/...embed_async_pending*`)
+
+- **deps**: Loosened `tar` requirement in `crates/kreuzberg/Cargo.toml` from `^0.4.46` back to `^0.4` so it remains compatible with `tree-sitter-language-pack v1.8.1`, which locks `tar` to `0.4.45`. The pinned floor prevented the e2e/rust crate from resolving a consistent version. (`crates/kreuzberg/Cargo.toml`)
+
+### Fixed (core: code_intelligence Go type mismatch)
+
+- **core**: Changed `ExtractionResult.code_intelligence` field type from `Option<crate::ProcessResult>` to `Option<serde_json::Value>`. The `ProcessResult` type lives in `tree_sitter_language_pack` — an external crate whose struct layout alef cannot resolve — so the Go backend emitted `*string`, causing `cannot unmarshal object into string` at runtime. Using `serde_json::Value` maps to `json.RawMessage` in Go, preserving full JSON fidelity while being opaque to alef. Updated `extraction/derive.rs` to serialize the `ProcessResult` before assignment; a `tracing::warn!` guards the rare serialization failure. (`crates/kreuzberg/src/types/extraction.rs`, `crates/kreuzberg/src/extraction/derive.rs`, `packages/go/v5/binding.go`)
+
+### Fixed (core: chunk_size=0 panic)
+
+- **core**: `build_chunk_config` in `crates/kreuzberg/src/chunking/builder.rs` now clamps `max_characters == 0` to 1000 (the `default_chunk_size` value) instead of forwarding zero to `text-splitter`, which panics with `chunk size must be non-zero`. Binding mirror structs whose `serde(default)` zeroes the field no longer abort the host process. A `tracing::warn!` line logs the clamp. (`crates/kreuzberg/src/chunking/builder.rs`)
+
+### Fixed (core: null-tolerant serde for ChunkSizing, EmbeddingModelType, FormatMetadata::Image uppercase)
+
+- **core**: `ChunkingConfig.sizing` and `EmbeddingConfig.model` fields now tolerate explicit JSON `null` (in addition to missing fields). Language binding mirror structs emit `"sizing": null` / `"model": null` from zero-valued structs; the previous `#[serde(default)]` annotation handled a missing key but not an explicit null for internally-tagged enums. Added `deserialize_null_default<T>` and `deserialize_null_model` helpers in `processing.rs` and switched both fields to use them. (`crates/kreuzberg/src/core/config/processing.rs`)
+- **core**: `FormatMetadata::Image` `Display` impl now emits the format string in uppercase (e.g., `"PNG"` instead of `"png"`), matching the fixture assertion convention used across all language e2e suites. (`crates/kreuzberg/src/types/metadata.rs`)
+
+### Fixed (e2e/php: hermetic ini)
+
+- **scripts/setup-php-ext-ini.sh + alef.toml**: PHP e2e runs were failing system-wide because a sibling project (tree-sitter-language-pack) had left a stale `/opt/homebrew/etc/php/8.4/conf.d/ext-kreuzberg.ini` pointing at a non-existent `ts_pack_core_php.so`. The local `php -c php.ini` flag only overrides the main `php.ini` path, not the scan-dir, so the stale entry kept being loaded. Hardened the e2e launcher to set `PHP_INI_SCAN_DIR=` (disabling conf.d scanning entirely) and made the generated `e2e/php/php.ini` set `extension_dir` explicitly so the hermetic config still finds the built extension. PHP e2e is now reproducible without depending on the host's conf.d state.
+
+### Fixed (R e2e: 159/160, only env tesseract failure remains)
+
+- **e2e/r**: Regenerated against alef with four R codegen fixes (no-arg-wrapper input leakage, empty `Vec<String>` → `character(0)`, R-side `extra_args` support, FormatMetadata tagged-enum collapse helper + `result_is_bytes`-aware length assertions). Added an R override on `render_pdf_page_to_png` with `extra_args = ["NULL", "NULL"]` to fill in the extendr-required `dpi`/`password` positionals when the fixture omits them. Combined, kreuzberg R e2e moves from 153/158 to 159/160 — the remaining failure (`test_smoke.R:9:3` PNG-with-OCR) is the pre-existing `tesseract not registered` env condition. (`alef.toml`, `e2e/r/`)
+
+### Fixed (Zig e2e: all 88 tests passing)
+
+- **e2e/zig**: Bumped pinned `alef_version` to 0.17.17 and regenerated `e2e/zig/` against the upstream codegen fix that skips the `chunks_have_heading_context` synthetic assertion. Combined with pre-existing zig-specific overrides (`extract_file` and `extract_bytes` redirected to their `_sync` variants with JSON-struct result parsing, `render_pdf_page_to_png` extra `null, null` args for dpi/password, and FormatMetadata-as-display inline accessor on the `metadata.format` assertion), `task zig:e2e` now reports `Build Summary: 43/43 steps succeeded; 88/88 tests passed`. (`alef.toml`, `e2e/zig/`)
+
+### Fixed (Go bindings: re-exported ProcessResult path)
+
+- **core**: Switched `ExtractionResult.code_intelligence` from `Option<tree_sitter_language_pack::ProcessResult>` to `Option<crate::ProcessResult>` so alef's type visitor resolves the re-exported name and emits the correct `*ProcessResult` Go binding type. Previously alef fell back to `*string`, producing `cannot unmarshal object into string` errors at runtime.
+
+### Fixed (DrawingType alef-skip, zig binding ffi_path)
+
+- **core**: Annotate `DrawingType` enum in `crates/kreuzberg/src/extraction/docx/drawing.rs`
+  with `#[cfg_attr(alef, alef(skip))]`. The enclosing `Drawing` struct was already
+  skipped but its inner enum was not, so alef R binding gen emitted
+  `impl From<kreuzberg::DrawingType> for ...` and broke `packages/r/src/rust/src/lib.rs`
+  with five `kreuzberg::DrawingType not found` errors.
+- **packages/zig/build.zig**: Default `ffi_path` updated from `../../target/debug`
+  to `../../target/release` so `zig build test` finds the FFI artifact built by the
+  alef test before-hook (`cargo build --release -p kreuzberg-ffi`). Mirrors the
+  alef-scaffold/zig fix.
+
+### Fixed (FormatMetadata Display impl)
+
+- **core**: Added `impl std::fmt::Display for FormatMetadata` so generated rust e2e
+  assertions on `metadata.format` can render the variant as a short string ("pdf",
+  "docx", "image"…). The Image variant emits the inner `format` (e.g., "PNG"),
+  matching the fixture's `field_equals` value. Required after alef-e2e/rust
+  switched to Display formatting in `field_access::rust_unwrap_binding`.
+
+### Fixed (java e2e clear_* methods)
+
+- **java e2e**: `clear_document_extractors()`, `clear_ocr_backends()`,
+  `clear_embedding_backends()`, `clear_post_processors()`,
+  `clear_renderers()`, `clear_validators()` now generate in the `Kreuzberg`
+  facade class. Root cause: `#[cfg_attr(alef, alef(skip))]` annotations on
+  these functions prevented alef from picking them up during Rust API
+  extraction. Removed the annotations from the 6 `clear_*()` functions (only;
+  `register_*/unregister_*` still skipped since they take `Arc<dyn Trait>`
+  params unsuitable for FFI). Re-generated all language bindings.
+
+### Fixed (kotlin-android e2e parity sweep)
+
+- **kotlin-android**: now honours `#[cfg_attr(alef, alef(skip))]` annotations
+  during DTO and enum emission (alef-backend-kotlin-android filter fix).
+- **alef-extract disambiguation**: when two types collide and one carries
+  `binding_excluded=true`, the non-excluded one now keeps the original name
+  (instead of getting a "2" suffix). Eliminates spurious `EmbeddingPreset2`,
+  `NodeContent2`, `LayoutClass2`, `PaddleLanguage2`, `FormatMetadata2`,
+  `ExtractionMethod2` from the IR.
+- **`pdf/metadata.rs::PdfMetadata`**: removed incorrect `alef(skip)`
+  annotation — there's only one definition (no duplicate to disambiguate),
+  so the annotation was hiding the only public type from bindings.
+- **stale kotlin-android wrappers**: 28+ leftover `*2.kt`,
+  `OcrTesseractConfig.kt`, `PdfMetadata.kt`, `ListType.kt`, `TableTableGrid.kt`,
+  `ArchiveArchive*.kt` files removed after the disambiguation fix.
+- **alef-e2e trait-bridge fixture support**: lifted the deferred-to-v0.14.5+
+  gate; trait-bridge fixtures (register/unregister/clear × 6 traits) now
+  generate per-language test calls.
+- **alef-extract embed_texts_async**: confirmed the cfg-gated generic
+  signature extracts cleanly; cleared the 3 stale skip blocks on
+  `embed_async_pending/embed_texts_async_*.json`.
+- **e2e generation surface**: regenerated all 16 language e2e suites. All
+  trait-bridge + plugin_api categories now exercise the full public API.
+  Only legitimate WASM/Rust platform-imposed skips remain (7× WASM-async,
+  1× Rust-missing-file-path).
+
+### Fixed (#985 pdf image extraction hang)
+
+- **PDF image extraction hang on dense pages (#985)**: `extract_image_positions`
+  previously ran a full decompression pass over every page unconditionally — even
+  when `extract_images=false` — causing multi-minute hangs on PDFs with many image
+  objects per page (e.g. InDesign/Acrobat exports). The pre-pass is eliminated;
+  image positions are now derived from the capped extraction result, so the
+  decompression path is skipped entirely when images are not requested. Also adds
+  cancellation-token support inside `extract_images_with_data` so
+  `extraction_timeout_secs` can interrupt multi-page extraction between pages, and
+  inside the inline-OCR image loop so a timeout can interrupt per-image OCR.
+
+  `max_images_per_page` now bounds decompression for XObject images: the pdf_oxide
+  backend enumerates the page XObject resource dictionary and stops decompressing
+  after `limit` images, avoiding the eager cost of `extract_images()` for images
+  beyond the cap. Inline images (`BI`/`EI` content-stream operators) fall back to
+  the eager path with a `.take(limit)` guard; full inline-image support is tracked
+  in #989.
+
+- **`kreuzberg::utils::pool` API simplified**: `Pool::acquire()` is now infallible
+  — it returns `PoolGuard<T>` directly instead of `Result<PoolGuard<T>, PoolError>`.
+  `PoolError` is removed. `parking_lot::Mutex` cannot poison, so the `Result`
+  wrapper was dead code. `Pool`, `PoolGuard`, `Recyclable`, `StringBufferPool`, and
+  `ByteBufferPool` are marked `#[doc(hidden)]` — they were technically reachable via
+  `kreuzberg::utils::pool` but were never part of the stable public API.
+
+### Added
+
+- **`kreuzberg` crate root**: plugin_api surface (`list_*`, `clear_*`, `register_*`,
+  `unregister_*` for all six plugin types; `detect_mime_type_from_bytes`,
+  `get_extensions_for_mime`) was already present in the internal module tree but not
+  wired up as top-level `pub use` items. The re-exports are now confirmed in place and
+  the 9 e2e fixtures that carried a stale "not re-exported" skip block have had that
+  block removed — those fixtures are now active across all language targets.
+
+### Fixed
+
+- **alef-backend-php**: emit reverse `From<binding> for kreuzberg::Core` impls for metadata DTOs
+  (ArchiveMetadata, BibtexMetadata, DocxMetadata, EmailMetadata, EpubMetadata, ExcelMetadata,
+  FictionBookMetadata, HtmlMetadata, ImageMetadata, JatsMetadata, OcrMetadata, PptxMetadata,
+  PstMetadata, TextMetadata, XmlMetadata, CitationMetadata, CsvMetadata, DbfMetadata, TableGrid).
+  Reverse From impls are required for flat enum binding→core conversion which calls `.into()` on
+  optional variant fields. Previously only forward impls were generated.
 
 - **Java `UnsatisfiedLinkError` on `kreuzberg_list_embedding_presets` / `kreuzberg_get_embedding_preset` (#998)**:
   the alef-generated FFI surface references `kreuzberg::EmbeddingPreset` unconditionally
@@ -20,6 +240,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `crates/kreuzberg/src/lib.rs`: a no-op `EmbeddingPreset` struct and empty-return
   implementations of both functions. The stubs ensure the symbols are always present
   and callers degrade gracefully (empty list / `null` handle) instead of crashing.
+
+- **#962**: PDF text extracted one character per line on glyph-spaced documents
+  (programmatic reproducer in `crates/kreuzberg/tests/pdf_glyph_spacing_issue_962.rs`)
+  — when a Word-exported PDF places each glyph via its own `BT…ET` block with a
+  sinusoidal y-jitter, pdf_oxide's ColumnAware reading order groups spans by y-level
+  rather than reading order, yielding single-character spans out of sequence. Detection:
+  ≥ 3 same-line x-disorder events among short (≤ 3 char) spans, where "same-line" uses
+  a 5 pt absolute ceiling (`MAX_GLYPH_JITTER_PT`) instead of a font-size fraction,
+  preventing false positives on height-zero span lists from normal documents.
+  Reconstruction: sort by y-descending, group by 5 pt y-proximity, re-sort each group
+  by x-ascending, insert spaces at word gaps (x-gap > `font_size × 0.5`). Heuristic
+  constants live in `crate::pdf::structure::constants` with measurement justification;
+  upstream fix shipped in pdf_oxide v0.3.51 (issue #518, closed 2026-05-19);
+  heuristic removable when kreuzberg upgrades to ≥ 0.3.51. Dutch word `relatie` (from
+  "relatie-id" in the Word broken-image placeholder string) added to `.typos.toml`.
 
 ### Changed
 

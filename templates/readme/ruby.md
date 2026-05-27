@@ -4,6 +4,13 @@
 
 {{ description }}
 
+## What This Package Provides
+
+- **Ruby-native extraction** — idiomatic Ruby objects over the shared Rust document engine.
+- **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings.
+- **OCR support** — Tesseract and PaddleOCR through the same configuration model as other bindings.
+- **Cross-binding parity** — output matches the Python, Node.js, Go, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
+
 ## Installation
 
 Add to your Gemfile:

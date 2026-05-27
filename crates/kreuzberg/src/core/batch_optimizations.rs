@@ -18,7 +18,6 @@
 
 use crate::utils::pool::{ByteBufferPool, StringBufferPool, create_byte_buffer_pool, create_string_buffer_pool};
 use crate::utils::pool_sizing::PoolSizeHint;
-use crate::{KreuzbergError, Result};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -221,20 +220,13 @@ impl BatchProcessor {
     ///
     /// Useful for memory-constrained environments or to reclaim memory
     /// after processing large batches.
-    pub fn clear_pools(&self) -> Result<()> {
-        let pool_opt = self.string_pool.lock();
-        if let Some(pool) = pool_opt.as_ref() {
-            pool.clear()
-                .map_err(|e| KreuzbergError::Other(format!("string pool error: {}", e)))?;
+    pub fn clear_pools(&self) {
+        if let Some(pool) = self.string_pool.lock().as_ref() {
+            pool.clear();
         }
-
-        let pool_opt = self.byte_pool.lock();
-        if let Some(pool) = pool_opt.as_ref() {
-            pool.clear()
-                .map_err(|e| KreuzbergError::Other(format!("byte pool error: {}", e)))?;
+        if let Some(pool) = self.byte_pool.lock().as_ref() {
+            pool.clear();
         }
-
-        Ok(())
     }
 }
 
@@ -276,12 +268,12 @@ mod tests {
         let pool = processor.string_pool();
 
         {
-            let mut s = pool.acquire().unwrap();
+            let mut s = pool.acquire();
             s.push_str("test");
         }
 
         {
-            let s = pool.acquire().unwrap();
+            let s = pool.acquire();
             assert_eq!(s.len(), 0);
         }
     }
@@ -292,12 +284,12 @@ mod tests {
         let pool = processor.byte_pool();
 
         {
-            let mut buf = pool.acquire().unwrap();
+            let mut buf = pool.acquire();
             buf.extend_from_slice(b"test");
         }
 
         {
-            let buf = pool.acquire().unwrap();
+            let buf = pool.acquire();
             assert_eq!(buf.len(), 0);
         }
     }
@@ -306,8 +298,8 @@ mod tests {
     fn test_batch_processor_clear_pools() {
         let processor = BatchProcessor::new();
 
-        let s1 = processor.string_pool().acquire().unwrap();
-        let s2 = processor.byte_pool().acquire().unwrap();
+        let s1 = processor.string_pool().acquire();
+        let s2 = processor.byte_pool().acquire();
 
         drop(s1);
         drop(s2);
@@ -315,7 +307,7 @@ mod tests {
         assert!(processor.string_pool_size() > 0);
         assert!(processor.byte_pool_size() > 0);
 
-        processor.clear_pools().unwrap();
+        processor.clear_pools();
 
         assert_eq!(processor.string_pool_size(), 0);
         assert_eq!(processor.byte_pool_size(), 0);

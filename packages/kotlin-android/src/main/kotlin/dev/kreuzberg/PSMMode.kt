@@ -17,23 +17,58 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Page Segmentation Mode for Tesseract OCR
- */
+/** Page Segmentation Mode for Tesseract OCR */
 enum class PSMMode {
-    OSD_ONLY,
-    AUTO_OSD,
-    AUTO_ONLY,
-    AUTO,
-    SINGLE_COLUMN,
-    SINGLE_BLOCK_VERTICAL,
-    SINGLE_BLOCK,
-    SINGLE_LINE,
-    SINGLE_WORD,
-    CIRCLE_WORD,
-    SINGLE_CHAR;
+    @com.fasterxml.jackson.annotation.JsonProperty("OsdOnly") OSD_ONLY,
+    @com.fasterxml.jackson.annotation.JsonProperty("AutoOsd") AUTO_OSD,
+    @com.fasterxml.jackson.annotation.JsonProperty("AutoOnly") AUTO_ONLY,
+    @com.fasterxml.jackson.annotation.JsonProperty("Auto") AUTO,
+    @com.fasterxml.jackson.annotation.JsonProperty("SingleColumn") SINGLE_COLUMN,
+    @com.fasterxml.jackson.annotation.JsonProperty("SingleBlockVertical") SINGLE_BLOCK_VERTICAL,
+    @com.fasterxml.jackson.annotation.JsonProperty("SingleBlock") SINGLE_BLOCK,
+    @com.fasterxml.jackson.annotation.JsonProperty("SingleLine") SINGLE_LINE,
+    @com.fasterxml.jackson.annotation.JsonProperty("SingleWord") SINGLE_WORD,
+    @com.fasterxml.jackson.annotation.JsonProperty("CircleWord") CIRCLE_WORD,
+    @com.fasterxml.jackson.annotation.JsonProperty("SingleChar") SINGLE_CHAR;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            OSD_ONLY -> "OsdOnly"
+            AUTO_OSD -> "AutoOsd"
+            AUTO_ONLY -> "AutoOnly"
+            AUTO -> "Auto"
+            SINGLE_COLUMN -> "SingleColumn"
+            SINGLE_BLOCK_VERTICAL -> "SingleBlockVertical"
+            SINGLE_BLOCK -> "SingleBlock"
+            SINGLE_LINE -> "SingleLine"
+            SINGLE_WORD -> "SingleWord"
+            CIRCLE_WORD -> "CircleWord"
+            SINGLE_CHAR -> "SingleChar"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): PSMMode =
+            when (value) {
+                "OsdOnly" -> OSD_ONLY
+                "AutoOsd" -> AUTO_OSD
+                "AutoOnly" -> AUTO_ONLY
+                "Auto" -> AUTO
+                "SingleColumn" -> SINGLE_COLUMN
+                "SingleBlockVertical" -> SINGLE_BLOCK_VERTICAL
+                "SingleBlock" -> SINGLE_BLOCK
+                "SingleLine" -> SINGLE_LINE
+                "SingleWord" -> SINGLE_WORD
+                "CircleWord" -> CIRCLE_WORD
+                "SingleChar" -> SINGLE_CHAR
+                else -> throw IllegalArgumentException("Unknown PSMMode value: $value")
+            }
+    }
 }

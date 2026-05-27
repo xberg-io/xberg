@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,28 +25,22 @@ package dev.kreuzberg
 /**
  * Preset configurations for common RAG use cases.
  *
- * Each preset combines chunk size, overlap, and embedding model
- * to provide an optimized configuration for specific scenarios.
+ * Each preset combines chunk size, overlap, and embedding model to provide an optimized
+ * configuration for specific scenarios.
  *
- * All string fields are owned `String` for FFI compatibility — instances
- * are safe to clone and pass across language boundaries.
+ * All string fields are owned `String` for FFI compatibility — instances are safe to clone and pass
+ * across language boundaries.
  */
 data class EmbeddingPreset(
     val name: String,
     val chunkSize: Long,
     val overlap: Long,
-    /**
-     * HuggingFace repository name for the model.
-     */
+    /** HuggingFace repository name for the model. */
     val modelRepo: String,
-    /**
-     * Pooling strategy: "cls" or "mean".
-     */
+    /** Pooling strategy: "cls" or "mean". */
     val pooling: String,
-    /**
-     * Path to the ONNX model file within the repo.
-     */
+    /** Path to the ONNX model file within the repo. */
     val modelFile: String,
     val dimensions: Long,
-    val description: String
+    val description: String,
 )

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,17 +25,15 @@ package dev.kreuzberg
 /**
  * A non-fatal warning from a processing pipeline stage.
  *
- * Captures errors from optional features that don't prevent extraction
- * but may indicate degraded results.
+ * Captures errors from optional features that don't prevent extraction but may indicate degraded
+ * results.
  */
 data class ProcessingWarning(
     /**
-     * The pipeline stage or feature that produced this warning
-     * (e.g., "embedding", "chunking", "language_detection", "output_format").
+     * The pipeline stage or feature that produced this warning (e.g., "embedding", "chunking",
+     * "language_detection", "output_format").
      */
     val source: String,
-    /**
-     * Human-readable description of what went wrong.
-     */
-    val message: String
+    /** Human-readable description of what went wrong. */
+    val message: String,
 )

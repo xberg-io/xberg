@@ -2,7 +2,7 @@
 title: "Kotlin API Reference"
 ---
 
-## Kotlin API Reference <span class="version-badge">v5.0.0-rc.1</span>
+## Kotlin API Reference <span class="version-badge">v5.0.0-rc.3</span>
 
 ### Functions
 
@@ -1143,13 +1143,13 @@ Trait for document extractor plugins.
 Implement this trait to add support for new document formats or to override
 built-in extraction behavior with custom logic.
 
-# Return Type
+## Return Type
 
 Extractors return `InternalDocument`, a flat intermediate representation.
 The pipeline converts this into the public `ExtractionResult` via the
 derivation step.
 
-# Priority System
+## Priority System
 
 When multiple extractors support the same MIME type, the registry selects
 the extractor with the highest priority value. Use this to:
@@ -1160,13 +1160,13 @@ the extractor with the highest priority value. Use this to:
 
 Default priority is 50.
 
-# Thread Safety
+## Thread Safety
 
 Extractors must be thread-safe (`Send + Sync`) to support concurrent extraction.
 
-##### Methods
+### Methods
 
-###### extractBytes()
+#### extractBytes()
 
 Extract content from a byte array.
 
@@ -1190,7 +1190,7 @@ The pipeline will convert this into the public `ExtractionResult`.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### extractFile()
+##### extractFile()
 
 Extract content from a file.
 
@@ -1237,7 +1237,7 @@ Get the priority of this extractor.
 Higher priority extractors are preferred when multiple extractors
 support the same MIME type.
 
-# Priority Guidelines
+## Priority Guidelines
 
 - **0-25**: Fallback/low-quality extractors
 - **26-49**: Alternative extractors
@@ -1255,7 +1255,7 @@ Priority value (default: 50)
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### canHandle()
+### canHandle()
 
 Optional: Check if this extractor can handle a specific file.
 
@@ -1272,7 +1272,7 @@ Defaults to `true` (rely on MIME type matching).
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### asSyncExtractor()
+#### asSyncExtractor()
 
 Attempt to get a reference to this extractor as a SyncExtractor.
 
@@ -1287,7 +1287,7 @@ This is used for WASM and other sync-only environments.
 
 ---
 
-#### DocumentNode
+##### DocumentNode
 
 A single node in the document tree.
 
@@ -1309,7 +1309,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 
 ---
 
-#### DocumentRelationship
+##### DocumentRelationship
 
 A resolved relationship between two nodes in the document tree.
 
@@ -1321,7 +1321,7 @@ A resolved relationship between two nodes in the document tree.
 
 ---
 
-#### DocumentStructure
+##### DocumentStructure
 
 Top-level structured document representation.
 
@@ -1329,7 +1329,7 @@ A flat array of nodes with index-based parent/child references forming a tree.
 Root-level nodes have `parent: None`. Use `body_roots()` and `furniture_roots()`
 to iterate over top-level content by layer.
 
-# Validation
+## Validation
 
 Call `validate()` after construction to verify all node indices are in bounds
 and parent-child relationships are bidirectionally consistent.
@@ -1341,9 +1341,9 @@ and parent-child relationships are bidirectionally consistent.
 | `relationships` | `List<DocumentRelationship>` | `[]`    | Resolved relationships between nodes (footnote refs, citations, anchor links, etc.). Populated during derivation from the internal document representation. Empty when no relationships are detected.                                                                                                                                                                                |
 | `nodeTypes`     | `List<String>`               | `[]`    | Sorted, deduplicated list of node type names present in this document. Each value is the snake_case `node_type` tag of the corresponding `NodeContent` variant (e.g. `"paragraph"`, `"heading"`, `"table"`, …). Computed from `nodes` via `DocumentStructure.finalize_node_types`. Empty until that method is called (internal construction paths call it at the end of derivation). |
 
-##### Methods
+### Methods
 
-###### finalizeNodeTypes()
+#### finalizeNodeTypes()
 
 Compute and populate the `node_types` field from the current `nodes`.
 
@@ -1356,7 +1356,7 @@ construction paths (builder, derivation) call this automatically.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### isEmpty()
+##### isEmpty()
 
 Check if the document structure is empty.
 
@@ -1376,7 +1376,7 @@ Check if the document structure is empty.
 
 ---
 
-#### DocxAppProperties
+##### DocxAppProperties
 
 Application properties from docProps/app.xml for DOCX
 
@@ -1403,7 +1403,7 @@ Contains Word-specific document statistics and metadata.
 
 ---
 
-#### DocxMetadata
+##### DocxMetadata
 
 Word document metadata.
 
@@ -1418,7 +1418,7 @@ Integrates with `office_metadata` module for core/app/custom properties.
 
 ---
 
-#### Drawing
+##### Drawing
 
 A drawing object extracted from `<w:drawing>`.
 
@@ -1431,7 +1431,7 @@ A drawing object extracted from `<w:drawing>`.
 
 ---
 
-#### Element
+##### Element
 
 Semantic element extracted from document.
 
@@ -1447,7 +1447,7 @@ unique identifier, and metadata for tracking origin and position.
 
 ---
 
-#### ElementMetadata
+##### ElementMetadata
 
 Metadata for a semantic element.
 
@@ -1461,7 +1461,7 @@ Metadata for a semantic element.
 
 ---
 
-#### EmailAttachment
+##### EmailAttachment
 
 Email attachment representation.
 
@@ -1478,7 +1478,7 @@ Contains metadata and optionally the content of an email attachment.
 
 ---
 
-#### EmailConfig
+##### EmailConfig
 
 Configuration for email extraction.
 
@@ -1488,7 +1488,7 @@ Configuration for email extraction.
 
 ---
 
-#### EmailExtractionResult
+##### EmailExtractionResult
 
 Email extraction result.
 
@@ -1512,7 +1512,7 @@ including headers, body content, and attachments.
 
 ---
 
-#### EmailMetadata
+##### EmailMetadata
 
 Email metadata extracted from .eml and .msg files.
 
@@ -1530,7 +1530,7 @@ Includes sender/recipient information, message ID, and attachment list.
 
 ---
 
-#### EmbedRequest
+##### EmbedRequest
 
 Embedding request for generating embeddings from text.
 
@@ -1541,7 +1541,7 @@ Embedding request for generating embeddings from text.
 
 ---
 
-#### EmbedResponse
+##### EmbedResponse
 
 Embedding response containing generated embeddings.
 
@@ -1554,7 +1554,7 @@ Embedding response containing generated embeddings.
 
 ---
 
-#### EmbedTextParams
+##### EmbedTextParams
 
 Request parameters for embedding generation.
 
@@ -1568,7 +1568,7 @@ Request parameters for embedding generation.
 
 ---
 
-#### EmbeddedFile
+##### EmbeddedFile
 
 Embedded file descriptor extracted from the PDF name tree.
 
@@ -1580,7 +1580,7 @@ Embedded file descriptor extracted from the PDF name tree.
 
 ---
 
-#### EmbeddingBackend
+##### EmbeddingBackend
 
 Trait for in-process embedding backend plugins.
 
@@ -1590,14 +1590,14 @@ Host-language bridges (PyO3, napi-rs, Rustler, extendr, magnus, ext-php-rs,
 C FFI, etc.) wrap their synchronous host callables in `spawn_blocking` or the
 equivalent to satisfy the async signature.
 
-# Thread safety
+## Thread safety
 
 Backends must be `Send + Sync + 'static`. They are stored in
 `Arc<dyn EmbeddingBackend>` and called concurrently from kreuzberg's chunking
 pipeline. If the backend's underlying model isn't thread-safe, the backend
 itself must serialize access internally (e.g. via `Mutex<Inner>`).
 
-# Contract
+## Contract
 
 - `embed(texts)` MUST return exactly `texts.len()` vectors, each of length
   `self.dimensions()`. The dispatcher in `embed_texts`
@@ -1618,7 +1618,7 @@ itself must serialize access internally (e.g. via `Mutex<Inner>`).
   held via the `Arc<dyn EmbeddingBackend>` reference, and only releasing
   shared state that isn't needed by `embed`.
 
-# Runtime
+## Runtime
 
 The synchronous `embed_texts` entry uses
 `tokio.task.block_in_place` to await the trait's async `embed`, which
@@ -1628,9 +1628,9 @@ or `tokio.runtime.Builder.new_current_thread()`) must use
 `embed_texts_async` instead, which awaits directly without
 `block_in_place`.
 
-##### Methods
+### Methods
 
-###### dimensions()
+#### dimensions()
 
 Embedding vector dimension. Must be `> 0` and must match the length of
 every vector returned by `embed`.
@@ -1641,7 +1641,7 @@ every vector returned by `embed`.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### embed()
+##### embed()
 
 Embed a batch of texts, returning one vector per input in order.
 
@@ -1659,7 +1659,7 @@ backend-specific failures. The dispatcher layers its own validation
 
 ---
 
-#### EmbeddingConfig
+##### EmbeddingConfig
 
 Embedding configuration for text chunks.
 
@@ -1676,7 +1676,7 @@ Requires the `embeddings` feature to be enabled.
 | `acceleration`         | `AccelerationConfig?` | `null`                      | Hardware acceleration for the embedding ONNX model. When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for inference. Defaults to `null` (auto-select per platform).                                                                                                                                                                                                                                                                                                                          |
 | `maxEmbedDurationSecs` | `Long?`               | `null`                      | Maximum wall-clock duration (in seconds) for a single `embed()` call when using `EmbeddingModelType.Plugin`. Applies only to the in-process plugin path — protects against hung host-language backends (e.g. a Python callback deadlocked on the GIL, a model stuck on CUDA OOM retries, etc.). On timeout, the dispatcher returns `Plugin` instead of blocking forever. `null` disables the timeout. The default (60 seconds) is conservative for common in-process inference; increase for large batches on slow hardware. |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -1688,7 +1688,7 @@ Requires the `embeddings` feature to be enabled.
 
 ---
 
-#### EmbeddingPreset
+##### EmbeddingPreset
 
 Preset configurations for common RAG use cases.
 
@@ -1711,7 +1711,7 @@ are safe to clone and pass across language boundaries.
 
 ---
 
-#### EpubMetadata
+##### EpubMetadata
 
 EPUB metadata (Dublin Core extensions).
 
@@ -1726,7 +1726,7 @@ EPUB metadata (Dublin Core extensions).
 
 ---
 
-#### ErrorMetadata
+##### ErrorMetadata
 
 Error metadata (for batch operations).
 
@@ -1737,7 +1737,7 @@ Error metadata (for batch operations).
 
 ---
 
-#### ExcelMetadata
+##### ExcelMetadata
 
 Excel/spreadsheet format metadata.
 
@@ -1751,7 +1751,7 @@ discriminant. Sheet count and sheet names are stored inside this struct.
 
 ---
 
-#### ExcelSheet
+##### ExcelSheet
 
 Single Excel worksheet.
 
@@ -1769,7 +1769,7 @@ converted to Markdown format and dimensional statistics.
 
 ---
 
-#### ExcelWorkbook
+##### ExcelWorkbook
 
 Excel workbook representation.
 
@@ -1783,13 +1783,13 @@ extracted content and metadata.
 
 ---
 
-#### ExtractResponse
+##### ExtractResponse
 
 Extraction response (list of results).
 
 ---
 
-#### ExtractStructuredParams
+##### ExtractStructuredParams
 
 Request parameters for LLM-based structured extraction.
 
@@ -1806,7 +1806,7 @@ Request parameters for LLM-based structured extraction.
 
 ---
 
-#### ExtractedImage
+##### ExtractedImage
 
 Extracted image from a document.
 
@@ -1835,7 +1835,7 @@ PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 
 ---
 
-#### ExtractedInlineImage
+##### ExtractedInlineImage
 
 Extracted inline image with metadata.
 
@@ -1850,7 +1850,7 @@ Extracted inline image with metadata.
 
 ---
 
-#### ExtractionConfig
+##### ExtractionConfig
 
 Main extraction configuration.
 
@@ -1894,7 +1894,7 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `structuredExtraction`     | `StructuredExtractionConfig?` | `null`                 | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `cancelToken`              | `String?`                     | `null`                 | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value.                                                                                                                 |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -1913,7 +1913,7 @@ indicating that image decompression and processing should occur.
 Returns `false` if both are disabled, allowing optimization to skip unnecessary
 image decompression for text-only extraction workflows.
 
-# Optimization Impact
+## Optimization Impact
 
 For text-only extractions (no OCR, no image extraction), skipping image
 decompression can improve CPU utilization by 5-10% by avoiding wasteful
@@ -1927,7 +1927,7 @@ image I/O and processing when results won't be used.
 
 ---
 
-#### ExtractionResult
+### ExtractionResult
 
 General extraction result used by the core extraction API.
 
@@ -1960,9 +1960,9 @@ This is the main result type returned by all extraction functions.
 | `formattedContent`    | `String?`                 | `null`  | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text.                                                                                                                                                                                                                                                                                  |
 | `ocrInternalDocument` | `String?`                 | `null`  | Structured hOCR document for the OCR+layout pipeline. When tesseract produces hOCR output, the parsed `InternalDocument` carries paragraph structure with bounding boxes and confidence scores. The layout classification step enriches these elements before final rendering.                                                                                                                                                                                                                                                                                 |
 
-##### Methods
+#### Methods
 
-###### fromOcr()
+##### fromOcr()
 
 Convert from an OCR result.
 
@@ -1974,7 +1974,7 @@ Convert from an OCR result.
 
 ---
 
-#### FictionBookMetadata
+##### FictionBookMetadata
 
 FictionBook (FB2) metadata.
 
@@ -1986,7 +1986,7 @@ FictionBook (FB2) metadata.
 
 ---
 
-#### FileExtractionConfig
+##### FileExtractionConfig
 
 Per-file extraction configuration overrides for batch processing.
 
@@ -1995,7 +1995,7 @@ This type is used with `batch_extract_files` and
 `batch_extract_bytes` to allow heterogeneous
 extraction settings within a single batch.
 
-# Excluded Fields
+## Excluded Fields
 
 The following `ExtractionConfig` fields are batch-level only and
 cannot be overridden per file:
@@ -2032,7 +2032,7 @@ cannot be overridden per file:
 
 ---
 
-#### Footnote
+### Footnote
 
 Footnote in Djot.
 
@@ -2061,7 +2061,7 @@ Represents structural elements like headings, paragraphs, lists, code blocks, et
 
 ---
 
-#### GridCell
+##### GridCell
 
 Individual grid cell with position and span metadata.
 
@@ -2077,7 +2077,7 @@ Individual grid cell with position and span metadata.
 
 ---
 
-#### HeaderMetadata
+##### HeaderMetadata
 
 Header/heading element metadata.
 
@@ -2091,7 +2091,7 @@ Header/heading element metadata.
 
 ---
 
-#### HeadingContext
+##### HeadingContext
 
 Heading context for a chunk within a Markdown document.
 
@@ -2103,7 +2103,7 @@ Contains the heading hierarchy from document root to this chunk's section.
 
 ---
 
-#### HeadingLevel
+##### HeadingLevel
 
 A single heading in the hierarchy.
 
@@ -2114,7 +2114,7 @@ A single heading in the hierarchy.
 
 ---
 
-#### HierarchicalBlock
+##### HierarchicalBlock
 
 A text block with hierarchy level assignment.
 
@@ -2130,7 +2130,7 @@ font size clustering and hierarchical analysis.
 
 ---
 
-#### HierarchyConfig
+##### HierarchyConfig
 
 Hierarchy extraction configuration for PDF text structure analysis.
 
@@ -2145,7 +2145,7 @@ included in page content.
 | `includeBbox`          | `Boolean` | `true`  | Include bounding box information in hierarchy blocks                                                                                                                                                                                                                      |
 | `ocrCoverageThreshold` | `Float?`  | `null`  | OCR coverage threshold for smart OCR triggering (0.0-1.0) Determines when OCR should be triggered based on text block coverage. OCR is triggered when text blocks cover less than this fraction of the page. Default: 0.5 (trigger OCR if less than 50% of page has text) |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2157,7 +2157,7 @@ included in page content.
 
 ---
 
-#### HtmlExtractionResult
+##### HtmlExtractionResult
 
 Result of HTML extraction with optional images and warnings.
 
@@ -2169,7 +2169,7 @@ Result of HTML extraction with optional images and warnings.
 
 ---
 
-#### HtmlMetadata
+##### HtmlMetadata
 
 HTML metadata extracted from HTML documents.
 
@@ -2194,7 +2194,7 @@ and extracted structural elements (headers, links, images, structured data).
 | `images`         | `List<ImageMetadataType>` | `[]`    | Extracted images with source and dimensions                                                                              |
 | `structuredData` | `List<StructuredData>`    | `[]`    | Extracted structured data blocks                                                                                         |
 
-##### Methods
+###### Methods
 
 ###### from()
 
@@ -2206,7 +2206,7 @@ and extracted structural elements (headers, links, images, structured data).
 
 ---
 
-#### HtmlOutputConfig
+##### HtmlOutputConfig
 
 Configuration for styled HTML output.
 
@@ -2223,7 +2223,7 @@ the plain comrak-based renderer.
 | `classPrefix` | `String`    | —                    | CSS class prefix applied to every emitted class name. Default: `"kb-"`. Change this if your host application already uses classes that start with `kb-`.                                                                                            |
 | `embedCss`    | `Boolean`   | `true`               | When `true` (default), write the resolved CSS into a `<style>` block immediately after the opening `<div class="{prefix}doc">`. Set to `false` to emit only the structural markup and wire up your own stylesheet targeting the `kb-*` class names. |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2235,7 +2235,7 @@ the plain comrak-based renderer.
 
 ---
 
-#### HwpImage
+##### HwpImage
 
 | Field  | Type        | Default | Description |
 | ------ | ----------- | ------- | ----------- |
@@ -2244,13 +2244,13 @@ the plain comrak-based renderer.
 
 ---
 
-#### HwpxExtractor
+##### HwpxExtractor
 
 Extractor for Hangul Word Processor XML (.hwpx) files.
 
 Supports HWPX (Open HWPML), the ZIP-based XML successor to the binary HWP 5.0 format.
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2334,7 +2334,7 @@ Supports HWPX (Open HWPML), the ZIP-based XML successor to the binary HWP 5.0 fo
 
 ---
 
-#### ImageExtractionConfig
+##### ImageExtractionConfig
 
 Image extraction configuration.
 
@@ -2350,7 +2350,7 @@ Image extraction configuration.
 | `maxImagesPerPage`   | `Int?`    | `null`  | Maximum number of image objects to extract per PDF page. Some PDFs (e.g. technical diagrams stored as thousands of raster fragments) can trigger extremely long or indefinite extraction times when every image object on a dense page is decoded individually via the PDF extractor. Setting this limit causes kreuzberg to stop collecting individual images once the count per page reaches the cap and emit a warning instead. `null` (default) means no limit — all images are extracted. |
 | `classify`           | `Boolean` | `true`  | When `true` (default), extracted images are classified by kind and grouped into clusters where they appear to belong to one figure.                                                                                                                                                                                                                                                                                                                                                            |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2362,7 +2362,7 @@ Image extraction configuration.
 
 ---
 
-#### ImageMetadata
+##### ImageMetadata
 
 Image metadata extracted from image files.
 
@@ -2377,7 +2377,7 @@ Includes dimensions, format, and EXIF data.
 
 ---
 
-#### ImageMetadataType
+##### ImageMetadataType
 
 Image element metadata.
 
@@ -2392,7 +2392,7 @@ Image element metadata.
 
 ---
 
-#### ImageOcrResult
+##### ImageOcrResult
 
 Result of OCR extraction from an image with optional page tracking.
 
@@ -2404,7 +2404,7 @@ Result of OCR extraction from an image with optional page tracking.
 
 ---
 
-#### ImagePreprocessingConfig
+##### ImagePreprocessingConfig
 
 Image preprocessing configuration for OCR.
 
@@ -2422,7 +2422,7 @@ for different document types.
 | `binarizationMethod` | `String`  | `"otsu"` | Binarization method: "otsu", "sauvola", "adaptive".             |
 | `invertColors`       | `Boolean` | `false`  | Invert colors (white text on black → black on white).           |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2434,7 +2434,7 @@ for different document types.
 
 ---
 
-#### ImagePreprocessingMetadata
+##### ImagePreprocessingMetadata
 
 Image preprocessing metadata.
 
@@ -2458,7 +2458,7 @@ including DPI normalization, resizing, and resampling.
 
 ---
 
-#### InfoResponse
+##### InfoResponse
 
 Server information response.
 
@@ -2469,7 +2469,7 @@ Server information response.
 
 ---
 
-#### InlineElement
+##### InlineElement
 
 Inline element within a block.
 
@@ -2484,7 +2484,7 @@ Represents text with formatting, links, images, etc.
 
 ---
 
-#### JatsMetadata
+##### JatsMetadata
 
 JATS (Journal Article Tag Suite) metadata.
 
@@ -2497,7 +2497,7 @@ JATS (Journal Article Tag Suite) metadata.
 
 ---
 
-#### Keyword
+##### Keyword
 
 Extracted keyword with metadata.
 
@@ -2510,7 +2510,7 @@ Extracted keyword with metadata.
 
 ---
 
-#### KeywordConfig
+##### KeywordConfig
 
 Keyword extraction configuration.
 
@@ -2524,7 +2524,7 @@ Keyword extraction configuration.
 | `yakeParams`  | `YakeParams?`      | `null`                  | YAKE-specific tuning parameters.                                                                                                                           |
 | `rakeParams`  | `RakeParams?`      | `null`                  | RAKE-specific tuning parameters.                                                                                                                           |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2536,7 +2536,7 @@ Keyword extraction configuration.
 
 ---
 
-#### LanguageDetectionConfig
+##### LanguageDetectionConfig
 
 Language detection configuration.
 
@@ -2546,7 +2546,7 @@ Language detection configuration.
 | `minConfidence`  | `Double`  | `0.8`   | Minimum confidence threshold (0.0-1.0)    |
 | `detectMultiple` | `Boolean` | `false` | Detect multiple languages in the document |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2558,7 +2558,7 @@ Language detection configuration.
 
 ---
 
-#### LayoutDetection
+##### LayoutDetection
 
 A single layout detection result.
 
@@ -2570,7 +2570,7 @@ A single layout detection result.
 
 ---
 
-#### LayoutDetectionConfig
+##### LayoutDetectionConfig
 
 Layout detection configuration.
 
@@ -2585,7 +2585,7 @@ is enabled for PDF extraction.
 | `tableModel`          | `TableModel`          | `TableModel.Tatr` | Table structure recognition model. Controls which model is used for table cell detection within layout-detected table regions. Defaults to `TableModel.Tatr`.                                                               |
 | `acceleration`        | `AccelerationConfig?` | `null`            | Hardware acceleration for ONNX models (layout detection + table structure). When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for inference. Defaults to `null` (auto-select per platform). |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2597,7 +2597,7 @@ is enabled for PDF extraction.
 
 ---
 
-#### LayoutRegion
+##### LayoutRegion
 
 A detected layout region on a page.
 
@@ -2614,7 +2614,7 @@ with confidence scores and spatial positions.
 
 ---
 
-#### LinkMetadata
+##### LinkMetadata
 
 Link element metadata.
 
@@ -2629,7 +2629,7 @@ Link element metadata.
 
 ---
 
-#### LlmConfig
+##### LlmConfig
 
 Configuration for an LLM provider/model via liter-llm.
 
@@ -2648,7 +2648,7 @@ its own `LlmConfig`, allowing different providers per feature.
 
 ---
 
-#### LlmUsage
+##### LlmUsage
 
 Token usage and cost data for a single LLM call made during extraction.
 
@@ -2668,7 +2668,7 @@ within one extraction (e.g. VLM OCR + structured extraction).
 
 ---
 
-#### ManifestEntryResponse
+##### ManifestEntryResponse
 
 Model manifest entry for cache management.
 
@@ -2681,7 +2681,7 @@ Model manifest entry for cache management.
 
 ---
 
-#### ManifestResponse
+##### ManifestResponse
 
 Model manifest response.
 
@@ -2694,7 +2694,7 @@ Model manifest response.
 
 ---
 
-#### MergedChunk
+##### MergedChunk
 
 A merged chunk produced by `merge_segments`.
 
@@ -2706,7 +2706,7 @@ A merged chunk produced by `merge_segments`.
 
 ---
 
-#### Metadata
+##### Metadata
 
 Extraction result metadata.
 
@@ -2738,7 +2738,7 @@ via a discriminated union, and additional custom fields from postprocessors.
 | `ocrUsed`              | `Boolean`                     | —       | Whether OCR was used during extraction. Set to `true` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary or fallback text. `false` means native text extraction was used exclusively. |
 | `additional`           | `Map<String, Any>`            | `{}`    | Additional custom fields from postprocessors. Serialized as a nested `"additional"` object (not flattened at root level). Uses `Cow<'static, str>` keys so static string keys avoid allocation.                                                              |
 
-##### Methods
+###### Methods
 
 ###### isEmpty()
 
@@ -2753,7 +2753,7 @@ additional postprocessor fields are populated.
 
 ---
 
-#### ModelPaths
+##### ModelPaths
 
 Combined paths to all models needed for OCR (backward compatibility).
 
@@ -2766,7 +2766,7 @@ Combined paths to all models needed for OCR (backward compatibility).
 
 ---
 
-#### OcrBackend
+##### OcrBackend
 
 Trait for OCR backend plugins.
 
@@ -2776,13 +2776,13 @@ Implement this trait to add custom OCR capabilities. OCR backends can be:
 - FFI bridges to Python libraries (like EasyOCR, PaddleOCR)
 - Cloud-based OCR services (Google Vision, AWS Textract, etc.)
 
-# Thread Safety
+## Thread Safety
 
 OCR backends must be thread-safe (`Send + Sync`) to support concurrent processing.
 
-##### Methods
+### Methods
 
-###### processImage()
+#### processImage()
 
 Process an image and extract text via OCR.
 
@@ -2802,7 +2802,7 @@ An `ExtractionResult` containing the extracted text and metadata.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### processImageFile()
+##### processImageFile()
 
 Process a file and extract text via OCR.
 
@@ -2897,7 +2897,7 @@ Only called if `supports_document_processing` returns `true`.
 
 ---
 
-#### OcrCacheStats
+##### OcrCacheStats
 
 | Field         | Type     | Default | Description   |
 | ------------- | -------- | ------- | ------------- |
@@ -2906,7 +2906,7 @@ Only called if `supports_document_processing` returns `true`.
 
 ---
 
-#### OcrConfidence
+##### OcrConfidence
 
 Confidence scores for an OCR element.
 
@@ -2920,7 +2920,7 @@ from recognition confidence (how confident about the actual text content).
 
 ---
 
-#### OcrConfig
+##### OcrConfig
 
 OCR configuration.
 
@@ -2941,7 +2941,7 @@ OCR configuration.
 | `acceleration`      | `AccelerationConfig?`     | `null`  | Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection). Not user-configurable via config files — injected at runtime from `ExtractionConfig.acceleration` before each `process_image` call.                                                                                                                                                                                                                      |
 | `tessdataBytes`     | `Map<String, ByteArray>?` | `null`  | Caller-supplied Tesseract `traineddata` bytes per language code. Primary use case is the WASM build, which has no filesystem and cannot download tessdata at runtime. Native builds typically rely on `TessdataManager` and ignore this field. When present, the WASM Tesseract backend prefers these bytes over its compile-time-bundled English data. Skipped by serde to keep config files small — supply via the typed API at runtime. |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -2953,7 +2953,7 @@ OCR configuration.
 
 ---
 
-#### OcrElement
+##### OcrElement
 
 A unified OCR element representing detected text with full metadata.
 
@@ -2973,7 +2973,7 @@ from both Tesseract and PaddleOCR backends.
 
 ---
 
-#### OcrElementConfig
+##### OcrElementConfig
 
 Configuration for OCR element extraction.
 
@@ -2988,7 +2988,7 @@ Controls how OCR elements are extracted and filtered.
 
 ---
 
-#### OcrExtractionResult
+##### OcrExtractionResult
 
 OCR extraction result.
 
@@ -3006,7 +3006,7 @@ including recognized text and detected tables.
 
 ---
 
-#### OcrMetadata
+##### OcrMetadata
 
 OCR processing metadata.
 
@@ -3023,7 +3023,7 @@ Captures information about OCR processing configuration and results.
 
 ---
 
-#### OcrPipelineConfig
+##### OcrPipelineConfig
 
 Multi-backend OCR pipeline with quality-based fallback.
 
@@ -3038,7 +3038,7 @@ the result is accepted. Otherwise the next backend is tried.
 
 ---
 
-#### OcrPipelineStage
+##### OcrPipelineStage
 
 A single backend stage in the OCR pipeline.
 
@@ -3053,7 +3053,7 @@ A single backend stage in the OCR pipeline.
 
 ---
 
-#### OcrQualityThresholds
+##### OcrQualityThresholds
 
 Quality thresholds for OCR fallback decisions and pipeline quality gating.
 
@@ -3079,7 +3079,7 @@ so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 | `alnumWsRatioThreshold`       | `Double` | `0.4`   | Alphanumeric+whitespace ratio threshold for skip decisions.                                                                                              |
 | `pipelineMinQuality`          | `Double` | `0.5`   | Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted. If the result from a backend scores below this, try the next backend.        |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -3091,7 +3091,7 @@ so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 
 ---
 
-#### OcrRotation
+##### OcrRotation
 
 Rotation information for an OCR element.
 
@@ -3102,7 +3102,7 @@ Rotation information for an OCR element.
 
 ---
 
-#### OcrTable
+##### OcrTable
 
 Table detected via OCR.
 
@@ -3117,7 +3117,7 @@ Represents a table structure recognized during OCR processing.
 
 ---
 
-#### OcrTableBoundingBox
+##### OcrTableBoundingBox
 
 Bounding box for an OCR-detected table in pixel coordinates.
 
@@ -3130,7 +3130,7 @@ Bounding box for an OCR-detected table in pixel coordinates.
 
 ---
 
-#### OdtProperties
+##### OdtProperties
 
 OpenDocument metadata from meta.xml
 
@@ -3160,7 +3160,7 @@ Uses Dublin Core elements (dc:) and OpenDocument meta elements (meta:).
 
 ---
 
-#### OpenWebDocumentResponse
+##### OpenWebDocumentResponse
 
 OpenWebUI "External" engine response format.
 
@@ -3173,7 +3173,7 @@ Returned by `PUT /process` for the OpenWebUI external document loader.
 
 ---
 
-#### OrientationResult
+##### OrientationResult
 
 Document orientation detection result.
 
@@ -3184,7 +3184,7 @@ Document orientation detection result.
 
 ---
 
-#### PaddleOcrConfig
+##### PaddleOcrConfig
 
 Configuration for PaddleOCR backend.
 
@@ -3206,7 +3206,7 @@ Uses a builder pattern for convenient configuration.
 | `dropScore`            | `Float`   | —       | Minimum recognition confidence score for text lines (default: 0.5). Text regions with recognition confidence below this threshold are discarded. Matches PaddleOCR Python's `drop_score` parameter. Range: 0.0-1.0                                                                                                |
 | `modelTier`            | `String`  | —       | Model tier controlling detection/recognition model size and accuracy trade-off. - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents |
 
-##### Methods
+###### Methods
 
 ###### withCacheDir()
 
@@ -3330,7 +3330,7 @@ Creates a default configuration with English language support.
 
 ---
 
-#### PageBoundary
+##### PageBoundary
 
 Byte offset boundary for a page.
 
@@ -3346,7 +3346,7 @@ at valid UTF-8 character boundaries when using standard String methods (push_str
 
 ---
 
-#### PageConfig
+##### PageConfig
 
 Page extraction and tracking configuration.
 
@@ -3360,13 +3360,13 @@ when page boundaries are available and chunking is configured.
 | ------------------- | --------- | ------- | -------------------------------------------------------- |
 | `extractPages`      | `Boolean` | `false` | Extract pages as separate array (ExtractionResult.pages) |
 | `insertPageMarkers` | `Boolean` | `false` | Insert page markers in main content string               |
-| `markerFormat`      | `String`  | `"      |
+| `markerFormat` | `String` | `" |  |
 
 <!-- PAGE {page_num} -->
 
 "` | Page marker format (use {page_num} placeholder) Default: "\n\n<!-- PAGE {page_num} -->\n\n" |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -3378,14 +3378,14 @@ when page boundaries are available and chunking is configured.
 
 ---
 
-#### PageContent
+##### PageContent
 
 Content for a single page/slide.
 
 When page extraction is enabled, documents are split into per-page content
 with associated tables and images mapped to each page.
 
-# Performance
+## Performance
 
 Uses Arc-wrapped tables and images for memory efficiency:
 
@@ -3408,7 +3408,7 @@ by avoiding redundant copies during serialization.
 
 ---
 
-#### PageHierarchy
+### PageHierarchy
 
 Page hierarchy structure containing heading levels and block information.
 
@@ -3442,7 +3442,7 @@ and visibility state (for presentations).
 
 ---
 
-#### PageMarginsPoints
+##### PageMarginsPoints
 
 Page margins converted to points (1/72 inch).
 
@@ -3458,7 +3458,7 @@ Page margins converted to points (1/72 inch).
 
 ---
 
-#### PageStructure
+##### PageStructure
 
 Unified page structure for documents.
 
@@ -3474,7 +3474,7 @@ with character offset boundaries for chunk-to-page mapping.
 
 ---
 
-#### PdfAnnotation
+##### PdfAnnotation
 
 A PDF annotation extracted from a document page.
 
@@ -3487,7 +3487,7 @@ A PDF annotation extracted from a document page.
 
 ---
 
-#### PdfConfig
+##### PdfConfig
 
 PDF-specific configuration.
 
@@ -3504,7 +3504,7 @@ PDF-specific configuration.
 | `allowSingleColumnTables` | `Boolean`          | `false` | Allow single-column pseudo tables in extraction results. By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters (density, sparsity, prose detection) still apply.              |
 | `ocrInlineImages`         | `Boolean`          | `false` | Perform OCR on inline images extracted from PDF pages and attach the recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is `null` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade gracefully (the image is returned without OCR text rather than failing the whole extraction). Default: `false`. |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -3516,7 +3516,7 @@ PDF-specific configuration.
 
 ---
 
-#### PdfMetadata
+##### PdfMetadata
 
 PDF-specific metadata.
 
@@ -3535,20 +3535,20 @@ are at the `Metadata` level.
 
 ---
 
-#### Plugin
+##### Plugin
 
 Base trait that all plugins must implement.
 
 This trait provides common functionality for plugin lifecycle management,
 identification, and metadata.
 
-# Thread Safety
+## Thread Safety
 
 All plugins must be `Send + Sync` to support concurrent usage across threads.
 
-##### Methods
+### Methods
 
-###### name()
+#### name()
 
 Returns the unique name/identifier for this plugin.
 
@@ -3564,7 +3564,7 @@ The name should be:
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### version()
+##### version()
 
 Returns the semantic version of this plugin.
 
@@ -3588,7 +3588,7 @@ Called once when the plugin is registered. Use this to:
 - Initialize resources (connections, caches, etc.)
 - Validate dependencies
 
-# Thread Safety
+## Thread Safety
 
 This method takes `&self` instead of `&mut self` to work with `Arc<dyn Plugin>`.
 Plugins needing mutable state during initialization should use interior mutability
@@ -3607,7 +3607,7 @@ Defaults to a no-op for stateless plugins.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### shutdown()
+### shutdown()
 
 Shutdown the plugin.
 
@@ -3618,7 +3618,7 @@ Use this to:
 - Flush caches
 - Release resources
 
-# Thread Safety
+## Thread Safety
 
 This method takes `&self` instead of `&mut self` to work with `Arc<dyn Plugin>`.
 Plugins needing mutable state during shutdown should use interior mutability
@@ -3636,7 +3636,7 @@ Defaults to a no-op for stateless plugins.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### description()
+### description()
 
 Optional plugin description for debugging and logging.
 
@@ -3648,7 +3648,7 @@ Defaults to empty string if not overridden.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### author()
+#### author()
 
 Optional plugin author information.
 
@@ -3662,7 +3662,7 @@ Defaults to empty string if not overridden.
 
 ---
 
-#### PostProcessor
+##### PostProcessor
 
 Trait for post-processor plugins.
 
@@ -3675,7 +3675,7 @@ extraction is complete. They can:
 - Score quality
 - Apply custom transformations
 
-# Processing Order
+## Processing Order
 
 Post-processors are executed in stage order:
 
@@ -3685,18 +3685,18 @@ Post-processors are executed in stage order:
 
 Within each stage, processors are executed in registration order.
 
-# Error Handling
+## Error Handling
 
 Post-processor errors are non-fatal by default - they're captured in metadata
 and execution continues. To make errors fatal, return an error from `process()`.
 
-# Thread Safety
+## Thread Safety
 
 Post-processors must be thread-safe (`Send + Sync`).
 
-##### Methods
+### Methods
 
-###### process()
+#### process()
 
 Process an extraction result.
 
@@ -3715,15 +3715,15 @@ Transform or enrich the extraction result. Can modify:
 Return errors for fatal processing failures. Non-fatal errors should be
 captured in metadata directly on the result.
 
-# Performance
+## Performance
 
 This signature avoids unnecessary cloning of large extraction results by
 taking a mutable reference instead of ownership. Processors modify the
 result in place.
 
-# Example - Language Detection
+## Example - Language Detection
 
-# Example - Text Cleaning
+## Example - Text Cleaning
 
 ```rust
 async fn process(&self, result: &mut ExtractionResult, config: &ExtractionConfig)
@@ -3745,7 +3745,7 @@ async fn process(&self, result: &mut ExtractionResult, config: &ExtractionConfig
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### processingStage()
+### processingStage()
 
 Get the processing stage for this post-processor.
 
@@ -3761,7 +3761,7 @@ The `ProcessingStage` (Early, Middle, or Late).
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### shouldProcess()
+#### shouldProcess()
 
 Optional: Check if this processor should run for a given result.
 
@@ -3778,7 +3778,7 @@ Defaults to `true` (always run).
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### estimatedDurationMs()
+##### estimatedDurationMs()
 
 Optional: Estimate processing time in milliseconds.
 
@@ -3810,7 +3810,7 @@ for high-priority processors that should run early in their stage.
 
 ---
 
-#### PostProcessorConfig
+##### PostProcessorConfig
 
 Post-processor configuration.
 
@@ -3822,7 +3822,7 @@ Post-processor configuration.
 | `enabledSet`         | `String?`       | `null`  | Pre-computed AHashSet for O(1) enabled processor lookup     |
 | `disabledSet`        | `String?`       | `null`  | Pre-computed AHashSet for O(1) disabled processor lookup    |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -3834,7 +3834,7 @@ Post-processor configuration.
 
 ---
 
-#### PptxAppProperties
+##### PptxAppProperties
 
 Application properties from docProps/app.xml for PPTX
 
@@ -3860,7 +3860,7 @@ Contains PowerPoint-specific document metadata.
 
 ---
 
-#### PptxExtractionResult
+##### PptxExtractionResult
 
 PowerPoint (PPTX) extraction result.
 
@@ -3882,7 +3882,7 @@ Contains extracted slide content, metadata, and embedded images/tables.
 
 ---
 
-#### PptxMetadata
+##### PptxMetadata
 
 PowerPoint presentation metadata.
 
@@ -3897,7 +3897,7 @@ Extracted from PPTX files containing slide counts and presentation details.
 
 ---
 
-#### ProcessingWarning
+##### ProcessingWarning
 
 A non-fatal warning from a processing pipeline stage.
 
@@ -3911,7 +3911,7 @@ but may indicate degraded results.
 
 ---
 
-#### PstMetadata
+##### PstMetadata
 
 Outlook PST archive metadata.
 
@@ -3921,7 +3921,7 @@ Outlook PST archive metadata.
 
 ---
 
-#### RakeParams
+##### RakeParams
 
 RAKE-specific parameters.
 
@@ -3930,7 +3930,7 @@ RAKE-specific parameters.
 | `minWordLength`     | `Long` | `1`     | Minimum word length to consider (default: 1).   |
 | `maxWordsPerPhrase` | `Long` | `3`     | Maximum words in a keyword phrase (default: 3). |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -3942,7 +3942,7 @@ RAKE-specific parameters.
 
 ---
 
-#### RecognizedTable
+##### RecognizedTable
 
 Pre-computed table markdown for a table detection region.
 
@@ -3959,14 +3959,14 @@ the type in their own code.
 
 ---
 
-#### Recyclable
+##### Recyclable
 
 Trait for types that can be pooled and reused.
 
 Implementing this trait allows a type to be used with `Pool<T>`.
 The `reset()` method should clear the object's state for reuse.
 
-##### Methods
+###### Methods
 
 ###### reset()
 
@@ -3983,7 +3983,7 @@ Should clear any internal data while preserving capacity.
 
 ---
 
-#### Renderer
+##### Renderer
 
 Trait for document renderers that convert `InternalDocument` to output strings.
 
@@ -3997,13 +3997,13 @@ The format name is exposed via `Plugin.name`. For stateless renderers
 the `Plugin` lifecycle methods (`version`, `initialize`, `shutdown`) all
 take no-op defaults and need not be overridden.
 
-# Thread Safety
+## Thread Safety
 
 Renderers must be `Send + Sync` (inherited from `Plugin`).
 
-##### Methods
+### Methods
 
-###### render()
+#### render()
 
 Render an `InternalDocument` to the output format.
 
@@ -4023,7 +4023,7 @@ Returns an error if rendering fails.
 
 ---
 
-#### ResolvedStyle
+##### ResolvedStyle
 
 Fully resolved (flattened) style after walking the inheritance chain.
 
@@ -4034,7 +4034,7 @@ Fully resolved (flattened) style after walking the inheritance chain.
 
 ---
 
-#### SecurityLimits
+##### SecurityLimits
 
 Configuration for security limits across extractors.
 
@@ -4053,7 +4053,7 @@ while still supporting legitimate documents.
 | `maxXmlDepth`         | `Long` | `1024`      | Maximum XML depth (100 levels)                                                                                                                                                                                                                                                                                          |
 | `maxTableCells`       | `Long` | `100000`    | Maximum cells per table (100,000)                                                                                                                                                                                                                                                                                       |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -4065,14 +4065,14 @@ while still supporting legitimate documents.
 
 ---
 
-#### ServerConfig
+##### ServerConfig
 
 API server configuration.
 
 This struct holds all configuration options for the Kreuzberg API server,
 including host/port settings, CORS configuration, and upload limits.
 
-# Defaults
+## Defaults
 
 - `host`: "127.0.0.1" (localhost only)
 - `port`: 8000
@@ -4088,9 +4088,9 @@ including host/port settings, CORS configuration, and upload limits.
 | `maxRequestBodyBytes`    | `Long`         | —       | Maximum size of request body in bytes (default: 100 MB)                                                                                                                                                                                            |
 | `maxMultipartFieldBytes` | `Long`         | —       | Maximum size of multipart fields in bytes (default: 100 MB)                                                                                                                                                                                        |
 
-##### Methods
+### Methods
 
-###### default()
+#### default()
 
 **Signature:**
 
@@ -4098,7 +4098,7 @@ including host/port settings, CORS configuration, and upload limits.
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### listenAddr()
+##### listenAddr()
 
 Get the server listen address (host:port).
 
@@ -4158,17 +4158,17 @@ Get maximum multipart field size in megabytes (rounded up).
 
 ---
 
-#### StreamReader
+##### StreamReader
 
 ---
 
-#### StringBufferPool
+##### StringBufferPool
 
 Convenience type alias for a pooled String.
 
 ---
 
-#### StructuredData
+##### StructuredData
 
 Structured data (Schema.org, microdata, RDFa) block.
 
@@ -4180,7 +4180,7 @@ Structured data (Schema.org, microdata, RDFa) block.
 
 ---
 
-#### StructuredDataResult
+##### StructuredDataResult
 
 | Field        | Type                  | Default | Description                |
 | ------------ | --------------------- | ------- | -------------------------- |
@@ -4191,7 +4191,7 @@ Structured data (Schema.org, microdata, RDFa) block.
 
 ---
 
-#### StructuredExtractionConfig
+##### StructuredExtractionConfig
 
 Configuration for LLM-based structured data extraction.
 
@@ -4209,7 +4209,7 @@ returning structured data that conforms to the schema.
 
 ---
 
-#### StructuredExtractionResponse
+##### StructuredExtractionResponse
 
 Response from structured extraction endpoint.
 
@@ -4221,7 +4221,7 @@ Response from structured extraction endpoint.
 
 ---
 
-#### StyleDefinition
+##### StyleDefinition
 
 A single style definition parsed from `<w:style>` in `word/styles.xml`.
 
@@ -4238,7 +4238,7 @@ A single style definition parsed from `<w:style>` in `word/styles.xml`.
 
 ---
 
-#### SupportedFormat
+##### SupportedFormat
 
 A supported document format entry.
 
@@ -4251,26 +4251,26 @@ Represents a file extension and its corresponding MIME type that Kreuzberg can p
 
 ---
 
-#### SyncExtractor
+##### SyncExtractor
 
 Trait for extractors that can work synchronously (WASM-compatible).
 
 This trait defines the synchronous extraction interface for WASM targets and other
 environments where async/tokio runtimes are not available or desirable.
 
-# Implementation
+## Implementation
 
 Extractors that need to support WASM should implement this trait in addition to
 the async `DocumentExtractor` trait. This allows the same extractor to work in both
 environments by delegating to the sync implementation.
 
-# MIME Type Validation
+## MIME Type Validation
 
 The `mime_type` parameter is guaranteed to be already validated.
 
-##### Methods
+### Methods
 
-###### extractSync()
+#### extractSync()
 
 Extract content from a byte array synchronously.
 
@@ -4289,7 +4289,7 @@ An `InternalDocument` containing the extracted elements, metadata, and tables.
 
 ---
 
-#### Table
+##### Table
 
 Extracted table structure.
 
@@ -4305,7 +4305,7 @@ Tables are converted to both structured cell data and Markdown format.
 
 ---
 
-#### TableCell
+##### TableCell
 
 Individual table cell with content and optional styling.
 
@@ -4320,7 +4320,7 @@ Future extension point for rich table support with cell-level metadata.
 
 ---
 
-#### TableGrid
+##### TableGrid
 
 Structured table grid with cell-level metadata.
 
@@ -4334,7 +4334,7 @@ Stores row/column dimensions and a flat list of cells with position info.
 
 ---
 
-#### TableProperties
+##### TableProperties
 
 Table-level properties from `<w:tblPr>`.
 
@@ -4352,11 +4352,11 @@ Table-level properties from `<w:tblPr>`.
 
 ---
 
-#### TessdataManager
+##### TessdataManager
 
 Manages tessdata file downloading, caching, and manifest generation.
 
-##### Methods
+###### Methods
 
 ###### cacheDir()
 
@@ -4395,7 +4395,7 @@ and this method always returns `Ok(0)`.
 
 ---
 
-#### TesseractConfig
+##### TesseractConfig
 
 Tesseract OCR configuration.
 
@@ -4427,7 +4427,7 @@ for specific document types (invoices, handwriting, etc.).
 | `textordSpaceSizeIsVariable`     | `Boolean`                   | `true`       | Variable-width space detection                                                                                                                                                                                                           |
 | `thresholdingMethod`             | `Boolean`                   | `false`      | Use adaptive thresholding method                                                                                                                                                                                                         |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -4439,7 +4439,7 @@ for specific document types (invoices, handwriting, etc.).
 
 ---
 
-#### TextAnnotation
+##### TextAnnotation
 
 Inline text annotation — byte-range based formatting and links.
 
@@ -4454,7 +4454,7 @@ enabling precise identification of formatted regions.
 
 ---
 
-#### TextExtractionResult
+##### TextExtractionResult
 
 Plain text and Markdown extraction result.
 
@@ -4473,7 +4473,7 @@ for Markdown files, structural elements like headers and links.
 
 ---
 
-#### TextMetadata
+##### TextMetadata
 
 Text/Markdown metadata.
 
@@ -4491,7 +4491,7 @@ for Markdown, structural elements like headers and links.
 
 ---
 
-#### TokenReductionConfig
+##### TokenReductionConfig
 
 | Field                      | Type                         | Default                   | Description                |
 | -------------------------- | ---------------------------- | ------------------------- | -------------------------- |
@@ -4507,7 +4507,7 @@ for Markdown, structural elements like headers and links.
 | `targetReduction`          | `Float?`                     | `null`                    | Target reduction           |
 | `enableSemanticClustering` | `Boolean`                    | `false`                   | Enable semantic clustering |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -4519,7 +4519,7 @@ for Markdown, structural elements like headers and links.
 
 ---
 
-#### TokenReductionOptions
+##### TokenReductionOptions
 
 Token reduction configuration.
 
@@ -4528,7 +4528,7 @@ Token reduction configuration.
 | `mode`                   | `String`  | —       | Reduction mode: "off", "light", "moderate", "aggressive", "maximum" |
 | `preserveImportantWords` | `Boolean` | `true`  | Preserve important words (capitalized, technical terms)             |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -4540,19 +4540,19 @@ Token reduction configuration.
 
 ---
 
-#### TracingLayer
+##### TracingLayer
 
 A `tower.Layer` that wraps each extraction in a semantic tracing span.
 
 ---
 
-#### TreeSitterConfig
+##### TreeSitterConfig
 
 Configuration for tree-sitter language pack integration.
 
 Controls grammar download behavior and code analysis options.
 
-# Example (TOML)
+## Example (TOML)
 
 ```toml
 [tree_sitter]
@@ -4573,9 +4573,9 @@ docstrings = true
 | `groups`    | `List<String>?`           | `null`  | Language groups to pre-download (e.g., `["web", "systems", "scripting"]`).                                                                           |
 | `process`   | `TreeSitterProcessConfig` | —       | Processing options for code analysis.                                                                                                                |
 
-##### Methods
+### Methods
 
-###### default()
+#### default()
 
 **Signature:**
 
@@ -4585,7 +4585,7 @@ docstrings = true
 
 ---
 
-#### TreeSitterProcessConfig
+##### TreeSitterProcessConfig
 
 Processing options for tree-sitter code analysis.
 
@@ -4603,7 +4603,7 @@ Controls which analysis features are enabled when extracting code files.
 | `chunkMaxSize` | `Long?`           | `null`                   | Maximum chunk size in bytes. `null` disables chunking.                       |
 | `contentMode`  | `CodeContentMode` | `CodeContentMode.Chunks` | Content rendering mode for code extraction.                                  |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -4615,7 +4615,7 @@ Controls which analysis features are enabled when extracting code files.
 
 ---
 
-#### Uri
+##### Uri
 
 A URI extracted from a document.
 
@@ -4632,7 +4632,7 @@ optional human-readable display text.
 
 ---
 
-#### Validator
+##### Validator
 
 Trait for validator plugins.
 
@@ -4640,7 +4640,7 @@ Validators check extraction results for quality, completeness, or correctness.
 Unlike post-processors, validator errors **fail fast** - if a validator returns
 an error, the extraction fails immediately.
 
-# Use Cases
+## Use Cases
 
 - **Quality Gates**: Ensure extracted content meets minimum quality standards
 - **Compliance**: Verify content meets regulatory requirements
@@ -4648,20 +4648,20 @@ an error, the extraction fails immediately.
 - **Format Validation**: Verify extracted content structure
 - **Security Checks**: Scan for malicious content
 
-# Error Handling
+## Error Handling
 
 Validator errors are **fatal** - they cause the extraction to fail and bubble up
 to the caller. Use validators for hard requirements that must be met.
 
 For non-fatal checks, use post-processors instead.
 
-# Thread Safety
+## Thread Safety
 
 Validators must be thread-safe (`Send + Sync`).
 
-##### Methods
+### Methods
 
-###### validate()
+#### validate()
 
 Validate an extraction result.
 
@@ -4678,7 +4678,7 @@ if validation fails.
 - `KreuzbergError.Validation` - Validation failed
 - Any other error type appropriate for the failure
 
-# Example - Content Length Validation
+## Example - Content Length Validation
 
 ```rust
 async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
@@ -4703,7 +4703,7 @@ async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
 }
 ```
 
-# Example - Quality Score Validation
+## Example - Quality Score Validation
 
 ```rust
 async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
@@ -4726,7 +4726,7 @@ async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
 }
 ```
 
-# Example - Security Validation
+## Example - Security Validation
 
 ```rust
 async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
@@ -4751,7 +4751,7 @@ async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### shouldValidate()
+### shouldValidate()
 
 Optional: Check if this validator should run for a given result.
 
@@ -4768,7 +4768,7 @@ Defaults to `true` (always run).
 // Phase 1: kotlin backend method signature generation
 ```
 
-###### priority()
+#### priority()
 
 Optional: Get the validation priority.
 
@@ -4789,7 +4789,7 @@ Priority value (higher = runs earlier).
 
 ---
 
-#### WarmResponse
+##### WarmResponse
 
 Cache warm response.
 
@@ -4801,7 +4801,7 @@ Cache warm response.
 
 ---
 
-#### XlsxAppProperties
+##### XlsxAppProperties
 
 Application properties from docProps/app.xml for XLSX
 
@@ -4821,7 +4821,7 @@ Contains Excel-specific document metadata.
 
 ---
 
-#### XmlExtractionResult
+##### XmlExtractionResult
 
 XML extraction result.
 
@@ -4836,7 +4836,7 @@ structural statistics about the XML document.
 
 ---
 
-#### XmlMetadata
+##### XmlMetadata
 
 XML metadata extracted during XML parsing.
 
@@ -4849,7 +4849,7 @@ Provides statistics about XML document structure.
 
 ---
 
-#### YakeParams
+##### YakeParams
 
 YAKE-specific parameters.
 
@@ -4857,7 +4857,7 @@ YAKE-specific parameters.
 | ------------ | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `windowSize` | `Long` | `2`     | Window size for co-occurrence analysis (default: 2). Controls the context window for computing co-occurrence statistics. |
 
-##### Methods
+###### Methods
 
 ###### default()
 
@@ -4869,7 +4869,7 @@ YAKE-specific parameters.
 
 ---
 
-#### YearRange
+##### YearRange
 
 Year range for bibliographic metadata.
 
@@ -4881,15 +4881,15 @@ Year range for bibliographic metadata.
 
 ---
 
-#### ZipBombValidator
+##### ZipBombValidator
 
 Helper struct for validating ZIP archives for security issues.
 
 ---
 
-### Enums
+#### Enums
 
-#### ExecutionProviderType
+##### ExecutionProviderType
 
 ONNX Runtime execution provider type.
 
@@ -4906,7 +4906,7 @@ Determines which hardware backend is used for model inference.
 
 ---
 
-#### OutputFormat
+##### OutputFormat
 
 Output format for extraction results.
 
@@ -4928,7 +4928,7 @@ boxes and confidence scores.
 
 ---
 
-#### HtmlTheme
+##### HtmlTheme
 
 Built-in HTML theme selection.
 
@@ -4942,7 +4942,7 @@ Built-in HTML theme selection.
 
 ---
 
-#### TableModel
+##### TableModel
 
 Which table structure recognition model to use.
 
@@ -4961,11 +4961,11 @@ YAML).
 
 ---
 
-#### ChunkerType
+##### ChunkerType
 
 Type of text chunker to use.
 
-# Variants
+## Variants
 
 - `Text` - Generic text splitter, splits on whitespace and punctuation
 - `Markdown` - Markdown-aware splitter, preserves formatting and structure
@@ -4987,7 +4987,7 @@ Type of text chunker to use.
 
 ---
 
-#### ChunkSizing
+### ChunkSizing
 
 How chunk size is measured.
 
@@ -5018,7 +5018,7 @@ Embedding model types supported by Kreuzberg.
 
 ---
 
-#### CodeContentMode
+##### CodeContentMode
 
 Content rendering mode for code extraction.
 
@@ -5033,7 +5033,7 @@ of `ExtractionResult`.
 
 ---
 
-#### FracType
+##### FracType
 
 | Value    | Description |
 | -------- | ----------- |
@@ -5044,7 +5044,7 @@ of `ExtractionResult`.
 
 ---
 
-#### OcrBackendType
+##### OcrBackendType
 
 OCR backend types.
 
@@ -5057,7 +5057,7 @@ OCR backend types.
 
 ---
 
-#### ProcessingStage
+##### ProcessingStage
 
 Processing stages for post-processors.
 
@@ -5072,7 +5072,7 @@ Use stages to control the order of post-processing operations.
 
 ---
 
-#### ReductionLevel
+##### ReductionLevel
 
 | Value        | Description |
 | ------------ | ----------- |
@@ -5084,7 +5084,7 @@ Use stages to control the order of post-processing operations.
 
 ---
 
-#### PdfAnnotationType
+##### PdfAnnotationType
 
 Type of PDF annotation.
 
@@ -5100,7 +5100,7 @@ Type of PDF annotation.
 
 ---
 
-#### BlockType
+##### BlockType
 
 Types of block-level elements in Djot.
 
@@ -5125,7 +5125,7 @@ Types of block-level elements in Djot.
 
 ---
 
-#### InlineType
+##### InlineType
 
 Types of inline elements in Djot.
 
@@ -5150,7 +5150,7 @@ Types of inline elements in Djot.
 
 ---
 
-#### RelationshipKind
+##### RelationshipKind
 
 Semantic kind of a relationship between document elements.
 
@@ -5166,7 +5166,7 @@ Semantic kind of a relationship between document elements.
 
 ---
 
-#### ContentLayer
+##### ContentLayer
 
 Content layer classification for document nodes.
 
@@ -5181,7 +5181,7 @@ Replaces separate body/furniture arrays with per-node granularity.
 
 ---
 
-#### NodeContent
+##### NodeContent
 
 Tagged enum for node content. Each variant carries only type-specific data.
 
@@ -5213,7 +5213,7 @@ Go/Java/TypeScript bindings.
 
 ---
 
-#### AnnotationKind
+##### AnnotationKind
 
 Types of inline text annotations.
 
@@ -5234,7 +5234,7 @@ Types of inline text annotations.
 
 ---
 
-#### ExtractionMethod
+##### ExtractionMethod
 
 How the extracted text was produced.
 
@@ -5246,7 +5246,7 @@ How the extracted text was produced.
 
 ---
 
-#### ChunkType
+##### ChunkType
 
 Semantic structural classification of a text chunk.
 
@@ -5272,7 +5272,7 @@ Designed to be extended in future versions without breaking changes.
 
 ---
 
-#### ImageKind
+##### ImageKind
 
 Heuristic classification of what an image likely depicts.
 
@@ -5292,7 +5292,7 @@ Heuristic classification of what an image likely depicts.
 
 ---
 
-#### ResultFormat
+##### ResultFormat
 
 Result-shape selection for extraction results.
 
@@ -5307,7 +5307,7 @@ blob vs. an element-based decomposition.
 
 ---
 
-#### ElementType
+##### ElementType
 
 Semantic element type classification.
 
@@ -5330,7 +5330,7 @@ Supports the element types commonly found in Unstructured documents.
 
 ---
 
-#### FormatMetadata
+##### FormatMetadata
 
 Format-specific metadata (discriminated union).
 
@@ -5362,7 +5362,7 @@ type-safe, clean metadata without nested optionals.
 
 ---
 
-#### TextDirection
+##### TextDirection
 
 Text direction enumeration for HTML documents.
 
@@ -5374,7 +5374,7 @@ Text direction enumeration for HTML documents.
 
 ---
 
-#### LinkType
+##### LinkType
 
 Link type classification.
 
@@ -5389,7 +5389,7 @@ Link type classification.
 
 ---
 
-#### ImageType
+##### ImageType
 
 Image type classification.
 
@@ -5402,7 +5402,7 @@ Image type classification.
 
 ---
 
-#### StructuredDataType
+##### StructuredDataType
 
 Structured data type classification.
 
@@ -5414,7 +5414,7 @@ Structured data type classification.
 
 ---
 
-#### OcrBoundingGeometry
+##### OcrBoundingGeometry
 
 Bounding geometry for an OCR element.
 
@@ -5428,7 +5428,7 @@ Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilateral
 
 ---
 
-#### OcrElementLevel
+##### OcrElementLevel
 
 Hierarchical level of an OCR element.
 
@@ -5444,7 +5444,7 @@ equivalent semantics for PaddleOCR.
 
 ---
 
-#### PageUnitType
+##### PageUnitType
 
 Type of paginated unit in a document.
 
@@ -5458,7 +5458,7 @@ Distinguishes between different types of "pages" (PDF pages, presentation slides
 
 ---
 
-#### UriKind
+##### UriKind
 
 Semantic classification of an extracted URI.
 
@@ -5473,7 +5473,7 @@ Semantic classification of an extracted URI.
 
 ---
 
-#### PoolError
+##### PoolError
 
 Error type for pool operations.
 
@@ -5483,7 +5483,7 @@ Error type for pool operations.
 
 ---
 
-#### KeywordAlgorithm
+##### KeywordAlgorithm
 
 Keyword algorithm selection.
 
@@ -5494,7 +5494,7 @@ Keyword algorithm selection.
 
 ---
 
-#### PsmMode
+##### PsmMode
 
 Page Segmentation Mode for Tesseract OCR
 
@@ -5514,7 +5514,7 @@ Page Segmentation Mode for Tesseract OCR
 
 ---
 
-#### PaddleLanguage
+##### PaddleLanguage
 
 Supported languages in PaddleOCR.
 
@@ -5541,7 +5541,7 @@ Maps user-friendly language codes to paddle-ocr-rs language identifiers.
 
 ---
 
-#### LayoutClass
+##### LayoutClass
 
 The 17 canonical document layout classes.
 
@@ -5573,16 +5573,16 @@ Wire format is snake_case in all serializers (JSON, TOML, YAML).
 
 ---
 
-### Errors
+#### Errors
 
-#### KreuzbergError
+##### KreuzbergError
 
 Main error type for all Kreuzberg operations.
 
 All errors in Kreuzberg use this enum, which preserves error chains
 and provides context for debugging.
 
-# Variants
+## Variants
 
 - `Io` - File system and I/O errors (always bubble up)
 - `Parsing` - Document parsing errors (corrupt files, unsupported features)

@@ -1,8 +1,9 @@
 # Configuration for the lychee link checker.
 # https://github.com/lycheeverse/lychee
 
-# Root directory for resolving relative paths in the built site
-root_dir = "site"
+# root_dir for resolving root-relative links is set dynamically in
+# `.task/tools/docs.yml` via `--root-dir "$PWD/docs"` — must be absolute,
+# so we do not hardcode it here.
 
 # Exclude common patterns that produce false positives
 exclude = [

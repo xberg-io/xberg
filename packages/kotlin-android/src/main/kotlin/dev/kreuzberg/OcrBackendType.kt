@@ -17,28 +17,41 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * OCR backend types.
- */
+/** OCR backend types. */
 enum class OcrBackendType {
-    /**
-     * Tesseract OCR (native Rust binding)
-     */
-    TESSERACT,
-    /**
-     * EasyOCR (Python-based, via FFI)
-     */
-    EASY_O_C_R,
-    /**
-     * PaddleOCR (Python-based, via FFI)
-     */
-    PADDLE_O_C_R,
-    /**
-     * Custom/third-party OCR backend
-     */
-    CUSTOM;
+    /** Tesseract OCR (native Rust binding) */
+    @com.fasterxml.jackson.annotation.JsonProperty("Tesseract") TESSERACT,
+    /** EasyOCR (Python-based, via FFI) */
+    @com.fasterxml.jackson.annotation.JsonProperty("EasyOCR") EASY_O_C_R,
+    /** PaddleOCR (Python-based, via FFI) */
+    @com.fasterxml.jackson.annotation.JsonProperty("PaddleOCR") PADDLE_O_C_R,
+    /** Custom/third-party OCR backend */
+    @com.fasterxml.jackson.annotation.JsonProperty("Custom") CUSTOM;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            TESSERACT -> "Tesseract"
+            EASY_O_C_R -> "EasyOCR"
+            PADDLE_O_C_R -> "PaddleOCR"
+            CUSTOM -> "Custom"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): OcrBackendType =
+            when (value) {
+                "Tesseract" -> TESSERACT
+                "EasyOCR" -> EASY_O_C_R
+                "PaddleOCR" -> PADDLE_O_C_R
+                "Custom" -> CUSTOM
+                else -> throw IllegalArgumentException("Unknown OcrBackendType value: $value")
+            }
+    }
 }

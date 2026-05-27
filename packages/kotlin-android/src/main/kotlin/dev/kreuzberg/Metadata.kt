@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,112 +25,79 @@ package dev.kreuzberg
 /**
  * Extraction result metadata.
  *
- * Contains common fields applicable to all formats, format-specific metadata
- * via a discriminated union, and additional custom fields from postprocessors.
+ * Contains common fields applicable to all formats, format-specific metadata via a discriminated
+ * union, and additional custom fields from postprocessors.
  */
 data class Metadata(
-    /**
-     * Document title
-     */
-    val title: String?,
-    /**
-     * Document subject or description
-     */
-    val subject: String?,
-    /**
-     * Primary author(s) - always Vec for consistency
-     */
-    val authors: List<String>?,
-    /**
-     * Keywords/tags - always Vec for consistency
-     */
-    val keywords: List<String>?,
-    /**
-     * Primary language (ISO 639 code)
-     */
-    val language: String?,
-    /**
-     * Creation timestamp (ISO 8601 format)
-     */
-    val createdAt: String?,
-    /**
-     * Last modification timestamp (ISO 8601 format)
-     */
-    val modifiedAt: String?,
-    /**
-     * User who created the document
-     */
-    val createdBy: String?,
-    /**
-     * User who last modified the document
-     */
-    val modifiedBy: String?,
-    /**
-     * Page/slide/sheet structure with boundaries
-     */
-    val pages: PageStructure?,
+    /** Document title */
+    val title: String? = null,
+    /** Document subject or description */
+    val subject: String? = null,
+    /** Primary author(s) - always Vec for consistency */
+    val authors: List<String>? = null,
+    /** Keywords/tags - always Vec for consistency */
+    val keywords: List<String>? = null,
+    /** Primary language (ISO 639 code) */
+    val language: String? = null,
+    /** Creation timestamp (ISO 8601 format) */
+    val createdAt: String? = null,
+    /** Last modification timestamp (ISO 8601 format) */
+    val modifiedAt: String? = null,
+    /** User who created the document */
+    val createdBy: String? = null,
+    /** User who last modified the document */
+    val modifiedBy: String? = null,
+    /** Page/slide/sheet structure with boundaries */
+    val pages: PageStructure? = null,
     /**
      * Format-specific metadata (discriminated union)
      *
-     * Contains detailed metadata specific to the document format.
-     * Serialized as a nested `"format"` object with a `format_type` discriminator field.
+     * Contains detailed metadata specific to the document format. Serialized as a nested `"format"`
+     * object with a `format_type` discriminator field.
      */
-    val format: FormatMetadata?,
-    /**
-     * Image preprocessing metadata (when OCR preprocessing was applied)
-     */
-    val imagePreprocessing: ImagePreprocessingMetadata?,
-    /**
-     * JSON schema (for structured data extraction)
-     */
-    val jsonSchema: String?,
-    /**
-     * Error metadata (for batch operations)
-     */
-    val error: ErrorMetadata?,
+    @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(`as` = FormatMetadata::class)
+    val format: FormatMetadata? = null,
+    /** Image preprocessing metadata (when OCR preprocessing was applied) */
+    val imagePreprocessing: ImagePreprocessingMetadata? = null,
+    /** JSON schema (for structured data extraction) */
+    val jsonSchema: Any? = null,
+    /** Error metadata (for batch operations) */
+    val error: ErrorMetadata? = null,
     /**
      * Extraction duration in milliseconds (for benchmarking).
      *
-     * This field is populated by batch extraction to provide per-file timing
-     * information. It's `null` for single-file extraction (which uses external timing).
+     * This field is populated by batch extraction to provide per-file timing information. It's
+     * `null` for single-file extraction (which uses external timing).
      */
-    val extractionDurationMs: Long?,
-    /**
-     * Document category (from frontmatter or classification).
-     */
-    val category: String?,
-    /**
-     * Document tags (from frontmatter).
-     */
-    val tags: List<String>?,
-    /**
-     * Document version string (from frontmatter).
-     */
-    val documentVersion: String?,
-    /**
-     * Abstract or summary text (from frontmatter).
-     */
-    val abstractText: String?,
+    val extractionDurationMs: Long? = null,
+    /** Document category (from frontmatter or classification). */
+    val category: String? = null,
+    /** Document tags (from frontmatter). */
+    val tags: List<String>? = null,
+    /** Document version string (from frontmatter). */
+    val documentVersion: String? = null,
+    /** Abstract or summary text (from frontmatter). */
+    val abstractText: String? = null,
     /**
      * Output format identifier (e.g., "markdown", "html", "text").
      *
-     * Set by the output format pipeline stage when format conversion is applied.
-     * Previously stored in `metadata.additional["output_format"]`.
+     * Set by the output format pipeline stage when format conversion is applied. Previously stored
+     * in `metadata.additional["output_format"]`.
      */
-    val outputFormat: String?,
+    val outputFormat: String? = null,
     /**
      * Whether OCR was used during extraction.
      *
-     * Set to `true` whenever the extraction pipeline ran an OCR backend
-     * (Tesseract, PaddleOCR, VLM, etc.) and used that output as the primary
-     * or fallback text. `false` means native text extraction was used exclusively.
+     * Set to `true` whenever the extraction pipeline ran an OCR backend (Tesseract, PaddleOCR, VLM,
+     * etc.) and used that output as the primary or fallback text. `false` means native text
+     * extraction was used exclusively.
      */
-    val ocrUsed: Boolean,
+    val ocrUsed: Boolean = false,
     /**
      * Additional custom fields from postprocessors.
      *
-     * Serialized as a nested `"additional"` object (not flattened at root level).
-     * Uses `Cow<'static, str>` keys so static string keys avoid allocation.
+     * Serialized as a nested `"additional"` object (not flattened at root level). Uses
+     * `Cow<'static, str>` keys so static string keys avoid allocation.
      */
-    val additional: Map<String, String>
+    val additional: Map<String, Any> = emptyMap(),
 )

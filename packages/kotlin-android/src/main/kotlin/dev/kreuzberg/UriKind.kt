@@ -17,36 +17,49 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Semantic classification of an extracted URI.
- */
+/** Semantic classification of an extracted URI. */
 enum class UriKind {
-    /**
-     * A clickable hyperlink (web URL, file link).
-     */
-    HYPERLINK,
-    /**
-     * An image or media resource reference.
-     */
-    IMAGE,
-    /**
-     * An internal anchor or cross-reference target.
-     */
-    ANCHOR,
-    /**
-     * A citation or bibliographic reference (DOI, academic ref).
-     */
-    CITATION,
-    /**
-     * A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST).
-     */
-    REFERENCE,
-    /**
-     * An email address (`mailto:` link or bare email).
-     */
-    EMAIL;
+    /** A clickable hyperlink (web URL, file link). */
+    @com.fasterxml.jackson.annotation.JsonProperty("hyperlink") HYPERLINK,
+    /** An image or media resource reference. */
+    @com.fasterxml.jackson.annotation.JsonProperty("image") IMAGE,
+    /** An internal anchor or cross-reference target. */
+    @com.fasterxml.jackson.annotation.JsonProperty("anchor") ANCHOR,
+    /** A citation or bibliographic reference (DOI, academic ref). */
+    @com.fasterxml.jackson.annotation.JsonProperty("citation") CITATION,
+    /** A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST). */
+    @com.fasterxml.jackson.annotation.JsonProperty("reference") REFERENCE,
+    /** An email address (`mailto:` link or bare email). */
+    @com.fasterxml.jackson.annotation.JsonProperty("email") EMAIL;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            HYPERLINK -> "hyperlink"
+            IMAGE -> "image"
+            ANCHOR -> "anchor"
+            CITATION -> "citation"
+            REFERENCE -> "reference"
+            EMAIL -> "email"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): UriKind =
+            when (value) {
+                "hyperlink" -> HYPERLINK
+                "image" -> IMAGE
+                "anchor" -> ANCHOR
+                "citation" -> CITATION
+                "reference" -> REFERENCE
+                "email" -> EMAIL
+                else -> throw IllegalArgumentException("Unknown UriKind value: $value")
+            }
+    }
 }

@@ -10,11 +10,16 @@ use crate::types::{Chunk, ChunkMetadata, PageBoundary};
 use super::boundaries::calculate_page_range;
 use super::classifier::classify_chunk;
 
+/// Default chunk size used when a zero value is passed (mirrors `default_chunk_size()`).
+const DEFAULT_CHUNK_SIZE: usize = 1000;
+
 /// Build a ChunkConfig from chunking parameters.
 ///
 /// # Arguments
 ///
-/// * `max_characters` - Maximum characters per chunk
+/// * `max_characters` - Maximum characters per chunk. A value of `0` is clamped to
+///   [`DEFAULT_CHUNK_SIZE`] (1000) to prevent panics from downstream `text-splitter`
+///   which requires a non-zero capacity.
 /// * `overlap` - Character overlap between consecutive chunks
 /// * `trim` - Whether to trim whitespace from boundaries
 ///
@@ -26,7 +31,16 @@ use super::classifier::classify_chunk;
 ///
 /// Returns `KreuzbergError::Validation` if configuration is invalid.
 pub(crate) fn build_chunk_config(max_characters: usize, overlap: usize, trim: bool) -> Result<ChunkConfig<Characters>> {
-    ChunkConfig::new(ChunkCapacity::new(max_characters))
+    let effective_max = if max_characters == 0 {
+        tracing::warn!(
+            clamped_to = DEFAULT_CHUNK_SIZE,
+            "chunk max_characters is 0; clamping to default to avoid panic"
+        );
+        DEFAULT_CHUNK_SIZE
+    } else {
+        max_characters
+    };
+    ChunkConfig::new(ChunkCapacity::new(effective_max))
         .with_overlap(overlap)
         .map(|config| config.with_trim(trim))
         .map_err(|e| KreuzbergError::validation(format!("Invalid chunking configuration: {}", e)))
@@ -106,6 +120,14 @@ mod tests {
     fn test_build_chunk_config_valid() {
         let result = build_chunk_config(100, 10, true);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_build_chunk_config_zero_clamps_to_default() {
+        // Passing 0 must not panic — text-splitter requires non-zero capacity.
+        // The clamp should silently use DEFAULT_CHUNK_SIZE (1000).
+        let result = build_chunk_config(0, 0, true);
+        assert!(result.is_ok(), "zero max_characters must be clamped, not panic");
     }
 
     #[test]

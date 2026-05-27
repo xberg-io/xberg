@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var processor = new WordCountProcessor();
+PostProcessorRegistry.Register(processor);
+
 public class WordCountProcessor : IPostProcessor
 {
     public string Name => "word-count";
@@ -56,7 +59,4 @@ public class WordCountProcessor : IPostProcessor
         return content.Split(new[] { ' ', '\t', '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries).Length;
     }
 }
-
-var processor = new WordCountProcessor();
-PostProcessorRegistry.Register(processor);
 ```

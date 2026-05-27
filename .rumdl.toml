@@ -2,7 +2,16 @@
 # https://github.com/rvben/rumdl
 
 respect-gitignore = true
-exclude = ["node_modules", "target", "dist", "vendor"]
+exclude = [
+  "node_modules",
+  "target",
+  "dist",
+  "vendor",
+  # Snippets carry alef snippet-runner directives (e.g. <!-- snippet:skip -->)
+  # that must sit directly above the fence. Reflowing them with rumdl breaks
+  # the directive contract.
+  "docs/snippets",
+]
 
 # MD013: Disable line-length enforcement (tables and code blocks can be long)
 # MD041: Don't require first line to be an H1

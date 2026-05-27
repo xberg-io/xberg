@@ -10,8 +10,8 @@ trim_trailing_whitespace = true
 [*.kt]
 indent_style = space
 indent_size = 4
-# Java packages derived from hyphenated GitHub orgs (e.g. `kreuzberg-dev` →
-# `com.github.kreuzberg_dev`) carry underscores; allow them for the
+# Java packages derived from hyphenated GitHub orgs (e.g. `sample-org` →
+# `com.github.sample_org`) carry underscores; allow them for the
 # co-located Java facade and its Kotlin wrappers.
 ktlint_standard_package-name = disabled
 # ktfmt and ktlint disagree on class/function/parameter splitting heuristics
@@ -26,6 +26,20 @@ ktlint_standard_indent = disabled
 # `string-template-indent` depends on `indent`; must be disabled together.
 ktlint_standard_string-template-indent = disabled
 ktlint_standard_filename = disabled
+# ktfmt collapses `fun foo(): T = callbackFlow { ... }` to one line for
+# expression-bodied functions; ktlint's multiline-expression-wrapping then
+# rejects it. Defer to ktfmt — disable the ktlint rule for the generated tree.
+ktlint_standard_multiline-expression-wrapping = disabled
+# ktlint --format and ktfmt fight on chained-call layout (`.foo()\n.bar()`
+# vs `.foo().bar()`) and on multi-line `if/else` bodies. ktfmt is the
+# canonical formatter for emitted code, so disable the ktlint counter-rules.
+ktlint_standard_chain-method-continuation = disabled
+ktlint_standard_multiline-if-else = disabled
+# ktfmt strips trailing commas before `)` on multiline call sites; ktlint
+# `trailing-comma-on-call-site` demands them. The two fight in a loop.
+# Defer to ktfmt — disable the ktlint rule.
+ktlint_standard_trailing-comma-on-call-site = disabled
+ktlint_standard_trailing-comma-on-declaration-site = disabled
 
 [*.gradle.kts]
 indent_style = space
@@ -42,6 +56,14 @@ ktlint_standard_indent = disabled
 # `string-template-indent` depends on `indent`; must be disabled together.
 ktlint_standard_string-template-indent = disabled
 ktlint_standard_filename = disabled
+ktlint_standard_multiline-expression-wrapping = disabled
+ktlint_standard_chain-method-continuation = disabled
+ktlint_standard_multiline-if-else = disabled
+# ktfmt strips trailing commas before `)` on multiline call sites; ktlint
+# `trailing-comma-on-call-site` demands them. The two fight in a loop.
+# Defer to ktfmt — disable the ktlint rule.
+ktlint_standard_trailing-comma-on-call-site = disabled
+ktlint_standard_trailing-comma-on-declaration-site = disabled
 
 [*.{xml,pro,gitignore}]
 indent_style = space

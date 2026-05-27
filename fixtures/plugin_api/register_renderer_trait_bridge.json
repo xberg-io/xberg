@@ -2,36 +2,24 @@
   "id": "register_renderer_trait_bridge",
   "category": "plugin_api",
   "description": "register_renderer: trait bridge",
-  "tags": ["trait-bridge"],
+  "tags": [
+    "trait-bridge"
+  ],
   "call": "register_renderer",
-  "skip": {
-    "languages": [
-      "rust",
-      "python",
-      "node",
-      "go",
-      "ruby",
-      "php",
-      "java",
-      "csharp",
-      "kotlin",
-      "kotlin_android",
-      "swift",
-      "dart",
-      "wasm",
-      "r",
-      "elixir",
-      "zig",
-      "ffi"
-    ],
-    "reason": "Trait-bridge fixture support deferred to alef-e2e v0.14.5+"
-  },
   "input": {
     "renderer": {
       "type": "test",
       "name": "test-renderer"
     }
   },
+  "args": [
+    {
+      "name": "renderer",
+      "field": "renderer",
+      "arg_type": "test_backend",
+      "trait": "Renderer"
+    }
+  ],
   "assertions": [
     {
       "type": "not_error"

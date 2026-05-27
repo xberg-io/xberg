@@ -160,7 +160,7 @@ pub struct ExtractionConfig {
     ///
     /// Controls maximum archive size, compression ratio, file count, and other
     /// security thresholds to prevent decompression bomb attacks. Also caps
-    /// nesting depth, iteration count, entity / token length, cumulative
+    /// nesting depth, iteration count, entity / token length, total
     /// content size, and table cell count for every extraction path that
     /// ingests user-controlled bytes.
     /// When `None`, default limits are used.
@@ -199,7 +199,7 @@ pub struct ExtractionConfig {
     ///
     /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
     /// table, list, and figure detection in the structure pipeline that would
-    /// otherwise rely on font-clustering heuristics alone. Substantially
+    /// otherwise rely on font-clustering heuristics alone. Significantly
     /// improves SF1 (structural F1) at the cost of inference latency
     /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
     /// Requires the `layout-detection` feature.

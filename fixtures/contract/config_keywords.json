@@ -1,7 +1,11 @@
 {
   "id": "config_keywords",
   "description": "Tests keyword extraction via YAKE algorithm",
-  "tags": ["contract", "config", "keywords"],
+  "tags": [
+    "contract",
+    "config",
+    "keywords"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "pdf/fake_memo.pdf",
@@ -34,6 +38,9 @@
     }
   ],
   "skip": {
-    "reason": "Requires features: keywords-yake"
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
   }
 }

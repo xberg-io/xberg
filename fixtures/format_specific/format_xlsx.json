@@ -2,7 +2,11 @@
   "id": "format_xlsx",
   "category": "format_specific",
   "description": "XLSX spreadsheet extraction using extract_file_sync",
-  "tags": ["format_specific", "xlsx", "text_extraction"],
+  "tags": [
+    "format_specific",
+    "xlsx",
+    "text_extraction"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "xlsx/stanley_cups.xlsx",
@@ -12,5 +16,11 @@
     {
       "type": "not_error"
     }
-  ]
+  ],
+  "skip": {
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
+  }
 }

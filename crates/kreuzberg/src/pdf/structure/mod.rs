@@ -6,7 +6,7 @@
 pub(crate) mod adapters;
 mod assembly;
 mod classify;
-mod constants;
+pub(crate) mod constants;
 pub(crate) mod geometry;
 pub(crate) mod layout_classify;
 mod lines;

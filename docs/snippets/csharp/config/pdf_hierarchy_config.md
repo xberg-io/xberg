@@ -46,7 +46,7 @@ var minimalConfig = new ExtractionConfig
     {
         Hierarchy = new HierarchyConfig
         {
-            Enabled = true;
+            Enabled = true,
             // Other properties use defaults:
             // KClusters = 6
             // IncludeBbox = true

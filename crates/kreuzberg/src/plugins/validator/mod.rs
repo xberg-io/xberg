@@ -45,7 +45,6 @@ pub fn list_validators() -> crate::Result<Vec<String>> {
 }
 
 /// Remove all registered validators.
-#[cfg_attr(alef, alef(skip))]
 pub fn clear_validators() -> crate::Result<()> {
     use crate::plugins::registry::get_validator_registry;
 

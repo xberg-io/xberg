@@ -17,11 +17,10 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * dBASE field information.
- */
+/** dBASE field information. */
 data class DbfFieldInfo(val name: String, val fieldType: String)

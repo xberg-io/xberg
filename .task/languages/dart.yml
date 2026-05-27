@@ -15,5 +15,6 @@ tasks:
     silent: false
     cmds:
       - cmd: |
+          command -v dart >/dev/null 2>&1 || { echo "Dart not found, skipping Dart upgrade"; exit 0; }
           cd packages/dart && dart pub upgrade --major-versions
         ignore_error: false

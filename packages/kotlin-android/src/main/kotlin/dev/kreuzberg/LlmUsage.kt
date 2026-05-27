@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,38 +25,26 @@ package dev.kreuzberg
 /**
  * Token usage and cost data for a single LLM call made during extraction.
  *
- * Populated when VLM OCR, structured extraction, or LLM-based embeddings
- * are used. Multiple entries may be present when multiple LLM calls occur
- * within one extraction (e.g. VLM OCR + structured extraction).
+ * Populated when VLM OCR, structured extraction, or LLM-based embeddings are used. Multiple entries
+ * may be present when multiple LLM calls occur within one extraction (e.g. VLM OCR + structured
+ * extraction).
  */
 data class LlmUsage(
+    /** The LLM model identifier (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"). */
+    val model: String = "",
     /**
-     * The LLM model identifier (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514").
+     * The pipeline stage that triggered this LLM call (e.g. "vlm_ocr", "structured_extraction",
+     * "embeddings").
      */
-    val model: String,
-    /**
-     * The pipeline stage that triggered this LLM call
-     * (e.g. "vlm_ocr", "structured_extraction", "embeddings").
-     */
-    val source: String,
-    /**
-     * Number of input/prompt tokens consumed.
-     */
-    val inputTokens: Long?,
-    /**
-     * Number of output/completion tokens generated.
-     */
-    val outputTokens: Long?,
-    /**
-     * Total tokens (input + output).
-     */
-    val totalTokens: Long?,
-    /**
-     * Estimated cost in USD based on the provider's published pricing.
-     */
-    val estimatedCost: Double?,
-    /**
-     * Why the model stopped generating (e.g. "stop", "length", "content_filter").
-     */
-    val finishReason: String?
+    val source: String = "",
+    /** Number of input/prompt tokens consumed. */
+    val inputTokens: Long? = null,
+    /** Number of output/completion tokens generated. */
+    val outputTokens: Long? = null,
+    /** Total tokens (input + output). */
+    val totalTokens: Long? = null,
+    /** Estimated cost in USD based on the provider's published pricing. */
+    val estimatedCost: Double? = null,
+    /** Why the model stopped generating (e.g. "stop", "length", "content_filter"). */
+    val finishReason: String? = null,
 )

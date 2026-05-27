@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,48 +25,31 @@ package dev.kreuzberg
 /**
  * Configuration for security limits across extractors.
  *
- * All limits are intentionally conservative to prevent DoS attacks
- * while still supporting legitimate documents.
+ * All limits are intentionally conservative to prevent DoS attacks while still supporting
+ * legitimate documents.
  */
 data class SecurityLimits(
+    /** Maximum uncompressed size for archives (500 MB) */
+    val maxArchiveSize: Long = 524288000L,
+    /** Maximum compression ratio before flagging as potential bomb (100:1) */
+    val maxCompressionRatio: Long = 100L,
+    /** Maximum number of files in archive (10,000) */
+    val maxFilesInArchive: Long = 10000L,
+    /** Maximum nesting depth for structures (100) */
+    val maxNestingDepth: Long = 1024L,
     /**
-     * Maximum uncompressed size for archives (500 MB)
+     * Maximum length of any single XML entity / attribute / token (1 MiB). This is a per-token cap,
+     * NOT a total cap — billion-laughs class attacks where a single entity expands to hundreds of
+     * MB are caught here, while normal long text content (a paragraph, a CDATA block) is caught by
+     * `max_content_size` instead.
      */
-    val maxArchiveSize: Long,
-    /**
-     * Maximum compression ratio before flagging as potential bomb (100:1)
-     */
-    val maxCompressionRatio: Long,
-    /**
-     * Maximum number of files in archive (10,000)
-     */
-    val maxFilesInArchive: Long,
-    /**
-     * Maximum nesting depth for structures (100)
-     */
-    val maxNestingDepth: Long,
-    /**
-     * Maximum length of any single XML entity / attribute / token (1 MiB).
-     * This is a per-token cap, NOT a cumulative cap — billion-laughs class
-     * attacks where a single entity expands to hundreds of MB are caught
-     * here, while normal long text content (a paragraph, a CDATA block) is
-     * caught by `max_content_size` instead.
-     */
-    val maxEntityLength: Long,
-    /**
-     * Maximum string growth per document (100 MB)
-     */
-    val maxContentSize: Long,
-    /**
-     * Maximum iterations per operation
-     */
-    val maxIterations: Long,
-    /**
-     * Maximum XML depth (100 levels)
-     */
-    val maxXmlDepth: Long,
-    /**
-     * Maximum cells per table (100,000)
-     */
-    val maxTableCells: Long
+    val maxEntityLength: Long = 1048576L,
+    /** Maximum string growth per document (100 MB) */
+    val maxContentSize: Long = 104857600L,
+    /** Maximum iterations per operation */
+    val maxIterations: Long = 10000000L,
+    /** Maximum XML depth (100 levels) */
+    val maxXmlDepth: Long = 1024L,
+    /** Maximum cells per table (100,000) */
+    val maxTableCells: Long = 100000L,
 )

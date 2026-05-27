@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,32 +28,18 @@ package dev.kreuzberg
  * Includes sender/recipient information, message ID, and attachment list.
  */
 data class EmailMetadata(
-    /**
-     * Sender's email address
-     */
-    val fromEmail: String?,
-    /**
-     * Sender's display name
-     */
-    val fromName: String?,
-    /**
-     * Primary recipients
-     */
-    val toEmails: List<String>,
-    /**
-     * CC recipients
-     */
-    val ccEmails: List<String>,
-    /**
-     * BCC recipients
-     */
-    val bccEmails: List<String>,
-    /**
-     * Message-ID header value
-     */
-    val messageId: String?,
-    /**
-     * List of attachment filenames
-     */
-    val attachments: List<String>
+    /** Sender's email address */
+    val fromEmail: String? = null,
+    /** Sender's display name */
+    val fromName: String? = null,
+    /** Primary recipients */
+    val toEmails: List<String> = emptyList(),
+    /** CC recipients */
+    val ccEmails: List<String> = emptyList(),
+    /** BCC recipients */
+    val bccEmails: List<String> = emptyList(),
+    /** Message-ID header value */
+    val messageId: String? = null,
+    /** List of attachment filenames */
+    val attachments: List<String> = emptyList(),
 )

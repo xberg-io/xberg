@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,40 +25,32 @@ package dev.kreuzberg
 /**
  * Output format for extraction results.
  *
- * Controls the format of the `content` field in `ExtractionResult`.
- * When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
- * accordingly. `Plain` returns the raw extracted text.
- * `Structured` returns JSON with full OCR element data including bounding
- * boxes and confidence scores.
+ * Controls the format of the `content` field in `ExtractionResult`. When set to `Markdown`, `Djot`,
+ * or `Html`, the output uses that format. `Plain` returns the raw extracted text. `Structured`
+ * returns JSON with full OCR element data including bounding boxes and confidence scores.
  */
 sealed class OutputFormat {
-    /**
-     * Plain text content only (default)
-     */
+    /** Plain text content only (default) */
     object Plain : OutputFormat()
-    /**
-     * Markdown format
-     */
+
+    /** Markdown format */
     object Markdown : OutputFormat()
-    /**
-     * Djot markup format
-     */
+
+    /** Djot markup format */
     object Djot : OutputFormat()
-    /**
-     * HTML format
-     */
+
+    /** HTML format */
     object Html : OutputFormat()
-    /**
-     * JSON tree format with heading-driven sections.
-     */
+
+    /** JSON tree format with heading-driven sections. */
     object Json : OutputFormat()
-    /**
-     * Structured JSON format with full OCR element metadata.
-     */
+
+    /** Structured JSON format with full OCR element metadata. */
     object Structured : OutputFormat()
+
     /**
-     * Custom renderer registered via the RendererRegistry.
-     * The string is the renderer name (e.g., "docx", "latex").
+     * Custom renderer registered via the RendererRegistry. The string is the renderer name (e.g.,
+     * "docx", "latex").
      */
     data class Custom(val value: String) : OutputFormat()
 }

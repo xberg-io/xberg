@@ -17,71 +17,57 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * PDF-specific configuration.
- */
+/** PDF-specific configuration. */
 data class PdfConfig(
-    /**
-     * Extract images from PDF
-     */
-    val extractImages: Boolean,
+    /** Extract images from PDF */
+    val extractImages: Boolean = false,
     /**
      * Extract tables from PDF.
      *
-     * When `true` (default), runs pdf_oxide's native grid detector and, if it
-     * finds nothing, falls back to the heuristic text-layer reconstruction in
-     * `pdf.oxide.table.extract_tables_heuristic`. Set to `false` to skip
-     * both passes — `tables` will then be empty in the result.
+     * When `true` (default), runs pdf_oxide's native grid detector and, if it finds nothing, falls
+     * back to the heuristic text-layer reconstruction in
+     * `pdf.oxide.table.extract_tables_heuristic`. Set to `false` to skip both passes — `tables`
+     * will then be empty in the result.
      */
-    val extractTables: Boolean,
+    val extractTables: Boolean = true,
+    /** List of passwords to try when opening encrypted PDFs */
+    val passwords: List<String>? = null,
+    /** Extract PDF metadata */
+    val extractMetadata: Boolean = true,
+    /** Hierarchy extraction configuration (None = hierarchy extraction disabled) */
+    val hierarchy: HierarchyConfig? = null,
+    /** Extract PDF annotations (text notes, highlights, links, stamps). Default: false */
+    val extractAnnotations: Boolean = false,
     /**
-     * List of passwords to try when opening encrypted PDFs
+     * Top margin fraction (0.0–1.0) of page height to exclude headers/running heads. Default: 0.06
+     * (6%)
      */
-    val passwords: List<String>?,
+    val topMarginFraction: Float? = null,
     /**
-     * Extract PDF metadata
+     * Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers. Default:
+     * 0.05 (5%)
      */
-    val extractMetadata: Boolean,
-    /**
-     * Hierarchy extraction configuration (None = hierarchy extraction disabled)
-     */
-    val hierarchy: HierarchyConfig?,
-    /**
-     * Extract PDF annotations (text notes, highlights, links, stamps).
-     * Default: false
-     */
-    val extractAnnotations: Boolean,
-    /**
-     * Top margin fraction (0.0–1.0) of page height to exclude headers/running heads.
-     * Default: 0.06 (6%)
-     */
-    val topMarginFraction: Float?,
-    /**
-     * Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers.
-     * Default: 0.05 (5%)
-     */
-    val bottomMarginFraction: Float?,
+    val bottomMarginFraction: Float? = null,
     /**
      * Allow single-column pseudo tables in extraction results.
      *
-     * By default, tables with fewer than 2 columns (layout-guided) or 3 columns
-     * (heuristic) are rejected. When `true`, the minimum column count is relaxed
-     * to 1, allowing single-column structured data (glossaries, itemized lists)
-     * to be emitted as tables. Other quality filters (density, sparsity, prose
-     * detection) still apply.
+     * By default, tables with fewer than 2 columns (layout-guided) or 3 columns (heuristic) are
+     * rejected. When `true`, the minimum column count is relaxed to 1, allowing single-column
+     * structured data (glossaries, itemized lists) to be emitted as tables. Other quality filters
+     * (density, sparsity, prose detection) still apply.
      */
-    val allowSingleColumnTables: Boolean,
+    val allowSingleColumnTables: Boolean = false,
     /**
-     * Perform OCR on inline images extracted from PDF pages and attach the
-     * recognized text to each `ExtractedImage.ocr_result`. Requires Tesseract
-     * to be available; if `ExtractionConfig.ocr` is `null` the extractor
-     * falls back to `TesseractConfig.default()`. Per-image failures degrade
-     * gracefully (the image is returned without OCR text rather than failing
-     * the whole extraction). Default: `false`.
+     * Perform OCR on inline images extracted from PDF pages and attach the recognized text to each
+     * `ExtractedImage.ocr_result`. Requires Tesseract to be available; if `ExtractionConfig.ocr` is
+     * `null` the extractor falls back to `TesseractConfig.default()`. Per-image failures degrade
+     * gracefully (the image is returned without OCR text rather than failing the whole extraction).
+     * Default: `false`.
      */
-    val ocrInlineImages: Boolean
+    val ocrInlineImages: Boolean = false,
 )

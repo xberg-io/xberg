@@ -90,12 +90,14 @@ def discover_fixtures(fixtures_dir: Path, name_filter: str | None = None) -> lis
         if not doc_path.exists():
             continue
 
-        results.append({
-            "name": name,
-            "fixture_path": fixture_path,
-            "doc_path": doc_path,
-            "fixture": fixture,
-        })
+        results.append(
+            {
+                "name": name,
+                "fixture_path": fixture_path,
+                "doc_path": doc_path,
+                "fixture": fixture,
+            }
+        )
 
     return results
 
@@ -139,61 +141,33 @@ def generate_markdown(
 
     # Strip markdown code fence wrapper if Gemini added one
     if text.startswith("```markdown\n"):
-        text = text[len("```markdown\n"):]
-        if text.endswith("\n```"):
-            text = text[:-len("\n```")]
+        text = text[len("```markdown\n") :]
+        text = text.removesuffix("\n```")
     elif text.startswith("```md\n"):
-        text = text[len("```md\n"):]
-        if text.endswith("\n```"):
-            text = text[:-len("\n```")]
+        text = text[len("```md\n") :]
+        text = text.removesuffix("\n```")
     elif text.startswith("```\n"):
-        text = text[len("```\n"):]
-        if text.endswith("\n```"):
-            text = text[:-len("\n```")]
+        text = text[len("```\n") :]
+        text = text.removesuffix("\n```")
 
     return text.strip() + "\n"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Generate markdown ground truth from PDFs using Gemini"
-    )
+    parser = argparse.ArgumentParser(description="Generate markdown ground truth from PDFs using Gemini")
     parser.add_argument(
-        "--filter", type=str, default=None,
-        help="Only process fixtures whose name contains this string"
+        "--filter", type=str, default=None, help="Only process fixtures whose name contains this string"
     )
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be processed without calling the API")
+    parser.add_argument("--force", action="store_true", help="Regenerate even if .md file already exists")
     parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Show what would be processed without calling the API"
+        "--model", type=str, default="gemini-2.0-flash", help="Gemini model to use (default: gemini-2.0-flash)"
     )
-    parser.add_argument(
-        "--force", action="store_true",
-        help="Regenerate even if .md file already exists"
-    )
-    parser.add_argument(
-        "--model", type=str, default="gemini-2.0-flash",
-        help="Gemini model to use (default: gemini-2.0-flash)"
-    )
-    parser.add_argument(
-        "--project", type=str, default="boxwood-spirit-479620-r5",
-        help="GCP project ID"
-    )
-    parser.add_argument(
-        "--location", type=str, default="us-central1",
-        help="Vertex AI location"
-    )
-    parser.add_argument(
-        "--delay", type=float, default=1.0,
-        help="Delay between API calls in seconds (rate limiting)"
-    )
-    parser.add_argument(
-        "--timeout", type=int, default=120,
-        help="Per-request timeout in seconds (default: 120)"
-    )
-    parser.add_argument(
-        "--max-size", type=int, default=None,
-        help="Skip PDFs larger than this many KB"
-    )
+    parser.add_argument("--project", type=str, default="boxwood-spirit-479620-r5", help="GCP project ID")
+    parser.add_argument("--location", type=str, default="us-central1", help="Vertex AI location")
+    parser.add_argument("--delay", type=float, default=1.0, help="Delay between API calls in seconds (rate limiting)")
+    parser.add_argument("--timeout", type=int, default=120, help="Per-request timeout in seconds (default: 120)")
+    parser.add_argument("--max-size", type=int, default=None, help="Skip PDFs larger than this many KB")
     args = parser.parse_args()
 
     repo_root = get_repo_root()

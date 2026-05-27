@@ -44,7 +44,6 @@ pub fn unregister_post_processor(name: &str) -> crate::Result<()> {
 }
 
 /// Remove all registered post-processors.
-#[cfg_attr(alef, alef(skip))]
 pub fn clear_post_processors() -> crate::Result<()> {
     use crate::plugins::registry::get_post_processor_registry;
 

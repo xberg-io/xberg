@@ -3,7 +3,7 @@
 
 version = '4.0'
 name = 'Kreuzberg'
-description = 'Rust document intelligence library with polyglot bindings (Python/TypeScript/Ruby/Java/Go/Elixir/C#/PHP)'
+description = 'Rust document intelligence library with active Python, TypeScript/Node, Ruby, PHP, Go, Java, C#, Elixir, R, WebAssembly, Dart, Kotlin Android, Swift, Zig, and C FFI bindings'
 gitignore = true
 presets = ['claude', 'copilot', 'cursor', 'antigravity', 'codex']
 builtins = [
@@ -17,6 +17,14 @@ builtins = [
   'csharp',
   'elixir',
   'r',
+  'wasm',
+  'pyo3',
+  'napi-rs',
+  'magnus',
+  'ext-php-rs',
+  'rustler',
+  'cgo',
+  'extendr',
   'default-commands',
 ]
 

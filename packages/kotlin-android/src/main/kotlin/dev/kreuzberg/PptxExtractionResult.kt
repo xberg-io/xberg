@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,51 +28,31 @@ package dev.kreuzberg
  * Contains extracted slide content, metadata, and embedded images/tables.
  */
 data class PptxExtractionResult(
-    /**
-     * Extracted text content from all slides
-     */
+    /** Extracted text content from all slides */
     val content: String,
-    /**
-     * Presentation metadata
-     */
+    /** Presentation metadata */
     val metadata: PptxMetadata,
-    /**
-     * Total number of slides
-     */
+    /** Total number of slides */
     val slideCount: Long,
-    /**
-     * Total number of embedded images
-     */
+    /** Total number of embedded images */
     val imageCount: Long,
-    /**
-     * Total number of tables
-     */
+    /** Total number of tables */
     val tableCount: Long,
-    /**
-     * Extracted images from the presentation
-     */
-    val images: List<ExtractedImage>,
-    /**
-     * Slide structure with boundaries (when page tracking is enabled)
-     */
-    val pageStructure: PageStructure?,
-    /**
-     * Per-slide content (when page tracking is enabled)
-     */
-    val pageContents: List<PageContent>?,
-    /**
-     * Structured document representation
-     */
-    val document: DocumentStructure?,
-    /**
-     * Hyperlinks discovered in slides as (url, optional_label) pairs.
-     */
-    val hyperlinks: List<String>,
+    /** Extracted images from the presentation */
+    val images: List<ExtractedImage> = emptyList(),
+    /** Slide structure with boundaries (when page tracking is enabled) */
+    val pageStructure: PageStructure? = null,
+    /** Per-slide content (when page tracking is enabled) */
+    val pageContents: List<PageContent>? = null,
+    /** Structured document representation */
+    val document: DocumentStructure? = null,
+    /** Hyperlinks discovered in slides as (url, optional_label) pairs. */
+    val hyperlinks: List<String> = emptyList(),
     /**
      * Office metadata extracted from docProps/core.xml and docProps/app.xml.
      *
-     * Contains keys like "title", "author", "created_by", "subject", "keywords",
-     * "modified_by", "created_at", "modified_at", etc.
+     * Contains keys like "title", "author", "created_by", "subject", "keywords", "modified_by",
+     * "created_at", "modified_at", etc.
      */
-    val officeMetadata: Map<String, String>
+    val officeMetadata: Map<String, String> = emptyMap(),
 )

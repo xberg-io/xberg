@@ -17,30 +17,21 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
 import java.nio.file.Path
 
-/**
- * Combined paths to all models needed for OCR (backward compatibility).
- */
+/** Combined paths to all models needed for OCR (backward compatibility). */
 data class ModelPaths(
-    /**
-     * Path to the detection model directory.
-     */
-    val detModel: Path,
-    /**
-     * Path to the classification model directory.
-     */
-    val clsModel: Path,
-    /**
-     * Path to the recognition model directory.
-     */
-    val recModel: Path,
-    /**
-     * Path to the character dictionary file.
-     */
-    val dictFile: Path
+    /** Path to the detection model directory. */
+    val detModel: java.nio.file.Path,
+    /** Path to the classification model directory. */
+    val clsModel: java.nio.file.Path,
+    /** Path to the recognition model directory. */
+    val recModel: java.nio.file.Path,
+    /** Path to the character dictionary file. */
+    val dictFile: java.nio.file.Path,
 )

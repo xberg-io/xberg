@@ -4,7 +4,12 @@
 
 {{ description }}
 
-**Powered by a Rust core** – Native performance for document extraction.
+## What This Package Provides
+
+- **Python-native extraction** — sync and async APIs for files, bytes, URLs, and batch ingestion.
+- **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings in typed Python objects.
+- **OCR choices** — Tesseract, EasyOCR, PaddleOCR, and VLM OCR where configured.
+- **Same Rust engine as every binding** — behavior matches the Node.js, Ruby, Go, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
 
 ## Installation
 

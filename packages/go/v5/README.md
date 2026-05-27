@@ -1,16 +1,12 @@
 # Kreuzberg
 
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 20px 0;">
-  <!-- Built with -->
   <a href="https://github.com/kreuzberg-dev/alef">
-    <img src="https://img.shields.io/badge/built%20with-alef%20%D7%90-007ec6" alt="Built with alef">
+    <img src="https://img.shields.io/badge/Bindings-alef%20%D7%90-007ec6" alt="Bindings">
   </a>
   <!-- Language Bindings -->
   <a href="https://crates.io/crates/kreuzberg">
     <img src="https://img.shields.io/crates/v/kreuzberg?label=Rust&color=007ec6" alt="Rust">
-  </a>
-  <a href="https://hex.pm/packages/kreuzberg">
-    <img src="https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6" alt="Elixir">
   </a>
   <a href="https://pypi.org/project/kreuzberg/">
     <img src="https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6" alt="Python">
@@ -21,12 +17,11 @@
   <a href="https://www.npmjs.com/package/@kreuzberg/wasm">
     <img src="https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6" alt="WASM">
   </a>
-
   <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg">
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
-    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.0.0" alt="Go">
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5">
+    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v5*" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
     <img src="https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6" alt="C#">
@@ -37,14 +32,32 @@
   <a href="https://rubygems.org/gems/kreuzberg">
     <img src="https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6" alt="Ruby">
   </a>
+  <a href="https://hex.pm/packages/kreuzberg">
+    <img src="https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6" alt="Elixir">
+  </a>
   <a href="https://kreuzberg-dev.r-universe.dev/kreuzberg">
     <img src="https://img.shields.io/badge/R-kreuzberg-007ec6" alt="R">
   </a>
-  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
-    <img src="https://img.shields.io/badge/Docker-007ec6?logo=docker&logoColor=white" alt="Docker">
+  <a href="https://pub.dev/packages/kreuzberg">
+    <img src="https://img.shields.io/pub/v/kreuzberg?label=Dart&color=007ec6" alt="Dart">
   </a>
-  <a href="https://artifacthub.io/packages/search?repo=kreuzberg">
-    <img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/kreuzberg" alt="Artifact Hub">
+  <a href="https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg-android">
+    <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg-android?label=Kotlin&color=007ec6" alt="Kotlin">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/swift">
+    <img src="https://img.shields.io/badge/Swift-SPM-007ec6" alt="Swift">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/zig">
+    <img src="https://img.shields.io/badge/Zig-package-007ec6" alt="Zig">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
+    <img src="https://img.shields.io/badge/C-FFI-007ec6" alt="C FFI">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
+    <img src="https://img.shields.io/badge/Docker-ghcr.io-007ec6?logo=docker&logoColor=white" alt="Docker">
+  </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/charts%2Fkreuzberg">
+    <img src="https://img.shields.io/badge/Helm-ghcr.io-007ec6?logo=helm&logoColor=white" alt="Helm">
   </a>
 
   <!-- Project Info -->
@@ -52,28 +65,39 @@
     <img src="https://img.shields.io/badge/License-Elastic--2.0-007ec6" alt="License">
   </a>
   <a href="https://docs.kreuzberg.dev">
-    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
-  </a>
-  <a href="https://docs.kreuzberg.dev/demo.html">
-    <img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Live_Demo-007ec6" alt="Live Demo">
+    <img src="https://img.shields.io/badge/Docs-kreuzberg-007ec6" alt="Documentation">
   </a>
   <a href="https://huggingface.co/Kreuzberg">
-    <img src="https://img.shields.io/badge/%F0%9F%A4%97_Hugging_Face-007ec6" alt="Hugging Face">
+    <img src="https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6" alt="Hugging Face">
   </a>
 </div>
 
-<img width="1128" height="191" alt="Banner2" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+<div align="center" style="margin: 24px 0 0;">
+  <a href="https://kreuzberg.dev">
+    <img alt="Kreuzberg" src="https://github.com/user-attachments/assets/419fc06c-8313-4324-b159-4b4d3cfce5c0" />
+  </a>
+</div>
 
-<div align="center" style="margin-top: 20px;">
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 28px 0 24px;">
   <a href="https://discord.gg/xt9WY3GnKR">
-      <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-7289da?logo=discord&logoColor=white" alt="Discord">
+    <img height="22" src="https://img.shields.io/badge/Discord-Chat-007ec6?logo=discord&logoColor=white" alt="Join Discord">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img height="22" src="https://img.shields.io/badge/Live%20Demo-Open-007ec6?logo=webassembly&logoColor=white" alt="Live Demo">
   </a>
 </div>
 
 High-performance document intelligence for Go backed by the Rust core that powers every Kreuzberg binding.
 
-> **Version 5.0.0-rc.1**
+> **Version 5.0.0-rc.3**
 > Report issues at [github.com/kreuzberg-dev/kreuzberg](https://github.com/kreuzberg-dev/kreuzberg/issues).
+
+## What This Package Provides
+
+- **Go module over the Rust core** — context-aware extraction with Go structs and errors.
+- **Structured results** — text, tables, images, metadata, language detection, chunks, and warnings.
+- **Static-link workflow** — build against `kreuzberg-ffi` and ship a self-contained Go binary.
+- **Cross-binding parity** — output matches the Python, Node.js, Ruby, Java, .NET, PHP, Elixir, R, Dart, Swift, Zig, WASM, and C FFI packages.
 
 ## Install
 
@@ -107,7 +131,7 @@ To use this package via `go get`:
 go get github.com/kreuzberg-dev/kreuzberg/v5@latest
 
 # Or a specific version
-go get github.com/kreuzberg-dev/kreuzberg/v5@v5.0.0-rc.1
+go get github.com/kreuzberg-dev/kreuzberg/v5@v5.0.0-rc.3
 ```
 
 You'll need to provide the static library at build time. See [Building with Static Libraries](#building-with-static-libraries) below.
@@ -122,7 +146,7 @@ Download the static library for your platform from [GitHub Releases](https://git
 
 ```bash
 # Example: Linux x86_64
-curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v5.0.0-rc.1/go-ffi-linux-x86_64.tar.gz
+curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v5.0.0-rc.3/go-ffi-linux-x86_64.tar.gz
 tar -xzf go-ffi-linux-x86_64.tar.gz
 
 # Copy to a permanent location

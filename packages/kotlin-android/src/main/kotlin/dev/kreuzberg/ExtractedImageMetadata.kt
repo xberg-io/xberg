@@ -17,28 +17,19 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Image metadata extracted from an image file.
- */
+/** Image metadata extracted from an image file. */
 data class ExtractedImageMetadata(
-    /**
-     * Image width in pixels
-     */
+    /** Image width in pixels */
     val width: Int,
-    /**
-     * Image height in pixels
-     */
+    /** Image height in pixels */
     val height: Int,
-    /**
-     * Image format (e.g., "PNG", "JPEG")
-     */
+    /** Image format (e.g., "PNG", "JPEG") */
     val format: String,
-    /**
-     * EXIF data if available
-     */
-    val exifData: Map<String, String>
+    /** EXIF data if available */
+    val exifData: Map<String, String> = emptyMap(),
 )

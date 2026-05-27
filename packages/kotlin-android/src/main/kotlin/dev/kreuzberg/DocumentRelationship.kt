@@ -17,24 +17,17 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * A resolved relationship between two nodes in the document tree.
- */
+/** A resolved relationship between two nodes in the document tree. */
 data class DocumentRelationship(
-    /**
-     * Source node index (the referencing node).
-     */
+    /** Source node index (the referencing node). */
     val source: Int,
-    /**
-     * Target node index (the referenced node).
-     */
+    /** Target node index (the referenced node). */
     val target: Int,
-    /**
-     * Semantic kind of the relationship.
-     */
-    val kind: RelationshipKind
+    /** Semantic kind of the relationship. */
+    val kind: RelationshipKind,
 )

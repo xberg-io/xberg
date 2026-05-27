@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -26,68 +27,61 @@ import java.nio.file.Path
 /**
  * Configuration for PaddleOCR backend.
  *
- * Configures PaddleOCR text detection and recognition with multi-language support.
- * Uses a builder pattern for convenient configuration.
+ * Configures PaddleOCR text detection and recognition with multi-language support. Uses a builder
+ * pattern for convenient configuration.
  */
 data class PaddleOcrConfig(
+    /** Language code (e.g., "en", "ch", "jpn", "kor", "deu", "fra") */
+    val language: String = "",
+    /** Optional custom cache directory for model files */
+    val cacheDir: java.nio.file.Path? = null,
     /**
-     * Language code (e.g., "en", "ch", "jpn", "kor", "deu", "fra")
+     * Enable angle classification for rotated text (default: false). Can misfire on short text
+     * regions, rotating crops incorrectly before recognition.
      */
-    val language: String,
+    val useAngleCls: Boolean = false,
+    /** Enable table structure detection (default: false) */
+    val enableTableDetection: Boolean = false,
     /**
-     * Optional custom cache directory for model files
+     * Database threshold for text detection (default: 0.3) Range: 0.0-1.0, higher values require
+     * more confident detections
      */
-    val cacheDir: Path?,
+    val detDbThresh: Float = 0.0f,
+    /** Box threshold for text bounding box refinement (default: 0.5) Range: 0.0-1.0 */
+    val detDbBoxThresh: Float = 0.0f,
     /**
-     * Enable angle classification for rotated text (default: false).
-     * Can misfire on short text regions, rotating crops incorrectly before recognition.
+     * Unclip ratio for expanding text bounding boxes (default: 1.6) Controls the expansion of
+     * detected text regions
      */
-    val useAngleCls: Boolean,
+    val detDbUnclipRatio: Float = 0.0f,
     /**
-     * Enable table structure detection (default: false)
+     * Maximum side length for detection image (default: 960) Larger images may be resized to this
+     * limit for faster inference
      */
-    val enableTableDetection: Boolean,
+    val detLimitSideLen: Int = 0,
     /**
-     * Database threshold for text detection (default: 0.3)
-     * Range: 0.0-1.0, higher values require more confident detections
+     * Batch size for recognition inference (default: 6) Number of text regions to process
+     * simultaneously
      */
-    val detDbThresh: Float,
+    val recBatchNum: Int = 0,
     /**
-     * Box threshold for text bounding box refinement (default: 0.5)
-     * Range: 0.0-1.0
+     * Padding in pixels added around the image before detection (default: 10). Large values can
+     * include surrounding content like table gridlines.
      */
-    val detDbBoxThresh: Float,
+    val padding: Int = 0,
     /**
-     * Unclip ratio for expanding text bounding boxes (default: 1.6)
-     * Controls the expansion of detected text regions
+     * Minimum recognition confidence score for text lines (default: 0.5). Text regions with
+     * recognition confidence below this threshold are discarded. Matches PaddleOCR Python's
+     * `drop_score` parameter. Range: 0.0-1.0
      */
-    val detDbUnclipRatio: Float,
-    /**
-     * Maximum side length for detection image (default: 960)
-     * Larger images may be resized to this limit for faster inference
-     */
-    val detLimitSideLen: Int,
-    /**
-     * Batch size for recognition inference (default: 6)
-     * Number of text regions to process simultaneously
-     */
-    val recBatchNum: Int,
-    /**
-     * Padding in pixels added around the image before detection (default: 10).
-     * Large values can include surrounding content like table gridlines.
-     */
-    val padding: Int,
-    /**
-     * Minimum recognition confidence score for text lines (default: 0.5).
-     * Text regions with recognition confidence below this threshold are discarded.
-     * Matches PaddleOCR Python's `drop_score` parameter.
-     * Range: 0.0-1.0
-     */
-    val dropScore: Float,
+    val dropScore: Float = 0.0f,
     /**
      * Model tier controlling detection/recognition model size and accuracy trade-off.
-     * - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference
-     * - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents
+     *
+     * - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast
+     *   download and inference
+     * - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU
+     *   or complex documents
      */
-    val modelTier: String
+    val modelTier: String = "",
 )

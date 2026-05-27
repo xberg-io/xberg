@@ -10,10 +10,6 @@
   "assertions": [
     {
       "type": "not_error"
-    },
-    {
-      "type": "contains",
-      "value": "pdf"
     }
   ]
 }

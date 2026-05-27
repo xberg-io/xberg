@@ -118,7 +118,6 @@ pub fn list_renderers() -> Result<Vec<String>> {
 /// # Errors
 ///
 /// Returns an error if the registry lock is poisoned.
-#[cfg_attr(alef, alef(skip))]
 pub fn clear_renderers() -> Result<()> {
     use crate::plugins::registry::get_renderer_registry;
 

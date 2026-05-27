@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,24 +28,14 @@ package dev.kreuzberg
  * Extracted from compressed archive files containing file lists and size information.
  */
 data class ArchiveMetadata(
-    /**
-     * Archive format ("ZIP", "TAR", "7Z", etc.)
-     */
-    val format: String,
-    /**
-     * Total number of files in the archive
-     */
-    val fileCount: Int,
-    /**
-     * List of file paths within the archive
-     */
-    val fileList: List<String>,
-    /**
-     * Total uncompressed size in bytes
-     */
-    val totalSize: Long,
-    /**
-     * Compressed size in bytes (if available)
-     */
-    val compressedSize: Long?
+    /** Archive format ("ZIP", "TAR", "7Z", etc.) */
+    val format: String = "",
+    /** Total number of files in the archive */
+    val fileCount: Int = 0,
+    /** List of file paths within the archive */
+    val fileList: List<String> = emptyList(),
+    /** Total uncompressed size in bytes */
+    val totalSize: Long = 0L,
+    /** Compressed size in bytes (if available) */
+    val compressedSize: Long? = null,
 )

@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -45,26 +46,20 @@ data class TreeSitterConfig(
     /**
      * Enable code intelligence processing (default: true).
      *
-     * When `false`, tree-sitter analysis is completely skipped even if
-     * the config section is present.
+     * When `false`, tree-sitter analysis is completely skipped even if the config section is
+     * present.
      */
-    val enabled: Boolean,
+    val enabled: Boolean = true,
     /**
      * Custom cache directory for downloaded grammars.
      *
      * When `null`, uses the default: `~/.cache/tree-sitter-language-pack/v{version}/libs/`.
      */
-    val cacheDir: Path?,
-    /**
-     * Languages to pre-download on init (e.g., `["python", "rust"]`).
-     */
-    val languages: List<String>?,
-    /**
-     * Language groups to pre-download (e.g., `["web", "systems", "scripting"]`).
-     */
-    val groups: List<String>?,
-    /**
-     * Processing options for code analysis.
-     */
-    val process: TreeSitterProcessConfig
+    val cacheDir: java.nio.file.Path? = null,
+    /** Languages to pre-download on init (e.g., `["python", "rust"]`). */
+    val languages: List<String>? = null,
+    /** Language groups to pre-download (e.g., `["web", "systems", "scripting"]`). */
+    val groups: List<String>? = null,
+    /** Processing options for code analysis. */
+    val process: TreeSitterProcessConfig = TreeSitterProcessConfig(),
 )

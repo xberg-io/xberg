@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var extractor = new CustomTextExtractor();
+KreuzbergLib.RegisterDocumentExtractor(extractor);
+
 public class CustomTextExtractor : IDocumentExtractor
 {
     public string Name => "custom-text-extractor";
@@ -44,7 +47,4 @@ public class CustomTextExtractor : IDocumentExtractor
         return 50;
     }
 }
-
-var extractor = new CustomTextExtractor();
-KreuzbergLib.RegisterDocumentExtractor(extractor);
 ```

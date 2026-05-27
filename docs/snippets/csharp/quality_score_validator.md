@@ -20,6 +20,12 @@ public class QualityValidator : IValidator
     public void Shutdown() { }
 }
 
-var validator = new QualityValidator();
-KreuzbergLib.RegisterValidator(validator);
+class Program
+{
+    static void Main()
+    {
+        var validator = new QualityValidator();
+        KreuzbergLib.RegisterValidator(validator);
+    }
+}
 ```

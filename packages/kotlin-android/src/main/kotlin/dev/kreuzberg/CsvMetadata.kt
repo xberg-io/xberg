@@ -17,17 +17,16 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * CSV/TSV file metadata.
- */
+/** CSV/TSV file metadata. */
 data class CsvMetadata(
-    val rowCount: Int,
-    val columnCount: Int,
-    val delimiter: String?,
-    val hasHeader: Boolean,
-    val columnTypes: List<String>?
+    val rowCount: Int = 0,
+    val columnCount: Int = 0,
+    val delimiter: String? = null,
+    val hasHeader: Boolean = false,
+    val columnTypes: List<String>? = null,
 )

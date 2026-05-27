@@ -3,17 +3,17 @@ internal: true
 
 tasks:
   update:
-    desc: "Update Java dependencies within major versions (mvnw versions:use-next-versions)"
+    desc: "Update Java dependencies within major versions (mvn versions:use-next-versions)"
     silent: false
     cmds:
       - cmd: |
-          cd packages/java && ./mvnw versions:use-next-versions -DgenerateBackupPoms=false
+          cd packages/java && command -v mvn >/dev/null 2>&1 && mvn versions:use-next-versions -DgenerateBackupPoms=false || echo "Maven not found, skipping Java upgrade"
         ignore_error: false
 
   upgrade:
-    desc: "Upgrade Java dependencies to latest including breaking changes (mvnw versions:use-latest-releases)"
+    desc: "Upgrade Java dependencies to latest including breaking changes (mvn versions:use-latest-releases)"
     silent: false
     cmds:
       - cmd: |
-          cd packages/java && ./mvnw versions:use-latest-releases -DgenerateBackupPoms=false
+          cd packages/java && command -v mvn >/dev/null 2>&1 && mvn versions:use-latest-releases -DgenerateBackupPoms=false || echo "Maven not found, skipping Java upgrade"
         ignore_error: false

@@ -29,6 +29,7 @@ on:
       - "zensical.toml"
       - "pyproject.toml"
       - "alef.toml"
+      - "CHANGELOG.md"
       - ".github/workflows/ci-docs.yaml"
   workflow_dispatch:
 
@@ -47,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Lint documentation + validate snippets
         uses: kreuzberg-dev/actions/lint-docs@v1
@@ -55,14 +56,14 @@ jobs:
           working-directory: .
           strict: "true"
           validate-snippets: "true"
-          alef-ref: v0.16.69
+          alef-ref: v0.19.5
 
   build:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -73,7 +74,7 @@ jobs:
           strict: "true"
 
       - name: Upload site artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: docs-site
           path: site/
@@ -86,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download site artifact
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: docs-site
           path: site/

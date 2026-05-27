@@ -2,36 +2,24 @@
   "id": "register_post_processor_trait_bridge",
   "category": "plugin_api",
   "description": "register_post_processor: trait bridge",
-  "tags": ["trait-bridge"],
+  "tags": [
+    "trait-bridge"
+  ],
   "call": "register_post_processor",
-  "skip": {
-    "languages": [
-      "rust",
-      "python",
-      "node",
-      "go",
-      "ruby",
-      "php",
-      "java",
-      "csharp",
-      "kotlin",
-      "kotlin_android",
-      "swift",
-      "dart",
-      "wasm",
-      "r",
-      "elixir",
-      "zig",
-      "ffi"
-    ],
-    "reason": "Trait-bridge fixture support deferred to v0.14.4+"
-  },
   "input": {
     "processor": {
       "type": "test",
       "name": "test-processor"
     }
   },
+  "args": [
+    {
+      "name": "processor",
+      "field": "processor",
+      "arg_type": "test_backend",
+      "trait": "PostProcessor"
+    }
+  ],
   "assertions": [
     {
       "type": "not_error"

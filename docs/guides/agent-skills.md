@@ -43,7 +43,7 @@ skills/kreuzberg/
     ├── rust-api.md                 # Complete Rust API
     ├── cli-reference.md            # All CLI commands and flags
     ├── configuration.md            # Config file formats and schema
-    ├── supported-formats.md        # All 91+ supported formats
+    ├── supported-formats.md        # All 90+ supported formats
     ├── advanced-features.md        # Plugins, embeddings, MCP, security
     └── other-bindings.md           # Go, Ruby, Java, C#, PHP, Elixir
 ```

@@ -33,6 +33,7 @@ def create_converter(ocr_enabled: bool) -> DocumentConverter:
     if not ocr_enabled:
         try:
             from docling.datamodel.pipeline_options import PipelineOptions
+
             options = PipelineOptions(do_ocr=False)
             return DocumentConverter(pipeline_options=options)
         except (ImportError, TypeError):
@@ -62,7 +63,9 @@ def extract_sync(file_path: str, converter: DocumentConverter, output_format: st
     }
 
 
-def extract_batch(file_paths: list[str], converter: DocumentConverter, output_format: str = "markdown") -> list[dict[str, Any]]:
+def extract_batch(
+    file_paths: list[str], converter: DocumentConverter, output_format: str = "markdown"
+) -> list[dict[str, Any]]:
     """Extract multiple files using batch API."""
     start = time.perf_counter()
     results = converter.convert_all(file_paths, raises_on_error=False)
@@ -225,7 +228,10 @@ def main() -> None:
         sys.exit(64)
 
     if len(args) < 1:
-        print("Usage: docling_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format markdown|plaintext] <mode> <file_path> [additional_files...]", file=sys.stderr)
+        print(
+            "Usage: docling_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format markdown|plaintext] <mode> <file_path> [additional_files...]",
+            file=sys.stderr,
+        )
         print("Modes: sync, batch, server", file=sys.stderr)
         sys.exit(1)
 

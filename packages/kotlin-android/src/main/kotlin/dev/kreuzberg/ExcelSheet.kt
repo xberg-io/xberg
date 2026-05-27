@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,34 +25,23 @@ package dev.kreuzberg
 /**
  * Single Excel worksheet.
  *
- * Represents one sheet from an Excel workbook with its content
- * converted to Markdown format and dimensional statistics.
+ * Represents one sheet from an Excel workbook with its content converted to Markdown format and
+ * dimensional statistics.
  */
 data class ExcelSheet(
-    /**
-     * Sheet name as it appears in Excel
-     */
+    /** Sheet name as it appears in Excel */
     val name: String,
-    /**
-     * Sheet content converted to Markdown tables
-     */
+    /** Sheet content converted to Markdown tables */
     val markdown: String,
-    /**
-     * Number of rows
-     */
+    /** Number of rows */
     val rowCount: Long,
-    /**
-     * Number of columns
-     */
+    /** Number of columns */
     val colCount: Long,
-    /**
-     * Total number of non-empty cells
-     */
+    /** Total number of non-empty cells */
     val cellCount: Long,
     /**
-     * Pre-extracted table cells (2D vector of cell values)
-     * Populated during markdown generation to avoid re-parsing markdown.
-     * None for empty sheets.
+     * Pre-extracted table cells (2D vector of cell values) Populated during markdown generation to
+     * avoid re-parsing markdown. None for empty sheets.
      */
-    val tableCells: List<List<String>>?
+    val tableCells: List<List<String>>? = null,
 )

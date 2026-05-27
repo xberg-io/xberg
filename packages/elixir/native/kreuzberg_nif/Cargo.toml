@@ -1,12 +1,16 @@
 [package]
 name = "kreuzberg_nif"
-version = "5.0.0-rc.1"
+version = "5.0.0-rc.3"
 edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
 readme = false
 keywords = ["document", "extraction", "pdf", "ocr", "text"]
 categories = ["text-processing"]
+[package.metadata.cargo-machete]
+ignored = ["tokio", "async-trait", "ahash"]
+
+[workspace]
 
 [lib]
 name = "kreuzberg_nif"
@@ -14,38 +18,10 @@ name = "kreuzberg_nif"
 crate-type = ["cdylib"]
 
 [dependencies]
-kreuzberg = { path = "../../../../crates/kreuzberg", features = [
-  "full",
-  "pdf",
-  "ocr",
-  "paddle-ocr",
-  "paddle-ocr-types",
-  "layout-detection",
-  "layout-types",
-  "embeddings",
-  "embedding-presets",
-  "chunking",
-  "keywords-yake",
-  "keywords-rake",
-  "language-detection",
-  "html",
-  "tree-sitter",
-  "office",
-  "email",
-  "archives",
-  "stopwords",
-  "auto-rotate",
-  "auto-rotate-types",
-  "tokio-runtime",
-  "api",
-  "mcp",
-  "liter-llm",
-  "quality",
-] }
+ahash = "0.8"
+async-trait = "0.1"
+kreuzberg = { version = "5.0.0-rc.3", path = "../../../../crates/kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 rustler = "0.37"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
-
-[workspace]

@@ -1,5 +1,4 @@
 <!-- snippet:skip reason="Elixir Rustler NIFs cannot host async Send + Sync + 'static Rust trait objects via callbacks; the BEAM actor-model boundary requires plugin work to live in the Rust core. The alef-generated Elixir trait_call macro additionally has a backslash/encoding bug (separate alef-codegen ticket). Custom plugins must be implemented in Rust." -->
-
 Embedding backend registration is not available in the Elixir binding. Custom embedding backends must be implemented in Rust using the `EmbeddingBackend` trait and registered in the Rust core before being used by Elixir.
 
 To use custom embeddings in Elixir:

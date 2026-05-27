@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,31 +25,26 @@ package dev.kreuzberg
 /**
  * Layout detection configuration.
  *
- * Controls layout detection behavior in the extraction pipeline.
- * When set on `ExtractionConfig`, layout detection
- * is enabled for PDF extraction.
+ * Controls layout detection behavior in the extraction pipeline. When set on `ExtractionConfig`,
+ * layout detection is enabled for PDF extraction.
  */
 data class LayoutDetectionConfig(
-    /**
-     * Confidence threshold override (None = use model default).
-     */
-    val confidenceThreshold: Float?,
-    /**
-     * Whether to apply postprocessing heuristics (default: true).
-     */
-    val applyHeuristics: Boolean,
+    /** Confidence threshold override (None = use model default). */
+    val confidenceThreshold: Float? = null,
+    /** Whether to apply postprocessing heuristics (default: true). */
+    val applyHeuristics: Boolean = true,
     /**
      * Table structure recognition model.
      *
-     * Controls which model is used for table cell detection within layout-detected
-     * table regions. Defaults to `TableModel.Tatr`.
+     * Controls which model is used for table cell detection within layout-detected table regions.
+     * Defaults to `TableModel.Tatr`.
      */
-    val tableModel: TableModel,
+    val tableModel: TableModel = TableModel.TATR,
     /**
      * Hardware acceleration for ONNX models (layout detection + table structure).
      *
-     * When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
-     * is used for inference. Defaults to `null` (auto-select per platform).
+     * When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT) is used for
+     * inference. Defaults to `null` (auto-select per platform).
      */
-    val acceleration: AccelerationConfig?
+    val acceleration: AccelerationConfig? = null,
 )

@@ -58,7 +58,7 @@ jobs:
       release_docker: ${{ steps.meta.outputs.release_docker }}
     steps:
       - name: Checkout code (default)
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
 
       - name: Resolve release metadata
         id: meta
@@ -72,7 +72,7 @@ jobs:
 
       - name: Re-checkout at target ref
         if: ${{ steps.meta.outputs.checkout_ref != '' }}
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.meta.outputs.checkout_ref }}
           fetch-depth: 0
@@ -117,12 +117,12 @@ jobs:
       cli_exists: ${{ steps.cli.outputs.exists }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4.1.0
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -181,7 +181,7 @@ jobs:
     if: ${{ needs.prepare.outputs.release_docker == 'true' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
@@ -214,7 +214,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true')) }}
-        uses: docker/login-action@v4.1.0
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -232,7 +232,7 @@ jobs:
 
       - name: Build and push image
         if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') || (matrix.variant == 'cli' && needs.check-docker.outputs.cli_exists != 'true')) }}
-        uses: docker/build-push-action@v7.1.0
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}

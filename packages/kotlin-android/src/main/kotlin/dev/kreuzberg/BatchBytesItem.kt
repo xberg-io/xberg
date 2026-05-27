@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,20 +25,14 @@ package dev.kreuzberg
 /**
  * Batch item for byte array extraction.
  *
- * Used with `batch_extract_bytes` and `batch_extract_bytes_sync`
- * to represent a single item in a batch extraction job.
+ * Used with `batch_extract_bytes` and `batch_extract_bytes_sync` to represent a single item in a
+ * batch extraction job.
  */
 data class BatchBytesItem(
-    /**
-     * The content bytes to extract from
-     */
+    /** The content bytes to extract from */
     val content: ByteArray,
-    /**
-     * MIME type of the content (e.g., "application/pdf", "text/html")
-     */
+    /** MIME type of the content (e.g., "application/pdf", "text/html") */
     val mimeType: String,
-    /**
-     * Per-item configuration overrides (None uses batch-level defaults)
-     */
-    val config: FileExtractionConfig?
+    /** Per-item configuration overrides (None uses batch-level defaults) */
+    val config: FileExtractionConfig? = null,
 )

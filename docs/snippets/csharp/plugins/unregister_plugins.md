@@ -1,6 +1,19 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var processor = new UnregisterableProcessor();
+PostProcessorRegistry.Register(processor);
+
+Console.WriteLine("Processor registered");
+var processors = KreuzbergLib.ListPostProcessors();
+Console.WriteLine($"Active processors: {string.Join(", ", processors)}");
+
+PostProcessorRegistry.Unregister(processor.Name);
+Console.WriteLine("Processor unregistered");
+
+processors = KreuzbergLib.ListPostProcessors();
+Console.WriteLine($"Active processors: {string.Join(", ", processors)}");
+
 public class UnregisterableProcessor : IPostProcessor
 {
     public string Name => "removable-processor";
@@ -19,17 +32,4 @@ public class UnregisterableProcessor : IPostProcessor
     public ulong EstimatedDurationMs(ExtractionResult result) => 10;
     public int Priority() => 50;
 }
-
-var processor = new UnregisterableProcessor();
-PostProcessorRegistry.Register(processor);
-
-Console.WriteLine("Processor registered");
-var processors = KreuzbergLib.ListPostProcessors();
-Console.WriteLine($"Active processors: {string.Join(", ", processors)}");
-
-PostProcessorRegistry.Unregister(processor.Name);
-Console.WriteLine("Processor unregistered");
-
-processors = KreuzbergLib.ListPostProcessors();
-Console.WriteLine($"Active processors: {string.Join(", ", processors)}");
 ```

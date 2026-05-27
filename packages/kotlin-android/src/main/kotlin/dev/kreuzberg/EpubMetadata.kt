@@ -17,18 +17,17 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * EPUB metadata (Dublin Core extensions).
- */
+/** EPUB metadata (Dublin Core extensions). */
 data class EpubMetadata(
-    val coverage: String?,
-    val dcFormat: String?,
-    val relation: String?,
-    val source: String?,
-    val dcType: String?,
-    val coverImage: String?
+    val coverage: String? = null,
+    val dcFormat: String? = null,
+    val relation: String? = null,
+    val source: String? = null,
+    val dcType: String? = null,
+    val coverImage: String? = null,
 )

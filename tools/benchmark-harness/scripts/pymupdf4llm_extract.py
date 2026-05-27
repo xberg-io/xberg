@@ -10,15 +10,16 @@ import resource
 import sys
 import time
 
-# Import pymupdf.layout BEFORE pymupdf4llm to enable improved layout analysis
-# and suppress the "Consider using the pymupdf_layout package" info message.
-import pymupdf.layout  # noqa: F401
-import pymupdf4llm
-
 # Suppress MuPDF C-level error/warning messages that can corrupt the
 # persistent server's line-based JSON protocol on stdout.
 # See: https://github.com/pymupdf/PyMuPDF/issues/606
 import pymupdf
+
+# Import pymupdf.layout BEFORE pymupdf4llm to enable improved layout analysis
+# and suppress the "Consider using the pymupdf_layout package" info message.
+import pymupdf.layout
+import pymupdf4llm
+
 pymupdf.TOOLS.mupdf_display_errors(False)
 
 

@@ -1,5 +1,4 @@
 <!-- snippet:skip reason="swift-bridge does not generate Swift-side protocol constructors for plugin registration. The Rust-side FFI defines SwiftDocumentExtractorBox as an opaque extern \"Swift\" type, but swift-bridge does not surface the protocol definition or constructor in the generated Swift package. Custom implementations must be written in Rust." -->
-
 ```swift title="Swift"
 import Kreuzberg
 

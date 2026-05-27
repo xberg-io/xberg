@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,8 +25,8 @@ package dev.kreuzberg
 /**
  * API server configuration.
  *
- * This struct holds all configuration options for the Kreuzberg API server,
- * including host/port settings, CORS configuration, and upload limits.
+ * This struct holds all configuration options for the Kreuzberg API server, including host/port
+ * settings, CORS configuration, and upload limits.
  *
  * # Defaults
  *
@@ -36,28 +37,19 @@ package dev.kreuzberg
  * - `max_multipart_field_bytes`: 104_857_600 (100 MB)
  */
 data class ServerConfig(
-    /**
-     * Server host address (e.g., "127.0.0.1", "0.0.0.0")
-     */
-    val host: String,
-    /**
-     * Server port number
-     */
-    val port: Short,
+    /** Server host address (e.g., "127.0.0.1", "0.0.0.0") */
+    val host: String = "",
+    /** Server port number */
+    val port: Short = 0,
     /**
      * CORS allowed origins. Empty vector means allow all origins.
      *
-     * If this is an empty vector, the server will accept requests from any origin.
-     * If populated with specific origins (e.g., `"https://example.com"`), only
-     * those origins will be allowed.
+     * If this is an empty vector, the server will accept requests from any origin. If populated
+     * with specific origins (e.g., `"https://example.com"`), only those origins will be allowed.
      */
-    val corsOrigins: List<String>,
-    /**
-     * Maximum size of request body in bytes (default: 100 MB)
-     */
-    val maxRequestBodyBytes: Long,
-    /**
-     * Maximum size of multipart fields in bytes (default: 100 MB)
-     */
-    val maxMultipartFieldBytes: Long
+    val corsOrigins: List<String> = emptyList(),
+    /** Maximum size of request body in bytes (default: 100 MB) */
+    val maxRequestBodyBytes: Long = 0L,
+    /** Maximum size of multipart fields in bytes (default: 100 MB) */
+    val maxMultipartFieldBytes: Long = 0L,
 )

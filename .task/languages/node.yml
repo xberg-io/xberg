@@ -7,10 +7,7 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd packages/typescript && pnpm up
-        ignore_error: false
-      - cmd: |
-          cd packages/wasm && pnpm up
+          pnpm up
         ignore_error: false
 
   upgrade:
@@ -18,8 +15,5 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd packages/typescript && pnpm up --latest
-        ignore_error: false
-      - cmd: |
-          cd packages/wasm && pnpm up --latest
+          pnpm up --latest
         ignore_error: false

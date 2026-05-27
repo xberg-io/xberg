@@ -17,24 +17,17 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Embedded file descriptor extracted from the PDF name tree.
- */
+/** Embedded file descriptor extracted from the PDF name tree. */
 data class EmbeddedFile(
-    /**
-     * The filename as stored in the PDF name tree.
-     */
+    /** The filename as stored in the PDF name tree. */
     val name: String,
-    /**
-     * Raw file bytes from the embedded stream.
-     */
+    /** Raw file bytes from the embedded stream. */
     val data: ByteArray,
-    /**
-     * MIME type if specified in the filespec, otherwise `null`.
-     */
-    val mimeType: String?
+    /** MIME type if specified in the filespec, otherwise `null`. */
+    val mimeType: String? = null,
 )

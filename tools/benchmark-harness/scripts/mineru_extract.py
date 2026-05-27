@@ -33,6 +33,7 @@ from typing import Any
 # The API surface has changed across versions, so we attempt several known entry points.
 try:
     from magic_pdf.pipe.UNIPipe import UNIPipe  # noqa: F401
+
     HAS_PYTHON_API = True
 except ImportError:
     HAS_PYTHON_API = False
@@ -106,17 +107,17 @@ def _strip_markdown(text: str) -> str:
     global _MD_STRIP_RE
     if _MD_STRIP_RE is None:
         _MD_STRIP_RE = [
-            (re.compile(r"^#{1,6}\s+", re.MULTILINE), ""),         # ATX headings
-            (re.compile(r"^\s*[-*+]\s+", re.MULTILINE), ""),        # bullet markers
-            (re.compile(r"^\s*\d+\.\s+", re.MULTILINE), ""),        # ordered list markers
-            (re.compile(r"^>\s?", re.MULTILINE), ""),                # blockquotes
-            (re.compile(r"```[a-zA-Z0-9_-]*\n?"), ""),               # code fences
-            (re.compile(r"`([^`]+)`"), r"\1"),                       # inline code
-            (re.compile(r"\*\*([^*]+)\*\*"), r"\1"),                 # bold
-            (re.compile(r"\*([^*]+)\*"), r"\1"),                     # italic
-            (re.compile(r"!\[([^\]]*)\]\([^)]*\)"), r"\1"),          # images
-            (re.compile(r"\[([^\]]+)\]\([^)]*\)"), r"\1"),           # links
-            (re.compile(r"^\s*\|.*\|\s*$", re.MULTILINE), ""),       # table rows (drop)
+            (re.compile(r"^#{1,6}\s+", re.MULTILINE), ""),  # ATX headings
+            (re.compile(r"^\s*[-*+]\s+", re.MULTILINE), ""),  # bullet markers
+            (re.compile(r"^\s*\d+\.\s+", re.MULTILINE), ""),  # ordered list markers
+            (re.compile(r"^>\s?", re.MULTILINE), ""),  # blockquotes
+            (re.compile(r"```[a-zA-Z0-9_-]*\n?"), ""),  # code fences
+            (re.compile(r"`([^`]+)`"), r"\1"),  # inline code
+            (re.compile(r"\*\*([^*]+)\*\*"), r"\1"),  # bold
+            (re.compile(r"\*([^*]+)\*"), r"\1"),  # italic
+            (re.compile(r"!\[([^\]]*)\]\([^)]*\)"), r"\1"),  # images
+            (re.compile(r"\[([^\]]+)\]\([^)]*\)"), r"\1"),  # links
+            (re.compile(r"^\s*\|.*\|\s*$", re.MULTILINE), ""),  # table rows (drop)
         ]
     out = text
     for pattern, repl in _MD_STRIP_RE:
@@ -160,13 +161,15 @@ def extract_batch(file_paths: list[str], ocr_enabled: bool, output_format: str =
             payload.pop("_extraction_time_ms", None)
             results.append(payload)
         except Exception as e:
-            results.append({
-                "content": "",
-                "metadata": {
-                    "framework": "mineru",
-                    "error": str(e),
-                },
-            })
+            results.append(
+                {
+                    "content": "",
+                    "metadata": {
+                        "framework": "mineru",
+                        "error": str(e),
+                    },
+                }
+            )
 
     total_duration_ms = (time.perf_counter() - start) * 1000.0
     per_file_duration_ms = total_duration_ms / len(file_paths) if file_paths else 0
@@ -289,7 +292,10 @@ def main() -> None:
         sys.exit(64)
 
     if len(args) < 1:
-        print("Usage: mineru_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format=markdown|plaintext] <mode> <file_path> [additional_files...]", file=sys.stderr)
+        print(
+            "Usage: mineru_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format=markdown|plaintext] <mode> <file_path> [additional_files...]",
+            file=sys.stderr,
+        )
         print("Modes: sync, batch, server", file=sys.stderr)
         sys.exit(1)
 

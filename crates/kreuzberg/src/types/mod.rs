@@ -25,6 +25,7 @@ pub use document_structure::{
 };
 pub use extraction::*;
 pub use formats::*;
+pub use internal::InternalDocument;
 pub use metadata::*;
 pub use ocr_elements::*;
 pub use page::*;

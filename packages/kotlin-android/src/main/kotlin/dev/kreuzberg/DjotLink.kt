@@ -17,28 +17,19 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Link element in Djot.
- */
+/** Link element in Djot. */
 data class DjotLink(
-    /**
-     * Link URL
-     */
+    /** Link URL */
     val url: String,
-    /**
-     * Link text content
-     */
+    /** Link text content */
     val text: String,
-    /**
-     * Optional title
-     */
-    val title: String?,
-    /**
-     * Element attributes
-     */
-    val attributes: String?
+    /** Optional title */
+    val title: String? = null,
+    /** Element attributes */
+    val attributes: String? = null,
 )

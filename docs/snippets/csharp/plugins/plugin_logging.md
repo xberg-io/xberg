@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var processor = new LoggingPostProcessor();
+PostProcessorRegistry.Register(processor);
+
 public class LoggingPostProcessor : IPostProcessor
 {
     public string Name => "logging-processor";
@@ -46,7 +49,4 @@ public class LoggingPostProcessor : IPostProcessor
         return 10;
     }
 }
-
-var processor = new LoggingPostProcessor();
-PostProcessorRegistry.Register(processor);
 ```

@@ -116,9 +116,9 @@ tasks:
       - task: rust:build
 
   build:bindings:
-    desc: "Build all language bindings (skip Rust core)"
+    desc: "Build all language bindings"
     cmds:
-      - alef build
+      - task: alef:build
 
   build:cli:
     desc: "Build the kreuzberg CLI binary"
@@ -242,7 +242,8 @@ tasks:
       - task: kotlin_android:upgrade
       - task: r:upgrade
       - task: zig:upgrade
-      - alef update --latest
+      - cmd: alef update --latest
+        ignore_error: true
       - prek autoupdate
       - gau --update .
 
@@ -266,12 +267,12 @@ tasks:
 
   # === Alef lifecycle ===
   alef:generate:
-    desc: "Run full alef pipeline (generate + stubs + scaffold + readme + docs + e2e)"
+    desc: "Regenerate all Alef-managed outputs without formatting or building"
     cmds:
-      - alef all --clean
+      - alef all --clean --format=false
 
   alef:verify:
-    desc: "Check bindings are up-to-date (CI mode)"
+    desc: "Check Alef-generated files are up to date"
     cmds:
       - alef verify --exit-code
 
@@ -299,18 +300,18 @@ tasks:
   e2e:build:
     desc: "Build all language bindings used by e2e suites (release)"
     cmds:
-      - alef build --release --lang python,node,ruby,php,ffi,go,java,csharp,elixir,wasm,r,dart,kotlin,swift,zig
+      - alef build --release --lang python,node,ruby,php,ffi,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
 
   e2e:run:
     desc: "Run all e2e test suites across all languages"
     cmds:
-      - alef test --e2e --lang rust,python,node,ruby,php,go,java,csharp,elixir,wasm,r,dart,kotlin,swift,zig
+      - alef test --e2e --lang rust,python,node,ruby,php,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
 
   e2e:all:
     desc: "Build all bindings + run all e2e tests (single command)"
     cmds:
-      - alef build --release --lang python,node,ruby,php,ffi,go,java,csharp,elixir,wasm,r,dart,kotlin,swift,zig
-      - alef test --e2e --lang rust,python,node,ruby,php,go,java,csharp,elixir,wasm,r,dart,kotlin,swift,zig
+      - alef build --release --lang python,node,ruby,php,ffi,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
+      - alef test --e2e --lang rust,python,node,ruby,php,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
 
   e2e:test:
     desc: "Run E2E tests for all languages (alias for e2e:run)"
@@ -394,7 +395,7 @@ tasks:
   kotlin:e2e:
     desc: "Run Kotlin e2e tests"
     cmds:
-      - alef test --e2e --lang kotlin
+      - alef test --e2e --lang kotlin_android
 
   swift:e2e:
     desc: "Run Swift e2e tests"

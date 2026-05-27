@@ -22,7 +22,7 @@ runs:
     - name: Cache Tesseract & tessdata (macOS)
       if: runner.os == 'macOS'
       id: cache-tesseract-macos
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@v5
       with:
         path: |
           /usr/local/opt/tesseract/
@@ -48,7 +48,7 @@ runs:
     - name: Cache Tesseract data (Linux)
       if: runner.os == 'Linux'
       id: cache-tesseract-linux
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@v5
       with:
         path: |
           /usr/share/tesseract-ocr/5/tessdata/
@@ -66,7 +66,7 @@ runs:
     - name: Cache Tesseract (Windows)
       if: runner.os == 'Windows'
       id: cache-tesseract-windows
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@v5
       with:
         path: |
           C:\Program Files\Tesseract-OCR
@@ -78,7 +78,7 @@ runs:
     - name: Cache LLVM (Windows)
       if: runner.os == 'Windows'
       id: cache-llvm-windows
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@v5
       with:
         path: |
           C:\Program Files\LLVM
@@ -88,7 +88,7 @@ runs:
     - name: Cache CMake (Windows)
       if: runner.os == 'Windows'
       id: cache-cmake-windows
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@v5
       with:
         path: |
           C:\Program Files\CMake

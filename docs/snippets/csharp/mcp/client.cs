@@ -5,6 +5,12 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 
+var client = new McpClient();
+await client.StartAsync();
+var content = await client.ExtractFileAsync("document.pdf");
+Console.WriteLine(content);
+client.Stop();
+
 class McpClient
 {
     private Process _mcpProcess;
@@ -56,10 +62,4 @@ class McpClient
         _mcpProcess?.Kill();
     }
 }
-
-var client = new McpClient();
-await client.StartAsync();
-var content = await client.ExtractFileAsync("document.pdf");
-Console.WriteLine(content);
-client.Stop();
 ```

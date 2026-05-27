@@ -34,7 +34,7 @@ yarn add {{ package_name }}
 go get {{ package_name }}
 ```
 
-For more details on FFI setup and native library linking, see the [Go API Reference](https://kreuzberg.dev/reference/api-go/).
+For more details on FFI setup and native library linking, see the [Go API Reference](https://docs.kreuzberg.dev/reference/api-go/).
 
 {% elif pm == "maven" %}
 {% set maven_parts = package_name | split(":") %}
@@ -268,5 +268,5 @@ Pre-built binaries available for:
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.22.x for embeddings support
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 {% else %}
-- See [Installation Guide](https://kreuzberg.dev/getting-started/installation/) for requirements
+- See [Installation Guide](https://docs.kreuzberg.dev/getting-started/installation/) for requirements
 {% endif %}

@@ -46,6 +46,7 @@ impl PSMMode {
 ///
 /// This is the internal representation used by the OCR processor.
 /// Public API uses i32 for PyO3 compatibility, converted to u8 here for efficiency.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TesseractConfig {
     pub language: String,
@@ -165,6 +166,7 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
 }
 
 /// OCR extraction result
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractionResult {
     pub content: String,
@@ -174,6 +176,7 @@ pub struct ExtractionResult {
 }
 
 /// Extracted table from OCR
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Table {
     pub cells: Vec<Vec<String>>,

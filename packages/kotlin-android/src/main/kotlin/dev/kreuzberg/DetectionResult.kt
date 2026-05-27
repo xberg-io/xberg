@@ -17,15 +17,14 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Page-level detection result containing all detections and page metadata.
- */
+/** Page-level detection result containing all detections and page metadata. */
 data class DetectionResult(
     val pageWidth: Int,
     val pageHeight: Int,
-    val detections: List<LayoutDetection>
+    val detections: List<LayoutDetection> = emptyList(),
 )

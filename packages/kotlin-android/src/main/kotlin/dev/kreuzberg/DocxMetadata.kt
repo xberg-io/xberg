@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,29 +25,29 @@ package dev.kreuzberg
 /**
  * Word document metadata.
  *
- * Extracted from DOCX files using shared Office Open XML metadata extraction.
- * Integrates with `office_metadata` module for core/app/custom properties.
+ * Extracted from DOCX files using shared Office Open XML metadata extraction. Integrates with
+ * `office_metadata` module for core/app/custom properties.
  */
 data class DocxMetadata(
     /**
      * Core properties from docProps/core.xml (Dublin Core metadata)
      *
-     * Contains title, creator, subject, keywords, dates, etc.
-     * Shared format across DOCX/PPTX/XLSX documents.
+     * Contains title, creator, subject, keywords, dates, etc. Shared format across DOCX/PPTX/XLSX
+     * documents.
      */
-    val coreProperties: CoreProperties?,
+    val coreProperties: CoreProperties? = null,
     /**
      * Application properties from docProps/app.xml (Word-specific statistics)
      *
-     * Contains word count, page count, paragraph count, editing time, etc.
-     * DOCX-specific variant of Office application properties.
+     * Contains word count, page count, paragraph count, editing time, etc. DOCX-specific variant of
+     * Office application properties.
      */
-    val appProperties: DocxAppProperties?,
+    val appProperties: DocxAppProperties? = null,
     /**
      * Custom properties from docProps/custom.xml (user-defined properties)
      *
-     * Contains key-value pairs defined by users or applications.
-     * Values can be strings, numbers, booleans, or dates.
+     * Contains key-value pairs defined by users or applications. Values can be strings, numbers,
+     * booleans, or dates.
      */
-    val customProperties: Map<String, String>?
+    val customProperties: Map<String, Any>? = null,
 )

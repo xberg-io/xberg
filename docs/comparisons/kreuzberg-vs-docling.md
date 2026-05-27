@@ -7,7 +7,7 @@ Kreuzberg and Docling are both open-source document extraction libraries, but th
 |                  | Kreuzberg                                                         | Docling                                              |
 | ---------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
 | **Written in**   | Rust                                                              | Python                                               |
-| **File formats** | 91+                                                               | ~38 extensions (15+ types)                           |
+| **File formats** | 90+                                                               | ~38 extensions (15+ types)                           |
 | **Use from**     | Python, TypeScript, Go, Ruby, Java, C#, PHP, Elixir, Rust, Wasm   | Python                                               |
 | **License**      | Apache-2.0                                                        | Elastic-2.0                                          |
 | **OCR**          | Tesseract + PaddleOCR (local, multi-backend fallback)             | Tesseract + EasyOCR                                  |
@@ -30,7 +30,7 @@ If you need raw extraction speed without ML overhead, Kreuzberg is faster out of
 
 What each tool can ingest.
 
-- **Kreuzberg (91+ formats)** -- PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data (JSON/YAML/TOML), plus LaTeX, Typst, BibTeX, Jupyter notebooks, EPUB, OrgMode, and more.
+- **Kreuzberg (90+ formats)** -- PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data (JSON/YAML/TOML), plus LaTeX, Typst, BibTeX, Jupyter notebooks, EPUB, OrgMode, and more.
 - **Docling (~38 extensions)** -- PDFs, DOCX, PPTX, XLSX, HTML, Markdown, AsciiDoc, CSV, images, and JATS (scientific article XML). Focused on the formats that benefit most from layout analysis.
 
 Docling covers the core document types well. Kreuzberg handles the long tail -- archives, email files, structured data, code, and niche markup formats.

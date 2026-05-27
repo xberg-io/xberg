@@ -48,7 +48,7 @@ jobs:
       matrix:
         abi: [arm64-v8a, x86_64]
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
       - uses: kreuzberg-dev/actions/setup-rust@v1
         with:
           cache-key-prefix: ci-mobile-android-${{ matrix.abi }}
@@ -68,7 +68,7 @@ jobs:
       matrix:
         target: [aarch64-apple-ios, aarch64-apple-ios-sim]
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
       - uses: kreuzberg-dev/actions/setup-rust@v1
         with:
           target: ${{ matrix.target }}

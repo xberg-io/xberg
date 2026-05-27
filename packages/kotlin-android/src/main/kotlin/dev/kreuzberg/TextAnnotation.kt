@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,20 +25,15 @@ package dev.kreuzberg
 /**
  * Inline text annotation — byte-range based formatting and links.
  *
- * Annotations reference byte offsets into the node's text content,
- * enabling precise identification of formatted regions.
+ * Annotations reference byte offsets into the node's text content, enabling precise identification
+ * of formatted regions.
  */
 data class TextAnnotation(
-    /**
-     * Start byte offset in the node's text content (inclusive).
-     */
+    /** Start byte offset in the node's text content (inclusive). */
     val start: Int,
-    /**
-     * End byte offset in the node's text content (exclusive).
-     */
+    /** End byte offset in the node's text content (exclusive). */
     val end: Int,
-    /**
-     * Annotation type.
-     */
-    val kind: AnnotationKind
+    /** Annotation type. */
+    @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(`as` = AnnotationKind::class)
+    val kind: AnnotationKind,
 )

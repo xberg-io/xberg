@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-rb"
-version = "5.0.0-rc.1"
+version = "5.0.0-rc.3"
 edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
@@ -14,36 +14,12 @@ path = "../src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-kreuzberg = { path = "../../../../../crates/kreuzberg", features = [
-  "full",
-  "pdf",
-  "ocr",
-  "paddle-ocr",
-  "paddle-ocr-types",
-  "layout-detection",
-  "layout-types",
-  "embeddings",
-  "embedding-presets",
-  "chunking",
-  "keywords-yake",
-  "keywords-rake",
-  "language-detection",
-  "html",
-  "tree-sitter",
-  "office",
-  "email",
-  "archives",
-  "stopwords",
-  "auto-rotate",
-  "auto-rotate-types",
-  "tokio-runtime",
-  "api",
-  "mcp",
-  "liter-llm",
-  "quality",
-] }
+ahash = "0.8"
+async-trait = "0.1"
+kreuzberg = { version = "5.0.0-rc.2", path = "../../../../../crates/kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 magnus = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread"] }
-async-trait = "0.1"
+[package.metadata.cargo-machete]
+ignored = ["tokio", "async-trait", "ahash"]

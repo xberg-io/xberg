@@ -49,8 +49,8 @@ pub struct ContentFilterConfig {
     ///
     /// Note: when a layout-detection model is active, the model may independently
     /// classify page-header / page-footer regions as furniture on a per-page basis.
-    /// To preserve those regions, set `include_headers = true` and/or
-    /// `include_footers = true` in addition to disabling this flag.
+    /// To preserve those regions, set `include_headers = true`, `include_footers = true`,
+    /// or both, in addition to disabling this flag.
     ///
     /// Primarily affects PDF extraction.
     ///

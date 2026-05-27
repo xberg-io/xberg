@@ -195,7 +195,10 @@ def main() -> None:
         sys.exit(64)
 
     if len(args) < 1:
-        print("Usage: unstructured_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format=markdown|plaintext] <mode> <file_path>", file=sys.stderr)
+        print(
+            "Usage: unstructured_extract.py [--ocr|--no-ocr] [--timeout=SECS] [--format=markdown|plaintext] <mode> <file_path>",
+            file=sys.stderr,
+        )
         print("Modes: sync, server", file=sys.stderr)
         sys.exit(1)
 

@@ -13,7 +13,9 @@ package dev.kreuzberg
 
 @Suppress("TooManyFunctions")
 object KreuzbergBridge {
-    init { System.loadLibrary("kreuzberg_jni") }
+    init {
+        System.loadLibrary("kreuzberg_jni")
+    }
 
     @Throws(KreuzbergBridgeException::class)
     external fun nativeExtractBytes(content: String, mimeType: String, config: String): String
@@ -45,29 +47,37 @@ object KreuzbergBridge {
     @Throws(KreuzbergBridgeException::class)
     external fun nativeGetExtensionsForMime(mimeType: String): String
 
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeListEmbeddingBackends(): String
+    @Throws(KreuzbergBridgeException::class) external fun nativeClearEmbeddingBackends()
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeListEmbeddingBackends(): String
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeListDocumentExtractors(): String
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeClearDocumentExtractors()
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeListOcrBackends(): String
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeClearOcrBackends()
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeListPostProcessors(): String
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeClearPostProcessors()
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeListRenderers(): String
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeClearRenderers()
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeListValidators(): String
+
+    @Throws(KreuzbergBridgeException::class) external fun nativeClearValidators()
 
     @Throws(KreuzbergBridgeException::class)
-    external fun nativeListDocumentExtractors(): String
-
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeListOcrBackends(): String
-
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeListPostProcessors(): String
-
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeListRenderers(): String
-
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeListValidators(): String
-
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeEmbedTextsAsync(texts: String, config: String): String
-
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeRenderPdfPageToPng(pdfBytes: String, pageIndex: Long, dpi: Int, password: String): ByteArray
+    external fun nativeRenderPdfPageToPng(
+        pdfBytes: String,
+        pageIndex: Long,
+        dpi: Int,
+        password: String,
+    ): ByteArray
 
     @Throws(KreuzbergBridgeException::class)
     external fun nativeDetectMimeType(path: String, checkExists: Boolean): String
@@ -78,6 +88,5 @@ object KreuzbergBridge {
     @Throws(KreuzbergBridgeException::class)
     external fun nativeGetEmbeddingPreset(name: String): String?
 
-    @Throws(KreuzbergBridgeException::class)
-    external fun nativeListEmbeddingPresets(): String
+    @Throws(KreuzbergBridgeException::class) external fun nativeListEmbeddingPresets(): String
 }

@@ -1,18 +1,20 @@
 # Kreuzberg
 
-[![Rust](https://img.shields.io/crates/v/kreuzberg?label=Rust)](https://crates.io/crates/kreuzberg)
-[![Python](https://img.shields.io/pypi/v/kreuzberg?label=Python)](https://pypi.org/project/kreuzberg/)
-[![TypeScript](https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript)](https://www.npmjs.com/package/@kreuzberg/node)
-[![WASM](https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM)](https://www.npmjs.com/package/@kreuzberg/wasm)
-[![Ruby](https://img.shields.io/gem/v/kreuzberg?label=Ruby)](https://rubygems.org/gems/kreuzberg)
-[![Java](https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java)](https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg)
-[![Go](https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go)](https://pkg.go.dev/github.com/kreuzberg-dev/kreuzberg)
-[![C#](https://img.shields.io/nuget/v/Kreuzberg?label=C%23)](https://www.nuget.org/packages/Kreuzberg/)
+[![Bindings](https://img.shields.io/badge/Bindings-alef%20%D7%90-007ec6)](https://github.com/kreuzberg-dev/alef)
 
-[![License: Elastic-2.0](https://img.shields.io/badge/License-Elastic--2.0-blue.svg)](https://www.elastic.co/licensing/elastic-license)
-[![Documentation](https://img.shields.io/badge/docs-kreuzberg.dev-blue)](https://kreuzberg.dev/)
-[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-yellow)](https://huggingface.co/Kreuzberg)
-[![Discord](https://img.shields.io/badge/Discord-Join%20our%20community-7289da)](https://discord.gg/xt9WY3GnKR)
+[![Rust](https://img.shields.io/crates/v/kreuzberg?label=Rust&color=007ec6)](https://crates.io/crates/kreuzberg)
+[![Python](https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6)](https://pypi.org/project/kreuzberg/)
+[![TypeScript](https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript&color=007ec6)](https://www.npmjs.com/package/@kreuzberg/node)
+[![WASM](https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6)](https://www.npmjs.com/package/@kreuzberg/wasm)
+[![Ruby](https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6)](https://rubygems.org/gems/kreuzberg)
+[![Java](https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6)](https://central.sonatype.com/artifact/dev.kreuzberg/kreuzberg)
+[![Go](https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6)](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/go/v5)
+[![C#](https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6)](https://www.nuget.org/packages/Kreuzberg/)
+
+[![License: Elastic-2.0](https://img.shields.io/badge/License-Elastic--2.0-007ec6)](https://www.elastic.co/licensing/elastic-license)
+[![Documentation](https://img.shields.io/badge/Docs-kreuzberg-007ec6)](https://kreuzberg.dev/)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Kreuzberg-007ec6)](https://huggingface.co/Kreuzberg)
+[![Discord](https://img.shields.io/badge/Discord-Chat-007ec6)](https://discord.gg/xt9WY3GnKR)
 
 High-performance document intelligence library for Rust. Extract text, metadata, and structured information from PDFs, Office documents, images, and 75 formats.
 
@@ -62,7 +64,7 @@ kreuzberg = { version = "4.0", features = ["pdf-bundled"] }
 kreuzberg = { version = "4.0", features = ["pdf-system"] }
 ```
 
-For more details on feature flags and configuration options, see the [Features documentation](https://docs.kreuzberg.dev/rust/features/).
+For more details on feature flags and configuration options, see the [Kreuzberg documentation](https://docs.kreuzberg.dev).
 
 ## System Requirements
 
@@ -192,7 +194,7 @@ fn main() -> kreuzberg::Result<()> {
 
 ## Code Intelligence
 
-Kreuzberg integrates [tree-sitter-language-pack](https://docs.tree-sitter-language-pack.kreuzberg.dev) to parse and analyze source code files across **248 programming languages**. When you extract a source code file, Kreuzberg automatically detects the language and produces structured analysis including functions, classes, imports, exports, symbols, diagnostics, and semantic code chunks.
+Kreuzberg integrates [tree-sitter-language-pack](https://docs.tree-sitter-language-pack.kreuzberg.dev) to parse and analyze source code files across **300+ programming languages**. When you extract a source code file, Kreuzberg automatically detects the language and produces structured analysis including functions, classes, imports, exports, symbols, diagnostics, and semantic code chunks.
 
 Code intelligence data is available via the `metadata.format` field as a `FormatMetadata::Code` variant containing a `ProcessResult`.
 
@@ -236,7 +238,7 @@ fn main() -> kreuzberg::Result<()> {
 }
 ```
 
-Requires the `tree-sitter` feature flag (included in `full`). See the [Code Intelligence Guide](https://docs.kreuzberg.dev/guides/code-intelligence/) for configuration details and examples in all languages.
+Requires the `tree-sitter` feature flag (included in `full`). See the [Kreuzberg docs](https://docs.kreuzberg.dev/) for configuration details and examples in all languages.
 
 ## Features
 

@@ -17,11 +17,10 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
- */
+/** Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right. */
 data class BBox(val x1: Float, val y1: Float, val x2: Float, val y2: Float)

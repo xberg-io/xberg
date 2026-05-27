@@ -11,3 +11,5 @@ allowBuilds:
 sharedWorkspaceLockfile: true
 autoInstallPeers: true
 hoist: true
+overrides:
+  glob: "10.5.0"

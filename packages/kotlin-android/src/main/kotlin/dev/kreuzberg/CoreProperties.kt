@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,68 +25,38 @@ package dev.kreuzberg
 /**
  * Dublin Core metadata from docProps/core.xml
  *
- * Contains standard metadata fields defined by the Dublin Core standard
- * and Office-specific extensions.
+ * Contains standard metadata fields defined by the Dublin Core standard and Office-specific
+ * extensions.
  */
 data class CoreProperties(
-    /**
-     * Document title
-     */
-    val title: String?,
-    /**
-     * Document subject/topic
-     */
-    val subject: String?,
-    /**
-     * Document creator/author
-     */
-    val creator: String?,
-    /**
-     * Keywords or tags
-     */
-    val keywords: String?,
-    /**
-     * Document description/abstract
-     */
-    val description: String?,
-    /**
-     * User who last modified the document
-     */
-    val lastModifiedBy: String?,
-    /**
-     * Revision number
-     */
-    val revision: String?,
-    /**
-     * Creation timestamp (ISO 8601)
-     */
-    val created: String?,
-    /**
-     * Last modification timestamp (ISO 8601)
-     */
-    val modified: String?,
-    /**
-     * Document category
-     */
-    val category: String?,
-    /**
-     * Content status (Draft, Final, etc.)
-     */
-    val contentStatus: String?,
-    /**
-     * Document language
-     */
-    val language: String?,
-    /**
-     * Unique identifier
-     */
-    val identifier: String?,
-    /**
-     * Document version
-     */
-    val version: String?,
-    /**
-     * Last print timestamp (ISO 8601)
-     */
-    val lastPrinted: String?
+    /** Document title */
+    val title: String? = null,
+    /** Document subject/topic */
+    val subject: String? = null,
+    /** Document creator/author */
+    val creator: String? = null,
+    /** Keywords or tags */
+    val keywords: String? = null,
+    /** Document description/abstract */
+    val description: String? = null,
+    /** User who last modified the document */
+    val lastModifiedBy: String? = null,
+    /** Revision number */
+    val revision: String? = null,
+    /** Creation timestamp (ISO 8601) */
+    val created: String? = null,
+    /** Last modification timestamp (ISO 8601) */
+    val modified: String? = null,
+    /** Document category */
+    val category: String? = null,
+    /** Content status (Draft, Final, etc.) */
+    val contentStatus: String? = null,
+    /** Document language */
+    val language: String? = null,
+    /** Unique identifier */
+    val identifier: String? = null,
+    /** Document version */
+    val version: String? = null,
+    /** Last print timestamp (ISO 8601) */
+    val lastPrinted: String? = null,
 )

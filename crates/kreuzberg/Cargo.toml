@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "High-performance document intelligence library for Rust. Extract text, metadata, and structured data from PDFs, Office documents, images, and 91+ formats and 248 programming languages via tree-sitter code intelligence with async/sync APIs."
+description = "High-performance document intelligence library for Rust. Extract text, metadata, and structured data from PDFs, Office documents, images, and 90+ formats and 300+ programming languages via tree-sitter code intelligence with async/sync APIs."
 license.workspace = true
 repository = "https://github.com/kreuzberg-dev/kreuzberg"
 homepage = "https://kreuzberg.dev"
@@ -329,7 +329,7 @@ itertools = { workspace = true, optional = true }
 jotdown = "0.10"
 kamadak-exif = { version = "0.6.1", optional = true }
 
-kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "5.0.0-rc.1", optional = true }
+kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "5.0.0-rc.3", optional = true }
 libc = { workspace = true }
 # liter-llm is declared in the platform-conditional dependencies block below — it must be
 # excluded on Windows because it pulls reqwest/rustls -> aws-lc-rs -> aws-lc-sys, which fails
@@ -382,7 +382,7 @@ sha2 = { version = "0.11", optional = true }
 simdutf8 = { version = "0.1", optional = true }
 snap = { version = "1.1", optional = true }
 strum = { version = "0.28", features = ["derive"], optional = true }
-tar = { version = "0.4.45", optional = true }
+tar = { version = "^0.4", optional = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tiff = { version = "0.11", optional = true }
@@ -403,7 +403,7 @@ tower-http = { version = "0.6", features = [
     "compression-full",
 ], optional = true }
 tracing = { workspace = true }
-tracing-opentelemetry = { version = "0.32", optional = true }
+tracing-opentelemetry = { version = "0.33", optional = true }
 unhwp = { version = "0.3.2", default-features = false, features = ["hwpx"], optional = true }
 unicode-normalization = { version = "0.1.25", optional = true }
 urlencoding = "2"
@@ -418,7 +418,7 @@ zip = { version = ">=7.0.0", optional = true, default-features = false, features
 [target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32")))'.dependencies]
 hf-hub = { version = "0.5", default-features = false, features = ["ureq"], optional = true }
 # PaddleOCR via ONNX Runtime - not available on WASM (vendored from paddle-ocr-rs)
-kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "5.0.0-rc.1", optional = true }
+kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "5.0.0-rc.3", optional = true }
 # liter-llm pulls reqwest/rustls -> aws-lc-rs -> aws-lc-sys. aws-lc-sys 0.40 fails to build on
 # Windows MSVC (stdalign feature detection treats `-WX` warnings as errors). Until upstream ships
 # a fix, restrict liter-llm to non-Windows targets so Windows FFI/CLI builds don't pull aws-lc-sys.
@@ -431,7 +431,7 @@ ureq = { version = "3.3", default-features = false, features = ["rustls", "json"
 [target.'cfg(all(target_os = "windows", not(target_arch = "wasm32")))'.dependencies]
 hf-hub = { version = "0.5", default-features = false, features = ["ureq"], optional = true }
 # PaddleOCR via ONNX Runtime - not available on WASM (vendored from paddle-ocr-rs)
-kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "5.0.0-rc.1", optional = true }
+kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "5.0.0-rc.3", optional = true }
 # Force ureq (transitive dep via hf-hub) to use native-tls on Windows
 ureq = { version = "3.3", default-features = false, features = [
     "native-tls",
@@ -450,7 +450,7 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 # On wasm32, swap kreuzberg-tesseract from its native default ("static-linking" -> "build-tesseract")
 # to the WASI-SDK build path ("build-tesseract-wasm") and bundle eng.traineddata so OCR works
 # in-memory with no filesystem.
-kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "5.0.0-rc.1", default-features = false, features = [
+kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "5.0.0-rc.3", default-features = false, features = [
     "build-tesseract-wasm",
     "bundle-tessdata-eng",
 ], optional = true }
@@ -470,12 +470,17 @@ filetime = "0.2"
 image = { workspace = true, default-features = false, features = ["png"] }
 jsonschema = "0.46"
 serial_test = "3.4.0"
-tar = "0.4.45"
+tar = "^0.4"
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"] }
 tokio-test = "0.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zip = { version = ">=7.0.0, <8.7.0", default-features = false, features = ["deflate-flate2"] }
+
+[[bench]]
+name = "text_quality"
+harness = false
+required-features = ["quality"]
 
 [lints]
 workspace = true

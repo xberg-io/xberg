@@ -1,5 +1,4 @@
 <!-- snippet:skip reason="Dart cannot construct the opaque BoxFn closure types required by createPostProcessorDartImpl — flutter_rust_bridge generates them as RustOpaqueInterface with no Dart-side wrapper. The closure-captured state pattern is therefore unreachable. Custom plugins must be written in Rust." -->
-
 ```dart title="Dart"
 import 'package:kreuzberg/kreuzberg.dart';
 

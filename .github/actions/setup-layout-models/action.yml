@@ -37,7 +37,7 @@ runs:
 
     - name: Restore layout models from cache
       if: inputs.cache-enabled == 'true'
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@v5
       id: cache-models
       with:
         path: ~/.cache/kreuzberg/layout

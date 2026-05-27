@@ -5,6 +5,21 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 
+var dockerClient = new DockerKreuzbergLib();
+
+try
+{
+    await dockerClient.StartContainerAsync();
+    await Task.Delay(2000);
+
+    var content = await dockerClient.ExtractFileAsync("document.pdf");
+    Console.WriteLine($"Extracted content:\n{content}");
+}
+finally
+{
+    await dockerClient.StopContainerAsync();
+}
+
 class DockerKreuzbergLib
 {
     private const string ContainerName = "kreuzberg-api";
@@ -77,20 +92,5 @@ class DockerKreuzbergLib
 
         Console.WriteLine("Container stopped and removed");
     }
-}
-
-var dockerClient = new DockerKreuzbergLib();
-
-try
-{
-    await dockerClient.StartContainerAsync();
-    await Task.Delay(2000); 
-
-    var content = await dockerClient.ExtractFileAsync("document.pdf");
-    Console.WriteLine($"Extracted content:\n{content}");
-}
-finally
-{
-    await dockerClient.StopContainerAsync();
 }
 ```

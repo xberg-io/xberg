@@ -1,6 +1,6 @@
 # Kreuzberg
 
-> High-performance document intelligence library with a Rust core and bindings for 12 languages. Extract text, metadata, and structured data from 88+ file formats including PDF, DOCX, PPTX, XLSX, HTML, images (with OCR), email, archives, and more.
+> High-performance document intelligence library with a Rust core and bindings for 12 languages. Extract text, metadata, and structured data from 90+ file formats including PDF, DOCX, PPTX, XLSX, HTML, images (with OCR), email, archives, and more.
 
 Kreuzberg provides async/sync APIs, text chunking, language detection, keyword extraction, and an extensible plugin system. It is 10-50x faster than pure-Python alternatives thanks to its Rust core.
 
@@ -55,7 +55,7 @@ Kreuzberg provides async/sync APIs, text chunking, language detection, keyword e
 - [Configuration Reference](https://docs.kreuzberg.dev/reference/configuration/): Full configuration options
 - [Environment Variables](https://docs.kreuzberg.dev/reference/environment-variables/): KREUZBERG_* environment variable reference
 - [File Size Limits](https://docs.kreuzberg.dev/reference/file-size-limits/): Upload and processing size limits
-- [Format Support](https://docs.kreuzberg.dev/reference/formats/): Supported file formats (75+)
+- [Format Support](https://docs.kreuzberg.dev/reference/formats/): Supported file formats (90+)
 - [Types](https://docs.kreuzberg.dev/reference/types/): Type definitions
 - [Errors](https://docs.kreuzberg.dev/reference/errors/): Error types and handling
 

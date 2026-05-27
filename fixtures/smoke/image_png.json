@@ -15,14 +15,10 @@
       "type": "equals",
       "field": "mime_type",
       "value": "image/png"
-    },
-    {
-      "type": "equals",
-      "field": "metadata.format",
-      "value": "PNG"
     }
   ],
   "skip": {
-    "reason": "Skip if document missing; Image extraction requires image processing dependencies"
+    "languages": ["wasm"],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
   }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-node"
-version = "5.0.0-rc.1"
+version = "5.0.0-rc.3"
 edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
@@ -10,43 +10,44 @@ categories = ["text-processing"]
 
 # `serde_json` is emitted unconditionally above so the manifest is stable
 # across regens, but for umbrella crates with no JSON-marshalled return types
-# it is genuinely unused. List it here so `cargo machete` doesn't flag the
-# no-json case as a real finding.
+# it is genuinely unused. The conditional `async-trait` / `futures-util` deps
+# are similarly flagged when the umbrella has trait-bridge / streaming
+# adapters configured but no actual async-trait callsite in this binding.
 [package.metadata.cargo-machete]
-ignored = ["serde_json"]
+ignored = ["serde_json", "async-trait"]
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
 async-trait = "0.1"
-kreuzberg = { path = "../kreuzberg", features = [
-  "full",
-  "pdf",
-  "ocr",
-  "paddle-ocr",
-  "paddle-ocr-types",
-  "layout-detection",
-  "layout-types",
-  "embeddings",
-  "embedding-presets",
-  "chunking",
-  "keywords-yake",
-  "keywords-rake",
-  "language-detection",
-  "html",
-  "tree-sitter",
-  "office",
-  "email",
-  "archives",
-  "stopwords",
-  "auto-rotate",
-  "auto-rotate-types",
-  "tokio-runtime",
-  "api",
-  "mcp",
-  "liter-llm",
-  "quality",
+kreuzberg = { version = "5.0.0-rc.3", path = "../kreuzberg", features = [
+	"full",
+	"pdf",
+	"ocr",
+	"paddle-ocr",
+	"paddle-ocr-types",
+	"layout-detection",
+	"layout-types",
+	"embeddings",
+	"embedding-presets",
+	"chunking",
+	"keywords-yake",
+	"keywords-rake",
+	"language-detection",
+	"html",
+	"tree-sitter",
+	"office",
+	"email",
+	"archives",
+	"stopwords",
+	"auto-rotate",
+	"auto-rotate-types",
+	"tokio-runtime",
+	"api",
+	"mcp",
+	"liter-llm",
+	"quality",
 ] }
 napi = { version = "3", features = ["async", "serde-json"] }
 napi-derive = "3"

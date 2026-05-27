@@ -44,14 +44,14 @@ defaults:
 jobs:
   setup:
     name: Build harness + native libs
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
     outputs:
       artifact-name: benchmarks-target
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -101,7 +101,7 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space before artifact upload"
 
       - name: Upload build artifacts (harness binary + kreuzberg-cli)
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-target
           path: |
@@ -111,7 +111,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload benchmark harness binary (for third-party jobs)
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-harness-binary
           path: |
@@ -124,7 +124,7 @@ jobs:
   bench-rust:
     name: bench-rust (${{ matrix.pipeline }}, ${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: setup
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -135,7 +135,7 @@ jobs:
         output_format: [markdown, plaintext]
         mode: [single-file, batch]
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -157,7 +157,7 @@ jobs:
           report-stats: "true"
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.setup.outputs.artifact-name }}
           path: target/release
@@ -189,7 +189,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-rust-${{ matrix.pipeline }}-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
@@ -199,7 +199,7 @@ jobs:
     name: docling (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -210,7 +210,7 @@ jobs:
         shard: [1, 2, 3]
         output_format: [markdown, plaintext]
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -219,7 +219,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -257,7 +257,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-docling-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
@@ -267,7 +267,7 @@ jobs:
     name: markitdown (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -280,7 +280,7 @@ jobs:
         exclude:
           - output_format: plaintext
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -289,7 +289,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -323,7 +323,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-markitdown-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
@@ -333,7 +333,7 @@ jobs:
     name: pandoc (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -343,7 +343,7 @@ jobs:
         mode: [single-file]
         output_format: [markdown, plaintext]
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -352,7 +352,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -391,7 +391,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-pandoc-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
@@ -401,7 +401,7 @@ jobs:
     name: unstructured (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/4)
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -412,7 +412,7 @@ jobs:
         shard: [1, 2, 3, 4]
         output_format: [markdown, plaintext]
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -421,7 +421,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -459,7 +459,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-unstructured-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
@@ -469,7 +469,7 @@ jobs:
     name: tika (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -482,7 +482,7 @@ jobs:
         exclude:
           - output_format: markdown
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -491,7 +491,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -505,7 +505,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Setup Java
-        uses: actions/setup-java@v5.2.0
+        uses: actions/setup-java@v5
         id: setup-java
         with:
           distribution: "temurin"
@@ -529,7 +529,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-tika-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
@@ -539,7 +539,7 @@ jobs:
     name: pymupdf4llm (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -552,7 +552,7 @@ jobs:
         exclude:
           - output_format: plaintext
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -561,7 +561,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -600,7 +600,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-pymupdf4llm-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
@@ -610,7 +610,7 @@ jobs:
     name: pdfplumber (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -622,7 +622,7 @@ jobs:
         exclude:
           - output_format: markdown
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -631,7 +631,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -664,7 +664,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-pdfplumber-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
@@ -674,7 +674,7 @@ jobs:
     name: mineru (${{ matrix.output_format }}, ${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -685,7 +685,7 @@ jobs:
         shard: [1, 2, 3]
         output_format: [markdown, plaintext]
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -694,7 +694,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -732,7 +732,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-mineru-${{ matrix.output_format }}-${{ matrix.mode }}-shard${{ matrix.shard }}-${{ github.run_id }}
           path: benchmark-results/
@@ -742,7 +742,7 @@ jobs:
     name: pypdf (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -754,7 +754,7 @@ jobs:
         exclude:
           - output_format: markdown
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -763,7 +763,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -796,7 +796,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-pypdf-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
@@ -806,7 +806,7 @@ jobs:
     name: pdfminer (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -818,7 +818,7 @@ jobs:
         exclude:
           - output_format: markdown
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -827,7 +827,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -860,7 +860,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-pdfminer-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
@@ -870,7 +870,7 @@ jobs:
     name: pdftotext (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -882,7 +882,7 @@ jobs:
         exclude:
           - output_format: markdown
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -891,7 +891,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -929,7 +929,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-pdftotext-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
@@ -939,7 +939,7 @@ jobs:
     name: playa-pdf (${{ matrix.output_format }}, ${{ matrix.mode }})
     needs: bench-rust
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: runner-medium-arm64
     timeout-minutes: 360
     permissions:
       contents: read
@@ -951,7 +951,7 @@ jobs:
         exclude:
           - output_format: markdown
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch || github.ref }}
 
@@ -960,7 +960,7 @@ jobs:
         uses: kreuzberg-dev/actions/free-disk-space-linux@v1
 
       - name: Download benchmark harness binary
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: benchmark-harness-binary
           path: target/release
@@ -993,7 +993,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-playa-pdf-${{ matrix.output_format }}-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
@@ -1022,7 +1022,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -1032,7 +1032,7 @@ jobs:
           cache-key-prefix: aggregate
 
       - name: Download all benchmark artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           pattern: "benchmarks-*"
           path: benchmark-artifacts/

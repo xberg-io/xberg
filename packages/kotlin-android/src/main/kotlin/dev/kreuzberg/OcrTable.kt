@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,20 +28,12 @@ package dev.kreuzberg
  * Represents a table structure recognized during OCR processing.
  */
 data class OcrTable(
-    /**
-     * Table cells as a 2D vector (rows × columns)
-     */
-    val cells: List<List<String>>,
-    /**
-     * Markdown representation of the table
-     */
+    /** Table cells as a 2D vector (rows × columns) */
+    val cells: List<List<String>> = emptyList(),
+    /** Markdown representation of the table */
     val markdown: String,
-    /**
-     * Page number where the table was found (1-indexed)
-     */
+    /** Page number where the table was found (1-indexed) */
     val pageNumber: Int,
-    /**
-     * Bounding box of the table in pixel coordinates (from OCR word positions).
-     */
-    val boundingBox: OcrTableBoundingBox?
+    /** Bounding box of the table in pixel coordinates (from OCR word positions). */
+    val boundingBox: OcrTableBoundingBox? = null,
 )

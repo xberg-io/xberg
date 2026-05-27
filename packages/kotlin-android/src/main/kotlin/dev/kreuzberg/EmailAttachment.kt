@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,29 +28,16 @@ package dev.kreuzberg
  * Contains metadata and optionally the content of an email attachment.
  */
 data class EmailAttachment(
-    /**
-     * Attachment name (from Content-Disposition header)
-     */
-    val name: String?,
-    /**
-     * Filename of the attachment
-     */
-    val filename: String?,
-    /**
-     * MIME type of the attachment
-     */
-    val mimeType: String?,
-    /**
-     * Size in bytes
-     */
-    val size: Long?,
-    /**
-     * Whether this attachment is an image
-     */
+    /** Attachment name (from Content-Disposition header) */
+    val name: String? = null,
+    /** Filename of the attachment */
+    val filename: String? = null,
+    /** MIME type of the attachment */
+    val mimeType: String? = null,
+    /** Size in bytes */
+    val size: Long? = null,
+    /** Whether this attachment is an image */
     val isImage: Boolean,
-    /**
-     * Attachment data (if extracted).
-     * Uses `bytes.Bytes` for cheap cloning of large buffers.
-     */
-    val data: ByteArray?
+    /** Attachment data (if extracted). Uses `bytes.Bytes` for cheap cloning of large buffers. */
+    val data: ByteArray? = null,
 )

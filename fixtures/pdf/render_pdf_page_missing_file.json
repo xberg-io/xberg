@@ -4,8 +4,25 @@
   "description": "render_pdf_page_to_png: missing file",
   "call": "render_pdf_page_to_png",
   "skip": {
-    "skip_languages": ["rust"],
-    "reason": "bytes arg type loads file at test-run time; missing-file error path not expressible via Rust fixture path"
+    "languages": [
+      "python",
+      "node",
+      "ruby",
+      "php",
+      "ffi",
+      "go",
+      "java",
+      "csharp",
+      "elixir",
+      "wasm",
+      "r",
+      "dart",
+      "kotlin_android",
+      "swift",
+      "zig",
+      "rust"
+    ],
+    "reason": "render_pdf_page_to_png takes pre-loaded pdf_bytes; the harness materializes file contents at generation time, so a runtime missing-file error path is not expressible via this fixture shape"
   },
   "input": {
     "pdf_path": "nonexistent/file.pdf",

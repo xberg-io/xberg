@@ -49,7 +49,7 @@ inline fn _first_error(comptime E: type) E {
 /// - `LockPoisoned` - Mutex/RwLock poisoning (should not happen in normal operation)
 /// - `UnsupportedFormat` - Unsupported MIME type or file format
 /// - `Other` - Catch-all for uncommon errors
-pub const KreuzbergError = error {
+pub const KreuzbergError = error{
     Io,
     Parsing,
     Ocr,
@@ -94,6 +94,7 @@ pub const ContentFilterConfig = struct {
     ///
     /// - PDF: Disables top-margin furniture stripping and prevents the layout
     ///   model from treating `PageHeader`-classified regions as furniture.
+    ///
     /// - DOCX: Includes document headers in text output.
     /// - RTF/ODT: Headers already included; this is a no-op when true.
     /// - HTML/EPUB: Keeps `<header>` element content.
@@ -104,6 +105,7 @@ pub const ContentFilterConfig = struct {
     ///
     /// - PDF: Disables bottom-margin furniture stripping and prevents the layout
     ///   model from treating `PageFooter`-classified regions as furniture.
+    ///
     /// - DOCX: Includes document footers in text output.
     /// - RTF/ODT: Footers already included; this is a no-op when true.
     /// - HTML/EPUB: Keeps `<footer>` element content.
@@ -118,8 +120,8 @@ pub const ContentFilterConfig = struct {
     ///
     /// Note: when a layout-detection model is active, the model may independently
     /// classify page-header / page-footer regions as furniture on a per-page basis.
-    /// To preserve those regions, set `include_headers = true` and/or
-    /// `include_footers = true` in addition to disabling this flag.
+    /// To preserve those regions, set `include_headers = true`, `include_footers = true`,
+    /// or both, in addition to disabling this flag.
     ///
     /// Primarily affects PDF extraction.
     ///
@@ -145,6 +147,7 @@ pub const EmailConfig = struct {
     /// emitted. Users should verify output when supplying unusual values.
     ///
     /// Common values:
+    ///
     /// - 1250: Central European (Polish, Czech, Hungarian, etc.)
     /// - 1251: Cyrillic (Russian, Ukrainian, Bulgarian, etc.)
     /// - 1252: Western European (default)
@@ -244,7 +247,7 @@ pub const ExtractionConfig = struct {
     ///
     /// Controls maximum archive size, compression ratio, file count, and other
     /// security thresholds to prevent decompression bomb attacks. Also caps
-    /// nesting depth, iteration count, entity / token length, cumulative
+    /// nesting depth, iteration count, entity / token length, total
     /// content size, and table cell count for every extraction path that
     /// ingests user-controlled bytes.
     /// When `null`, default limits are used.
@@ -252,6 +255,7 @@ pub const ExtractionConfig = struct {
     /// Content text format (default: Plain).
     ///
     /// Controls the format of the extracted content:
+    ///
     /// - `Plain`: Raw extracted text (default)
     /// - `Markdown`: Markdown formatted output
     /// - `Djot`: Djot markup format (requires djot feature)
@@ -276,7 +280,7 @@ pub const ExtractionConfig = struct {
     ///
     /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
     /// table, list, and figure detection in the structure pipeline that would
-    /// otherwise rely on font-clustering heuristics alone. Substantially
+    /// otherwise rely on font-clustering heuristics alone. Significantly
     /// improves SF1 (structural F1) at the cost of inference latency
     /// (~150-300ms/page CPU, ~20-50ms/page GPU). Default: `false`.
     /// Requires the `layout-detection` feature.
@@ -355,6 +359,7 @@ pub const ExtractionConfig = struct {
 ///
 /// The following `ExtractionConfig` fields are batch-level only and
 /// cannot be overridden per file:
+///
 /// - `max_concurrent_extractions` — controls batch parallelism
 /// - `use_cache` — global caching policy
 /// - `acceleration` — shared ONNX execution provider
@@ -581,6 +586,7 @@ pub const StructuredExtractionConfig = struct {
     /// Custom Jinja2 extraction prompt template. When `null`, a default template is used.
     ///
     /// Available template variables:
+    ///
     /// - `{{ content }}` — The extracted document text.
     /// - `{{ schema }}` — The JSON schema as a formatted string.
     /// - `{{ schema_name }}` — The schema name.
@@ -737,6 +743,7 @@ pub const OcrConfig = struct {
     /// Custom Jinja2 prompt template for VLM OCR.
     ///
     /// When `null`, uses the default template. Available variables:
+    ///
     /// - `{{ language }}` — The document language code (e.g., "eng", "deu").
     vlm_prompt: ?[]const u8,
     /// Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection).
@@ -849,9 +856,9 @@ pub const PostProcessorConfig = struct {
     /// Blacklist of processor names to skip (None = none disabled)
     disabled_processors: ?[]const []const u8,
     /// Pre-computed AHashSet for O(1) enabled processor lookup
-    enabled_set: ?[]const u8,
+    enabled_set: ?[]const []const u8,
     /// Pre-computed AHashSet for O(1) disabled processor lookup
-    disabled_set: ?[]const u8,
+    disabled_set: ?[]const []const u8,
 };
 
 /// Chunking configuration.
@@ -1197,7 +1204,7 @@ pub const SecurityLimits = struct {
     /// Maximum nesting depth for structures (100)
     max_nesting_depth: u64,
     /// Maximum length of any single XML entity / attribute / token (1 MiB).
-    /// This is a per-token cap, NOT a cumulative cap — billion-laughs class
+    /// This is a per-token cap, NOT a total cap — billion-laughs class
     /// attacks where a single entity expands to hundreds of MB are caught
     /// here, while normal long text content (a paragraph, a CDATA block) is
     /// caught by `max_content_size` instead.
@@ -1235,12 +1242,13 @@ pub const PdfAnnotation = struct {
     /// Page number where the annotation appears (1-indexed).
     page_number: u32,
     /// Bounding box of the annotation on the page.
-    bounding_box: ?[]const u8,
+    bounding_box: ?BoundingBox,
 };
 
 /// Comprehensive Djot document structure with semantic preservation.
 ///
 /// This type captures the full richness of Djot markup, including:
+///
 /// - Block-level structures (headings, lists, blockquotes, code blocks, etc.)
 /// - Inline formatting (emphasis, strong, highlight, subscript, superscript, etc.)
 /// - Attributes (classes, IDs, key-value pairs)
@@ -1398,14 +1406,14 @@ pub const DocumentNode = struct {
     /// Page number where this node ends (for multi-page tables/sections).
     page_end: ?u32,
     /// Bounding box in document coordinates.
-    bbox: ?[]const u8,
+    bbox: ?BoundingBox,
     /// Inline annotations (formatting, links) on this node's text content.
     ///
     /// Only meaningful for text-carrying nodes; empty for containers.
     annotations: []const TextAnnotation,
     /// Format-specific key-value attributes.
     ///
-    /// Extensible bag for data that doesn't warrant a typed field: CSS classes,
+    /// Extensible bag for miscellaneous data without a dedicated typed field: CSS classes,
     /// LaTeX environment names, Excel cell formulas, slide layout names, etc.
     attributes: ?std.StringHashMap([]const u8),
 };
@@ -1437,7 +1445,7 @@ pub const GridCell = struct {
     /// Whether this is a header cell.
     is_header: bool,
     /// Bounding box for this cell (if available).
-    bbox: ?[]const u8,
+    bbox: ?BoundingBox,
 };
 
 /// Inline text annotation — byte-range based formatting and links.
@@ -1494,6 +1502,7 @@ pub const ExtractionResult = struct {
     ///
     /// When extracting Djot documents with structured extraction enabled,
     /// this field contains the full semantic structure including:
+    ///
     /// - Block-level elements with nesting
     /// - Inline formatting with attributes
     /// - Links, images, footnotes
@@ -1508,6 +1517,7 @@ pub const ExtractionResult = struct {
     ///
     /// When OCR is performed with element extraction enabled, this field contains
     /// the structured representation of detected text including:
+    ///
     /// - Bounding geometry (rectangles or quadrilaterals)
     /// - Confidence scores (detection and recognition)
     /// - Rotation information
@@ -1522,6 +1532,7 @@ pub const ExtractionResult = struct {
     ///
     /// When `include_document_structure` is true in `ExtractionConfig`, this field
     /// contains the full hierarchical representation of the document including:
+    ///
     /// - Heading-driven section nesting
     /// - Table grids with cell-level metadata
     /// - Content layer classification (body, header, footer, footnote)
@@ -1577,11 +1588,15 @@ pub const ExtractionResult = struct {
     /// Populated when extracting source code files with the `tree-sitter` feature.
     /// Contains metrics, structural analysis, imports/exports, comments,
     /// docstrings, symbols, diagnostics, and optionally chunked code segments.
+    ///
+    /// Stored as an opaque JSON value so that all language bindings (Go, Java,
+    /// C#, …) can deserialize it as a raw JSON object rather than a typed struct.
+    /// The underlying type is `tree_sitter_language_pack.ProcessResult`.
     code_intelligence: ?[]const u8,
     /// LLM token usage and cost data for all LLM calls made during this extraction.
     ///
     /// Contains one entry per LLM call. Multiple entries are produced when
-    /// VLM OCR, structured extraction, and/or LLM embeddings all run during
+    /// VLM OCR, structured extraction, or LLM embeddings run during
     /// the same extraction.
     ///
     /// `null` when no LLM was used.
@@ -1757,7 +1772,7 @@ pub const ExtractedImage = struct {
     ocr_result: ?ExtractionResult,
     /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
     /// Only populated for PDF-extracted images when position data is available from the PDF extractor.
-    bounding_box: ?[]const u8,
+    bounding_box: ?BoundingBox,
     /// Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
     /// Used for rendering image references when the binary data is not extracted.
     source_path: ?[]const u8,
@@ -1771,6 +1786,18 @@ pub const ExtractedImage = struct {
     cluster_id: ?u32,
 };
 
+/// Bounding box coordinates for element positioning.
+pub const BoundingBox = struct {
+    /// Left x-coordinate
+    x0: f64,
+    /// Bottom y-coordinate
+    y0: f64,
+    /// Right x-coordinate
+    x1: f64,
+    /// Top y-coordinate
+    y1: f64,
+};
+
 /// Metadata for a semantic element.
 pub const ElementMetadata = struct {
     /// Page number (1-indexed)
@@ -1778,7 +1805,7 @@ pub const ElementMetadata = struct {
     /// Source filename or document name
     filename: ?[]const u8,
     /// Bounding box coordinates if available
-    coordinates: ?[]const u8,
+    coordinates: ?BoundingBox,
     /// Position index in the element sequence
     element_index: ?u64,
     /// Additional custom metadata
@@ -1861,9 +1888,9 @@ pub const TextExtractionResult = struct {
     /// Markdown headers (text only, Markdown files only)
     headers: ?[]const []const u8,
     /// Markdown links as (text, URL) tuples (Markdown files only)
-    links: ?[]const []const u8,
+    links: ?[]const []const []const u8,
     /// Code blocks as (language, code) tuples (Markdown files only)
-    code_blocks: ?[]const []const u8,
+    code_blocks: ?[]const []const []const u8,
 };
 
 /// PowerPoint (PPTX) extraction result.
@@ -2028,6 +2055,7 @@ pub const TesseractConfig = struct {
     /// Page Segmentation Mode (0-13).
     ///
     /// Common values:
+    ///
     /// - 3: Fully automatic page segmentation (native default)
     /// - 6: Assume a single uniform block of text (WASM default — avoids layout-analysis hang)
     /// - 11: Sparse text with no particular order
@@ -2265,9 +2293,9 @@ pub const TextMetadata = struct {
     /// Markdown headers (headings text only, for Markdown files)
     headers: ?[]const []const u8,
     /// Markdown links as (text, url) tuples (for Markdown files)
-    links: ?[]const []const u8,
+    links: ?[]const []const []const u8,
     /// Code blocks as (language, code) tuples (for Markdown files)
-    code_blocks: ?[]const []const u8,
+    code_blocks: ?[]const []const []const u8,
 };
 
 /// Header/heading element metadata.
@@ -2297,7 +2325,7 @@ pub const LinkMetadata = struct {
     /// Rel attribute values
     rel: []const []const u8,
     /// Additional attributes as key-value pairs
-    attributes: []const []const u8,
+    attributes: []const []const []const u8,
 };
 
 /// Image element metadata.
@@ -2313,7 +2341,7 @@ pub const ImageMetadataType = struct {
     /// Image type classification
     image_type: ImageType,
     /// Additional attributes as key-value pairs
-    attributes: []const []const u8,
+    attributes: []const []const []const u8,
 };
 
 /// Structured data (Schema.org, microdata, RDFa) block.
@@ -2657,6 +2685,7 @@ pub const PageInfo = struct {
 /// # Performance
 ///
 /// Uses Arc-wrapped tables and images for memory efficiency:
+///
 /// - `Vec<Arc<Table>>` enables zero-copy sharing of table data
 /// - `Vec<Arc<ExtractedImage>>` enables zero-copy sharing of image data
 /// - Maintains exact JSON compatibility via custom Serialize/Deserialize
@@ -2706,7 +2735,7 @@ pub const LayoutRegion = struct {
     /// Confidence score from the layout detection model (0.0 to 1.0).
     confidence: f64,
     /// Bounding box in document coordinate space.
-    bounding_box: []const u8,
+    bounding_box: BoundingBox,
     /// Fraction of the page area covered by this region (0.0 to 1.0).
     area_fraction: f64,
 };
@@ -2734,6 +2763,7 @@ pub const HierarchicalBlock = struct {
     /// The hierarchy level of this block (H1-H6 or Body)
     ///
     /// Levels correspond to HTML heading tags:
+    ///
     /// - "h1": Top-level heading
     /// - "h2": Secondary heading
     /// - "h3": Tertiary heading
@@ -2761,7 +2791,7 @@ pub const Table = struct {
     page_number: u32,
     /// Bounding box of the table on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
     /// Only populated for PDF-extracted tables when position data is available.
-    bounding_box: ?[]const u8,
+    bounding_box: ?BoundingBox,
 };
 
 /// Individual table cell with content and optional styling.
@@ -2916,6 +2946,7 @@ pub const PaddleOcrConfig = struct {
     /// Range: 0.0-1.0
     drop_score: f32,
     /// Model tier controlling detection/recognition model size and accuracy trade-off.
+    ///
     /// - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference
     /// - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents
     model_tier: []const u8,
@@ -3028,8 +3059,8 @@ pub const ExecutionProviderType = enum {
 /// Output format for extraction results.
 ///
 /// Controls the format of the `content` field in `ExtractionResult`.
-/// When set to `Markdown`, `Djot`, or `Html`, the output will be formatted
-/// accordingly. `Plain` returns the raw extracted text.
+/// When set to `Markdown`, `Djot`, or `Html`, the output uses that format.
+/// `Plain` returns the raw extracted text.
 /// `Structured` returns JSON with full OCR element data including bounding
 /// boxes and confidence scores.
 pub const OutputFormat = union(enum) {
@@ -3188,12 +3219,6 @@ pub const ListType = enum {
     indented,
 };
 
-/// Whether the drawing is inline or anchored.
-pub const DrawingType = union(enum) {
-    inline_: void,
-    anchored: []const u8,
-};
-
 pub const FracType = enum {
     bar,
     no_bar,
@@ -3221,6 +3246,7 @@ pub const ProcessingStage = enum {
     /// Early stage - foundational processing.
     ///
     /// Use for:
+    ///
     /// - Language detection
     /// - Character encoding normalization
     /// - Entity extraction (NER)
@@ -3229,6 +3255,7 @@ pub const ProcessingStage = enum {
     /// Middle stage - content transformation.
     ///
     /// Use for:
+    ///
     /// - Keyword extraction
     /// - Token reduction
     /// - Text summarization
@@ -3237,6 +3264,7 @@ pub const ProcessingStage = enum {
     /// Late stage - final enrichment.
     ///
     /// Use for:
+    ///
     /// - Custom user hooks
     /// - Analytics/logging
     /// - Final validation
@@ -3423,7 +3451,7 @@ pub const NodeContent = union(enum) {
         content: []const u8,
     },
     /// Structured metadata block (email headers, YAML frontmatter, etc.).
-    metadata_block: []const []const u8,
+    metadata_block: []const []const []const u8,
 };
 
 /// Types of inline text annotations.
@@ -3788,6 +3816,7 @@ pub const LayoutClass = enum {
 /// Extract content from a byte array.
 ///
 /// This is the main entry point for in-memory extraction. It performs the following steps:
+///
 /// 1. Validate MIME type
 /// 2. Handle legacy format conversion if needed
 /// 3. Select appropriate extractor from registry
@@ -3803,11 +3832,9 @@ pub const LayoutClass = enum {
 /// Returns `KreuzbergError.Validation` if MIME type is invalid.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const u8) KreuzbergError![]u8 {
-    const mime_type_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{mime_type}, 0);
+    const mime_type_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{mime_type}, 0);
     defer std.heap.c_allocator.free(mime_type_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_bytes(content.ptr, content.len, mime_type_z, config_handle);
@@ -3822,13 +3849,13 @@ pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    }
-;
+    };
 }
 
 /// Extract content from a file.
 ///
 /// This is the main entry point for file-based extraction. It performs the following steps:
+///
 /// 1. Check cache for existing result (if caching enabled)
 /// 2. Detect or validate MIME type
 /// 3. Select appropriate extractor from registry
@@ -3845,14 +3872,11 @@ pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const
 /// Returns `KreuzbergError.Io` if the file doesn't exist (NotFound) or for other file I/O errors.
 /// Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
 pub fn extract_file(path: []const u8, mime_type: ?[]const u8, config: []const u8) KreuzbergError![]u8 {
-    const path_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{path}, 0);
+    const path_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{path}, 0);
     defer std.heap.c_allocator.free(path_z);
-    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{v}, 0) else null;
     defer if (mime_type_z) |z| std.heap.c_allocator.free(z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_file(path_z, if (mime_type_z) |z| z.ptr else null, config_handle);
@@ -3867,8 +3891,7 @@ pub fn extract_file(path: []const u8, mime_type: ?[]const u8, config: []const u8
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    }
-;
+    };
 }
 
 /// Synchronous wrapper for `extract_file`.
@@ -3882,14 +3905,11 @@ pub fn extract_file(path: []const u8, mime_type: ?[]const u8, config: []const u8
 /// This function is only available with the `tokio-runtime` feature. For WASM targets,
 /// use a truly synchronous extraction approach instead.
 pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []const u8) KreuzbergError![]u8 {
-    const path_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{path}, 0);
+    const path_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{path}, 0);
     defer std.heap.c_allocator.free(path_z);
-    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const mime_type_z: ?[:0]u8 = if (mime_type) |v| try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{v}, 0) else null;
     defer if (mime_type_z) |z| std.heap.c_allocator.free(z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_file_sync(path_z, if (mime_type_z) |z| z.ptr else null, config_handle);
@@ -3904,8 +3924,7 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []con
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    }
-;
+    };
 }
 
 /// Synchronous wrapper for `extract_bytes`.
@@ -3916,11 +3935,9 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []con
 /// With the `tokio-runtime` feature, this blocks the current thread using the global
 /// Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
 pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []const u8) KreuzbergError![]u8 {
-    const mime_type_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{mime_type}, 0);
+    const mime_type_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{mime_type}, 0);
     defer std.heap.c_allocator.free(mime_type_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_extract_bytes_sync(content.ptr, content.len, mime_type_z, config_handle);
@@ -3935,8 +3952,7 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    }
-;
+    };
 }
 
 /// Synchronous wrapper for `batch_extract_files`.
@@ -3945,11 +3961,9 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []
 /// Only available with `tokio-runtime` (WASM has no filesystem).
 pub fn batch_extract_files_sync(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_files_sync(items_z, config_handle);
@@ -3975,11 +3989,9 @@ pub fn batch_extract_files_sync(items: []const u8, config: []const u8) Kreuzberg
 /// that iterates through items and calls `extract_bytes_sync()`.
 pub fn batch_extract_bytes_sync(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_bytes_sync(items_z, config_handle);
@@ -4010,6 +4022,7 @@ pub fn batch_extract_bytes_sync(items: []const u8, config: []const u8) Kreuzberg
 /// taken from the batch-level `config`.
 ///
 ///   per-file configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration (provides defaults and batch settings)
 ///
 /// **Returns:**
@@ -4027,11 +4040,9 @@ pub fn batch_extract_bytes_sync(items: []const u8, config: []const u8) Kreuzberg
 /// Per-file configuration overrides:
 pub fn batch_extract_files(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_files(items_z, config_handle);
@@ -4061,6 +4072,7 @@ pub fn batch_extract_files(items: []const u8, config: []const u8) KreuzbergError
 /// the batch-level defaults for that item.
 ///
 ///   MIME type, and optional per-item configuration overrides.
+///
 /// * `config` - Batch-level extraction configuration
 ///
 /// **Returns:**
@@ -4073,11 +4085,9 @@ pub fn batch_extract_files(items: []const u8, config: []const u8) KreuzbergError
 /// Per-item configuration overrides:
 pub fn batch_extract_bytes(items: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const items_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{items}, 0);
+    const items_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{items}, 0);
     defer std.heap.c_allocator.free(items_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_extraction_config_from_json(config_z);
     const _result = c.kreuzberg_batch_extract_bytes(items_z, config_handle);
@@ -4133,8 +4143,7 @@ pub fn detect_mime_type_from_bytes(content: []const u8) KreuzbergError![]u8 {
 ///
 /// A vector of file extensions (without leading dot) for the MIME type.
 pub fn get_extensions_for_mime(mime_type: []const u8) KreuzbergError![]u8 {
-    const mime_type_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{mime_type}, 0);
+    const mime_type_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{mime_type}, 0);
     defer std.heap.c_allocator.free(mime_type_z);
     const _result = c.kreuzberg_get_extensions_for_mime(mime_type_z);
     const _result_len = c.kreuzberg_get_extensions_for_mime_len(mime_type_z);
@@ -4282,11 +4291,9 @@ pub fn list_validators() KreuzbergError![]u8 {
 ///   or the blocking inference task panics
 pub fn embed_texts_async(texts: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const texts_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{texts}, 0);
+    const texts_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{texts}, 0);
     defer std.heap.c_allocator.free(texts_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_embedding_config_from_json(config_z);
     const _result = c.kreuzberg_embed_texts_async(texts_z, config_handle);
@@ -4314,8 +4321,7 @@ pub fn embed_texts_async(texts: []const u8, config: []const u8) KreuzbergError![
 /// Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
 /// or rendered, or if `page_index` is out of range.
 pub fn render_pdf_page_to_png(pdf_bytes: []const u8, page_index: u64, dpi: ?i32, password: ?[]const u8) KreuzbergError![]u8 {
-    const password_z: ?[:0]u8 = if (password) |v| try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{v}, 0) else null;
+    const password_z: ?[:0]u8 = if (password) |v| try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{v}, 0) else null;
     defer if (password_z) |z| std.heap.c_allocator.free(z);
     var _out_ptr: [*c]u8 = undefined;
     var _out_len: usize = 0;
@@ -4334,8 +4340,7 @@ pub fn render_pdf_page_to_png(pdf_bytes: []const u8, page_index: u64, dpi: ?i32,
 /// Uses the file extension and optionally the file content to determine the MIME type.
 /// Set `check_exists` to `true` to verify the file exists before detection.
 pub fn detect_mime_type(path: []const u8, check_exists: bool) KreuzbergError![]u8 {
-    const path_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{path}, 0);
+    const path_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{path}, 0);
     defer std.heap.c_allocator.free(path_z);
     const _result = c.kreuzberg_detect_mime_type(path_z, check_exists);
     const _result_len = c.kreuzberg_detect_mime_type_len(path_z, check_exists);
@@ -4356,11 +4361,9 @@ pub fn detect_mime_type(path: []const u8, check_exists: bool) KreuzbergError![]u
 /// Returns a 2D vector where each inner vector is the embedding for the corresponding text.
 pub fn embed_texts(texts: []const u8, config: []const u8) KreuzbergError![]u8 {
     // Vec/Map parameters are passed as JSON strings across the FFI boundary.
-    const texts_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{texts}, 0);
+    const texts_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{texts}, 0);
     defer std.heap.c_allocator.free(texts_z);
-    const config_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{config}, 0);
+    const config_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{config}, 0);
     defer std.heap.c_allocator.free(config_z);
     const config_handle = c.kreuzberg_embedding_config_from_json(config_z);
     const _result = c.kreuzberg_embed_texts(texts_z, config_handle);
@@ -4383,8 +4386,7 @@ pub fn embed_texts(texts: []const u8, config: []const u8) KreuzbergError![]u8 {
 /// Returns `null` if no preset with the given name exists. Returns an owned
 /// clone so the value is safe to pass across FFI boundaries.
 pub fn get_embedding_preset(name: []const u8) error{OutOfMemory}!?[]u8 {
-    const name_z = try std.fmt.allocPrintSentinel(
-        std.heap.c_allocator, "{s}", .{name}, 0);
+    const name_z = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}", .{name}, 0);
     defer std.heap.c_allocator.free(name_z);
     const _result = c.kreuzberg_get_embedding_preset(name_z);
     return if (_result == null) null else blk: {
@@ -4394,8 +4396,7 @@ pub fn get_embedding_preset(name: []const u8) error{OutOfMemory}!?[]u8 {
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
         break :blk owned;
-    }
-;
+    };
 }
 
 /// List the names of all available embedding presets.
@@ -4417,16 +4418,16 @@ pub fn list_embedding_presets() error{OutOfMemory}![]u8 {
 /// `register_ocr_backend` function to register your implementation.
 pub const IOcrBackend = extern struct {
     /// Return the plugin name into `out_name` (heap-allocated, caller frees).
-    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void = null,
+    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Return the plugin version into `out_version` (heap-allocated, caller frees).
-    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void = null,
+    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Initialise the plugin; return 0 on success, non-zero on error.
-    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Shut down the plugin; return 0 on success, non-zero on error.
-    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Process an image and extract text via OCR.
     ///
@@ -4481,7 +4482,7 @@ pub const IOcrBackend = extern struct {
     ///     })
     /// }
     /// ```
-    process_image: ?*const fn (user_data: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    process_image: ?*const fn (user_data: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Process a file and extract text via OCR.
     ///
     /// Default implementation reads the file and calls `process_image`.
@@ -4495,7 +4496,7 @@ pub const IOcrBackend = extern struct {
     /// # Errors
     ///
     /// Same as `process_image`, plus file I/O errors.
-    process_image_file: ?*const fn (user_data: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    process_image_file: ?*const fn (user_data: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Check if this backend supports a given language code.
     ///
     /// # Arguments
@@ -4513,7 +4514,7 @@ pub const IOcrBackend = extern struct {
     ///     self.languages.contains(&lang.to_string())
     /// }
     /// ```
-    supports_language: ?*const fn (user_data: ?*anyopaque, lang: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    supports_language: ?*const fn (user_data: ?*anyopaque, lang: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Get the backend type identifier.
     ///
     /// # Returns
@@ -4527,19 +4528,19 @@ pub const IOcrBackend = extern struct {
     ///     OcrBackendType::Tesseract
     /// }
     /// ```
-    backend_type: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
+    backend_type: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 = null,
     /// Optional: Get a list of all supported languages.
     ///
     /// Defaults to empty list. Override to provide comprehensive language support info.
-    supported_languages: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
+    supported_languages: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 = null,
     /// Optional: Check if the backend supports table detection.
     ///
     /// Defaults to `false`. Override if your backend can detect and extract tables.
-    supports_table_detection: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    supports_table_detection: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Check if the backend supports direct document-level processing (e.g. for PDFs).
     ///
     /// Defaults to `false`. Override if the backend has optimized document processing.
-    supports_document_processing: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    supports_document_processing: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Process a document file directly via OCR.
     ///
     /// Only called if `supports_document_processing` returns `true`.
@@ -4548,10 +4549,10 @@ pub const IOcrBackend = extern struct {
     ///
     /// * `path` - Path to the document file (e.g. .pdf)
     /// * `config` - OCR configuration
-    process_document: ?*const fn (user_data: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    process_document: ?*const fn (user_data: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
-    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
+    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.c) void = null,
 };
 
 /// Register a `OcrBackend` implementation with the Rust runtime.
@@ -4568,14 +4569,31 @@ pub fn register_ocr_backend(name: [*c]const u8, vtable: IOcrBackend, user_data: 
 /// Unregister a previously registered `OcrBackend` implementation by name.
 ///
 /// Returns 0 on success; non-zero on failure.
-pub fn unregister_ocr_backend(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
-    return c.kreuzberg_unregister_ocr_backend(name, out_error);
+pub fn unregister_ocr_backend(name: [*c]const u8) KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_unregister_ocr_backend(name, &_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
+}
+
+/// Remove ALL registered `OcrBackend` plugins from the registry.
+///
+/// Returns 0 on success; non-zero on failure.
+pub fn clear_ocr_backends() KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_clear_ocr_backend(&_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
 }
 
 /// Build an `IOcrBackend` vtable for a concrete Zig type `T`.
 ///
 /// `T` must implement every method of `OcrBackend` as a plain Zig function.
-/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// Each slot is wrapped in a `callconv(.c)` thunk that casts `user_data`
 /// back to `*T` and forwards the call.
 ///
 /// # Usage
@@ -4587,39 +4605,41 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
     _ = instance; // instance is passed as user_data by the caller
     return IOcrBackend{
         .name_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_name;
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
         .version_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_version;
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
         .initialize_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .shutdown_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .process_image = struct {
-            fn thunk(ud: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, image_bytes_ptr: [*c]const u8, image_bytes_len: usize, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const image_bytes_slice = image_bytes_ptr[0..image_bytes_len];
                 if (self.process_image(image_bytes_slice, config)) |value| {
-                    _ = value; _ = out_result; unreachable; // complex return: implement manually
+                    _ = value;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -4629,10 +4649,12 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .process_image_file = struct {
-            fn thunk(ud: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, path: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.process_image_file(path, config)) |value| {
-                    _ = value; _ = out_result; unreachable; // complex return: implement manually
+                    _ = value;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -4642,7 +4664,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .supports_language = struct {
-            fn thunk(ud: ?*anyopaque, lang: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, lang: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.supports_language(lang);
@@ -4650,7 +4672,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .backend_type = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.backend_type();
@@ -4658,7 +4680,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .supported_languages = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.supported_languages();
@@ -4666,7 +4688,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .supports_table_detection = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.supports_table_detection();
@@ -4674,7 +4696,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .supports_document_processing = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.supports_document_processing();
@@ -4682,10 +4704,12 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .process_document = struct {
-            fn thunk(ud: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, _path: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.process_document(_path, _config)) |value| {
-                    _ = value; _ = out_result; unreachable; // complex return: implement manually
+                    _ = value;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -4695,7 +4719,7 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
         }.thunk,
 
         .free_user_data = struct {
-            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque) callconv(.c) void {
                 _ = user_data;
             }
         }.thunk,
@@ -4707,16 +4731,16 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
 /// `register_post_processor` function to register your implementation.
 pub const IPostProcessor = extern struct {
     /// Return the plugin name into `out_name` (heap-allocated, caller frees).
-    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void = null,
+    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Return the plugin version into `out_version` (heap-allocated, caller frees).
-    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void = null,
+    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Initialise the plugin; return 0 on success, non-zero on error.
-    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Shut down the plugin; return 0 on success, non-zero on error.
-    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Process an extraction result.
     ///
@@ -4775,7 +4799,7 @@ pub const IPostProcessor = extern struct {
     ///     Ok(())
     /// }
     /// ```
-    process: ?*const fn (user_data: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    process: ?*const fn (user_data: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Get the processing stage for this post-processor.
     ///
     /// Determines when this processor runs in the pipeline.
@@ -4791,7 +4815,7 @@ pub const IPostProcessor = extern struct {
     ///     ProcessingStage::Early  // Run before other processors
     /// }
     /// ```
-    processing_stage: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
+    processing_stage: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 = null,
     /// Optional: Check if this processor should run for a given result.
     ///
     /// Allows conditional processing based on MIME type, metadata, or content.
@@ -4814,7 +4838,7 @@ pub const IPostProcessor = extern struct {
     ///     result.mime_type == "application/pdf"
     /// }
     /// ```
-    should_process: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    should_process: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Optional: Estimate processing time in milliseconds.
     ///
     /// Used for logging and debugging. Defaults to 0 (unknown).
@@ -4826,16 +4850,16 @@ pub const IPostProcessor = extern struct {
     /// # Returns
     ///
     /// Estimated processing time in milliseconds.
-    estimated_duration_ms: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) u64 = null,
+    estimated_duration_ms: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) u64 = null,
     /// Execution priority within the processing stage.
     ///
     /// Higher values run first within the same `ProcessingStage`. Defaults to 50.
     /// Use 0-49 for fallback processors, 50 for normal processors, and 51-255
     /// for high-priority processors that should run early in their stage.
-    priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
-    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
+    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.c) void = null,
 };
 
 /// Register a `PostProcessor` implementation with the Rust runtime.
@@ -4852,14 +4876,31 @@ pub fn register_post_processor(name: [*c]const u8, vtable: IPostProcessor, user_
 /// Unregister a previously registered `PostProcessor` implementation by name.
 ///
 /// Returns 0 on success; non-zero on failure.
-pub fn unregister_post_processor(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
-    return c.kreuzberg_unregister_post_processor(name, out_error);
+pub fn unregister_post_processor(name: [*c]const u8) KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_unregister_post_processor(name, &_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
+}
+
+/// Remove ALL registered `PostProcessor` plugins from the registry.
+///
+/// Returns 0 on success; non-zero on failure.
+pub fn clear_post_processors() KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_clear_post_processor(&_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
 }
 
 /// Build an `IPostProcessor` vtable for a concrete Zig type `T`.
 ///
 /// `T` must implement every method of `PostProcessor` as a plain Zig function.
-/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// Each slot is wrapped in a `callconv(.c)` thunk that casts `user_data`
 /// back to `*T` and forwards the call.
 ///
 /// # Usage
@@ -4871,35 +4912,35 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
     _ = instance; // instance is passed as user_data by the caller
     return IPostProcessor{
         .name_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_name;
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
         .version_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_version;
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
         .initialize_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .shutdown_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .process = struct {
-            fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.process(result, config)) |value| {
                     _ = value;
@@ -4913,7 +4954,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         }.thunk,
 
         .processing_stage = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.processing_stage();
@@ -4921,7 +4962,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         }.thunk,
 
         .should_process = struct {
-            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.should_process(_result, _config);
@@ -4929,7 +4970,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         }.thunk,
 
         .estimated_duration_ms = struct {
-            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) u64 {
+            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) u64 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.estimated_duration_ms(_result);
@@ -4937,7 +4978,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         }.thunk,
 
         .priority = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.priority();
@@ -4945,7 +4986,7 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
         }.thunk,
 
         .free_user_data = struct {
-            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque) callconv(.c) void {
                 _ = user_data;
             }
         }.thunk,
@@ -4957,16 +4998,16 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
 /// `register_validator` function to register your implementation.
 pub const IValidator = extern struct {
     /// Return the plugin name into `out_name` (heap-allocated, caller frees).
-    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void = null,
+    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Return the plugin version into `out_version` (heap-allocated, caller frees).
-    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void = null,
+    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Initialise the plugin; return 0 on success, non-zero on error.
-    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Shut down the plugin; return 0 on success, non-zero on error.
-    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Validate an extraction result.
     ///
@@ -5054,7 +5095,7 @@ pub const IValidator = extern struct {
     ///     Ok(())
     /// }
     /// ```
-    validate: ?*const fn (user_data: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    validate: ?*const fn (user_data: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Optional: Check if this validator should run for a given result.
     ///
     /// Allows conditional validation based on MIME type, metadata, or content.
@@ -5077,7 +5118,7 @@ pub const IValidator = extern struct {
     ///     result.mime_type == "application/pdf"
     /// }
     /// ```
-    should_validate: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    should_validate: ?*const fn (user_data: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Optional: Get the validation priority.
     ///
     /// Higher priority validators run first. Useful for ordering validation checks
@@ -5097,10 +5138,10 @@ pub const IValidator = extern struct {
     ///     100
     /// }
     /// ```
-    priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
-    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
+    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.c) void = null,
 };
 
 /// Register a `Validator` implementation with the Rust runtime.
@@ -5117,14 +5158,31 @@ pub fn register_validator(name: [*c]const u8, vtable: IValidator, user_data: ?*a
 /// Unregister a previously registered `Validator` implementation by name.
 ///
 /// Returns 0 on success; non-zero on failure.
-pub fn unregister_validator(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
-    return c.kreuzberg_unregister_validator(name, out_error);
+pub fn unregister_validator(name: [*c]const u8) KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_unregister_validator(name, &_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
+}
+
+/// Remove ALL registered `Validator` plugins from the registry.
+///
+/// Returns 0 on success; non-zero on failure.
+pub fn clear_validators() KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_clear_validator(&_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
 }
 
 /// Build an `IValidator` vtable for a concrete Zig type `T`.
 ///
 /// `T` must implement every method of `Validator` as a plain Zig function.
-/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// Each slot is wrapped in a `callconv(.c)` thunk that casts `user_data`
 /// back to `*T` and forwards the call.
 ///
 /// # Usage
@@ -5136,35 +5194,35 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
     _ = instance; // instance is passed as user_data by the caller
     return IValidator{
         .name_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_name;
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
         .version_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_version;
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
         .initialize_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .shutdown_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .validate = struct {
-            fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, result: [*c]const u8, config: [*c]const u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.validate(result, config)) |value| {
                     _ = value;
@@ -5178,7 +5236,7 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
         }.thunk,
 
         .should_validate = struct {
-            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, _result: [*c]const u8, _config: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.should_validate(_result, _config);
@@ -5186,7 +5244,7 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
         }.thunk,
 
         .priority = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.priority();
@@ -5194,7 +5252,7 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
         }.thunk,
 
         .free_user_data = struct {
-            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque) callconv(.c) void {
                 _ = user_data;
             }
         }.thunk,
@@ -5206,20 +5264,20 @@ pub fn make_validator_vtable(comptime T: type, instance: *T) IValidator {
 /// `register_embedding_backend` function to register your implementation.
 pub const IEmbeddingBackend = extern struct {
     /// Return the plugin name into `out_name` (heap-allocated, caller frees).
-    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void = null,
+    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Return the plugin version into `out_version` (heap-allocated, caller frees).
-    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void = null,
+    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Initialise the plugin; return 0 on success, non-zero on error.
-    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Shut down the plugin; return 0 on success, non-zero on error.
-    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Embedding vector dimension. Must be `> 0` and must match the length of
     /// every vector returned by `embed`.
-    dimensions: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) usize = null,
+    dimensions: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) usize = null,
     /// Embed a batch of texts, returning one vector per input in order.
     ///
     /// # Errors
@@ -5227,10 +5285,10 @@ pub const IEmbeddingBackend = extern struct {
     /// Implementations should return `Plugin` for
     /// backend-specific failures. The dispatcher layers its own validation
     /// (length, per-vector dimension) on top.
-    embed: ?*const fn (user_data: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    embed: ?*const fn (user_data: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
-    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
+    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.c) void = null,
 };
 
 /// Register a `EmbeddingBackend` implementation with the Rust runtime.
@@ -5247,14 +5305,31 @@ pub fn register_embedding_backend(name: [*c]const u8, vtable: IEmbeddingBackend,
 /// Unregister a previously registered `EmbeddingBackend` implementation by name.
 ///
 /// Returns 0 on success; non-zero on failure.
-pub fn unregister_embedding_backend(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
-    return c.kreuzberg_unregister_embedding_backend(name, out_error);
+pub fn unregister_embedding_backend(name: [*c]const u8) KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_unregister_embedding_backend(name, &_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
+}
+
+/// Remove ALL registered `EmbeddingBackend` plugins from the registry.
+///
+/// Returns 0 on success; non-zero on failure.
+pub fn clear_embedding_backends() KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_clear_embedding_backend(&_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
 }
 
 /// Build an `IEmbeddingBackend` vtable for a concrete Zig type `T`.
 ///
 /// `T` must implement every method of `EmbeddingBackend` as a plain Zig function.
-/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// Each slot is wrapped in a `callconv(.c)` thunk that casts `user_data`
 /// back to `*T` and forwards the call.
 ///
 /// # Usage
@@ -5266,35 +5341,35 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
     _ = instance; // instance is passed as user_data by the caller
     return IEmbeddingBackend{
         .name_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_name;
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
         .version_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_version;
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
         .initialize_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .shutdown_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .dimensions = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) usize {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) usize {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.dimensions();
@@ -5302,10 +5377,12 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
         }.thunk,
 
         .embed = struct {
-            fn thunk(ud: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, texts: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.embed(texts)) |value| {
-                    _ = value; _ = out_result; unreachable; // complex return: implement manually
+                    _ = value;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5315,7 +5392,7 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
         }.thunk,
 
         .free_user_data = struct {
-            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque) callconv(.c) void {
                 _ = user_data;
             }
         }.thunk,
@@ -5327,16 +5404,16 @@ pub fn make_embedding_backend_vtable(comptime T: type, instance: *T) IEmbeddingB
 /// `register_document_extractor` function to register your implementation.
 pub const IDocumentExtractor = extern struct {
     /// Return the plugin name into `out_name` (heap-allocated, caller frees).
-    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void = null,
+    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Return the plugin version into `out_version` (heap-allocated, caller frees).
-    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void = null,
+    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Initialise the plugin; return 0 on success, non-zero on error.
-    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Shut down the plugin; return 0 on success, non-zero on error.
-    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Extract content from a byte array.
     ///
@@ -5359,7 +5436,7 @@ pub const IDocumentExtractor = extern struct {
     /// - `KreuzbergError::Validation` - Invalid document structure
     /// - `KreuzbergError::Io` - I/O errors (these always bubble up)
     /// - `KreuzbergError::MissingDependency` - Required dependency not available
-    extract_bytes: ?*const fn (user_data: ?*anyopaque, content_ptr: [*c]const u8, content_len: usize, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    extract_bytes: ?*const fn (user_data: ?*anyopaque, content_ptr: [*c]const u8, content_len: usize, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Extract content from a file.
     ///
     /// Default implementation reads the file and calls `extract_bytes`.
@@ -5378,7 +5455,7 @@ pub const IDocumentExtractor = extern struct {
     /// # Errors
     ///
     /// Same as `extract_bytes`, plus file I/O errors.
-    extract_file: ?*const fn (user_data: ?*anyopaque, path: [*c]const u8, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    extract_file: ?*const fn (user_data: ?*anyopaque, path: [*c]const u8, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Get the list of MIME types supported by this extractor.
     ///
     /// Can include exact MIME types and prefix patterns:
@@ -5388,7 +5465,7 @@ pub const IDocumentExtractor = extern struct {
     /// # Returns
     ///
     /// A slice of MIME type strings.
-    supported_mime_types: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
+    supported_mime_types: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 = null,
     /// Get the priority of this extractor.
     ///
     /// Higher priority extractors are preferred when multiple extractors
@@ -5405,7 +5482,7 @@ pub const IDocumentExtractor = extern struct {
     /// # Returns
     ///
     /// Priority value (default: 50)
-    priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    priority: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Optional: Check if this extractor can handle a specific file.
     ///
     /// Allows for more sophisticated detection beyond MIME types.
@@ -5419,15 +5496,15 @@ pub const IDocumentExtractor = extern struct {
     /// # Returns
     ///
     /// `true` if the extractor can handle this file, `false` otherwise.
-    can_handle: ?*const fn (user_data: ?*anyopaque, _path: [*c]const u8, _mime_type: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 = null,
+    can_handle: ?*const fn (user_data: ?*anyopaque, _path: [*c]const u8, _mime_type: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Attempt to get a reference to this extractor as a SyncExtractor.
     ///
     /// Returns None if the extractor doesn't support synchronous extraction.
     /// This is used for WASM and other sync-only environments.
-    as_sync_extractor: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 = null,
+    as_sync_extractor: ?*const fn (user_data: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 = null,
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
-    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
+    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.c) void = null,
 };
 
 /// Register a `DocumentExtractor` implementation with the Rust runtime.
@@ -5444,14 +5521,31 @@ pub fn register_document_extractor(name: [*c]const u8, vtable: IDocumentExtracto
 /// Unregister a previously registered `DocumentExtractor` implementation by name.
 ///
 /// Returns 0 on success; non-zero on failure.
-pub fn unregister_document_extractor(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
-    return c.kreuzberg_unregister_document_extractor(name, out_error);
+pub fn unregister_document_extractor(name: [*c]const u8) KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_unregister_document_extractor(name, &_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
+}
+
+/// Remove ALL registered `DocumentExtractor` plugins from the registry.
+///
+/// Returns 0 on success; non-zero on failure.
+pub fn clear_document_extractors() KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_clear_document_extractor(&_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
 }
 
 /// Build an `IDocumentExtractor` vtable for a concrete Zig type `T`.
 ///
 /// `T` must implement every method of `DocumentExtractor` as a plain Zig function.
-/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// Each slot is wrapped in a `callconv(.c)` thunk that casts `user_data`
 /// back to `*T` and forwards the call.
 ///
 /// # Usage
@@ -5463,39 +5557,41 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
     _ = instance; // instance is passed as user_data by the caller
     return IDocumentExtractor{
         .name_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_name;
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
         .version_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_version;
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
         .initialize_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .shutdown_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .extract_bytes = struct {
-            fn thunk(ud: ?*anyopaque, content_ptr: [*c]const u8, content_len: usize, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, content_ptr: [*c]const u8, content_len: usize, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const content_slice = content_ptr[0..content_len];
                 if (self.extract_bytes(content_slice, mime_type, config)) |value| {
-                    _ = value; _ = out_result; unreachable; // complex return: implement manually
+                    _ = value;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5505,10 +5601,12 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
         }.thunk,
 
         .extract_file = struct {
-            fn thunk(ud: ?*anyopaque, path: [*c]const u8, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, path: [*c]const u8, mime_type: [*c]const u8, config: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.extract_file(path, mime_type, config)) |value| {
-                    _ = value; _ = out_result; unreachable; // complex return: implement manually
+                    _ = value;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5518,7 +5616,7 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
         }.thunk,
 
         .supported_mime_types = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.supported_mime_types();
@@ -5526,7 +5624,7 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
         }.thunk,
 
         .priority = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.priority();
@@ -5534,7 +5632,7 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
         }.thunk,
 
         .can_handle = struct {
-            fn thunk(ud: ?*anyopaque, _path: [*c]const u8, _mime_type: [*c]const u8, out_result: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, _path: [*c]const u8, _mime_type: [*c]const u8, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.can_handle(_path, _mime_type);
@@ -5542,7 +5640,7 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
         }.thunk,
 
         .as_sync_extractor = struct {
-            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.C) [*c]const u8 {
+            fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) [*c]const u8 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 _ = out_result;
                 return self.as_sync_extractor();
@@ -5550,7 +5648,7 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
         }.thunk,
 
         .free_user_data = struct {
-            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque) callconv(.c) void {
                 _ = user_data;
             }
         }.thunk,
@@ -5562,16 +5660,16 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
 /// `register_renderer` function to register your implementation.
 pub const IRenderer = extern struct {
     /// Return the plugin name into `out_name` (heap-allocated, caller frees).
-    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void = null,
+    name_fn: ?*const fn (user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Return the plugin version into `out_version` (heap-allocated, caller frees).
-    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void = null,
+    version_fn: ?*const fn (user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void = null,
 
     /// Initialise the plugin; return 0 on success, non-zero on error.
-    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    initialize_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Shut down the plugin; return 0 on success, non-zero on error.
-    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    shutdown_fn: ?*const fn (user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
 
     /// Render an [`InternalDocument`] to the output format.
     ///
@@ -5586,10 +5684,10 @@ pub const IRenderer = extern struct {
     /// # Errors
     ///
     /// Returns an error if rendering fails.
-    render: ?*const fn (user_data: ?*anyopaque, doc: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 = null,
+    render: ?*const fn (user_data: ?*anyopaque, doc: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 = null,
     /// Called by the Rust runtime when the bridge is dropped.
     /// Use this to release any Zig-side state held via `user_data`.
-    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.C) void = null,
+    free_user_data: ?*const fn (user_data: ?*anyopaque) callconv(.c) void = null,
 };
 
 /// Register a `Renderer` implementation with the Rust runtime.
@@ -5606,14 +5704,31 @@ pub fn register_renderer(name: [*c]const u8, vtable: IRenderer, user_data: ?*any
 /// Unregister a previously registered `Renderer` implementation by name.
 ///
 /// Returns 0 on success; non-zero on failure.
-pub fn unregister_renderer(name: [*c]const u8, out_error: ?*?[*c]u8) i32 {
-    return c.kreuzberg_unregister_renderer(name, out_error);
+pub fn unregister_renderer(name: [*c]const u8) KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_unregister_renderer(name, &_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
+}
+
+/// Remove ALL registered `Renderer` plugins from the registry.
+///
+/// Returns 0 on success; non-zero on failure.
+pub fn clear_renderers() KreuzbergError!void {
+    var _out_error: [*c]u8 = null;
+    const _rc = c.kreuzberg_clear_renderer(&_out_error);
+    if (_out_error != null) _free_string(_out_error);
+    if (_rc != 0 or c.kreuzberg_last_error_code() != 0) {
+        return _first_error(KreuzbergError);
+    }
 }
 
 /// Build an `IRenderer` vtable for a concrete Zig type `T`.
 ///
 /// `T` must implement every method of `Renderer` as a plain Zig function.
-/// Each slot is wrapped in a `callconv(.C)` thunk that casts `user_data`
+/// Each slot is wrapped in a `callconv(.c)` thunk that casts `user_data`
 /// back to `*T` and forwards the call.
 ///
 /// # Usage
@@ -5625,38 +5740,40 @@ pub fn make_renderer_vtable(comptime T: type, instance: *T) IRenderer {
     _ = instance; // instance is passed as user_data by the caller
     return IRenderer{
         .name_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_name: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_name;
                 unreachable; // override .name_fn in the returned vtable
             }
         }.thunk,
         .version_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque, out_version: ?*?[*c]u8) callconv(.c) void {
                 _ = user_data;
                 _ = out_version;
                 unreachable; // override .version_fn in the returned vtable
             }
         }.thunk,
         .initialize_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .shutdown_fn = struct {
-            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(user_data: ?*anyopaque, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 _ = user_data;
                 _ = out_error;
                 return 0;
             }
         }.thunk,
         .render = struct {
-            fn thunk(ud: ?*anyopaque, doc: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.C) i32 {
+            fn thunk(ud: ?*anyopaque, doc: [*c]const u8, out_result: ?*?[*c]u8, out_error: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 if (self.render(doc)) |value| {
-                    _ = value; _ = out_result; unreachable; // complex return: implement manually
+                    _ = value;
+                    _ = out_result;
+                    unreachable; // complex return: implement manually
                 } else |err| {
                     _ = err;
                     if (out_error) |ptr| ptr.* = null; // caller checks error code
@@ -5666,7 +5783,7 @@ pub fn make_renderer_vtable(comptime T: type, instance: *T) IRenderer {
         }.thunk,
 
         .free_user_data = struct {
-            fn thunk(user_data: ?*anyopaque) callconv(.C) void {
+            fn thunk(user_data: ?*anyopaque) callconv(.c) void {
                 _ = user_data;
             }
         }.thunk,

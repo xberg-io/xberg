@@ -17,15 +17,14 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * FictionBook (FB2) metadata.
- */
+/** FictionBook (FB2) metadata. */
 data class FictionBookMetadata(
-    val genres: List<String>,
-    val sequences: List<String>,
-    val annotation: String?
+    val genres: List<String> = emptyList(),
+    val sequences: List<String> = emptyList(),
+    val annotation: String? = null,
 )

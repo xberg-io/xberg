@@ -21,10 +21,9 @@
 
 package dev.kreuzberg
 
-/**
- * Whether the drawing is inline or anchored.
- */
+/** Whether the drawing is inline or anchored. */
 sealed class DrawingType {
     object Inline : DrawingType()
+
     data class Anchored(val value: String) : DrawingType()
 }

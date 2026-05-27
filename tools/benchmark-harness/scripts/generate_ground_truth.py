@@ -51,20 +51,42 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # File type → handler mapping
 # ---------------------------------------------------------------------------
 
-RAW_SOURCE_TYPES = frozenset({
-    "md", "txt", "rst", "org", "commonmark", "djot",
-    "toml", "yaml", "json", "tsv", "bib", "csv", "svg",
-})
+RAW_SOURCE_TYPES = frozenset(
+    {
+        "md",
+        "txt",
+        "rst",
+        "org",
+        "commonmark",
+        "djot",
+        "toml",
+        "yaml",
+        "json",
+        "tsv",
+        "bib",
+        "csv",
+        "svg",
+    }
+)
 
 PDFTOTEXT_TYPES = frozenset({"pdf"})
-PANDOC_TYPES = frozenset({
-    "tex", "latex", "typ", "epub", "fb2", "docbook", "odt", "rtf", "opml",
-})
+PANDOC_TYPES = frozenset(
+    {
+        "tex",
+        "latex",
+        "typ",
+        "epub",
+        "fb2",
+        "docbook",
+        "odt",
+        "rtf",
+        "opml",
+    }
+)
 PYTHON_DOCX_TYPES = frozenset({"docx"})
 PYTHON_PPTX_TYPES = frozenset({"pptx", "pptm", "ppsx"})
 OPENPYXL_TYPES = frozenset({"xlsx", "xlsm"})
@@ -81,19 +103,47 @@ DBF_TYPES = frozenset({"dbf"})
 HWP_TYPES = frozenset({"hwp"})
 
 # Archive and image types are excluded from ground truth generation
-EXCLUDED_TYPES = frozenset({
-    "7z", "gz", "tar", "tgz", "zip", "lz4",
-    "gif", "jpeg", "jpg", "jp2", "png", "tiff", "webp",
-    "bmp", "pbm", "pgm", "pnm", "ppm",
-})
+EXCLUDED_TYPES = frozenset(
+    {
+        "7z",
+        "gz",
+        "tar",
+        "tgz",
+        "zip",
+        "lz4",
+        "gif",
+        "jpeg",
+        "jpg",
+        "jp2",
+        "png",
+        "tiff",
+        "webp",
+        "bmp",
+        "pbm",
+        "pgm",
+        "pnm",
+        "ppm",
+    }
+)
 
 ALL_HANDLED_TYPES = (
-    RAW_SOURCE_TYPES | PDFTOTEXT_TYPES | PANDOC_TYPES |
-    PYTHON_DOCX_TYPES | PYTHON_PPTX_TYPES | OPENPYXL_TYPES |
-    BEAUTIFULSOUP_TYPES | PYTHON_EMAIL_TYPES | EXTRACT_MSG_TYPES |
-    NBFORMAT_TYPES | XML_PARSE_TYPES | XLRD_TYPES |
-    ANTIWORD_TYPES | LIBREOFFICE_TYPES | ODS_TYPES |
-    DBF_TYPES | HWP_TYPES
+    RAW_SOURCE_TYPES
+    | PDFTOTEXT_TYPES
+    | PANDOC_TYPES
+    | PYTHON_DOCX_TYPES
+    | PYTHON_PPTX_TYPES
+    | OPENPYXL_TYPES
+    | BEAUTIFULSOUP_TYPES
+    | PYTHON_EMAIL_TYPES
+    | EXTRACT_MSG_TYPES
+    | NBFORMAT_TYPES
+    | XML_PARSE_TYPES
+    | XLRD_TYPES
+    | ANTIWORD_TYPES
+    | LIBREOFFICE_TYPES
+    | ODS_TYPES
+    | DBF_TYPES
+    | HWP_TYPES
 )
 
 
@@ -140,6 +190,7 @@ def get_source_type(file_type: str) -> str:
 # Text extraction handlers
 # ---------------------------------------------------------------------------
 
+
 def handle_raw_source(doc_path: Path) -> str:
     """Read the file as-is. For text-based formats, source content IS ground truth."""
     try:
@@ -157,7 +208,9 @@ def handle_pdftotext(doc_path: Path) -> str:
     """
     result = subprocess.run(
         ["pdftotext", "-layout", str(doc_path), "-"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     if result.returncode != 0:
         raise RuntimeError(f"pdftotext failed: {result.stderr}")
@@ -369,7 +422,9 @@ def handle_antiword(doc_path: Path) -> str:
     try:
         result = subprocess.run(
             ["antiword", str(doc_path)],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode == 0:
             return result.stdout
@@ -380,7 +435,9 @@ def handle_antiword(doc_path: Path) -> str:
     try:
         result = subprocess.run(
             ["catdoc", str(doc_path)],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode == 0:
             return result.stdout
@@ -391,7 +448,9 @@ def handle_antiword(doc_path: Path) -> str:
     try:
         result = subprocess.run(
             ["textutil", "-convert", "txt", "-stdout", str(doc_path)],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode == 0:
             return result.stdout
@@ -405,7 +464,7 @@ def handle_ods(doc_path: Path) -> str:
     """Extract text from ODS using odfpy."""
     from odf import text as odf_text
     from odf.opendocument import load as odf_load
-    from odf.table import Table, TableRow, TableCell
+    from odf.table import Table, TableCell, TableRow
 
     doc = odf_load(str(doc_path))
     lines = []
@@ -444,7 +503,9 @@ def handle_libreoffice(doc_path: Path) -> str:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 ["libreoffice", "--headless", "--convert-to", "txt:Text", "--outdir", tmpdir, str(doc_path)],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             if result.returncode == 0:
                 txt_files = list(Path(tmpdir).glob("*.txt"))
@@ -457,7 +518,9 @@ def handle_libreoffice(doc_path: Path) -> str:
     try:
         result = subprocess.run(
             ["textutil", "-convert", "txt", "-stdout", str(doc_path)],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if result.returncode == 0:
             return result.stdout
@@ -505,6 +568,7 @@ def extract_text(doc_path: Path, file_type: str) -> str:
 # ---------------------------------------------------------------------------
 # Core logic
 # ---------------------------------------------------------------------------
+
 
 def get_repo_root() -> Path:
     """Find the repository root directory."""
@@ -706,7 +770,7 @@ def main() -> int:
         print(f"\nUpdated ground_truth_mapping.json: {new_entries} new entries (total: {len(mapping)})")
 
     # Print summary
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("Summary:")
     print(f"  Generated:         {stats['generated']}")
     if args.dry_run:

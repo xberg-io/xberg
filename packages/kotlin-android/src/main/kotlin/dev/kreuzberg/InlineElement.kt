@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,20 +28,12 @@ package dev.kreuzberg
  * Represents text with formatting, links, images, etc.
  */
 data class InlineElement(
-    /**
-     * Type of inline element
-     */
+    /** Type of inline element */
     val elementType: InlineType,
-    /**
-     * Text content
-     */
+    /** Text content */
     val content: String,
-    /**
-     * Element attributes
-     */
-    val attributes: String?,
-    /**
-     * Additional metadata (e.g., href for links, src/alt for images)
-     */
-    val metadata: Map<String, String>?
+    /** Element attributes */
+    val attributes: String? = null,
+    /** Additional metadata (e.g., href for links, src/alt for images) */
+    val metadata: Map<String, String>? = null,
 )

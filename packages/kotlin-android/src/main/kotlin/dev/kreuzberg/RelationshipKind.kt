@@ -17,40 +17,53 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Semantic kind of a relationship between document elements.
- */
+/** Semantic kind of a relationship between document elements. */
 enum class RelationshipKind {
-    /**
-     * Footnote marker -> footnote definition.
-     */
-    FOOTNOTE_REFERENCE,
-    /**
-     * Citation marker -> bibliography entry.
-     */
-    CITATION_REFERENCE,
-    /**
-     * Internal anchor link (`#id`) -> target heading/element.
-     */
-    INTERNAL_LINK,
-    /**
-     * Caption paragraph -> figure/table it describes.
-     */
-    CAPTION,
-    /**
-     * Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`).
-     */
-    LABEL,
-    /**
-     * TOC entry -> target section.
-     */
-    TOC_ENTRY,
-    /**
-     * Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
-     */
-    CROSS_REFERENCE;
+    /** Footnote marker -> footnote definition. */
+    @com.fasterxml.jackson.annotation.JsonProperty("footnote_reference") FOOTNOTE_REFERENCE,
+    /** Citation marker -> bibliography entry. */
+    @com.fasterxml.jackson.annotation.JsonProperty("citation_reference") CITATION_REFERENCE,
+    /** Internal anchor link (`#id`) -> target heading/element. */
+    @com.fasterxml.jackson.annotation.JsonProperty("internal_link") INTERNAL_LINK,
+    /** Caption paragraph -> figure/table it describes. */
+    @com.fasterxml.jackson.annotation.JsonProperty("caption") CAPTION,
+    /** Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`). */
+    @com.fasterxml.jackson.annotation.JsonProperty("label") LABEL,
+    /** TOC entry -> target section. */
+    @com.fasterxml.jackson.annotation.JsonProperty("toc_entry") TOC_ENTRY,
+    /** Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field). */
+    @com.fasterxml.jackson.annotation.JsonProperty("cross_reference") CROSS_REFERENCE;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            FOOTNOTE_REFERENCE -> "footnote_reference"
+            CITATION_REFERENCE -> "citation_reference"
+            INTERNAL_LINK -> "internal_link"
+            CAPTION -> "caption"
+            LABEL -> "label"
+            TOC_ENTRY -> "toc_entry"
+            CROSS_REFERENCE -> "cross_reference"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): RelationshipKind =
+            when (value) {
+                "footnote_reference" -> FOOTNOTE_REFERENCE
+                "citation_reference" -> CITATION_REFERENCE
+                "internal_link" -> INTERNAL_LINK
+                "caption" -> CAPTION
+                "label" -> LABEL
+                "toc_entry" -> TOC_ENTRY
+                "cross_reference" -> CROSS_REFERENCE
+                else -> throw IllegalArgumentException("Unknown RelationshipKind value: $value")
+            }
+    }
 }

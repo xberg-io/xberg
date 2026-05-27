@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,31 +25,27 @@ package dev.kreuzberg
 /**
  * A text chunk with optional embedding and metadata.
  *
- * Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
- * contains the text content, optional embedding vector (if embedding generation
- * is configured), and metadata about its position in the document.
+ * Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk contains the text
+ * content, optional embedding vector (if embedding generation is configured), and metadata about
+ * its position in the document.
  */
 data class Chunk(
-    /**
-     * The text content of this chunk.
-     */
+    /** The text content of this chunk. */
     val content: String,
     /**
      * Semantic structural classification of this chunk.
      *
-     * Assigned by the heuristic classifier based on content patterns and
-     * heading context. Defaults to `ChunkType.Unknown` when no rule matches.
+     * Assigned by the heuristic classifier based on content patterns and heading context. Defaults
+     * to `ChunkType.Unknown` when no rule matches.
      */
     val chunkType: ChunkType,
     /**
      * Optional embedding vector for this chunk.
      *
-     * Only populated when `EmbeddingConfig` is provided in chunking configuration.
-     * The dimensionality depends on the chosen embedding model.
+     * Only populated when `EmbeddingConfig` is provided in chunking configuration. The
+     * dimensionality depends on the chosen embedding model.
      */
-    val embedding: List<Float>?,
-    /**
-     * Metadata about this chunk's position and properties.
-     */
-    val metadata: ChunkMetadata
+    val embedding: List<Float>? = null,
+    /** Metadata about this chunk's position and properties. */
+    val metadata: ChunkMetadata,
 )

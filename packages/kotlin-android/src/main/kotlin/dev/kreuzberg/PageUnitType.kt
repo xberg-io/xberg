@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,19 +25,34 @@ package dev.kreuzberg
 /**
  * Type of paginated unit in a document.
  *
- * Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet sheets).
+ * Distinguishes between different types of "pages" (PDF pages, presentation slides, spreadsheet
+ * sheets).
  */
 enum class PageUnitType {
-    /**
-     * Standard document pages (PDF, DOCX, images)
-     */
-    PAGE,
-    /**
-     * Presentation slides (PPTX, ODP)
-     */
-    SLIDE,
-    /**
-     * Spreadsheet sheets (XLSX, ODS)
-     */
-    SHEET;
+    /** Standard document pages (PDF, DOCX, images) */
+    @com.fasterxml.jackson.annotation.JsonProperty("page") PAGE,
+    /** Presentation slides (PPTX, ODP) */
+    @com.fasterxml.jackson.annotation.JsonProperty("slide") SLIDE,
+    /** Spreadsheet sheets (XLSX, ODS) */
+    @com.fasterxml.jackson.annotation.JsonProperty("sheet") SHEET;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            PAGE -> "page"
+            SLIDE -> "slide"
+            SHEET -> "sheet"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): PageUnitType =
+            when (value) {
+                "page" -> PAGE
+                "slide" -> SLIDE
+                "sheet" -> SHEET
+                else -> throw IllegalArgumentException("Unknown PageUnitType value: $value")
+            }
+    }
 }

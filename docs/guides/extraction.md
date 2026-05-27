@@ -421,7 +421,7 @@ When a layout-detection model is active, it can independently classify regions a
 
 ## Supported Formats
 
-Kreuzberg supports 75+ file formats across 8 categories:
+Kreuzberg supports 90+ file formats across 8 categories:
 
 | Category          | Extensions                                               | Notes                               |
 | ----------------- | -------------------------------------------------------- | ----------------------------------- |

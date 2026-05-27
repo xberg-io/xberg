@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,40 +28,22 @@ package dev.kreuzberg
  * Contains Excel-specific document metadata.
  */
 data class XlsxAppProperties(
-    /**
-     * Application name (e.g., "Microsoft Excel")
-     */
-    val application: String?,
-    /**
-     * Application version
-     */
-    val appVersion: String?,
-    /**
-     * Document security level
-     */
-    val docSecurity: Int?,
-    /**
-     * Scale crop flag
-     */
-    val scaleCrop: Boolean?,
-    /**
-     * Links up to date flag
-     */
-    val linksUpToDate: Boolean?,
-    /**
-     * Shared document flag
-     */
-    val sharedDoc: Boolean?,
-    /**
-     * Hyperlinks changed flag
-     */
-    val hyperlinksChanged: Boolean?,
-    /**
-     * Company name
-     */
-    val company: String?,
-    /**
-     * Worksheet names
-     */
-    val worksheetNames: List<String>
+    /** Application name (e.g., "Microsoft Excel") */
+    val application: String? = null,
+    /** Application version */
+    val appVersion: String? = null,
+    /** Document security level */
+    val docSecurity: Int? = null,
+    /** Scale crop flag */
+    val scaleCrop: Boolean? = null,
+    /** Links up to date flag */
+    val linksUpToDate: Boolean? = null,
+    /** Shared document flag */
+    val sharedDoc: Boolean? = null,
+    /** Hyperlinks changed flag */
+    val hyperlinksChanged: Boolean? = null,
+    /** Company name */
+    val company: String? = null,
+    /** Worksheet names */
+    val worksheetNames: List<String> = emptyList(),
 )

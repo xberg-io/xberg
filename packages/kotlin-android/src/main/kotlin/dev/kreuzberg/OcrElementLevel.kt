@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,24 +25,37 @@ package dev.kreuzberg
 /**
  * Hierarchical level of an OCR element.
  *
- * Maps to Tesseract's page segmentation hierarchy and provides
- * equivalent semantics for PaddleOCR.
+ * Maps to Tesseract's page segmentation hierarchy and provides equivalent semantics for PaddleOCR.
  */
 enum class OcrElementLevel {
-    /**
-     * Individual word
-     */
-    WORD,
-    /**
-     * Line of text (default for PaddleOCR)
-     */
-    LINE,
-    /**
-     * Paragraph or text block
-     */
-    BLOCK,
-    /**
-     * Page-level element
-     */
-    PAGE;
+    /** Individual word */
+    @com.fasterxml.jackson.annotation.JsonProperty("word") WORD,
+    /** Line of text (default for PaddleOCR) */
+    @com.fasterxml.jackson.annotation.JsonProperty("line") LINE,
+    /** Paragraph or text block */
+    @com.fasterxml.jackson.annotation.JsonProperty("block") BLOCK,
+    /** Page-level element */
+    @com.fasterxml.jackson.annotation.JsonProperty("page") PAGE;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            WORD -> "word"
+            LINE -> "line"
+            BLOCK -> "block"
+            PAGE -> "page"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): OcrElementLevel =
+            when (value) {
+                "word" -> WORD
+                "line" -> LINE
+                "block" -> BLOCK
+                "page" -> PAGE
+                else -> throw IllegalArgumentException("Unknown OcrElementLevel value: $value")
+            }
+    }
 }

@@ -29,10 +29,14 @@ TARGET="$EXT_DIR/$BASENAME"
 cp "$BUILT_EXT" "$TARGET" 2>/dev/null || true # May fail if already exists, that's OK
 echo "Extension copied/verified: $TARGET"
 
-# Create php.ini in current directory (e2e/php) that loads the extension
+# Create php.ini in current directory (e2e/php) that loads the extension.
+# extension_dir is set explicitly so the ini works even when invoked with
+# PHP_INI_SCAN_DIR= (which is recommended in the e2e runner to skip stale
+# conf.d/*.ini entries left behind by sibling projects).
 cat >php.ini <<EOF
 ; Temporary PHP INI for e2e tests — loads kreuzberg PHP extension from system extension directory
 [PHP]
+extension_dir=$EXT_DIR
 extension=$BASENAME
 EOF
 

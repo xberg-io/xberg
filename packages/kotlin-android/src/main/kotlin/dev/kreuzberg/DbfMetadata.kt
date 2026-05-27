@@ -17,11 +17,14 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * dBASE (DBF) file metadata.
- */
-data class DbfMetadata(val recordCount: Long, val fieldCount: Long, val fields: List<DbfFieldInfo>)
+/** dBASE (DBF) file metadata. */
+data class DbfMetadata(
+    val recordCount: Long = 0L,
+    val fieldCount: Long = 0L,
+    val fields: List<DbfFieldInfo> = emptyList(),
+)

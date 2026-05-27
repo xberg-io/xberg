@@ -2642,6 +2642,19 @@ body:has(.full-width-iframe) article {
   border-radius: 12px;
 }
 
+.hero-banner a {
+  display: block;
+  line-height: 0;
+  text-decoration: none;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.hero-banner a:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 3px;
+}
+
 /* Homepage bottom cloud banner */
 .cloud-banner {
   margin: 2.5rem -0.8rem 0;

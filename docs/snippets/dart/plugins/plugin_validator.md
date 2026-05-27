@@ -1,5 +1,4 @@
 <!-- snippet:skip reason="Dart cannot construct the opaque BoxFn closure types required by createValidatorDartImpl — flutter_rust_bridge generates them as RustOpaqueInterface with no Dart-side wrapper. Custom validators must be written in Rust." -->
-
 ```dart title="Dart"
 import 'package:kreuzberg/kreuzberg.dart';
 

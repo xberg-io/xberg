@@ -17,11 +17,10 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Outlook PST archive metadata.
- */
-data class PstMetadata(val messageCount: Long)
+/** Outlook PST archive metadata. */
+data class PstMetadata(val messageCount: Long = 0L)

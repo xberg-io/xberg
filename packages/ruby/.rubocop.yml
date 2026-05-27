@@ -10,6 +10,7 @@ AllCops:
     - "vendor/**/*"
     - "tmp/**/*"
     - "lib/**/*.bundle"
+    - "lib/**/*.rb"
     - "ext/**/*"
 
 Style/FrozenStringLiteralComment:
@@ -18,11 +19,11 @@ Style/FrozenStringLiteralComment:
 
 Style/StringLiterals:
   Enabled: true
-  EnforcedStyle: single_quotes
+  EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   Enabled: true
-  EnforcedStyle: single_quotes
+  EnforcedStyle: double_quotes
 
 Style/Documentation:
   Enabled: false

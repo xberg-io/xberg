@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,82 +25,65 @@ package dev.kreuzberg
 /**
  * Extracted image from a document.
  *
- * Contains raw image data, metadata, and optional nested OCR results.
- * Raw bytes allow cross-language compatibility - users can convert to
- * PIL.Image (Python), Sharp (Node.js), or other formats as needed.
+ * Contains raw image data, metadata, and optional nested OCR results. Raw bytes allow
+ * cross-language compatibility - users can convert to PIL.Image (Python), Sharp (Node.js), or other
+ * formats as needed.
  */
 data class ExtractedImage(
     /**
-     * Raw image data (PNG, JPEG, WebP, etc. bytes).
-     * Uses `bytes.Bytes` for cheap cloning of large buffers.
+     * Raw image data (PNG, JPEG, WebP, etc. bytes). Uses `bytes.Bytes` for cheap cloning of large
+     * buffers.
      */
     val data: ByteArray,
     /**
-     * Image format (e.g., "jpeg", "png", "webp")
-     * Uses Cow<'static, str> to avoid allocation for static literals.
+     * Image format (e.g., "jpeg", "png", "webp") Uses Cow<'static, str> to avoid allocation for
+     * static literals.
      */
     val format: String,
-    /**
-     * Zero-indexed position of this image in the document/page
-     */
+    /** Zero-indexed position of this image in the document/page */
     val imageIndex: Int,
-    /**
-     * Page/slide number where image was found (1-indexed)
-     */
-    val pageNumber: Int?,
-    /**
-     * Image width in pixels
-     */
-    val width: Int?,
-    /**
-     * Image height in pixels
-     */
-    val height: Int?,
-    /**
-     * Colorspace information (e.g., "RGB", "CMYK", "Gray")
-     */
-    val colorspace: String?,
-    /**
-     * Bits per color component (e.g., 8, 16)
-     */
-    val bitsPerComponent: Int?,
-    /**
-     * Whether this image is a mask image
-     */
+    /** Page/slide number where image was found (1-indexed) */
+    val pageNumber: Int? = null,
+    /** Image width in pixels */
+    val width: Int? = null,
+    /** Image height in pixels */
+    val height: Int? = null,
+    /** Colorspace information (e.g., "RGB", "CMYK", "Gray") */
+    val colorspace: String? = null,
+    /** Bits per color component (e.g., 8, 16) */
+    val bitsPerComponent: Int? = null,
+    /** Whether this image is a mask image */
     val isMask: Boolean,
-    /**
-     * Optional description of the image
-     */
-    val description: String?,
+    /** Optional description of the image */
+    val description: String? = null,
     /**
      * Nested OCR extraction result (if image was OCRed)
      *
-     * When OCR is performed on this image, the result is embedded here
-     * rather than in a separate collection, making the relationship explicit.
+     * When OCR is performed on this image, the result is embedded here rather than in a separate
+     * collection, making the relationship explicit.
      */
-    val ocrResult: ExtractionResult?,
+    val ocrResult: ExtractionResult? = null,
     /**
-     * Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
-     * Only populated for PDF-extracted images when position data is available from the PDF extractor.
+     * Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right,
+     * y1=top). Only populated for PDF-extracted images when position data is available from the PDF
+     * extractor.
      */
-    val boundingBox: String?,
+    val boundingBox: BoundingBox? = null,
     /**
-     * Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
-     * Used for rendering image references when the binary data is not extracted.
+     * Original source path of the image within the document archive (e.g., "media/image1.png" in
+     * DOCX). Used for rendering image references when the binary data is not extracted.
      */
-    val sourcePath: String?,
+    val sourcePath: String? = null,
     /**
-     * Heuristic classification of what this image likely depicts.
-     * `null` if classification was disabled or inconclusive.
+     * Heuristic classification of what this image likely depicts. `null` if classification was
+     * disabled or inconclusive.
      */
-    val imageKind: ImageKind?,
+    val imageKind: ImageKind? = null,
+    /** Confidence score for `image_kind`, in the range 0.0 to 1.0. */
+    val kindConfidence: Float? = null,
     /**
-     * Confidence score for `image_kind`, in the range 0.0 to 1.0.
+     * Identifier shared across images that form a single logical figure (e.g. all raster tiles of
+     * one technical drawing). `null` for singletons.
      */
-    val kindConfidence: Float?,
-    /**
-     * Identifier shared across images that form a single logical figure
-     * (e.g. all raster tiles of one technical drawing). `null` for singletons.
-     */
-    val clusterId: Int?
+    val clusterId: Int? = null,
 )

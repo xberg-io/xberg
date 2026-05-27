@@ -20,20 +20,26 @@ public record ChunkItem(
     [property: JsonPropertyName("chunk_index")] int ChunkIndex
 );
 
-var client = new HttpClient();
-var request = new ChunkRequest(
-    Text: "Your long text content here...",
-    MaxCharacters: 1000,
-    Overlap: 50,
-    ChunkerType: "text"
-);
-
-var response = await client.PostAsJsonAsync("http://localhost:8000/chunk", request);
-var result = await response.Content.ReadFromJsonAsync<ChunkResponse>();
-
-Console.WriteLine($"Created {result?.ChunkCount} chunks");
-foreach (var chunk in result?.Chunks ?? [])
+class Program
 {
-    Console.WriteLine($"Chunk {chunk.ChunkIndex}: {chunk.Content[..Math.Min(50, chunk.Content.Length)]}...");
+    static async Task Main()
+    {
+        var client = new HttpClient();
+        var request = new ChunkRequest(
+            Text: "Your long text content here...",
+            MaxCharacters: 1000,
+            Overlap: 50,
+            ChunkerType: "text"
+        );
+
+        var response = await client.PostAsJsonAsync("http://localhost:8000/chunk", request);
+        var result = await response.Content.ReadFromJsonAsync<ChunkResponse>();
+
+        Console.WriteLine($"Created {result?.ChunkCount} chunks");
+        foreach (var chunk in result?.Chunks ?? [])
+        {
+            Console.WriteLine($"Chunk {chunk.ChunkIndex}: {chunk.Content[..Math.Min(50, chunk.Content.Length)]}...");
+        }
+    }
 }
 ```

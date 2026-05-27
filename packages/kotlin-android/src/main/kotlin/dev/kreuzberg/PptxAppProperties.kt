@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,64 +28,34 @@ package dev.kreuzberg
  * Contains PowerPoint-specific document metadata.
  */
 data class PptxAppProperties(
-    /**
-     * Application name (e.g., "Microsoft Office PowerPoint")
-     */
-    val application: String?,
-    /**
-     * Application version
-     */
-    val appVersion: String?,
-    /**
-     * Total editing time in minutes
-     */
-    val totalTime: Int?,
-    /**
-     * Company name
-     */
-    val company: String?,
-    /**
-     * Document security level
-     */
-    val docSecurity: Int?,
-    /**
-     * Scale crop flag
-     */
-    val scaleCrop: Boolean?,
-    /**
-     * Links up to date flag
-     */
-    val linksUpToDate: Boolean?,
-    /**
-     * Shared document flag
-     */
-    val sharedDoc: Boolean?,
-    /**
-     * Hyperlinks changed flag
-     */
-    val hyperlinksChanged: Boolean?,
-    /**
-     * Number of slides
-     */
-    val slides: Int?,
-    /**
-     * Number of notes
-     */
-    val notes: Int?,
-    /**
-     * Number of hidden slides
-     */
-    val hiddenSlides: Int?,
-    /**
-     * Number of multimedia clips
-     */
-    val multimediaClips: Int?,
-    /**
-     * Presentation format (e.g., "Widescreen", "Standard")
-     */
-    val presentationFormat: String?,
-    /**
-     * Slide titles
-     */
-    val slideTitles: List<String>
+    /** Application name (e.g., "Microsoft Office PowerPoint") */
+    val application: String? = null,
+    /** Application version */
+    val appVersion: String? = null,
+    /** Total editing time in minutes */
+    val totalTime: Int? = null,
+    /** Company name */
+    val company: String? = null,
+    /** Document security level */
+    val docSecurity: Int? = null,
+    /** Scale crop flag */
+    val scaleCrop: Boolean? = null,
+    /** Links up to date flag */
+    val linksUpToDate: Boolean? = null,
+    /** Shared document flag */
+    val sharedDoc: Boolean? = null,
+    /** Hyperlinks changed flag */
+    val hyperlinksChanged: Boolean? = null,
+    /** Number of slides */
+    val slides: Int? = null,
+    /** Number of notes */
+    val notes: Int? = null,
+    /** Number of hidden slides */
+    val hiddenSlides: Int? = null,
+    /** Number of multimedia clips */
+    val multimediaClips: Int? = null,
+    /** Presentation format (e.g., "Widescreen", "Standard") */
+    val presentationFormat: String? = null,
+    /** Slide titles */
+    val slideTitles: List<String> = emptyList(),
 )

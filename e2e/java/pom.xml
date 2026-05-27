@@ -12,7 +12,7 @@
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <junit.version>6.0.3</junit.version>
+        <junit.version>6.1.0</junit.version>
     </properties>
 
     <dependencyManagement>
@@ -31,9 +31,9 @@
         <dependency>
             <groupId>dev.kreuzberg</groupId>
             <artifactId>kreuzberg</artifactId>
-            <version>5.0.0-rc.1</version>
+            <version>5.0.0-rc.3</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-5.0.0-rc.1.jar</systemPath>
+            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-5.0.0-rc.3.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

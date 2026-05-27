@@ -66,7 +66,13 @@ public class CloudOcrBackend : IOcrBackend
     }
 }
 
-// Register the backend
-var backend = new CloudOcrBackend(apiKey: "your-api-key");
-OcrBackendBridge.Register(backend);
+class Program
+{
+    static void Main()
+    {
+        // Register the backend
+        var backend = new CloudOcrBackend(apiKey: "your-api-key");
+        OcrBackendBridge.Register(backend);
+    }
+}
 ```

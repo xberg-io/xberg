@@ -16,7 +16,7 @@ When extracting source code, the `metadata.format` field contains a `ProcessResu
 - **Chunks** -- semantically meaningful code chunks for RAG and embedding pipelines
 - **Metrics** -- file-level statistics (lines of code, comment lines, empty lines, node count)
 
-Language support covers **306 programming languages** via tree-sitter grammars. See the [TSLP documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev) for the full language list.
+Language support covers **300+ programming languages** via tree-sitter grammars. See the [TSLP documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev) for the full language list.
 
 ## Getting Started
 
@@ -222,7 +222,7 @@ If neither method identifies the language, extraction returns an `UnsupportedFor
 
 ## Language Support
 
-Tree-sitter-language-pack supports 306 programming languages. For the full list, see the [TSLP language reference](https://docs.tree-sitter-language-pack.kreuzberg.dev).
+Tree-sitter-language-pack supports 300+ programming languages. For the full list, see the [TSLP language reference](https://docs.tree-sitter-language-pack.kreuzberg.dev).
 
 Common languages with full structural analysis:
 

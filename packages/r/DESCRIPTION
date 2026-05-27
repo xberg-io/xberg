@@ -1,6 +1,6 @@
 Package: kreuzberg
 Title: High-performance document intelligence library
-Version: 5.0.0.9001
+Version: 5.0.0.9003
 Authors@R: person("Na'aman Hirschfeld <naaman@kreuzberg.dev>", email = "author@example.com", role = c("aut", "cre"))
 Description: High-performance document intelligence library
     Rust bindings generated with extendr.

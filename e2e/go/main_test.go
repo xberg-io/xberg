@@ -27,6 +27,13 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+	// If MOCK_SERVER_URL is already set, a parent process (e.g. `alef test-apps run`)
+	// started a shared mock-server and exported its URL (plus any MOCK_SERVERS /
+	// MOCK_SERVER_<FIXTURE_ID> vars). Use it as-is and do NOT spawn our own server.
+	if os.Getenv("MOCK_SERVER_URL") != "" {
+		os.Exit(m.Run())
+	}
+
 	// Start the mock HTTP server if it exists.
 	mockServerBin := filepath.Join(dir, "..", "rust", "target", "release", "mock-server")
 	if _, err := os.Stat(mockServerBin); err == nil {

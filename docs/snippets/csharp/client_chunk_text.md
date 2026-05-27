@@ -34,30 +34,35 @@ public record ChunkItem(
     [property: JsonPropertyName("last_page")] int? LastPage
 );
 
-// Usage
-using var client = new HttpClient();
-
-var request = new ChunkRequest(
-    Text: "Your long text content here...",
-    ChunkerType: "text",
-    Config: new ChunkConfig(
-        MaxCharacters: 1000,
-        Overlap: 50,
-        Trim: true
-    )
-);
-
-var response = await client.PostAsJsonAsync(
-    "http://localhost:8000/chunk",
-    request
-);
-
-var result = await response.Content.ReadFromJsonAsync<ChunkResponse>();
-
-Console.WriteLine($"Created {result?.ChunkCount} chunks");
-foreach (var chunk in result?.Chunks ?? [])
+class Program
 {
-    var preview = chunk.Content[..Math.Min(50, chunk.Content.Length)];
-    Console.WriteLine($"Chunk {chunk.ChunkIndex}: {preview}...");
+    static async Task Main()
+    {
+        using var client = new HttpClient();
+
+        var request = new ChunkRequest(
+            Text: "Your long text content here...",
+            ChunkerType: "text",
+            Config: new ChunkConfig(
+                MaxCharacters: 1000,
+                Overlap: 50,
+                Trim: true
+            )
+        );
+
+        var response = await client.PostAsJsonAsync(
+            "http://localhost:8000/chunk",
+            request
+        );
+
+        var result = await response.Content.ReadFromJsonAsync<ChunkResponse>();
+
+        Console.WriteLine($"Created {result?.ChunkCount} chunks");
+        foreach (var chunk in result?.Chunks ?? [])
+        {
+            var preview = chunk.Content[..Math.Min(50, chunk.Content.Length)];
+            Console.WriteLine($"Chunk {chunk.ChunkIndex}: {preview}...");
+        }
+    }
 }
 ```

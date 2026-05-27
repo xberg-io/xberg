@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,53 +25,40 @@ package dev.kreuzberg
 /**
  * Metadata for individual page/slide/sheet.
  *
- * Captures per-page information including dimensions, content counts,
- * and visibility state (for presentations).
+ * Captures per-page information including dimensions, content counts, and visibility state (for
+ * presentations).
  */
 data class PageInfo(
-    /**
-     * Page number (1-indexed)
-     */
+    /** Page number (1-indexed) */
     val number: Int,
-    /**
-     * Page title (usually for presentations)
-     */
-    val title: String?,
-    /**
-     * Dimensions in points (PDF) or pixels (images): (width, height)
-     */
-    val dimensions: List<Double>?,
-    /**
-     * Number of images on this page
-     */
-    val imageCount: Int?,
-    /**
-     * Number of tables on this page
-     */
-    val tableCount: Int?,
-    /**
-     * Whether this page is hidden (e.g., in presentations)
-     */
-    val hidden: Boolean?,
+    /** Page title (usually for presentations) */
+    val title: String? = null,
+    /** Dimensions in points (PDF) or pixels (images): (width, height) */
+    val dimensions: List<Double>? = null,
+    /** Number of images on this page */
+    val imageCount: Int? = null,
+    /** Number of tables on this page */
+    val tableCount: Int? = null,
+    /** Whether this page is hidden (e.g., in presentations) */
+    val hidden: Boolean? = null,
     /**
      * Whether this page is blank (no meaningful text, no images, no tables)
      *
-     * A page is considered blank if it has fewer than 3 non-whitespace characters
-     * and contains no tables or images. This is useful for filtering out empty pages
-     * in scanned documents or PDFs with blank separator pages.
+     * A page is considered blank if it has fewer than 3 non-whitespace characters and contains no
+     * tables or images. This is useful for filtering out empty pages in scanned documents or PDFs
+     * with blank separator pages.
      */
-    val isBlank: Boolean?,
+    val isBlank: Boolean? = null,
     /**
      * Whether this page contains non-trivial vector graphics (paths, shapes, curves)
      *
-     * Indicates the presence of vector-drawn content such as charts, diagrams,
-     * or geometric shapes (e.g., from Adobe InDesign, LaTeX TikZ). These are
-     * invisible to `ExtractionResult.images` since they are not embedded as raster
-     * XObjects. Set to `true` when path count exceeds a heuristic threshold,
-     * signaling that downstream consumers may want to rasterize the page to
+     * Indicates the presence of vector-drawn content such as charts, diagrams, or geometric shapes
+     * (e.g., from Adobe InDesign, LaTeX TikZ). These are invisible to `ExtractionResult.images`
+     * since they are not embedded as raster XObjects. Set to `true` when path count exceeds a
+     * heuristic threshold, signaling that downstream consumers may want to rasterize the page to
      * capture this content.
      *
      * Only populated for PDFs; `null` for other document types.
      */
-    val hasVectorGraphics: Boolean
+    val hasVectorGraphics: Boolean,
 )

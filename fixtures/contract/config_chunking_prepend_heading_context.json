@@ -1,7 +1,12 @@
 {
   "id": "config_chunking_prepend_heading_context",
   "description": "Tests markdown chunker prepends heading hierarchy to chunk content",
-  "tags": ["contract", "config", "chunking", "heading-context"],
+  "tags": [
+    "contract",
+    "config",
+    "chunking",
+    "heading-context"
+  ],
   "call": "extract_file_sync",
   "input": {
     "path": "markdown/extraction_test.md",
@@ -39,6 +44,9 @@
     }
   ],
   "skip": {
-    "reason": "Requires features: chunking"
+    "languages": [
+      "wasm"
+    ],
+    "reason": "WASM cannot access filesystem; use extractBytes with file content instead"
   }
 }

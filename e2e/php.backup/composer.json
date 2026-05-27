@@ -1,0 +1,22 @@
+{
+  "name": "kreuzberg-dev/e2e-php",
+  "description": "E2e tests for PHP bindings",
+  "type": "project",
+  "require-dev": {
+    "phpunit/phpunit": "^13.1",
+    "guzzlehttp/guzzle": "^7.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Kreuzberg\\": "../../packages/php/src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Kreuzberg\\E2e\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "php run_tests.php"
+  }
+}

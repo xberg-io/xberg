@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,52 +25,66 @@ package dev.kreuzberg
 /**
  * Semantic element type classification.
  *
- * Categorizes text content into semantic units for downstream processing.
- * Supports the element types commonly found in Unstructured documents.
+ * Categorizes text content into semantic units for downstream processing. Supports the element
+ * types commonly found in Unstructured documents.
  */
 enum class ElementType {
-    /**
-     * Document title
-     */
-    TITLE,
-    /**
-     * Main narrative text body
-     */
-    NARRATIVE_TEXT,
-    /**
-     * Section heading
-     */
-    HEADING,
-    /**
-     * List item (bullet, numbered, etc.)
-     */
-    LIST_ITEM,
-    /**
-     * Table element
-     */
-    TABLE,
-    /**
-     * Image element
-     */
-    IMAGE,
-    /**
-     * Page break marker
-     */
-    PAGE_BREAK,
-    /**
-     * Code block
-     */
-    CODE_BLOCK,
-    /**
-     * Block quote
-     */
-    BLOCK_QUOTE,
-    /**
-     * Footer text
-     */
-    FOOTER,
-    /**
-     * Header text
-     */
-    HEADER;
+    /** Document title */
+    @com.fasterxml.jackson.annotation.JsonProperty("title") TITLE,
+    /** Main narrative text body */
+    @com.fasterxml.jackson.annotation.JsonProperty("narrative_text") NARRATIVE_TEXT,
+    /** Section heading */
+    @com.fasterxml.jackson.annotation.JsonProperty("heading") HEADING,
+    /** List item (bullet, numbered, etc.) */
+    @com.fasterxml.jackson.annotation.JsonProperty("list_item") LIST_ITEM,
+    /** Table element */
+    @com.fasterxml.jackson.annotation.JsonProperty("table") TABLE,
+    /** Image element */
+    @com.fasterxml.jackson.annotation.JsonProperty("image") IMAGE,
+    /** Page break marker */
+    @com.fasterxml.jackson.annotation.JsonProperty("page_break") PAGE_BREAK,
+    /** Code block */
+    @com.fasterxml.jackson.annotation.JsonProperty("code_block") CODE_BLOCK,
+    /** Block quote */
+    @com.fasterxml.jackson.annotation.JsonProperty("block_quote") BLOCK_QUOTE,
+    /** Footer text */
+    @com.fasterxml.jackson.annotation.JsonProperty("footer") FOOTER,
+    /** Header text */
+    @com.fasterxml.jackson.annotation.JsonProperty("header") HEADER;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            TITLE -> "title"
+            NARRATIVE_TEXT -> "narrative_text"
+            HEADING -> "heading"
+            LIST_ITEM -> "list_item"
+            TABLE -> "table"
+            IMAGE -> "image"
+            PAGE_BREAK -> "page_break"
+            CODE_BLOCK -> "code_block"
+            BLOCK_QUOTE -> "block_quote"
+            FOOTER -> "footer"
+            HEADER -> "header"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): ElementType =
+            when (value) {
+                "title" -> TITLE
+                "narrative_text" -> NARRATIVE_TEXT
+                "heading" -> HEADING
+                "list_item" -> LIST_ITEM
+                "table" -> TABLE
+                "image" -> IMAGE
+                "page_break" -> PAGE_BREAK
+                "code_block" -> CODE_BLOCK
+                "block_quote" -> BLOCK_QUOTE
+                "footer" -> FOOTER
+                "header" -> HEADER
+                else -> throw IllegalArgumentException("Unknown ElementType value: $value")
+            }
+    }
 }

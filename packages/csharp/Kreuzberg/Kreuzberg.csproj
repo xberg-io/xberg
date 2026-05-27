@@ -3,13 +3,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Kreuzberg</RootNamespace>
     <PackageId>Kreuzberg</PackageId>
-    <Version>5.0.0-rc.1</Version>
+    <Version>5.0.0-rc.3</Version>
     <Description>High-performance document intelligence library</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <RepositoryUrl>https://github.com/kreuzberg-dev/kreuzberg</RepositoryUrl>
     <Authors>Na&apos;aman Hirschfeld &lt;naaman@kreuzberg.dev&gt;</Authors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
   <ItemGroup>

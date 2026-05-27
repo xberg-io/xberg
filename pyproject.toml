@@ -21,6 +21,16 @@ dev = [
   "types-psutil>=7.2.2.20260508",
   "validate-pyproject>=0.24.1",
 ]
+bench-docling = [ "docling>=2.64.1" ]
+bench-markitdown = [ "markitdown[all]>=0.1.4" ]
+bench-mineru = [ "mineru[pipeline]>=2.6.7", "onnxruntime" ]
+bench-pdfminer = [ "pdfminer-six>=20231228" ]
+bench-pdfplumber = [ "pdfplumber>=0.11.4" ]
+bench-pdftotext = [ "pdftotext>=2.2.2" ]
+bench-playa-pdf = [ "playa-pdf>=0.6.0" ]
+bench-pymupdf4llm = [ "pillow>=10.0.0", "pymupdf-layout>=0.0.1", "pymupdf4llm>=0.0.17" ]
+bench-pypdf = [ "pypdf>=4.0.0" ]
+bench-unstructured = [ "unstructured[all-docs]>=0.18.21" ]
 doc = [ "mkdocstrings>=1.0.4", "mkdocstrings-python>=2.0.3", "zensical" ]
 
 [tool.uv]
@@ -138,7 +148,44 @@ lint.per-file-ignores."scripts/**/*.py" = [
   "PLW2901",
   "SIM105",
 ]
-lint.per-file-ignores."tools/benchmark-harness/scripts/*.py" = [ "BLE001", "D103", "T201" ]
+lint.per-file-ignores."tools/benchmark-harness/scripts/*.py" = [
+  "ANN001",
+  "ANN201",
+  "ANN202",
+  "ARG001",
+  "BLE001",
+  "C901",
+  "D103",
+  "E741",
+  "EXE001",
+  "EXE002",
+  "F841",
+  "INP001",
+  "N818",
+  "PERF203",
+  "PERF401",
+  "PIE810",
+  "PLC0206",
+  "PLC0415",
+  "PLR0911",
+  "PLR0912",
+  "PLR0915",
+  "PLR1714",
+  "PLW1510",
+  "PLW2901",
+  "PTH110",
+  "PTH112",
+  "PTH118",
+  "PTH119",
+  "PTH122",
+  "PTH123",
+  "RET504",
+  "S314",
+  "S607",
+  "SIM108",
+  "SIM115",
+  "T201",
+]
 lint.per-file-ignores."tools/perf/*.py" = [ "D103", "T201" ]
 lint.isort.known-first-party = [ "kreuzberg" ]
 lint.mccabe.max-complexity = 15

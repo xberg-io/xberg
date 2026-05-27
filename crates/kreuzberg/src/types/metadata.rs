@@ -113,6 +113,42 @@ impl FormatMetadata {
     }
 }
 
+impl std::fmt::Display for FormatMetadata {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            #[cfg(feature = "pdf")]
+            Self::Pdf(_) => f.write_str("pdf"),
+            #[cfg(feature = "office")]
+            Self::Docx(_) => f.write_str("docx"),
+            Self::Excel(_) => f.write_str("excel"),
+            Self::Email(_) => f.write_str("email"),
+            Self::Pptx(_) => f.write_str("pptx"),
+            Self::Archive(_) => f.write_str("archive"),
+            Self::Image(image) => f.write_str(&image.format.to_uppercase()),
+            Self::Xml(_) => f.write_str("xml"),
+            Self::Text(_) => f.write_str("text"),
+            Self::Html(_) => f.write_str("html"),
+            Self::Ocr(_) => f.write_str("ocr"),
+            Self::Csv(_) => f.write_str("csv"),
+            #[cfg(feature = "office")]
+            Self::Bibtex(_) => f.write_str("bibtex"),
+            #[cfg(feature = "office")]
+            Self::Citation(_) => f.write_str("citation"),
+            #[cfg(feature = "office")]
+            Self::FictionBook(_) => f.write_str("fictionbook"),
+            #[cfg(feature = "office")]
+            Self::Dbf(_) => f.write_str("dbf"),
+            #[cfg(feature = "xml")]
+            Self::Jats(_) => f.write_str("jats"),
+            #[cfg(feature = "office")]
+            Self::Epub(_) => f.write_str("epub"),
+            Self::Pst(_) => f.write_str("pst"),
+            #[cfg(feature = "tree-sitter")]
+            Self::Code(_) => f.write_str("code"),
+        }
+    }
+}
+
 /// Extraction result metadata.
 ///
 /// Contains common fields applicable to all formats, format-specific metadata

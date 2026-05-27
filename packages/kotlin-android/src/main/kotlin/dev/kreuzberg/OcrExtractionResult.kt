@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,35 +25,26 @@ package dev.kreuzberg
 /**
  * OCR extraction result.
  *
- * Result of performing OCR on an image or scanned document,
- * including recognized text and detected tables.
+ * Result of performing OCR on an image or scanned document, including recognized text and detected
+ * tables.
  */
 data class OcrExtractionResult(
-    /**
-     * Recognized text content
-     */
+    /** Recognized text content */
     val content: String,
-    /**
-     * Original MIME type of the processed image
-     */
+    /** Original MIME type of the processed image */
     val mimeType: String,
+    /** OCR processing metadata (confidence scores, language, etc.) */
+    val metadata: Map<String, Any> = emptyMap(),
+    /** Tables detected and extracted via OCR */
+    val tables: List<OcrTable> = emptyList(),
     /**
-     * OCR processing metadata (confidence scores, language, etc.)
+     * Structured OCR elements with bounding boxes and confidence scores. Available when TSV output
+     * is requested or table detection is enabled.
      */
-    val metadata: Map<String, String>,
+    val ocrElements: List<OcrElement>? = null,
     /**
-     * Tables detected and extracted via OCR
+     * Structured document produced from hOCR parsing. Carries paragraph structure, bounding boxes,
+     * and confidence scores that the flattened `content` string discards.
      */
-    val tables: List<OcrTable>,
-    /**
-     * Structured OCR elements with bounding boxes and confidence scores.
-     * Available when TSV output is requested or table detection is enabled.
-     */
-    val ocrElements: List<OcrElement>?,
-    /**
-     * Structured document produced from hOCR parsing.
-     * Carries paragraph structure, bounding boxes, and confidence scores
-     * that the flattened `content` string discards.
-     */
-    val internalDocument: String?
+    val internalDocument: String? = null,
 )

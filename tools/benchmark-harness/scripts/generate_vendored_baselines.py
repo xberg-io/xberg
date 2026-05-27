@@ -16,6 +16,7 @@ Usage:
     uv run tools/benchmark-harness/scripts/generate_vendored_baselines.py rapidocr
     uv run tools/benchmark-harness/scripts/generate_vendored_baselines.py --force
 """
+
 import json
 import os
 import sys
@@ -41,8 +42,9 @@ OCR_FIXTURES = [
 
 def pdf_to_images(pdf_path: str, dpi: int = 300) -> list[np.ndarray]:
     """Convert PDF pages to numpy arrays (RGB, HWC)."""
-    from PIL import Image
     import io
+
+    from PIL import Image
 
     doc = fitz.open(pdf_path)
     images = []
@@ -162,6 +164,7 @@ def main():
             except Exception as e:
                 print(f" ERROR: {e}")
                 import traceback
+
                 traceback.print_exc()
 
 

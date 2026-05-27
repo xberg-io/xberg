@@ -235,3 +235,9 @@ pub mod document_extractor {
 
 #[cfg(feature = "embeddings")]
 pub(crate) use registry::get_embedding_backend_registry;
+
+// Self-healing initializer for the global OCR backend registry. Re-exported at
+// crate visibility so the image extractor can re-seed the built-in backends
+// after `clear_ocr_backends` empties the registry.
+#[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
+pub(crate) use ocr::ensure_ocr_backends_initialized;

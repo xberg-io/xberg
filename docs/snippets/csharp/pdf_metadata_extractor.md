@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var processor = new PdfMetadataExtractor();
+KreuzbergLib.RegisterPostProcessor(processor);
+
 public class PdfMetadataExtractor : IPostProcessor
 {
     private int _processedCount = 0;
@@ -29,7 +32,4 @@ public class PdfMetadataExtractor : IPostProcessor
         Console.WriteLine($"Processed {_processedCount} PDFs");
     }
 }
-
-var processor = new PdfMetadataExtractor();
-KreuzbergLib.RegisterPostProcessor(processor);
 ```

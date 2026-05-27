@@ -15,5 +15,6 @@ tasks:
     silent: false
     cmds:
       - cmd: |
+          test -f packages/kotlin-android/gradlew || { echo "Kotlin-Android gradlew not found, skipping upgrade"; exit 0; }
           cd packages/kotlin-android && ./gradlew useLatestVersions
         ignore_error: false

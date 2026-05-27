@@ -2,6 +2,9 @@
 using Kreuzberg;
 using System.Collections.Generic;
 
+var backend = new CustomEmbeddingBackend();
+EmbeddingBackendRegistry.Register(backend);
+
 public class CustomEmbeddingBackend : IEmbeddingBackend
 {
     public string Name => "custom-embeddings";
@@ -37,7 +40,4 @@ public class CustomEmbeddingBackend : IEmbeddingBackend
         return embeddings;
     }
 }
-
-var backend = new CustomEmbeddingBackend();
-EmbeddingBackendRegistry.Register(backend);
 ```

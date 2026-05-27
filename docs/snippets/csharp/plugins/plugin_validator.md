@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var validator = new ContentTypeValidator("application/pdf", "text/plain");
+ValidatorRegistry.Register(validator);
+
 public class ContentTypeValidator : IValidator
 {
     private readonly string[] _allowedMimeTypes;
@@ -44,7 +47,4 @@ public class ContentTypeValidator : IValidator
         return 50;
     }
 }
-
-var validator = new ContentTypeValidator("application/pdf", "text/plain");
-ValidatorRegistry.Register(validator);
 ```

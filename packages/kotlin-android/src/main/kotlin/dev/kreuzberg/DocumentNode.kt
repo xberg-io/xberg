@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,53 +25,38 @@ package dev.kreuzberg
 /**
  * A single node in the document tree.
  *
- * Each node has deterministic `id`, typed `content`, optional `parent`/`children`
- * for tree structure, and metadata like page number, bounding box, and content layer.
+ * Each node has deterministic `id`, typed `content`, optional `parent`/`children` for tree
+ * structure, and metadata like page number, bounding box, and content layer.
  */
 data class DocumentNode(
-    /**
-     * Deterministic identifier (hash of content + position).
-     */
+    /** Deterministic identifier (hash of content + position). */
     val id: String,
-    /**
-     * Node content — tagged enum, type-specific data only.
-     */
+    /** Node content — tagged enum, type-specific data only. */
+    @field:com.fasterxml.jackson.databind.annotation.JsonSerialize(`as` = NodeContent::class)
     val content: NodeContent,
-    /**
-     * Parent node index (`null` = root-level node).
-     */
-    val parent: Int?,
-    /**
-     * Child node indices in reading order.
-     */
-    val children: List<Int>,
-    /**
-     * Content layer classification.
-     */
+    /** Parent node index (`null` = root-level node). */
+    val parent: Int? = null,
+    /** Child node indices in reading order. */
+    val children: List<Int> = emptyList(),
+    /** Content layer classification. */
     val contentLayer: ContentLayer,
-    /**
-     * Page number where this node starts (1-indexed).
-     */
-    val page: Int?,
-    /**
-     * Page number where this node ends (for multi-page tables/sections).
-     */
-    val pageEnd: Int?,
-    /**
-     * Bounding box in document coordinates.
-     */
-    val bbox: String?,
+    /** Page number where this node starts (1-indexed). */
+    val page: Int? = null,
+    /** Page number where this node ends (for multi-page tables/sections). */
+    val pageEnd: Int? = null,
+    /** Bounding box in document coordinates. */
+    val bbox: BoundingBox? = null,
     /**
      * Inline annotations (formatting, links) on this node's text content.
      *
      * Only meaningful for text-carrying nodes; empty for containers.
      */
-    val annotations: List<TextAnnotation>,
+    val annotations: List<TextAnnotation> = emptyList(),
     /**
      * Format-specific key-value attributes.
      *
-     * Extensible bag for data that doesn't warrant a typed field: CSS classes,
-     * LaTeX environment names, Excel cell formulas, slide layout names, etc.
+     * Extensible bag for miscellaneous data without a dedicated typed field: CSS classes, LaTeX
+     * environment names, Excel cell formulas, slide layout names, etc.
      */
-    val attributes: Map<String, String>?
+    val attributes: Map<String, String>? = null,
 )

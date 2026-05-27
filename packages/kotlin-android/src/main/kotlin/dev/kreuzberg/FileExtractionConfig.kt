@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,115 +25,73 @@ package dev.kreuzberg
 /**
  * Per-file extraction configuration overrides for batch processing.
  *
- * All fields are `Option<T>` — `null` means "use the batch-level default."
- * This type is used with `batch_extract_files` and
- * `batch_extract_bytes` to allow heterogeneous
- * extraction settings within a single batch.
+ * All fields are `Option<T>` — `null` means "use the batch-level default." This type is used with
+ * `batch_extract_files` and `batch_extract_bytes` to allow heterogeneous extraction settings within
+ * a single batch.
  *
  * # Excluded Fields
  *
- * The following `ExtractionConfig` fields are batch-level only and
- * cannot be overridden per file:
+ * The following `ExtractionConfig` fields are batch-level only and cannot be overridden per file:
+ *
  * - `max_concurrent_extractions` — controls batch parallelism
  * - `use_cache` — global caching policy
  * - `acceleration` — shared ONNX execution provider
  * - `security_limits` — global archive security policy
  */
 data class FileExtractionConfig(
-    /**
-     * Override quality post-processing for this file.
-     */
-    val enableQualityProcessing: Boolean?,
-    /**
-     * Override OCR configuration for this file (None in the Option = use batch default).
-     */
-    val ocr: OcrConfig?,
-    /**
-     * Override force OCR for this file.
-     */
-    val forceOcr: Boolean?,
-    /**
-     * Override force OCR pages for this file (1-indexed page numbers).
-     */
-    val forceOcrPages: List<Int>?,
-    /**
-     * Override disable OCR for this file.
-     */
-    val disableOcr: Boolean?,
-    /**
-     * Override chunking configuration for this file.
-     */
-    val chunking: ChunkingConfig?,
-    /**
-     * Override content filtering configuration for this file.
-     */
-    val contentFilter: ContentFilterConfig?,
-    /**
-     * Override image extraction configuration for this file.
-     */
-    val images: ImageExtractionConfig?,
-    /**
-     * Override PDF options for this file.
-     */
-    val pdfOptions: PdfConfig?,
-    /**
-     * Override token reduction for this file.
-     */
-    val tokenReduction: TokenReductionOptions?,
-    /**
-     * Override language detection for this file.
-     */
-    val languageDetection: LanguageDetectionConfig?,
-    /**
-     * Override page extraction for this file.
-     */
-    val pages: PageConfig?,
-    /**
-     * Override keyword extraction for this file.
-     */
-    val keywords: KeywordConfig?,
-    /**
-     * Override post-processor for this file.
-     */
-    val postprocessor: PostProcessorConfig?,
-    /**
-     * Override HTML conversion options for this file.
-     */
-    val htmlOptions: String?,
-    /**
-     * Override result format for this file.
-     */
-    val resultFormat: ResultFormat?,
-    /**
-     * Override output content format for this file.
-     */
-    val outputFormat: OutputFormat?,
-    /**
-     * Override document structure output for this file.
-     */
-    val includeDocumentStructure: Boolean?,
-    /**
-     * Override layout detection for this file.
-     */
-    val layout: LayoutDetectionConfig?,
+    /** Override quality post-processing for this file. */
+    val enableQualityProcessing: Boolean? = null,
+    /** Override OCR configuration for this file (None in the Option = use batch default). */
+    val ocr: OcrConfig? = null,
+    /** Override force OCR for this file. */
+    val forceOcr: Boolean? = null,
+    /** Override force OCR pages for this file (1-indexed page numbers). */
+    val forceOcrPages: List<Int>? = null,
+    /** Override disable OCR for this file. */
+    val disableOcr: Boolean? = null,
+    /** Override chunking configuration for this file. */
+    val chunking: ChunkingConfig? = null,
+    /** Override content filtering configuration for this file. */
+    val contentFilter: ContentFilterConfig? = null,
+    /** Override image extraction configuration for this file. */
+    val images: ImageExtractionConfig? = null,
+    /** Override PDF options for this file. */
+    val pdfOptions: PdfConfig? = null,
+    /** Override token reduction for this file. */
+    val tokenReduction: TokenReductionOptions? = null,
+    /** Override language detection for this file. */
+    val languageDetection: LanguageDetectionConfig? = null,
+    /** Override page extraction for this file. */
+    val pages: PageConfig? = null,
+    /** Override keyword extraction for this file. */
+    val keywords: KeywordConfig? = null,
+    /** Override post-processor for this file. */
+    val postprocessor: PostProcessorConfig? = null,
+    /** Override HTML conversion options for this file. */
+    val htmlOptions: String? = null,
+    /** Override result format for this file. */
+    val resultFormat: ResultFormat? = null,
+    /** Override output content format for this file. */
+    val outputFormat: OutputFormat? = null,
+    /** Override document structure output for this file. */
+    val includeDocumentStructure: Boolean? = null,
+    /** Override layout detection for this file. */
+    val layout: LayoutDetectionConfig? = null,
     /**
      * Override per-file extraction timeout in seconds.
      *
-     * When set, the extraction for this file will be canceled after the
-     * specified duration. A timed-out file produces an error result without
-     * affecting other files in the batch.
+     * When set, the extraction for this file will be canceled after the specified duration. A
+     * timed-out file produces an error result without affecting other files in the batch.
      */
-    val timeoutSecs: Long?,
-    /**
-     * Override tree-sitter configuration for this file.
-     */
-    val treeSitter: TreeSitterConfig?,
+    val timeoutSecs: Long? = null,
+    /** Override tree-sitter configuration for this file. */
+    val treeSitter: TreeSitterConfig? = null,
     /**
      * Override structured extraction configuration for this file.
      *
-     * When set, enables LLM-based structured extraction with a JSON schema
-     * for this specific file. The extracted content is sent to a VLM/LLM
-     * and the response is parsed according to the provided schema.
+     * When set, enables LLM-based structured extraction with a JSON schema for this specific file.
+     * The extracted content is sent to a VLM/LLM and the response is parsed according to the
+     * provided schema.
      */
-    val structuredExtraction: StructuredExtractionConfig?
+    val structuredExtraction: StructuredExtractionConfig? = null,
 )

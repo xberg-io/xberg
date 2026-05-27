@@ -129,7 +129,6 @@ impl AsRef<str> for InternalElementId {
 /// Implements `Serialize`/`Deserialize` so that foreign-language plugin implementations
 /// (Python, TypeScript, Ruby, etc.) can construct and return this type via JSON at the
 /// FFI/trait-bridge boundary.
-#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InternalDocument {
     /// All elements in reading order. Append-only during extraction.

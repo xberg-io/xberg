@@ -11,9 +11,9 @@ tasks:
         ignore_error: false
 
   upgrade:
-    desc: "Upgrade Zig dependencies (zig fetch --update-hash)"
+    desc: "Upgrade Zig dependencies (zig package manager)"
     silent: false
     cmds:
       - cmd: |
-          cd packages/zig && zig fetch --update-hash
+          echo "Zig package updates are manual; see packages/zig/build.zig.zon"
         ignore_error: false

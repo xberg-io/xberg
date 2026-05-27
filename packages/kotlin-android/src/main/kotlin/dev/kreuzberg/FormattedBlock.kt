@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,32 +28,18 @@ package dev.kreuzberg
  * Represents structural elements like headings, paragraphs, lists, code blocks, etc.
  */
 data class FormattedBlock(
-    /**
-     * Type of block element
-     */
+    /** Type of block element */
     val blockType: BlockType,
-    /**
-     * Heading level (1-6) for headings, or nesting level for lists
-     */
-    val level: Long?,
-    /**
-     * Inline content within the block
-     */
-    val inlineContent: List<InlineElement>,
-    /**
-     * Element attributes (classes, IDs, key-value pairs)
-     */
-    val attributes: String?,
-    /**
-     * Language identifier for code blocks
-     */
-    val language: String?,
-    /**
-     * Raw code content for code blocks
-     */
-    val code: String?,
-    /**
-     * Nested blocks for containers (blockquotes, list items, divs)
-     */
-    val children: List<FormattedBlock>
+    /** Heading level (1-6) for headings, or nesting level for lists */
+    val level: Long? = null,
+    /** Inline content within the block */
+    val inlineContent: List<InlineElement> = emptyList(),
+    /** Element attributes (classes, IDs, key-value pairs) */
+    val attributes: String? = null,
+    /** Language identifier for code blocks */
+    val language: String? = null,
+    /** Raw code content for code blocks */
+    val code: String? = null,
+    /** Nested blocks for containers (blockquotes, list items, divs) */
+    val children: List<FormattedBlock> = emptyList(),
 )

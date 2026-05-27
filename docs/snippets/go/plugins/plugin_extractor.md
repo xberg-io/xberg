@@ -1,3 +1,4 @@
+<!-- snippet:skip reason="Go bindings do not support custom document extractor plugins" -->
 ```markdown title="Markdown"
 !!! note "Not Supported"
 The Go binding is a thin CGO wrapper and does not currently support

@@ -17,36 +17,23 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * Link element metadata.
- */
+/** Link element metadata. */
 data class LinkMetadata(
-    /**
-     * The href URL value
-     */
+    /** The href URL value */
     val href: String,
-    /**
-     * Link text content (normalized)
-     */
+    /** Link text content (normalized) */
     val text: String,
-    /**
-     * Optional title attribute
-     */
-    val title: String?,
-    /**
-     * Link type classification
-     */
+    /** Optional title attribute */
+    val title: String? = null,
+    /** Link type classification */
     val linkType: LinkType,
-    /**
-     * Rel attribute values
-     */
-    val rel: List<String>,
-    /**
-     * Additional attributes as key-value pairs
-     */
-    val attributes: List<String>
+    /** Rel attribute values */
+    val rel: List<String> = emptyList(),
+    /** Additional attributes as key-value pairs */
+    val attributes: List<List<String>> = emptyList(),
 )

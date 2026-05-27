@@ -17,16 +17,15 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * JATS (Journal Article Tag Suite) metadata.
- */
+/** JATS (Journal Article Tag Suite) metadata. */
 data class JatsMetadata(
-    val copyright: String?,
-    val license: String?,
-    val historyDates: Map<String, String>,
-    val contributorRoles: List<ContributorRole>
+    val copyright: String? = null,
+    val license: String? = null,
+    val historyDates: Map<String, String> = emptyMap(),
+    val contributorRoles: List<ContributorRole> = emptyList(),
 )

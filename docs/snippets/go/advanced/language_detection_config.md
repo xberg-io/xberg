@@ -5,15 +5,18 @@ import (
 	"github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
 )
 
-enabled := true
-detectMultiple := false
-minConfidence := 0.8
+func main() {
+	enabled := true
+	detectMultiple := false
+	minConfidence := 0.8
 
-config := &kreuzberg.ExtractionConfig{
-	LanguageDetection: &kreuzberg.LanguageDetectionConfig{
-		Enabled:         &enabled,
-		MinConfidence:   &minConfidence,
-		DetectMultiple:  &detectMultiple,
-	},
+	config := &kreuzberg.ExtractionConfig{
+		LanguageDetection: &kreuzberg.LanguageDetectionConfig{
+			Enabled:        &enabled,
+			MinConfidence:  &minConfidence,
+			DetectMultiple: &detectMultiple,
+		},
+	}
+	_ = config
 }
 ```

@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import Kreuzberg
 
 final class KreuzbergTests: XCTestCase {

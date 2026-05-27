@@ -15,5 +15,6 @@ tasks:
     silent: false
     cmds:
       - cmd: |
-          cd packages/csharp && dotnet outdated -u
+          command -v dotnet >/dev/null 2>&1 || { echo "Dotnet not found, skipping C# upgrade"; exit 0; }
+          cd packages/csharp/Kreuzberg && dotnet outdated -u
         ignore_error: false

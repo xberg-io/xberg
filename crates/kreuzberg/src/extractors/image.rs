@@ -51,6 +51,9 @@ impl ImageExtractor {
         };
 
         let backend = {
+            // Re-seed the built-in backends if the registry was emptied
+            // (e.g. via `clear_ocr_backends`), so OCR remains usable.
+            crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
             let registry = registry.read();
             registry.get(&ocr_config.backend)?
@@ -218,6 +221,9 @@ impl ImageExtractor {
 
         // 4. Get OCR backend
         let backend = {
+            // Re-seed the built-in backends if the registry was emptied
+            // (e.g. via `clear_ocr_backends`), so OCR remains usable.
+            crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
             let registry = registry.read();
             registry.get(&ocr_config.backend)?

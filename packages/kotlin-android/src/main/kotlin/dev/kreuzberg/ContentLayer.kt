@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -27,20 +28,34 @@ package dev.kreuzberg
  * Replaces separate body/furniture arrays with per-node granularity.
  */
 enum class ContentLayer {
-    /**
-     * Main document body content.
-     */
-    BODY,
-    /**
-     * Page/section header (running header).
-     */
-    HEADER,
-    /**
-     * Page/section footer (running footer).
-     */
-    FOOTER,
-    /**
-     * Footnote content.
-     */
-    FOOTNOTE;
+    /** Main document body content. */
+    @com.fasterxml.jackson.annotation.JsonProperty("body") BODY,
+    /** Page/section header (running header). */
+    @com.fasterxml.jackson.annotation.JsonProperty("header") HEADER,
+    /** Page/section footer (running footer). */
+    @com.fasterxml.jackson.annotation.JsonProperty("footer") FOOTER,
+    /** Footnote content. */
+    @com.fasterxml.jackson.annotation.JsonProperty("footnote") FOOTNOTE;
+
+    @com.fasterxml.jackson.annotation.JsonValue
+    fun toWire(): String =
+        when (this) {
+            BODY -> "body"
+            HEADER -> "header"
+            FOOTER -> "footer"
+            FOOTNOTE -> "footnote"
+        }
+
+    companion object {
+        @com.fasterxml.jackson.annotation.JsonCreator
+        @JvmStatic
+        fun fromWire(value: String): ContentLayer =
+            when (value) {
+                "body" -> BODY
+                "header" -> HEADER
+                "footer" -> FOOTER
+                "footnote" -> FOOTNOTE
+                else -> throw IllegalArgumentException("Unknown ContentLayer value: $value")
+            }
+    }
 }

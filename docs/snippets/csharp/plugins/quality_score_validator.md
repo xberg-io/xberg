@@ -51,6 +51,12 @@ public class QualityScoreValidator : IValidator
     }
 }
 
-var validator = new QualityScoreValidator();
-ValidatorRegistry.Register(validator);
+class Program
+{
+    static void Main()
+    {
+        var validator = new QualityScoreValidator();
+        ValidatorRegistry.Register(validator);
+    }
+}
 ```

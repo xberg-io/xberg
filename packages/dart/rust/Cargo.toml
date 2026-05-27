@@ -1,31 +1,29 @@
 [package]
 name = "kreuzberg-dart"
-version = "5.0.0-rc.1"
+version = "5.0.0-rc.3"
 edition = "2024"
 license = "Elastic-2.0"
 
 [package.metadata.cargo-machete]
 # Umbrella + sibling crates are pulled in so flutter_rust_bridge can resolve
 # every referenced type, but the generated Rust wrapper only `use`s a subset.
-ignored = ["kreuzberg"]
+ignored = ["ahash", "kreuzberg"]
 
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
+ahash = "0.8"
+async-trait = "0.1"
 flutter_rust_bridge = "=2.12.0"
 serde_json = "1"
-tokio = { version = "1", features = ["rt"] }
-async-trait = "0.1"
-
-[target.'cfg(not(any(all(target_os = "android", target_arch = "x86_64"), all(target_os = "ios", target_arch = "x86_64"))))'.dependencies]
-kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
 
 [target.'cfg(all(target_os = "android", target_arch = "x86_64"))'.dependencies]
 kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, features = ["android-target"] }
 
-[target.'cfg(all(target_os = "ios", target_arch = "x86_64"))'.dependencies]
-kreuzberg = { path = "../../../crates/kreuzberg", default-features = false, features = ["android-target"] }
+[target.'cfg(not(all(target_os = "android", target_arch = "x86_64")))'.dependencies]
+kreuzberg = { path = "../../../crates/kreuzberg", features = ["full"] }
 
 [lints.rust]
 # flutter_rust_bridge uses #[cfg(frb_expand)] internally during macro expansion.

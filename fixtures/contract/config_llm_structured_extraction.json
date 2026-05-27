@@ -46,6 +46,7 @@
     }
   ],
   "skip": {
-    "reason": "Requires features: liter-llm; Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var"
+    "languages": ["python", "rust", "node", "go", "ruby", "elixir", "wasm", "java", "csharp", "php", "r", "dart", "kotlin_android", "swift", "zig"],
+    "reason": "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var; runtime-only skip"
   }
 }

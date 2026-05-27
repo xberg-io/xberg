@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,25 +25,16 @@ package dev.kreuzberg
 /**
  * A detected layout region on a page.
  *
- * When layout detection is enabled, each page may have layout regions
- * identifying different content types (text, pictures, tables, etc.)
- * with confidence scores and spatial positions.
+ * When layout detection is enabled, each page may have layout regions identifying different content
+ * types (text, pictures, tables, etc.) with confidence scores and spatial positions.
  */
 data class LayoutRegion(
-    /**
-     * Layout class name (e.g. "picture", "table", "text", "section_header").
-     */
-    val className: String,
-    /**
-     * Confidence score from the layout detection model (0.0 to 1.0).
-     */
-    val confidence: Double,
-    /**
-     * Bounding box in document coordinate space.
-     */
-    val boundingBox: String,
-    /**
-     * Fraction of the page area covered by this region (0.0 to 1.0).
-     */
-    val areaFraction: Double
+    /** Layout class name (e.g. "picture", "table", "text", "section_header"). */
+    val className: String = "",
+    /** Confidence score from the layout detection model (0.0 to 1.0). */
+    val confidence: Double = 0.0,
+    /** Bounding box in document coordinate space. */
+    val boundingBox: BoundingBox = BoundingBox(),
+    /** Fraction of the page area covered by this region (0.0 to 1.0). */
+    val areaFraction: Double = 0.0,
 )

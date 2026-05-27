@@ -64,7 +64,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -93,7 +93,7 @@ jobs:
           extra-cargo-args: --features all
 
       - name: Upload FFI artifacts
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: ffi-${{ matrix.target }}
           path: |
@@ -163,7 +163,7 @@ jobs:
             zig-version: "0.16.0"
             test-cmd: 'FFI_ABS="$PWD/target/release" && cd e2e/zig && zig build test -Dffi_path="$FFI_ABS"'
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -173,7 +173,7 @@ jobs:
           cache-key-prefix: e2e-${{ matrix.lang }}
 
       - name: Download FFI artifacts
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8
         with:
           name: ffi-aarch64-unknown-linux-gnu
           path: ffi-artifacts
@@ -234,13 +234,13 @@ jobs:
 
       - name: Setup Go
         if: matrix.go-version
-        uses: actions/setup-go@v6.4.0
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
 
       - name: Setup Ruby
         if: matrix.ruby-version
-        uses: ruby/setup-ruby@v1.308.0
+        uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
@@ -248,7 +248,7 @@ jobs:
 
       - name: Setup Java
         if: matrix.java-version
-        uses: actions/setup-java@v5.2.0
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ matrix.java-version }}
@@ -261,7 +261,7 @@ jobs:
 
       - name: Setup .NET
         if: matrix.dotnet-version
-        uses: actions/setup-dotnet@v5.2.0
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
 
@@ -291,7 +291,7 @@ jobs:
 
       - name: Setup Dart
         if: matrix.dart-version
-        uses: dart-lang/setup-dart@v1.7.2
+        uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.dart-version }}
 

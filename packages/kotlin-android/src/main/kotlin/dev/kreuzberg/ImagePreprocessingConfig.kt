@@ -17,6 +17,7 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
@@ -24,37 +25,22 @@ package dev.kreuzberg
 /**
  * Image preprocessing configuration for OCR.
  *
- * These settings control how images are preprocessed before OCR to improve
- * text recognition quality. Different preprocessing strategies work better
- * for different document types.
+ * These settings control how images are preprocessed before OCR to improve text recognition
+ * quality. Different preprocessing strategies work better for different document types.
  */
 data class ImagePreprocessingConfig(
-    /**
-     * Target DPI for the image (300 is standard, 600 for small text).
-     */
-    val targetDpi: Int,
-    /**
-     * Auto-detect and correct image rotation.
-     */
-    val autoRotate: Boolean,
-    /**
-     * Correct skew (tilted images).
-     */
-    val deskew: Boolean,
-    /**
-     * Remove noise from the image.
-     */
-    val denoise: Boolean,
-    /**
-     * Enhance contrast for better text visibility.
-     */
-    val contrastEnhance: Boolean,
-    /**
-     * Binarization method: "otsu", "sauvola", "adaptive".
-     */
-    val binarizationMethod: String,
-    /**
-     * Invert colors (white text on black → black on white).
-     */
-    val invertColors: Boolean
+    /** Target DPI for the image (300 is standard, 600 for small text). */
+    val targetDpi: Int = 300,
+    /** Auto-detect and correct image rotation. */
+    val autoRotate: Boolean = true,
+    /** Correct skew (tilted images). */
+    val deskew: Boolean = true,
+    /** Remove noise from the image. */
+    val denoise: Boolean = false,
+    /** Enhance contrast for better text visibility. */
+    val contrastEnhance: Boolean = false,
+    /** Binarization method: "otsu", "sauvola", "adaptive". */
+    val binarizationMethod: String = "otsu",
+    /** Invert colors (white text on black → black on white). */
+    val invertColors: Boolean = false,
 )

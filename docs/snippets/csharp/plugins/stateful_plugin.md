@@ -2,6 +2,9 @@
 using Kreuzberg;
 using System.Collections.Concurrent;
 
+var processor = new StatefulPostProcessor();
+PostProcessorRegistry.Register(processor);
+
 public class StatefulPostProcessor : IPostProcessor
 {
     private int _callCount = 0;
@@ -53,7 +56,4 @@ public class StatefulPostProcessor : IPostProcessor
         return 50;
     }
 }
-
-var processor = new StatefulPostProcessor();
-PostProcessorRegistry.Register(processor);
 ```

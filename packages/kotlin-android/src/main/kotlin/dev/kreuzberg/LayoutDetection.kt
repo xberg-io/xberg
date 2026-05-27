@@ -17,11 +17,10 @@
     "FunctionParameterNaming",
     "LongParameterList",
     "CyclomaticComplexMethod",
+    "LongMethod",
 )
 
 package dev.kreuzberg
 
-/**
- * A single layout detection result.
- */
+/** A single layout detection result. */
 data class LayoutDetection(val className: LayoutClass, val confidence: Float, val bbox: BBox)

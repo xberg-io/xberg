@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-php"
-version = "5.0.0-rc.1"
+version = "5.0.0-rc.3"
 edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
@@ -8,12 +8,9 @@ readme = false
 keywords = ["document", "extraction", "pdf", "ocr", "text"]
 categories = ["text-processing"]
 
-# `serde_json` and `tokio` are emitted unconditionally above so the manifest
-# is stable across regens, but for umbrella crates with no async fns and no
-# JSON-marshalled return types they are genuinely unused. List them here so
-# `cargo machete` doesn't flag the no-async-no-json case as a real finding.
+# `ahash` and `futures-util` are conditionally included but not directly used in PHP code.
 [package.metadata.cargo-machete]
-ignored = ["serde_json", "tokio"]
+ignored = ["tokio", "ahash", "async-trait"]
 
 [lib]
 crate-type = ["cdylib"]
@@ -22,36 +19,10 @@ crate-type = ["cdylib"]
 extension-module = []
 
 [dependencies]
+ahash = "0.8"
 async-trait = "0.1"
 ext-php-rs = "0.15"
-kreuzberg = { path = "../kreuzberg", features = [
-    "full",
-    "pdf",
-    "ocr",
-    "paddle-ocr",
-    "paddle-ocr-types",
-    "layout-detection",
-    "layout-types",
-    "embeddings",
-    "embedding-presets",
-    "chunking",
-    "keywords-yake",
-    "keywords-rake",
-    "language-detection",
-    "html",
-    "tree-sitter",
-    "office",
-    "email",
-    "archives",
-    "stopwords",
-    "auto-rotate",
-    "auto-rotate-types",
-    "tokio-runtime",
-    "api",
-    "mcp",
-    "liter-llm",
-    "quality",
-] }
+kreuzberg = { version = "5.0.0-rc.3", path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

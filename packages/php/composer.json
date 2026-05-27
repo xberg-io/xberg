@@ -28,18 +28,9 @@
     "extension-name": "kreuzberg",
     "support-zts": true,
     "support-nts": true,
-    "download-url-method": [
-      "pre-packaged-binary",
-      "composer-default"
-    ]
+    "download-url-method": ["pre-packaged-binary", "composer-default"]
   },
-  "keywords": [
-    "document",
-    "extraction",
-    "pdf",
-    "ocr",
-    "text"
-  ],
+  "keywords": ["document", "extraction", "pdf", "ocr", "text"],
   "extra": {
     "pie": {
       "binary": {

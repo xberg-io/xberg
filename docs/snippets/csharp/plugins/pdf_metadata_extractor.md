@@ -1,6 +1,9 @@
 ```csharp title="C#"
 using Kreuzberg;
 
+var enricher = new PdfMetadataEnricher();
+PostProcessorRegistry.Register(enricher);
+
 public class PdfMetadataEnricher : IPostProcessor
 {
     private int _processedCount = 0;
@@ -52,7 +55,4 @@ public class PdfMetadataEnricher : IPostProcessor
         return 50;
     }
 }
-
-var enricher = new PdfMetadataEnricher();
-PostProcessorRegistry.Register(enricher);
 ```

@@ -23,6 +23,7 @@ pub(crate) use tar::{extract_tar_file_bytes, extract_tar_metadata, extract_tar_t
 pub(crate) use zip::{extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content};
 
 /// Archive metadata extracted from an archive file.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone)]
 pub struct ArchiveMetadata {
     /// Archive format (e.g., "ZIP", "TAR")
@@ -36,6 +37,7 @@ pub struct ArchiveMetadata {
 }
 
 /// Information about a single file in an archive.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone)]
 pub struct ArchiveEntry {
     /// File path within the archive

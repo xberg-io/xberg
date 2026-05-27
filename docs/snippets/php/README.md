@@ -231,7 +231,7 @@ Integration with ReactPHP framework using ReactBridge::toPromise().
 
 ## Key Features Demonstrated
 
-- **91+ File Formats**: PDF, DOCX, XLSX, PPTX, images, HTML, and more
+- **90+ File Formats**: PDF, DOCX, XLSX, PPTX, images, HTML, and more
 - **Async Extraction**: Non-blocking extraction with DeferredResult pattern
 - **OCR Support**: Tesseract integration with preprocessing
 - **Table Extraction**: Extract structured tables with multiple export formats
