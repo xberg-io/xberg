@@ -4,8 +4,16 @@ default_install_hook_types:
 default_stages:
 - pre-commit
 repos:
+- repo: https://github.com/Goldziher/gitfluff
+  rev: v0.8.0
+  hooks:
+  - id: gitfluff-lint
+    args:
+    - --write
+    stages:
+    - commit-msg
 - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
-  rev: v1.2.1
+  rev: v1.2.3
   hooks:
   - id: ai-rulez-generate
   - id: trailing-whitespace
@@ -21,7 +29,11 @@ repos:
   - id: cpd
   - id: java-verify
   - id: rumdl-fmt
+  - id: actionlint
   - id: gh-actions-updater
+  - id: typos
+    args:
+    - --force-exclude
 - repo: local
   hooks:
   - id: spotless-check
