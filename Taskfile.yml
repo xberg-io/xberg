@@ -9,12 +9,14 @@ version: "3"
 #
 # Command patterns:
 #   task setup         -> install all dependencies
-#   task build         -> build core + bindings (debug)
-#   task build:release -> build core + bindings (release)
+#   task build         -> build Rust core only (debug)
+#   task build:all     -> build core + bindings (debug)
+#   task build:release -> build Rust core only (release)
 #   task test          -> run all tests
-#   task test:e2e      -> generate + run e2e tests for all bindings
+#   task e2e:all       -> generate + build + run e2e tests for all bindings
 #   task test:cov      -> tests with coverage
-#   task format        -> format all code (cargo fmt + alef fmt)
+#   task format        -> format Rust code
+#   task alef:format   -> format Alef-managed generated output
 #   task lint          -> lint via prek (full pre-commit chain)
 #   task update        -> compatible dependency updates (minor versions only)
 #   task upgrade       -> breaking dependency upgrades (latest versions)
@@ -31,7 +33,7 @@ version: "3"
 #   task elixir:*      -> Elixir-specific tasks
 #   task dart:*        -> Dart-specific tasks
 #   task swift:*       -> Swift-specific tasks
-#   task kotlin_android:* -> Kotlin/Android-specific tasks
+#   task kotlin-android:* -> Kotlin/Android-specific tasks
 #   task r:*           -> R-specific tasks
 #   task zig:*         -> Zig-specific tasks
 # ============================================================================
@@ -59,7 +61,7 @@ includes:
     taskfile: ./.task/languages/dart.yml
   swift:
     taskfile: ./.task/languages/swift.yml
-  kotlin_android:
+  kotlin-android:
     taskfile: ./.task/languages/kotlin_android.yml
   r:
     taskfile: ./.task/languages/r.yml
@@ -94,31 +96,35 @@ tasks:
 
   # === Build ===
   build:
-    desc: "Build core Rust library and all language bindings (debug)"
+    desc: "Build Rust core library only (debug)"
     cmds:
-      - task: rust:build:dev
-      - alef build
+      - task: build:core
 
   build:release:
-    desc: "Build core Rust library and all language bindings (release)"
+    desc: "Build Rust core library only (release)"
     cmds:
       - task: rust:build:release
-      - alef build --release
 
   build:ci:
-    desc: "Build all in CI mode"
+    desc: "Build Rust core library in CI mode"
     cmds:
       - task: rust:build:ci
 
   build:core:
-    desc: "Build Rust core library only"
+    desc: "Build Rust core library only (debug)"
     cmds:
-      - task: rust:build
+      - task: rust:build:dev
 
   build:bindings:
     desc: "Build all language bindings"
     cmds:
       - task: alef:build
+
+  build:all:
+    desc: "Build Rust core library and all language bindings (debug)"
+    cmds:
+      - task: build:core
+      - task: build:bindings
 
   build:cli:
     desc: "Build the kreuzberg CLI binary"
@@ -127,21 +133,20 @@ tasks:
 
   # === Test ===
   test:
-    desc: "Run all test suites (Rust core + bindings)"
+    desc: "Run Rust core tests"
     cmds:
       - task: rust:test
+
+  test:all:
+    desc: "Run all test suites (Rust core + bindings)"
+    cmds:
+      - task: test
       - alef test
 
   test:bindings:
     desc: "Run binding test suites only (skip Rust core)"
     cmds:
       - alef test
-
-  test:e2e:
-    desc: "Generate and run e2e tests across all bindings"
-    cmds:
-      - alef e2e generate
-      - alef test --e2e
 
   test:cov:
     desc: "Run all tests with coverage"
@@ -167,15 +172,9 @@ tasks:
       - alef lint
 
   format:
-    desc: "Format all code (Rust + all bindings)"
+    desc: "Format Rust code"
     cmds:
-      - cargo fmt --all
-      - alef fmt
-
-  fmt:
-    desc: "Format all code (alias for format)"
-    cmds:
-      - task: format
+      - task: rust:format
 
   format:check:
     desc: "Check code formatting without modifications"
@@ -218,7 +217,7 @@ tasks:
       - task: elixir:update
       - task: dart:update
       - task: swift:update
-      - task: kotlin_android:update
+      - task: kotlin-android:update
       - task: r:update
       - task: zig:update
       - alef update
@@ -239,7 +238,7 @@ tasks:
       - task: elixir:upgrade
       - task: dart:upgrade
       - task: swift:upgrade
-      - task: kotlin_android:upgrade
+      - task: kotlin-android:upgrade
       - task: r:upgrade
       - task: zig:upgrade
       - cmd: alef update --latest
@@ -281,6 +280,11 @@ tasks:
     cmds:
       - alef build
 
+  alef:format:
+    desc: "Format Alef-managed generated output"
+    cmds:
+      - alef fmt
+
   alef:sync:
     desc: "Sync version from Cargo.toml to all manifests"
     cmds:
@@ -302,21 +306,33 @@ tasks:
     cmds:
       - alef build --release --lang python,node,ruby,php,ffi,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
 
-  e2e:run:
+  e2e:all:
+    desc: "Generate, build, and run all e2e test suites"
+    cmds:
+      - task: e2e:generate
+      - task: e2e:build
+      - task: e2e:test
+
+  e2e:test:
     desc: "Run all e2e test suites across all languages"
     cmds:
       - alef test --e2e --lang rust,python,node,ruby,php,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
 
-  e2e:all:
-    desc: "Build all bindings + run all e2e tests (single command)"
+  e2e:quick:
+    desc: "Run quick Rust e2e tests"
     cmds:
-      - alef build --release --lang python,node,ruby,php,ffi,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
-      - alef test --e2e --lang rust,python,node,ruby,php,go,java,csharp,elixir,wasm,r,dart,kotlin_android,swift,zig
+      - alef test --e2e --lang rust
 
-  e2e:test:
-    desc: "Run E2E tests for all languages (alias for e2e:run)"
+  e2e:lint:
+    desc: "Validate e2e fixtures"
     cmds:
-      - task: e2e:run
+      - alef e2e validate
+
+  e2e:verify:
+    desc: "Verify generated e2e tests are up to date"
+    cmds:
+      - alef e2e generate
+      - git diff --exit-code e2e/
 
   rust:e2e:
     desc: "Run Rust e2e tests via alef"
@@ -392,8 +408,8 @@ tasks:
       - task: dart:setup
       - alef test --e2e --lang dart
 
-  kotlin:e2e:
-    desc: "Run Kotlin e2e tests"
+  kotlin-android:e2e:
+    desc: "Run Kotlin/Android e2e tests"
     cmds:
       - alef test --e2e --lang kotlin_android
 
@@ -509,20 +525,20 @@ tasks:
       - dotnet format --verify-no-changes
     dir: packages/csharp
 
-  kotlin:format:
-    desc: "Format Kotlin binding with ktlint via gradle"
+  kotlin-android:format:
+    desc: "Format Kotlin/Android binding with ktlint via gradle"
     cmds:
       - gradle ktlintFormat --no-daemon
     dir: packages/kotlin
 
-  kotlin:lint:
-    desc: "Lint Kotlin binding with ktlint via gradle"
+  kotlin-android:lint:
+    desc: "Lint Kotlin/Android binding with ktlint via gradle"
     cmds:
       - gradle ktlintCheck --no-daemon
     dir: packages/kotlin
 
-  kotlin:test:
-    desc: "Run Kotlin binding tests"
+  kotlin-android:test:
+    desc: "Run Kotlin/Android binding tests"
     cmds:
       - cargo build --release -p kreuzberg-ffi
       - gradle test --no-daemon
