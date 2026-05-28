@@ -12120,16 +12120,6 @@ impl PhpOcrBackendBridge {
 unsafe impl Send for PhpOcrBackendBridge {}
 unsafe impl Sync for PhpOcrBackendBridge {}
 
-impl Drop for PhpOcrBackendBridge {
-    fn drop(&mut self) {
-        // SAFETY: Decrement the refcount we incremented in new().
-        // This allows PHP to garbage-collect the object when the bridge is dropped.
-        unsafe {
-            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
-        }
-    }
-}
-
 impl kreuzberg::plugins::Plugin for PhpOcrBackendBridge {
     fn name(&self) -> &str {
         &self.cached_name
@@ -12323,16 +12313,6 @@ impl PhpPostProcessorBridge {
 unsafe impl Send for PhpPostProcessorBridge {}
 unsafe impl Sync for PhpPostProcessorBridge {}
 
-impl Drop for PhpPostProcessorBridge {
-    fn drop(&mut self) {
-        // SAFETY: Decrement the refcount we incremented in new().
-        // This allows PHP to garbage-collect the object when the bridge is dropped.
-        unsafe {
-            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
-        }
-    }
-}
-
 impl kreuzberg::plugins::Plugin for PhpPostProcessorBridge {
     fn name(&self) -> &str {
         &self.cached_name
@@ -12501,16 +12481,6 @@ impl PhpValidatorBridge {
 unsafe impl Send for PhpValidatorBridge {}
 unsafe impl Sync for PhpValidatorBridge {}
 
-impl Drop for PhpValidatorBridge {
-    fn drop(&mut self) {
-        // SAFETY: Decrement the refcount we incremented in new().
-        // This allows PHP to garbage-collect the object when the bridge is dropped.
-        unsafe {
-            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
-        }
-    }
-}
-
 impl kreuzberg::plugins::Plugin for PhpValidatorBridge {
     fn name(&self) -> &str {
         &self.cached_name
@@ -12660,16 +12630,6 @@ impl PhpEmbeddingBackendBridge {
 // and is never accessed concurrently from multiple threads.
 unsafe impl Send for PhpEmbeddingBackendBridge {}
 unsafe impl Sync for PhpEmbeddingBackendBridge {}
-
-impl Drop for PhpEmbeddingBackendBridge {
-    fn drop(&mut self) {
-        // SAFETY: Decrement the refcount we incremented in new().
-        // This allows PHP to garbage-collect the object when the bridge is dropped.
-        unsafe {
-            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
-        }
-    }
-}
 
 impl kreuzberg::plugins::Plugin for PhpEmbeddingBackendBridge {
     fn name(&self) -> &str {
@@ -12829,16 +12789,6 @@ impl PhpDocumentExtractorBridge {
 // and is never accessed concurrently from multiple threads.
 unsafe impl Send for PhpDocumentExtractorBridge {}
 unsafe impl Sync for PhpDocumentExtractorBridge {}
-
-impl Drop for PhpDocumentExtractorBridge {
-    fn drop(&mut self) {
-        // SAFETY: Decrement the refcount we incremented in new().
-        // This allows PHP to garbage-collect the object when the bridge is dropped.
-        unsafe {
-            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
-        }
-    }
-}
 
 impl kreuzberg::plugins::Plugin for PhpDocumentExtractorBridge {
     fn name(&self) -> &str {
@@ -13016,16 +12966,6 @@ impl PhpRendererBridge {
 // and is never accessed concurrently from multiple threads.
 unsafe impl Send for PhpRendererBridge {}
 unsafe impl Sync for PhpRendererBridge {}
-
-impl Drop for PhpRendererBridge {
-    fn drop(&mut self) {
-        // SAFETY: Decrement the refcount we incremented in new().
-        // This allows PHP to garbage-collect the object when the bridge is dropped.
-        unsafe {
-            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
-        }
-    }
-}
 
 impl kreuzberg::plugins::Plugin for PhpRendererBridge {
     fn name(&self) -> &str {

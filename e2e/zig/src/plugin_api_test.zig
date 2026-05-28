@@ -24,12 +24,12 @@ test "register_document_extractor_trait_bridge" {
     // register_document_extractor: trait bridge
     suppress_abort();
     const TestStub_register_document_extractor_trait_bridge = struct {
-        pub fn extract_bytes(_: *@This(), _: []const u8, _: []const u8, _: kreuzberg.ExtractionConfig) !kreuzberg.InternalDocument { return undefined; }
-        pub fn extract_file(_: *@This(), _: []const u8, _: []const u8, _: kreuzberg.ExtractionConfig) !kreuzberg.InternalDocument { return undefined; }
-        pub fn supported_mime_types(_: *@This()) []const []const u8 { return &.{}; }
+        pub fn extract_bytes(_: *@This(), _: [*c]const u8, _: [*c]const u8, _: [*c]const u8) ![*c]const u8 { return undefined; }
+        pub fn extract_file(_: *@This(), _: [*c]const u8, _: [*c]const u8, _: [*c]const u8) ![*c]const u8 { return undefined; }
+        pub fn supported_mime_types(_: *@This()) []const [*c]const u8 { return &.{}; }
         pub fn priority(_: *@This()) i32 { return 0; }
-        pub fn can_handle(_: *@This(), _: []const u8, _: []const u8) bool { return false; }
-        pub fn as_sync_extractor(_: *@This()) ?kreuzberg.SyncExtractor { return null; }
+        pub fn can_handle(_: *@This(), _: [*c]const u8, _: [*c]const u8) bool { return false; }
+        pub fn as_sync_extractor(_: *@This()) ?[*c]const u8 { return null; }
     };
     var stub_register_document_extractor_trait_bridge = TestStub_register_document_extractor_trait_bridge{};
     const vtable_register_document_extractor_trait_bridge = kreuzberg.make_document_extractor_vtable(TestStub_register_document_extractor_trait_bridge, &stub_register_document_extractor_trait_bridge);
@@ -42,7 +42,7 @@ test "register_embedding_backend_trait_bridge" {
     suppress_abort();
     const TestStub_register_embedding_backend_trait_bridge = struct {
         pub fn dimensions(_: *@This()) u64 { return 0; }
-        pub fn embed(_: *@This(), _: []const []const u8) ![]const []const f32 { return &.{}; }
+        pub fn embed(_: *@This(), _: []const [*c]const u8) ![]const []const f32 { return &.{}; }
     };
     var stub_register_embedding_backend_trait_bridge = TestStub_register_embedding_backend_trait_bridge{};
     const vtable_register_embedding_backend_trait_bridge = kreuzberg.make_embedding_backend_vtable(TestStub_register_embedding_backend_trait_bridge, &stub_register_embedding_backend_trait_bridge);
@@ -54,14 +54,14 @@ test "register_ocr_backend_trait_bridge" {
     // register_ocr_backend: trait bridge
     suppress_abort();
     const TestStub_register_ocr_backend_trait_bridge = struct {
-        pub fn process_image(_: *@This(), _: []const u8, _: kreuzberg.OcrConfig) !kreuzberg.ExtractionResult { return undefined; }
-        pub fn process_image_file(_: *@This(), _: []const u8, _: kreuzberg.OcrConfig) !kreuzberg.ExtractionResult { return undefined; }
-        pub fn supports_language(_: *@This(), _: []const u8) bool { return false; }
-        pub fn backend_type(_: *@This()) kreuzberg.OcrBackendType { return undefined; }
-        pub fn supported_languages(_: *@This()) []const []const u8 { return &.{}; }
+        pub fn process_image(_: *@This(), _: [*c]const u8, _: [*c]const u8) ![*c]const u8 { return undefined; }
+        pub fn process_image_file(_: *@This(), _: [*c]const u8, _: [*c]const u8) ![*c]const u8 { return undefined; }
+        pub fn supports_language(_: *@This(), _: [*c]const u8) bool { return false; }
+        pub fn backend_type(_: *@This()) [*c]const u8 { return undefined; }
+        pub fn supported_languages(_: *@This()) []const [*c]const u8 { return &.{}; }
         pub fn supports_table_detection(_: *@This()) bool { return false; }
         pub fn supports_document_processing(_: *@This()) bool { return false; }
-        pub fn process_document(_: *@This(), _: []const u8, _: kreuzberg.OcrConfig) !kreuzberg.ExtractionResult { return undefined; }
+        pub fn process_document(_: *@This(), _: [*c]const u8, _: [*c]const u8) ![*c]const u8 { return undefined; }
     };
     var stub_register_ocr_backend_trait_bridge = TestStub_register_ocr_backend_trait_bridge{};
     const vtable_register_ocr_backend_trait_bridge = kreuzberg.make_ocr_backend_vtable(TestStub_register_ocr_backend_trait_bridge, &stub_register_ocr_backend_trait_bridge);
@@ -73,10 +73,10 @@ test "register_post_processor_trait_bridge" {
     // register_post_processor: trait bridge
     suppress_abort();
     const TestStub_register_post_processor_trait_bridge = struct {
-        pub fn process(_: *@This(), _: kreuzberg.ExtractionResult, _: kreuzberg.ExtractionConfig) !void {}
-        pub fn processing_stage(_: *@This()) kreuzberg.ProcessingStage { return undefined; }
-        pub fn should_process(_: *@This(), _: kreuzberg.ExtractionResult, _: kreuzberg.ExtractionConfig) bool { return false; }
-        pub fn estimated_duration_ms(_: *@This(), _: kreuzberg.ExtractionResult) u64 { return 0; }
+        pub fn process(_: *@This(), _: [*c]const u8, _: [*c]const u8) !void {}
+        pub fn processing_stage(_: *@This()) [*c]const u8 { return undefined; }
+        pub fn should_process(_: *@This(), _: [*c]const u8, _: [*c]const u8) bool { return false; }
+        pub fn estimated_duration_ms(_: *@This(), _: [*c]const u8) u64 { return 0; }
         pub fn priority(_: *@This()) i32 { return 0; }
     };
     var stub_register_post_processor_trait_bridge = TestStub_register_post_processor_trait_bridge{};
@@ -89,7 +89,7 @@ test "register_renderer_trait_bridge" {
     // register_renderer: trait bridge
     suppress_abort();
     const TestStub_register_renderer_trait_bridge = struct {
-        pub fn render(_: *@This(), _: kreuzberg.InternalDocument) ![]const u8 { return ""; }
+        pub fn render(_: *@This(), _: [*c]const u8) ![*c]const u8 { return ""; }
     };
     var stub_register_renderer_trait_bridge = TestStub_register_renderer_trait_bridge{};
     const vtable_register_renderer_trait_bridge = kreuzberg.make_renderer_vtable(TestStub_register_renderer_trait_bridge, &stub_register_renderer_trait_bridge);
@@ -101,8 +101,8 @@ test "register_validator_trait_bridge" {
     // register_validator: trait bridge
     suppress_abort();
     const TestStub_register_validator_trait_bridge = struct {
-        pub fn validate(_: *@This(), _: kreuzberg.ExtractionResult, _: kreuzberg.ExtractionConfig) !void {}
-        pub fn should_validate(_: *@This(), _: kreuzberg.ExtractionResult, _: kreuzberg.ExtractionConfig) bool { return false; }
+        pub fn validate(_: *@This(), _: [*c]const u8, _: [*c]const u8) !void {}
+        pub fn should_validate(_: *@This(), _: [*c]const u8, _: [*c]const u8) bool { return false; }
         pub fn priority(_: *@This()) i32 { return 0; }
     };
     var stub_register_validator_trait_bridge = TestStub_register_validator_trait_bridge{};

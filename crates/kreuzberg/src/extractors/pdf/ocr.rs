@@ -2291,10 +2291,7 @@ mod tests {
     #[cfg(all(feature = "ocr", target_os = "linux"))]
     #[test]
     fn parse_cgroup_v2_numeric_saturating_subtraction() {
-        assert_eq!(
-            parse_cgroup_v2("1000000000\n", "250000000\n"),
-            Some(750_000_000)
-        );
+        assert_eq!(parse_cgroup_v2("1000000000\n", "250000000\n"), Some(750_000_000));
         // usage > limit must saturate to 0, not underflow.
         assert_eq!(parse_cgroup_v2("100", "500"), Some(0));
     }

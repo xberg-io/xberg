@@ -112,7 +112,6 @@ type OcrBackend interface {
 }
 
 //export goOcrBackendProcessImage
-
 func goOcrBackendProcessImage(
 	userData unsafe.Pointer,
 	image_bytes *C.uint8_t,
@@ -121,7 +120,6 @@ func goOcrBackendProcessImage(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -154,9 +152,7 @@ func goOcrBackendProcessImage(
 	return 0  // success
 }
 
-
 //export goOcrBackendProcessImageFile
-
 func goOcrBackendProcessImageFile(
 	userData unsafe.Pointer,
 	path *C.char,
@@ -164,7 +160,6 @@ func goOcrBackendProcessImageFile(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -194,16 +189,13 @@ func goOcrBackendProcessImageFile(
 	return 0  // success
 }
 
-
 //export goOcrBackendSupportsLanguage
-
 func goOcrBackendSupportsLanguage(
 	userData unsafe.Pointer,
 	lang *C.char,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -222,15 +214,12 @@ func goOcrBackendSupportsLanguage(
 	return 0  // success
 }
 
-
 //export goOcrBackendBackendType
-
 func goOcrBackendBackendType(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -247,15 +236,12 @@ func goOcrBackendBackendType(
 	return 0  // success
 }
 
-
 //export goOcrBackendSupportedLanguages
-
 func goOcrBackendSupportedLanguages(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -272,15 +258,12 @@ func goOcrBackendSupportedLanguages(
 	return 0  // success
 }
 
-
 //export goOcrBackendSupportsTableDetection
-
 func goOcrBackendSupportsTableDetection(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -297,15 +280,12 @@ func goOcrBackendSupportsTableDetection(
 	return 0  // success
 }
 
-
 //export goOcrBackendSupportsDocumentProcessing
-
 func goOcrBackendSupportsDocumentProcessing(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -322,9 +302,7 @@ func goOcrBackendSupportsDocumentProcessing(
 	return 0  // success
 }
 
-
 //export goOcrBackendProcessDocument
-
 func goOcrBackendProcessDocument(
 	userData unsafe.Pointer,
 	_path *C.char,
@@ -332,7 +310,6 @@ func goOcrBackendProcessDocument(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(OcrBackend)
 
@@ -362,9 +339,7 @@ func goOcrBackendProcessDocument(
 	return 0  // success
 }
 
-
 //export goOcrBackendName
-
 func goOcrBackendName(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -380,7 +355,6 @@ func goOcrBackendName(userData unsafe.Pointer, outResult **C.char, outError **C.
 }
 
 //export goOcrBackendVersion
-
 func goOcrBackendVersion(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -396,7 +370,6 @@ func goOcrBackendVersion(userData unsafe.Pointer, outResult **C.char, outError *
 }
 
 //export goOcrBackendInitialize
-
 func goOcrBackendInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -415,7 +388,6 @@ func goOcrBackendInitialize(userData unsafe.Pointer, outError **C.char) C.int32_
 }
 
 //export goOcrBackendShutdown
-
 func goOcrBackendShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -434,7 +406,6 @@ func goOcrBackendShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t 
 }
 
 //export goOcrBackendFreeUserData
-
 func goOcrBackendFreeUserData(userData unsafe.Pointer) {
 
 	cgo.Handle(uintptr(unsafe.Pointer(userData))).Delete()
@@ -549,14 +520,12 @@ type PostProcessor interface {
 }
 
 //export goPostProcessorProcess
-
 func goPostProcessorProcess(
 	userData unsafe.Pointer,
 	result *C.char,
 	config *C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(PostProcessor)
 
@@ -587,15 +556,12 @@ func goPostProcessorProcess(
 	return 0  // success
 }
 
-
 //export goPostProcessorProcessingStage
-
 func goPostProcessorProcessingStage(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(PostProcessor)
 
@@ -612,9 +578,7 @@ func goPostProcessorProcessingStage(
 	return 0  // success
 }
 
-
 //export goPostProcessorShouldProcess
-
 func goPostProcessorShouldProcess(
 	userData unsafe.Pointer,
 	_result *C.char,
@@ -622,7 +586,6 @@ func goPostProcessorShouldProcess(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(PostProcessor)
 
@@ -651,16 +614,13 @@ func goPostProcessorShouldProcess(
 	return 0  // success
 }
 
-
 //export goPostProcessorEstimatedDurationMs
-
 func goPostProcessorEstimatedDurationMs(
 	userData unsafe.Pointer,
 	_result *C.char,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(PostProcessor)
 
@@ -683,15 +643,12 @@ func goPostProcessorEstimatedDurationMs(
 	return 0  // success
 }
 
-
 //export goPostProcessorPriority
-
 func goPostProcessorPriority(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(PostProcessor)
 
@@ -708,9 +665,7 @@ func goPostProcessorPriority(
 	return 0  // success
 }
 
-
 //export goPostProcessorName
-
 func goPostProcessorName(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -726,7 +681,6 @@ func goPostProcessorName(userData unsafe.Pointer, outResult **C.char, outError *
 }
 
 //export goPostProcessorVersion
-
 func goPostProcessorVersion(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -742,7 +696,6 @@ func goPostProcessorVersion(userData unsafe.Pointer, outResult **C.char, outErro
 }
 
 //export goPostProcessorInitialize
-
 func goPostProcessorInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -761,7 +714,6 @@ func goPostProcessorInitialize(userData unsafe.Pointer, outError **C.char) C.int
 }
 
 //export goPostProcessorShutdown
-
 func goPostProcessorShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -780,7 +732,6 @@ func goPostProcessorShutdown(userData unsafe.Pointer, outError **C.char) C.int32
 }
 
 //export goPostProcessorFreeUserData
-
 func goPostProcessorFreeUserData(userData unsafe.Pointer) {
 
 	cgo.Handle(uintptr(unsafe.Pointer(userData))).Delete()
@@ -886,14 +837,12 @@ type Validator interface {
 }
 
 //export goValidatorValidate
-
 func goValidatorValidate(
 	userData unsafe.Pointer,
 	result *C.char,
 	config *C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(Validator)
 
@@ -924,9 +873,7 @@ func goValidatorValidate(
 	return 0  // success
 }
 
-
 //export goValidatorShouldValidate
-
 func goValidatorShouldValidate(
 	userData unsafe.Pointer,
 	_result *C.char,
@@ -934,7 +881,6 @@ func goValidatorShouldValidate(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(Validator)
 
@@ -963,15 +909,12 @@ func goValidatorShouldValidate(
 	return 0  // success
 }
 
-
 //export goValidatorPriority
-
 func goValidatorPriority(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(Validator)
 
@@ -988,9 +931,7 @@ func goValidatorPriority(
 	return 0  // success
 }
 
-
 //export goValidatorName
-
 func goValidatorName(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1006,7 +947,6 @@ func goValidatorName(userData unsafe.Pointer, outResult **C.char, outError **C.c
 }
 
 //export goValidatorVersion
-
 func goValidatorVersion(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1022,7 +962,6 @@ func goValidatorVersion(userData unsafe.Pointer, outResult **C.char, outError **
 }
 
 //export goValidatorInitialize
-
 func goValidatorInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1041,7 +980,6 @@ func goValidatorInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t
 }
 
 //export goValidatorShutdown
-
 func goValidatorShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1060,7 +998,6 @@ func goValidatorShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 }
 
 //export goValidatorFreeUserData
-
 func goValidatorFreeUserData(userData unsafe.Pointer) {
 
 	cgo.Handle(uintptr(unsafe.Pointer(userData))).Delete()
@@ -1161,13 +1098,11 @@ type EmbeddingBackend interface {
 }
 
 //export goEmbeddingBackendDimensions
-
 func goEmbeddingBackendDimensions(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(EmbeddingBackend)
 
@@ -1184,16 +1119,13 @@ func goEmbeddingBackendDimensions(
 	return 0  // success
 }
 
-
 //export goEmbeddingBackendEmbed
-
 func goEmbeddingBackendEmbed(
 	userData unsafe.Pointer,
 	texts *C.char,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(EmbeddingBackend)
 
@@ -1221,9 +1153,7 @@ func goEmbeddingBackendEmbed(
 	return 0  // success
 }
 
-
 //export goEmbeddingBackendName
-
 func goEmbeddingBackendName(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1239,7 +1169,6 @@ func goEmbeddingBackendName(userData unsafe.Pointer, outResult **C.char, outErro
 }
 
 //export goEmbeddingBackendVersion
-
 func goEmbeddingBackendVersion(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1255,7 +1184,6 @@ func goEmbeddingBackendVersion(userData unsafe.Pointer, outResult **C.char, outE
 }
 
 //export goEmbeddingBackendInitialize
-
 func goEmbeddingBackendInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1274,7 +1202,6 @@ func goEmbeddingBackendInitialize(userData unsafe.Pointer, outError **C.char) C.
 }
 
 //export goEmbeddingBackendShutdown
-
 func goEmbeddingBackendShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1293,7 +1220,6 @@ func goEmbeddingBackendShutdown(userData unsafe.Pointer, outError **C.char) C.in
 }
 
 //export goEmbeddingBackendFreeUserData
-
 func goEmbeddingBackendFreeUserData(userData unsafe.Pointer) {
 
 	cgo.Handle(uintptr(unsafe.Pointer(userData))).Delete()
@@ -1402,7 +1328,6 @@ type DocumentExtractor interface {
 }
 
 //export goDocumentExtractorExtractBytes
-
 func goDocumentExtractorExtractBytes(
 	userData unsafe.Pointer,
 	content *C.uint8_t,
@@ -1412,7 +1337,6 @@ func goDocumentExtractorExtractBytes(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(DocumentExtractor)
 
@@ -1447,9 +1371,7 @@ func goDocumentExtractorExtractBytes(
 	return 0  // success
 }
 
-
 //export goDocumentExtractorExtractFile
-
 func goDocumentExtractorExtractFile(
 	userData unsafe.Pointer,
 	path *C.char,
@@ -1458,7 +1380,6 @@ func goDocumentExtractorExtractFile(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(DocumentExtractor)
 
@@ -1490,15 +1411,12 @@ func goDocumentExtractorExtractFile(
 	return 0  // success
 }
 
-
 //export goDocumentExtractorSupportedMimeTypes
-
 func goDocumentExtractorSupportedMimeTypes(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(DocumentExtractor)
 
@@ -1515,15 +1433,12 @@ func goDocumentExtractorSupportedMimeTypes(
 	return 0  // success
 }
 
-
 //export goDocumentExtractorPriority
-
 func goDocumentExtractorPriority(
 	userData unsafe.Pointer,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(DocumentExtractor)
 
@@ -1540,9 +1455,7 @@ func goDocumentExtractorPriority(
 	return 0  // success
 }
 
-
 //export goDocumentExtractorCanHandle
-
 func goDocumentExtractorCanHandle(
 	userData unsafe.Pointer,
 	_path *C.char,
@@ -1550,7 +1463,6 @@ func goDocumentExtractorCanHandle(
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(DocumentExtractor)
 
@@ -1571,9 +1483,7 @@ func goDocumentExtractorCanHandle(
 	return 0  // success
 }
 
-
 //export goDocumentExtractorName
-
 func goDocumentExtractorName(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1589,7 +1499,6 @@ func goDocumentExtractorName(userData unsafe.Pointer, outResult **C.char, outErr
 }
 
 //export goDocumentExtractorVersion
-
 func goDocumentExtractorVersion(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1605,7 +1514,6 @@ func goDocumentExtractorVersion(userData unsafe.Pointer, outResult **C.char, out
 }
 
 //export goDocumentExtractorInitialize
-
 func goDocumentExtractorInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1624,7 +1532,6 @@ func goDocumentExtractorInitialize(userData unsafe.Pointer, outError **C.char) C
 }
 
 //export goDocumentExtractorShutdown
-
 func goDocumentExtractorShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1643,7 +1550,6 @@ func goDocumentExtractorShutdown(userData unsafe.Pointer, outError **C.char) C.i
 }
 
 //export goDocumentExtractorFreeUserData
-
 func goDocumentExtractorFreeUserData(userData unsafe.Pointer) {
 
 	cgo.Handle(uintptr(unsafe.Pointer(userData))).Delete()
@@ -1743,14 +1649,12 @@ type Renderer interface {
 }
 
 //export goRendererRender
-
 func goRendererRender(
 	userData unsafe.Pointer,
 	doc *C.char,
 	outResult **C.char,
 	outError **C.char,
 ) C.int32_t {
-
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
 	impl, ok := handle.Value().(Renderer)
 
@@ -1777,9 +1681,7 @@ func goRendererRender(
 	return 0  // success
 }
 
-
 //export goRendererName
-
 func goRendererName(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1795,7 +1697,6 @@ func goRendererName(userData unsafe.Pointer, outResult **C.char, outError **C.ch
 }
 
 //export goRendererVersion
-
 func goRendererVersion(userData unsafe.Pointer, outResult **C.char, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1811,7 +1712,6 @@ func goRendererVersion(userData unsafe.Pointer, outResult **C.char, outError **C
 }
 
 //export goRendererInitialize
-
 func goRendererInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1830,7 +1730,6 @@ func goRendererInitialize(userData unsafe.Pointer, outError **C.char) C.int32_t 
 }
 
 //export goRendererShutdown
-
 func goRendererShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 
 	handle := cgo.Handle(uintptr(unsafe.Pointer(userData)))
@@ -1849,7 +1748,6 @@ func goRendererShutdown(userData unsafe.Pointer, outError **C.char) C.int32_t {
 }
 
 //export goRendererFreeUserData
-
 func goRendererFreeUserData(userData unsafe.Pointer) {
 
 	cgo.Handle(uintptr(unsafe.Pointer(userData))).Delete()

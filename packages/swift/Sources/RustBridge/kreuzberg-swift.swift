@@ -1,4 +1,6 @@
+// swift-format-ignore-file
 import RustBridgeC
+
 public func extractBytes<GenericIntoRustString: IntoRustString>(_ content: RustVec<UInt8>, _ mime_type: GenericIntoRustString, _ config: ExtractionConfig) throws -> ExtractionResult {
     try { let val = __swift_bridge__$extract_bytes({ let val = content; val.isOwned = false; return val.ptr }(), { let rustString = mime_type.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), {config.isOwned = false; return config.ptr;}()); if val.is_ok { return ExtractionResult(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -17898,6 +17900,3 @@ func __swift_bridge__SwiftDocumentExtractorBox__free (ptr: UnsafeMutableRawPoint
 func __swift_bridge__SwiftRendererBox__free (ptr: UnsafeMutableRawPointer) {
     let _ = Unmanaged<SwiftRendererBox>.fromOpaque(ptr).takeRetainedValue()
 }
-
-
-
