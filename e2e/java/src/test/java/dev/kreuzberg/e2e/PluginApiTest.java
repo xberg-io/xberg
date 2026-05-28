@@ -21,6 +21,14 @@ class PluginApiTest {
         // register_document_extractor: trait bridge
         class TestStubRegisterDocumentExtractorTraitBridge implements dev.kreuzberg.IDocumentExtractor {
     @Override
+    public String extract_bytes(byte[] content, String mimeType, dev.kreuzberg.ExtractionConfig config) {
+        return "";
+    }
+    @Override
+    public String extract_file(java.nio.file.Path path, String mimeType, dev.kreuzberg.ExtractionConfig config) {
+        return "";
+    }
+    @Override
     public java.util.List<String> supported_mime_types() {
         return new java.util.ArrayList<>();
     }
@@ -99,6 +107,10 @@ class PluginApiTest {
         return false;
     }
     @Override
+    public String backend_type() {
+        return "";
+    }
+    @Override
     public java.util.List<String> supported_languages() {
         return new java.util.ArrayList<>();
     }
@@ -139,6 +151,10 @@ class PluginApiTest {
         class TestStubRegisterPostProcessorTraitBridge implements dev.kreuzberg.IPostProcessor {
     @Override
     public void process(dev.kreuzberg.ExtractionResult result, dev.kreuzberg.ExtractionConfig config) {}
+    @Override
+    public String processing_stage() {
+        return "";
+    }
     @Override
     public boolean should_process(dev.kreuzberg.ExtractionResult result, dev.kreuzberg.ExtractionConfig config) {
         return false;
