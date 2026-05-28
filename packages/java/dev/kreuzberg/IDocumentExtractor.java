@@ -31,6 +31,4 @@ public interface IDocumentExtractor {
 /** priority. */    int priority() throws Exception;
 
 /** can_handle. */    boolean can_handle(java.nio.file.Path _path, String _mime_type) throws Exception;
-
-/** as_sync_extractor. */    String as_sync_extractor() throws Exception;
 }
