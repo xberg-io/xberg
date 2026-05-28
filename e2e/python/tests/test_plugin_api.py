@@ -7,7 +7,7 @@
 """E2e tests for category: plugin_api."""
 
 import pytest  # noqa: F401
-from kreuzberg import register_document_extractor, register_embedding_backend, register_ocr_backend, register_post_processor, register_renderer, register_validator, unregister_document_extractor, unregister_embedding_backend, unregister_post_processor, unregister_renderer, unregister_validator
+from kreuzberg import register_document_extractor, register_embedding_backend, register_ocr_backend, register_post_processor, register_renderer, register_validator, unregister_document_extractor, unregister_embedding_backend, unregister_post_processor, unregister_renderer, unregister_validator, unregister_ocr_backend
 
 def _alef_e2e_text(value: object) -> str:
     return "" if value is None else str(value)

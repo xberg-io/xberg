@@ -12111,9 +12111,9 @@ impl PhpOcrBackendBridge {
         // The ZendObject is passed to us as &mut, but we need to store a pointer
         // that may outlive this function call (when registered in global registry).
         // Incrementing the refcount ensures the object won't be garbage-collected
-        // while we hold a reference to it. We use ext_php_rs::sys::GC_ADDREF macro.
+        // while we hold a reference to it. We directly manipulate the gc refcount.
         unsafe {
-            ext_php_rs::sys::GC_ADDREF(&mut (*php_obj).gc);
+            (*php_obj).gc.refcount = (*php_obj).gc.refcount.wrapping_add(1);
         }
 
         Self {
@@ -12134,7 +12134,7 @@ impl Drop for PhpOcrBackendBridge {
         // SAFETY: Decrement the refcount we incremented in new().
         // This allows PHP to garbage-collect the object when the bridge is dropped.
         unsafe {
-            ext_php_rs::sys::GC_DELREF(&mut (*self.inner).gc);
+            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
         }
     }
 }
@@ -12323,9 +12323,9 @@ impl PhpPostProcessorBridge {
         // The ZendObject is passed to us as &mut, but we need to store a pointer
         // that may outlive this function call (when registered in global registry).
         // Incrementing the refcount ensures the object won't be garbage-collected
-        // while we hold a reference to it. We use ext_php_rs::sys::GC_ADDREF macro.
+        // while we hold a reference to it. We directly manipulate the gc refcount.
         unsafe {
-            ext_php_rs::sys::GC_ADDREF(&mut (*php_obj).gc);
+            (*php_obj).gc.refcount = (*php_obj).gc.refcount.wrapping_add(1);
         }
 
         Self {
@@ -12346,7 +12346,7 @@ impl Drop for PhpPostProcessorBridge {
         // SAFETY: Decrement the refcount we incremented in new().
         // This allows PHP to garbage-collect the object when the bridge is dropped.
         unsafe {
-            ext_php_rs::sys::GC_DELREF(&mut (*self.inner).gc);
+            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
         }
     }
 }
@@ -12510,9 +12510,9 @@ impl PhpValidatorBridge {
         // The ZendObject is passed to us as &mut, but we need to store a pointer
         // that may outlive this function call (when registered in global registry).
         // Incrementing the refcount ensures the object won't be garbage-collected
-        // while we hold a reference to it. We use ext_php_rs::sys::GC_ADDREF macro.
+        // while we hold a reference to it. We directly manipulate the gc refcount.
         unsafe {
-            ext_php_rs::sys::GC_ADDREF(&mut (*php_obj).gc);
+            (*php_obj).gc.refcount = (*php_obj).gc.refcount.wrapping_add(1);
         }
 
         Self {
@@ -12533,7 +12533,7 @@ impl Drop for PhpValidatorBridge {
         // SAFETY: Decrement the refcount we incremented in new().
         // This allows PHP to garbage-collect the object when the bridge is dropped.
         unsafe {
-            ext_php_rs::sys::GC_DELREF(&mut (*self.inner).gc);
+            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
         }
     }
 }
@@ -12679,9 +12679,9 @@ impl PhpEmbeddingBackendBridge {
         // The ZendObject is passed to us as &mut, but we need to store a pointer
         // that may outlive this function call (when registered in global registry).
         // Incrementing the refcount ensures the object won't be garbage-collected
-        // while we hold a reference to it. We use ext_php_rs::sys::GC_ADDREF macro.
+        // while we hold a reference to it. We directly manipulate the gc refcount.
         unsafe {
-            ext_php_rs::sys::GC_ADDREF(&mut (*php_obj).gc);
+            (*php_obj).gc.refcount = (*php_obj).gc.refcount.wrapping_add(1);
         }
 
         Self {
@@ -12702,7 +12702,7 @@ impl Drop for PhpEmbeddingBackendBridge {
         // SAFETY: Decrement the refcount we incremented in new().
         // This allows PHP to garbage-collect the object when the bridge is dropped.
         unsafe {
-            ext_php_rs::sys::GC_DELREF(&mut (*self.inner).gc);
+            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
         }
     }
 }
@@ -12857,9 +12857,9 @@ impl PhpDocumentExtractorBridge {
         // The ZendObject is passed to us as &mut, but we need to store a pointer
         // that may outlive this function call (when registered in global registry).
         // Incrementing the refcount ensures the object won't be garbage-collected
-        // while we hold a reference to it. We use ext_php_rs::sys::GC_ADDREF macro.
+        // while we hold a reference to it. We directly manipulate the gc refcount.
         unsafe {
-            ext_php_rs::sys::GC_ADDREF(&mut (*php_obj).gc);
+            (*php_obj).gc.refcount = (*php_obj).gc.refcount.wrapping_add(1);
         }
 
         Self {
@@ -12880,7 +12880,7 @@ impl Drop for PhpDocumentExtractorBridge {
         // SAFETY: Decrement the refcount we incremented in new().
         // This allows PHP to garbage-collect the object when the bridge is dropped.
         unsafe {
-            ext_php_rs::sys::GC_DELREF(&mut (*self.inner).gc);
+            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
         }
     }
 }
@@ -13053,9 +13053,9 @@ impl PhpRendererBridge {
         // The ZendObject is passed to us as &mut, but we need to store a pointer
         // that may outlive this function call (when registered in global registry).
         // Incrementing the refcount ensures the object won't be garbage-collected
-        // while we hold a reference to it. We use ext_php_rs::sys::GC_ADDREF macro.
+        // while we hold a reference to it. We directly manipulate the gc refcount.
         unsafe {
-            ext_php_rs::sys::GC_ADDREF(&mut (*php_obj).gc);
+            (*php_obj).gc.refcount = (*php_obj).gc.refcount.wrapping_add(1);
         }
 
         Self {
@@ -13076,7 +13076,7 @@ impl Drop for PhpRendererBridge {
         // SAFETY: Decrement the refcount we incremented in new().
         // This allows PHP to garbage-collect the object when the bridge is dropped.
         unsafe {
-            ext_php_rs::sys::GC_DELREF(&mut (*self.inner).gc);
+            (*self.inner).gc.refcount = (*self.inner).gc.refcount.wrapping_sub(1);
         }
     }
 }
