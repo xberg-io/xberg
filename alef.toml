@@ -156,9 +156,12 @@ sources = [
   "crates/kreuzberg/src/plugins/extractor/mod.rs",
   # OCR backend registry operations (register/unregister/list/clear)
   "crates/kreuzberg/src/plugins/ocr.rs",
+  # Renderer trait and registry operations
+  "crates/kreuzberg/src/plugins/renderer.rs",
   # Validator registry operations
   "crates/kreuzberg/src/plugins/validator/mod.rs",
-  # Post-processor registry operations
+  # Post-processor trait and registry operations
+  "crates/kreuzberg/src/plugins/processor/trait.rs",
   "crates/kreuzberg/src/plugins/processor/mod.rs",
 ]
 features = [
