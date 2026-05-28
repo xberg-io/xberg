@@ -55,7 +55,7 @@ dbase = "0.7"
 futures = "0.3"
 getrandom = { version = "0.4.2", features = ["wasm_js"] }
 hex = "0.4.3"
-html-to-markdown-rs = { version = "3.5.2", default-features = false }
+html-to-markdown-rs = { version = "3.5.4", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"
@@ -63,7 +63,7 @@ kreuzberg = { path = "./crates/kreuzberg", version = "5.0.0-rc.3", default-featu
 
 lazy_static = "1.5.0"
 libc = "0.2.186"
-liter-llm = { version = "1.4.0-rc.32", default-features = false, features = ["tracing"] }
+liter-llm = { version = "1.4.0-rc.39", default-features = false, features = ["tracing"] }
 log = "0.4"
 lzma-rust2 = { version = "0.16.3" }
 memmap2 = "0.9"
@@ -78,7 +78,7 @@ pdf_oxide = { version = "0.3.55", default-features = false, features = [
     "legacy-crypto",
 ] }
 rayon = "1.12.0"
-reqwest = { version = "0.13.3", default-features = false }
+reqwest = { version = "0.13.4", default-features = false }
 
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.150" }
