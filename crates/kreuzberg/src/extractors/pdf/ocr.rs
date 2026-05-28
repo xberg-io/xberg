@@ -1110,17 +1110,8 @@ fn adapt_batch_size_to_memory(configured: usize, document_size: usize) -> usize 
 fn get_available_memory() -> usize {
     #[cfg(target_os = "linux")]
     {
-        if let Ok(contents) = std::fs::read_to_string("/proc/meminfo") {
-            for line in contents.lines() {
-                if let Some(rest) = line.strip_prefix("MemAvailable:") {
-                    let kb_str = rest.trim().trim_end_matches("kB").trim();
-                    if let Ok(kb) = kb_str.parse::<usize>() {
-                        return kb * 1024;
-                    }
-                }
-            }
-        }
-        0
+        let host = read_meminfo_available();
+        host.min(cgroup_headroom().unwrap_or(usize::MAX))
     }
     #[cfg(target_os = "macos")]
     {
@@ -1141,7 +1132,60 @@ fn get_available_memory() -> usize {
         0
     }
 }
+#[cfg(all(feature = "ocr", target_os = "linux"))]
+fn parse_meminfo_available(contents: &str) -> usize {
+    contents
+        .lines()
+        .find_map(|l| {
+            l.strip_prefix("MemAvailable:")?
+                .trim()
+                .trim_end_matches("kB")
+                .trim()
+                .parse::<usize>()
+                .ok()
+        })
+        .map(|kb| kb * 1024)
+        .unwrap_or(0)
+}
 
+#[cfg(all(feature = "ocr", target_os = "linux"))]
+fn read_meminfo_available() -> usize {
+    parse_meminfo_available(&std::fs::read_to_string("/proc/meminfo").unwrap_or_default())
+}
+
+#[cfg(all(feature = "ocr", target_os = "linux"))]
+fn parse_cgroup_v2(max: &str, current: &str) -> Option<usize> {
+    let max = max.trim();
+    if max == "max" {
+        return None;
+    }
+    let limit = max.parse::<usize>().ok()?;
+    let usage = current.trim().parse::<usize>().ok()?;
+    Some(limit.saturating_sub(usage))
+}
+
+#[cfg(all(feature = "ocr", target_os = "linux"))]
+fn parse_cgroup_v1(limit: &str, usage: &str) -> Option<usize> {
+    let limit = limit.trim().parse::<usize>().ok()?;
+    let usage = usage.trim().parse::<usize>().ok()?;
+    // v1 limit_in_bytes returns ~9.2e18 when unlimited
+    (limit < (isize::MAX as usize)).then(|| limit.saturating_sub(usage))
+}
+
+#[cfg(all(feature = "ocr", target_os = "linux"))]
+fn cgroup_headroom() -> Option<usize> {
+    // cgroup v2 (unified): /sys/fs/cgroup/memory.{max,current}
+    if let (Ok(max), Ok(cur)) = (
+        std::fs::read_to_string("/sys/fs/cgroup/memory.max"),
+        std::fs::read_to_string("/sys/fs/cgroup/memory.current"),
+    ) {
+        return parse_cgroup_v2(&max, &cur);
+    }
+    // cgroup v1 fallback
+    let limit = std::fs::read_to_string("/sys/fs/cgroup/memory/memory.limit_in_bytes").ok()?;
+    let usage = std::fs::read_to_string("/sys/fs/cgroup/memory/memory.usage_in_bytes").ok()?;
+    parse_cgroup_v1(&limit, &usage)
+}
 /// Run a multi-backend OCR pipeline with quality-based fallback.
 ///
 /// Images and layout detections are computed once and shared across all stages.
@@ -2236,5 +2280,73 @@ mod tests {
                 "page_number must be page_idx + 1"
             );
         }
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_cgroup_v2_unlimited_returns_none() {
+        assert_eq!(parse_cgroup_v2("max\n", "12345"), None);
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_cgroup_v2_numeric_saturating_subtraction() {
+        assert_eq!(
+            parse_cgroup_v2("1000000000\n", "250000000\n"),
+            Some(750_000_000)
+        );
+        // usage > limit must saturate to 0, not underflow.
+        assert_eq!(parse_cgroup_v2("100", "500"), Some(0));
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_cgroup_v2_invalid_returns_none() {
+        assert_eq!(parse_cgroup_v2("not-a-number", "0"), None);
+        assert_eq!(parse_cgroup_v2("1000", "not-a-number"), None);
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_cgroup_v1_unlimited_sentinel_returns_none() {
+        // Real-world cgroup v1 unlimited values are near isize::MAX.
+        let unlimited = usize::MAX.to_string();
+        assert_eq!(parse_cgroup_v1(&unlimited, "0"), None);
+
+        let just_under = (isize::MAX as usize - 1).to_string();
+        assert!(parse_cgroup_v1(&just_under, "0").is_some());
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_cgroup_v1_numeric_saturating_subtraction() {
+        assert_eq!(parse_cgroup_v1("2000000", "500000"), Some(1_500_000));
+        assert_eq!(parse_cgroup_v1("100", "500"), Some(0));
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_meminfo_available_extracts_kb_and_converts_to_bytes() {
+        let synthetic = "\
+MemTotal:        8000000 kB
+MemFree:         1000000 kB
+MemAvailable:       2048 kB
+Buffers:           50000 kB
+";
+        assert_eq!(parse_meminfo_available(synthetic), 2048 * 1024);
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_meminfo_available_missing_field_returns_zero() {
+        let synthetic = "MemTotal: 8000000 kB\nMemFree: 1000000 kB\n";
+        assert_eq!(parse_meminfo_available(synthetic), 0);
+    }
+
+    #[cfg(all(feature = "ocr", target_os = "linux"))]
+    #[test]
+    fn parse_meminfo_available_handles_unparseable_value_as_zero() {
+        let synthetic = "MemAvailable: notanumber kB\n";
+        assert_eq!(parse_meminfo_available(synthetic), 0);
     }
 }
