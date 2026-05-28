@@ -5736,6 +5736,9 @@ const _: fn() = || {
         let _: Option<i64> = ImageExtractionConfig.max_images_per_page;
         let _: bool = ImageExtractionConfig.classify;
         let _: bool = ImageExtractionConfig.include_page_rasters;
+        let _: bool = ImageExtractionConfig.run_ocr_on_images;
+        let _: bool = ImageExtractionConfig.ocr_text_only;
+        let _: bool = ImageExtractionConfig.append_ocr_text;
     }
     {
         let ImageMetadata = None::<crate::ImageMetadata>.unwrap();
@@ -8713,6 +8716,9 @@ impl SseDecode for crate::ImageExtractionConfig {
         let mut var_maxImagesPerPage = <Option<i64>>::sse_decode(deserializer);
         let mut var_classify = <bool>::sse_decode(deserializer);
         let mut var_includePageRasters = <bool>::sse_decode(deserializer);
+        let mut var_runOcrOnImages = <bool>::sse_decode(deserializer);
+        let mut var_ocrTextOnly = <bool>::sse_decode(deserializer);
+        let mut var_appendOcrText = <bool>::sse_decode(deserializer);
         return crate::ImageExtractionConfig {
             extract_images: var_extractImages,
             target_dpi: var_targetDpi,
@@ -8724,6 +8730,9 @@ impl SseDecode for crate::ImageExtractionConfig {
             max_images_per_page: var_maxImagesPerPage,
             classify: var_classify,
             include_page_rasters: var_includePageRasters,
+            run_ocr_on_images: var_runOcrOnImages,
+            ocr_text_only: var_ocrTextOnly,
+            append_ocr_text: var_appendOcrText,
         };
     }
 }
@@ -14193,6 +14202,9 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::ImageExtractionConfig> 
             self.0.max_images_per_page.into_into_dart().into_dart(),
             self.0.classify.into_into_dart().into_dart(),
             self.0.include_page_rasters.into_into_dart().into_dart(),
+            self.0.run_ocr_on_images.into_into_dart().into_dart(),
+            self.0.ocr_text_only.into_into_dart().into_dart(),
+            self.0.append_ocr_text.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -17824,6 +17836,9 @@ impl SseEncode for crate::ImageExtractionConfig {
         <Option<i64>>::sse_encode(self.max_images_per_page, serializer);
         <bool>::sse_encode(self.classify, serializer);
         <bool>::sse_encode(self.include_page_rasters, serializer);
+        <bool>::sse_encode(self.run_ocr_on_images, serializer);
+        <bool>::sse_encode(self.ocr_text_only, serializer);
+        <bool>::sse_encode(self.append_ocr_text, serializer);
     }
 }
 

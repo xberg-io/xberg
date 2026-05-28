@@ -9071,8 +9071,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ImageExtractionConfig dco_decode_image_extraction_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return ImageExtractionConfig(
       extractImages: dco_decode_bool(arr[0]),
       targetDpi: dco_decode_i_64(arr[1]),
@@ -9084,6 +9084,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       maxImagesPerPage: dco_decode_opt_box_autoadd_i_64(arr[7]),
       classify: dco_decode_bool(arr[8]),
       includePageRasters: dco_decode_bool(arr[9]),
+      runOcrOnImages: dco_decode_bool(arr[10]),
+      ocrTextOnly: dco_decode_bool(arr[11]),
+      appendOcrText: dco_decode_bool(arr[12]),
     );
   }
 
@@ -13913,6 +13916,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_maxImagesPerPage = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_classify = sse_decode_bool(deserializer);
     var var_includePageRasters = sse_decode_bool(deserializer);
+    var var_runOcrOnImages = sse_decode_bool(deserializer);
+    var var_ocrTextOnly = sse_decode_bool(deserializer);
+    var var_appendOcrText = sse_decode_bool(deserializer);
     return ImageExtractionConfig(
       extractImages: var_extractImages,
       targetDpi: var_targetDpi,
@@ -13924,6 +13930,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       maxImagesPerPage: var_maxImagesPerPage,
       classify: var_classify,
       includePageRasters: var_includePageRasters,
+      runOcrOnImages: var_runOcrOnImages,
+      ocrTextOnly: var_ocrTextOnly,
+      appendOcrText: var_appendOcrText,
     );
   }
 
@@ -19579,6 +19588,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.maxImagesPerPage, serializer);
     sse_encode_bool(self.classify, serializer);
     sse_encode_bool(self.includePageRasters, serializer);
+    sse_encode_bool(self.runOcrOnImages, serializer);
+    sse_encode_bool(self.ocrTextOnly, serializer);
+    sse_encode_bool(self.appendOcrText, serializer);
   }
 
   @protected

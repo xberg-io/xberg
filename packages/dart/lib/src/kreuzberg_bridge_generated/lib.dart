@@ -4915,6 +4915,22 @@ class ImageExtractionConfig {
   /// (e.g. citation previews, visual grounding).
   final bool includePageRasters;
 
+  /// Run OCR on extracted images and include the recognized text in the document content.
+  ///
+  /// When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images
+  /// are processed with the configured OCR backend. Set to `false` to extract images
+  /// without OCR processing, even when OCR is enabled.
+  final bool runOcrOnImages;
+
+  /// When `true`, image OCR results are rendered as plain text without the
+  /// `![...](...)` markdown placeholder. Only takes effect when `run_ocr_on_images`
+  /// is also `true`.
+  final bool ocrTextOnly;
+
+  /// When `true` and `ocr_text_only` is `false`, append the OCR text after
+  /// the image placeholder in the rendered output.
+  final bool appendOcrText;
+
   const ImageExtractionConfig({
     required this.extractImages,
     required this.targetDpi,
@@ -4926,6 +4942,9 @@ class ImageExtractionConfig {
     this.maxImagesPerPage,
     required this.classify,
     required this.includePageRasters,
+    required this.runOcrOnImages,
+    required this.ocrTextOnly,
+    required this.appendOcrText,
   });
 
   @override
@@ -4939,7 +4958,10 @@ class ImageExtractionConfig {
       maxDpi.hashCode ^
       maxImagesPerPage.hashCode ^
       classify.hashCode ^
-      includePageRasters.hashCode;
+      includePageRasters.hashCode ^
+      runOcrOnImages.hashCode ^
+      ocrTextOnly.hashCode ^
+      appendOcrText.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -4955,7 +4977,10 @@ class ImageExtractionConfig {
           maxDpi == other.maxDpi &&
           maxImagesPerPage == other.maxImagesPerPage &&
           classify == other.classify &&
-          includePageRasters == other.includePageRasters;
+          includePageRasters == other.includePageRasters &&
+          runOcrOnImages == other.runOcrOnImages &&
+          ocrTextOnly == other.ocrTextOnly &&
+          appendOcrText == other.appendOcrText;
 }
 
 /// Heuristic classification of what an image likely depicts.
