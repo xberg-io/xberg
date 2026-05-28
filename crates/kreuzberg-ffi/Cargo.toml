@@ -10,7 +10,7 @@ categories = ["text-processing"]
 repository = "https://github.com/kreuzberg-dev/kreuzberg"
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 ahash = "0.8"

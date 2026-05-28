@@ -21,6 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (breaking)
 
+- **ffi (ABI)**: `KreuzbergOcrBackendVTable.process_image` and `KreuzbergDocumentExtractorVTable.extract_bytes` now include a `uintptr_t image_bytes_len` / `content_len` parameter **immediately after** the `*const uint8_t` pointer and before the `config` string:
+
+  ```c
+  // Before (alef < 0.19.21)
+  int32_t (*process_image)(const void *user_data,
+                           const uint8_t *image_bytes,
+                           const char *config, ...);
+  // After (alef >= 0.19.21)
+  int32_t (*process_image)(const void *user_data,
+                           const uint8_t *image_bytes,
+                           uintptr_t image_bytes_len,
+                           const char *config, ...);
+  ```
+
+  The old signature caused silent truncation of binary payloads at the first embedded NUL byte. Any pre-compiled C, Go, Java, or C# callback registered against the old vtable ABI must be recompiled. Fixes #1056.
 - **types**: `ImageKind` gains a new `PageRaster` variant. Any exhaustive `match` on `ImageKind` in downstream code must add a `PageRaster` arm. (#1018)
 
 ### Fixed
