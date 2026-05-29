@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **table**: `detect_rows` sort comparator changed from `.unwrap()` to `.unwrap_or(Ordering::Equal)` on `partial_cmp`, eliminating a latent panic if a NaN y-center value were ever introduced. Defensive improvement; the `u32` fields of `HocrWord` cannot produce NaN today. (#1057)
 - **chunking (pptx)**: skip `<pic>` elements whose `<a:blip>` lacks `r:embed` instead of aborting the entire slide; logs a warning and preserves the rest of the slide content. (#1016)
 - **pdf/chunking**: populate `first_page`/`last_page` on every chunk from multi-page PDFs by normalising trailing whitespace in page content before locating it inside `result.content`; previously caused 7 of 24 chunks to have null page metadata. (#1013, #1004)
 - **chunking (yaml/json)**: populate `first_page`/`last_page` on YAML/JSON section chunks by threading `page_boundaries` into `chunk_yaml_by_sections`. This unblocks the image-indices population step in `features.rs` for YAML chunks. (#963)

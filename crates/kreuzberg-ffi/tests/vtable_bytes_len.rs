@@ -12,9 +12,7 @@
 /// Per-test state is passed via `user_data` — no global statics — so tests
 /// are independent and can run in parallel without interfering.
 use kreuzberg_ffi::{
-    KreuzbergDocumentExtractorBridge,
-    KreuzbergDocumentExtractorVTable,
-    KreuzbergOcrBackendBridge,
+    KreuzbergDocumentExtractorBridge, KreuzbergDocumentExtractorVTable, KreuzbergOcrBackendBridge,
     KreuzbergOcrBackendVTable,
 };
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
@@ -112,12 +110,12 @@ async fn ocr_backend_vtable_process_image_passes_full_length_with_embedded_nuls(
     };
 
     // SAFETY: state lives for the duration of this test and outlives the bridge.
-    let bridge = unsafe {
-        KreuzbergOcrBackendBridge::new("test-ocr-stub".to_string(), vtable, state_ptr)
-    };
+    let bridge = unsafe { KreuzbergOcrBackendBridge::new("test-ocr-stub".to_string(), vtable, state_ptr) };
 
     use kreuzberg::OcrBackend;
-    let _ = bridge.process_image(&image_bytes, &kreuzberg::OcrConfig::default()).await;
+    let _ = bridge
+        .process_image(&image_bytes, &kreuzberg::OcrConfig::default())
+        .await;
 
     assert_eq!(
         state.received_len.load(Ordering::SeqCst),
@@ -155,17 +153,15 @@ async fn document_extractor_vtable_extract_bytes_passes_full_length_with_embedde
     };
 
     // SAFETY: state lives for the duration of this test and outlives the bridge.
-    let bridge = unsafe {
-        KreuzbergDocumentExtractorBridge::new(
-            "test-extractor-stub".to_string(),
-            vtable,
-            state_ptr,
-        )
-    };
+    let bridge = unsafe { KreuzbergDocumentExtractorBridge::new("test-extractor-stub".to_string(), vtable, state_ptr) };
 
     use kreuzberg::DocumentExtractor;
     let _ = bridge
-        .extract_bytes(&content, "application/octet-stream", &kreuzberg::ExtractionConfig::default())
+        .extract_bytes(
+            &content,
+            "application/octet-stream",
+            &kreuzberg::ExtractionConfig::default(),
+        )
         .await;
 
     assert_eq!(
@@ -189,8 +185,20 @@ async fn document_extractor_vtable_extract_bytes_passes_full_length_with_embedde
 #[test]
 fn image_kind_page_raster_is_10_and_unknown_is_11() {
     // SAFETY: pure integer dispatch, no pointers.
-    assert_eq!(unsafe { kreuzberg_ffi::kreuzberg_image_kind_from_i32(10) }, 10, "PageRaster == 10");
-    assert_eq!(unsafe { kreuzberg_ffi::kreuzberg_image_kind_from_i32(11) }, 11, "Unknown == 11");
+    assert_eq!(
+        unsafe { kreuzberg_ffi::kreuzberg_image_kind_from_i32(10) },
+        10,
+        "PageRaster == 10"
+    );
+    assert_eq!(
+        unsafe { kreuzberg_ffi::kreuzberg_image_kind_from_i32(11) },
+        11,
+        "Unknown == 11"
+    );
     // Old Unknown value must now resolve to PageRaster, not Unknown.
-    assert_ne!(unsafe { kreuzberg_ffi::kreuzberg_image_kind_from_i32(10) }, -1, "10 must be valid");
+    assert_ne!(
+        unsafe { kreuzberg_ffi::kreuzberg_image_kind_from_i32(10) },
+        -1,
+        "10 must be valid"
+    );
 }

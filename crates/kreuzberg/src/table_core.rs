@@ -143,7 +143,7 @@ pub(crate) fn detect_rows(words: &[HocrWord], row_threshold_ratio: f64) -> Vec<u
         .filter(|group| !group.is_empty())
         .map(|group| {
             let mut sorted = group.clone();
-            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             let mid = sorted.len() / 2;
             sorted[mid] as u32
         })
@@ -314,6 +314,37 @@ pub(crate) fn table_to_markdown(table: &[Vec<String>]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_detect_rows_zero_height_words_grouped_into_one_row() {
+        let words = vec![
+            HocrWord {
+                text: "A".to_string(),
+                left: 0,
+                top: 10,
+                width: 5,
+                height: 0,
+                confidence: 0.0,
+            },
+            HocrWord {
+                text: "B".to_string(),
+                left: 0,
+                top: 10,
+                width: 5,
+                height: 0,
+                confidence: 0.0,
+            },
+        ];
+        let rows = detect_rows(&words, 0.5);
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[test]
+    fn test_nan_safe_sort_does_not_panic() {
+        let mut values: Vec<f64> = vec![1.0, f64::NAN, 2.0];
+        values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        assert_eq!(values.len(), 3);
+    }
 
     #[test]
     fn test_hocr_word_methods() {
