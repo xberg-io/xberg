@@ -9,32 +9,13 @@
   },
   "main": "index.js",
   "types": "index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./index.d.ts",
-      "require": "./index.js",
-      "default": "./index.js"
-    }
-  },
   "files": ["index.js", "index.d.ts", "*.node"],
-  "optionalDependencies": {
-    "kreuzberg-linux-x64-gnu": "5.0.0-rc.3",
-    "kreuzberg-linux-arm64-gnu": "5.0.0-rc.3",
-    "kreuzberg-linux-x64-musl": "5.0.0-rc.3",
-    "kreuzberg-linux-arm64-musl": "5.0.0-rc.3",
-    "kreuzberg-darwin-x64": "5.0.0-rc.3",
-    "kreuzberg-darwin-arm64": "5.0.0-rc.3",
-    "kreuzberg-win32-x64-msvc": "5.0.0-rc.3",
-    "kreuzberg-win32-arm64-msvc": "5.0.0-rc.3"
-  },
   "napi": {
     "packageName": "kreuzberg",
     "binaryName": "kreuzberg-node",
     "targets": [
       "x86_64-unknown-linux-gnu",
       "aarch64-unknown-linux-gnu",
-      "x86_64-unknown-linux-musl",
-      "aarch64-unknown-linux-musl",
       "x86_64-apple-darwin",
       "aarch64-apple-darwin",
       "x86_64-pc-windows-msvc",
@@ -47,6 +28,5 @@
     "prepublishOnly": "napi prepublish -t npm --skip-optional-publish"
   },
   "engines": { "node": ">= 18" },
-  "publishConfig": { "access": "public" },
   "devDependencies": { "@napi-rs/cli": "^3.6.2" }
 }

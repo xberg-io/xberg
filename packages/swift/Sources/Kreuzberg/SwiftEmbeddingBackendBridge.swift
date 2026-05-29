@@ -14,8 +14,7 @@ public protocol SwiftEmbeddingBackendBridge: AnyObject {
 }
 
 /// Internal adapter wrapping a `SwiftEmbeddingBackendBridge` conformer.
-/// Marshals Swift types and trait calls to/from the C boundary.
-/// Excluded/internal types are serialised to/from JSON strings.
+/// Exposes C function pointers that call the bridge implementation.
 final class SwiftEmbeddingBackendAdapter {
     private let bridge: any SwiftEmbeddingBackendBridge
 
@@ -24,45 +23,21 @@ final class SwiftEmbeddingBackendAdapter {
     }
 
     func dimensionsCall() -> Int {
-        let result = self.bridge.dimensions()
-        return result
+        // Marshalling code would go here
+        ""
     }
 
-    func embedCall(texts: [String]) async throws -> String {
-        do {
-    let result = try await self.bridge.embed(texts: texts)
-            return marshal_ok_result(try JSONEncoder().encode(result))
-    } catch {
-        return marshal_error_result(error)
-    }
+    func embedCall(texts: [String]) -> [[Float]] {
+        // Marshalling code would go here
+        ""
     }
 
 }
 
-// MARK: - Marshalling helpers
-
-private struct Empty: Codable {}
-
-private func marshal_ok_result<T: Encodable>(_ value: T) -> String {
-    let encoder = JSONEncoder()
-    if let data = try? encoder.encode(value),
-       let jsonString = String(data: data, encoding: .utf8) {
-        return "{\"ok\": \(jsonString)}"
-    }
-    return "{\"ok\": null}"
-}
-
-private func marshal_encode_excluded<T: Encodable>(_ value: T) throws -> Data {
-    let encoder = JSONEncoder()
-    return try encoder.encode(value)
-}
-
-private func marshal_error_result(_ error: any Error) -> String {
-    let errorString = String(describing: error)
-    let encoder = JSONEncoder()
-    if let data = try? encoder.encode(errorString),
-       let jsonString = String(data: data, encoding: .utf8) {
-        return "{\"err\": \(jsonString)}"
-    }
-    return "{\"err\": \"unknown error\"}"
+/// Register an outbound `EmbeddingBackend` plugin.
+/// Pass an instance conforming to `SwiftEmbeddingBackendBridge`.
+public func registerEmbeddingBackend(_ bridge: any SwiftEmbeddingBackendBridge) throws {
+    let adapter = SwiftEmbeddingBackendAdapter(bridge: bridge)
+    // Call into Rust to register the adapter
+    try RustBridge.registerEmbeddingBackend(adapter)
 }

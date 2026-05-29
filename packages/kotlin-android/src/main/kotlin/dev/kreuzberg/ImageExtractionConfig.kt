@@ -73,4 +73,23 @@ data class ImageExtractionConfig(
      * (e.g. citation previews, visual grounding).
      */
     val includePageRasters: Boolean = false,
+    /**
+     * Run OCR on extracted images and include the recognized text in the document content.
+     *
+     * When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images
+     * are processed with the configured OCR backend. Set to `false` to extract images
+     * without OCR processing, even when OCR is enabled.
+     */
+    val runOcrOnImages: Boolean = true,
+    /**
+     * When `true`, image OCR results are rendered as plain text without the
+     * `![...](...)` markdown placeholder. Only takes effect when `run_ocr_on_images`
+     * is also `true`.
+     */
+    val ocrTextOnly: Boolean = false,
+    /**
+     * When `true` and `ocr_text_only` is `false`, append the OCR text after
+     * the image placeholder in the rendered output.
+     */
+    val appendOcrText: Boolean = false,
 )

@@ -23,7 +23,7 @@
 ///
 /// See also: crates/kreuzberg-ffi/tests/vtable_bytes_len.rs (previous identical class of bug).
 /// Per project rules: every unsafe block has a SAFETY comment.
-use std::ffi::{CString, c_char};
+use std::ffi::{c_char, CString};
 use std::fs;
 use std::path::Path;
 

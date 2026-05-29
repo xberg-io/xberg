@@ -26,8 +26,8 @@ public final class OcrBackendBridge implements AutoCloseable {
     private static final ConcurrentHashMap<String, OcrBackendBridge>
             OCR_BACKEND_BRIDGES = new ConcurrentHashMap<>();
 
-    // C vtable: 13 fields (4 plugin methods + 8 trait methods + free_user_data)
-    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 13L;
+    // C vtable: 12 fields (4 plugin methods + 7 trait methods + free_user_data)
+    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 12L;
 
     private final Arena arena;
     private final MemorySegment vtable;
@@ -126,13 +126,6 @@ public final class OcrBackendBridge implements AutoCloseable {
             vtable.set(ValueLayout.ADDRESS, offset, stubSupportsLanguage);
             offset += ValueLayout.ADDRESS.byteSize();
 
-            var stubBackendType = LINKER.upcallStub(LOOKUP.bind(this, "handleBackendType",
-                MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-                arena);
-            vtable.set(ValueLayout.ADDRESS, offset, stubBackendType);
-            offset += ValueLayout.ADDRESS.byteSize();
-
             var stubSupportedLanguages = LINKER.upcallStub(LOOKUP.bind(this, "handleSupportedLanguages",
                 MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
                 FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
@@ -214,13 +207,13 @@ public final class OcrBackendBridge implements AutoCloseable {
     private int handleProcessImage(
         MemorySegment userData,
         MemorySegment image_bytes_in,
-        long image_bytesLen,
+        long image_bytes_len,
         MemorySegment config_in,
         MemorySegment outResult,
         MemorySegment outError
     ) {
         try {
-            byte[] image_bytes = image_bytes_in.reinterpret(image_bytesLen).toArray(ValueLayout.JAVA_BYTE);
+            byte[] image_bytes = image_bytes_in.reinterpret(image_bytes_len).toArray(ValueLayout.JAVA_BYTE);
             String config_json = config_in.reinterpret(Long.MAX_VALUE).getString(0);
             OcrConfig config = JSON.readValue(config_json, OcrConfig.class);
             ExtractionResult result = impl.process_image(image_bytes, config);
@@ -260,19 +253,6 @@ public final class OcrBackendBridge implements AutoCloseable {
         try {
             String lang = lang_in.reinterpret(Long.MAX_VALUE).getString(0);
             boolean result = impl.supports_language(lang);
-            String json = JSON.writeValueAsString(result);
-            MemorySegment jsonCs = arena.allocateFrom(json);
-            outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
-            return 0;
-        } catch (Throwable e) {
-            writeError(outError, e);
-            return 1;
-        }
-    }
-
-    private int handleBackendType(MemorySegment userData, MemorySegment outResult, MemorySegment outError) {
-        try {
-            String result = impl.backend_type();
             String json = JSON.writeValueAsString(result);
             MemorySegment jsonCs = arena.allocateFrom(json);
             outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
@@ -349,11 +329,6 @@ public final class OcrBackendBridge implements AutoCloseable {
         catch (Throwable ignored) { /* swallow */ }
     }
 
-    /** Read a NUL-terminated native C string safely without unbounded reinterpret. */
-    private static String readNativeString(MemorySegment ptr) {
-        return ptr.reinterpret(4096).getString(0);
-    }
-
     @Override
     public void close() { arena.close(); }
 
@@ -367,7 +342,9 @@ public final class OcrBackendBridge implements AutoCloseable {
                 int rc = (int) NativeLib.KREUZBERG_REGISTER_OCR_BACKEND.invoke(nameCs, bridge.vtableSegment(), MemorySegment.NULL, outErr);
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
-                    String msg = errPtr.equals(MemorySegment.NULL) ? "registration failed (rc=" + rc + ")" : readNativeString(errPtr);
+                    String msg = errPtr.equals(MemorySegment.NULL)
+                        ? "registration failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("registerOcrBackend: " + msg);
                 }
             }

@@ -30,5 +30,5 @@
     "support-nts": true,
     "download-url-method": ["pre-packaged-binary", "composer-default"]
   },
-  "keywords": ["document", "extraction", "ocr", "pdf", "text"]
+  "keywords": ["document", "extraction", "pdf", "ocr", "text"]
 }

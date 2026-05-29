@@ -475,6 +475,19 @@ pub struct ImageExtractionConfig {
     /// Defaults to `false`. Enable when downstream consumers need page thumbnails
     /// (e.g. citation previews, visual grounding).
     pub include_page_rasters: bool,
+    /// Run OCR on extracted images and include the recognized text in the document content.
+    ///
+    /// When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images
+    /// are processed with the configured OCR backend. Set to `false` to extract images
+    /// without OCR processing, even when OCR is enabled.
+    pub run_ocr_on_images: bool,
+    /// When `true`, image OCR results are rendered as plain text without the
+    /// `![...](...)` markdown placeholder. Only takes effect when `run_ocr_on_images`
+    /// is also `true`.
+    pub ocr_text_only: bool,
+    /// When `true` and `ocr_text_only` is `false`, append the OCR text after
+    /// the image placeholder in the rendered output.
+    pub append_ocr_text: bool,
 }
 
 /// Token reduction configuration.
@@ -4226,6 +4239,9 @@ impl From<kreuzberg::ImageExtractionConfig> for ImageExtractionConfig {
             max_images_per_page: v.max_images_per_page.map(|x| x as _),
             classify: v.classify as _,
             include_page_rasters: v.include_page_rasters as _,
+            run_ocr_on_images: v.run_ocr_on_images as _,
+            ocr_text_only: v.ocr_text_only as _,
+            append_ocr_text: v.append_ocr_text as _,
         }
     }
 }
@@ -6652,6 +6668,9 @@ impl From<ImageExtractionConfig> for kreuzberg::ImageExtractionConfig {
             max_images_per_page: v.max_images_per_page.map(|x| x as _),
             classify: v.classify as _,
             include_page_rasters: v.include_page_rasters as _,
+            run_ocr_on_images: v.run_ocr_on_images as _,
+            ocr_text_only: v.ocr_text_only as _,
+            append_ocr_text: v.append_ocr_text as _,
         }
     }
 }

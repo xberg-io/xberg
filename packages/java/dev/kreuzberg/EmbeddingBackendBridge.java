@@ -158,11 +158,6 @@ public final class EmbeddingBackendBridge implements AutoCloseable {
         catch (Throwable ignored) { /* swallow */ }
     }
 
-    /** Read a NUL-terminated native C string safely without unbounded reinterpret. */
-    private static String readNativeString(MemorySegment ptr) {
-        return ptr.reinterpret(4096).getString(0);
-    }
-
     @Override
     public void close() { arena.close(); }
 
@@ -181,7 +176,9 @@ public final class EmbeddingBackendBridge implements AutoCloseable {
                 );
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
-                    String msg = errPtr.equals(MemorySegment.NULL) ? "registration failed (rc=" + rc + ")" : readNativeString(errPtr);
+                    String msg = errPtr.equals(MemorySegment.NULL)
+                        ? "registration failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("registerEmbeddingBackend: " + msg);
                 }
             }

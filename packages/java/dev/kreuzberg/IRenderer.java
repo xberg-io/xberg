@@ -19,6 +19,4 @@ public interface IRenderer {
 
     /** Shut down the plugin. */
     default void shutdown() throws Exception {}
-
-/** render. */    String render(String doc) throws Exception;
 }

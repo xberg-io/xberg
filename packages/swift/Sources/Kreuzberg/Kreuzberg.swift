@@ -285,7 +285,20 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
     /// Defaults to `false`. Enable when downstream consumers need page thumbnails
     /// (e.g. citation previews, visual grounding).
     public let includePageRasters: Bool
-    public init(extractImages: Bool, targetDpi: Int32, maxImageDimension: Int32, injectPlaceholders: Bool, autoAdjustDpi: Bool, minDpi: Int32, maxDpi: Int32, maxImagesPerPage: UInt32? = nil, classify: Bool, includePageRasters: Bool) {
+    /// Run OCR on extracted images and include the recognized text in the document content.
+    ///
+    /// When `true` (default) and `ExtractionConfig.ocr` is configured, extracted images
+    /// are processed with the configured OCR backend. Set to `false` to extract images
+    /// without OCR processing, even when OCR is enabled.
+    public let runOcrOnImages: Bool
+    /// When `true`, image OCR results are rendered as plain text without the
+    /// `![...](...)` markdown placeholder. Only takes effect when `run_ocr_on_images`
+    /// is also `true`.
+    public let ocrTextOnly: Bool
+    /// When `true` and `ocr_text_only` is `false`, append the OCR text after
+    /// the image placeholder in the rendered output.
+    public let appendOcrText: Bool
+    public init(extractImages: Bool, targetDpi: Int32, maxImageDimension: Int32, injectPlaceholders: Bool, autoAdjustDpi: Bool, minDpi: Int32, maxDpi: Int32, maxImagesPerPage: UInt32? = nil, classify: Bool, includePageRasters: Bool, runOcrOnImages: Bool, ocrTextOnly: Bool, appendOcrText: Bool) {
         self.extractImages = extractImages
         self.targetDpi = targetDpi
         self.maxImageDimension = maxImageDimension
@@ -296,6 +309,9 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
         self.maxImagesPerPage = maxImagesPerPage
         self.classify = classify
         self.includePageRasters = includePageRasters
+        self.runOcrOnImages = runOcrOnImages
+        self.ocrTextOnly = ocrTextOnly
+        self.appendOcrText = appendOcrText
     }
     private enum CodingKeys: String, CodingKey {
         case extractImages = "extract_images"
@@ -308,6 +324,9 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
         case maxImagesPerPage = "max_images_per_page"
         case classify = "classify"
         case includePageRasters = "include_page_rasters"
+        case runOcrOnImages = "run_ocr_on_images"
+        case ocrTextOnly = "ocr_text_only"
+        case appendOcrText = "append_ocr_text"
     }
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -321,6 +340,9 @@ public struct ImageExtractionConfig: Codable, Sendable, Hashable {
         self.maxImagesPerPage = try container.decodeIfPresent(UInt32.self, forKey: .maxImagesPerPage) ?? nil
         self.classify = try container.decodeIfPresent(Bool.self, forKey: .classify) ?? true
         self.includePageRasters = try container.decodeIfPresent(Bool.self, forKey: .includePageRasters) ?? false
+        self.runOcrOnImages = try container.decodeIfPresent(Bool.self, forKey: .runOcrOnImages) ?? true
+        self.ocrTextOnly = try container.decodeIfPresent(Bool.self, forKey: .ocrTextOnly) ?? false
+        self.appendOcrText = try container.decodeIfPresent(Bool.self, forKey: .appendOcrText) ?? false
     }
 }
 
@@ -337,9 +359,12 @@ internal extension ImageExtractionConfig {
         self.maxImagesPerPage = rb.maxImagesPerPage()
         self.classify = rb.classify()
         self.includePageRasters = rb.includePageRasters()
+        self.runOcrOnImages = rb.runOcrOnImages()
+        self.ocrTextOnly = rb.ocrTextOnly()
+        self.appendOcrText = rb.appendOcrText()
     }
     func intoRust() throws -> RustBridge.ImageExtractionConfig {
-        return RustBridge.ImageExtractionConfig(self.extractImages, self.targetDpi, self.maxImageDimension, self.injectPlaceholders, self.autoAdjustDpi, self.minDpi, self.maxDpi, self.maxImagesPerPage, self.classify, self.includePageRasters)
+        return RustBridge.ImageExtractionConfig(self.extractImages, self.targetDpi, self.maxImageDimension, self.injectPlaceholders, self.autoAdjustDpi, self.minDpi, self.maxDpi, self.maxImagesPerPage, self.classify, self.includePageRasters, self.runOcrOnImages, self.ocrTextOnly, self.appendOcrText)
     }
 }
 

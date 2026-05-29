@@ -21,7 +21,7 @@ interface PostProcessor
      * @param mixed $config
      * @return mixed Return value from the plugin method
      */
-    public function process(mixed $result, mixed $config): mixed;
+    public function process(, mixed $result, mixed $config): mixed;
 
     /**
      * Get the processing stage for this post-processor.
@@ -39,7 +39,7 @@ interface PostProcessor
      * @param mixed $_config
      * @return mixed Return value from the plugin method
      */
-    public function should_process(mixed $_result, mixed $_config): mixed;
+    public function should_process(, mixed $_result, mixed $_config): mixed;
 
     /**
      * Optional: Estimate processing time in milliseconds.
@@ -48,7 +48,7 @@ interface PostProcessor
      * @param mixed $_result
      * @return mixed Return value from the plugin method
      */
-    public function estimated_duration_ms(mixed $_result): mixed;
+    public function estimated_duration_ms(, mixed $_result): mixed;
 
     /**
      * Execution priority within the processing stage.

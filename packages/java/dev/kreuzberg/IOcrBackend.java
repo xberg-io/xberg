@@ -28,8 +28,6 @@ public interface IOcrBackend {
 
 /** supports_language. */    boolean supports_language(String lang) throws Exception;
 
-/** backend_type. */    String backend_type() throws Exception;
-
 /** supported_languages. */    List<String> supported_languages() throws Exception;
 
 /** supports_table_detection. */    boolean supports_table_detection() throws Exception;

@@ -28,6 +28,6 @@ interface EmbeddingBackend
      * @param mixed $texts
      * @return mixed Return value from the plugin method
      */
-    public function embed(mixed $texts): mixed;
+    public function embed(, mixed $texts): mixed;
 
 }

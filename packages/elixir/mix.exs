@@ -7,7 +7,7 @@ defmodule Kreuzberg.MixProject do
       version: "5.0.0-rc.3",
       elixir: "~> 1.14",
       elixirc_paths: ["lib", Path.expand("../../packages/elixir/native/kreuzberg_nif/src", __DIR__)],
-      rustler_crates: [kreuzberg_nif: [mode: :release, targets: ~w(aarch64-apple-darwin aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu x86_64-pc-windows-gnu)]],
+      rustler_crates: [kreuzberg_nif: [mode: :release]],
       description: "High-performance document intelligence library",
       package: package(),
       deps: deps()

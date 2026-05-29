@@ -25,8 +25,8 @@ public final class PostProcessorBridge implements AutoCloseable {
     private static final ConcurrentHashMap<String, PostProcessorBridge>
             POST_PROCESSOR_BRIDGES = new ConcurrentHashMap<>();
 
-    // C vtable: 10 fields (4 plugin methods + 5 trait methods + free_user_data)
-    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 10L;
+    // C vtable: 9 fields (4 plugin methods + 4 trait methods + free_user_data)
+    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 9L;
 
     private final Arena arena;
     private final MemorySegment vtable;
@@ -79,13 +79,6 @@ public final class PostProcessorBridge implements AutoCloseable {
                 ),
                 arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubProcess);
-            offset += ValueLayout.ADDRESS.byteSize();
-
-            var stubProcessingStage = LINKER.upcallStub(LOOKUP.bind(this, "handleProcessingStage",
-                MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
-                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
-                arena);
-            vtable.set(ValueLayout.ADDRESS, offset, stubProcessingStage);
             offset += ValueLayout.ADDRESS.byteSize();
 
             var stubShouldProcess = LINKER.upcallStub(LOOKUP.bind(this, "handleShouldProcess",
@@ -179,19 +172,6 @@ public final class PostProcessorBridge implements AutoCloseable {
         }
     }
 
-    private int handleProcessingStage(MemorySegment userData, MemorySegment outResult, MemorySegment outError) {
-        try {
-            String result = impl.processing_stage();
-            String json = JSON.writeValueAsString(result);
-            MemorySegment jsonCs = arena.allocateFrom(json);
-            outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
-            return 0;
-        } catch (Throwable e) {
-            writeError(outError, e);
-            return 1;
-        }
-    }
-
     private int handleShouldProcess(
         MemorySegment userData,
         MemorySegment _result_in,
@@ -253,11 +233,6 @@ public final class PostProcessorBridge implements AutoCloseable {
         catch (Throwable ignored) { /* swallow */ }
     }
 
-    /** Read a NUL-terminated native C string safely without unbounded reinterpret. */
-    private static String readNativeString(MemorySegment ptr) {
-        return ptr.reinterpret(4096).getString(0);
-    }
-
     @Override
     public void close() { arena.close(); }
 
@@ -276,7 +251,9 @@ public final class PostProcessorBridge implements AutoCloseable {
                 );
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
-                    String msg = errPtr.equals(MemorySegment.NULL) ? "registration failed (rc=" + rc + ")" : readNativeString(errPtr);
+                    String msg = errPtr.equals(MemorySegment.NULL)
+                        ? "registration failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("registerPostProcessor: " + msg);
                 }
             }

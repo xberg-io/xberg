@@ -22,7 +22,7 @@ interface DocumentExtractor
      * @param mixed $config
      * @return mixed Return value from the plugin method
      */
-    public function extract_bytes(mixed $content, string $mime_type, mixed $config): mixed;
+    public function extract_bytes(, mixed $content, string $mime_type, mixed $config): mixed;
 
     /**
      * Extract content from a file.
@@ -33,7 +33,7 @@ interface DocumentExtractor
      * @param mixed $config
      * @return mixed Return value from the plugin method
      */
-    public function extract_file(mixed $path, string $mime_type, mixed $config): mixed;
+    public function extract_file(, mixed $path, string $mime_type, mixed $config): mixed;
 
     /**
      * Get the list of MIME types supported by this extractor.
@@ -59,7 +59,7 @@ interface DocumentExtractor
      * @param string $_mime_type
      * @return mixed Return value from the plugin method
      */
-    public function can_handle(mixed $_path, string $_mime_type): mixed;
+    public function can_handle(, mixed $_path, string $_mime_type): mixed;
 
     /**
      * Attempt to get a reference to this extractor as a SyncExtractor.

@@ -1,14 +1,14 @@
 {
-  "name": "kreuzberg-e2e-wasm",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "NODE_OPTIONS=--max-old-space-size=4096 vitest run"
-  },
-  "devDependencies": {
-    "kreuzberg": "file:../../crates/kreuzberg-wasm/pkg/nodejs",
-    "rollup": "^4.53.3",
-    "vitest": "^4.1.5"
-  }
+	"name": "kreuzberg-e2e-wasm",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"kreuzberg": "file:../../crates/kreuzberg-wasm/pkg/nodejs",
+		"rollup": "^4.53.3",
+		"vitest": "^4.1.5"
+	}
 }

@@ -21,7 +21,7 @@ interface Validator
      * @param mixed $config
      * @return mixed Return value from the plugin method
      */
-    public function validate(mixed $result, mixed $config): mixed;
+    public function validate(, mixed $result, mixed $config): mixed;
 
     /**
      * Optional: Check if this validator should run for a given result.
@@ -31,7 +31,7 @@ interface Validator
      * @param mixed $_config
      * @return mixed Return value from the plugin method
      */
-    public function should_validate(mixed $_result, mixed $_config): mixed;
+    public function should_validate(, mixed $_result, mixed $_config): mixed;
 
     /**
      * Optional: Get the validation priority.

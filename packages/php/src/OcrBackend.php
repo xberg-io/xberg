@@ -21,7 +21,7 @@ interface OcrBackend
      * @param mixed $config
      * @return mixed Return value from the plugin method
      */
-    public function process_image(mixed $image_bytes, mixed $config): mixed;
+    public function process_image(, mixed $image_bytes, mixed $config): mixed;
 
     /**
      * Process a file and extract text via OCR.
@@ -31,7 +31,7 @@ interface OcrBackend
      * @param mixed $config
      * @return mixed Return value from the plugin method
      */
-    public function process_image_file(mixed $path, mixed $config): mixed;
+    public function process_image_file(, mixed $path, mixed $config): mixed;
 
     /**
      * Check if this backend supports a given language code.
@@ -40,7 +40,7 @@ interface OcrBackend
      * @param string $lang
      * @return mixed Return value from the plugin method
      */
-    public function supports_language(string $lang): mixed;
+    public function supports_language(, string $lang): mixed;
 
     /**
      * Get the backend type identifier.
@@ -82,6 +82,6 @@ interface OcrBackend
      * @param mixed $_config
      * @return mixed Return value from the plugin method
      */
-    public function process_document(mixed $_path, mixed $_config): mixed;
+    public function process_document(, mixed $_path, mixed $_config): mixed;
 
 }

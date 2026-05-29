@@ -262,6 +262,9 @@ mod ffi {
             max_images_per_page: Option<u32>,
             classify: bool,
             include_page_rasters: bool,
+            run_ocr_on_images: bool,
+            ocr_text_only: bool,
+            append_ocr_text: bool,
         ) -> ImageExtractionConfig;
         #[swift_bridge(swift_name = "extractImages")]
         fn extract_images(&self) -> bool;
@@ -282,6 +285,12 @@ mod ffi {
         fn classify(&self) -> bool;
         #[swift_bridge(swift_name = "includePageRasters")]
         fn include_page_rasters(&self) -> bool;
+        #[swift_bridge(swift_name = "runOcrOnImages")]
+        fn run_ocr_on_images(&self) -> bool;
+        #[swift_bridge(swift_name = "ocrTextOnly")]
+        fn ocr_text_only(&self) -> bool;
+        #[swift_bridge(swift_name = "appendOcrText")]
+        fn append_ocr_text(&self) -> bool;
     }
 
     extern "Rust" {
@@ -3786,6 +3795,9 @@ impl ImageExtractionConfig {
         max_images_per_page: Option<u32>,
         classify: bool,
         include_page_rasters: bool,
+        run_ocr_on_images: bool,
+        ocr_text_only: bool,
+        append_ocr_text: bool,
     ) -> ImageExtractionConfig {
         ImageExtractionConfig(kreuzberg::ImageExtractionConfig {
             extract_images,
@@ -3798,6 +3810,9 @@ impl ImageExtractionConfig {
             max_images_per_page,
             classify,
             include_page_rasters,
+            run_ocr_on_images,
+            ocr_text_only,
+            append_ocr_text,
         })
     }
     pub fn extract_images(&self) -> bool {
@@ -3857,6 +3872,24 @@ impl ImageExtractionConfig {
     }
     pub fn include_page_rasters(&self) -> bool {
         ::serde_json::to_value(&self.0.include_page_rasters)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn run_ocr_on_images(&self) -> bool {
+        ::serde_json::to_value(&self.0.run_ocr_on_images)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn ocr_text_only(&self) -> bool {
+        ::serde_json::to_value(&self.0.ocr_text_only)
+            .ok()
+            .and_then(|j| ::serde_json::from_value(j).ok())
+            .unwrap_or_default()
+    }
+    pub fn append_ocr_text(&self) -> bool {
+        ::serde_json::to_value(&self.0.append_ocr_text)
             .ok()
             .and_then(|j| ::serde_json::from_value(j).ok())
             .unwrap_or_default()

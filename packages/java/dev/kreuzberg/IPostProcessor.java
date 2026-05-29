@@ -22,8 +22,6 @@ public interface IPostProcessor {
 
 /** process. */    void process(ExtractionResult result, ExtractionConfig config) throws Exception;
 
-/** processing_stage. */    String processing_stage() throws Exception;
-
 /** should_process. */    boolean should_process(ExtractionResult _result, ExtractionConfig _config) throws Exception;
 
 /** estimated_duration_ms. */    long estimated_duration_ms(ExtractionResult _result) throws Exception;

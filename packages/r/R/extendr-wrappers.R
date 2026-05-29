@@ -615,6 +615,9 @@ BatchFileItem <- new.env(parent = emptyenv())
 #' @field max_images_per_page Maximum number of image objects to extract per PDF page.
 #' @field classify When `true` (default), extracted images are classified by kind and grouped into clusters where they
 #' @field include_page_rasters When `true`, full-page renders produced during OCR preprocessing are captured and
+#' @field run_ocr_on_images Run OCR on extracted images and include the recognized text in the document content.
+#' @field ocr_text_only When `true`, image OCR results are rendered as plain text without the `![...](...)` markdown
+#' @field append_ocr_text When `true` and `ocr_text_only` is `false`, append the OCR text after the image placeholder
 #' @export
 ImageExtractionConfig <- new.env(parent = emptyenv())
 ImageExtractionConfig$default <- function() .Call("wrap__ImageExtractionConfig__default", PACKAGE = "kreuzberg")

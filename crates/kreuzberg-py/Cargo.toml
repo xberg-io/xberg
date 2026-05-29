@@ -5,7 +5,7 @@ edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
 readme = false
-keywords = ["document", "extraction", "ocr", "pdf", "text"]
+keywords = ["document", "extraction", "pdf", "ocr", "text"]
 categories = ["text-processing"]
 
 [lib]

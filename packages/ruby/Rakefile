@@ -2,12 +2,12 @@
 
 require "bundler"
 Bundler::GemHelper.install_tasks name: "kreuzberg"
-require "rb_sys/extensiontask"
+require "rake/extensiontask"
 require "rspec/core/rake_task"
 
 GEMSPEC = Gem::Specification.load(File.expand_path("kreuzberg.gemspec", __dir__))
 
-RbSys::ExtensionTask.new("kreuzberg_rb", GEMSPEC) do |ext|
+Rake::ExtensionTask.new("kreuzberg_rb", GEMSPEC) do |ext|
   ext.lib_dir = "lib"
   ext.ext_dir = "ext/kreuzberg_rb"
   ext.cross_compile = true

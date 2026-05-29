@@ -26,8 +26,8 @@ public final class DocumentExtractorBridge implements AutoCloseable {
     private static final ConcurrentHashMap<String, DocumentExtractorBridge>
             DOCUMENT_EXTRACTOR_BRIDGES = new ConcurrentHashMap<>();
 
-    // C vtable: 11 fields (4 plugin methods + 6 trait methods + free_user_data)
-    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 11L;
+    // C vtable: 8 fields (4 plugin methods + 3 trait methods + free_user_data)
+    private static final long VTABLE_SIZE = (long) ValueLayout.ADDRESS.byteSize() * 8L;
 
     private final Arena arena;
     private final MemorySegment vtable;
@@ -67,54 +67,6 @@ public final class DocumentExtractorBridge implements AutoCloseable {
                 FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
                 arena);
             vtable.set(ValueLayout.ADDRESS, offset, stubShutdown);
-            offset += ValueLayout.ADDRESS.byteSize();
-
-            var stubExtractBytes = LINKER.upcallStub(LOOKUP.bind(this, "handleExtractBytes",
-                MethodType.methodType(
-                    int.class,
-                    MemorySegment.class,
-                    MemorySegment.class,
-                    long.class,
-                    MemorySegment.class,
-                    MemorySegment.class,
-                    MemorySegment.class,
-                    MemorySegment.class
-                )),
-                FunctionDescriptor.of(
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_LONG,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS
-                ),
-                arena);
-            vtable.set(ValueLayout.ADDRESS, offset, stubExtractBytes);
-            offset += ValueLayout.ADDRESS.byteSize();
-
-            var stubExtractFile = LINKER.upcallStub(LOOKUP.bind(this, "handleExtractFile",
-                MethodType.methodType(
-                    int.class,
-                    MemorySegment.class,
-                    MemorySegment.class,
-                    MemorySegment.class,
-                    MemorySegment.class,
-                    MemorySegment.class,
-                    MemorySegment.class
-                )),
-                FunctionDescriptor.of(
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS
-                ),
-                arena);
-            vtable.set(ValueLayout.ADDRESS, offset, stubExtractFile);
             offset += ValueLayout.ADDRESS.byteSize();
 
             var stubSupportedMimeTypes = LINKER.upcallStub(LOOKUP.bind(this, "handleSupportedMimeTypes",
@@ -188,55 +140,6 @@ public final class DocumentExtractorBridge implements AutoCloseable {
         } catch (Throwable e) { return 1; }
     }
 
-    private int handleExtractBytes(
-        MemorySegment userData,
-        MemorySegment content_in,
-        long contentLen,
-        MemorySegment mime_type_in,
-        MemorySegment config_in,
-        MemorySegment outResult,
-        MemorySegment outError
-    ) {
-        try {
-            byte[] content = content_in.reinterpret(contentLen).toArray(ValueLayout.JAVA_BYTE);
-            String mime_type = mime_type_in.reinterpret(Long.MAX_VALUE).getString(0);
-            String config_json = config_in.reinterpret(Long.MAX_VALUE).getString(0);
-            ExtractionConfig config = JSON.readValue(config_json, ExtractionConfig.class);
-            String result = impl.extract_bytes(content, mime_type, config);
-            String json = JSON.writeValueAsString(result);
-            MemorySegment jsonCs = arena.allocateFrom(json);
-            outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
-            return 0;
-        } catch (Throwable e) {
-            writeError(outError, e);
-            return 1;
-        }
-    }
-
-    private int handleExtractFile(
-        MemorySegment userData,
-        MemorySegment path_in,
-        MemorySegment mime_type_in,
-        MemorySegment config_in,
-        MemorySegment outResult,
-        MemorySegment outError
-    ) {
-        try {
-            java.nio.file.Path path = java.nio.file.Paths.get(path_in.reinterpret(Long.MAX_VALUE).getString(0));
-            String mime_type = mime_type_in.reinterpret(Long.MAX_VALUE).getString(0);
-            String config_json = config_in.reinterpret(Long.MAX_VALUE).getString(0);
-            ExtractionConfig config = JSON.readValue(config_json, ExtractionConfig.class);
-            String result = impl.extract_file(path, mime_type, config);
-            String json = JSON.writeValueAsString(result);
-            MemorySegment jsonCs = arena.allocateFrom(json);
-            outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
-            return 0;
-        } catch (Throwable e) {
-            writeError(outError, e);
-            return 1;
-        }
-    }
-
     private int handleSupportedMimeTypes(MemorySegment userData, MemorySegment outResult, MemorySegment outError) {
         try {
             List<String> result = impl.supported_mime_types();
@@ -289,11 +192,6 @@ public final class DocumentExtractorBridge implements AutoCloseable {
         catch (Throwable ignored) { /* swallow */ }
     }
 
-    /** Read a NUL-terminated native C string safely without unbounded reinterpret. */
-    private static String readNativeString(MemorySegment ptr) {
-        return ptr.reinterpret(4096).getString(0);
-    }
-
     @Override
     public void close() { arena.close(); }
 
@@ -312,7 +210,9 @@ public final class DocumentExtractorBridge implements AutoCloseable {
                 );
                 if (rc != 0) {
                     MemorySegment errPtr = outErr.get(ValueLayout.ADDRESS, 0);
-                    String msg = errPtr.equals(MemorySegment.NULL) ? "registration failed (rc=" + rc + ")" : readNativeString(errPtr);
+                    String msg = errPtr.equals(MemorySegment.NULL)
+                        ? "registration failed (rc=" + rc + ")"
+                        : errPtr.reinterpret(Long.MAX_VALUE).getString(0);
                     throw new RuntimeException("registerDocumentExtractor: " + msg);
                 }
             }

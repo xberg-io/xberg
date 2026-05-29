@@ -13,8 +13,7 @@ public protocol SwiftRendererBridge: AnyObject {
 }
 
 /// Internal adapter wrapping a `SwiftRendererBridge` conformer.
-/// Marshals Swift types and trait calls to/from the C boundary.
-/// Excluded/internal types are serialised to/from JSON strings.
+/// Exposes C function pointers that call the bridge implementation.
 final class SwiftRendererAdapter {
     private let bridge: any SwiftRendererBridge
 
@@ -22,41 +21,17 @@ final class SwiftRendererAdapter {
     self.bridge = bridge
     }
 
-    func renderCall(doc: String) throws -> String {
-        do {
-    let result = try self.bridge.render(doc: doc)
-            return marshal_ok_result(result)
-    } catch {
-        return marshal_error_result(error)
-    }
+    func renderCall(doc: InternalDocument) -> String {
+        // Marshalling code would go here
+        ""
     }
 
 }
 
-// MARK: - Marshalling helpers
-
-private struct Empty: Codable {}
-
-private func marshal_ok_result<T: Encodable>(_ value: T) -> String {
-    let encoder = JSONEncoder()
-    if let data = try? encoder.encode(value),
-       let jsonString = String(data: data, encoding: .utf8) {
-        return "{\"ok\": \(jsonString)}"
-    }
-    return "{\"ok\": null}"
-}
-
-private func marshal_encode_excluded<T: Encodable>(_ value: T) throws -> Data {
-    let encoder = JSONEncoder()
-    return try encoder.encode(value)
-}
-
-private func marshal_error_result(_ error: any Error) -> String {
-    let errorString = String(describing: error)
-    let encoder = JSONEncoder()
-    if let data = try? encoder.encode(errorString),
-       let jsonString = String(data: data, encoding: .utf8) {
-        return "{\"err\": \(jsonString)}"
-    }
-    return "{\"err\": \"unknown error\"}"
+/// Register an outbound `Renderer` plugin.
+/// Pass an instance conforming to `SwiftRendererBridge`.
+public func registerRenderer(_ bridge: any SwiftRendererBridge) throws {
+    let adapter = SwiftRendererAdapter(bridge: bridge)
+    // Call into Rust to register the adapter
+    try RustBridge.registerRenderer(adapter)
 }
