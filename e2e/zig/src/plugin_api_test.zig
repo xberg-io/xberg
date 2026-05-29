@@ -28,7 +28,7 @@ test "register_document_extractor_trait_bridge" {
     };
     var stub_register_document_extractor_trait_bridge = TestStub_register_document_extractor_trait_bridge{};
     const vtable_register_document_extractor_trait_bridge = kreuzberg.make_document_extractor_vtable(TestStub_register_document_extractor_trait_bridge, &stub_register_document_extractor_trait_bridge);
-    var out_err_register_document_extractor_trait_bridge: ?[*:0]u8 = null;
+    var out_err_register_document_extractor_trait_bridge: ?[*c]u8 = null;
     _ = kreuzberg.register_document_extractor("test", vtable_register_document_extractor_trait_bridge, &stub_register_document_extractor_trait_bridge, @ptrCast(&out_err_register_document_extractor_trait_bridge));
 }
 
@@ -41,7 +41,7 @@ test "register_embedding_backend_trait_bridge" {
     };
     var stub_register_embedding_backend_trait_bridge = TestStub_register_embedding_backend_trait_bridge{};
     const vtable_register_embedding_backend_trait_bridge = kreuzberg.make_embedding_backend_vtable(TestStub_register_embedding_backend_trait_bridge, &stub_register_embedding_backend_trait_bridge);
-    var out_err_register_embedding_backend_trait_bridge: ?[*:0]u8 = null;
+    var out_err_register_embedding_backend_trait_bridge: ?[*c]u8 = null;
     _ = kreuzberg.register_embedding_backend("test", vtable_register_embedding_backend_trait_bridge, &stub_register_embedding_backend_trait_bridge, @ptrCast(&out_err_register_embedding_backend_trait_bridge));
 }
 
@@ -55,7 +55,7 @@ test "register_ocr_backend_trait_bridge" {
     };
     var stub_register_ocr_backend_trait_bridge = TestStub_register_ocr_backend_trait_bridge{};
     const vtable_register_ocr_backend_trait_bridge = kreuzberg.make_ocr_backend_vtable(TestStub_register_ocr_backend_trait_bridge, &stub_register_ocr_backend_trait_bridge);
-    var out_err_register_ocr_backend_trait_bridge: ?[*:0]u8 = null;
+    var out_err_register_ocr_backend_trait_bridge: ?[*c]u8 = null;
     _ = kreuzberg.register_ocr_backend("test", vtable_register_ocr_backend_trait_bridge, &stub_register_ocr_backend_trait_bridge, @ptrCast(&out_err_register_ocr_backend_trait_bridge));
 }
 
@@ -68,7 +68,7 @@ test "register_post_processor_trait_bridge" {
     };
     var stub_register_post_processor_trait_bridge = TestStub_register_post_processor_trait_bridge{};
     const vtable_register_post_processor_trait_bridge = kreuzberg.make_post_processor_vtable(TestStub_register_post_processor_trait_bridge, &stub_register_post_processor_trait_bridge);
-    var out_err_register_post_processor_trait_bridge: ?[*:0]u8 = null;
+    var out_err_register_post_processor_trait_bridge: ?[*c]u8 = null;
     _ = kreuzberg.register_post_processor("test", vtable_register_post_processor_trait_bridge, &stub_register_post_processor_trait_bridge, @ptrCast(&out_err_register_post_processor_trait_bridge));
 }
 
@@ -80,7 +80,7 @@ test "register_renderer_trait_bridge" {
     };
     var stub_register_renderer_trait_bridge = TestStub_register_renderer_trait_bridge{};
     const vtable_register_renderer_trait_bridge = kreuzberg.make_renderer_vtable(TestStub_register_renderer_trait_bridge, &stub_register_renderer_trait_bridge);
-    var out_err_register_renderer_trait_bridge: ?[*:0]u8 = null;
+    var out_err_register_renderer_trait_bridge: ?[*c]u8 = null;
     _ = kreuzberg.register_renderer("test", vtable_register_renderer_trait_bridge, &stub_register_renderer_trait_bridge, @ptrCast(&out_err_register_renderer_trait_bridge));
 }
 
@@ -92,7 +92,7 @@ test "register_validator_trait_bridge" {
     };
     var stub_register_validator_trait_bridge = TestStub_register_validator_trait_bridge{};
     const vtable_register_validator_trait_bridge = kreuzberg.make_validator_vtable(TestStub_register_validator_trait_bridge, &stub_register_validator_trait_bridge);
-    var out_err_register_validator_trait_bridge: ?[*:0]u8 = null;
+    var out_err_register_validator_trait_bridge: ?[*c]u8 = null;
     _ = kreuzberg.register_validator("test", vtable_register_validator_trait_bridge, &stub_register_validator_trait_bridge, @ptrCast(&out_err_register_validator_trait_bridge));
 }
 

@@ -13,6 +13,18 @@ public func extractFileSync<GenericIntoRustString: IntoRustString>(_ path: Gener
 public func extractBytesSync<GenericIntoRustString: IntoRustString>(_ content: RustVec<UInt8>, _ mime_type: GenericIntoRustString, _ config: ExtractionConfig) throws -> ExtractionResult {
     try { let val = __swift_bridge__$extract_bytes_sync({ let val = content; val.isOwned = false; return val.ptr }(), { let rustString = mime_type.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), {config.isOwned = false; return config.ptr;}()); if val.is_ok { return ExtractionResult(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func batchExtractFilesSync(_ items: RustVec<BatchFileItem>, _ config: ExtractionConfig) throws -> RustVec<ExtractionResult> {
+    try { let val = __swift_bridge__$batch_extract_files_sync({ let val = items; val.isOwned = false; return val.ptr }(), {config.isOwned = false; return config.ptr;}()); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func batchExtractBytesSync(_ items: RustVec<BatchBytesItem>, _ config: ExtractionConfig) throws -> RustVec<ExtractionResult> {
+    try { let val = __swift_bridge__$batch_extract_bytes_sync({ let val = items; val.isOwned = false; return val.ptr }(), {config.isOwned = false; return config.ptr;}()); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func batchExtractFiles(_ items: RustVec<BatchFileItem>, _ config: ExtractionConfig) throws -> RustVec<ExtractionResult> {
+    try { let val = __swift_bridge__$batch_extract_files({ let val = items; val.isOwned = false; return val.ptr }(), {config.isOwned = false; return config.ptr;}()); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func batchExtractBytes(_ items: RustVec<BatchBytesItem>, _ config: ExtractionConfig) throws -> RustVec<ExtractionResult> {
+    try { let val = __swift_bridge__$batch_extract_bytes({ let val = items; val.isOwned = false; return val.ptr }(), {config.isOwned = false; return config.ptr;}()); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func detectMimeTypeFromBytes(_ content: RustVec<UInt8>) throws -> RustString {
     try { let val = __swift_bridge__$detect_mime_type_from_bytes({ let val = content; val.isOwned = false; return val.ptr }()); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -408,6 +420,12 @@ func __swift_bridge__SwiftRendererBox_alef_render (_ this: UnsafeMutableRawPoint
 public func extractionConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ExtractionConfig {
     try { let val = __swift_bridge__$extraction_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ExtractionConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
+public func batchBytesItemFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> BatchBytesItem {
+    try { let val = __swift_bridge__$batch_bytes_item_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return BatchBytesItem(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func batchFileItemFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> BatchFileItem {
+    try { let val = __swift_bridge__$batch_file_item_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return BatchFileItem(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
 public func ocrConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> OcrConfig {
     try { let val = __swift_bridge__$ocr_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return OcrConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -431,12 +449,6 @@ public func emailConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: G
 }
 public func fileExtractionConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> FileExtractionConfig {
     try { let val = __swift_bridge__$file_extraction_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return FileExtractionConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
-}
-public func batchBytesItemFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> BatchBytesItem {
-    try { let val = __swift_bridge__$batch_bytes_item_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return BatchBytesItem(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
-}
-public func batchFileItemFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> BatchFileItem {
-    try { let val = __swift_bridge__$batch_file_item_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return BatchFileItem(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
 public func imageExtractionConfigFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> ImageExtractionConfig {
     try { let val = __swift_bridge__$image_extraction_config_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return ImageExtractionConfig(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()

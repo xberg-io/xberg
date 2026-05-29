@@ -291,14 +291,20 @@ public sealed class OcrBackendBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -320,14 +326,20 @@ public sealed class OcrBackendBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -359,14 +371,20 @@ public sealed class OcrBackendBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -384,14 +402,20 @@ public sealed class OcrBackendBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -439,14 +463,20 @@ public sealed class OcrBackendBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -836,14 +866,20 @@ public sealed class PostProcessorBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -1662,14 +1698,20 @@ public sealed class EmbeddingBackendBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -2049,14 +2091,20 @@ public sealed class DocumentExtractorBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -2079,14 +2127,20 @@ public sealed class DocumentExtractorBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -2104,14 +2158,20 @@ public sealed class DocumentExtractorBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -2158,14 +2218,20 @@ public sealed class DocumentExtractorBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {
@@ -2508,14 +2574,20 @@ public sealed class RendererBridge : IDisposable {
             return 0;
         } catch (Exception ex) {
             outResult = IntPtr.Zero;
+            outError = IntPtr.Zero;
+            // Attempt to marshal exception message, but on ANY failure just leave outError null
             try {
-                outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(ex.Message ?? ex.GetType().Name);
-            } catch {
+                string _errMsg = null!;
                 try {
-                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8("Callback error (exception marshalling failed)");
+                    _errMsg = ex?.Message ?? ex?.GetType()?.Name ?? "Unknown exception";
                 } catch {
-                    outError = IntPtr.Zero;
+                    _errMsg = "Callback failed";
                 }
+                if (!string.IsNullOrEmpty(_errMsg)) {
+                    outError = global::System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(_errMsg);
+                }
+            } catch {
+                // Marshalling failed; outError stays null — Rust will see return code 1
             }
             return 1;
         } finally {

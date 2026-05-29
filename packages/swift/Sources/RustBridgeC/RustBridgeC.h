@@ -3158,6 +3158,10 @@ struct __private__ResultPtrAndPtr __swift_bridge__$extract_bytes(void* content, 
 struct __private__ResultPtrAndPtr __swift_bridge__$extract_file(void* path, void* mime_type, void* config);
 struct __private__ResultPtrAndPtr __swift_bridge__$extract_file_sync(void* path, void* mime_type, void* config);
 struct __private__ResultPtrAndPtr __swift_bridge__$extract_bytes_sync(void* content, void* mime_type, void* config);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_extract_files_sync(void* items, void* config);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_extract_bytes_sync(void* items, void* config);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_extract_files(void* items, void* config);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_extract_bytes(void* items, void* config);
 struct __private__ResultPtrAndPtr __swift_bridge__$detect_mime_type_from_bytes(void* content);
 struct __private__ResultPtrAndPtr __swift_bridge__$get_extensions_for_mime(void* mime_type);
 struct __private__ResultPtrAndPtr __swift_bridge__$list_embedding_backends(void);
@@ -3208,6 +3212,8 @@ void* __swift_bridge__$register_renderer(void* swift_box);
 void* __swift_bridge__$unregister_renderer(void* name);
 void* __swift_bridge__$clear_renderers(void);
 struct __private__ResultPtrAndPtr __swift_bridge__$extraction_config_from_json(void* json);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_bytes_item_from_json(void* json);
+struct __private__ResultPtrAndPtr __swift_bridge__$batch_file_item_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$ocr_config_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$embedding_config_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$extraction_result_from_json(void* json);
@@ -3216,8 +3222,6 @@ struct __private__ResultPtrAndPtr __swift_bridge__$acceleration_config_from_json
 struct __private__ResultPtrAndPtr __swift_bridge__$content_filter_config_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$email_config_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$file_extraction_config_from_json(void* json);
-struct __private__ResultPtrAndPtr __swift_bridge__$batch_bytes_item_from_json(void* json);
-struct __private__ResultPtrAndPtr __swift_bridge__$batch_file_item_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$image_extraction_config_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$token_reduction_options_from_json(void* json);
 struct __private__ResultPtrAndPtr __swift_bridge__$language_detection_config_from_json(void* json);

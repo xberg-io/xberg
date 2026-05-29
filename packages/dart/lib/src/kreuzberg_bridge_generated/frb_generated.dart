@@ -3,6 +3,9 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'dart:ffi';
+import 'dart:isolate';
+import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -18,6 +21,62 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
   RustLib._();
 
+  /// Resolve the prebuilt native library from this package's own installed
+  /// location so the load works from any working directory and under hardened
+  /// runtimes. Returns `null` to defer to flutter_rust_bridge's default loader.
+  ///
+  /// Published pub.dev packages stage natives under `lib/src/native/<rid>/`
+  /// (e.g. `macos-arm64`, `linux-x64`). For local FRB-dev builds the dylib is
+  /// emitted into `lib/src/kreuzberg_bridge_generated/`; that
+  /// path is searched as a fallback.
+  static Future<ExternalLibrary?> _alefResolveExternalLibrary() async {
+    try {
+      final packageRoot = await Isolate.resolvePackageUri(
+        Uri.parse('package:kreuzberg/kreuzberg.dart'),
+      );
+      if (packageRoot == null) return null;
+      final libNames = _alefHostLibNames();
+      final searchDirs = <Uri>[
+        if (_alefHostRid() != null)
+          packageRoot.resolve('src/native/${_alefHostRid()}/'),
+        packageRoot.resolve('src/kreuzberg_bridge_generated/'),
+      ];
+      for (final dir in searchDirs) {
+        for (final name in libNames) {
+          final libPath = dir.resolve(name).toFilePath();
+          if (File(libPath).existsSync()) {
+            return ExternalLibrary.open(libPath);
+          }
+        }
+      }
+    } catch (_) {
+      // Fall through to the default loader on any resolution failure.
+    }
+    return null;
+  }
+
+  /// Map the host platform to the pub.dev native staging RID. Returns `null`
+  /// for unrecognized host triples so the FRB-dev fallback path runs instead.
+  static String? _alefHostRid() {
+    final abi = Abi.current();
+    if (abi == Abi.macosArm64) return 'macos-arm64';
+    if (abi == Abi.macosX64) return 'macos-x64';
+    if (abi == Abi.linuxArm64) return 'linux-arm64';
+    if (abi == Abi.linuxX64) return 'linux-x64';
+    if (abi == Abi.windowsArm64) return 'windows-arm64';
+    if (abi == Abi.windowsX64) return 'windows-x64';
+    return null;
+  }
+
+  static List<String> _alefHostLibNames() {
+    // The Dart-binding Rust crate is `{stem}-dart` (per the cargo manifest
+    // template), which produces a cdylib named `lib{stem}_dart.{ext}` on Unix
+    // and `{stem}_dart.dll` on Windows.
+    if (Platform.isMacOS) return const ['libkreuzberg_dart.dylib'];
+    if (Platform.isWindows) return const ['kreuzberg_dart.dll'];
+    return const ['libkreuzberg_dart.so'];
+  }
+
   /// Initialize flutter_rust_bridge
   static Future<void> init({
     RustLibApi? api,
@@ -25,6 +84,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
     ExternalLibrary? externalLibrary,
     bool forceSameCodegenVersion = true,
   }) async {
+    externalLibrary ??= await _alefResolveExternalLibrary();
     await instance.initImpl(
       api: api,
       handler: handler,

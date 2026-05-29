@@ -1793,7 +1793,8 @@ typedef struct KREUZBERGKreuzbergPostProcessorVTable {
    * ```
    */
   int32_t (*processing_stage)(const void *user_data,
-                              char **out_result);
+                              char **out_result,
+                              char **out_error);
   /**
    * Optional: Check if this processor should run for a given result.
    *

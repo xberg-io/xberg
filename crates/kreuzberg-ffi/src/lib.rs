@@ -29859,7 +29859,7 @@ pub struct KreuzbergPostProcessorVTable {
     /// }
     /// ```
     pub processing_stage:
-        Option<unsafe extern "C" fn(user_data: *const std::ffi::c_void, out_result: *mut *mut std::ffi::c_char) -> i32>,
+        Option<unsafe extern "C" fn(user_data: *const std::ffi::c_void, out_result: *mut *mut std::ffi::c_char, out_error: *mut *mut std::ffi::c_char) -> i32>,
     /// Optional: Check if this processor should run for a given result.
     ///
     /// Allows conditional processing based on MIME type, metadata, or content.
@@ -30102,9 +30102,14 @@ impl kreuzberg::PostProcessor for KreuzbergPostProcessorBridge {
             return Default::default();
         };
         let mut _out_result: *mut std::ffi::c_char = std::ptr::null_mut();
+        let mut _out_error: *mut std::ffi::c_char = std::ptr::null_mut();
         // SAFETY: fp is a valid non-null function pointer; all temporaries outlive this call;
         // user_data validity is the caller's responsibility (documented in the vtable API).
-        let _rc = unsafe { fp(self.user_data, &mut _out_result) };
+        let _rc = unsafe { fp(self.user_data, &mut _out_result, &mut _out_error) };
+        // Free error if present
+        if !_out_error.is_null() {
+            unsafe { ffi_free_string(_out_error) };
+        }
         if _out_result.is_null() {
             return Default::default();
         }

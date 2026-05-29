@@ -4738,12 +4738,8 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const value = self.backend_type();
-                if (value != null and out_result != null) {
-                    const zig_str = value.?;
-                    var len: usize = 0;
-                    while (zig_str[len] != 0) : (len += 1) {}
-                    const c_str = c.kreuzberg_string_new(@ptrCast(zig_str), len);
-                    out_result.*.* = c_str;
+                if (out_result) |ptr| {
+                    ptr.* = @constCast(value);
                 }
                 return 0;
             }
@@ -4753,12 +4749,8 @@ pub fn make_ocr_backend_vtable(comptime T: type, instance: *T) IOcrBackend {
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const value = self.supported_languages();
-                if (value != null and out_result != null) {
-                    const zig_str = value.?;
-                    var len: usize = 0;
-                    while (zig_str[len] != 0) : (len += 1) {}
-                    const c_str = c.kreuzberg_string_new(@ptrCast(zig_str), len);
-                    out_result.*.* = c_str;
+                if (out_result) |ptr| {
+                    ptr.* = @constCast(value);
                 }
                 return 0;
             }
@@ -5030,12 +5022,8 @@ pub fn make_post_processor_vtable(comptime T: type, instance: *T) IPostProcessor
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const value = self.processing_stage();
-                if (value != null and out_result != null) {
-                    const zig_str = value.?;
-                    var len: usize = 0;
-                    while (zig_str[len] != 0) : (len += 1) {}
-                    const c_str = c.kreuzberg_string_new(@ptrCast(zig_str), len);
-                    out_result.*.* = c_str;
+                if (out_result) |ptr| {
+                    ptr.* = @constCast(value);
                 }
                 return 0;
             }
@@ -5682,12 +5670,8 @@ pub fn make_document_extractor_vtable(comptime T: type, instance: *T) IDocumentE
             fn thunk(ud: ?*anyopaque, out_result: ?*?[*c]u8) callconv(.c) i32 {
                 const self: *T = @ptrCast(@alignCast(ud));
                 const value = self.supported_mime_types();
-                if (value != null and out_result != null) {
-                    const zig_str = value.?;
-                    var len: usize = 0;
-                    while (zig_str[len] != 0) : (len += 1) {}
-                    const c_str = c.kreuzberg_string_new(@ptrCast(zig_str), len);
-                    out_result.*.* = c_str;
+                if (out_result) |ptr| {
+                    ptr.* = @constCast(value);
                 }
                 return 0;
             }

@@ -316,7 +316,7 @@ OCR configuration.
 | `tesseract_config` | `TesseractConfig \| None` | `None` | Tesseract-specific configuration (optional) |
 | `output_format` | `OutputFormat \| None` | `None` | Output format for OCR results (optional, for format conversion) |
 | `paddle_ocr_config` | `dict[str, Any] \| None` | `None` | PaddleOCR-specific configuration (optional, JSON passthrough) |
-| `backend_options` | `dict[str, Any] \| None` | `None` | Arbitrary per-call options passed through to the backend unchanged. Custom OCR backends and built-in backends that support runtime tuning can read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored. This is the recommended extension point for per-call parameters that are not covered by the typed fields above (e.g. mode switching, preprocessing flags, inference batch size). **Scope:** when `pipeline` is `None`, this value is propagated to the primary stage of the auto-constructed pipeline. When `pipeline` is explicitly set, this field has **no effect** — the caller must set `OcrPipelineStage.backend_options` directly on the relevant stage(s) instead. Example: ```json { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 }``` |
+| `backend_options` | `dict[str, Any] \| None` | `None` | Arbitrary per-call options passed through to the backend unchanged. Custom OCR backends and built-in backends that support runtime tuning can read this value and deserialize the keys they care about. Keys unknown to the backend are silently ignored. This is the recommended extension point for per-call parameters that are not covered by the typed fields above (e.g. mode switching, preprocessing flags, inference batch size). **Scope:** when `pipeline` is `None`, this value is propagated to the primary stage of the auto-constructed pipeline. When `pipeline` is explicitly set, this field has **no effect** — the caller must set `OcrPipelineStage.backend_options` directly on the relevant stage(s) instead. Example: ```json { "mode": "fast", "enable_layout": true, "timeout_ms": 5000 } ``` |
 | `element_config` | `OcrElementConfig \| None` | `None` | OCR element extraction configuration |
 | `quality_thresholds` | `OcrQualityThresholds \| None` | `None` | Quality thresholds for the native-text-to-OCR fallback decision. When None, uses compiled defaults (matching previous hardcoded behavior). |
 | `pipeline` | `OcrPipelineConfig \| None` | `None` | Multi-backend OCR pipeline configuration. When set, enables weighted fallback across multiple OCR backends based on output quality. When None, uses the single `backend` field (same as today). |
@@ -342,7 +342,7 @@ when page boundaries are available and chunking is configured.
 |-------|------|---------|-------------|
 | `extract_pages` | `bool` | `False` | Extract pages as separate array (ExtractionResult.pages) |
 | `insert_page_markers` | `bool` | `False` | Insert page markers in main content string |
-| `marker_format` | `str` | `" |  |
+| `marker_format` | `str` | `"
 
 <!-- PAGE {page_num} -->
 
@@ -1330,12 +1330,12 @@ available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 
 Type of text chunker to use.
 
-## Variants
+# Variants
 
-- `Text` - Generic text splitter, splits on whitespace and punctuation
-- `Markdown` - Markdown-aware splitter, preserves formatting and structure
-- `Yaml` - YAML-aware splitter, creates one chunk per top-level key
-- `Semantic` - Topic-aware chunker. With an `EmbeddingConfig`, splits at
+* `Text` - Generic text splitter, splits on whitespace and punctuation
+* `Markdown` - Markdown-aware splitter, preserves formatting and structure
+* `Yaml` - YAML-aware splitter, creates one chunk per top-level key
+* `Semantic` - Topic-aware chunker. With an `EmbeddingConfig`, splits at
   embedding-based topic shifts tuned by `topic_threshold` (default 0.75,
   lower = more splits). Without an embedding, falls back to a
   structural-boundary heuristic (ALL-CAPS headers, numbered sections,
@@ -1352,7 +1352,7 @@ Type of text chunker to use.
 
 ---
 
-### CodeContentMode
+#### CodeContentMode
 
 Content rendering mode for code extraction.
 
@@ -1380,7 +1380,7 @@ Embedding model types supported by Kreuzberg.
 
 ---
 
-##### ExecutionProviderType
+#### ExecutionProviderType
 
 ONNX Runtime execution provider type.
 
@@ -1397,7 +1397,7 @@ Determines which hardware backend is used for model inference.
 
 ---
 
-##### ExtractionMethod
+#### ExtractionMethod
 
 How the extracted text was produced.
 
@@ -1409,7 +1409,7 @@ How the extracted text was produced.
 
 ---
 
-##### FormatMetadata
+#### FormatMetadata
 
 Format-specific metadata (discriminated union).
 
@@ -1441,7 +1441,7 @@ type-safe, clean metadata without nested optionals.
 
 ---
 
-##### HtmlTheme
+#### HtmlTheme
 
 Built-in HTML theme selection.
 
@@ -1455,7 +1455,7 @@ Built-in HTML theme selection.
 
 ---
 
-##### KeywordAlgorithm
+#### KeywordAlgorithm
 
 Keyword algorithm selection.
 
@@ -1466,7 +1466,7 @@ Keyword algorithm selection.
 
 ---
 
-##### OcrBoundingGeometry
+#### OcrBoundingGeometry
 
 Bounding geometry for an OCR element.
 
@@ -1480,7 +1480,7 @@ Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilateral
 
 ---
 
-##### OcrElementLevel
+#### OcrElementLevel
 
 Hierarchical level of an OCR element.
 
@@ -1496,7 +1496,7 @@ equivalent semantics for PaddleOCR.
 
 ---
 
-##### OutputFormat
+#### OutputFormat
 
 Output format for extraction results.
 
@@ -1518,7 +1518,7 @@ boxes and confidence scores.
 
 ---
 
-##### ReductionLevel
+#### ReductionLevel
 
 | Variant | Description |
 |---------|-------------|
@@ -1530,7 +1530,7 @@ boxes and confidence scores.
 
 ---
 
-##### ResultFormat
+#### ResultFormat
 
 Result-shape selection for extraction results.
 
@@ -1545,7 +1545,7 @@ blob vs. an element-based decomposition.
 
 ---
 
-##### TableModel
+#### TableModel
 
 Which table structure recognition model to use.
 
@@ -1564,7 +1564,7 @@ YAML).
 
 ---
 
-##### TextDirection
+#### TextDirection
 
 Text direction enumeration for HTML documents.
 
