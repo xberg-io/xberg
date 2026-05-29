@@ -105,6 +105,14 @@ nav = [
     { "Changelog" = "CHANGELOG.md" },
     { "Contributing" = "contributing.md" },
   ] },
+
+  { "Ecosystem" = [
+    { "Kreuzberg Cloud" = "https://docs.kreuzberg.cloud/" },
+    { "html-to-markdown" = "https://docs.html-to-markdown.kreuzberg.dev/" },
+    { "liter-llm" = "https://docs.liter-llm.kreuzberg.dev/" },
+    { "tree-sitter-language-pack" = "https://docs.tree-sitter-language-pack.kreuzberg.dev/" },
+    { "Kreuzcrawl" = "https://docs.kreuzcrawl.kreuzberg.dev/" },
+  ] },
 ]
 
 [project.theme]
