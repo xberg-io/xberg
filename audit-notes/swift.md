@@ -105,7 +105,7 @@ public func extractBytes(_ content: String, _ mimeType: String, _ configJson: St
 - `packages/swift/Sources/Kreuzberg/BridgeRegistrationOverloads.swift`: lines 76–98 (register overloads)
 - `packages/swift/Sources/Kreuzberg/BridgeRegistrationOverloads.swift`: lines 112–216 (adapter implementations)
 
-**Description**: The alef e2e fixtures call `Kreuzberg.registerOcrBackend(stub)` where `stub` conforms to the lightweight `SwiftOcrBackendBridge` protocol (which only exposes a subset of methods like `supportsLanguage()` and `backendType()`). However, the underlying registration functions expect the full `OcrBackend` protocol (with methods like `processImage`, `initialize`, `shutdown`, etc.). 
+**Description**: The alef e2e fixtures call `Kreuzberg.registerOcrBackend(stub)` where `stub` conforms to the lightweight `SwiftOcrBackendBridge` protocol (which only exposes a subset of methods like `supportsLanguage()` and `backendType()`). However, the underlying registration functions expect the full `OcrBackend` protocol (with methods like `processImage`, `initialize`, `shutdown`, etc.).
 
 The hand-written adapters (`_OcrBackendBridgeAdapter`, `_PostProcessorBridgeAdapter`, etc.) wrap the bridge stub and implement the full protocol with sensible defaults: async methods throw with a descriptive error, capability queries return safe defaults (false, empty arrays, no-op initializers).
 
@@ -205,8 +205,8 @@ Example fixture template fix:
 ```swift
 class TestStubRegisterOcrBackendTraitBridge: SwiftOcrBackendBridge {
     var name: String { "register_ocr_backend_trait_bridge" }
-    func processImage(image_bytes: Data, config: OcrConfig) async throws -> ExtractionResult { 
-        try RustBridge.extractionResultFromJson("{}") 
+    func processImage(image_bytes: Data, config: OcrConfig) async throws -> ExtractionResult {
+        try RustBridge.extractionResultFromJson("{}")
     }
     func supportsLanguage(lang: String) -> Bool { false }
     func backendType() -> OcrBackendType { .tesseract }

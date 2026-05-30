@@ -13999,11 +13999,8 @@ mod __alef_wasm_bridge_ocrbackend {
             };
 
             // Convert result
-            // Convert JS result to bool
-            result
-                .as_string()
-                .and_then(|s| serde_json::from_str::<bool>(&s).ok())
-                .unwrap_or_default()
+            // JS returns a native bool, not a JSON string
+            result.as_bool().unwrap_or_default()
         }
 
         fn backend_type(&self) -> kreuzberg::OcrBackendType {
@@ -14033,11 +14030,8 @@ mod __alef_wasm_bridge_ocrbackend {
             };
 
             // Convert result
-            // Convert JS result to kreuzberg::OcrBackendType
-            result
-                .as_string()
-                .and_then(|s| serde_json::from_str::<kreuzberg::OcrBackendType>(&s).ok())
-                .unwrap_or_default()
+            // JS returns an OcrBackendType object; deserialize via serde_wasm_bindgen
+            serde_wasm_bindgen::from_value(result).unwrap_or_default()
         }
     }
 
@@ -14284,11 +14278,8 @@ mod __alef_wasm_bridge_postprocessor {
             };
 
             // Convert result
-            // Convert JS result to kreuzberg::ProcessingStage
-            result
-                .as_string()
-                .and_then(|s| serde_json::from_str::<kreuzberg::ProcessingStage>(&s).ok())
-                .unwrap_or_default()
+            // JS returns a ProcessingStage object; deserialize via serde_wasm_bindgen
+            serde_wasm_bindgen::from_value(result).unwrap_or_default()
         }
     }
 
@@ -14710,10 +14701,7 @@ mod __alef_wasm_bridge_embeddingbackend {
 
             // Convert result
             // JS dimensions() returns a number, not a JSON string.
-            result
-                .as_f64()
-                .map(|n| n as usize)
-                .unwrap_or_default()
+            result.as_f64().map(|n| n as usize).unwrap_or_default()
         }
 
         async fn embed(&self, texts: Vec<String>) -> std::result::Result<Vec<Vec<f32>>, kreuzberg::KreuzbergError> {

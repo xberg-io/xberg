@@ -5,7 +5,7 @@ This document catalogues hand-edits made to the Dart binding and e2e tests durin
 ## ALEF_GAP — Missing template surfaces
 
 ### 1. Trait-bridge type stubs in traits.dart
-**Location:** `packages/dart/lib/src/traits.dart` lines 679-689  
+**Location:** `packages/dart/lib/src/traits.dart` lines 679-689
 **Changes:** Hand-added four type stubs required by e2e test fixtures:
 - `OcrBackendType` enum (line 680) — tesseract, easyocr, paddleocr, rapidocr variants
 - `ProcessingStage` enum (line 683) — preProcessing, processing, postProcessing variants
@@ -19,7 +19,7 @@ This document catalogues hand-edits made to the Dart binding and e2e tests durin
 ---
 
 ### 2. EmbeddingConfig default values in wrapper methods
-**Location:** `packages/dart/lib/src/kreuzberg.dart` lines 486-491, 529-534  
+**Location:** `packages/dart/lib/src/kreuzberg.dart` lines 486-491, 529-534
 **Changes:** Added inline EmbeddingConfig constructor with defaults:
 ```dart
 config: config ?? EmbeddingConfig(
@@ -32,7 +32,7 @@ config: config ?? EmbeddingConfig(
 
 **Rationale:** EmbeddingConfig struct fields have defaults in the Rust source, but the Dart FFI-generated constructor required them as positional/named parameters. The wrapper provides sensible fallbacks matching the Rust `EmbeddingConfig::default()` implementation.
 
-**Suggested upstream fix:** 
+**Suggested upstream fix:**
 1. Alef should annotate `#[serde(default)]` fields in Rust structs and pass those annotations to the Dart codegen.
 2. The `FrbDartOptionalFieldsWithDefaults` post-processor (currently invoked after FRB generation) should be enhanced to populate default values in wrapper methods, not just make fields optional in constructors.
 3. Alternatively, store embedding defaults in a separate `EmbeddingConfigDefaults` factory function that alef generates alongside the config struct.
@@ -40,7 +40,7 @@ config: config ?? EmbeddingConfig(
 ---
 
 ### 3. Async wrapper init functions for plugin trait bridge stubs
-**Location:** `e2e/dart/test/plugin_api_test.dart` lines 64-75, 86-93, 110-123, 137-147, 157-163, 175-183  
+**Location:** `e2e/dart/test/plugin_api_test.dart` lines 64-75, 86-93, 110-123, 137-147, 157-163, 175-183
 **Changes:** Converted trait bridge stub initialization from synchronous final values to async init functions:
 ```dart
 late final DocumentExtractorDartImpl _TestStubRegisterDocumentExtractorTraitBridge_wrapped;
@@ -69,7 +69,7 @@ No binding code bugs were found. All hand-edits are necessary adaptations to ale
 ## TEST_FIXTURE — e2e generator issues
 
 ### 1. Plugin API e2e test stub class signatures mismatch
-**Location:** `e2e/dart/test/plugin_api_test.dart` class stubs (lines 52-60, 78-82, 96-106, 126-133, 150-153, 166-171)  
+**Location:** `e2e/dart/test/plugin_api_test.dart` class stubs (lines 52-60, 78-82, 96-106, 126-133, 150-153, 166-171)
 **Issue:** The generated abstract trait classes expect async methods, but test stub implementations were declared sync. For example:
 - `DocumentExtractor.extractBytes()` signature expects `Future<InternalDocument>`
 - Test stub implementation was `Future<InternalDocument> extractBytes(...) async => InternalDocument()`
@@ -83,8 +83,8 @@ This creates a signature mismatch: the trait bridge requires methods that return
 ## ROOT_CAUSE — Kreuzberg core or FRB codegen issues
 
 ### 1. Reserved-keyword collision: Uri → ExtractedUri
-**Commit:** `5393349c7a` (fix(rust)!: rename Uri to ExtractedUri to avoid dart:core collision)  
-**Location:** Affects all bindings; Dart codegen regression  
+**Commit:** `5393349c7a` (fix(rust)!: rename Uri to ExtractedUri to avoid dart:core collision)
+**Location:** Affects all bindings; Dart codegen regression
 **Issue:** The Rust struct `Uri` collides with `dart:core.Uri` in flutter_rust_bridge-generated Dart bindings. The FRB codegen at `frb_generated.dart` line 41-46 declares:
 ```dart
 packageRoot.resolve(...) returns dart:core.Uri
@@ -98,7 +98,7 @@ but was typed as the local Rust-derived `Uri` struct, producing 3 type-mismatch 
 ---
 
 ### 2. FRB codegen pipeline integration with alef post-processors
-**Location:** `Taskfile.yml` dart:setup task, commit `177d8f3ee0`  
+**Location:** `Taskfile.yml` dart:setup task, commit `177d8f3ee0`
 **Issue:** The dart:setup task was calling both `task dart:codegen` (direct FRB invocation) and `alef build` (which also invokes FRB). The second invocation regenerated files and overwrote post-processor changes.
 
 **Fix applied:** Remove the duplicate `dart:codegen` call; only `alef build` is responsible for FRB generation and post-processing in the correct order. This ensures:
@@ -111,7 +111,7 @@ but was typed as the local Rust-derived `Uri` struct, producing 3 type-mismatch 
 ---
 
 ### 3. FRB post-processor for optional fields with defaults
-**Location:** `packages/dart/rust/src/frb_generated.rs` build script hook  
+**Location:** `packages/dart/rust/src/frb_generated.rs` build script hook
 **Issue:** The `FrbDartOptionalFieldsWithDefaults` post-processor transforms Rust struct fields marked with `#[serde(default)]` into optional Dart constructor parameters. Without it:
 - `EmbeddingConfig(model: ..., normalize: ..., ...)` required all fields
 - Tests failed on `EmbeddingConfig()` constructor calls without fields

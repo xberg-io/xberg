@@ -2,6 +2,8 @@
 // Delegates to FFI (kreuzberg-ffi) for all operations.
 #![allow(non_snake_case, unsafe_code, unsafe_attr_outside_unsafe)]
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jbyteArray, jint, jlong, jstring};
@@ -33,36 +35,9 @@ use kreuzberg_ffi::{
 // Helper Functions
 // ============================================================================
 
-/// Decode Base64 string to bytes (simple implementation for JNI use)
+/// Decode Base64 string to bytes using the standard base64 engine
 fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
-    // Simple Base64 decoding: map characters to 6-bit values
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = Vec::new();
-    let mut buffer = 0u32;
-    let mut bits = 0;
-
-    for ch in input.chars() {
-        if ch == '=' {
-            break;
-        }
-        if ch.is_whitespace() {
-            continue;
-        }
-        let pos = ALPHABET
-            .iter()
-            .position(|&c| c == ch as u8)
-            .ok_or_else(|| format!("Invalid Base64 character: {}", ch))?;
-
-        buffer = (buffer << 6) | (pos as u32);
-        bits += 6;
-
-        if bits >= 8 {
-            bits -= 8;
-            result.push((buffer >> bits) as u8);
-            buffer &= (1 << bits) - 1;
-        }
-    }
-    Ok(result)
+    STANDARD.decode(input).map_err(|e| format!("Invalid Base64: {}", e))
 }
 
 /// Helper to throw a KreuzbergBridgeException and return null/0

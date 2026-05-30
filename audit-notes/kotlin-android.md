@@ -1,7 +1,7 @@
 # Kotlin-Android Hand-Edits Audit
 
-**Status**: 82/82 e2e tests green  
-**Audit Scope**: Commits bd1bef129d..519abc3001 (5 commits)  
+**Status**: 82/82 e2e tests green
+**Audit Scope**: Commits bd1bef129d..519abc3001 (5 commits)
 **Summary**: All hand-edits are categorized below for upstream alef-template consolidation.
 
 ---
@@ -18,8 +18,8 @@ These edits represent gaps in the alef kotlin-android binding generator. Alef ge
 
 ### Kreuzberg-JNI Shim Crate (Entire File)
 
-**File**: `crates/kreuzberg-jni/src/lib.rs` (1194 lines)  
-**Category**: ALEF_GAP  
+**File**: `crates/kreuzberg-jni/src/lib.rs` (1194 lines)
+**Category**: ALEF_GAP
 **Scope**: Hand-written entirely — alef does not generate JNI shims
 
 **Summary**: The JNI shim is a complete, separate crate that:
@@ -63,8 +63,8 @@ Alef should emit:
 
 ### Jackson Mapper Configuration (Kreuzberg.kt lines 38–100)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`  
-**Category**: ALEF_GAP  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`
+**Category**: ALEF_GAP
 **Lines**: 38–100
 
 **Summary**: Four Jackson configuration changes:
@@ -104,8 +104,8 @@ private val mapper = jacksonObjectMapper()
 
 ### loadBytesFromPathOrUtf8() Helper (Kreuzberg.kt lines 167–210)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`  
-**Category**: ALEF_GAP  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`
+**Category**: ALEF_GAP
 **Lines**: 167–210
 
 **Summary**: Path resolution for e2e test fixtures. The alef e2e generator emits JSON fixture paths (e.g., `"documents/sample.pdf"`) into function parameters, but production callers may pass inline string content. This helper:
@@ -138,8 +138,8 @@ Alef should recognize that `content: &[u8]` in Rust becomes `content: String` in
 
 ### fixConfigSerialization() + fixOutputFormatInNode() Helpers (Kreuzberg.kt lines 102–165)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`  
-**Category**: ALEF_GAP (status: partially superseded)  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`
+**Category**: ALEF_GAP (status: partially superseded)
 **Lines**: 102–165
 
 **Summary**: Two functions that repair serialization issues at call time:
@@ -169,8 +169,8 @@ Consider removing `fixConfigSerialization()` after validating that the OutputFor
 
 ### OutputFormat Custom Serializer (OutputFormat.kt)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/OutputFormat.kt`  
-**Category**: ALEF_GAP  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/OutputFormat.kt`
+**Category**: ALEF_GAP
 **Lines**: 34–35 (decorators), 56–101 (custom serializers)
 
 **Summary**: Custom Jackson serializers for the sealed class `OutputFormat`:
@@ -219,8 +219,8 @@ private class SealedTypeSerializer : StdSerializer<SealedType>(...) {
 
 ### FormatMetadata Custom Serializer (FormatMetadata.kt)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/FormatMetadata.kt`  
-**Category**: ALEF_GAP  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/FormatMetadata.kt`
+**Category**: ALEF_GAP
 **Lines**: 31–32 (decorators), 56–230 (custom serializers)
 
 **Summary**: Custom Jackson (de)serializers for `FormatMetadata`, a discriminated union. Key detail:
@@ -233,8 +233,8 @@ private class SealedTypeSerializer : StdSerializer<SealedType>(...) {
 
 ### DocumentNode.contentLayer Nullable (DocumentNode.kt)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/DocumentNode.kt`  
-**Category**: ALEF_GAP  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/DocumentNode.kt`
+**Category**: ALEF_GAP
 **Line**: 42 (changed from `val contentLayer: ContentLayer` to `val contentLayer: ContentLayer? = null`)
 
 **Summary**: Marks `contentLayer` optional with a default of `null`. This is a hand-edit to make the Kotlin field nullable to match Rust's `Option<ContentLayer>` default, which Rust serializes by omitting the field entirely. Without the nullable + default, alef-generated Kotlin would make the field required, and deserialization would fail when Rust omits it.
@@ -245,8 +245,8 @@ private class SealedTypeSerializer : StdSerializer<SealedType>(...) {
 
 ### ChunkingConfig.sizing Nullable (ChunkingConfig.kt)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/ChunkingConfig.kt`  
-**Category**: ALEF_GAP  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/ChunkingConfig.kt`
+**Category**: ALEF_GAP
 **Line**: 74 (changed from `val sizing: ChunkSizing` to `val sizing: ChunkSizing? = null`)
 
 **Summary**: Same as `contentLayer`; marks Rust `Option<ChunkSizing>` as nullable in Kotlin.
@@ -257,8 +257,8 @@ private class SealedTypeSerializer : StdSerializer<SealedType>(...) {
 
 ### renderPdfPageToPng() Path Resolution (Kreuzberg.kt)
 
-**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`  
-**Category**: ALEF_GAP  
+**File**: `packages/kotlin-android/src/main/kotlin/dev/kreuzberg/Kreuzberg.kt`
+**Category**: ALEF_GAP
 **Lines**: 783–792 (changed from one-liner to multi-statement with path resolution)
 
 **Summary**: Uses `loadBytesFromPathOrUtf8()` to resolve fixture paths for PDF bytes, matching behavior of `extractBytes()` and `extractBytesSync()`. The alef e2e generator emits fixture paths; production code may pass inline bytes.
@@ -271,9 +271,9 @@ private class SealedTypeSerializer : StdSerializer<SealedType>(...) {
 
 ### kreuzberg-ffi Crate-Type: Add rlib (Cargo.toml)
 
-**File**: `crates/kreuzberg-ffi/Cargo.toml`  
-**Category**: ROOT_CAUSE  
-**Change**: `crate-type = ["cdylib", "staticlib"]` → `crate-type = ["cdylib", "staticlib", "rlib"]`  
+**File**: `crates/kreuzberg-ffi/Cargo.toml`
+**Category**: ROOT_CAUSE
+**Change**: `crate-type = ["cdylib", "staticlib"]` → `crate-type = ["cdylib", "staticlib", "rlib"]`
 **Commit**: `66ca4f40eb fix(kotlin-android): force-link kreuzberg-ffi symbols into JNI cdylib`
 
 **Rationale**: The JNI shim (`kreuzberg-jni`) is a `cdylib` that imports kreuzberg-ffi functions by name. Without `"rlib"` in kreuzberg-ffi's crate-type, the linker drops `#[no_mangle]` symbols as dead code, and JNI calls resolve to null at runtime.
@@ -305,8 +305,8 @@ Before upstreaming to alef, consolidate the following hand-written code:
 
 ### 1. Replace Hand-Rolled base64_decode() with `base64` Crate
 
-**Location**: `crates/kreuzberg-jni/src/lib.rs` lines 37–66  
-**Current**: Manual Base64 alphabet mapping  
+**Location**: `crates/kreuzberg-jni/src/lib.rs` lines 37–66
+**Current**: Manual Base64 alphabet mapping
 **Suggested**: Add `base64` crate and use `base64::engine::general_purpose::STANDARD.decode()`
 
 ### 2. Evaluate Partial Deprecation of fixConfigSerialization()
@@ -337,8 +337,8 @@ Rust Vec<u8>  ──→  JVM byte[] (via JNI)  ──→  Kotlin ByteArray
                     Rust byte slice
 ```
 
-**In Kotlin**: `Base64.getEncoder().encodeToString(bytes)`  
-**In JNI**: `base64_decode(&content_str)` → `Vec<u8>`  
+**In Kotlin**: `Base64.getEncoder().encodeToString(bytes)`
+**In JNI**: `base64_decode(&content_str)` → `Vec<u8>`
 **Convention**: All binary payloads Base64-encoded for JNI safety
 
 ### 2. Configuration Marshalling
@@ -355,7 +355,7 @@ Kotlin ExtractionConfig  ──→  mapper.writeValueAsString()
   *mut ExtractionConfig (opaque)
 ```
 
-**In Kotlin**: `mapper.writeValueAsString(config)`  
+**In Kotlin**: `mapper.writeValueAsString(config)`
 **In JNI**: Accept `*const c_char` (JSON), parse via `serde_json`
 
 ### 3. MIME Type Handling

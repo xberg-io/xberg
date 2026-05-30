@@ -104,6 +104,16 @@ public func registerRenderer(_ bridge: SwiftRendererBridge) throws {
 // exposes. The remaining methods use safe defaults: register/initialize/
 // shutdown are no-ops, processing entrypoints throw, capability queries
 // report false/empty.
+//
+// Adapter stub names (returned by name() method):
+// - _OcrBackendBridgeAdapter → "swift-bridge-ocr-stub"
+// - _PostProcessorBridgeAdapter → "swift-bridge-post-processor-stub"
+// - _ValidatorBridgeAdapter → "swift-bridge-validator-stub"
+// - _EmbeddingBackendBridgeAdapter → "swift-bridge-embedding-stub"
+// - _DocumentExtractorBridgeAdapter → "swift-bridge-document-extractor-stub"
+// - _RendererBridgeAdapter → "swift-bridge-renderer-stub"
+//
+// These names are used by e2e test cleanup to unregister stubs after each test.
 
 private struct _BridgeStubError: Error, CustomStringConvertible {
     let description: String

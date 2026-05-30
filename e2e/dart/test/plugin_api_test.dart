@@ -51,8 +51,8 @@ String _camelToSnake(String camel) {
 
 class TestStubRegisterDocumentExtractorTraitBridge extends DocumentExtractor {
   String get name => 'register_document_extractor_trait_bridge';
-  Future<ExtractionResult> extractBytes(Uint8List content, String mimeType, ExtractionConfig config) async => InternalDocument();
-  Future<ExtractionResult> extractFile(String path, String mimeType, ExtractionConfig config) async => InternalDocument();
+  Future<InternalDocument> extractBytes(Uint8List content, String mimeType, ExtractionConfig config) async => InternalDocument();
+  Future<InternalDocument> extractFile(String path, String mimeType, ExtractionConfig config) async => InternalDocument();
   List<String> supportedMimeTypes() => [];
   int priority() => 0;
   bool canHandle(String path, String mimeType) => false;

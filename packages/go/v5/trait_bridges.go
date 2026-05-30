@@ -1613,10 +1613,12 @@ func RegisterDocumentExtractor(impl DocumentExtractor) error {
 			msg = C.GoString(cErr)
 			C.free(unsafe.Pointer(cErr))
 		}
-		handle.Delete()
+		documentExtractorRegistry.deleteAllOnError(handle)
 		return fmt.Errorf("%s", msg)
 	}
 
+	// Store handle by name for later cleanup on unregister
+	documentExtractorRegistry.store(impl.Name(), handle)
 	return nil
 }
 
@@ -1636,6 +1638,8 @@ func UnregisterDocumentExtractor(name string) error {
 		return fmt.Errorf("%s", msg)
 	}
 
+	// Delete the handle now that Rust has unregistered the plugin
+	documentExtractorRegistry.delete(name)
 	return nil
 }
 
@@ -1653,6 +1657,8 @@ func ClearDocumentExtractors() error {
 		return fmt.Errorf("%s", msg)
 	}
 
+	// Delete all handles now that Rust has cleared all plugins
+	documentExtractorRegistry.clear()
 	return nil
 }
 

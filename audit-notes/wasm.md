@@ -71,7 +71,7 @@ This document categorizes all hand-edits made to the WASM binding during the ale
 
 **Category**: ALEF_GAP + TEST_FIXTURE
 
-**Suggested Upstream Fix**: 
+**Suggested Upstream Fix**:
 1. Extend alef's e2e fixture schema to track camelCase method naming per trait (use wasm-bindgen's naming convention by default)
 2. Emit initialize/shutdown stubs for all trait test classes (body: no-op void or stub return value)
 3. Use camelCase names in all generated test stubs
@@ -131,7 +131,7 @@ This document categorizes all hand-edits made to the WASM binding during the ale
 **File**: `crates/kreuzberg/src/extraction/pst.rs`, lines 59–84
 **Decision**: Hand-edited in Rust core to gate PST extraction behind `#[cfg(all(feature = "email", not(target_arch = "wasm32")))]` with a WASM-safe fallback that returns a validation error.
 
-**Tradeoff**: 
+**Tradeoff**:
 - **Current (binding-side)**: Clean — Rust core knows about WASM constraint and provides a user-facing error message.
 - **Alternative (feature gate)**: Could move `tempfile` usage behind a separate internal feature, but WASM consumers never care about PST extraction (it requires a filesystem), so binding-side gating is simpler and more discoverable for WASM users (they get an explicit error, not a compile failure).
 
@@ -212,4 +212,3 @@ All trait stubs must implement:
 **Medium**: BINDING_BUG issues 5–8. Return-value parsing requires careful audits of the alef wasm bridge codegen to distinguish primitives, JSON strings, and serde_wasm_bindgen objects. The fix pattern applies broadly.
 
 **Low**: ROOT_CAUSE issue 9. No action needed; pst.rs gating is correct and binding-specific.
-
