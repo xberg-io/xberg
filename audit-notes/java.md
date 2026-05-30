@@ -8,15 +8,15 @@ Systematic audit of Java Panama FFM bindings (`packages/java/`, `e2e/java/`). Cu
 ## CRITICAL BUGS
 
 ### BUG #1: NULL_CHECK_MISSING_ON_OPTIONAL_FFI_FUNCTIONS
-**Severity:** HIGH (NPE at runtime if optional functions are missing)  
-**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`  
+**Severity:** HIGH (NPE at runtime if optional functions are missing)
+**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`
 **Issue:** Multiple methods invoke optional FFI functions (marked with `.orElse(null)` in NativeLib) without null checks:
 
-- **Line 701:** `calculateQualityScore()` → `KREUZBERG_CALCULATE_QUALITY_SCORE.invoke(ctext, metadata)`  
-- **Line 62:** `extractBytes()` → `KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr)` (used in 2 locations)  
-- **Line 133:** `extractFile()` → `KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr)`  
-- **Line 529:** `clearOcrBackends()` → `KREUZBERG_CLEAR_OCR_BACKEND.invoke(outErr)`  
-- **Line 863:** `getEmbeddingPreset()` → `KREUZBERG_EMBEDDING_PRESET_TO_JSON.invoke(resultPtr)`  
+- **Line 701:** `calculateQualityScore()` → `KREUZBERG_CALCULATE_QUALITY_SCORE.invoke(ctext, metadata)`
+- **Line 62:** `extractBytes()` → `KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr)` (used in 2 locations)
+- **Line 133:** `extractFile()` → `KREUZBERG_EXTRACTION_RESULT_TO_JSON.invoke(resultPtr)`
+- **Line 529:** `clearOcrBackends()` → `KREUZBERG_CLEAR_OCR_BACKEND.invoke(outErr)`
+- **Line 863:** `getEmbeddingPreset()` → `KREUZBERG_EMBEDDING_PRESET_TO_JSON.invoke(resultPtr)`
 
 **Root Cause:** FFI bindings for optional features (quality scoring, plugin management, embeddings) are defined with `.orElse(null)` in `NativeLib.java`, but callers don't guard against null. If the underlying Rust library is built without these features or symbols are missing, calls throw NPE instead of graceful error.
 
@@ -32,8 +32,8 @@ if (NativeLib.KREUZBERG_CALCULATE_QUALITY_SCORE == null) {
 ---
 
 ### BUG #2: TYPE_MISMATCH_IN_CALCULATEQUALITYSCORE_METADATA_PARAM
-**Severity:** CRITICAL (Memory corruption / undefined behavior)  
-**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, line 701  
+**Severity:** CRITICAL (Memory corruption / undefined behavior)
+**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, line 701
 **Issue:** `calculateQualityScore()` tries to pass Java `Map<String, Object>` metadata directly to native code:
 
 ```java
@@ -63,12 +63,12 @@ var primitiveResult = (double) NativeLib.KREUZBERG_CALCULATE_QUALITY_SCORE
 ---
 
 ### BUG #3: UNCHECKED_ERROR_CODES_IN_PLUGIN_MANAGEMENT
-**Severity:** MEDIUM (Silent failures, no error propagation)  
-**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, plugin methods  
+**Severity:** MEDIUM (Silent failures, no error propagation)
+**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, plugin methods
 **Issue:** Methods like `clearOcrBackends()` (line 564), `clearDocumentExtractors()` (line 526), `clearPostProcessors()` (line 600), `clearRenderers()` (line 637), `clearValidators()` (line 668) all follow a pattern where they:
 
-1. Call FFI function returning error code  
-2. Extract error message from out-param  
+1. Call FFI function returning error code
+2. Extract error message from out-param
 3. Never propagate the exception if error message is NULL but code != 0
 
 Example from `clearOcrBackends()` (lines 564-578):
@@ -89,28 +89,28 @@ Actually, this pattern is correct. Revising: **This is NOT a bug** — error is 
 ---
 
 ### BUG #3: INCORRECT_NULL_HANDLING_ON_OPTIONAL_FUNCTIONS_REVISED
-**Severity:** MEDIUM (Feature unavailability not detected)  
-**Location:** `NativeLib.java`, lines 349–351, 423–425, etc.  
+**Severity:** MEDIUM (Feature unavailability not detected)
+**Location:** `NativeLib.java`, lines 349–351, 423–425, etc.
 **Issue:** Optional functions use `.orElse(null)`, but:
 
-1. No compile-time indication that function may be null  
-2. Callers don't document that they may fail with NPE  
-3. No feature flag documentation (e.g., "requires `quality` feature")  
+1. No compile-time indication that function may be null
+2. Callers don't document that they may fail with NPE
+3. No feature flag documentation (e.g., "requires `quality` feature")
 
 **Root Cause:** Alef generated `.orElse(null)` for optional functions, but Java caller side has no annotation or javadoc warning.
 
 **Impact:** API surface is misleading — users expect all public methods to work. If they call `calculateQualityScore()` in a WASM build (where quality features are optional), they get NPE with no context.
 
-**Fix:** 
-- Add `@CheckForNull` or `@Nullable` annotations to method signatures  
-- Document in method javadoc which features/builds support the method  
-- Add runtime guard with clear error message  
+**Fix:**
+- Add `@CheckForNull` or `@Nullable` annotations to method signatures
+- Document in method javadoc which features/builds support the method
+- Add runtime guard with clear error message
 
 ---
 
 ### BUG #4: CALCULATEQUALITYSCORE_ACCEPTS_NULL_MAP_WITHOUT_SERIALIZATION
-**Severity:** CRITICAL (Undefined behavior with null metadata)  
-**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, lines 695–706  
+**Severity:** CRITICAL (Undefined behavior with null metadata)
+**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, lines 695–706
 **Issue:** Method accepts `@Nullable Map<String, Object> metadata`, but if it's null, still tries to pass it to FFI. If metadata is null, the code passes the Java null reference (which becomes 0 or garbage) to the C function expecting a valid address.
 
 ```java
@@ -135,13 +135,13 @@ var primitiveResult = (double) NativeLib.KREUZBERG_CALCULATE_QUALITY_SCORE
 ---
 
 ### BUG #5: ARENA_RESOURCE_LEAK_RISK_ON_EXCEPTION_IN_JSON_SERIALIZATION
-**Severity:** LOW (Minor resource leak in error path)  
-**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, all methods  
+**Severity:** LOW (Minor resource leak in error path)
+**Location:** `packages/java/dev/kreuzberg/KreuzbergRs.java`, all methods
 **Issue:** All methods allocate to arena inside try-with-resources, which is correct. However, JSON serialization (`MAPPER.writeValueAsString()`) is called *before* arena allocation. If serialization throws, the arena is created but unused:
 
 ```java
 try (var arena = Arena.ofShared()) {  // ← Arena allocated
-    var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;  
+    var cconfigJson = config != null ? MAPPER.writeValueAsString(config) : null;
     // ↑ If this throws, arena is still created but immediately closed (ok)
 ```
 
@@ -152,8 +152,8 @@ Actually, try-with-resources will close the arena even if the body throws, so th
 ## MINOR ISSUES & CODE QUALITY
 
 ### ISSUE #1: VAR_OVERUSE_REDUCES_API_DISCOVERABILITY
-**Severity:** LOW  
-**Location:** Throughout `KreuzbergRs.java`  
+**Severity:** LOW
+**Location:** Throughout `KreuzbergRs.java`
 **Pattern:** Excessive use of `var` keyword obscures types:
 ```java
 var ccontent = arena.allocateFrom(ValueLayout.JAVA_BYTE, content);  // What type?
@@ -169,8 +169,8 @@ MemorySegment cmimeType = arena.allocateFrom(mimeType);
 ```
 
 ### ISSUE #2: CHECKASTERROR_SILENTLY_RETURNS_NULL_ON_SOME_PATHS
-**Severity:** MEDIUM (Silent null returns confusing)  
-**Location:** Lines 59–60, 130–131, 191–192, 236–237, etc.  
+**Severity:** MEDIUM (Silent null returns confusing)
+**Location:** Lines 59–60, 130–131, 191–192, 236–237, etc.
 **Pattern:**
 ```java
 if (resultPtr.equals(MemorySegment.NULL)) {
@@ -190,8 +190,8 @@ if (resultPtr.equals(MemorySegment.NULL)) {
 ```
 
 ### ISSUE #3: MISSING_VALIDATION_ON_POINTER_DEREFERENCES
-**Severity:** LOW  
-**Location:** Line 68, 139, 200, 244, etc.  
+**Severity:** LOW
+**Location:** Line 68, 139, 200, 244, etc.
 **Pattern:** Dereferencing pointers returned from Rust without bounds validation:
 ```java
 String json = jsonPtr.reinterpret(Long.MAX_VALUE).getString(0);
@@ -199,9 +199,9 @@ String json = jsonPtr.reinterpret(Long.MAX_VALUE).getString(0);
 ```
 
 If Rust returns a buffer that's not properly NUL-terminated or is garbage, `getString(0)` could:
-- Read past buffer boundary  
-- Hang trying to find NUL terminator  
-- Return garbage  
+- Read past buffer boundary
+- Hang trying to find NUL terminator
+- Return garbage
 
 **Recommendation:** Use a safer API or add bounds checks. Currently acceptable because Rust library *should* return valid C strings, but not bulletproof.
 
@@ -210,8 +210,8 @@ If Rust returns a buffer that's not properly NUL-terminated or is garbage, `getS
 ## INFRASTRUCTURE ISSUES
 
 ### ISSUE #4: OPTIONAL_FUNCTION_HANDLES_NOT_DOCUMENTED
-**Severity:** LOW  
-**Location:** `NativeLib.java`, all `.orElse(null)` declarations  
+**Severity:** LOW
+**Location:** `NativeLib.java`, all `.orElse(null)` declarations
 **Pattern:** No javadoc explaining which functions are optional and under what conditions they're missing.
 
 **Recommendation:** Add inline comments:
@@ -244,45 +244,45 @@ All `FunctionDescriptor` declarations were checked against the C ABI in `crates/
 ## SUMMARY OF FIXES
 
 ### Priority 1 (Must Fix - Correctness)
-1. **BUG #2:** Serialize metadata to JSON in `calculateQualityScore()`  
-2. **BUG #1:** Add null checks before invoking optional method handles  
-3. **BUG #4:** Proper null-to-NULL conversion for metadata parameter  
+1. **BUG #2:** Serialize metadata to JSON in `calculateQualityScore()`
+2. **BUG #1:** Add null checks before invoking optional method handles
+3. **BUG #4:** Proper null-to-NULL conversion for metadata parameter
 
 ### Priority 2 (Should Fix - Robustness)
-4. **ISSUE #2:** Replace silent `return null` with explicit exception on NULL result  
-5. **ISSUE #4:** Document optional functions in javadoc and with inline comments  
+4. **ISSUE #2:** Replace silent `return null` with explicit exception on NULL result
+5. **ISSUE #4:** Document optional functions in javadoc and with inline comments
 
 ### Priority 3 (Nice to Have - Readability)
-6. **ISSUE #1:** Use explicit types instead of `var` for FFI marshalling  
+6. **ISSUE #1:** Use explicit types instead of `var` for FFI marshalling
 
 ---
 
 ## TEST COVERAGE
 
 Current e2e tests pass (SmokeTest, AsyncTest, BatchTest, etc.), which means:
-- ✓ Basic extraction works  
-- ✓ Arena lifecycle is correct  
-- ✓ JSON serialization for config works  
-- ✗ **Optional features not tested** (no e2e for quality scoring, embedding presets)  
-- ✗ **Error paths not tested** (missing native library, feature unavailability)  
+- ✓ Basic extraction works
+- ✓ Arena lifecycle is correct
+- ✓ JSON serialization for config works
+- ✗ **Optional features not tested** (no e2e for quality scoring, embedding presets)
+- ✗ **Error paths not tested** (missing native library, feature unavailability)
 
 **Recommendation:** Add e2e tests for:
-- `calculateQualityScore()` with and without metadata  
-- Optional function availability checks  
-- Null input handling  
+- `calculateQualityScore()` with and without metadata
+- Optional function availability checks
+- Null input handling
 
 ---
 
 ## VERIFICATION CHECKLIST
 
-- [x] FunctionDescriptor signatures spot-checked  
-- [x] Arena try-with-resources patterns validated  
-- [x] Optional function usage patterns identified  
-- [x] Error code propagation reviewed  
-- [x] Type marshalling (serialization/deserialization) reviewed  
-- [ ] Full C ABI alignment verification (requires cbindgen output)  
-- [ ] Optional function availability at runtime (requires test)  
-- [ ] Memory alignment on struct reads (not applicable — using JSON)  
+- [x] FunctionDescriptor signatures spot-checked
+- [x] Arena try-with-resources patterns validated
+- [x] Optional function usage patterns identified
+- [x] Error code propagation reviewed
+- [x] Type marshalling (serialization/deserialization) reviewed
+- [ ] Full C ABI alignment verification (requires cbindgen output)
+- [ ] Optional function availability at runtime (requires test)
+- [ ] Memory alignment on struct reads (not applicable — using JSON)
 
 ---
 
@@ -290,12 +290,12 @@ Current e2e tests pass (SmokeTest, AsyncTest, BatchTest, etc.), which means:
 
 These issues likely stem from Alef binding generation:
 
-1. **Optional function safety:** Mark optional methods with `@CheckForNull` and generate null guards  
-2. **Complex parameter serialization:** Detect when a parameter requires JSON serialization and auto-generate it  
-3. **Out-parameter validation:** Generate explicit error throws instead of silent null returns  
-4. **Type visibility:** Don't use `var` for FFI marshalling; explicit types aid debugging  
+1. **Optional function safety:** Mark optional methods with `@CheckForNull` and generate null guards
+2. **Complex parameter serialization:** Detect when a parameter requires JSON serialization and auto-generate it
+3. **Out-parameter validation:** Generate explicit error throws instead of silent null returns
+4. **Type visibility:** Don't use `var` for FFI marshalling; explicit types aid debugging
 
 ---
 
-**Audit Completed:** 2026-05-30  
+**Audit Completed:** 2026-05-30
 **Auditor Notes:** Errors appear benign in current test suite because e2e only exercises mandatory features. Crashes will occur if optional features are requested or native library build is missing optional symbols.

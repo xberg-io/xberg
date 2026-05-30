@@ -1,7 +1,7 @@
 # Elixir Binding Systematic Bug Audit
 
-**Audit Date**: 2026-05-30  
-**Repo**: `packages/elixir/` + `e2e/elixir/`  
+**Audit Date**: 2026-05-30
+**Repo**: `packages/elixir/` + `e2e/elixir/`
 **Status**: 28/28 e2e tests green (before audit)
 
 ## Executive Summary
@@ -9,7 +9,7 @@
 Found **3 critical bugs** and **2 high-priority gaps** in the Elixir NIF binding:
 
 1. **CRITICAL: CPU-bound NIFs lack DirtyCpu scheduling** — blocks BEAM schedulers
-2. **HIGH: Thread panics not safely caught** — crashes BEAM VM  
+2. **HIGH: Thread panics not safely caught** — crashes BEAM VM
 3. **HIGH: Missing Dialyzer config** — type-safety not validated
 4. **MISSING: No Dialyzer coverage**
 5. **MISSING: No mix_audit in CI**
@@ -20,8 +20,8 @@ Found **3 critical bugs** and **2 high-priority gaps** in the Elixir NIF binding
 
 ### BINDING_BUG #1: Scheduler Violation — CPU-Bound NIFs Without DirtyCpu
 
-**Severity**: CRITICAL  
-**Issue**: Operations >1ms run on the normal scheduler, blocking the BEAM.  
+**Severity**: CRITICAL
+**Issue**: Operations >1ms run on the normal scheduler, blocking the BEAM.
 **Lines in NIF**: `packages/elixir/native/kreuzberg_nif/src/lib.rs`
 
 #### CPU-Bound but Unscheduled (MUST FIX)
@@ -67,7 +67,7 @@ These are <1ms operations; normal scheduler is fine.
 
 ### BINDING_BUG #2: Thread Panic Not Safely Handled
 
-**Severity**: CRITICAL  
+**Severity**: CRITICAL
 **Issue**: `.join()` panic is converted to string error, but panics crash the BEAM.
 
 **Lines**:
@@ -98,7 +98,7 @@ let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 
 ### BINDING_BUG #3: Error Tuple Type Inconsistency
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Issue**: NIFs return `Result<T, String>`, but Elixir wrappers expect `{:ok, T} | {:error, atom, String}`.
 
 **Evidence**:
@@ -124,7 +124,7 @@ enum NifError {
 
 ### ALEF_GAP: Missing Dialyzer Configuration
 
-**Severity**: HIGH  
+**Severity**: HIGH
 **Issue**: No dialyxir/Dialyzer setup in `packages/elixir/mix.exs`.
 
 **Current State**:
@@ -146,7 +146,7 @@ enum NifError {
 
 ### TEST_FIXTURE: Weak Error Path Testing
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Issue**: `e2e/elixir/` tests check happy path but not error handling thoroughly.
 
 **Evidence**:
@@ -221,7 +221,7 @@ Wrap each `std::thread::Builder::new()...spawn()` block with panic-safe error ha
          .map(|s| serde_json::from_str::<kreuzberg::ExtractionConfig>(&s))
          .transpose()
          .map_err(|e| e.to_string())?;
-+    
++
 +    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
          std::thread::Builder::new()
              .stack_size(32 * 1024 * 1024)
@@ -243,7 +243,7 @@ Wrap each `std::thread::Builder::new()...spawn()` block with panic-safe error ha
              .join()
              .map_err(|_| "thread panicked".to_string())?
 +    }));
-+    
++
 +    match result {
 +        Ok(inner_result) => inner_result,
 +        Err(_) => Err("thread panicked during extraction".to_string()),
@@ -301,7 +301,7 @@ Ensure all `def` stubs match the 3-tuple error format returned by Rustler.
 
 ## Test Status
 
-**Current**: 28/28 e2e tests pass  
+**Current**: 28/28 e2e tests pass
 **After fixes**: Should remain 28/28 pass
 
 The fixes are internal safety improvements and scheduling; they don't change the public API contract. Tests continue to pass but the NIF implementation becomes:
@@ -356,4 +356,3 @@ The fixes are internal safety improvements and scheduling; they don't change the
 - Rustler Docs: https://github.com/rusterlium/rustler
 - BEAM Scheduler: https://www.erlang.org/doc/man/erl_nif.html (see `schedule` param)
 - Elixir NIF best practices: https://hexdocs.pm/rustler/
-

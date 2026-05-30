@@ -1,8 +1,8 @@
 # Python Binding Systematic Audit
 
-**Date**: May 30, 2026  
-**Binding Version**: 5.0.0-rc.3  
-**E2E Status**: 108/108 passing (at audit start)  
+**Date**: May 30, 2026
+**Binding Version**: 5.0.0-rc.3
+**E2E Status**: 108/108 passing (at audit start)
 **Coverage**: PyO3 binding (crates/kreuzberg-py), Python wrapper (packages/python), E2E tests (e2e/python)
 
 ---
@@ -11,8 +11,8 @@
 
 ### 1. BINDING_BUG: Monolithic Error Translation → PyRuntimeError
 
-**Severity**: CRITICAL  
-**Category**: Error Handling  
+**Severity**: CRITICAL
+**Category**: Error Handling
 **Files Affected**:
 - `crates/kreuzberg-py/src/lib.rs` (auto-generated, all `#[pyfunction]` items)
 - `packages/python/kreuzberg/exceptions.py` (defines exception classes that are never used)
@@ -72,15 +72,15 @@ fn error_to_pyerr(e: kreuzberg::KreuzbergError) -> PyErr {
 
 Then use `error_to_pyerr(e)` instead of `PyRuntimeError::new_err(e.to_string())` throughout.
 
-**Status**: DEFERRED - Requires upstream Alef changes OR manual implementation in binding.  
+**Status**: DEFERRED - Requires upstream Alef changes OR manual implementation in binding.
 **Priority**: CRITICAL (breaks API contract)
 
 ---
 
 ### 2. TEST_FIXTURE: Missing Error Type Assertions
 
-**Severity**: HIGH  
-**Category**: Test Coverage  
+**Severity**: HIGH
+**Category**: Test Coverage
 **Files Affected**:
 - `e2e/python/tests/test_async.py:49,59`
 - `e2e/python/tests/test_error.py` (entire file, likely same pattern)
@@ -112,7 +112,7 @@ with pytest.raises(Exception):  # Generic catch
    ```
 2. Create a new e2e fixture file `fixtures/error_types.json` that exercises all error paths with correct exception type assertions.
 
-**Status**: BLOCKED - Depends on Issue #1 fix (error mapping)  
+**Status**: BLOCKED - Depends on Issue #1 fix (error mapping)
 **Priority**: HIGH (test quality)
 
 ---
@@ -121,8 +121,8 @@ with pytest.raises(Exception):  # Generic catch
 
 ### 3. ALEF_GAP: Missing Docstrings on Core Functions
 
-**Severity**: MEDIUM  
-**Category**: API Documentation  
+**Severity**: MEDIUM
+**Category**: API Documentation
 **Files Affected**:
 - `crates/kreuzberg-py/src/lib.rs` (auto-generated, all `#[pyfunction]` items)
 - `packages/python/kreuzberg/api.py` (auto-generated)
@@ -152,15 +152,15 @@ Workaround: Add docstrings to the wrapper functions in `packages/python/kreuzber
 ```python
 def extract_file(path: str, mime_type: str | None = None, config: ExtractionConfig | None = None) -> Coroutine[Any, Any, ExtractionResult]:
     """Extract text, tables, and metadata from a file.
-    
+
     Args:
         path: File path to extract from.
         mime_type: Optional MIME type (e.g., 'application/pdf'). Auto-detected if omitted.
         config: ExtractionConfig with options for OCR, chunking, etc.
-    
+
     Returns:
         ExtractionResult containing extracted content, metadata, and processing details.
-    
+
     Raises:
         OcrError: If OCR fails (if enabled).
         ParsingError: If document parsing fails.
@@ -169,15 +169,15 @@ def extract_file(path: str, mime_type: str | None = None, config: ExtractionConf
     """
 ```
 
-**Status**: FIXABLE  
+**Status**: FIXABLE
 **Priority**: MEDIUM (quality of life)
 
 ---
 
 ### 4. POTENTIAL_BUG: Sync `embed_texts` May Block Python Thread
 
-**Severity**: LOW  
-**Category**: Performance/Thread Safety  
+**Severity**: LOW
+**Category**: Performance/Thread Safety
 **File**: `crates/kreuzberg-py/src/lib.rs:11119`
 
 **Issue Description**:
@@ -200,7 +200,7 @@ This is NOT necessarily a bug. The Rust binding has both `embed_texts` (sync) an
 - Recommend `embed_texts_async` for performance-critical applications
 - If sync blocking is a problem, call `embed_texts` in a `concurrent.futures.ThreadPoolExecutor`
 
-**Status**: ACCEPTED (design choice, not a bug)  
+**Status**: ACCEPTED (design choice, not a bug)
 **Priority**: LOW (documentation only)
 
 ---
@@ -209,7 +209,7 @@ This is NOT necessarily a bug. The Rust binding has both `embed_texts` (sync) an
 
 ### 5. ASYNC_SAFE: Proper GIL Management in Async Closures
 
-**Status**: PASS  
+**Status**: PASS
 **Evidence**:
 ```rust
 pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -222,7 +222,7 @@ All async functions use `async move` and capture by value. No Py<T> or Bound<T> 
 
 ### 6. TYPE_STUBS: Parity Between .pyi and Implementation
 
-**Status**: PASS  
+**Status**: PASS
 **Spot Checks**:
 - `AccelerationConfig.__init__` signature in .pyi matches generated binding ✓
 - `ExtractionConfig.__init__` has all 28 parameters in .pyi ✓
@@ -232,7 +232,7 @@ No type stub drift detected.
 
 ### 7. PLUGIN_SAFETY: Error Handling in Plugin Bridges
 
-**Status**: PASS  
+**Status**: PASS
 **Examples**:
 ```rust
 // PyOcrBackendBridge.initialize() at line 11199
@@ -304,7 +304,7 @@ Plugin method calls properly wrap PyErr into KreuzbergError. ✓
 1. **Fix Issue #1 (error mapping)** — Either:
    - Upstream: Add error variant discrimination to Alef's Python backend
    - Local: Implement `error_to_pyerr()` helper in binding and refactor all error sites
-   
+
    This is the single most important issue affecting API correctness.
 
 ### Short Term (High Value)

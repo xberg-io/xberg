@@ -19,9 +19,9 @@ Systematic bug audit of `packages/typescript/`, `crates/kreuzberg-node/`, and `e
 
 ### 1. BINDING_BUG: Duplicate Function Declarations in .d.ts (CRITICAL)
 
-**Severity**: HIGH  
-**File**: `crates/kreuzberg-node/index.d.ts`  
-**Location**: Lines 99-101 (and others)  
+**Severity**: HIGH
+**File**: `crates/kreuzberg-node/index.d.ts`
+**Location**: Lines 99-101 (and others)
 **Description**: The generated `.d.ts` file contains duplicate function declarations for six registry management functions:
 - `clearDocumentExtractors()` (appears twice)
 - `clearEmbeddingBackends()` (appears twice)
@@ -40,9 +40,9 @@ Systematic bug audit of `packages/typescript/`, `crates/kreuzberg-node/`, and `e
 
 ### 2. ERROR_HANDLING: All Errors Mapped to GenericFailure
 
-**Severity**: MEDIUM  
-**File**: `crates/kreuzberg-node/src/lib.rs`  
-**Occurrences**: 76 instances  
+**Severity**: MEDIUM
+**File**: `crates/kreuzberg-node/src/lib.rs`
+**Occurrences**: 76 instances
 **Description**: All Rust errors are converted to `napi::Status::GenericFailure` with only the error message preserved. This prevents proper categorization of errors on the JavaScript side.
 
 **Example**:
@@ -64,9 +64,9 @@ Systematic bug audit of `packages/typescript/`, `crates/kreuzberg-node/`, and `e
 
 ### 3. TYPE_COERCION: i64 for Time/Size Fields
 
-**Severity**: LOW  
-**File**: `crates/kreuzberg-node/src/lib.rs`  
-**Occurrences**: ~30 `Option<i64>` fields in config structs  
+**Severity**: LOW
+**File**: `crates/kreuzberg-node/src/lib.rs`
+**Occurrences**: ~30 `Option<i64>` fields in config structs
 **Description**: Timeout, cache TTL, archive size, and nesting depth fields use `i64` instead of `u32`/`u64`.
 
 **Examples**:
@@ -80,8 +80,8 @@ Systematic bug audit of `packages/typescript/`, `crates/kreuzberg-node/`, and `e
 
 ### 4. BUFFER_HANDLING: Vec<u8> Copies
 
-**Severity**: LOW  
-**File**: `crates/kreuzberg-node/src/lib.rs`, lines 5878, 5971, 6139  
+**Severity**: LOW
+**File**: `crates/kreuzberg-node/src/lib.rs`, lines 5878, 5971, 6139
 **Description**: All Buffer inputs are converted to `Vec<u8>` via `.to_vec()`, which always copies the underlying data.
 
 **Code Pattern**:
@@ -99,8 +99,8 @@ kreuzberg::extract_bytes(&content, &mime_type, &config_core)
 
 ### 5. ASYNC_HANDLING: Global Tokio Runtime
 
-**Severity**: LOW (design choice)  
-**File**: `crates/kreuzberg-node/src/lib.rs`, lines 54-59  
+**Severity**: LOW (design choice)
+**File**: `crates/kreuzberg-node/src/lib.rs`, lines 54-59
 **Description**: A static `WORKER_POOL` is initialized as a global Tokio runtime for both async and sync functions.
 
 **Pattern**:
@@ -108,7 +108,7 @@ kreuzberg::extract_bytes(&content, &mime_type, &config_core)
 static WORKER_POOL: std::sync::LazyLock<tokio::runtime::Runtime> = ...
 ```
 
-**Correctness**: 
+**Correctness**:
 - `async fn` functions like `extract_bytes()` are directly exposed via NAPI and return Promises ✓
 - Sync functions use `WORKER_POOL.block_on()` to bridge to async Rust ✓
 - No blocking on event loop (sync functions use dedicated thread pool) ✓
@@ -119,8 +119,8 @@ static WORKER_POOL: std::sync::LazyLock<tokio::runtime::Runtime> = ...
 
 ### 6. EMBEDDING_PRECISION: f32 to f64 Conversion
 
-**Severity**: LOW (intentional)  
-**File**: `crates/kreuzberg-node/src/lib.rs`, line 6319  
+**Severity**: LOW (intentional)
+**File**: `crates/kreuzberg-node/src/lib.rs`, line 6319
 **Description**: Rust core returns `Vec<Vec<f32>>` embeddings, but Node binding promotes them to `Vec<Vec<f64>>` before returning to JavaScript.
 
 **Code**:
@@ -136,8 +136,8 @@ row.into_iter().map(|x| x as f64).collect::<Vec<_>>()
 
 ### 7. TYPE_DEFINITIONS: JSDoc Parity
 
-**Severity**: LOW  
-**File**: `crates/kreuzberg-node/index.d.ts`  
+**Severity**: LOW
+**File**: `crates/kreuzberg-node/index.d.ts`
 **Description**: TypeScript docs use legacy rustdoc syntax (`[...] links`, `:` in param names) instead of JSDoc/TSDoc syntax.
 
 **Examples**:
@@ -157,8 +157,8 @@ row.into_iter().map(|x| x as f64).collect::<Vec<_>>()
 
 ### 8. TRAIT_BRIDGE: Object Lifetime Safety
 
-**Severity**: LOW (well-handled)  
-**File**: `crates/kreuzberg-node/src/lib.rs`, lines 138-164 (JsVisitorRef), 6679-6711 (JsPostProcessorBridge)  
+**Severity**: LOW (well-handled)
+**File**: `crates/kreuzberg-node/src/lib.rs`, lines 138-164 (JsVisitorRef), 6679-6711 (JsPostProcessorBridge)
 **Description**: Trait bridge wrappers use `Object<'static>` transmute to store JS objects across async boundaries.
 
 **Code Pattern**:
@@ -189,7 +189,7 @@ let js_obj: napi::bindgen_prelude::Object<'static> = unsafe { std::mem::transmut
 
 These 6 functions have duplicate declarations in `index.d.ts`:
 1. `clearDocumentExtractors()` — lines 91, 93
-2. `clearEmbeddingBackends()` — lines 87, 89  
+2. `clearEmbeddingBackends()` — lines 87, 89
 3. `clearOcrBackends()` — lines 99, 101
 4. `clearPostProcessors()` — lines 107, 109
 5. `clearRenderers()` — lines 103, 105
@@ -201,8 +201,8 @@ These 6 functions have duplicate declarations in `index.d.ts`:
 
 ### 9. CONFIG_CONVERSION: Field Serialization
 
-**Severity**: LOW  
-**File**: `crates/kreuzberg-node/src/lib.rs`, lines 8061, 8075, 8079  
+**Severity**: LOW
+**File**: `crates/kreuzberg-node/src/lib.rs`, lines 8061, 8075, 8079
 **Description**: Fields `html_options`, `concurrency`, and `cancel_token` are serialized as `format!("{:?}")` because they contain complex Rust types that cannot serialize to JSON.
 
 **Impact**: These fields are read-only on the JS side and return debug representations. Acceptable for internal use but not user-facing config.
@@ -235,7 +235,7 @@ Tests are currently building (napi build running). The e2e suite is comprehensiv
 ## Recommendations
 
 1. **Critical**: Fix duplicate .d.ts declarations
-   - Regenerate with `alef generate` 
+   - Regenerate with `alef generate`
    - File: `crates/kreuzberg-node/index.d.ts`
    - Affects: `clearDocumentExtractors`, `clearEmbeddingBackends`, `clearOcrBackends`, `clearPostProcessors`, `clearRenderers`, `clearValidators`
 
@@ -263,4 +263,3 @@ Tests are currently building (napi build running). The e2e suite is comprehensiv
 - ✓ Embedding precision (f32→f64) intentional and documented
 - ✓ Config conversion comprehensive, all fields mapped
 - ✓ Error messages preserve context via `.to_string()`
-
