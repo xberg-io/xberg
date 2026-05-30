@@ -75,7 +75,24 @@ pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionC
         }
 
         let validated_mime = if mime_type == "application/octet-stream" {
-            mime::detect_mime_type_from_bytes(content)?
+            // When tree-sitter is configured, check if content is recognized source code.
+            // This allows octet-stream files with tree-sitter config to be detected as code.
+            #[cfg(feature = "tree-sitter")]
+            if config.tree_sitter.is_some() {
+                if let Ok(text) = std::str::from_utf8(content) {
+                    let trimmed = text.trim_start();
+                    if tree_sitter_language_pack::detect_language_from_content(trimmed).is_some() {
+                        // Recognize as source code when tree-sitter can detect a language.
+                        mime::SOURCE_CODE_MIME_TYPE.to_string()
+                    } else {
+                        mime::detect_mime_type_from_bytes(content)?
+                    }
+                } else {
+                    mime::detect_mime_type_from_bytes(content)?
+                }
+            } else {
+                mime::detect_mime_type_from_bytes(content)?
+            }
         } else {
             mime::validate_mime_type(mime_type)?
         };

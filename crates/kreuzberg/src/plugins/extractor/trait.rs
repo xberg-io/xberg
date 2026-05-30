@@ -195,6 +195,7 @@ pub trait DocumentExtractor: Plugin {
     ///
     /// Returns None if the extractor doesn't support synchronous extraction.
     /// This is used for WASM and other sync-only environments.
+    #[doc(hidden)]
     fn as_sync_extractor(&self) -> Option<&dyn crate::extractors::SyncExtractor> {
         None
     }
