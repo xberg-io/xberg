@@ -19748,7 +19748,11 @@ impl From<kreuzberg::FormatMetadata> for WasmFormatMetadata {
                 format_type: "pst".to_string(),
                 _0: serde_wasm_bindgen::to_value(&field0).ok(),
             },
-            // FormatMetadata::Code: stripped on wasm (Code variant gated behind tree-sitter feature)
+            #[cfg(any(feature = "tree-sitter", feature = "tree-sitter-wasm"))]
+            kreuzberg::FormatMetadata::Code(field0) => Self {
+                format_type: "code".to_string(),
+                _0: serde_wasm_bindgen::to_value(&field0).ok(),
+            },
         }
     }
 }

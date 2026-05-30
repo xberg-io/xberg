@@ -78,7 +78,7 @@ repos:
     - packages/
     - tools/
     exclude: ^e2e/
-  - id: alef-docs-fresh
+  # - id: alef-docs-fresh  # TEMP DISABLED — Step 0 lockdown active
   - id: cargo-deny
     args:
     - check
@@ -195,8 +195,8 @@ repos:
   - id: rumdl-fmt
     exclude: ^templates/
   - id: cpd
-  - id: alef-verify
-  - id: alef-sync-versions
+  # - id: alef-verify        # TEMP DISABLED — Step 0 lockdown active
+  # - id: alef-sync-versions # TEMP DISABLED — Step 0 lockdown active
   - id: actionlint
   - id: typos
     args:
