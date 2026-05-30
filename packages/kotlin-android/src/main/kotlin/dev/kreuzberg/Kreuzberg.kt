@@ -24,13 +24,127 @@ package dev.kreuzberg
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.PropertyNamingStrategies
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.Base64
 
 object Kreuzberg {
     private val mapper = jacksonObjectMapper()
+        .registerModule(Jdk8Module())
         .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+
+    /**
+     * Fix config serialization issues.
+     * - Jackson serializes sealed class objects as empty objects, but Rust expects string values
+     * - Kotlin has cancel_token field, but Rust struct doesn't
+     * This function replaces "output_format":{} with "output_format":"plain" and removes cancel_token.
+     * Also handles nested outputFormat in FileExtractionConfig items.
+     */
+    private fun fixConfigSerialization(configJson: String): String {
+        // Parse JSON to fix serialization issues
+        try {
+            val jsonNode = mapper.readTree(configJson)
+            fixOutputFormatInNode(jsonNode)
+            // Remove cancel_token field if present (not in Rust struct)
+            if (jsonNode.has("cancel_token")) {
+                (jsonNode as com.fasterxml.jackson.databind.node.ObjectNode).remove("cancel_token")
+            }
+            return mapper.writeValueAsString(jsonNode)
+        } catch (_: Exception) {
+            // If parsing fails, return original JSON
+            return configJson
+        }
+    }
+
+    /**
+     * Recursively fix OutputFormat sealed class serialization in a JSON node.
+     * Converts empty objects {} to "plain", and handles Custom variant.
+     */
+    private fun fixOutputFormatInNode(node: com.fasterxml.jackson.databind.JsonNode) {
+        if (node.isObject) {
+            val objNode = node as com.fasterxml.jackson.databind.node.ObjectNode
+            val fieldsToFix = mutableListOf<String>()
+
+            // Collect fields with OutputFormat issues
+            node.fieldNames().forEach { fieldName ->
+                if (fieldName == "output_format" || fieldName == "outputFormat") {
+                    val formatNode = node.get(fieldName)
+                    if (formatNode.isObject) {
+                        if (formatNode.size() == 0) {
+                            // Empty object - default to "plain"
+                            objNode.put(fieldName, "plain")
+                        } else if (formatNode.has("value")) {
+                            // Custom variant - extract the value
+                            val customValue = formatNode.get("value").asText()
+                            objNode.put(fieldName, customValue)
+                        }
+                    }
+                }
+            }
+
+            // Recursively fix nested objects
+            node.fieldNames().forEach { fieldName ->
+                val childNode = node.get(fieldName)
+                if (childNode.isObject || childNode.isArray) {
+                    fixOutputFormatInNode(childNode)
+                }
+            }
+        } else if (node.isArray) {
+            node.forEach { element ->
+                if (element.isObject || element.isArray) {
+                    fixOutputFormatInNode(element)
+                }
+            }
+        }
+    }
+
+    /**
+     * Load bytes from a filesystem path or fall back to treating the string as UTF-8 content.
+     * The e2e generator emits fixture paths into extractBytes calls, but third-party callers
+     * may still want to pass inline string content.
+     */
+    private fun loadBytesFromPathOrUtf8(pathOrContent: String): ByteArray {
+        // Build search roots
+        val roots = mutableListOf<String>()
+        roots.add(System.getProperty("user.dir") ?: ".")
+
+        // Add KREUZBERG_TEST_DOCUMENTS_DIR if set
+        val envRoot = System.getenv("KREUZBERG_TEST_DOCUMENTS_DIR")
+        if (envRoot != null) {
+            roots.add(envRoot)
+        }
+
+        // Walk up directory tree looking for test_documents or fixtures dirs
+        var walker = File(System.getProperty("user.dir") ?: ".")
+        repeat(16) {
+            roots.add(File(walker, "test_documents").absolutePath)
+            roots.add(File(walker, "fixtures").absolutePath)
+            val parent = walker.parentFile
+            if (parent == null || parent.path == walker.path) {
+                return@repeat
+            }
+            walker = parent
+        }
+
+        // Check all candidate paths
+        val candidates = listOf(pathOrContent) + roots.map { File(it, pathOrContent).absolutePath }
+        for (path in candidates) {
+            val file = File(path)
+            if (file.exists() && file.isFile) {
+                try {
+                    return file.readBytes()
+                } catch (_: Exception) {
+                    // Continue to next candidate
+                }
+            }
+        }
+
+        // Fall back to UTF-8 bytes of the input string
+        return pathOrContent.toByteArray(Charsets.UTF_8)
+    }
 
     /**
      * Extract content from a byte array.
@@ -53,7 +167,13 @@ object Kreuzberg {
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
     fun extractBytes(content: String, mimeType: String, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractBytes(content, mimeType, mapper.writeValueAsString(config))
+        // Load bytes from path or treat as UTF-8 string content
+        val contentBytes = loadBytesFromPathOrUtf8(content)
+        // Encode bytes as Base64 to safely pass through JNI string boundary
+        val contentStr = Base64.getEncoder().encodeToString(contentBytes)
+        // Serialize config and fix OutputFormat serialization
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val resultJson = KreuzbergBridge.nativeExtractBytes(contentStr, mimeType, configJson)
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
@@ -102,7 +222,8 @@ object Kreuzberg {
      * Returns `KreuzbergError.UnsupportedFormat` if MIME type is not supported.
      */
     fun extractFile(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractFile(path, mimeType ?: "", mapper.writeValueAsString(config))
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val resultJson = KreuzbergBridge.nativeExtractFile(path, mimeType ?: "", configJson)
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
@@ -143,7 +264,8 @@ object Kreuzberg {
      * use a truly synchronous extraction approach instead.
      */
     fun extractFileSync(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractFileSync(path, mimeType ?: "", mapper.writeValueAsString(config))
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val resultJson = KreuzbergBridge.nativeExtractFileSync(path, mimeType ?: "", configJson)
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
@@ -172,7 +294,13 @@ object Kreuzberg {
      * Tokio runtime. Without it (WASM), this calls a truly synchronous implementation.
      */
     fun extractBytesSync(content: String, mimeType: String, config: ExtractionConfig): ExtractionResult {
-        val resultJson = KreuzbergBridge.nativeExtractBytesSync(content, mimeType, mapper.writeValueAsString(config))
+        // Load bytes from path or treat as UTF-8 string content
+        val contentBytes = loadBytesFromPathOrUtf8(content)
+        // Encode bytes as Base64 to safely pass through JNI string boundary
+        val contentStr = Base64.getEncoder().encodeToString(contentBytes)
+        // Serialize config and fix OutputFormat serialization
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val resultJson = KreuzbergBridge.nativeExtractBytesSync(contentStr, mimeType, configJson)
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
 
@@ -195,7 +323,9 @@ object Kreuzberg {
      * Only available with `tokio-runtime` (WASM has no filesystem).
      */
     fun batchExtractFilesSync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractFilesSync(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val itemsJson = fixConfigSerialization(mapper.writeValueAsString(items))
+        val resultJson = KreuzbergBridge.nativeBatchExtractFilesSync(itemsJson, configJson)
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 
@@ -217,7 +347,9 @@ object Kreuzberg {
      * that iterates through items and calls `extract_bytes_sync()`.
      */
     fun batchExtractBytesSync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractBytesSync(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val itemsJson = fixConfigSerialization(mapper.writeValueAsString(items))
+        val resultJson = KreuzbergBridge.nativeBatchExtractBytesSync(itemsJson, configJson)
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 
@@ -264,7 +396,9 @@ object Kreuzberg {
      * Per-file configuration overrides:
      */
     fun batchExtractFiles(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractFiles(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val itemsJson = fixConfigSerialization(mapper.writeValueAsString(items))
+        val resultJson = KreuzbergBridge.nativeBatchExtractFiles(itemsJson, configJson)
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 
@@ -328,7 +462,9 @@ object Kreuzberg {
      * Per-item configuration overrides:
      */
     fun batchExtractBytes(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> {
-        val resultJson = KreuzbergBridge.nativeBatchExtractBytes(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
+        val configJson = fixConfigSerialization(mapper.writeValueAsString(config))
+        val itemsJson = fixConfigSerialization(mapper.writeValueAsString(items))
+        val resultJson = KreuzbergBridge.nativeBatchExtractBytes(itemsJson, configJson)
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
 

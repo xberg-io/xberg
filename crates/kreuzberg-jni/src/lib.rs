@@ -2,9 +2,9 @@
 // Delegates to FFI (kreuzberg-ffi) for all operations.
 #![allow(non_snake_case, unsafe_code, unsafe_attr_outside_unsafe)]
 
+use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jbyteArray, jint, jlong, jstring};
-use jni::JNIEnv;
 use std::ffi::{CStr, CString};
 
 // Pull in kreuzberg-ffi by Rust path. The `use` keeps the rlib's
@@ -22,14 +22,47 @@ use kreuzberg_ffi::{
     kreuzberg_embedding_preset_to_json, kreuzberg_extract_bytes, kreuzberg_extract_bytes_sync, kreuzberg_extract_file,
     kreuzberg_extract_file_sync, kreuzberg_extraction_config_free, kreuzberg_extraction_config_from_json,
     kreuzberg_extraction_result_free, kreuzberg_extraction_result_to_json, kreuzberg_free_bytes, kreuzberg_free_string,
-    kreuzberg_get_embedding_preset, kreuzberg_list_document_extractors, kreuzberg_list_embedding_backends,
-    kreuzberg_list_embedding_presets, kreuzberg_list_ocr_backends, kreuzberg_list_post_processors,
-    kreuzberg_list_renderers, kreuzberg_list_validators, kreuzberg_render_pdf_page_to_png,
+    kreuzberg_get_embedding_preset, kreuzberg_last_error_code, kreuzberg_last_error_context,
+    kreuzberg_list_document_extractors, kreuzberg_list_embedding_backends, kreuzberg_list_embedding_presets,
+    kreuzberg_list_ocr_backends, kreuzberg_list_post_processors, kreuzberg_list_renderers, kreuzberg_list_validators,
+    kreuzberg_render_pdf_page_to_png,
 };
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/// Decode Base64 string to bytes (simple implementation for JNI use)
+fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
+    // Simple Base64 decoding: map characters to 6-bit values
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = Vec::new();
+    let mut buffer = 0u32;
+    let mut bits = 0;
+
+    for ch in input.chars() {
+        if ch == '=' {
+            break;
+        }
+        if ch.is_whitespace() {
+            continue;
+        }
+        let pos = ALPHABET
+            .iter()
+            .position(|&c| c == ch as u8)
+            .ok_or_else(|| format!("Invalid Base64 character: {}", ch))?;
+
+        buffer = (buffer << 6) | (pos as u32);
+        bits += 6;
+
+        if bits >= 8 {
+            bits -= 8;
+            result.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    Ok(result)
+}
 
 /// Helper to throw a KreuzbergBridgeException and return null/0
 fn throw_exception<'local>(env: &mut JNIEnv<'local>, message: &str) -> jstring {
@@ -42,11 +75,24 @@ fn throw_exception_void(env: &mut JNIEnv, message: &str) {
     let _ = env.throw_new("dev/kreuzberg/KreuzbergBridgeException", message);
 }
 
+/// Get FFI error message from last error context
+fn get_ffi_error_message() -> String {
+    // SAFETY: kreuzberg_last_error_context returns a valid C string
+    let error_msg = unsafe {
+        let ptr = kreuzberg_last_error_context();
+        if ptr.is_null() {
+            return "Unknown error".to_string();
+        }
+        match CStr::from_ptr(ptr).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => "Failed to decode error message".to_string(),
+        }
+    };
+    error_msg
+}
+
 /// Convert JString to Rust String, returning an error message if conversion fails
-fn jstring_to_string<'local>(
-    env: &mut JNIEnv<'local>,
-    jstr: &JString<'local>,
-) -> Result<String, String> {
+fn jstring_to_string<'local>(env: &mut JNIEnv<'local>, jstr: &JString<'local>) -> Result<String, String> {
     env.get_string(jstr)
         .map(|j| j.into())
         .map_err(|e| format!("Failed to convert JString: {}", e))
@@ -102,8 +148,20 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesImpl
         Err(e) => return throw_exception(&mut env, &e),
     };
 
-    // Convert content string to bytes
-    let content_bytes = content_str.into_bytes();
+    eprintln!("JNI nativeExtractBytesImpl called!");
+    eprintln!("  content_str length={} (base64)", content_str.len());
+    eprintln!("  mime_type={}", mime_type_str);
+    eprintln!("  config length={}", config_str.len());
+
+    // Decode content from Base64 (Kotlin wrapper encodes bytes as Base64 to pass through JNI)
+    let content_bytes = match base64_decode(&content_str) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("JNI: Base64 decode failed: {}", e);
+            return throw_exception(&mut env, &format!("Failed to decode Base64 content: {}", e));
+        }
+    };
+    eprintln!("  decoded {} bytes", content_bytes.len());
 
     let mime_type_c = match CString::new(mime_type_str) {
         Ok(cs) => cs,
@@ -118,7 +176,15 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesImpl
     // Parse config JSON into ExtractionConfig
     let config_ptr = unsafe { kreuzberg_extraction_config_from_json(config_c.as_ptr()) };
     if config_ptr.is_null() {
-        return throw_exception(&mut env, "Failed to parse config JSON");
+        eprintln!("JNI: kreuzberg_extraction_config_from_json returned null!");
+        // Try to get FFI error details
+        let error_code = unsafe { kreuzberg_last_error_code() };
+        let error_msg = unsafe { CStr::from_ptr(kreuzberg_last_error_context()) }.to_string_lossy();
+        eprintln!("JNI: FFI error code={}, message={}", error_code, error_msg);
+        return throw_exception(
+            &mut env,
+            &format!("Failed to parse config JSON (code {}): {}", error_code, error_msg),
+        );
     }
 
     // SAFETY: We have valid pointers from CString and config_ptr
@@ -194,9 +260,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFileImpl<
     }
 
     // SAFETY: We have valid pointers from CString
-    let result = unsafe {
-        kreuzberg_extract_file(path_c.as_ptr(), mime_type_c.as_ptr(), config_ptr)
-    };
+    let result = unsafe { kreuzberg_extract_file(path_c.as_ptr(), mime_type_c.as_ptr(), config_ptr) };
 
     if result.is_null() {
         unsafe {
@@ -261,9 +325,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFileSyncI
     }
 
     // SAFETY: We have valid pointers from CString
-    let result = unsafe {
-        kreuzberg_extract_file_sync(path_c.as_ptr(), mime_type_c.as_ptr(), config_ptr)
-    };
+    let result = unsafe { kreuzberg_extract_file_sync(path_c.as_ptr(), mime_type_c.as_ptr(), config_ptr) };
 
     if result.is_null() {
         unsafe {
@@ -307,21 +369,32 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesSync
         Err(e) => return throw_exception(&mut env, &e),
     };
 
-    let content_bytes = content_str.into_bytes();
+    // Decode content from Base64 (Kotlin wrapper encodes bytes as Base64 to pass through JNI)
+    let content_bytes = match base64_decode(&content_str) {
+        Ok(bytes) => bytes,
+        Err(e) => return throw_exception(&mut env, &format!("Failed to decode Base64 content: {}", e)),
+    };
 
-    let mime_type_c = match CString::new(mime_type_str) {
+    let mime_type_c = match CString::new(mime_type_str.clone()) {
         Ok(cs) => cs,
         Err(e) => return throw_exception(&mut env, &format!("Invalid mime_type: {}", e)),
     };
 
-    let config_c = match CString::new(config_str) {
+    let config_c = match CString::new(config_str.clone()) {
         Ok(cs) => cs,
-        Err(e) => return throw_exception(&mut env, &format!("Invalid config: {}", e)),
+        Err(e) => return throw_exception(&mut env, &format!("Invalid config (null byte in string): {}", e)),
     };
+
+    // Debug output
+    eprintln!("JNI nativeExtractBytesSyncImpl called!");
+    eprintln!("  content_bytes.len={}", content_bytes.len());
+    eprintln!("  mime_type={}", mime_type_str);
+    eprintln!("  config length={}", config_str.len());
 
     let config_ptr = unsafe { kreuzberg_extraction_config_from_json(config_c.as_ptr()) };
     if config_ptr.is_null() {
-        return throw_exception(&mut env, "Failed to parse config JSON");
+        eprintln!("JNI: Failed to parse config JSON: '{}'", config_str);
+        return throw_exception(&mut env, &format!("Failed to parse config JSON: '{}'", config_str));
     }
 
     // SAFETY: We have valid pointers from CString
@@ -425,6 +498,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractByte
         Err(e) => return throw_exception(&mut env, &e),
     };
 
+    let items_len = items_str.len();
     let items_c = match CString::new(items_str) {
         Ok(cs) => cs,
         Err(e) => return throw_exception(&mut env, &format!("Invalid items: {}", e)),
@@ -437,17 +511,25 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractByte
 
     let config_ptr = unsafe { kreuzberg_extraction_config_from_json(config_c.as_ptr()) };
     if config_ptr.is_null() {
-        return throw_exception(&mut env, "Failed to parse config JSON");
+        let error_msg = get_ffi_error_message();
+        return throw_exception(&mut env, &format!("Failed to parse config JSON: {}", error_msg));
     }
 
     // SAFETY: We have valid pointers from CString
+    eprintln!(
+        "JNI nativeBatchExtractBytesSyncImpl: calling kreuzberg_batch_extract_bytes_sync with items length={}",
+        items_len
+    );
     let result_ptr = unsafe { kreuzberg_batch_extract_bytes_sync(items_c.as_ptr(), config_ptr) };
 
     if result_ptr.is_null() {
+        let error_msg = get_ffi_error_message();
         unsafe {
             kreuzberg_extraction_config_free(config_ptr);
         }
-        return throw_exception(&mut env, "Batch extract bytes sync failed");
+        let detailed_error = format!("Batch extract bytes sync failed: {}", error_msg);
+        eprintln!("ERROR: {}", detailed_error);
+        return throw_exception(&mut env, &detailed_error);
     }
 
     let jstr = cstring_ptr_to_jstring(&mut env, result_ptr);
@@ -579,9 +661,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeDetectMimeTypeFr
     let content_bytes = content_str.into_bytes();
 
     // SAFETY: We have a valid slice from Vec
-    let result_ptr = unsafe {
-        kreuzberg_detect_mime_type_from_bytes(content_bytes.as_ptr(), content_bytes.len())
-    };
+    let result_ptr = unsafe { kreuzberg_detect_mime_type_from_bytes(content_bytes.as_ptr(), content_bytes.len()) };
 
     if result_ptr.is_null() {
         throw_exception(&mut env, "Detect MIME type failed")
@@ -866,10 +946,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListOcrBackendsI
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearOcrBackendsImpl(
-    mut env: JNIEnv,
-    _class: JClass,
-) {
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearOcrBackendsImpl(mut env: JNIEnv, _class: JClass) {
     // SAFETY: Function takes no parameters other than out_error
     let mut err_ptr = std::ptr::null_mut();
     let code = unsafe { kreuzberg_clear_ocr_backend(&mut err_ptr) };
@@ -956,10 +1033,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListRenderersImp
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearRenderersImpl(
-    mut env: JNIEnv,
-    _class: JClass,
-) {
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearRenderersImpl(mut env: JNIEnv, _class: JClass) {
     // SAFETY: Function takes no parameters other than out_error
     let mut err_ptr = std::ptr::null_mut();
     let code = unsafe { kreuzberg_clear_renderer(&mut err_ptr) };
@@ -1001,10 +1075,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListValidatorsIm
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearValidatorsImpl(
-    mut env: JNIEnv,
-    _class: JClass,
-) {
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearValidatorsImpl(mut env: JNIEnv, _class: JClass) {
     // SAFETY: Function takes no parameters other than out_error
     let mut err_ptr = std::ptr::null_mut();
     let code = unsafe { kreuzberg_clear_validator(&mut err_ptr) };
