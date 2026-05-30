@@ -4493,16 +4493,16 @@ public struct ExtractedUri: Codable, Sendable, Hashable {
 
 // MARK: - Internal FFI conversions for ExtractedUri
 internal extension ExtractedUri {
-    init(_ rb: RustBridge.ExtractedUriRef) throws {
+    init(_ rb: ExtractedUriRef) throws {
         self.url = rb.url().toString()
         self.label = rb.label()?.toString()
         self.page = rb.page()
         self.kind = UriKind(rawValue: rb.kind().toString()) ?? { fatalError("Unknown UriKind: \(rb.kind().toString())") }()
     }
-    func intoRust() throws -> RustBridge.ExtractedUri {
+    func intoRust() throws -> ExtractedUri {
         let data = try JSONEncoder().encode(self)
         let json = String(data: data, encoding: .utf8) ?? "{}"
-        return try RustBridge.extractedUriFromJson(json)
+        return try extractedUriFromJson(json)
     }
 }
 
@@ -7253,7 +7253,11 @@ public func extractBytesSync(content: [UInt8], mimeType: String, config: Extract
 /// ```
 public func batchExtractFilesSync(items: [BatchFileItem], config: ExtractionConfig) throws -> [ExtractionResult] {
     let _rb_items: RustVec<BatchFileItem> = { let v = RustVec<BatchFileItem>(); for x in items { v.push(value: x) }; return v }()
-    return try RustBridge.batchExtractFilesSync(_rb_items, config).map { ref in var item = ExtractionResult(ptr: ref.ptr); item.isOwned = false; return item }
+    return try RustBridge.batchExtractFilesSync(_rb_items, config).map { ref in
+        let item = (ref as! ExtractionResult)
+        item.isOwned = false
+        return item
+    }
 }
 
 /// Synchronous wrapper for `batch_extract_bytes`.
@@ -7282,7 +7286,11 @@ public func batchExtractFilesSync(items: [BatchFileItem], config: ExtractionConf
 /// ```
 public func batchExtractBytesSync(items: [BatchBytesItem], config: ExtractionConfig) throws -> [ExtractionResult] {
     let _rb_items: RustVec<BatchBytesItem> = { let v = RustVec<BatchBytesItem>(); for x in items { v.push(value: x) }; return v }()
-    return try RustBridge.batchExtractBytesSync(_rb_items, config).map { ref in var item = ExtractionResult(ptr: ref.ptr); item.isOwned = false; return item }
+    return try RustBridge.batchExtractBytesSync(_rb_items, config).map { ref in
+        let item = (ref as! ExtractionResult)
+        item.isOwned = false
+        return item
+    }
 }
 
 /// Extract content from multiple files concurrently.
