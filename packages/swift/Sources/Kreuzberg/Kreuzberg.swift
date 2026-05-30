@@ -4493,16 +4493,16 @@ public struct ExtractedUri: Codable, Sendable, Hashable {
 
 // MARK: - Internal FFI conversions for ExtractedUri
 internal extension ExtractedUri {
-    init(_ rb: ExtractedUriRef) throws {
+    init(_ rb: UriRef) throws {
         self.url = rb.url().toString()
         self.label = rb.label()?.toString()
         self.page = rb.page()
         self.kind = UriKind(rawValue: rb.kind().toString()) ?? { fatalError("Unknown UriKind: \(rb.kind().toString())") }()
     }
-    func intoRust() throws -> ExtractedUri {
+    func intoRust() throws -> Uri {
         let data = try JSONEncoder().encode(self)
         let json = String(data: data, encoding: .utf8) ?? "{}"
-        return try extractedUriFromJson(json)
+        return try uriFromJson(json)
     }
 }
 
@@ -7357,10 +7357,11 @@ public func batchExtractBytesSync(items: [BatchBytesItem], config: ExtractionCon
 /// ```
 public func batchExtractFiles(items: [BatchFileItem], config: ExtractionConfig) async throws -> [ExtractionResult] {
     let _rb_items: RustVec<BatchFileItem> = { let v = RustVec<BatchFileItem>(); for x in items { v.push(value: x) }; return v }()
-    return try await Task.detached(priority: .userInitiated) {
-        let result = try RustBridge.batchExtractFiles(_rb_items, config)
-        return result
-    }.value
+    await Task.yield()
+    let result = try RustBridge.batchExtractFiles(_rb_items, config)
+    var out: [ExtractionResult] = []
+    while let item = result.pop() { out.append(item) }
+    return out.reversed()
 }
 
 /// Extract content from multiple byte arrays concurrently.
@@ -7420,10 +7421,11 @@ public func batchExtractFiles(items: [BatchFileItem], config: ExtractionConfig) 
 /// ```
 public func batchExtractBytes(items: [BatchBytesItem], config: ExtractionConfig) async throws -> [ExtractionResult] {
     let _rb_items: RustVec<BatchBytesItem> = { let v = RustVec<BatchBytesItem>(); for x in items { v.push(value: x) }; return v }()
-    return try await Task.detached(priority: .userInitiated) {
-        let result = try RustBridge.batchExtractBytes(_rb_items, config)
-        return result
-    }.value
+    await Task.yield()
+    let result = try RustBridge.batchExtractBytes(_rb_items, config)
+    var out: [ExtractionResult] = []
+    while let item = result.pop() { out.append(item) }
+    return out.reversed()
 }
 
 /// Detect MIME type from raw file bytes.
