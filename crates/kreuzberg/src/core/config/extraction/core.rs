@@ -214,6 +214,20 @@ pub struct ExtractionConfig {
     #[serde(default)]
     pub layout: Option<super::super::layout::LayoutDetectionConfig>,
 
+    /// Transcription (speech-to-text) configuration for audio/video files.
+    ///
+    /// When set and `enabled`, files with audio/video MIME types (mp3, mp4,
+    /// m4a, wav, webm, etc.) are routed to the Whisper-based transcription
+    /// pipeline. The actual heavy dependencies are only active under the
+    /// `transcription` feature; the field is visible under `transcription-types`
+    /// (including on WASM and Android targets that use the no-ORT preset).
+    ///
+    /// Default: `None` (transcription disabled). This is an additive,
+    /// non-breaking change.
+    #[cfg(feature = "transcription-types")]
+    #[serde(default)]
+    pub transcription: Option<super::super::transcription::TranscriptionConfig>,
+
     /// Run layout detection on the non-OCR PDF markdown path.
     ///
     /// When `true` and `layout` is `Some(_)`, layout regions inform heading,
@@ -377,6 +391,8 @@ impl Default for ExtractionConfig {
             max_embedded_file_bytes: default_max_embedded_file_bytes(),
             #[cfg(feature = "layout-types")]
             layout: None,
+            #[cfg(feature = "transcription-types")]
+            transcription: None,
             use_layout_for_markdown: false,
             result_format: crate::types::ResultFormat::Unified,
             output_format: OutputFormat::Plain,
@@ -450,6 +466,8 @@ impl ExtractionConfig {
             ref include_document_structure,
             #[cfg(feature = "layout-types")]
             ref layout,
+            #[cfg(feature = "transcription-types")]
+                transcription: _,
             ref timeout_secs,
             #[cfg(feature = "tree-sitter")]
             ref tree_sitter,

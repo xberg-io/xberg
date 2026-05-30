@@ -126,6 +126,11 @@ pub struct FileExtractionConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layout: Option<super::super::layout::LayoutDetectionConfig>,
 
+    /// Transcription configuration (see ExtractionConfig for docs).
+    #[cfg(feature = "transcription-types")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcription: Option<super::super::transcription::TranscriptionConfig>,
+
     /// Override per-file extraction timeout in seconds.
     ///
     /// When set, the extraction for this file will be canceled after the

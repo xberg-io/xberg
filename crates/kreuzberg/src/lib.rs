@@ -124,6 +124,10 @@ pub mod layout;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 
+// Transcription (audio/video STT) — internal module + public types gated separately.
+#[cfg(any(feature = "transcription", feature = "transcription-types"))]
+pub(crate) mod transcription;
+
 // ── Error, Result, and all types ─────────────────────────────────────────────
 // NOTE: `CancellationToken` is intentionally NOT re-exported here.
 // It is an `Arc<AtomicBool>` wrapper that does not cross FFI cleanly.
@@ -158,6 +162,8 @@ pub use core::config::{
     RedactionPattern, RedactionTerm, StructuredExtractionConfig, SummarizationConfig, TokenReductionOptions,
     TranslationConfig,
 };
+#[cfg(feature = "transcription-types")]
+pub use core::config::{TranscriptionConfig, WhisperModel};
 pub use extractors::security::SecurityLimits;
 
 #[cfg(feature = "quality")]

@@ -327,7 +327,7 @@ fn test_mime_validation() {
     assert!(validate_mime_type("image/png").is_ok());
     assert!(validate_mime_type("image/custom-format").is_ok());
 
-    assert!(validate_mime_type("video/mp4").is_err());
+    // video/mp4 (and other audio/video) are now declared formats; extraction requires transcription feature
     assert!(validate_mime_type("application/unknown").is_err());
 }
 

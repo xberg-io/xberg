@@ -135,6 +135,13 @@ pub enum KreuzbergError {
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
 
+    #[error("Transcription error: {message}")]
+    Transcription {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
     #[error("Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)")]
     Timeout { elapsed_ms: u64, limit_ms: u64 },
 
@@ -246,6 +253,7 @@ impl KreuzbergError {
     error_constructor!(serialization, Serialization);
     error_constructor!(embedding, Embedding);
     error_constructor!(security, Security);
+    error_constructor!(transcription, Transcription);
 }
 
 #[cfg(test)]

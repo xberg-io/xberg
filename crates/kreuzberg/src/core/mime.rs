@@ -515,6 +515,36 @@ static FORMATS: &[FormatEntry] = &[
         mime_type: "application/x-iwork-keynote-sffkey",
         aliases: &[],
     },
+    // ── Audio / Video (speech-to-text transcription) ────────────────────
+    // Supported when the `transcription` feature is enabled.
+    // Registered unconditionally so list_supported_formats() and MIME detection
+    // are consistent; extraction fails gracefully with a clear error when the
+    // feature (or config) is absent — exactly the same contract as pdf/office etc.
+    FormatEntry {
+        extensions: &["mp3", "mpga"],
+        mime_type: "audio/mpeg",
+        aliases: &["audio/mp3"],
+    },
+    FormatEntry {
+        extensions: &["m4a"],
+        mime_type: "audio/mp4",
+        aliases: &["audio/x-m4a"],
+    },
+    FormatEntry {
+        extensions: &["wav"],
+        mime_type: "audio/wav",
+        aliases: &["audio/x-wav"],
+    },
+    FormatEntry {
+        extensions: &["webm"],
+        mime_type: "audio/webm",
+        aliases: &["video/webm"],
+    },
+    FormatEntry {
+        extensions: &["mp4", "mpeg"],
+        mime_type: "video/mp4",
+        aliases: &["audio/mp4", "video/mpeg"],
+    },
     // ── Source code (tree-sitter) ──────────────────────────────────────
     // No file extension mapping — detection is dynamic via TSLP's
     // detect_language_from_extension() as a fallback in detect_mime_type().
@@ -1045,7 +1075,7 @@ mod tests {
     #[test]
     fn test_validate_mime_type_unsupported() {
         assert!(validate_mime_type("application/unknown").is_err());
-        assert!(validate_mime_type("video/mp4").is_err());
+        // audio/video MIME types are now declared (transcription feature controls actual extraction)
     }
 
     #[test]

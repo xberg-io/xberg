@@ -280,6 +280,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **types**: bidirectional `From` impls between `InternalDocument` (rich pipeline type) and `ExtractionResult` (public output type). Lossy conversions used at FFI/trait-bridge boundaries where foreign-language plugins return `ExtractionResult` but the canonical Rust trait signature requires `InternalDocument`. `ExtractionResult → InternalDocument` stashes content in `pre_rendered_content`; `InternalDocument → ExtractionResult` runs `derive_extraction_result` with `OutputFormat::Plain`.
 
+- **transcription** (behind `transcription` + `transcription-types` features): Initial foundation for audio/video speech-to-text support (.mp3, .mp4, .m4a, .wav, .webm and related). Adds `TranscriptionConfig` (with `model`, `language`, `timestamps`, safety limits, etc.) and `WhisperModel` enum. New MIME types are declared; extraction is routed through a feature-gated `TranscriptionExtractor`. Real Whisper ONNX inference + full symphonia decode is the immediate follow-up. All heavy dependencies (ort, hf-hub, symphonia) are optional and zero-impact when the feature is disabled. (#487)
+
 - **extraction**: `ImageExtractionConfig` gains three new fields for controlling image-OCR output:
   - `run_ocr_on_images` (default `true`) — when `false`, suppresses per-image OCR even if an OCR backend is configured. Useful for extracting images without OCR overhead.
   - `ocr_text_only` (default `false`) — replaces the `![alt](url)` image placeholder with the OCR text. Only takes effect when `run_ocr_on_images` is `true`.

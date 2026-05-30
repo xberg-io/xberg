@@ -23,6 +23,7 @@ pub mod pdf;
 pub mod processing;
 pub mod redaction;
 pub mod summarization;
+pub mod transcription;
 pub mod translation;
 #[cfg(feature = "tree-sitter")]
 pub mod tree_sitter;
@@ -59,3 +60,6 @@ pub use ner::{NerBackendKind, NerConfig};
 pub use redaction::{RedactionConfig, RedactionPattern, RedactionTerm};
 pub use summarization::SummarizationConfig;
 pub use translation::TranslationConfig;
+
+#[cfg(feature = "transcription-types")]
+pub use transcription::{TranscriptionConfig, WhisperModel};

@@ -121,6 +121,7 @@ impl ApiError {
             KreuzbergError::Other(_) => "Error",
             KreuzbergError::Cancelled => "CancelledError",
             KreuzbergError::Security { .. } => "SecurityError",
+            KreuzbergError::Transcription { .. } => "TranscriptionError",
         };
 
         Self {

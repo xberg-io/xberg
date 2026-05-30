@@ -89,6 +89,9 @@ pub mod qr;
 #[cfg(feature = "archives")]
 pub mod archive;
 
+#[cfg(feature = "transcription")]
+pub mod transcription;
+
 #[cfg(feature = "email")]
 pub mod email;
 
@@ -281,6 +284,9 @@ pub use xml::XmlExtractor;
 #[cfg(feature = "xml")]
 pub use docbook::DocbookExtractor;
 
+#[cfg(feature = "transcription")]
+pub use transcription::TranscriptionExtractor;
+
 /// One-time initialization guard for the built-in extractor registry.
 ///
 /// Set to `()` once registration succeeds. If registration fails the cell remains
@@ -413,6 +419,9 @@ pub(crate) fn register_default_extractors() -> Result<()> {
         registry.register(Arc::new(GzipExtractor::new()))?;
     }
 
+    #[cfg(feature = "transcription")]
+    registry.register(Arc::new(TranscriptionExtractor))?;
+
     Ok(())
 }
 
@@ -435,6 +444,7 @@ mod tests {
 
         #[allow(unused_mut)]
         let mut expected_count = 5; // plain-text, markdown, structured, djot, csv
+        // transcription-extractor is only present when the feature is compiled in
         assert!(extractor_names.contains(&"plain-text-extractor".to_string()));
         assert!(extractor_names.contains(&"markdown-extractor".to_string()));
         assert!(extractor_names.contains(&"structured-extractor".to_string()));
@@ -541,6 +551,12 @@ mod tests {
             assert!(extractor_names.contains(&"tar-extractor".to_string()));
             assert!(extractor_names.contains(&"7z-extractor".to_string()));
             assert!(extractor_names.contains(&"gzip-extractor".to_string()));
+        }
+
+        #[cfg(feature = "transcription")]
+        {
+            expected_count += 1;
+            assert!(extractor_names.contains(&"transcription".to_string()));
         }
 
         assert_eq!(

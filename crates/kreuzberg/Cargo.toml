@@ -27,6 +27,9 @@ ignored = [
     # cargo-machete checks for the package name but the source imports the lib name.
     "kreuzberg-gliner-rs",
     "kreuzberg-orp",
+    # symphonia is optional behind the `transcription` feature; cargo-machete cannot
+    # resolve optional dep usage through feature-gated cfg blocks.
+    "symphonia",
 ]
 
 [lib]
@@ -162,6 +165,23 @@ layout-types = []
 # auto-rotate-types: pure-Rust OrientationResult struct — no ORT dependency.
 # Included by auto-rotate; also usable standalone on WASM/Android targets.
 auto-rotate-types = []
+
+# Transcription (audio/video speech-to-text via Whisper ONNX + ORT).
+# Matches the exact pattern of embeddings / layout-detection / paddle-ocr:
+# - transcription-types: pure config structs only (WASM/Android safe, no ORT)
+# - transcription: full inference (ORT + hf-hub + symphonia decode). Zero impact when off.
+# Excluded from no-ort-target, wasm-target, android-target (x86_64 emulator) exactly like other ORT ML.
+transcription-types = []
+transcription = [
+    "transcription-types",
+    "dep:ort",
+    "dep:hf-hub",
+    "dep:sha2",
+    "dep:symphonia",
+    "ort-bundled",
+    "tokio-runtime",
+]
+
 chunking = [
     "dep:auto_enums",
     "dep:either",
@@ -277,6 +297,7 @@ no-ort-target = [
     "redaction",
     "summarization",
     "qr-codes",
+    "transcription-types",
 ]
 # wasm-target: no-ort-target plus WASM-specific overrides (excel-wasm, tree-sitter-wasm, ocr-wasm).
 wasm-target = ["no-ort-target", "excel-wasm", "tree-sitter-wasm", "ocr-wasm"]
@@ -330,6 +351,7 @@ full = [
     "paddle-ocr",
     "layout-detection",
     "embeddings",
+    "transcription",
     "chunking-tokenizers",
     "tree-sitter",
     "liter-llm",
@@ -347,7 +369,15 @@ full = [
     "qr-codes",
 ]
 # Server deployment preset — formats + analysis + services + OCR.
-server = ["formats", "analysis", "services", "ocr", "paddle-ocr", "layout-detection"]
+server = [
+    "formats",
+    "analysis",
+    "services",
+    "ocr",
+    "paddle-ocr",
+    "layout-detection",
+    "transcription",
+]
 # CLI-only features (thin gate for kreuzberg-cli).
 cli = ["services", "chunking"]
 
@@ -463,6 +493,15 @@ simdutf8 = { version = "0.1", optional = true }
 similar = { workspace = true, optional = true }
 snap = { version = "1.1", optional = true }
 strum = { version = "0.28", features = ["derive"], optional = true }
+# Symphonia: pure-Rust audio decoder for mp3, wav, m4a/mp4, webm etc.
+# MPL-2.0 (file-scoped copyleft, safe for our use). Exception granted in deny.toml.
+symphonia = { version = "0.5", optional = true, default-features = false, features = [
+    "mp3",
+    "wav",
+    "aac",
+    "isomp4",
+    "mkv",
+] }
 tar = { version = "^0.4", optional = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }

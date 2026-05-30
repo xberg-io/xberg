@@ -119,6 +119,14 @@ pub(crate) fn map_kreuzberg_error_to_mcp(error: KreuzbergError) -> McpError {
             // Hostile / malformed user input → invalid params per MCP spec.
             McpError::invalid_params(error_message, None)
         }
+
+        KreuzbergError::Transcription { message, source } => {
+            let mut error_message = format!("Transcription error: {}", message);
+            if let Some(src) = source {
+                let _ = write!(error_message, " (caused by: {})", src);
+            }
+            McpError::internal_error(error_message, None)
+        }
     }
 }
 

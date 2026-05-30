@@ -208,10 +208,10 @@ async fn test_mime_type_image_prefix_validation() {
 async fn test_unknown_mime_type() {
     let unsupported = vec![
         "application/x-unknown-format",
-        "video/mp4",
-        "audio/mp3",
         "application/octet-stream",
         "text/x-unsupported",
+        // Note: video/mp4 and audio/mp3 are now declared supported formats (transcription feature
+        // gates actual extraction; validate_mime_type succeeds for declared formats).
     ];
 
     for mime_type in unsupported {

@@ -50,6 +50,19 @@ exceptions = [
   { allow = ["MPL-2.0"], crate = "option-ext" },
   # r-efi: UEFI bindings, platform-specific transitive dep, never linked
   { allow = ["LGPL-2.1-or-later"], crate = "r-efi" },
+  # symphonia (and sub-crates): audio decoder for transcription feature.
+  # MPL-2.0 is file-scoped copyleft; using the crate imposes no share-alike on kreuzberg.
+  # Required for clean decode of mp3/mp4/m4a/wav/webm to 16kHz mono f32 PCM for Whisper.
+  { allow = ["MPL-2.0"], crate = "symphonia" },
+  { allow = ["MPL-2.0"], crate = "symphonia-core" },
+  { allow = ["MPL-2.0"], crate = "symphonia-bundle-mp3" },
+  { allow = ["MPL-2.0"], crate = "symphonia-format-wav" },
+  { allow = ["MPL-2.0"], crate = "symphonia-format-isomp4" },
+  { allow = ["MPL-2.0"], crate = "symphonia-format-mkv" },
+  { allow = ["MPL-2.0"], crate = "symphonia-codec-aac" },
+  { allow = ["MPL-2.0"], crate = "symphonia-metadata" },
+  { allow = ["MPL-2.0"], crate = "symphonia-format-riff" },
+  { allow = ["MPL-2.0"], crate = "symphonia-utils-xiph" },
 ]
 
 #[[licenses.clarify]]
