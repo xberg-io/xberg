@@ -7,178 +7,25 @@ use jni::sys::{jboolean, jbyteArray, jint, jlong, jstring};
 use jni::JNIEnv;
 use std::ffi::{CStr, CString};
 
-// Pull in kreuzberg-ffi as a Rust dep so its #[no_mangle] symbols are
-// preserved through static linking; without this, rlib dead-code
-// elimination drops them and the extern "C" forward declarations below
-// resolve to null at runtime, crashing the JVM on first JNI call.
-extern crate kreuzberg_ffi;
-
-// Build a #[used] static array of function pointers into kreuzberg_ffi so
-// the linker treats every FFI export as live and emits it as a defined
-// symbol in libkreuzberg_jni. Without a forced reference, plain
-// `extern crate` is insufficient — the linker still GC's the symbols.
-struct PtrSlot(*const ());
-unsafe impl Sync for PtrSlot {}
-
-#[used]
-static _KEEP_FFI_LIVE: &[PtrSlot] = &[
-    PtrSlot(kreuzberg_ffi::kreuzberg_extract_bytes as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_extract_bytes_sync as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_extract_file as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_extract_file_sync as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_batch_extract_bytes as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_batch_extract_bytes_sync as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_batch_extract_files as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_batch_extract_files_sync as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_extraction_config_from_json as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_extraction_config_free as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_extraction_result_to_json as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_extraction_result_free as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_detect_mime_type as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_detect_mime_type_from_bytes as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_get_extensions_for_mime as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_embed_texts as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_list_embedding_presets as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_get_embedding_preset as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_render_pdf_page_to_png as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_free_string as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_list_embedding_backends as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_clear_embedding_backend as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_list_document_extractors as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_clear_document_extractor as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_list_ocr_backends as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_clear_ocr_backend as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_list_post_processors as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_clear_post_processor as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_list_renderers as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_clear_renderer as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_list_validators as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_clear_validator as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_unregister_document_extractor as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_unregister_embedding_backend as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_unregister_ocr_backend as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_unregister_post_processor as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_unregister_renderer as *const ()),
-    PtrSlot(kreuzberg_ffi::kreuzberg_unregister_validator as *const ()),
-];
-
-// ============================================================================
-// FFI Function Declarations
-// These are C symbols exported from kreuzberg-ffi
-// ============================================================================
-
-unsafe extern "C" {
-    // Config handling
-    fn kreuzberg_extraction_config_from_json(json: *const std::ffi::c_char)
-        -> *mut std::ffi::c_void;
-    fn kreuzberg_extraction_config_free(ptr: *mut std::ffi::c_void);
-
-    // Extraction functions
-    fn kreuzberg_extract_bytes(
-        content: *const u8,
-        content_len: usize,
-        mime_type: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_void;
-
-    fn kreuzberg_extract_file(
-        path: *const std::ffi::c_char,
-        mime_type: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_void;
-
-    fn kreuzberg_extract_file_sync(
-        path: *const std::ffi::c_char,
-        mime_type: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_void;
-
-    fn kreuzberg_extract_bytes_sync(
-        content: *const u8,
-        content_len: usize,
-        mime_type: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_void;
-
-    // Batch extraction
-    fn kreuzberg_batch_extract_files_sync(
-        items: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_char;
-
-    fn kreuzberg_batch_extract_bytes_sync(
-        items: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_char;
-
-    fn kreuzberg_batch_extract_files(
-        items: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_char;
-
-    fn kreuzberg_batch_extract_bytes(
-        items: *const std::ffi::c_char,
-        config: *const std::ffi::c_void,
-    ) -> *mut std::ffi::c_char;
-
-    // MIME detection
-    fn kreuzberg_detect_mime_type_from_bytes(
-        content: *const u8,
-        content_len: usize,
-    ) -> *mut std::ffi::c_char;
-
-    fn kreuzberg_detect_mime_type(
-        path: *const std::ffi::c_char,
-        check_exists: i32,
-    ) -> *mut std::ffi::c_char;
-
-    // Result handling
-    fn kreuzberg_extraction_result_to_json(ptr: *const std::ffi::c_void) -> *mut std::ffi::c_char;
-
-    fn kreuzberg_extraction_result_free(ptr: *mut std::ffi::c_void);
-
-    // List/Clear backends
-    fn kreuzberg_list_embedding_backends() -> *mut std::ffi::c_char;
-    fn kreuzberg_clear_embedding_backend(out_error: *mut *mut std::ffi::c_char) -> i32;
-
-    fn kreuzberg_list_document_extractors() -> *mut std::ffi::c_char;
-    fn kreuzberg_clear_document_extractor(out_error: *mut *mut std::ffi::c_char) -> i32;
-
-    fn kreuzberg_list_ocr_backends() -> *mut std::ffi::c_char;
-    fn kreuzberg_clear_ocr_backend(out_error: *mut *mut std::ffi::c_char) -> i32;
-
-    fn kreuzberg_list_post_processors() -> *mut std::ffi::c_char;
-    fn kreuzberg_clear_post_processor(out_error: *mut *mut std::ffi::c_char) -> i32;
-
-    fn kreuzberg_list_renderers() -> *mut std::ffi::c_char;
-    fn kreuzberg_clear_renderer(out_error: *mut *mut std::ffi::c_char) -> i32;
-
-    fn kreuzberg_list_validators() -> *mut std::ffi::c_char;
-    fn kreuzberg_clear_validator(out_error: *mut *mut std::ffi::c_char) -> i32;
-
-    // Embeddings
-    fn kreuzberg_embed_texts(
-        texts: *const std::ffi::c_char,
-        config: *const std::ffi::c_char,
-    ) -> *mut std::ffi::c_char;
-
-    fn kreuzberg_list_embedding_presets() -> *mut std::ffi::c_char;
-
-    fn kreuzberg_get_embedding_preset(name: *const std::ffi::c_char) -> *mut std::ffi::c_char;
-
-    // PDF rendering
-    fn kreuzberg_render_pdf_page_to_png(
-        pdf_bytes: *const u8,
-        pdf_bytes_len: usize,
-        page_index: u32,
-        dpi: u32,
-        password: *const std::ffi::c_char,
-    ) -> *mut u8;
-
-    // Memory management
-    fn kreuzberg_free_string(ptr: *mut std::ffi::c_char);
-    fn kreuzberg_free_bytes(ptr: *mut u8, len: usize, cap: usize);
-}
+// Pull in kreuzberg-ffi by Rust path. The `use` keeps the rlib's
+// #[no_mangle] symbols live through static linking — without an explicit
+// reference, rlib dead-code elimination drops them and the JNI shim's
+// indirect calls would resolve to null at runtime, crashing the JVM on
+// the first FFI invocation. Using the typed FFI signatures directly also
+// lets the compiler catch any future signature drift in kreuzberg-ffi.
+use kreuzberg_ffi::{
+    kreuzberg_batch_extract_bytes, kreuzberg_batch_extract_bytes_sync, kreuzberg_batch_extract_files,
+    kreuzberg_batch_extract_files_sync, kreuzberg_clear_document_extractor, kreuzberg_clear_embedding_backend,
+    kreuzberg_clear_ocr_backend, kreuzberg_clear_post_processor, kreuzberg_clear_renderer, kreuzberg_clear_validator,
+    kreuzberg_detect_mime_type, kreuzberg_detect_mime_type_from_bytes, kreuzberg_embed_texts,
+    kreuzberg_embedding_config_free, kreuzberg_embedding_config_from_json, kreuzberg_embedding_preset_free,
+    kreuzberg_embedding_preset_to_json, kreuzberg_extract_bytes, kreuzberg_extract_bytes_sync, kreuzberg_extract_file,
+    kreuzberg_extract_file_sync, kreuzberg_extraction_config_free, kreuzberg_extraction_config_from_json,
+    kreuzberg_extraction_result_free, kreuzberg_extraction_result_to_json, kreuzberg_free_bytes, kreuzberg_free_string,
+    kreuzberg_get_embedding_preset, kreuzberg_list_document_extractors, kreuzberg_list_embedding_backends,
+    kreuzberg_list_embedding_presets, kreuzberg_list_ocr_backends, kreuzberg_list_post_processors,
+    kreuzberg_list_renderers, kreuzberg_list_validators, kreuzberg_render_pdf_page_to_png,
+};
 
 // ============================================================================
 // Helper Functions
@@ -821,16 +668,27 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeEmbedTextsImpl<'
         Err(e) => return throw_exception(&mut env, &format!("Invalid config: {}", e)),
     };
 
-    // SAFETY: We have valid pointers from CString
-    let result_ptr = unsafe { kreuzberg_embed_texts(texts_c.as_ptr(), config_c.as_ptr()) };
+    // Parse the JSON config into a typed EmbeddingConfig handle before invoking
+    // embed_texts — the FFI takes a typed pointer, not a raw JSON string.
+    let config_ptr = unsafe { kreuzberg_embedding_config_from_json(config_c.as_ptr()) };
+    if config_ptr.is_null() {
+        return throw_exception(&mut env, "Failed to parse embedding config JSON");
+    }
+
+    // SAFETY: We have valid pointers from CString and the typed config handle.
+    let result_ptr = unsafe { kreuzberg_embed_texts(texts_c.as_ptr(), config_ptr) };
 
     if result_ptr.is_null() {
+        unsafe {
+            kreuzberg_embedding_config_free(config_ptr);
+        }
         throw_exception(&mut env, "Embed texts failed")
     } else {
         let jstr = cstring_ptr_to_jstring(&mut env, result_ptr);
         // Clean up
         unsafe {
             kreuzberg_free_string(result_ptr);
+            kreuzberg_embedding_config_free(config_ptr);
         }
         jstr
     }
@@ -872,17 +730,21 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeGetEmbeddingPres
         Err(e) => return throw_exception(&mut env, &format!("Invalid name: {}", e)),
     };
 
-    // SAFETY: We have a valid C string
-    let result_ptr = unsafe { kreuzberg_get_embedding_preset(name_c.as_ptr()) };
+    // SAFETY: We have a valid C string.
+    // kreuzberg_get_embedding_preset returns a typed *mut EmbeddingPreset, not a
+    // JSON string — serialise it via kreuzberg_embedding_preset_to_json before
+    // crossing back to the JVM.
+    let preset_ptr = unsafe { kreuzberg_get_embedding_preset(name_c.as_ptr()) };
 
-    if result_ptr.is_null() {
+    if preset_ptr.is_null() {
         // Return null (None in Kotlin)
         std::ptr::null_mut()
     } else {
-        let jstr = cstring_ptr_to_jstring(&mut env, result_ptr);
-        // Clean up
+        let json_ptr = unsafe { kreuzberg_embedding_preset_to_json(preset_ptr) };
+        let jstr = cstring_ptr_to_jstring(&mut env, json_ptr);
         unsafe {
-            kreuzberg_free_string(result_ptr);
+            kreuzberg_free_string(json_ptr);
+            kreuzberg_embedding_preset_free(preset_ptr);
         }
         jstr
     }
@@ -1202,20 +1064,38 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeRenderPdfPageToP
         }
     };
 
-    // SAFETY: We have valid pointers
-    let _result_ptr = unsafe {
+    // FFI returns -1 on failure or fills the out_ptr/out_len/out_cap triple.
+    let mut out_ptr: *mut u8 = std::ptr::null_mut();
+    let mut out_len: usize = 0;
+    let mut out_cap: usize = 0;
+    // SAFETY: input pointers are valid for the duration of this call; out-params
+    // point to stack locals that outlive the FFI call.
+    let rc = unsafe {
         kreuzberg_render_pdf_page_to_png(
             pdf_bytes_data.as_ptr(),
             pdf_bytes_data.len(),
-            page_index as u32,
-            dpi as u32,
+            page_index as usize,
+            dpi as i32,
             password_c.as_ptr(),
+            &mut out_ptr,
+            &mut out_len,
+            &mut out_cap,
         )
     };
 
-    // For now, return empty byte array since length tracking is complex
-    // TODO: Fix with proper length tracking from FFI
-    env.byte_array_from_slice(&[])
+    if rc != 0 || out_ptr.is_null() {
+        throw_exception(&mut env, "Render PDF page to PNG failed");
+        return std::ptr::null_mut();
+    }
+
+    // Copy the PNG bytes into a JVM-owned byte[] before releasing the FFI buffer.
+    // SAFETY: out_ptr/out_len describe the PNG buffer the FFI populated.
+    let png_bytes = unsafe { std::slice::from_raw_parts(out_ptr, out_len) }.to_vec();
+    unsafe {
+        kreuzberg_free_bytes(out_ptr, out_len, out_cap);
+    }
+
+    env.byte_array_from_slice(&png_bytes)
         .map(|ba| ba.into_raw())
         .unwrap_or(std::ptr::null_mut())
 }
