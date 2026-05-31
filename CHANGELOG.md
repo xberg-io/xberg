@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is attempted. Applies to OOXML embedded objects (DOCX/PPTX) and email attachments. Files
   exceeding the cap are skipped with a `ProcessingWarning`. Set to `None` to disable.
 
+- **pdf/email**: `SecurityBudget` wired into the PDF extractor and the email extractor.
+  Both extractors now enforce `SecurityLimits.max_content_size` (default 100 MiB) on
+  the total accumulated element text after extraction. A crafted document that produces
+  more than the limit via repeated/synthetic content streams returns
+  `KreuzbergError::Security` instead of silently exhausting heap. The check uses the
+  same `From<SecurityError>` conversion used by every other budget-aware extractor so
+  bindings observe a unified `Security` error variant.
+
 - **pdf**: Decompression ratio guard for PDF embedded file streams. lopdf's
   `decompressed_content()` was called unconditionally on embedded-file streams in
   `pdf/embedded_files.rs`, allowing a crafted PDF with a highly-compressed stream to

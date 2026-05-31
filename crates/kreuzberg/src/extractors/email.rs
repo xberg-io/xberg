@@ -3,6 +3,7 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::extractors::SyncExtractor;
+use crate::extractors::security::SecurityBudget;
 use crate::plugins::{DocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
 use crate::types::internal_builder::InternalDocumentBuilder;
@@ -284,6 +285,15 @@ impl SyncExtractor for EmailExtractor {
             additional,
             ..Default::default()
         };
+
+        // Guard total extracted text against max_content_size to prevent a crafted
+        // email with a gigabytes-scale body from exhausting memory in downstream
+        // consumers. Checked once after the document is fully built so the limit
+        // acts as a document-level cap rather than a per-element cap.
+        let mut budget = SecurityBudget::from_config(config);
+        for elem in &doc.elements {
+            budget.account_text(elem.text.len())?;
+        }
 
         Ok(doc)
     }
@@ -617,5 +627,50 @@ Content-Type: text/html; charset=utf-8
             paragraph_count, 2,
             "Should have exactly 2 body paragraphs (no duplicates)"
         );
+    }
+
+    #[test]
+    fn test_content_size_guard_fires_when_limit_exceeded() {
+        // Build an email whose body text exceeds a tiny max_content_size.
+        // The guard must return KreuzbergError::Security.
+        use crate::extractors::security::SecurityLimits;
+
+        let long_body = "x".repeat(1000);
+        let eml = format!(
+            "From: sender@example.com\r\nSubject: Big\r\n\r\n{}",
+            long_body
+        );
+
+        let config = ExtractionConfig {
+            security_limits: Some(SecurityLimits {
+                max_content_size: 10, // 10 bytes — the body is 1000 bytes
+                ..SecurityLimits::default()
+            }),
+            ..Default::default()
+        };
+
+        let extractor = EmailExtractor::new();
+        let result = extractor.extract_sync(eml.as_bytes(), "message/rfc822", &config);
+
+        assert!(
+            result.is_err(),
+            "extraction must fail when content exceeds max_content_size"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.to_lowercase().contains("security") || err_msg.to_lowercase().contains("content"),
+            "error must mention security or content: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_content_size_guard_passes_for_normal_email() {
+        // A normal short email must not be rejected by the content-size guard.
+        let eml = "From: sender@example.com\r\nSubject: Hi\r\n\r\nHello world.";
+        let config = ExtractionConfig::default();
+        let extractor = EmailExtractor::new();
+        let result = extractor.extract_sync(eml.as_bytes(), "message/rfc822", &config);
+        assert!(result.is_ok(), "normal email must not be rejected: {:?}", result.err());
     }
 }

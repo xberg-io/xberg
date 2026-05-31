@@ -704,6 +704,16 @@ impl PdfExtractor {
             "InternalDocument finalized (oxide path)"
         );
 
+        // Guard total extracted text against max_content_size. A crafted PDF with
+        // repeated paragraphs or synthetic content streams could produce gigabytes
+        // of text. Checked after full assembly so the limit is a document-level cap.
+        {
+            let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
+            for elem in &doc.elements {
+                budget.account_text(elem.text.len())?;
+            }
+        }
+
         Ok(doc)
     }
 
