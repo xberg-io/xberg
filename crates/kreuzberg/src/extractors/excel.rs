@@ -7,11 +7,14 @@ use crate::extractors::security::SecurityBudget;
 use crate::plugins::{DocumentExtractor, Plugin};
 use crate::types::internal::InternalDocument;
 use crate::types::internal_builder::InternalDocumentBuilder;
+use crate::types::page::PageContent;
+use crate::types::tables::Table;
 use crate::types::{ExcelMetadata, Metadata};
 use ahash::AHashMap;
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::path::Path;
+use std::sync::Arc;
 
 /// Validate an Excel workbook against security limits.
 ///
@@ -59,23 +62,85 @@ impl ExcelExtractor {
 
     /// Build an `InternalDocument` from the workbook.
     ///
-    /// Each sheet becomes a table preceded by an H2 heading with the
-    /// sheet name (when non-empty).
+    /// Each sheet becomes a table preceded by an H2 heading with the sheet name (when
+    /// non-empty). Additionally, `prebuilt_pages` is set to `Some(Vec<PageContent>)` with
+    /// one entry per sheet so that `ExtractionResult.pages` is always `Some` for Excel.
+    ///
+    /// Empty sheets still produce a `PageContent` entry so the page index aligns with the
+    /// sheet index. The top-level `content` remains the concatenation of all per-sheet
+    /// content, preserving backward compat for callers that do not read `pages`.
     fn build_internal_document(workbook: &crate::types::ExcelWorkbook) -> InternalDocument {
         let mut builder = InternalDocumentBuilder::new("excel");
+        let mut pages: Vec<PageContent> = Vec::with_capacity(workbook.sheets.len());
 
         for (sheet_index, sheet) in workbook.sheets.iter().enumerate() {
+            let page_number = (sheet_index + 1) as u32;
+
             if let Some(ref cells) = sheet.table_cells
                 && !cells.is_empty()
             {
                 if !sheet.name.is_empty() {
                     builder.push_heading(2, &sheet.name, None, None);
                 }
-                builder.push_table_from_cells(cells, Some((sheet_index + 1) as u32), None);
+                builder.push_table_from_cells(cells, Some(page_number), None);
+
+                // Build per-sheet content: heading (when named) + markdown table.
+                let page_content = if sheet.name.is_empty() {
+                    sheet.markdown.clone()
+                } else {
+                    format!("## {}\n\n{}", sheet.name, sheet.markdown)
+                };
+
+                // Wrap the sheet table in Arc for zero-copy sharing.
+                let arc_table = Arc::new(Table {
+                    cells: cells.clone(),
+                    markdown: sheet.markdown.clone(),
+                    page_number,
+                    bounding_box: None,
+                });
+
+                pages.push(PageContent {
+                    page_number,
+                    content: page_content,
+                    tables: vec![arc_table],
+                    image_indices: Vec::new(),
+                    hierarchy: None,
+                    is_blank: Some(false),
+                    layout_regions: None,
+                    speaker_notes: None,
+                    section_name: if sheet.name.is_empty() {
+                        None
+                    } else {
+                        Some(sheet.name.clone())
+                    },
+                });
+            } else {
+                // Empty sheet: emit a PageContent so page index == sheet index.
+                pages.push(PageContent {
+                    page_number,
+                    content: if sheet.name.is_empty() {
+                        String::new()
+                    } else {
+                        format!("## {}", sheet.name)
+                    },
+                    tables: Vec::new(),
+                    image_indices: Vec::new(),
+                    hierarchy: None,
+                    is_blank: Some(true),
+                    layout_regions: None,
+                    speaker_notes: None,
+                    section_name: if sheet.name.is_empty() {
+                        None
+                    } else {
+                        Some(sheet.name.clone())
+                    },
+                });
             }
         }
 
-        builder.build()
+        let mut doc = builder.build();
+        doc.prebuilt_pages = Some(pages);
+        doc
     }
 }
 
@@ -292,6 +357,53 @@ impl DocumentExtractor for ExcelExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{ExcelSheet, ExcelWorkbook};
+    use std::collections::HashMap;
+
+    fn make_sheet(name: &str, cells: Option<Vec<Vec<String>>>) -> ExcelSheet {
+        let (markdown, row_count, col_count, cell_count) = match cells.as_ref() {
+            Some(c) if !c.is_empty() => {
+                let rows = c.len();
+                let cols = c.iter().map(|r| r.len()).max().unwrap_or(0);
+                let count = c.iter().flat_map(|r| r.iter()).filter(|s| !s.is_empty()).count();
+                // Build a minimal markdown table for test assertions
+                let mut md = String::new();
+                for (i, row) in c.iter().enumerate() {
+                    md.push('|');
+                    for cell in row {
+                        md.push(' ');
+                        md.push_str(cell);
+                        md.push_str(" |");
+                    }
+                    md.push('\n');
+                    if i == 0 && c.len() > 1 {
+                        md.push('|');
+                        for _ in row {
+                            md.push_str(" --- |");
+                        }
+                        md.push('\n');
+                    }
+                }
+                (md, rows, cols, count)
+            }
+            _ => (String::new(), 0, 0, 0),
+        };
+        ExcelSheet {
+            name: name.to_string(),
+            markdown,
+            row_count,
+            col_count,
+            cell_count,
+            table_cells: cells,
+        }
+    }
+
+    fn make_workbook(sheets: Vec<ExcelSheet>) -> ExcelWorkbook {
+        ExcelWorkbook {
+            sheets,
+            metadata: HashMap::new(),
+        }
+    }
 
     #[test]
     fn test_excel_extractor_plugin_interface() {
@@ -308,5 +420,160 @@ mod tests {
         assert_eq!(mime_types.len(), 9);
         assert!(mime_types.contains(&"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
         assert!(mime_types.contains(&"application/vnd.ms-excel"));
+    }
+
+    #[test]
+    fn test_prebuilt_pages_always_some() {
+        // Even an empty workbook sets prebuilt_pages to Some(vec![]) so callers
+        // can rely on .is_some() to detect that this format supports paging.
+        let workbook = make_workbook(vec![]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+        assert!(doc.prebuilt_pages.is_some());
+        assert_eq!(doc.prebuilt_pages.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_single_sheet_produces_one_page() {
+        let cells = vec![
+            vec!["Name".to_string(), "Value".to_string()],
+            vec!["A".to_string(), "1".to_string()],
+        ];
+        let workbook = make_workbook(vec![make_sheet("Sheet1", Some(cells))]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+
+        let pages = doc.prebuilt_pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].page_number, 1);
+        assert_eq!(pages[0].section_name.as_deref(), Some("Sheet1"));
+        assert!(pages[0].content.contains("Sheet1"));
+        assert_eq!(pages[0].tables.len(), 1);
+        assert_eq!(pages[0].is_blank, Some(false));
+    }
+
+    #[test]
+    fn test_single_sheet_content_matches_flat_content() {
+        // The concatenation of per-sheet page content should equal what the flat
+        // extraction produces (heading text + table rows visible in elements).
+        let cells = vec![
+            vec!["Col1".to_string(), "Col2".to_string()],
+            vec!["r1".to_string(), "r2".to_string()],
+        ];
+        let workbook = make_workbook(vec![make_sheet("Data", Some(cells))]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+
+        let pages = doc.prebuilt_pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 1);
+        // Page content must start with the heading
+        assert!(pages[0].content.starts_with("## Data"));
+        // Page content must include the table markdown
+        assert!(pages[0].content.contains("Col1"));
+        assert!(pages[0].content.contains("r1"));
+    }
+
+    #[test]
+    fn test_multi_sheet_workbook_produces_one_page_per_sheet() {
+        let sheet1_cells = vec![
+            vec!["A".to_string(), "B".to_string()],
+            vec!["1".to_string(), "2".to_string()],
+        ];
+        let sheet2_cells = vec![vec!["X".to_string()], vec!["99".to_string()]];
+        let sheet3_cells = vec![vec!["P".to_string(), "Q".to_string(), "R".to_string()]];
+        let workbook = make_workbook(vec![
+            make_sheet("First", Some(sheet1_cells)),
+            make_sheet("Second", Some(sheet2_cells)),
+            make_sheet("Third", Some(sheet3_cells)),
+        ]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+
+        let pages = doc.prebuilt_pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 3);
+
+        // Page numbers are 1-indexed and match sheet order
+        assert_eq!(pages[0].page_number, 1);
+        assert_eq!(pages[1].page_number, 2);
+        assert_eq!(pages[2].page_number, 3);
+
+        // Section names match sheet names
+        assert_eq!(pages[0].section_name.as_deref(), Some("First"));
+        assert_eq!(pages[1].section_name.as_deref(), Some("Second"));
+        assert_eq!(pages[2].section_name.as_deref(), Some("Third"));
+
+        // Each page's content is only that sheet's markdown (not other sheets)
+        assert!(pages[0].content.contains("First"));
+        assert!(!pages[0].content.contains("Second"));
+        assert!(pages[1].content.contains("Second"));
+        assert!(!pages[1].content.contains("First"));
+        assert!(pages[2].content.contains("Third"));
+
+        // Each page has exactly one table
+        assert_eq!(pages[0].tables.len(), 1);
+        assert_eq!(pages[1].tables.len(), 1);
+        assert_eq!(pages[2].tables.len(), 1);
+
+        // Tables carry the right cells
+        assert_eq!(pages[0].tables[0].cells[0][0], "A");
+        assert_eq!(pages[1].tables[0].cells[0][0], "X");
+        assert_eq!(pages[2].tables[0].cells[0][0], "P");
+    }
+
+    #[test]
+    fn test_empty_sheet_in_middle_produces_page_at_correct_index() {
+        // An empty sheet must still emit a PageContent so page index == sheet index.
+        let sheet1_cells = vec![vec!["A".to_string()]];
+        let sheet3_cells = vec![vec!["C".to_string()]];
+        let workbook = make_workbook(vec![
+            make_sheet("First", Some(sheet1_cells)),
+            make_sheet("Empty", None), // empty — no table_cells
+            make_sheet("Third", Some(sheet3_cells)),
+        ]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+
+        let pages = doc.prebuilt_pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 3);
+
+        assert_eq!(pages[0].page_number, 1);
+        assert_eq!(pages[1].page_number, 2);
+        assert_eq!(pages[2].page_number, 3);
+
+        // Empty sheet has no tables and is marked blank
+        assert_eq!(pages[1].tables.len(), 0);
+        assert_eq!(pages[1].is_blank, Some(true));
+        assert_eq!(pages[1].section_name.as_deref(), Some("Empty"));
+
+        // Non-empty sheets are not blank
+        assert_eq!(pages[0].is_blank, Some(false));
+        assert_eq!(pages[2].is_blank, Some(false));
+    }
+
+    #[test]
+    fn test_empty_sheet_cells_vec_produces_page_at_correct_index() {
+        // table_cells = Some(vec![]) (present but empty) is treated the same as None.
+        let workbook = make_workbook(vec![
+            make_sheet("HasData", Some(vec![vec!["x".to_string()]])),
+            make_sheet("EmptyCells", Some(vec![])),
+        ]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+
+        let pages = doc.prebuilt_pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[1].page_number, 2);
+        assert_eq!(pages[1].tables.len(), 0);
+        assert_eq!(pages[1].is_blank, Some(true));
+    }
+
+    #[test]
+    fn test_sheet_order_preserved() {
+        // Natural workbook sheet order must be reflected in page order.
+        let workbook = make_workbook(vec![
+            make_sheet("Z", Some(vec![vec!["z".to_string()]])),
+            make_sheet("A", Some(vec![vec!["a".to_string()]])),
+            make_sheet("M", Some(vec![vec!["m".to_string()]])),
+        ]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+
+        let pages = doc.prebuilt_pages.as_ref().unwrap();
+        assert_eq!(pages[0].section_name.as_deref(), Some("Z"));
+        assert_eq!(pages[1].section_name.as_deref(), Some("A"));
+        assert_eq!(pages[2].section_name.as_deref(), Some("M"));
     }
 }
