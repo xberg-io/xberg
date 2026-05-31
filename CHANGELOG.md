@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **docx/revisions**: DOCX extraction now populates `ExtractionResult.revisions` from OOXML
+  track-changes markup. `w:ins` elements produce `RevisionKind::Insertion` with the inserted text
+  in `RevisionDelta.content` as `DiffLine::Added`; `w:del` / `w:delText` produce
+  `RevisionKind::Deletion` with `DiffLine::Removed`; `w:rPrChange` produces
+  `RevisionKind::FormatChange` with an empty delta (property diff is a future TODO).
+  Each revision carries `w:id` (→ `revision_id`), `w:author`, and `w:date` (ISO-8601 string).
+  Anchor is `RevisionAnchor::Paragraph { index }` pointing at the containing paragraph.
+  Accepted-changes convention is preserved: inserted text appears in `content`, deleted text does
+  not. `revisions` is `None` when the document contains no track-changes markup.
+
 - **types**: new `revisions: Option<Vec<DocumentRevision>>` field on `ExtractionResult` plus the
   `DocumentRevision` / `RevisionKind` / `RevisionAnchor` / `RevisionDelta` types. Every extractor
   defaults to `None` for now; per-format population lands in follow-up commits (DOCX next).
