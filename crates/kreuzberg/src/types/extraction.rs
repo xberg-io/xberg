@@ -202,6 +202,19 @@ pub struct ExtractionResult {
     #[serde(default)]
     pub uris: Option<Vec<super::uri::ExtractedUri>>,
 
+    /// Tracked changes embedded in the source document.
+    ///
+    /// Populated by per-format extractors that understand change-tracking
+    /// metadata (DOCX `w:ins`/`w:del`/`w:rPrChange`, ODT `text:change-*`,
+    /// …). Every extractor defaults to `None` until its format-specific
+    /// implementation is added. Extractors that do populate this field follow
+    /// the "accepted-changes" convention: inserted text is present in
+    /// `content`, deleted text is absent — the revision list is the separate
+    /// audit trail.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub revisions: Option<Vec<super::revisions::DocumentRevision>>,
+
     /// Structured extraction output from LLM-based JSON schema extraction.
     ///
     /// When `structured_extraction` is configured in `ExtractionConfig`, the

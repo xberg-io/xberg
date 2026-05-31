@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **types**: new `revisions: Option<Vec<DocumentRevision>>` field on `ExtractionResult` plus the
+  `DocumentRevision` / `RevisionKind` / `RevisionAnchor` / `RevisionDelta` types. Every extractor
+  defaults to `None` for now; per-format population lands in follow-up commits (DOCX next).
+  `DocumentRevision` is part of the unconditional public surface — works without the `diff` feature.
+  `DiffLine` and `CellChange` are now canonical in `types::revisions` and re-exported from `diff`
+  for backward compat; the `diff` feature's public paths are unchanged.
+
 - **diff**: new optional `diff` Cargo feature exposes `kreuzberg::diff::compare(a, b, opts) -> ExtractionDiff`
   over two `ExtractionResult` values. Backed by `similar` (Myers/LCS). Surfaces content hunks (unified-diff
   format), table cell-level diffs, metadata changes (add/remove/change map), and embedded-children

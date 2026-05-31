@@ -12,6 +12,7 @@ pub mod internal_builder;
 pub mod metadata;
 pub mod ocr_elements;
 pub mod page;
+pub mod revisions;
 pub mod serde_helpers;
 pub mod tables;
 pub mod uri;
@@ -29,6 +30,7 @@ pub use internal::InternalDocument;
 pub use metadata::*;
 pub use ocr_elements::*;
 pub use page::*;
+pub use revisions::{CellChange, DiffLine, DocumentRevision, RevisionAnchor, RevisionDelta, RevisionKind};
 pub use tables::*;
 pub use uri::*;
 

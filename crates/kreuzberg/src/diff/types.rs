@@ -1,8 +1,19 @@
 //! Types for extraction result diffs.
+//!
+//! `DiffLine` and `CellChange` are canonical definitions live in
+//! `crate::types::revisions` so that `RevisionDelta` can reference them
+//! unconditionally without the `diff` feature gate. They are re-exported
+//! here so the `crate::diff::DiffLine` path continues to work for callers
+//! who import them through the `diff` feature.
 
 use serde::{Deserialize, Serialize};
 
 use crate::types::{extraction::ArchiveEntry, tables::Table};
+
+// Re-export from the unconditional types module so the `diff` feature's
+// public path (`kreuzberg::diff::DiffLine`, `kreuzberg::diff::CellChange`)
+// remains stable. The canonical definitions are in `crate::types::revisions`.
+pub use crate::types::revisions::{CellChange, DiffLine};
 
 /// Options controlling how two `ExtractionResult` values are compared.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,19 +87,6 @@ pub struct DiffHunk {
     pub lines: Vec<DiffLine>,
 }
 
-/// A single line in a unified-diff hunk.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
-#[serde(tag = "kind", content = "text", rename_all = "snake_case")]
-pub enum DiffLine {
-    /// Unchanged context line.
-    Context(String),
-    /// Line added in `b`.
-    Added(String),
-    /// Line removed from `a`.
-    Removed(String),
-}
-
 /// Cell-level changes for a pair of tables that share the same index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
@@ -99,20 +97,6 @@ pub struct TableDiff {
     pub to_index: usize,
     /// Cell-level changes within the table.
     pub cell_changes: Vec<CellChange>,
-}
-
-/// A single changed cell within a table.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
-pub struct CellChange {
-    /// Zero-based row index.
-    pub row: usize,
-    /// Zero-based column index.
-    pub col: usize,
-    /// Value in `a`.
-    pub from: String,
-    /// Value in `b`.
-    pub to: String,
 }
 
 /// Changes to embedded archive children between two results.

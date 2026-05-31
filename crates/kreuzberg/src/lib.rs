@@ -202,10 +202,11 @@ pub use keywords::RakeParams;
 #[cfg(feature = "keywords-yake")]
 pub use keywords::YakeParams;
 
+// DiffLine and CellChange are canonical in types::revisions (unconditional)
+// and surfaced at the crate root via `pub use types::*` above.
+// The diff feature adds algorithm types on top.
 #[cfg(feature = "diff")]
-pub use diff::{
-    CellChange, DiffHunk, DiffLine, DiffOptions, EmbeddedChanges, EmbeddedDiff, ExtractionDiff, TableDiff, compare,
-};
+pub use diff::{DiffHunk, DiffOptions, EmbeddedChanges, EmbeddedDiff, ExtractionDiff, TableDiff, compare};
 
 #[cfg(feature = "tree-sitter")]
 pub use core::config::{CodeContentMode, TreeSitterConfig, TreeSitterProcessConfig};
