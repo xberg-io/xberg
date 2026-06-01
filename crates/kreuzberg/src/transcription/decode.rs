@@ -11,6 +11,8 @@ use crate::KreuzbergError;
 use crate::Result;
 
 /// The canonical PCM format that all transcription engines receive.
+// Fields read by the inference engine in the follow-up PR; stub only uses duration_ms.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PcmAudio {
     pub samples: Vec<f32>,

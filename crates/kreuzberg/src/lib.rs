@@ -124,8 +124,8 @@ pub mod layout;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 
-// Transcription (audio/video STT) — internal module + public types gated separately.
-#[cfg(any(feature = "transcription", feature = "transcription-types"))]
+// Transcription (audio/video STT) — decode + inference pipeline; config types live under core::config.
+#[cfg(feature = "transcription")]
 pub(crate) mod transcription;
 
 // ── Error, Result, and all types ─────────────────────────────────────────────

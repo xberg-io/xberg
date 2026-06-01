@@ -113,6 +113,10 @@ impl DocumentExtractor for TranscriptionExtractor {
     fn priority(&self) -> i32 {
         50 // Normal default — users can override with a higher-priority custom plugin
     }
+
+    fn as_sync_extractor(&self) -> Option<&dyn SyncExtractor> {
+        Some(self)
+    }
 }
 
 impl SyncExtractor for TranscriptionExtractor {
