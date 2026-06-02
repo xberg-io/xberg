@@ -68,24 +68,65 @@ jobs:
         with:
           submodules: recursive
 
+      # Build FFI is the slowest job in ci-e2e (full cargo release with --features all).
+      # Hash every file that actually affects the FFI ABI or the embedded core lib, then
+      # restore from cache when unchanged. The hash also gates the build steps below.
+      - name: Compute FFI source hash
+        id: ffi-hash
+        shell: bash
+        run: |
+          hash=$(find \
+            Cargo.toml Cargo.lock rust-toolchain.toml \
+            crates/kreuzberg \
+            crates/kreuzberg-ffi \
+            crates/kreuzberg-cli \
+            crates/kreuzberg-tesseract \
+            crates/kreuzberg-paddle-ocr \
+            -type f \
+            \( -name '*.rs' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \
+               -o -name 'build.rs' -o -name '*.h' -o -name '*.c' \
+               -o -name '*.pc' -o -name 'rust-toolchain.toml' \) \
+            2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1)
+          echo "value=$hash" >> "$GITHUB_OUTPUT"
+          echo "FFI source hash: $hash"
+
+      - name: Restore FFI artifacts from cache
+        id: ffi-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/release/libkreuzberg_ffi.*
+            target/release/kreuzberg_ffi.*
+            target/release/kreuzberg
+            target/release/kreuzberg.exe
+            crates/kreuzberg-ffi/include/kreuzberg.h
+            crates/kreuzberg-ffi/kreuzberg-ffi.pc
+            crates/kreuzberg-ffi/cmake/
+          key: ffi-${{ matrix.target }}-${{ steps.ffi-hash.outputs.value }}
+
       - name: Setup Rust
+        if: steps.ffi-cache.outputs.cache-hit != 'true'
         uses: kreuzberg-dev/actions/setup-rust@v1
         with:
           cache-key-prefix: build-ffi-${{ matrix.target }}
           target: ${{ matrix.target }}
 
       - name: Install system dependencies
+        if: steps.ffi-cache.outputs.cache-hit != 'true'
         uses: ./.github/actions/install-system-deps
 
       - name: Setup OpenSSL
+        if: steps.ffi-cache.outputs.cache-hit != 'true'
         uses: kreuzberg-dev/actions/setup-openssl@v1
 
       - name: Build FFI library
+        if: steps.ffi-cache.outputs.cache-hit != 'true'
         uses: kreuzberg-dev/actions/build-rust-ffi@v1
         with:
           crate-name: kreuzberg-ffi
 
       - name: Build CLI
+        if: steps.ffi-cache.outputs.cache-hit != 'true'
         uses: kreuzberg-dev/actions/build-rust-cli@v1
         with:
           package-name: kreuzberg-cli
@@ -128,7 +169,7 @@ jobs:
             test-cmd: "cd e2e/go && go test ./... -count=1 -v"
           - lang: ruby
             ruby-version: "3.4"
-            test-cmd: "cd e2e/ruby && bundle exec rspec"
+            test-cmd: "cd packages/ruby && bundle install && bundle exec rake compile && cd ../../e2e/ruby && bundle install && bundle exec rspec"
           - lang: java
             java-version: "25"
             test-cmd: "cd packages/java && mvn -q package -DskipTests && cd ../../e2e/java && mvn test -q"
