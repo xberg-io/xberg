@@ -589,6 +589,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bstr"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "bufrw"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2974,6 +2984,8 @@ dependencies = [
  "encoding_rs",
  "fast_image_resize",
  "flate2",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
  "getrandom 0.4.2",
  "hayro-jbig2",
  "hayro-jpeg2000",
@@ -3966,9 +3978,9 @@ dependencies = [
 
 [[package]]
 name = "pdf_oxide"
-version = "0.3.57"
+version = "0.3.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d198c6e2ca858d823f197b35e535faf8ec55c824ab480e60bf3fcb2368706e"
+checksum = "971e7e9cd5dafa2242fb48e9cea232a4c1f00d9310a87d18c27cb44786a3cd08"
 dependencies = [
  "aes 0.9.0",
  "base64 0.22.1",
@@ -5274,9 +5286,12 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "similar"
-version = "2.7.0"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+checksum = "e6505efef05804732ed8a3f2d4f279429eb485bd69d5b0cc6b19cc02005cda16"
+dependencies = [
+ "bstr",
+]
 
 [[package]]
 name = "siphasher"
@@ -6109,9 +6124,9 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "unhwp"
-version = "0.3.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e40d84ffa1071cccf93564ea804955376a4b740368de580644087ee9c449c8a6"
+checksum = "3f28443ff4cdb5a40b84f039ab013b000f1a2623f554dbe36d52c94148e7fe17"
 dependencies = [
  "cfb 0.10.0",
  "flate2",
