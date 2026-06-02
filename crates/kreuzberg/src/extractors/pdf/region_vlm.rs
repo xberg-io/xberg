@@ -200,7 +200,7 @@ pub(crate) fn inject_region_results(
     for result in results {
         let page_num = Some((result.page_index + 1) as u32);
         document.elements.push(InternalElement {
-            kind: ElementKind::Text,
+            kind: ElementKind::Paragraph,
             text: result.markdown,
             page: page_num,
             ..Default::default()
