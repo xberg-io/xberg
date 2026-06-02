@@ -241,7 +241,7 @@ All plugins must implement `Send + Sync` because the extraction pipeline invokes
 
 Plugins can be registered in two ways:
 
-1. **Built-in** — automatically registered when Kreuzberg initializes. These are the default extractors, OCR backends, and processors.
+1. **Built-in** — automatically registered when Kreuzberg initializes. These are the default extractors, OCR backends, and processors. The seven OSS v5 enrichment processors (NER, redaction, summarisation, translation, page classification, image captioning, QR-code detection) all register through the shared `register_builtin()` umbrella in `crates/kreuzberg/src/plugins/processor/builtin/mod.rs`. Each is gated behind its Cargo feature (`ner`, `redaction`, `summarization`, `translation`, `classification`, `captioning`, `qr-codes`) and only joins the registry when the feature is active.
 2. **Programmatic** — registered manually via the registry API at runtime.
 
 ---

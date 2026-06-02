@@ -49,6 +49,14 @@ Document intelligence with a Rust core and native bindings for 17 languages. Ext
 
   Use as a library, CLI tool, REST API server, MCP server, or Docker container. Pick what fits your stack.
 
+- :material-shield-account:{ .lg .middle } **Redaction & Anonymisation** <span class="version-badge">v5.0.0-rc.3</span>
+
+  Strip PII before extracted content leaves the pipeline. Pattern engine covers emails, phones, IBANs, SSNs, credit cards; pair with NER for names, organisations, and locations.
+
+- :material-tag-text:{ .lg .middle } **Named-Entity Recognition** <span class="version-badge">v5.0.0-rc.3</span>
+
+  Detect people, organisations, locations, dates, money, and caller-supplied zero-shot labels in extracted text. ONNX (gline-rs) or LLM backend.
+
 </div>
 
 → **[See all features](features.md)**

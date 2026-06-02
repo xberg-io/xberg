@@ -252,6 +252,24 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 
 `LlmConfig` and `StructuredExtractionConfig` types are exposed in Python, Node.js, and PHP bindings. Five new environment variables (`KREUZBERG_LLM_MODEL`, `KREUZBERG_LLM_API_KEY`, `KREUZBERG_LLM_BASE_URL`, `KREUZBERG_VLM_OCR_MODEL`, `KREUZBERG_VLM_EMBEDDING_MODEL`) provide zero-code configuration.
 
+### Document Enrichment
+
+!!! Info "Added in v5.0.0-rc.3"
+
+**Named-Entity Recognition** -- Detect people, organisations, locations, dates, money, percentages, emails, phones, URLs, and caller-supplied zero-shot labels via gline-rs (ONNX) or any liter-llm provider. Results populate `ExtractionResult.entities`. See the [NER Guide](guides/ner.md).
+
+**Redaction & Anonymisation** -- Late-stage post-processor that rewrites `content`, `formatted_content`, chunks, entities, summary, translation, and page classifications. Pattern engine covers emails, phones, SSNs, credit cards, IBANs, IP addresses, SWIFT/BIC, postal codes, dates of birth; pair with NER for PERSON / ORGANIZATION / LOCATION. Strategies: mask, hash, token-replace, drop. Caller can supply literal terms and regex patterns. See the [Redaction Guide](guides/redaction.md).
+
+**Document Summarisation** -- Pure-Rust TextRank (extractive, local, deterministic) or any liter-llm provider (abstractive). Result on `ExtractionResult.summary`. See the [Summarisation Guide](guides/summarization.md).
+
+**Document Translation** -- Translate `content`, `formatted_content`, and per-chunk text into a BCP-47 target language with any liter-llm provider. Optional Markdown/HTML preservation. Result on `ExtractionResult.translation`. See the [Translation Guide](guides/translation.md).
+
+**Page Classification** -- Per-page LLM classification against caller-supplied labels. Single-label or multi-label. Result on `ExtractionResult.page_classifications`. See the [Page Classification Guide](guides/page-classification.md).
+
+**VLM Image Captions** -- Describe extracted images with any vision-capable liter-llm provider. Result on `ExtractedImage.caption`. See the [Image Captions Guide](guides/image-captions.md).
+
+**QR-Code Detection** -- Pure-Rust `rqrr` decoder runs over extracted images. Result on `ExtractedImage.qr_codes`. Ships in `wasm-target` and `android-target`. See the [QR Codes Guide](guides/qr-codes.md).
+
 ### For Search and Indexing
 
 **Keyword Extraction** -- Extract key phrases using YAKE (unsupervised, language-independent) or RAKE (fast statistical method). Configurable n-gram ranges and language-specific stopword filtering. See the [Keyword Extraction Guide](guides/keywords.md).

@@ -95,6 +95,13 @@ It can be loaded from TOML, YAML, or JSON files, or created programmatically.
 | `tree_sitter` | `TreeSitterConfig \| None` | `None` | Tree-sitter language pack configuration (None = tree-sitter disabled). When set, enables code file extraction using tree-sitter parsers. Controls grammar download behavior and code analysis options. |
 | `structured_extraction` | `StructuredExtractionConfig \| None` | `None` | Structured extraction via LLM (None = disabled). When set, the extracted document content is sent to an LLM with the provided JSON schema. The structured response is stored in `ExtractionResult.structured_output`. |
 | `cancel_token` | `str \| None` | `None` | Cancellation token for this extraction (None = no external cancellation). Pass a `CancellationToken` clone here and call `CancellationToken.cancel` from another thread / task to abort the extraction in progress. The extractor checks the token at safe checkpoints (before lock acquisition, between pages, between batch items) and returns `KreuzbergError.Cancelled` when set. The field is excluded from serialization because `CancellationToken` is a runtime handle, not a configuration value. |
+| `ner` | `NerConfig \| None` | `None` | Named Entity Recognition configuration (None = NER disabled). When set, enables entity extraction post-processor with configurable backend and label set. |
+| `redaction` | `RedactionConfig \| None` | `None` | Redaction configuration (None = redaction disabled, Late stage). When set, applies PII redaction to extracted content. |
+| `summarization` | `SummarizationConfig \| None` | `None` | Summarisation configuration (None = summarisation disabled). When set, generates extractive or abstractive summary of the document. |
+| `translation` | `TranslationConfig \| None` | `None` | Document translation configuration (None = translation disabled). When set, translates extracted content to the specified target language. |
+| `page_classification` | `PageClassificationConfig \| None` | `None` | Per-page classification configuration (None = page classification disabled). When set, classifies each page with configurable labels. |
+| `captioning` | `CaptioningConfig \| None` | `None` | VLM image caption generation configuration (None = captioning disabled). When set, uses a vision model to generate captions for extracted images. |
+| `qr_codes` | `bool \| None` | `None` | Enable QR code detection and decoding in extracted images (None = disabled). When `true`, extracted images are scanned for QR codes using pure-Rust decoder. |
 
 ---
 
@@ -485,6 +492,101 @@ Controls which analysis features are enabled when extracting code files.
 | `diagnostics` | `bool` | `False` | Include parse diagnostics. Default: false. |
 | `chunk_max_size` | `int \| None` | `None` | Maximum chunk size in bytes. `None` disables chunking. |
 | `content_mode` | `CodeContentMode` | `CodeContentMode.CHUNKS` | Content rendering mode for code extraction. |
+
+---
+
+### NerConfig <span class="version-badge">v5.0.0-rc.3</span>
+
+Named Entity Recognition configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `backend` | `NerBackendKind` | `Onnx` | `Onnx` (gline-rs) or `Llm` (liter-llm zero-shot) |
+| `categories` | `list[EntityCategory]` | `[]` | Empty = sensible PERSON / ORG / LOCATION / EMAIL set |
+| `model` | `str \| None` | `None` | Only used by `Onnx`; gline-rs default is `urchade/gliner_multi-v2.1` |
+| `llm` | `LlmConfig \| None` | `None` | Required by `Llm` backend |
+| `custom_labels` | `list[str]` | `[]` | Zero-shot caller-supplied labels; surface as `EntityCategory.Custom(label)` |
+
+---
+
+### RedactionConfig <span class="version-badge">v5.0.0-rc.3</span>
+
+Redaction configuration for PII removal.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `categories` | `set[PiiCategory]` | empty | Empty = every supported category |
+| `strategy` | `RedactionStrategy` | `Mask` | `Mask` / `Hash` / `TokenReplace` / `Drop` |
+| `ner` | `NerConfig \| None` | `None` | Required to redact `Person` / `Organization` / `Location` |
+| `preserve_offsets` | `bool` | `True` | When `False`, chunk byte ranges still refer to the original content |
+| `custom_terms` | `list[RedactionTerm]` | `[]` | Literal strings to redact |
+| `custom_patterns` | `list[RedactionPattern]` | `[]` | Regex patterns to redact |
+
+**RedactionTerm**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `label` | `str` | _required_ | Custom category label (surfaces as `PiiCategory.Custom(label)`) |
+| `value` | `str` | _required_ | Literal string (regex-escaped automatically) |
+| `case_sensitive` | `bool` | `False` | Set `True` for exact-byte match |
+
+**RedactionPattern**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `label` | `str` | _required_ | Custom category label |
+| `pattern` | `str` | _required_ | Rust `regex` dialect (no look-around); validated at config-construction time |
+| `case_sensitive` | `bool` | `False` | When `False`, engine prepends `(?i)` |
+
+---
+
+### SummarizationConfig <span class="version-badge">v5.0.0-rc.3</span>
+
+Summarisation configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `strategy` | `SummaryStrategy` | `Extractive` | `Extractive` (TextRank, local) or `Abstractive` (LLM) |
+| `max_tokens` | `int \| None` | `None` | Loose whitespace tokens for extractive; provider tokens for abstractive |
+| `llm` | `LlmConfig \| None` | `None` | Ignored for `Extractive`; required for `Abstractive` |
+
+---
+
+### TranslationConfig <span class="version-badge">v5.0.0-rc.3</span>
+
+Document translation configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `target_lang` | `str` | _required_ | BCP-47 tag |
+| `source_lang` | `str \| None` | `None` | BCP-47 tag; auto-detect when omitted |
+| `preserve_markup` | `bool` | `False` | When `True`, translate `formatted_content` preserving Markdown/HTML |
+| `llm` | `LlmConfig` | _required_ | liter-llm provider |
+
+---
+
+### PageClassificationConfig <span class="version-badge">v5.0.0-rc.3</span>
+
+Per-page classification configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `labels` | `list[str]` | _required_ | At least one configured label |
+| `multi_label` | `bool` | `False` | When `True`, model may return any subset; when `False`, exactly one |
+| `prompt_template` | `str \| None` | `None` | Minijinja template with `{{ labels }}`, `{{ page_text }}`, `{{ multi_label }}` |
+| `llm` | `LlmConfig` | _required_ | liter-llm provider |
+
+---
+
+### CaptioningConfig <span class="version-badge">v5.0.0-rc.3</span>
+
+VLM image caption generation configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `llm` | `LlmConfig` | _required_ | Vision-capable provider |
+| `prompt` | `str \| None` | `None` | Override the built-in caption prompt |
+| `min_image_area` | `int` | `1000` | Pixel-area threshold; smaller images skip captioning |
 
 ---
 

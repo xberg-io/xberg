@@ -33,6 +33,13 @@ nav = [
       { "Layout Detection" = "guides/layout-detection.md" },
       { "LLM Integration" = "guides/llm-integration.md" },
       { "Code Intelligence" = "guides/code-intelligence.md" },
+      { "Named-Entity Recognition" = "guides/ner.md" },
+      { "Redaction & Anonymisation" = "guides/redaction.md" },
+      { "Document Summarisation" = "guides/summarization.md" },
+      { "Document Translation" = "guides/translation.md" },
+      { "Page Classification" = "guides/page-classification.md" },
+      { "VLM Image Captions" = "guides/image-captions.md" },
+      { "QR-Code Detection" = "guides/qr-codes.md" },
     ] },
     { "Deployment" = [
       { "Docker" = "guides/docker.md" },

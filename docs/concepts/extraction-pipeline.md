@@ -175,10 +175,14 @@ Post-processors run in three ordered stages so you can control what happens firs
 | Stage      | Purpose               | Examples                                                            |
 | ---------- | --------------------- | ------------------------------------------------------------------- |
 | **Early**  | Raw text cleanup      | Strip control characters, fix encoding issues, normalize whitespace |
-| **Middle** | Content analysis      | Extract named entities, detect language, classify document type     |
-| **Late**   | Final transformations | Apply output formatting, generate summaries, redact PII             |
+| **Middle** | Content analysis      | NER, summarisation, translation, page classification, image captioning, QR-code detection |
+| **Late**   | Final transformations | Output formatting, [redaction & anonymisation](../guides/redaction.md) |
+
+The seven OSS v5 enrichment processors all register through the shared `register_builtin()` umbrella (`crates/kreuzberg/src/plugins/processor/builtin/mod.rs`) behind their feature gates: `ner`, `redaction`, `summarization`, `translation`, `classification`, `captioning`, `qr-codes`. Each is feature-gated and registered only when its Cargo feature is active.
 
 An important design choice: **post-processor errors do not fail the extraction.** If a post-processor throws an exception, the error is logged and the pipeline continues with the result as-is. This means a buggy post-processor can't take down your extraction pipeline.
+
+Redaction runs Late by design: it must see the populated `entities`, `summary`, `translation`, and `page_classifications` fields so it can rewrite their textual content before the result leaves Kreuzberg. The original pre-redaction text is dropped at the end of the pipeline; only `ExtractionResult.redaction_report` carries byte offsets back into the original.
 
 ---
 

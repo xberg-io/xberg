@@ -498,15 +498,31 @@ export KREUZBERG_LLM_MODEL=ollama/llama3
 ### KREUZBERG_LLM_API_KEY
 
 **Type**: `String`
-**Default**: None
+**Default**: unset
 
-API key for the structured extraction LLM provider. When not set, liter-llm falls back to provider-standard environment variables (for example, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
+Kreuzberg-wide API key fallback for LLM-backed features. When set, serves as a fallback for any LLM-backed pipeline feature that doesn't have an explicit `api_key` in its config.
+
+**Used by**: VLM OCR, structured extraction, embeddings, NER (LLM backend), redaction (NER), summarisation (abstractive), translation, page classification, and VLM image captions.
+
+**Precedence** (highest to lowest):
+1. Explicit `api_key` field in the relevant config (`LlmConfig.api_key`, `OcrConfig.vlm_config.api_key`, etc.)
+2. Config file's `api_key` (loaded before CLI processing)
+3. CLI flag `--api-key`
+4. `KREUZBERG_LLM_API_KEY` env var (this entry — Kreuzberg-wide fallback for any LLM feature)
+5. Per-provider env var (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, …) — resolved inside liter-llm
+
+**Local providers** (Ollama, LM Studio, vLLM, llama.cpp, LocalAI, llamafile) skip every API-key lookup.
 
 ```bash title="LLM API Key Configuration"
+# Set Kreuzberg-wide fallback (used for any LLM feature without explicit api_key)
 export KREUZBERG_LLM_API_KEY=sk-...
+
+# Or use provider-standard env vars (higher precedence within liter-llm fallback chain)
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-**Security Warning**: Prefer using provider-standard environment variables or a secrets manager over setting this directly. This variable is provided for cases where multiple providers are used and explicit key routing is needed.
+**Security Warning**: Prefer using provider-standard environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.) or a secrets manager over `KREUZBERG_LLM_API_KEY`. This variable is provided for cases where explicit key routing is needed and provider-standard vars are not suitable.
 
 ### KREUZBERG_LLM_BASE_URL
 

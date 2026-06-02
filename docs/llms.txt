@@ -27,6 +27,13 @@ Kreuzberg provides async/sync APIs, text chunking, language detection, keyword e
 - [PDF Hierarchy](https://docs.kreuzberg.dev/guides/output-formats/#pdf-hierarchy-detection): PDF hierarchy detection using K-means clustering
 - [Keyword Extraction](https://docs.kreuzberg.dev/guides/keywords/): YAKE and RAKE keyword extraction
 - [Advanced Features](https://docs.kreuzberg.dev/guides/advanced/): Advanced usage patterns
+- [Named-Entity Recognition](https://docs.kreuzberg.dev/guides/ner/): Detect people, organisations, locations, and caller-supplied zero-shot labels via gline-rs or LLM
+- [Redaction & Anonymisation](https://docs.kreuzberg.dev/guides/redaction/): Strip PII from extracted text with the pattern engine plus optional NER backend
+- [Document Summarisation](https://docs.kreuzberg.dev/guides/summarization/): Extractive TextRank (local) or LLM abstractive summaries
+- [Document Translation](https://docs.kreuzberg.dev/guides/translation/): Translate content into a BCP-47 target language via any liter-llm provider
+- [Page Classification](https://docs.kreuzberg.dev/guides/page-classification/): Per-page LLM classification against caller-supplied label sets
+- [VLM Image Captions](https://docs.kreuzberg.dev/guides/image-captions/): Caption every extracted image with a vision-capable LLM
+- [QR-Code Detection](https://docs.kreuzberg.dev/guides/qr-codes/): Pure-Rust QR decoding over extracted images
 - [Docker Deployment](https://docs.kreuzberg.dev/guides/docker/): Docker container deployment
 - [Kubernetes Deployment](https://docs.kreuzberg.dev/guides/kubernetes/): Kubernetes deployment guide
 - [API Server](https://docs.kreuzberg.dev/guides/api-server/): REST API server setup
