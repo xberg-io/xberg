@@ -436,7 +436,9 @@ async fn test_nonexistent_file_error() {
 #[tokio::test]
 async fn test_unsupported_mime_type_error() {
     let config = ExtractionConfig::default();
-    let result = extract_bytes(b"test", "video/mp4", &config).await;
+    // video/mp4 is now a declared format (routes to transcription extractor when
+    // that feature is enabled). Use a genuinely unsupported type instead.
+    let result = extract_bytes(b"test", "application/x-kreuzberg-test-unsupported", &config).await;
 
     assert!(result.is_err());
     assert!(matches!(
