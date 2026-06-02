@@ -25,8 +25,10 @@ memory-profiling = ["tikv-jemallocator", "tikv-jemalloc-ctl"]
 [dependencies]
 
 ahash = { workspace = true }
+anyhow = { workspace = true }
 
 async-trait = { workspace = true }
+base64 = { workspace = true }
 chrono = { workspace = true }
 
 clap = { workspace = true }
@@ -39,6 +41,7 @@ pprof = { version = "0.15", features = ["flamegraph", "criterion"], optional = t
 pulldown-cmark = "0.13"
 rayon = { workspace = true }
 regex = "1"
+reqwest = { workspace = true, features = ["blocking", "native-tls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shellexpand = "3"

@@ -509,7 +509,9 @@ name = "benchmark-harness"
 version = "5.0.0-rc.3"
 dependencies = [
  "ahash",
+ "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "chrono",
  "clap",
  "dotenvy",
@@ -521,6 +523,7 @@ dependencies = [
  "pulldown-cmark 0.13.4",
  "rayon",
  "regex",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "shellexpand",
