@@ -35,6 +35,7 @@ pub(crate) struct RegionVlmResult {
     /// Markdown text from the VLM.
     pub markdown: String,
     /// The layout hint that triggered this extraction.
+    #[allow(dead_code)]
     pub hint: LayoutHint,
 }
 

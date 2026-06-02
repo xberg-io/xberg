@@ -7204,6 +7204,7 @@ impl From<OcrConfig> for kreuzberg::OcrConfig {
             pipeline: v.pipeline.map(Into::into),
             auto_rotate: v.auto_rotate as _,
             vlm_config: v.vlm_config.map(Into::into),
+            vlm_fallback: Default::default(),
             vlm_prompt: v.vlm_prompt.map(Into::into),
             acceleration: v.acceleration.map(Into::into),
             tessdata_bytes: v
