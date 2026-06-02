@@ -54,3 +54,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 which = "8"
 
 [dev-dependencies]
+dotenvy = "0.15"
