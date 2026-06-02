@@ -190,7 +190,6 @@ impl NerBackend for GlineBackend {
         let backend = Arc::clone(&self.model);
         let model_path = self.model_path.clone();
         let tokenizer_path = self.tokenizer_path.clone();
-        let repo_id = self.repo_id.clone();
 
         tokio::task::spawn_blocking(move || {
             let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
@@ -208,7 +207,6 @@ impl NerBackend for GlineBackend {
                 plugin_name: "ner-gline".to_string(),
             })?;
             drop(guard);
-            let _ = repo_id; // captured for error context; suppress unused warning
 
             let entities: Vec<Entity> = output
                 .spans
