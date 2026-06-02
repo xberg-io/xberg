@@ -10,6 +10,8 @@ mod layout_hints;
 mod layout_runner;
 mod ocr;
 mod pages;
+#[cfg(all(feature = "liter-llm", feature = "layout-detection", not(target_os = "windows")))]
+mod region_vlm;
 
 use crate::Result;
 use crate::core::config::ExtractionConfig;
@@ -703,6 +705,42 @@ impl PdfExtractor {
             has_pages = doc.prebuilt_pages.is_some(),
             "InternalDocument finalized (oxide path)"
         );
+
+        // --- Per-region VLM extraction for figures and complex layouts ---
+        //
+        // When `vlm_fallback != Disabled` and layout detection found Picture regions,
+        // crop each region from the page raster and send it to the VLM. Results are
+        // appended to the assembled document. VLM failures per region are suppressed
+        // with warnings so that one bad crop cannot abort the whole extraction.
+        #[cfg(all(feature = "liter-llm", feature = "layout-detection", not(target_os = "windows")))]
+        {
+            let vlm_enabled = config
+                .ocr
+                .as_ref()
+                .map(|o| o.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled && o.vlm_config.is_some())
+                .unwrap_or(false);
+
+            if vlm_enabled {
+                if let (Some(layout_images), Some(hints)) =
+                    (markdown_layout_images.as_deref(), markdown_layout_hints.as_deref())
+                {
+                    let vlm_cfg = config
+                        .ocr
+                        .as_ref()
+                        .and_then(|o| o.vlm_config.as_ref())
+                        .expect("vlm_config checked above");
+
+                    let region_results = region_vlm::extract_vlm_regions(layout_images, hints, vlm_cfg).await;
+                    if !region_results.is_empty() {
+                        tracing::debug!(
+                            count = region_results.len(),
+                            "injecting VLM region results into document"
+                        );
+                        region_vlm::inject_region_results(&mut doc, region_results);
+                    }
+                }
+            }
+        }
 
         // Guard total extracted text against max_content_size. A crafted PDF with
         // repeated paragraphs or synthetic content streams could produce gigabytes
