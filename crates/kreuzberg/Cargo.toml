@@ -153,10 +153,6 @@ candle-ocr = [
 candle-trocr = ["candle-ocr", "kreuzberg-candle-ocr/trocr"]
 # PaddleOCR-VL backend: aggregate feature enabling candle-ocr with paddleocr-vl sub-feature
 candle-paddleocr-vl = ["candle-ocr", "kreuzberg-candle-ocr/paddleocr-vl"]
-# GOT-OCR 2.0 backend: aggregate feature enabling candle-ocr with got-ocr sub-feature
-candle-got-ocr = ["candle-ocr", "kreuzberg-candle-ocr/got-ocr"]
-# GLM-OCR backend: aggregate feature enabling candle-ocr with glm-ocr sub-feature
-candle-glm-ocr = ["candle-ocr", "kreuzberg-candle-ocr/glm-ocr"]
 # PaddleOCR via ONNX Runtime
 # Requires 'ocr' feature for shared conversion utilities and table reconstruction
 paddle-ocr = [

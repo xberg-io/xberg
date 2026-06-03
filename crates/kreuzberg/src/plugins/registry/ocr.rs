@@ -153,30 +153,6 @@ impl OcrBackendRegistry {
             });
             tracing::info!("PaddleOCR-VL backend registered successfully");
         }
-
-        #[cfg(feature = "candle-got-ocr")]
-        {
-            use crate::candle_ocr::GotOcrBackend;
-            use kreuzberg_candle_ocr::models::GotOcrMode;
-            tracing::info!("Initializing GOT-OCR 2.0 backend");
-            let backend = GotOcrBackend::new(GotOcrMode::default());
-            self.register(Arc::new(backend)).unwrap_or_else(|e| {
-                tracing::warn!("Failed to register GOT-OCR 2.0 backend: {e}");
-            });
-            tracing::info!("GOT-OCR 2.0 backend registered successfully");
-        }
-
-        #[cfg(feature = "candle-glm-ocr")]
-        {
-            use crate::candle_ocr::GlmOcrBackend;
-            use crate::candle_ocr::glm_ocr_backend::GlmOcrTask;
-            tracing::info!("Initializing GLM-OCR backend");
-            let backend = GlmOcrBackend::new(GlmOcrTask::default());
-            self.register(Arc::new(backend)).unwrap_or_else(|e| {
-                tracing::warn!("Failed to register GLM-OCR backend: {e}");
-            });
-            tracing::info!("GLM-OCR backend registered successfully");
-        }
     }
 
     /// Create a new empty OCR backend registry without default backends.

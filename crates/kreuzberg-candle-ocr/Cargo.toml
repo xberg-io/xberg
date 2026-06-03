@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2024"
 rust-version.workspace = true
 authors.workspace = true
-description = "Candle-based VLM OCR engines for Kreuzberg - pure-Rust transformer OCR (TrOCR, PaddleOCR-VL, GOT-OCR, GLM-OCR)"
+description = "Candle-based VLM OCR engines for Kreuzberg - pure-Rust transformer OCR (TrOCR, PaddleOCR-VL)"
 license = "MIT"
 repository.workspace = true
 homepage = "https://kreuzberg.dev"
@@ -28,8 +28,6 @@ default = []
 # Per-model sub-features. None enabled by default.
 trocr = []
 paddleocr-vl = []
-got-ocr = []
-glm-ocr = []
 
 # Device acceleration pass-throughs to candle.
 cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
