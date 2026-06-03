@@ -161,7 +161,12 @@ pub use extractors::security::SecurityLimits;
 #[cfg(feature = "quality")]
 pub use text::{ReductionLevel, TokenReductionConfig};
 
-#[cfg(all(feature = "ner-llm", not(target_os = "windows"), not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "ner-llm",
+    not(target_os = "windows"),
+    not(target_arch = "wasm32"),
+    not(all(target_os = "android", target_arch = "x86_64"))
+))]
 pub use text::ner::llm::LlmBackend;
 
 #[cfg(feature = "redaction")]
