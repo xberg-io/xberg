@@ -173,7 +173,7 @@ impl GotOcrEngine {
         tracing::debug!("Loading GOT-OCR weights from HuggingFace");
 
         // Full implementation would:
-        // 1. Load model.safetensors via VarBuilder::from_mmaped_safetensors
+        // 1. Load model.safetensors via VarBuilder::from_mapped_safetensors
         // 2. Initialize vision encoder: ImageEncoderViT with SAM ViT-Det config
         // 3. Initialize text decoder: Qwen2 ModelForCausalLM
         // 4. Load projector MLP weights for visual token projection
