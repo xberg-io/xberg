@@ -185,11 +185,7 @@ impl LlmBackend {
         Self { _config: config }
     }
 
-    pub async fn detect(
-        &self,
-        _text: &str,
-        _categories: &[crate::EntityCategory],
-    ) -> Result<Vec<crate::Entity>> {
+    pub async fn detect(&self, _text: &str, _categories: &[crate::EntityCategory]) -> Result<Vec<crate::Entity>> {
         Err(crate::KreuzbergError::Other(
             "ner-llm feature not available on this target".into(),
         ))
@@ -216,10 +212,37 @@ pub use text::ner::gline::GlineBackend;
 // Stub for Android x86_64 (no ORT prebuilt), so alef-generated bindings compile.
 // See feature flag policy: android-target excludes ner-onnx.
 #[cfg(all(not(feature = "ner-onnx"), all(target_os = "android", target_arch = "x86_64")))]
+#[derive(Clone, Debug)]
 pub struct GlineBackend {
     pub repo_id: String,
     pub model_path: std::path::PathBuf,
     pub tokenizer_path: std::path::PathBuf,
+}
+
+#[cfg(all(not(feature = "ner-onnx"), all(target_os = "android", target_arch = "x86_64")))]
+impl GlineBackend {
+    pub fn new(_repo_id: Option<&str>) -> Result<Self> {
+        Err(crate::KreuzbergError::Other(
+            "ner-onnx feature not available on this target".into(),
+        ))
+    }
+
+    pub async fn detect(&self, _text: &str, _categories: &[crate::EntityCategory]) -> Result<Vec<crate::Entity>> {
+        Err(crate::KreuzbergError::Other(
+            "ner-onnx feature not available on this target".into(),
+        ))
+    }
+
+    pub async fn detect_with_custom(
+        &self,
+        _text: &str,
+        _categories: &[crate::EntityCategory],
+        _custom_labels: &[String],
+    ) -> Result<Vec<crate::Entity>> {
+        Err(crate::KreuzbergError::Other(
+            "ner-onnx feature not available on this target".into(),
+        ))
+    }
 }
 
 #[cfg(all(feature = "liter-llm", not(target_os = "windows")))]
