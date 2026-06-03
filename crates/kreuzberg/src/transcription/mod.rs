@@ -6,6 +6,5 @@
 //! presented to the extractor registry.
 
 pub mod decode;
-
-// Note: decode_audio_to_pcm is currently only used inside the cfg-gated extractor.
-// Re-export will be restored when the real decode implementation is wired.
+#[cfg(feature = "transcription")]
+pub mod tags;

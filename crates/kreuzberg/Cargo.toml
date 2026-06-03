@@ -30,6 +30,8 @@ ignored = [
     # symphonia is optional behind the `transcription` feature; cargo-machete cannot
     # resolve optional dep usage through feature-gated cfg blocks.
     "symphonia",
+    # lofty is optional behind the `transcription` feature; same resolution limit.
+    "lofty",
 ]
 
 [lib]
@@ -178,6 +180,7 @@ transcription = [
     "dep:hf-hub",
     "dep:sha2",
     "dep:symphonia",
+    "dep:lofty",
     "ort-bundled",
     "tokio-runtime",
 ]
@@ -432,6 +435,9 @@ kreuzberg-gliner-rs = { version = "0.2.0", optional = true }
 kreuzberg-orp = { version = "0.1.1", optional = true }
 kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "5.0.0-rc.3", optional = true }
 libc = { workspace = true }
+# lofty: pure-Rust audio tag reader (ID3v1/v2, MP4 atoms, Vorbis comments, FLAC, etc.)
+# MIT license. Used for metadata extraction independent of the inference backend.
+lofty = { version = "0.24", optional = true }
 # liter-llm is declared in the platform-conditional dependencies block below — it must be
 # excluded on Windows because it pulls reqwest/rustls -> aws-lc-rs -> aws-lc-sys, which fails
 # to build on Windows MSVC.

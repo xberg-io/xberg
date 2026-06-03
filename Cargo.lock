@@ -3743,6 +3743,7 @@ dependencies = [
  "kreuzberg-tesseract",
  "libc",
  "liter-llm",
+ "lofty",
  "log",
  "lopdf",
  "mail-parser",
@@ -4129,6 +4130,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
 dependencies = [
  "scopeguard",
+]
+
+[[package]]
+name = "lofty"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dec4feeff6c7d75093278133a06e827d7af6d2bfe20b0f331f9d10338a5ec7ca"
+dependencies = [
+ "byteorder",
+ "data-encoding",
+ "flate2",
+ "lofty_attr",
+ "log",
+ "ogg_pager",
+ "paste",
+]
+
+[[package]]
+name = "lofty_attr"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "458ace39169e4b83c4f77ae3d42d5d1d11c422feef590219a97c973d3b524557"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -4845,6 +4872,15 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "zip 8.6.0",
+]
+
+[[package]]
+name = "ogg_pager"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d36b1d6964c3ac92b7aea701057e02b6b91143d70d83b20abf75a231a3c0216"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]

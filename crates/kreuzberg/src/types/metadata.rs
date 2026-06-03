@@ -96,6 +96,8 @@ pub enum FormatMetadata {
     #[cfg(feature = "office")]
     Epub(EpubMetadata),
     Pst(PstMetadata),
+    #[cfg(feature = "transcription-types")]
+    Audio(AudioMetadata),
     /// Code metadata (tree-sitter analysis results, not exposed in bindings).
     #[cfg(feature = "tree-sitter")]
     #[cfg_attr(alef, alef(skip))]
@@ -153,6 +155,8 @@ impl std::fmt::Display for FormatMetadata {
             #[cfg(feature = "office")]
             Self::Epub(_) => f.write_str("epub"),
             Self::Pst(_) => f.write_str("pst"),
+            #[cfg(feature = "transcription-types")]
+            Self::Audio(_) => f.write_str("audio"),
             #[cfg(feature = "tree-sitter")]
             Self::Code(_) => f.write_str("code"),
         }
@@ -203,6 +207,8 @@ impl utoipa::PartialSchema for FormatMetadata {
                     #[cfg(feature = "office")]
                     ("epub", "#/components/schemas/EpubMetadata"),
                     ("pst", "#/components/schemas/PstMetadata"),
+                    #[cfg(feature = "transcription-types")]
+                    ("audio", "#/components/schemas/AudioMetadata"),
                 ],
             )));
 
@@ -244,7 +250,14 @@ impl utoipa::PartialSchema for FormatMetadata {
             #[cfg(not(feature = "xml"))]
             let builder = builder;
 
-            builder.item(Ref::from_schema_name("PstMetadata"))
+            let builder = builder.item(Ref::from_schema_name("PstMetadata"));
+
+            #[cfg(feature = "transcription-types")]
+            let builder = builder.item(Ref::from_schema_name("AudioMetadata"));
+            #[cfg(not(feature = "transcription-types"))]
+            let builder = builder;
+
+            builder
         };
 
         builder.into()
@@ -287,6 +300,8 @@ impl utoipa::ToSchema for FormatMetadata {
         push_schema!(OcrMetadata);
         push_schema!(CsvMetadata);
         push_schema!(PstMetadata);
+        #[cfg(feature = "transcription-types")]
+        push_schema!(AudioMetadata);
     }
 }
 
@@ -1104,4 +1119,32 @@ pub struct EpubMetadata {
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct PstMetadata {
     pub message_count: usize,
+}
+
+/// Audio/video file metadata.
+///
+/// Populated from container tags (ID3v2, MP4 atoms, Vorbis comments, etc.) and
+/// PCM decode properties. Available when the `transcription-types` feature is enabled.
+#[cfg(feature = "transcription-types")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct AudioMetadata {
+    /// Duration in milliseconds derived from the decoded audio stream.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+    /// Audio codec (e.g. "mp3", "aac", "opus", "flac").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codec: Option<String>,
+    /// Container format (e.g. "mpeg", "mp4", "ogg", "wav").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub container: Option<String>,
+    /// Sample rate in Hz after decode (always 16000 when resampled for Whisper).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sample_rate_hz: Option<u32>,
+    /// Number of audio channels (1 = mono, 2 = stereo).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channels: Option<u16>,
+    /// Audio bitrate in kbps from the source file tags/properties.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bitrate: Option<u32>,
 }

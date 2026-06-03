@@ -72,13 +72,17 @@ impl DocumentExtractor for TranscriptionExtractor {
             )));
         }
 
-        // Decode is CPU-bound and blocking → run on the blocking pool.
-        // We must own the data for the spawned task ('static).
+        // Decode PCM and read audio tags on the blocking pool in one pass.
         let bytes_owned = content.to_vec();
         let max_bytes_for_decode = tcfg.max_bytes;
-        let pcm: PcmAudio = task::spawn_blocking(move || decode_audio_to_pcm(&bytes_owned, max_bytes_for_decode))
+        let (pcm, tags): (PcmAudio, crate::transcription::tags::AudioTags) =
+            task::spawn_blocking(move || {
+                let pcm = decode_audio_to_pcm(&bytes_owned, max_bytes_for_decode)?;
+                let tags = crate::transcription::tags::read_audio_tags(&bytes_owned);
+                Ok::<_, KreuzbergError>((pcm, tags))
+            })
             .await
-            .map_err(|e| KreuzbergError::transcription_with_source("Decoder task panicked", e))??; // the inner Result
+            .map_err(|e| KreuzbergError::transcription_with_source("Decoder task panicked", e))??;
 
         // Duration limit (after we know the real duration).
         if let Some(max_dur) = tcfg.max_duration_ms
@@ -91,13 +95,12 @@ impl DocumentExtractor for TranscriptionExtractor {
         }
 
         // Whisper ONNX inference is wired in the follow-up PR.
-        // Until then, return an empty placeholder so the pipeline exercises
-        // all guards and config plumbing without silently producing wrong output.
-        let _ = pcm;
-        tracing::warn!("transcription stub: returning empty document — Whisper inference not yet wired (follow-up PR)");
-        let mut doc = InternalDocument::new("audio-transcript");
-        doc.mime_type = mime_type.to_string();
-        Ok(doc)
+        // Tags and PCM metadata are already populated above — the follow-up PR replaces
+        // this Err with the inference call and moves the doc construction to Ok(doc).
+        let _ = (pcm, tags);
+        Err(KreuzbergError::transcription(
+            "Whisper inference not yet implemented — pending follow-up PR",
+        ))
     }
 
     fn supported_mime_types(&self) -> &[&str] {
@@ -145,6 +148,7 @@ impl SyncExtractor for TranscriptionExtractor {
         }
 
         let pcm = decode_audio_to_pcm(content, tcfg.max_bytes)?;
+        let tags = crate::transcription::tags::read_audio_tags(content);
 
         if let Some(max_d) = tcfg.max_duration_ms
             && pcm.duration_ms > max_d
@@ -155,11 +159,11 @@ impl SyncExtractor for TranscriptionExtractor {
             )));
         }
 
-        let _ = pcm;
-        tracing::warn!("transcription stub: returning empty document — Whisper inference not yet wired (follow-up PR)");
-        let mut doc = InternalDocument::new("audio-transcript");
-        doc.mime_type = mime_type.to_string();
-        Ok(doc)
+        // Whisper inference is wired in the follow-up PR.
+        let _ = (pcm, tags);
+        Err(KreuzbergError::transcription(
+            "Whisper inference not yet implemented — pending follow-up PR",
+        ))
     }
 }
 
@@ -279,15 +283,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_async_stub_succeeds_with_valid_config() {
+    async fn test_async_stub_returns_inference_not_implemented_error() {
         let ext = TranscriptionExtractor;
         let cfg = config_with_transcription(TranscriptionConfig::default());
-        // Stub always returns an empty document — no inference yet.
+        // Before Whisper inference is wired, the extractor must return an explicit error
+        // rather than silently returning an empty document.
         let result = ext.extract_bytes(&[0u8; 64], "audio/mpeg", &cfg).await;
+        assert!(result.is_err(), "expected inference-not-implemented error");
+        let msg = result.unwrap_err().to_string();
         assert!(
-            result.is_ok(),
-            "stub should succeed for valid config: {:?}",
-            result.err()
+            msg.contains("not yet implemented") || msg.contains("follow-up"),
+            "unexpected error message: {msg}"
         );
     }
 }
