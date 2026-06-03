@@ -2,31 +2,60 @@
 // alef:hash:e4a17520766145e761ea1662da07f7497a7f2fd19fcf9ecada67bc4a6ab85861
 // Re-generate with: alef generate
 #![allow(dead_code, unused_imports, unused_variables)]
-#![allow(clippy::too_many_arguments, clippy::let_unit_value, clippy::needless_borrow, clippy::map_identity, clippy::just_underscores_and_digits, clippy::unused_unit, clippy::unnecessary_cast, clippy::unwrap_or_default, clippy::derivable_impls, clippy::needless_borrows_for_generic_args, clippy::unnecessary_fallible_conversions, clippy::useless_conversion, clippy::arc_with_non_send_sync, clippy::collapsible_if, clippy::clone_on_copy, clippy::should_implement_trait, clippy::await_holding_refcell_ref)]
+#![allow(
+    clippy::too_many_arguments,
+    clippy::let_unit_value,
+    clippy::needless_borrow,
+    clippy::map_identity,
+    clippy::just_underscores_and_digits,
+    clippy::unused_unit,
+    clippy::unnecessary_cast,
+    clippy::unwrap_or_default,
+    clippy::derivable_impls,
+    clippy::needless_borrows_for_generic_args,
+    clippy::unnecessary_fallible_conversions,
+    clippy::useless_conversion,
+    clippy::arc_with_non_send_sync,
+    clippy::collapsible_if,
+    clippy::clone_on_copy,
+    clippy::should_implement_trait,
+    clippy::await_holding_refcell_ref
+)]
 
-use wasm_bindgen::prelude::*;
 use kreuzberg::Validator;
 use kreuzberg::text::ner::NerBackend;
 use std::sync::Arc;
 use std::sync::Mutex;
+use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmCacheStats {    total_files: usize,    total_size_mb: f64,    available_space_mb: f64,    oldest_file_age_days: f64,    newest_file_age_days: f64,}
-
+pub struct WasmCacheStats {
+    total_files: usize,
+    total_size_mb: f64,
+    available_space_mb: f64,
+    oldest_file_age_days: f64,
+    newest_file_age_days: f64,
+}
 
 #[wasm_bindgen]
 impl WasmCacheStats {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            totalFiles: usize,
-            totalSizeMb: f64,
-            availableSpaceMb: f64,
-            oldestFileAgeDays: f64,
-            newestFileAgeDays: f64,
-        ) -> WasmCacheStats {
-        WasmCacheStats { total_files: totalFiles, total_size_mb: totalSizeMb, available_space_mb: availableSpaceMb, oldest_file_age_days: oldestFileAgeDays, newest_file_age_days: newestFileAgeDays }
+        totalFiles: usize,
+        totalSizeMb: f64,
+        availableSpaceMb: f64,
+        oldestFileAgeDays: f64,
+        newestFileAgeDays: f64,
+    ) -> WasmCacheStats {
+        WasmCacheStats {
+            total_files: totalFiles,
+            total_size_mb: totalSizeMb,
+            available_space_mb: availableSpaceMb,
+            oldest_file_age_days: oldestFileAgeDays,
+            newest_file_age_days: newestFileAgeDays,
+        }
     }
 
     #[wasm_bindgen]
@@ -94,15 +123,20 @@ impl WasmCacheStats {
 /// # Example
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmAccelerationConfig {    provider: WasmExecutionProviderType,    device_id: u32,}
-
+pub struct WasmAccelerationConfig {
+    provider: WasmExecutionProviderType,
+    device_id: u32,
+}
 
 #[wasm_bindgen]
 impl WasmAccelerationConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(provider: Option<WasmExecutionProviderType>, deviceId: Option<u32>) -> WasmAccelerationConfig {
-        WasmAccelerationConfig { provider: provider.unwrap_or_default(), device_id: deviceId.unwrap_or_default() }
+        WasmAccelerationConfig {
+            provider: provider.unwrap_or_default(),
+            device_id: deviceId.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -135,15 +169,22 @@ impl WasmAccelerationConfig {
 /// Configuration for the VLM captioning post-processor.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmCaptioningConfig {    llm: WasmLlmConfig,    prompt: Option<String>,    min_image_area: u32,}
-
+pub struct WasmCaptioningConfig {
+    llm: WasmLlmConfig,
+    prompt: Option<String>,
+    min_image_area: u32,
+}
 
 #[wasm_bindgen]
 impl WasmCaptioningConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(llm: WasmLlmConfig, minImageArea: u32, prompt: Option<String>) -> WasmCaptioningConfig {
-        WasmCaptioningConfig { llm: llm, prompt: prompt, min_image_area: minImageArea }
+        WasmCaptioningConfig {
+            llm,
+            prompt,
+            min_image_area: minImageArea,
+        }
     }
 
     #[wasm_bindgen]
@@ -186,15 +227,29 @@ impl WasmCaptioningConfig {
 /// Configuration for the page-classification post-processor.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageClassificationConfig {    prompt_template: Option<String>,    labels: Vec<String>,    multi_label: bool,    llm: WasmLlmConfig,}
-
+pub struct WasmPageClassificationConfig {
+    prompt_template: Option<String>,
+    labels: Vec<String>,
+    multi_label: bool,
+    llm: WasmLlmConfig,
+}
 
 #[wasm_bindgen]
 impl WasmPageClassificationConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(labels: Vec<String>, multiLabel: bool, llm: WasmLlmConfig, promptTemplate: Option<String>) -> WasmPageClassificationConfig {
-        WasmPageClassificationConfig { prompt_template: promptTemplate, labels: labels, multi_label: multiLabel, llm: llm }
+    pub fn new(
+        labels: Vec<String>,
+        multiLabel: bool,
+        llm: WasmLlmConfig,
+        promptTemplate: Option<String>,
+    ) -> WasmPageClassificationConfig {
+        WasmPageClassificationConfig {
+            prompt_template: promptTemplate,
+            labels,
+            multi_label: multiLabel,
+            llm,
+        }
     }
 
     #[wasm_bindgen]
@@ -255,20 +310,29 @@ impl WasmPageClassificationConfig {
 /// default behavior unchanged.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmContentFilterConfig {    include_headers: bool,    include_footers: bool,    strip_repeating_text: bool,    include_watermarks: bool,}
-
+pub struct WasmContentFilterConfig {
+    include_headers: bool,
+    include_footers: bool,
+    strip_repeating_text: bool,
+    include_watermarks: bool,
+}
 
 #[wasm_bindgen]
 impl WasmContentFilterConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            includeHeaders: Option<bool>,
-            includeFooters: Option<bool>,
-            stripRepeatingText: Option<bool>,
-            includeWatermarks: Option<bool>,
-        ) -> WasmContentFilterConfig {
-        WasmContentFilterConfig { include_headers: includeHeaders.unwrap_or(false), include_footers: includeFooters.unwrap_or(false), strip_repeating_text: stripRepeatingText.unwrap_or(true), include_watermarks: includeWatermarks.unwrap_or(false) }
+        includeHeaders: Option<bool>,
+        includeFooters: Option<bool>,
+        stripRepeatingText: Option<bool>,
+        includeWatermarks: Option<bool>,
+    ) -> WasmContentFilterConfig {
+        WasmContentFilterConfig {
+            include_headers: includeHeaders.unwrap_or(false),
+            include_footers: includeFooters.unwrap_or(false),
+            strip_repeating_text: stripRepeatingText.unwrap_or(true),
+            include_watermarks: includeWatermarks.unwrap_or(false),
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "includeHeaders")]
@@ -321,15 +385,18 @@ impl WasmContentFilterConfig {
 /// Configuration for email extraction.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmEmailConfig {    msg_fallback_codepage: Option<u32>,}
-
+pub struct WasmEmailConfig {
+    msg_fallback_codepage: Option<u32>,
+}
 
 #[wasm_bindgen]
 impl WasmEmailConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(msgFallbackCodepage: Option<u32>) -> WasmEmailConfig {
-        WasmEmailConfig { msg_fallback_codepage: msgFallbackCodepage }
+        WasmEmailConfig {
+            msg_fallback_codepage: msgFallbackCodepage,
+        }
     }
 
     #[wasm_bindgen]
@@ -357,8 +424,45 @@ impl WasmEmailConfig {
 /// # Example
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmExtractionConfig {    use_cache: bool,    enable_quality_processing: bool,    ocr: Option<WasmOcrConfig>,    force_ocr: bool,    force_ocr_pages: Option<Vec<u32>>,    disable_ocr: bool,    chunking: Option<WasmChunkingConfig>,    content_filter: Option<WasmContentFilterConfig>,    images: Option<WasmImageExtractionConfig>,    token_reduction: Option<WasmTokenReductionOptions>,    language_detection: Option<WasmLanguageDetectionConfig>,    pages: Option<WasmPageConfig>,    postprocessor: Option<WasmPostProcessorConfig>,    html_options: Option<String>,    extraction_timeout_secs: Option<u64>,    max_concurrent_extractions: Option<usize>,    result_format: WasmResultFormat,    security_limits: Option<WasmSecurityLimits>,    max_embedded_file_bytes: Option<u64>,    output_format: WasmOutputFormat,    use_layout_for_markdown: bool,    include_document_structure: bool,    acceleration: Option<WasmAccelerationConfig>,    cache_namespace: Option<String>,    cache_ttl_secs: Option<u64>,    email: Option<WasmEmailConfig>,    concurrency: Option<String>,    max_archive_depth: usize,    structured_extraction: Option<WasmStructuredExtractionConfig>,    ner: Option<WasmNerConfig>,    redaction: Option<WasmRedactionConfig>,    summarization: Option<WasmSummarizationConfig>,    translation: Option<WasmTranslationConfig>,    page_classification: Option<WasmPageClassificationConfig>,    captioning: Option<WasmCaptioningConfig>,    qr_codes: Option<bool>,    cancel_token: Option<String>,}
-
+pub struct WasmExtractionConfig {
+    use_cache: bool,
+    enable_quality_processing: bool,
+    ocr: Option<WasmOcrConfig>,
+    force_ocr: bool,
+    force_ocr_pages: Option<Vec<u32>>,
+    disable_ocr: bool,
+    chunking: Option<WasmChunkingConfig>,
+    content_filter: Option<WasmContentFilterConfig>,
+    images: Option<WasmImageExtractionConfig>,
+    token_reduction: Option<WasmTokenReductionOptions>,
+    language_detection: Option<WasmLanguageDetectionConfig>,
+    pages: Option<WasmPageConfig>,
+    postprocessor: Option<WasmPostProcessorConfig>,
+    html_options: Option<String>,
+    extraction_timeout_secs: Option<u64>,
+    max_concurrent_extractions: Option<usize>,
+    result_format: WasmResultFormat,
+    security_limits: Option<WasmSecurityLimits>,
+    max_embedded_file_bytes: Option<u64>,
+    output_format: WasmOutputFormat,
+    use_layout_for_markdown: bool,
+    include_document_structure: bool,
+    acceleration: Option<WasmAccelerationConfig>,
+    cache_namespace: Option<String>,
+    cache_ttl_secs: Option<u64>,
+    email: Option<WasmEmailConfig>,
+    concurrency: Option<String>,
+    max_archive_depth: usize,
+    structured_extraction: Option<WasmStructuredExtractionConfig>,
+    ner: Option<WasmNerConfig>,
+    redaction: Option<WasmRedactionConfig>,
+    summarization: Option<WasmSummarizationConfig>,
+    translation: Option<WasmTranslationConfig>,
+    page_classification: Option<WasmPageClassificationConfig>,
+    captioning: Option<WasmCaptioningConfig>,
+    qr_codes: Option<bool>,
+    cancel_token: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmExtractionConfig {
@@ -366,44 +470,82 @@ impl WasmExtractionConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            useCache: Option<bool>,
-            enableQualityProcessing: Option<bool>,
-            forceOcr: Option<bool>,
-            disableOcr: Option<bool>,
-            resultFormat: Option<WasmResultFormat>,
-            outputFormat: Option<WasmOutputFormat>,
-            useLayoutForMarkdown: Option<bool>,
-            includeDocumentStructure: Option<bool>,
-            maxArchiveDepth: Option<usize>,
-            ocr: Option<WasmOcrConfig>,
-            forceOcrPages: Option<Vec<u32>>,
-            chunking: Option<WasmChunkingConfig>,
-            contentFilter: Option<WasmContentFilterConfig>,
-            images: Option<WasmImageExtractionConfig>,
-            tokenReduction: Option<WasmTokenReductionOptions>,
-            languageDetection: Option<WasmLanguageDetectionConfig>,
-            pages: Option<WasmPageConfig>,
-            postprocessor: Option<WasmPostProcessorConfig>,
-            extractionTimeoutSecs: Option<u64>,
-            maxConcurrentExtractions: Option<usize>,
-            securityLimits: Option<WasmSecurityLimits>,
-            maxEmbeddedFileBytes: Option<u64>,
-            acceleration: Option<WasmAccelerationConfig>,
-            cacheNamespace: Option<String>,
-            cacheTtlSecs: Option<u64>,
-            email: Option<WasmEmailConfig>,
-            concurrency: Option<String>,
-            structuredExtraction: Option<WasmStructuredExtractionConfig>,
-            ner: Option<WasmNerConfig>,
-            redaction: Option<WasmRedactionConfig>,
-            summarization: Option<WasmSummarizationConfig>,
-            translation: Option<WasmTranslationConfig>,
-            pageClassification: Option<WasmPageClassificationConfig>,
-            captioning: Option<WasmCaptioningConfig>,
-            qrCodes: Option<bool>,
-            cancelToken: Option<String>,
-        ) -> WasmExtractionConfig {
-        WasmExtractionConfig { use_cache: useCache.unwrap_or(true), enable_quality_processing: enableQualityProcessing.unwrap_or(true), ocr: ocr, force_ocr: forceOcr.unwrap_or(false), force_ocr_pages: forceOcrPages, disable_ocr: disableOcr.unwrap_or(false), chunking: chunking, content_filter: contentFilter, images: images, token_reduction: tokenReduction, language_detection: languageDetection, pages: pages, postprocessor: postprocessor, html_options: Default::default(), extraction_timeout_secs: extractionTimeoutSecs, max_concurrent_extractions: maxConcurrentExtractions, result_format: resultFormat.unwrap_or_default(), security_limits: securityLimits, max_embedded_file_bytes: maxEmbeddedFileBytes, output_format: outputFormat.unwrap_or_default(), use_layout_for_markdown: useLayoutForMarkdown.unwrap_or(false), include_document_structure: includeDocumentStructure.unwrap_or(false), acceleration: acceleration, cache_namespace: cacheNamespace, cache_ttl_secs: cacheTtlSecs, email: email, concurrency: concurrency, max_archive_depth: maxArchiveDepth.unwrap_or_default(), structured_extraction: structuredExtraction, ner: ner, redaction: redaction, summarization: summarization, translation: translation, page_classification: pageClassification, captioning: captioning, qr_codes: qrCodes, cancel_token: cancelToken }
+        useCache: Option<bool>,
+        enableQualityProcessing: Option<bool>,
+        forceOcr: Option<bool>,
+        disableOcr: Option<bool>,
+        resultFormat: Option<WasmResultFormat>,
+        outputFormat: Option<WasmOutputFormat>,
+        useLayoutForMarkdown: Option<bool>,
+        includeDocumentStructure: Option<bool>,
+        maxArchiveDepth: Option<usize>,
+        ocr: Option<WasmOcrConfig>,
+        forceOcrPages: Option<Vec<u32>>,
+        chunking: Option<WasmChunkingConfig>,
+        contentFilter: Option<WasmContentFilterConfig>,
+        images: Option<WasmImageExtractionConfig>,
+        tokenReduction: Option<WasmTokenReductionOptions>,
+        languageDetection: Option<WasmLanguageDetectionConfig>,
+        pages: Option<WasmPageConfig>,
+        postprocessor: Option<WasmPostProcessorConfig>,
+        extractionTimeoutSecs: Option<u64>,
+        maxConcurrentExtractions: Option<usize>,
+        securityLimits: Option<WasmSecurityLimits>,
+        maxEmbeddedFileBytes: Option<u64>,
+        acceleration: Option<WasmAccelerationConfig>,
+        cacheNamespace: Option<String>,
+        cacheTtlSecs: Option<u64>,
+        email: Option<WasmEmailConfig>,
+        concurrency: Option<String>,
+        structuredExtraction: Option<WasmStructuredExtractionConfig>,
+        ner: Option<WasmNerConfig>,
+        redaction: Option<WasmRedactionConfig>,
+        summarization: Option<WasmSummarizationConfig>,
+        translation: Option<WasmTranslationConfig>,
+        pageClassification: Option<WasmPageClassificationConfig>,
+        captioning: Option<WasmCaptioningConfig>,
+        qrCodes: Option<bool>,
+        cancelToken: Option<String>,
+    ) -> WasmExtractionConfig {
+        WasmExtractionConfig {
+            use_cache: useCache.unwrap_or(true),
+            enable_quality_processing: enableQualityProcessing.unwrap_or(true),
+            ocr,
+            force_ocr: forceOcr.unwrap_or(false),
+            force_ocr_pages: forceOcrPages,
+            disable_ocr: disableOcr.unwrap_or(false),
+            chunking,
+            content_filter: contentFilter,
+            images,
+            token_reduction: tokenReduction,
+            language_detection: languageDetection,
+            pages,
+            postprocessor,
+            html_options: Default::default(),
+            extraction_timeout_secs: extractionTimeoutSecs,
+            max_concurrent_extractions: maxConcurrentExtractions,
+            result_format: resultFormat.unwrap_or_default(),
+            security_limits: securityLimits,
+            max_embedded_file_bytes: maxEmbeddedFileBytes,
+            output_format: outputFormat.unwrap_or_default(),
+            use_layout_for_markdown: useLayoutForMarkdown.unwrap_or(false),
+            include_document_structure: includeDocumentStructure.unwrap_or(false),
+            acceleration,
+            cache_namespace: cacheNamespace,
+            cache_ttl_secs: cacheTtlSecs,
+            email,
+            concurrency,
+            max_archive_depth: maxArchiveDepth.unwrap_or_default(),
+            structured_extraction: structuredExtraction,
+            ner,
+            redaction,
+            summarization,
+            translation,
+            page_classification: pageClassification,
+            captioning,
+            qr_codes: qrCodes,
+            cancel_token: cancelToken,
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "useCache")]
@@ -794,7 +936,7 @@ impl WasmExtractionConfig {
     /// decompression can improve CPU utilization by 5-10% by avoiding wasteful
     /// image I/O and processing when results won't be used.
     #[wasm_bindgen(js_name = "needsImageProcessing")]
-    pub fn needs_image_processing(&self, ) -> bool {
+    pub fn needs_image_processing(&self) -> bool {
         kreuzberg::ExtractionConfig::from(self.clone()).needs_image_processing()
     }
 }
@@ -818,8 +960,26 @@ impl WasmExtractionConfig {
 /// # Example
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmFileExtractionConfig {    enable_quality_processing: Option<bool>,    ocr: Option<WasmOcrConfig>,    force_ocr: Option<bool>,    force_ocr_pages: Option<Vec<u32>>,    disable_ocr: Option<bool>,    chunking: Option<WasmChunkingConfig>,    content_filter: Option<WasmContentFilterConfig>,    images: Option<WasmImageExtractionConfig>,    token_reduction: Option<WasmTokenReductionOptions>,    language_detection: Option<WasmLanguageDetectionConfig>,    pages: Option<WasmPageConfig>,    postprocessor: Option<WasmPostProcessorConfig>,    html_options: Option<String>,    result_format: Option<WasmResultFormat>,    output_format: Option<WasmOutputFormat>,    include_document_structure: Option<bool>,    timeout_secs: Option<u64>,    structured_extraction: Option<WasmStructuredExtractionConfig>,}
-
+pub struct WasmFileExtractionConfig {
+    enable_quality_processing: Option<bool>,
+    ocr: Option<WasmOcrConfig>,
+    force_ocr: Option<bool>,
+    force_ocr_pages: Option<Vec<u32>>,
+    disable_ocr: Option<bool>,
+    chunking: Option<WasmChunkingConfig>,
+    content_filter: Option<WasmContentFilterConfig>,
+    images: Option<WasmImageExtractionConfig>,
+    token_reduction: Option<WasmTokenReductionOptions>,
+    language_detection: Option<WasmLanguageDetectionConfig>,
+    pages: Option<WasmPageConfig>,
+    postprocessor: Option<WasmPostProcessorConfig>,
+    html_options: Option<String>,
+    result_format: Option<WasmResultFormat>,
+    output_format: Option<WasmOutputFormat>,
+    include_document_structure: Option<bool>,
+    timeout_secs: Option<u64>,
+    structured_extraction: Option<WasmStructuredExtractionConfig>,
+}
 
 #[wasm_bindgen]
 impl WasmFileExtractionConfig {
@@ -827,25 +987,44 @@ impl WasmFileExtractionConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            enableQualityProcessing: Option<bool>,
-            ocr: Option<WasmOcrConfig>,
-            forceOcr: Option<bool>,
-            forceOcrPages: Option<Vec<u32>>,
-            disableOcr: Option<bool>,
-            chunking: Option<WasmChunkingConfig>,
-            contentFilter: Option<WasmContentFilterConfig>,
-            images: Option<WasmImageExtractionConfig>,
-            tokenReduction: Option<WasmTokenReductionOptions>,
-            languageDetection: Option<WasmLanguageDetectionConfig>,
-            pages: Option<WasmPageConfig>,
-            postprocessor: Option<WasmPostProcessorConfig>,
-            resultFormat: Option<WasmResultFormat>,
-            outputFormat: Option<WasmOutputFormat>,
-            includeDocumentStructure: Option<bool>,
-            timeoutSecs: Option<u64>,
-            structuredExtraction: Option<WasmStructuredExtractionConfig>,
-        ) -> WasmFileExtractionConfig {
-        WasmFileExtractionConfig { enable_quality_processing: enableQualityProcessing, ocr: ocr, force_ocr: forceOcr, force_ocr_pages: forceOcrPages, disable_ocr: disableOcr, chunking: chunking, content_filter: contentFilter, images: images, token_reduction: tokenReduction, language_detection: languageDetection, pages: pages, postprocessor: postprocessor, html_options: Default::default(), result_format: resultFormat, output_format: outputFormat, include_document_structure: includeDocumentStructure, timeout_secs: timeoutSecs, structured_extraction: structuredExtraction }
+        enableQualityProcessing: Option<bool>,
+        ocr: Option<WasmOcrConfig>,
+        forceOcr: Option<bool>,
+        forceOcrPages: Option<Vec<u32>>,
+        disableOcr: Option<bool>,
+        chunking: Option<WasmChunkingConfig>,
+        contentFilter: Option<WasmContentFilterConfig>,
+        images: Option<WasmImageExtractionConfig>,
+        tokenReduction: Option<WasmTokenReductionOptions>,
+        languageDetection: Option<WasmLanguageDetectionConfig>,
+        pages: Option<WasmPageConfig>,
+        postprocessor: Option<WasmPostProcessorConfig>,
+        resultFormat: Option<WasmResultFormat>,
+        outputFormat: Option<WasmOutputFormat>,
+        includeDocumentStructure: Option<bool>,
+        timeoutSecs: Option<u64>,
+        structuredExtraction: Option<WasmStructuredExtractionConfig>,
+    ) -> WasmFileExtractionConfig {
+        WasmFileExtractionConfig {
+            enable_quality_processing: enableQualityProcessing,
+            ocr,
+            force_ocr: forceOcr,
+            force_ocr_pages: forceOcrPages,
+            disable_ocr: disableOcr,
+            chunking,
+            content_filter: contentFilter,
+            images,
+            token_reduction: tokenReduction,
+            language_detection: languageDetection,
+            pages,
+            postprocessor,
+            html_options: Default::default(),
+            result_format: resultFormat,
+            output_format: outputFormat,
+            include_document_structure: includeDocumentStructure,
+            timeout_secs: timeoutSecs,
+            structured_extraction: structuredExtraction,
+        }
     }
 
     #[wasm_bindgen]
@@ -1041,15 +1220,22 @@ impl WasmFileExtractionConfig {
 /// to represent a single item in a batch extraction job.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmBatchBytesItem {    content: Vec<u8>,    mime_type: String,    config: Option<WasmFileExtractionConfig>,}
-
+pub struct WasmBatchBytesItem {
+    content: Vec<u8>,
+    mime_type: String,
+    config: Option<WasmFileExtractionConfig>,
+}
 
 #[wasm_bindgen]
 impl WasmBatchBytesItem {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(content: Vec<u8>, mimeType: String, config: Option<WasmFileExtractionConfig>) -> WasmBatchBytesItem {
-        WasmBatchBytesItem { content: content, mime_type: mimeType, config: config }
+        WasmBatchBytesItem {
+            content,
+            mime_type: mimeType,
+            config,
+        }
     }
 
     #[wasm_bindgen]
@@ -1095,15 +1281,17 @@ impl WasmBatchBytesItem {
 /// to represent a single file in a batch extraction job.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmBatchFileItem {    path: String,    config: Option<WasmFileExtractionConfig>,}
-
+pub struct WasmBatchFileItem {
+    path: String,
+    config: Option<WasmFileExtractionConfig>,
+}
 
 #[wasm_bindgen]
 impl WasmBatchFileItem {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(path: String, config: Option<WasmFileExtractionConfig>) -> WasmBatchFileItem {
-        WasmBatchFileItem { path: path, config: config }
+        WasmBatchFileItem { path, config }
     }
 
     #[wasm_bindgen]
@@ -1136,8 +1324,21 @@ impl WasmBatchFileItem {
 /// Image extraction configuration.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmImageExtractionConfig {    extract_images: bool,    target_dpi: i32,    max_image_dimension: i32,    inject_placeholders: bool,    auto_adjust_dpi: bool,    min_dpi: i32,    max_dpi: i32,    max_images_per_page: Option<u32>,    classify: bool,    include_page_rasters: bool,    run_ocr_on_images: bool,    ocr_text_only: bool,    append_ocr_text: bool,}
-
+pub struct WasmImageExtractionConfig {
+    extract_images: bool,
+    target_dpi: i32,
+    max_image_dimension: i32,
+    inject_placeholders: bool,
+    auto_adjust_dpi: bool,
+    min_dpi: i32,
+    max_dpi: i32,
+    max_images_per_page: Option<u32>,
+    classify: bool,
+    include_page_rasters: bool,
+    run_ocr_on_images: bool,
+    ocr_text_only: bool,
+    append_ocr_text: bool,
+}
 
 #[wasm_bindgen]
 impl WasmImageExtractionConfig {
@@ -1145,21 +1346,35 @@ impl WasmImageExtractionConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            extractImages: Option<bool>,
-            targetDpi: Option<i32>,
-            maxImageDimension: Option<i32>,
-            injectPlaceholders: Option<bool>,
-            autoAdjustDpi: Option<bool>,
-            minDpi: Option<i32>,
-            maxDpi: Option<i32>,
-            classify: Option<bool>,
-            includePageRasters: Option<bool>,
-            runOcrOnImages: Option<bool>,
-            ocrTextOnly: Option<bool>,
-            appendOcrText: Option<bool>,
-            maxImagesPerPage: Option<u32>,
-        ) -> WasmImageExtractionConfig {
-        WasmImageExtractionConfig { extract_images: extractImages.unwrap_or(true), target_dpi: targetDpi.unwrap_or(300), max_image_dimension: maxImageDimension.unwrap_or(4096), inject_placeholders: injectPlaceholders.unwrap_or(true), auto_adjust_dpi: autoAdjustDpi.unwrap_or(true), min_dpi: minDpi.unwrap_or(72), max_dpi: maxDpi.unwrap_or(600), max_images_per_page: maxImagesPerPage, classify: classify.unwrap_or(true), include_page_rasters: includePageRasters.unwrap_or(false), run_ocr_on_images: runOcrOnImages.unwrap_or(true), ocr_text_only: ocrTextOnly.unwrap_or(false), append_ocr_text: appendOcrText.unwrap_or(false) }
+        extractImages: Option<bool>,
+        targetDpi: Option<i32>,
+        maxImageDimension: Option<i32>,
+        injectPlaceholders: Option<bool>,
+        autoAdjustDpi: Option<bool>,
+        minDpi: Option<i32>,
+        maxDpi: Option<i32>,
+        classify: Option<bool>,
+        includePageRasters: Option<bool>,
+        runOcrOnImages: Option<bool>,
+        ocrTextOnly: Option<bool>,
+        appendOcrText: Option<bool>,
+        maxImagesPerPage: Option<u32>,
+    ) -> WasmImageExtractionConfig {
+        WasmImageExtractionConfig {
+            extract_images: extractImages.unwrap_or(true),
+            target_dpi: targetDpi.unwrap_or(300),
+            max_image_dimension: maxImageDimension.unwrap_or(4096),
+            inject_placeholders: injectPlaceholders.unwrap_or(true),
+            auto_adjust_dpi: autoAdjustDpi.unwrap_or(true),
+            min_dpi: minDpi.unwrap_or(72),
+            max_dpi: maxDpi.unwrap_or(600),
+            max_images_per_page: maxImagesPerPage,
+            classify: classify.unwrap_or(true),
+            include_page_rasters: includePageRasters.unwrap_or(false),
+            run_ocr_on_images: runOcrOnImages.unwrap_or(true),
+            ocr_text_only: ocrTextOnly.unwrap_or(false),
+            append_ocr_text: appendOcrText.unwrap_or(false),
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "extractImages")]
@@ -1302,15 +1517,20 @@ impl WasmImageExtractionConfig {
 /// Token reduction configuration.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTokenReductionOptions {    mode: String,    preserve_important_words: bool,}
-
+pub struct WasmTokenReductionOptions {
+    mode: String,
+    preserve_important_words: bool,
+}
 
 #[wasm_bindgen]
 impl WasmTokenReductionOptions {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(mode: Option<String>, preserveImportantWords: Option<bool>) -> WasmTokenReductionOptions {
-        WasmTokenReductionOptions { mode: mode.unwrap_or_default(), preserve_important_words: preserveImportantWords.unwrap_or(true) }
+        WasmTokenReductionOptions {
+            mode: mode.unwrap_or_default(),
+            preserve_important_words: preserveImportantWords.unwrap_or(true),
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -1343,15 +1563,26 @@ impl WasmTokenReductionOptions {
 /// Language detection configuration.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmLanguageDetectionConfig {    enabled: bool,    min_confidence: f64,    detect_multiple: bool,}
-
+pub struct WasmLanguageDetectionConfig {
+    enabled: bool,
+    min_confidence: f64,
+    detect_multiple: bool,
+}
 
 #[wasm_bindgen]
 impl WasmLanguageDetectionConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(enabled: Option<bool>, minConfidence: Option<f64>, detectMultiple: Option<bool>) -> WasmLanguageDetectionConfig {
-        WasmLanguageDetectionConfig { enabled: enabled.unwrap_or(true), min_confidence: minConfidence.unwrap_or(0.8), detect_multiple: detectMultiple.unwrap_or(false) }
+    pub fn new(
+        enabled: Option<bool>,
+        minConfidence: Option<f64>,
+        detectMultiple: Option<bool>,
+    ) -> WasmLanguageDetectionConfig {
+        WasmLanguageDetectionConfig {
+            enabled: enabled.unwrap_or(true),
+            min_confidence: minConfidence.unwrap_or(0.8),
+            detect_multiple: detectMultiple.unwrap_or(false),
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -1405,23 +1636,38 @@ impl WasmLanguageDetectionConfig {
 /// ```
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmLlmConfig {    model: String,    api_key: Option<String>,    base_url: Option<String>,    timeout_secs: Option<u64>,    max_retries: Option<u32>,    temperature: Option<f64>,    max_tokens: Option<u64>,}
-
+pub struct WasmLlmConfig {
+    model: String,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    timeout_secs: Option<u64>,
+    max_retries: Option<u32>,
+    temperature: Option<f64>,
+    max_tokens: Option<u64>,
+}
 
 #[wasm_bindgen]
 impl WasmLlmConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            model: Option<String>,
-            apiKey: Option<String>,
-            baseUrl: Option<String>,
-            timeoutSecs: Option<u64>,
-            maxRetries: Option<u32>,
-            temperature: Option<f64>,
-            maxTokens: Option<u64>,
-        ) -> WasmLlmConfig {
-        WasmLlmConfig { model: model.unwrap_or_default(), api_key: apiKey, base_url: baseUrl, timeout_secs: timeoutSecs, max_retries: maxRetries, temperature: temperature, max_tokens: maxTokens }
+        model: Option<String>,
+        apiKey: Option<String>,
+        baseUrl: Option<String>,
+        timeoutSecs: Option<u64>,
+        maxRetries: Option<u32>,
+        temperature: Option<f64>,
+        maxTokens: Option<u64>,
+    ) -> WasmLlmConfig {
+        WasmLlmConfig {
+            model: model.unwrap_or_default(),
+            api_key: apiKey,
+            base_url: baseUrl,
+            timeout_secs: timeoutSecs,
+            max_retries: maxRetries,
+            temperature,
+            max_tokens: maxTokens,
+        }
     }
 
     #[wasm_bindgen]
@@ -1524,22 +1770,35 @@ impl WasmLlmConfig {
 /// ```
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmStructuredExtractionConfig {    schema: JsValue,    schema_name: String,    schema_description: Option<String>,    strict: bool,    prompt: Option<String>,    llm: WasmLlmConfig,}
-
+pub struct WasmStructuredExtractionConfig {
+    schema: JsValue,
+    schema_name: String,
+    schema_description: Option<String>,
+    strict: bool,
+    prompt: Option<String>,
+    llm: WasmLlmConfig,
+}
 
 #[wasm_bindgen]
 impl WasmStructuredExtractionConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            schema: JsValue,
-            schemaName: String,
-            strict: bool,
-            llm: WasmLlmConfig,
-            schemaDescription: Option<String>,
-            prompt: Option<String>,
-        ) -> WasmStructuredExtractionConfig {
-        WasmStructuredExtractionConfig { schema: schema, schema_name: schemaName, schema_description: schemaDescription, strict: strict, prompt: prompt, llm: llm }
+        schema: JsValue,
+        schemaName: String,
+        strict: bool,
+        llm: WasmLlmConfig,
+        schemaDescription: Option<String>,
+        prompt: Option<String>,
+    ) -> WasmStructuredExtractionConfig {
+        WasmStructuredExtractionConfig {
+            schema,
+            schema_name: schemaName,
+            schema_description: schemaDescription,
+            strict,
+            prompt,
+            llm,
+        }
     }
 
     #[wasm_bindgen]
@@ -1612,21 +1871,32 @@ impl WasmStructuredExtractionConfig {
 /// Configuration for the NER post-processor.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmNerConfig {    backend: WasmNerBackendKind,    categories: Vec<WasmEntityCategory>,    model: Option<String>,    llm: Option<WasmLlmConfig>,    custom_labels: Vec<String>,}
-
+pub struct WasmNerConfig {
+    backend: WasmNerBackendKind,
+    categories: Vec<WasmEntityCategory>,
+    model: Option<String>,
+    llm: Option<WasmLlmConfig>,
+    custom_labels: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmNerConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            backend: Option<WasmNerBackendKind>,
-            categories: Option<Vec<WasmEntityCategory>>,
-            customLabels: Option<Vec<String>>,
-            model: Option<String>,
-            llm: Option<WasmLlmConfig>,
-        ) -> WasmNerConfig {
-        WasmNerConfig { backend: backend.unwrap_or_default(), categories: categories.unwrap_or_default(), model: model, llm: llm, custom_labels: customLabels.unwrap_or_default() }
+        backend: Option<WasmNerBackendKind>,
+        categories: Option<Vec<WasmEntityCategory>>,
+        customLabels: Option<Vec<String>>,
+        model: Option<String>,
+        llm: Option<WasmLlmConfig>,
+    ) -> WasmNerConfig {
+        WasmNerConfig {
+            backend: backend.unwrap_or_default(),
+            categories: categories.unwrap_or_default(),
+            model,
+            llm,
+            custom_labels: customLabels.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -1652,7 +1922,10 @@ impl WasmNerConfig {
 
     #[wasm_bindgen(setter)]
     pub fn set_categories(&mut self, value: Vec<String>) {
-        self.categories = value.into_iter().filter_map(|s| WasmEntityCategory::from_api_str(&s)).collect();
+        self.categories = value
+            .into_iter()
+            .filter_map(|s| WasmEntityCategory::from_api_str(&s))
+            .collect();
     }
 
     #[wasm_bindgen(getter)]
@@ -1692,8 +1965,24 @@ impl WasmNerConfig {
 /// so `OcrQualityThresholds.default()` preserves existing semantics exactly.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrQualityThresholds {    min_total_non_whitespace: usize,    min_non_whitespace_per_page: f64,    min_meaningful_word_len: usize,    min_meaningful_words: usize,    min_alnum_ratio: f64,    min_garbage_chars: usize,    max_fragmented_word_ratio: f64,    critical_fragmented_word_ratio: f64,    min_avg_word_length: f64,    min_words_for_avg_length_check: usize,    min_consecutive_repeat_ratio: f64,    min_words_for_repeat_check: usize,    substantive_min_chars: usize,    non_text_min_chars: usize,    alnum_ws_ratio_threshold: f64,    pipeline_min_quality: f64,}
-
+pub struct WasmOcrQualityThresholds {
+    min_total_non_whitespace: usize,
+    min_non_whitespace_per_page: f64,
+    min_meaningful_word_len: usize,
+    min_meaningful_words: usize,
+    min_alnum_ratio: f64,
+    min_garbage_chars: usize,
+    max_fragmented_word_ratio: f64,
+    critical_fragmented_word_ratio: f64,
+    min_avg_word_length: f64,
+    min_words_for_avg_length_check: usize,
+    min_consecutive_repeat_ratio: f64,
+    min_words_for_repeat_check: usize,
+    substantive_min_chars: usize,
+    non_text_min_chars: usize,
+    alnum_ws_ratio_threshold: f64,
+    pipeline_min_quality: f64,
+}
 
 #[wasm_bindgen]
 impl WasmOcrQualityThresholds {
@@ -1701,24 +1990,41 @@ impl WasmOcrQualityThresholds {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            minTotalNonWhitespace: Option<usize>,
-            minNonWhitespacePerPage: Option<f64>,
-            minMeaningfulWordLen: Option<usize>,
-            minMeaningfulWords: Option<usize>,
-            minAlnumRatio: Option<f64>,
-            minGarbageChars: Option<usize>,
-            maxFragmentedWordRatio: Option<f64>,
-            criticalFragmentedWordRatio: Option<f64>,
-            minAvgWordLength: Option<f64>,
-            minWordsForAvgLengthCheck: Option<usize>,
-            minConsecutiveRepeatRatio: Option<f64>,
-            minWordsForRepeatCheck: Option<usize>,
-            substantiveMinChars: Option<usize>,
-            nonTextMinChars: Option<usize>,
-            alnumWsRatioThreshold: Option<f64>,
-            pipelineMinQuality: Option<f64>,
-        ) -> WasmOcrQualityThresholds {
-        WasmOcrQualityThresholds { min_total_non_whitespace: minTotalNonWhitespace.unwrap_or(64), min_non_whitespace_per_page: minNonWhitespacePerPage.unwrap_or(32.0), min_meaningful_word_len: minMeaningfulWordLen.unwrap_or(4), min_meaningful_words: minMeaningfulWords.unwrap_or(3), min_alnum_ratio: minAlnumRatio.unwrap_or(0.3), min_garbage_chars: minGarbageChars.unwrap_or(5), max_fragmented_word_ratio: maxFragmentedWordRatio.unwrap_or(0.6), critical_fragmented_word_ratio: criticalFragmentedWordRatio.unwrap_or(0.8), min_avg_word_length: minAvgWordLength.unwrap_or(2.0), min_words_for_avg_length_check: minWordsForAvgLengthCheck.unwrap_or(50), min_consecutive_repeat_ratio: minConsecutiveRepeatRatio.unwrap_or(0.08), min_words_for_repeat_check: minWordsForRepeatCheck.unwrap_or(50), substantive_min_chars: substantiveMinChars.unwrap_or(100), non_text_min_chars: nonTextMinChars.unwrap_or(20), alnum_ws_ratio_threshold: alnumWsRatioThreshold.unwrap_or(0.4), pipeline_min_quality: pipelineMinQuality.unwrap_or(0.5) }
+        minTotalNonWhitespace: Option<usize>,
+        minNonWhitespacePerPage: Option<f64>,
+        minMeaningfulWordLen: Option<usize>,
+        minMeaningfulWords: Option<usize>,
+        minAlnumRatio: Option<f64>,
+        minGarbageChars: Option<usize>,
+        maxFragmentedWordRatio: Option<f64>,
+        criticalFragmentedWordRatio: Option<f64>,
+        minAvgWordLength: Option<f64>,
+        minWordsForAvgLengthCheck: Option<usize>,
+        minConsecutiveRepeatRatio: Option<f64>,
+        minWordsForRepeatCheck: Option<usize>,
+        substantiveMinChars: Option<usize>,
+        nonTextMinChars: Option<usize>,
+        alnumWsRatioThreshold: Option<f64>,
+        pipelineMinQuality: Option<f64>,
+    ) -> WasmOcrQualityThresholds {
+        WasmOcrQualityThresholds {
+            min_total_non_whitespace: minTotalNonWhitespace.unwrap_or(64),
+            min_non_whitespace_per_page: minNonWhitespacePerPage.unwrap_or(32.0),
+            min_meaningful_word_len: minMeaningfulWordLen.unwrap_or(4),
+            min_meaningful_words: minMeaningfulWords.unwrap_or(3),
+            min_alnum_ratio: minAlnumRatio.unwrap_or(0.3),
+            min_garbage_chars: minGarbageChars.unwrap_or(5),
+            max_fragmented_word_ratio: maxFragmentedWordRatio.unwrap_or(0.6),
+            critical_fragmented_word_ratio: criticalFragmentedWordRatio.unwrap_or(0.8),
+            min_avg_word_length: minAvgWordLength.unwrap_or(2.0),
+            min_words_for_avg_length_check: minWordsForAvgLengthCheck.unwrap_or(50),
+            min_consecutive_repeat_ratio: minConsecutiveRepeatRatio.unwrap_or(0.08),
+            min_words_for_repeat_check: minWordsForRepeatCheck.unwrap_or(50),
+            substantive_min_chars: substantiveMinChars.unwrap_or(100),
+            non_text_min_chars: nonTextMinChars.unwrap_or(20),
+            alnum_ws_ratio_threshold: alnumWsRatioThreshold.unwrap_or(0.4),
+            pipeline_min_quality: pipelineMinQuality.unwrap_or(0.5),
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "minTotalNonWhitespace")]
@@ -1891,23 +2197,38 @@ impl WasmOcrQualityThresholds {
 /// A single backend stage in the OCR pipeline.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrPipelineStage {    backend: String,    priority: u32,    language: Option<String>,    tesseract_config: Option<WasmTesseractConfig>,    paddle_ocr_config: Option<JsValue>,    vlm_config: Option<WasmLlmConfig>,    backend_options: Option<JsValue>,}
-
+pub struct WasmOcrPipelineStage {
+    backend: String,
+    priority: u32,
+    language: Option<String>,
+    tesseract_config: Option<WasmTesseractConfig>,
+    paddle_ocr_config: Option<JsValue>,
+    vlm_config: Option<WasmLlmConfig>,
+    backend_options: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmOcrPipelineStage {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            backend: String,
-            priority: u32,
-            language: Option<String>,
-            tesseractConfig: Option<WasmTesseractConfig>,
-            paddleOcrConfig: Option<JsValue>,
-            vlmConfig: Option<WasmLlmConfig>,
-            backendOptions: Option<JsValue>,
-        ) -> WasmOcrPipelineStage {
-        WasmOcrPipelineStage { backend: backend, priority: priority, language: language, tesseract_config: tesseractConfig, paddle_ocr_config: paddleOcrConfig, vlm_config: vlmConfig, backend_options: backendOptions }
+        backend: String,
+        priority: u32,
+        language: Option<String>,
+        tesseractConfig: Option<WasmTesseractConfig>,
+        paddleOcrConfig: Option<JsValue>,
+        vlmConfig: Option<WasmLlmConfig>,
+        backendOptions: Option<JsValue>,
+    ) -> WasmOcrPipelineStage {
+        WasmOcrPipelineStage {
+            backend,
+            priority,
+            language,
+            tesseract_config: tesseractConfig,
+            paddle_ocr_config: paddleOcrConfig,
+            vlm_config: vlmConfig,
+            backend_options: backendOptions,
+        }
     }
 
     #[wasm_bindgen]
@@ -1994,15 +2315,23 @@ impl WasmOcrPipelineStage {
 /// the result is accepted. Otherwise the next backend is tried.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrPipelineConfig {    stages: Vec<WasmOcrPipelineStage>,    quality_thresholds: WasmOcrQualityThresholds,}
-
+pub struct WasmOcrPipelineConfig {
+    stages: Vec<WasmOcrPipelineStage>,
+    quality_thresholds: WasmOcrQualityThresholds,
+}
 
 #[wasm_bindgen]
 impl WasmOcrPipelineConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(stages: Vec<WasmOcrPipelineStage>, qualityThresholds: WasmOcrQualityThresholds) -> WasmOcrPipelineConfig {
-        WasmOcrPipelineConfig { stages: stages, quality_thresholds: qualityThresholds }
+    pub fn new(
+        stages: Vec<WasmOcrPipelineStage>,
+        qualityThresholds: WasmOcrQualityThresholds,
+    ) -> WasmOcrPipelineConfig {
+        WasmOcrPipelineConfig {
+            stages,
+            quality_thresholds: qualityThresholds,
+        }
     }
 
     #[wasm_bindgen]
@@ -2035,8 +2364,24 @@ impl WasmOcrPipelineConfig {
 /// OCR configuration.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrConfig {    enabled: bool,    backend: String,    language: String,    tesseract_config: Option<WasmTesseractConfig>,    output_format: Option<WasmOutputFormat>,    paddle_ocr_config: Option<JsValue>,    backend_options: Option<JsValue>,    element_config: Option<WasmOcrElementConfig>,    quality_thresholds: Option<WasmOcrQualityThresholds>,    pipeline: Option<WasmOcrPipelineConfig>,    auto_rotate: bool,    vlm_fallback: JsValue,    vlm_config: Option<WasmLlmConfig>,    vlm_prompt: Option<String>,    acceleration: Option<WasmAccelerationConfig>,    tessdata_bytes: Option<JsValue>,}
-
+pub struct WasmOcrConfig {
+    enabled: bool,
+    backend: String,
+    language: String,
+    tesseract_config: Option<WasmTesseractConfig>,
+    output_format: Option<WasmOutputFormat>,
+    paddle_ocr_config: Option<JsValue>,
+    backend_options: Option<JsValue>,
+    element_config: Option<WasmOcrElementConfig>,
+    quality_thresholds: Option<WasmOcrQualityThresholds>,
+    pipeline: Option<WasmOcrPipelineConfig>,
+    auto_rotate: bool,
+    vlm_fallback: JsValue,
+    vlm_config: Option<WasmLlmConfig>,
+    vlm_prompt: Option<String>,
+    acceleration: Option<WasmAccelerationConfig>,
+    tessdata_bytes: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmOcrConfig {
@@ -2044,24 +2389,41 @@ impl WasmOcrConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            enabled: Option<bool>,
-            backend: Option<String>,
-            language: Option<String>,
-            autoRotate: Option<bool>,
-            vlmFallback: Option<JsValue>,
-            tesseractConfig: Option<WasmTesseractConfig>,
-            outputFormat: Option<WasmOutputFormat>,
-            paddleOcrConfig: Option<JsValue>,
-            backendOptions: Option<JsValue>,
-            elementConfig: Option<WasmOcrElementConfig>,
-            qualityThresholds: Option<WasmOcrQualityThresholds>,
-            pipeline: Option<WasmOcrPipelineConfig>,
-            vlmConfig: Option<WasmLlmConfig>,
-            vlmPrompt: Option<String>,
-            acceleration: Option<WasmAccelerationConfig>,
-            tessdataBytes: Option<JsValue>,
-        ) -> WasmOcrConfig {
-        WasmOcrConfig { enabled: enabled.unwrap_or(true), backend: backend.unwrap_or_default(), language: language.unwrap_or_default(), tesseract_config: tesseractConfig, output_format: outputFormat, paddle_ocr_config: paddleOcrConfig, backend_options: backendOptions, element_config: elementConfig, quality_thresholds: qualityThresholds, pipeline: pipeline, auto_rotate: autoRotate.unwrap_or(false), vlm_fallback: vlmFallback.unwrap_or_default(), vlm_config: vlmConfig, vlm_prompt: vlmPrompt, acceleration: acceleration, tessdata_bytes: tessdataBytes }
+        enabled: Option<bool>,
+        backend: Option<String>,
+        language: Option<String>,
+        autoRotate: Option<bool>,
+        vlmFallback: Option<JsValue>,
+        tesseractConfig: Option<WasmTesseractConfig>,
+        outputFormat: Option<WasmOutputFormat>,
+        paddleOcrConfig: Option<JsValue>,
+        backendOptions: Option<JsValue>,
+        elementConfig: Option<WasmOcrElementConfig>,
+        qualityThresholds: Option<WasmOcrQualityThresholds>,
+        pipeline: Option<WasmOcrPipelineConfig>,
+        vlmConfig: Option<WasmLlmConfig>,
+        vlmPrompt: Option<String>,
+        acceleration: Option<WasmAccelerationConfig>,
+        tessdataBytes: Option<JsValue>,
+    ) -> WasmOcrConfig {
+        WasmOcrConfig {
+            enabled: enabled.unwrap_or(true),
+            backend: backend.unwrap_or_default(),
+            language: language.unwrap_or_default(),
+            tesseract_config: tesseractConfig,
+            output_format: outputFormat,
+            paddle_ocr_config: paddleOcrConfig,
+            backend_options: backendOptions,
+            element_config: elementConfig,
+            quality_thresholds: qualityThresholds,
+            pipeline,
+            auto_rotate: autoRotate.unwrap_or(false),
+            vlm_fallback: vlmFallback.unwrap_or_default(),
+            vlm_config: vlmConfig,
+            vlm_prompt: vlmPrompt,
+            acceleration,
+            tessdata_bytes: tessdataBytes,
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -2240,15 +2602,26 @@ impl WasmOcrConfig {
 /// when page boundaries are available and chunking is configured.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageConfig {    extract_pages: bool,    insert_page_markers: bool,    marker_format: String,}
-
+pub struct WasmPageConfig {
+    extract_pages: bool,
+    insert_page_markers: bool,
+    marker_format: String,
+}
 
 #[wasm_bindgen]
 impl WasmPageConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(extractPages: Option<bool>, insertPageMarkers: Option<bool>, markerFormat: Option<String>) -> WasmPageConfig {
-        WasmPageConfig { extract_pages: extractPages.unwrap_or(false), insert_page_markers: insertPageMarkers.unwrap_or(false), marker_format: markerFormat.unwrap_or_else(|| "\n\n<!-- PAGE {page_num} -->\n\n".to_string()) }
+    pub fn new(
+        extractPages: Option<bool>,
+        insertPageMarkers: Option<bool>,
+        markerFormat: Option<String>,
+    ) -> WasmPageConfig {
+        WasmPageConfig {
+            extract_pages: extractPages.unwrap_or(false),
+            insert_page_markers: insertPageMarkers.unwrap_or(false),
+            marker_format: markerFormat.unwrap_or_else(|| "\n\n<!-- PAGE {page_num} -->\n\n".to_string()),
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "extractPages")]
@@ -2291,21 +2664,32 @@ impl WasmPageConfig {
 /// Post-processor configuration.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPostProcessorConfig {    enabled: bool,    enabled_processors: Option<Vec<String>>,    disabled_processors: Option<Vec<String>>,    enabled_set: Option<Vec<String>>,    disabled_set: Option<Vec<String>>,}
-
+pub struct WasmPostProcessorConfig {
+    enabled: bool,
+    enabled_processors: Option<Vec<String>>,
+    disabled_processors: Option<Vec<String>>,
+    enabled_set: Option<Vec<String>>,
+    disabled_set: Option<Vec<String>>,
+}
 
 #[wasm_bindgen]
 impl WasmPostProcessorConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            enabled: Option<bool>,
-            enabledProcessors: Option<Vec<String>>,
-            disabledProcessors: Option<Vec<String>>,
-            enabledSet: Option<Vec<String>>,
-            disabledSet: Option<Vec<String>>,
-        ) -> WasmPostProcessorConfig {
-        WasmPostProcessorConfig { enabled: enabled.unwrap_or(true), enabled_processors: enabledProcessors, disabled_processors: disabledProcessors, enabled_set: enabledSet, disabled_set: disabledSet }
+        enabled: Option<bool>,
+        enabledProcessors: Option<Vec<String>>,
+        disabledProcessors: Option<Vec<String>>,
+        enabledSet: Option<Vec<String>>,
+        disabledSet: Option<Vec<String>>,
+    ) -> WasmPostProcessorConfig {
+        WasmPostProcessorConfig {
+            enabled: enabled.unwrap_or(true),
+            enabled_processors: enabledProcessors,
+            disabled_processors: disabledProcessors,
+            enabled_set: enabledSet,
+            disabled_set: disabledSet,
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -2373,8 +2757,17 @@ impl WasmPostProcessorConfig {
 /// Use `..Default.default()` when constructing to allow for future field additions:
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmChunkingConfig {    max_characters: usize,    overlap: usize,    trim: bool,    chunker_type: WasmChunkerType,    embedding: Option<WasmEmbeddingConfig>,    preset: Option<String>,    sizing: JsValue,    prepend_heading_context: bool,    topic_threshold: Option<f32>,}
-
+pub struct WasmChunkingConfig {
+    max_characters: usize,
+    overlap: usize,
+    trim: bool,
+    chunker_type: WasmChunkerType,
+    embedding: Option<WasmEmbeddingConfig>,
+    preset: Option<String>,
+    sizing: JsValue,
+    prepend_heading_context: bool,
+    topic_threshold: Option<f32>,
+}
 
 #[wasm_bindgen]
 impl WasmChunkingConfig {
@@ -2382,17 +2775,27 @@ impl WasmChunkingConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            maxCharacters: Option<usize>,
-            overlap: Option<usize>,
-            trim: Option<bool>,
-            chunkerType: Option<WasmChunkerType>,
-            sizing: Option<JsValue>,
-            prependHeadingContext: Option<bool>,
-            embedding: Option<WasmEmbeddingConfig>,
-            preset: Option<String>,
-            topicThreshold: Option<f32>,
-        ) -> WasmChunkingConfig {
-        WasmChunkingConfig { max_characters: maxCharacters.unwrap_or(1000), overlap: overlap.unwrap_or(200), trim: trim.unwrap_or(true), chunker_type: chunkerType.unwrap_or_default(), embedding: embedding, preset: preset, sizing: sizing.unwrap_or_default(), prepend_heading_context: prependHeadingContext.unwrap_or(false), topic_threshold: topicThreshold }
+        maxCharacters: Option<usize>,
+        overlap: Option<usize>,
+        trim: Option<bool>,
+        chunkerType: Option<WasmChunkerType>,
+        sizing: Option<JsValue>,
+        prependHeadingContext: Option<bool>,
+        embedding: Option<WasmEmbeddingConfig>,
+        preset: Option<String>,
+        topicThreshold: Option<f32>,
+    ) -> WasmChunkingConfig {
+        WasmChunkingConfig {
+            max_characters: maxCharacters.unwrap_or(1000),
+            overlap: overlap.unwrap_or(200),
+            trim: trim.unwrap_or(true),
+            chunker_type: chunkerType.unwrap_or_default(),
+            embedding,
+            preset,
+            sizing: sizing.unwrap_or_default(),
+            prepend_heading_context: prependHeadingContext.unwrap_or(false),
+            topic_threshold: topicThreshold,
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "maxCharacters")]
@@ -2498,23 +2901,38 @@ impl WasmChunkingConfig {
 /// Requires the `embeddings` feature to be enabled.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmEmbeddingConfig {    model: JsValue,    normalize: bool,    batch_size: usize,    show_download_progress: bool,    cache_dir: Option<String>,    acceleration: Option<WasmAccelerationConfig>,    max_embed_duration_secs: Option<u64>,}
-
+pub struct WasmEmbeddingConfig {
+    model: JsValue,
+    normalize: bool,
+    batch_size: usize,
+    show_download_progress: bool,
+    cache_dir: Option<String>,
+    acceleration: Option<WasmAccelerationConfig>,
+    max_embed_duration_secs: Option<u64>,
+}
 
 #[wasm_bindgen]
 impl WasmEmbeddingConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            model: Option<JsValue>,
-            normalize: Option<bool>,
-            batchSize: Option<usize>,
-            showDownloadProgress: Option<bool>,
-            cacheDir: Option<String>,
-            acceleration: Option<WasmAccelerationConfig>,
-            maxEmbedDurationSecs: Option<u64>,
-        ) -> WasmEmbeddingConfig {
-        WasmEmbeddingConfig { model: model.unwrap_or_default(), normalize: normalize.unwrap_or(true), batch_size: batchSize.unwrap_or(32), show_download_progress: showDownloadProgress.unwrap_or(false), cache_dir: cacheDir, acceleration: acceleration, max_embed_duration_secs: maxEmbedDurationSecs }
+        model: Option<JsValue>,
+        normalize: Option<bool>,
+        batchSize: Option<usize>,
+        showDownloadProgress: Option<bool>,
+        cacheDir: Option<String>,
+        acceleration: Option<WasmAccelerationConfig>,
+        maxEmbedDurationSecs: Option<u64>,
+    ) -> WasmEmbeddingConfig {
+        WasmEmbeddingConfig {
+            model: model.unwrap_or_default(),
+            normalize: normalize.unwrap_or(true),
+            batch_size: batchSize.unwrap_or(32),
+            show_download_progress: showDownloadProgress.unwrap_or(false),
+            cache_dir: cacheDir,
+            acceleration,
+            max_embed_duration_secs: maxEmbedDurationSecs,
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -2597,22 +3015,35 @@ impl WasmEmbeddingConfig {
 /// Configuration for the redaction post-processor.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmRedactionConfig {    categories: Vec<WasmPiiCategory>,    strategy: WasmRedactionStrategy,    ner: Option<WasmNerConfig>,    preserve_offsets: bool,    custom_terms: Vec<WasmRedactionTerm>,    custom_patterns: Vec<WasmRedactionPattern>,}
-
+pub struct WasmRedactionConfig {
+    categories: Vec<WasmPiiCategory>,
+    strategy: WasmRedactionStrategy,
+    ner: Option<WasmNerConfig>,
+    preserve_offsets: bool,
+    custom_terms: Vec<WasmRedactionTerm>,
+    custom_patterns: Vec<WasmRedactionPattern>,
+}
 
 #[wasm_bindgen]
 impl WasmRedactionConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            categories: Option<Vec<WasmPiiCategory>>,
-            strategy: Option<WasmRedactionStrategy>,
-            preserveOffsets: Option<bool>,
-            customTerms: Option<Vec<WasmRedactionTerm>>,
-            customPatterns: Option<Vec<WasmRedactionPattern>>,
-            ner: Option<WasmNerConfig>,
-        ) -> WasmRedactionConfig {
-        WasmRedactionConfig { categories: categories.unwrap_or_default(), strategy: strategy.unwrap_or_default(), ner: ner, preserve_offsets: preserveOffsets.unwrap_or(true), custom_terms: customTerms.unwrap_or_default(), custom_patterns: customPatterns.unwrap_or_default() }
+        categories: Option<Vec<WasmPiiCategory>>,
+        strategy: Option<WasmRedactionStrategy>,
+        preserveOffsets: Option<bool>,
+        customTerms: Option<Vec<WasmRedactionTerm>>,
+        customPatterns: Option<Vec<WasmRedactionPattern>>,
+        ner: Option<WasmNerConfig>,
+    ) -> WasmRedactionConfig {
+        WasmRedactionConfig {
+            categories: categories.unwrap_or_default(),
+            strategy: strategy.unwrap_or_default(),
+            ner,
+            preserve_offsets: preserveOffsets.unwrap_or(true),
+            custom_terms: customTerms.unwrap_or_default(),
+            custom_patterns: customPatterns.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -2622,7 +3053,10 @@ impl WasmRedactionConfig {
 
     #[wasm_bindgen(setter)]
     pub fn set_categories(&mut self, value: Vec<String>) {
-        self.categories = value.into_iter().filter_map(|s| WasmPiiCategory::from_api_str(&s)).collect();
+        self.categories = value
+            .into_iter()
+            .filter_map(|s| WasmPiiCategory::from_api_str(&s))
+            .collect();
     }
 
     #[wasm_bindgen(getter)]
@@ -2690,8 +3124,10 @@ impl WasmRedactionConfig {
     /// still rejects empty values to avoid degenerate zero-length matches.
     #[allow(clippy::missing_errors_doc)]
     #[wasm_bindgen]
-    pub fn validate(&self, ) -> Result<(), JsValue> {
-        let result = kreuzberg::RedactionConfig::from(self.clone()).validate().map_err(|e| JsValue::from_str(&e.to_string()))?;
+    pub fn validate(&self) -> Result<(), JsValue> {
+        let result = kreuzberg::RedactionConfig::from(self.clone())
+            .validate()
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(result)
     }
 }
@@ -2703,15 +3139,22 @@ impl WasmRedactionConfig {
 /// `Self.case_sensitive` to `true` for exact byte-match semantics.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmRedactionTerm {    label: String,    value: String,    case_sensitive: bool,}
-
+pub struct WasmRedactionTerm {
+    label: String,
+    value: String,
+    case_sensitive: bool,
+}
 
 #[wasm_bindgen]
 impl WasmRedactionTerm {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(label: String, value: String, caseSensitive: bool) -> WasmRedactionTerm {
-        WasmRedactionTerm { label: label, value: value, case_sensitive: caseSensitive }
+        WasmRedactionTerm {
+            label,
+            value,
+            case_sensitive: caseSensitive,
+        }
     }
 
     #[wasm_bindgen]
@@ -2770,15 +3213,22 @@ impl WasmRedactionTerm {
 /// `Self.case_sensitive` is `false`.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmRedactionPattern {    label: String,    pattern: String,    case_sensitive: bool,}
-
+pub struct WasmRedactionPattern {
+    label: String,
+    pattern: String,
+    case_sensitive: bool,
+}
 
 #[wasm_bindgen]
 impl WasmRedactionPattern {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(label: String, pattern: String, caseSensitive: bool) -> WasmRedactionPattern {
-        WasmRedactionPattern { label: label, pattern: pattern, case_sensitive: caseSensitive }
+        WasmRedactionPattern {
+            label,
+            pattern,
+            case_sensitive: caseSensitive,
+        }
     }
 
     #[wasm_bindgen]
@@ -2827,15 +3277,26 @@ impl WasmRedactionPattern {
 /// Configuration for the summarisation post-processor.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmSummarizationConfig {    strategy: WasmSummaryStrategy,    max_tokens: Option<u32>,    llm: Option<WasmLlmConfig>,}
-
+pub struct WasmSummarizationConfig {
+    strategy: WasmSummaryStrategy,
+    max_tokens: Option<u32>,
+    llm: Option<WasmLlmConfig>,
+}
 
 #[wasm_bindgen]
 impl WasmSummarizationConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(strategy: Option<WasmSummaryStrategy>, maxTokens: Option<u32>, llm: Option<WasmLlmConfig>) -> WasmSummarizationConfig {
-        WasmSummarizationConfig { strategy: strategy.unwrap_or_default(), max_tokens: maxTokens, llm: llm }
+    pub fn new(
+        strategy: Option<WasmSummaryStrategy>,
+        maxTokens: Option<u32>,
+        llm: Option<WasmLlmConfig>,
+    ) -> WasmSummarizationConfig {
+        WasmSummarizationConfig {
+            strategy: strategy.unwrap_or_default(),
+            max_tokens: maxTokens,
+            llm,
+        }
     }
 
     #[wasm_bindgen]
@@ -2878,15 +3339,29 @@ impl WasmSummarizationConfig {
 /// Configuration for the translation post-processor.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTranslationConfig {    target_lang: String,    source_lang: Option<String>,    preserve_markup: bool,    llm: WasmLlmConfig,}
-
+pub struct WasmTranslationConfig {
+    target_lang: String,
+    source_lang: Option<String>,
+    preserve_markup: bool,
+    llm: WasmLlmConfig,
+}
 
 #[wasm_bindgen]
 impl WasmTranslationConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(targetLang: String, preserveMarkup: bool, llm: WasmLlmConfig, sourceLang: Option<String>) -> WasmTranslationConfig {
-        WasmTranslationConfig { target_lang: targetLang, source_lang: sourceLang, preserve_markup: preserveMarkup, llm: llm }
+    pub fn new(
+        targetLang: String,
+        preserveMarkup: bool,
+        llm: WasmLlmConfig,
+        sourceLang: Option<String>,
+    ) -> WasmTranslationConfig {
+        WasmTranslationConfig {
+            target_lang: targetLang,
+            source_lang: sourceLang,
+            preserve_markup: preserveMarkup,
+            llm,
+        }
     }
 
     #[wasm_bindgen]
@@ -2941,15 +3416,20 @@ impl WasmTranslationConfig {
 /// Represents a file extension and its corresponding MIME type that Kreuzberg can process.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmSupportedFormat {    extension: String,    mime_type: String,}
-
+pub struct WasmSupportedFormat {
+    extension: String,
+    mime_type: String,
+}
 
 #[wasm_bindgen]
 impl WasmSupportedFormat {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(extension: String, mimeType: String) -> WasmSupportedFormat {
-        WasmSupportedFormat { extension: extension, mime_type: mimeType }
+        WasmSupportedFormat {
+            extension,
+            mime_type: mimeType,
+        }
     }
 
     #[wasm_bindgen]
@@ -2981,15 +3461,29 @@ impl WasmSupportedFormat {
 
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmStructuredDataResult {    content: String,    format: String,    metadata: JsValue,    text_fields: Vec<String>,}
-
+pub struct WasmStructuredDataResult {
+    content: String,
+    format: String,
+    metadata: JsValue,
+    text_fields: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmStructuredDataResult {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(content: String, format: String, metadata: JsValue, textFields: Vec<String>) -> WasmStructuredDataResult {
-        WasmStructuredDataResult { content: content, format: format, metadata: metadata, text_fields: textFields }
+    pub fn new(
+        content: String,
+        format: String,
+        metadata: JsValue,
+        textFields: Vec<String>,
+    ) -> WasmStructuredDataResult {
+        WasmStructuredDataResult {
+            content,
+            format,
+            metadata,
+            text_fields: textFields,
+        }
     }
 
     #[wasm_bindgen]
@@ -3044,8 +3538,17 @@ impl WasmStructuredDataResult {
 /// Contains Excel-specific document metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmXlsxAppProperties {    application: Option<String>,    app_version: Option<String>,    doc_security: Option<i32>,    scale_crop: Option<bool>,    links_up_to_date: Option<bool>,    shared_doc: Option<bool>,    hyperlinks_changed: Option<bool>,    company: Option<String>,    worksheet_names: Vec<String>,}
-
+pub struct WasmXlsxAppProperties {
+    application: Option<String>,
+    app_version: Option<String>,
+    doc_security: Option<i32>,
+    scale_crop: Option<bool>,
+    links_up_to_date: Option<bool>,
+    shared_doc: Option<bool>,
+    hyperlinks_changed: Option<bool>,
+    company: Option<String>,
+    worksheet_names: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmXlsxAppProperties {
@@ -3053,17 +3556,27 @@ impl WasmXlsxAppProperties {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            worksheetNames: Option<Vec<String>>,
-            application: Option<String>,
-            appVersion: Option<String>,
-            docSecurity: Option<i32>,
-            scaleCrop: Option<bool>,
-            linksUpToDate: Option<bool>,
-            sharedDoc: Option<bool>,
-            hyperlinksChanged: Option<bool>,
-            company: Option<String>,
-        ) -> WasmXlsxAppProperties {
-        WasmXlsxAppProperties { application: application, app_version: appVersion, doc_security: docSecurity, scale_crop: scaleCrop, links_up_to_date: linksUpToDate, shared_doc: sharedDoc, hyperlinks_changed: hyperlinksChanged, company: company, worksheet_names: worksheetNames.unwrap_or_default() }
+        worksheetNames: Option<Vec<String>>,
+        application: Option<String>,
+        appVersion: Option<String>,
+        docSecurity: Option<i32>,
+        scaleCrop: Option<bool>,
+        linksUpToDate: Option<bool>,
+        sharedDoc: Option<bool>,
+        hyperlinksChanged: Option<bool>,
+        company: Option<String>,
+    ) -> WasmXlsxAppProperties {
+        WasmXlsxAppProperties {
+            application,
+            app_version: appVersion,
+            doc_security: docSecurity,
+            scale_crop: scaleCrop,
+            links_up_to_date: linksUpToDate,
+            shared_doc: sharedDoc,
+            hyperlinks_changed: hyperlinksChanged,
+            company,
+            worksheet_names: worksheetNames.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -3168,8 +3681,23 @@ impl WasmXlsxAppProperties {
 /// Contains PowerPoint-specific document metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPptxAppProperties {    application: Option<String>,    app_version: Option<String>,    total_time: Option<i32>,    company: Option<String>,    doc_security: Option<i32>,    scale_crop: Option<bool>,    links_up_to_date: Option<bool>,    shared_doc: Option<bool>,    hyperlinks_changed: Option<bool>,    slides: Option<i32>,    notes: Option<i32>,    hidden_slides: Option<i32>,    multimedia_clips: Option<i32>,    presentation_format: Option<String>,    slide_titles: Vec<String>,}
-
+pub struct WasmPptxAppProperties {
+    application: Option<String>,
+    app_version: Option<String>,
+    total_time: Option<i32>,
+    company: Option<String>,
+    doc_security: Option<i32>,
+    scale_crop: Option<bool>,
+    links_up_to_date: Option<bool>,
+    shared_doc: Option<bool>,
+    hyperlinks_changed: Option<bool>,
+    slides: Option<i32>,
+    notes: Option<i32>,
+    hidden_slides: Option<i32>,
+    multimedia_clips: Option<i32>,
+    presentation_format: Option<String>,
+    slide_titles: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmPptxAppProperties {
@@ -3177,23 +3705,39 @@ impl WasmPptxAppProperties {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            slideTitles: Option<Vec<String>>,
-            application: Option<String>,
-            appVersion: Option<String>,
-            totalTime: Option<i32>,
-            company: Option<String>,
-            docSecurity: Option<i32>,
-            scaleCrop: Option<bool>,
-            linksUpToDate: Option<bool>,
-            sharedDoc: Option<bool>,
-            hyperlinksChanged: Option<bool>,
-            slides: Option<i32>,
-            notes: Option<i32>,
-            hiddenSlides: Option<i32>,
-            multimediaClips: Option<i32>,
-            presentationFormat: Option<String>,
-        ) -> WasmPptxAppProperties {
-        WasmPptxAppProperties { application: application, app_version: appVersion, total_time: totalTime, company: company, doc_security: docSecurity, scale_crop: scaleCrop, links_up_to_date: linksUpToDate, shared_doc: sharedDoc, hyperlinks_changed: hyperlinksChanged, slides: slides, notes: notes, hidden_slides: hiddenSlides, multimedia_clips: multimediaClips, presentation_format: presentationFormat, slide_titles: slideTitles.unwrap_or_default() }
+        slideTitles: Option<Vec<String>>,
+        application: Option<String>,
+        appVersion: Option<String>,
+        totalTime: Option<i32>,
+        company: Option<String>,
+        docSecurity: Option<i32>,
+        scaleCrop: Option<bool>,
+        linksUpToDate: Option<bool>,
+        sharedDoc: Option<bool>,
+        hyperlinksChanged: Option<bool>,
+        slides: Option<i32>,
+        notes: Option<i32>,
+        hiddenSlides: Option<i32>,
+        multimediaClips: Option<i32>,
+        presentationFormat: Option<String>,
+    ) -> WasmPptxAppProperties {
+        WasmPptxAppProperties {
+            application,
+            app_version: appVersion,
+            total_time: totalTime,
+            company,
+            doc_security: docSecurity,
+            scale_crop: scaleCrop,
+            links_up_to_date: linksUpToDate,
+            shared_doc: sharedDoc,
+            hyperlinks_changed: hyperlinksChanged,
+            slides,
+            notes,
+            hidden_slides: hiddenSlides,
+            multimedia_clips: multimediaClips,
+            presentation_format: presentationFormat,
+            slide_titles: slideTitles.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -3359,8 +3903,17 @@ impl WasmPptxAppProperties {
 /// while still supporting legitimate documents.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmSecurityLimits {    max_archive_size: usize,    max_compression_ratio: usize,    max_files_in_archive: usize,    max_nesting_depth: usize,    max_entity_length: usize,    max_content_size: usize,    max_iterations: usize,    max_xml_depth: usize,    max_table_cells: usize,}
-
+pub struct WasmSecurityLimits {
+    max_archive_size: usize,
+    max_compression_ratio: usize,
+    max_files_in_archive: usize,
+    max_nesting_depth: usize,
+    max_entity_length: usize,
+    max_content_size: usize,
+    max_iterations: usize,
+    max_xml_depth: usize,
+    max_table_cells: usize,
+}
 
 #[wasm_bindgen]
 impl WasmSecurityLimits {
@@ -3368,17 +3921,27 @@ impl WasmSecurityLimits {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            maxArchiveSize: Option<usize>,
-            maxCompressionRatio: Option<usize>,
-            maxFilesInArchive: Option<usize>,
-            maxNestingDepth: Option<usize>,
-            maxEntityLength: Option<usize>,
-            maxContentSize: Option<usize>,
-            maxIterations: Option<usize>,
-            maxXmlDepth: Option<usize>,
-            maxTableCells: Option<usize>,
-        ) -> WasmSecurityLimits {
-        WasmSecurityLimits { max_archive_size: maxArchiveSize.unwrap_or(524288000), max_compression_ratio: maxCompressionRatio.unwrap_or(100), max_files_in_archive: maxFilesInArchive.unwrap_or(10000), max_nesting_depth: maxNestingDepth.unwrap_or(1024), max_entity_length: maxEntityLength.unwrap_or(1048576), max_content_size: maxContentSize.unwrap_or(104857600), max_iterations: maxIterations.unwrap_or(10000000), max_xml_depth: maxXmlDepth.unwrap_or(1024), max_table_cells: maxTableCells.unwrap_or(100000) }
+        maxArchiveSize: Option<usize>,
+        maxCompressionRatio: Option<usize>,
+        maxFilesInArchive: Option<usize>,
+        maxNestingDepth: Option<usize>,
+        maxEntityLength: Option<usize>,
+        maxContentSize: Option<usize>,
+        maxIterations: Option<usize>,
+        maxXmlDepth: Option<usize>,
+        maxTableCells: Option<usize>,
+    ) -> WasmSecurityLimits {
+        WasmSecurityLimits {
+            max_archive_size: maxArchiveSize.unwrap_or(524288000),
+            max_compression_ratio: maxCompressionRatio.unwrap_or(100),
+            max_files_in_archive: maxFilesInArchive.unwrap_or(10000),
+            max_nesting_depth: maxNestingDepth.unwrap_or(1024),
+            max_entity_length: maxEntityLength.unwrap_or(1048576),
+            max_content_size: maxContentSize.unwrap_or(104857600),
+            max_iterations: maxIterations.unwrap_or(10000000),
+            max_xml_depth: maxXmlDepth.unwrap_or(1024),
+            max_table_cells: maxTableCells.unwrap_or(100000),
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "maxArchiveSize")]
@@ -3485,15 +4048,22 @@ impl WasmSecurityLimits {
 /// serialised internally by the mutex).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmGlineBackend {    repo_id: String,    model_path: String,    tokenizer_path: String,}
-
+pub struct WasmGlineBackend {
+    repo_id: String,
+    model_path: String,
+    tokenizer_path: String,
+}
 
 #[wasm_bindgen]
 impl WasmGlineBackend {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(repoId: String, modelPath: String, tokenizerPath: String) -> WasmGlineBackend {
-        WasmGlineBackend { repo_id: repoId, model_path: modelPath, tokenizer_path: tokenizerPath }
+        WasmGlineBackend {
+            repo_id: repoId,
+            model_path: modelPath,
+            tokenizer_path: tokenizerPath,
+        }
     }
 
     #[wasm_bindgen]
@@ -3546,34 +4116,52 @@ impl WasmGlineBackend {
     #[allow(clippy::missing_errors_doc)]
     #[wasm_bindgen]
     pub async fn detect(&self, text: String, categories: Vec<WasmEntityCategory>) -> Result<Vec<WasmEntity>, JsValue> {
-        let result = kreuzberg::GlineBackend::from(self.clone()).detect(&text, &categories).await
+        let result = kreuzberg::GlineBackend::from(self.clone())
+            .detect(&text, &categories)
+            .await
             .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))?;
-        Ok(Vec<WasmEntity>::from(result))
+        Ok(Vec::<WasmEntity>::from(result))
     }
 
     /// Native zero-shot multi-label inference: passes the union of `categories`
     /// (as label strings) and `custom_labels` to a single GLiNER inference call.
     #[allow(clippy::missing_errors_doc)]
     #[wasm_bindgen(js_name = "detectWithCustom")]
-    pub async fn detect_with_custom(&self, text: String, categories: Vec<WasmEntityCategory>, custom_labels: Vec<String>) -> Result<Vec<WasmEntity>, JsValue> {
-        let result = kreuzberg::GlineBackend::from(self.clone()).detect_with_custom(&text, &categories, &custom_labels).await
+    pub async fn detect_with_custom(
+        &self,
+        text: String,
+        categories: Vec<WasmEntityCategory>,
+        custom_labels: Vec<String>,
+    ) -> Result<Vec<WasmEntity>, JsValue> {
+        let result = kreuzberg::GlineBackend::from(self.clone())
+            .detect_with_custom(&text, &categories, &custom_labels)
+            .await
             .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))?;
-        Ok(Vec<WasmEntity>::from(result))
+        Ok(Vec::<WasmEntity>::from(result))
     }
 }
 
 /// One detected PII span in the input text.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPatternMatch {    start: usize,    end: usize,    category: WasmPiiCategory,    text: String,}
-
+pub struct WasmPatternMatch {
+    start: usize,
+    end: usize,
+    category: WasmPiiCategory,
+    text: String,
+}
 
 #[wasm_bindgen]
 impl WasmPatternMatch {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(start: usize, end: usize, category: WasmPiiCategory, text: String) -> WasmPatternMatch {
-        WasmPatternMatch { start: start, end: end, category: category, text: text }
+        WasmPatternMatch {
+            start,
+            end,
+            category,
+            text,
+        }
     }
 
     #[wasm_bindgen]
@@ -3630,12 +4218,13 @@ pub struct WasmTokenCounter {
     pub(crate) inner: Arc<std::sync::Mutex<kreuzberg::text::redaction::strategy::TokenCounter>>,
 }
 
-
 #[wasm_bindgen]
 impl WasmTokenCounter {
     #[wasm_bindgen]
     pub fn new() -> WasmTokenCounter {
-        Self { inner: Arc::new(std::sync::Mutex::new(kreuzberg::TokenCounter::new())) }
+        Self {
+            inner: Arc::new(std::sync::Mutex::new(kreuzberg::TokenCounter::new())),
+        }
     }
 
     /// Allocate the next token for `category` and `original`. If the original
@@ -3649,20 +4238,29 @@ impl WasmTokenCounter {
 /// A PDF annotation extracted from a document page.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPdfAnnotation {    annotation_type: WasmPdfAnnotationType,    content: Option<String>,    page_number: u32,    bounding_box: Option<WasmBoundingBox>,}
-
+pub struct WasmPdfAnnotation {
+    annotation_type: WasmPdfAnnotationType,
+    content: Option<String>,
+    page_number: u32,
+    bounding_box: Option<WasmBoundingBox>,
+}
 
 #[wasm_bindgen]
 impl WasmPdfAnnotation {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            annotationType: WasmPdfAnnotationType,
-            pageNumber: u32,
-            content: Option<String>,
-            boundingBox: Option<WasmBoundingBox>,
-        ) -> WasmPdfAnnotation {
-        WasmPdfAnnotation { annotation_type: annotationType, content: content, page_number: pageNumber, bounding_box: boundingBox }
+        annotationType: WasmPdfAnnotationType,
+        pageNumber: u32,
+        content: Option<String>,
+        boundingBox: Option<WasmBoundingBox>,
+    ) -> WasmPdfAnnotation {
+        WasmPdfAnnotation {
+            annotation_type: annotationType,
+            content,
+            page_number: pageNumber,
+            bounding_box: boundingBox,
+        }
     }
 
     #[wasm_bindgen]
@@ -3715,15 +4313,20 @@ impl WasmPdfAnnotation {
 /// Classification result for a single page.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageClassification {    page_number: u32,    labels: Vec<WasmClassificationLabel>,}
-
+pub struct WasmPageClassification {
+    page_number: u32,
+    labels: Vec<WasmClassificationLabel>,
+}
 
 #[wasm_bindgen]
 impl WasmPageClassification {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(pageNumber: u32, labels: Vec<WasmClassificationLabel>) -> WasmPageClassification {
-        WasmPageClassification { page_number: pageNumber, labels: labels }
+        WasmPageClassification {
+            page_number: pageNumber,
+            labels,
+        }
     }
 
     #[wasm_bindgen]
@@ -3756,15 +4359,17 @@ impl WasmPageClassification {
 /// A single label + confidence pair.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmClassificationLabel {    label: String,    confidence: Option<f32>,}
-
+pub struct WasmClassificationLabel {
+    label: String,
+    confidence: Option<f32>,
+}
 
 #[wasm_bindgen]
 impl WasmClassificationLabel {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(label: String, confidence: Option<f32>) -> WasmClassificationLabel {
-        WasmClassificationLabel { label: label, confidence: confidence }
+        WasmClassificationLabel { label, confidence }
     }
 
     #[wasm_bindgen]
@@ -3807,8 +4412,16 @@ impl WasmClassificationLabel {
 /// Available when the `djot` feature is enabled.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDjotContent {    plain_text: String,    blocks: Vec<WasmFormattedBlock>,    metadata: WasmMetadata,    tables: Vec<WasmTable>,    images: Vec<WasmDjotImage>,    links: Vec<WasmDjotLink>,    footnotes: Vec<WasmFootnote>,    attributes: Vec<String>,}
-
+pub struct WasmDjotContent {
+    plain_text: String,
+    blocks: Vec<WasmFormattedBlock>,
+    metadata: WasmMetadata,
+    tables: Vec<WasmTable>,
+    images: Vec<WasmDjotImage>,
+    links: Vec<WasmDjotLink>,
+    footnotes: Vec<WasmFootnote>,
+    attributes: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmDjotContent {
@@ -3816,16 +4429,25 @@ impl WasmDjotContent {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            plainText: String,
-            blocks: Vec<WasmFormattedBlock>,
-            metadata: WasmMetadata,
-            tables: Vec<WasmTable>,
-            images: Vec<WasmDjotImage>,
-            links: Vec<WasmDjotLink>,
-            footnotes: Vec<WasmFootnote>,
-            attributes: Vec<String>,
-        ) -> WasmDjotContent {
-        WasmDjotContent { plain_text: plainText, blocks: blocks, metadata: metadata, tables: tables, images: images, links: links, footnotes: footnotes, attributes: attributes }
+        plainText: String,
+        blocks: Vec<WasmFormattedBlock>,
+        metadata: WasmMetadata,
+        tables: Vec<WasmTable>,
+        images: Vec<WasmDjotImage>,
+        links: Vec<WasmDjotLink>,
+        footnotes: Vec<WasmFootnote>,
+        attributes: Vec<String>,
+    ) -> WasmDjotContent {
+        WasmDjotContent {
+            plain_text: plainText,
+            blocks,
+            metadata,
+            tables,
+            images,
+            links,
+            footnotes,
+            attributes,
+        }
     }
 
     #[wasm_bindgen]
@@ -3920,23 +4542,38 @@ impl WasmDjotContent {
 /// Represents structural elements like headings, paragraphs, lists, code blocks, etc.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmFormattedBlock {    block_type: WasmBlockType,    level: Option<usize>,    inline_content: Vec<WasmInlineElement>,    attributes: Option<String>,    language: Option<String>,    code: Option<String>,    children: Vec<WasmFormattedBlock>,}
-
+pub struct WasmFormattedBlock {
+    block_type: WasmBlockType,
+    level: Option<usize>,
+    inline_content: Vec<WasmInlineElement>,
+    attributes: Option<String>,
+    language: Option<String>,
+    code: Option<String>,
+    children: Vec<WasmFormattedBlock>,
+}
 
 #[wasm_bindgen]
 impl WasmFormattedBlock {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            blockType: WasmBlockType,
-            inlineContent: Vec<WasmInlineElement>,
-            children: Vec<WasmFormattedBlock>,
-            level: Option<usize>,
-            attributes: Option<String>,
-            language: Option<String>,
-            code: Option<String>,
-        ) -> WasmFormattedBlock {
-        WasmFormattedBlock { block_type: blockType, level: level, inline_content: inlineContent, attributes: attributes, language: language, code: code, children: children }
+        blockType: WasmBlockType,
+        inlineContent: Vec<WasmInlineElement>,
+        children: Vec<WasmFormattedBlock>,
+        level: Option<usize>,
+        attributes: Option<String>,
+        language: Option<String>,
+        code: Option<String>,
+    ) -> WasmFormattedBlock {
+        WasmFormattedBlock {
+            block_type: blockType,
+            level,
+            inline_content: inlineContent,
+            attributes,
+            language,
+            code,
+            children,
+        }
     }
 
     #[wasm_bindgen]
@@ -4021,15 +4658,29 @@ impl WasmFormattedBlock {
 /// Represents text with formatting, links, images, etc.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmInlineElement {    element_type: WasmInlineType,    content: String,    attributes: Option<String>,    metadata: Option<JsValue>,}
-
+pub struct WasmInlineElement {
+    element_type: WasmInlineType,
+    content: String,
+    attributes: Option<String>,
+    metadata: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmInlineElement {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(elementType: WasmInlineType, content: String, attributes: Option<String>, metadata: Option<JsValue>) -> WasmInlineElement {
-        WasmInlineElement { element_type: elementType, content: content, attributes: attributes, metadata: metadata }
+    pub fn new(
+        elementType: WasmInlineType,
+        content: String,
+        attributes: Option<String>,
+        metadata: Option<JsValue>,
+    ) -> WasmInlineElement {
+        WasmInlineElement {
+            element_type: elementType,
+            content,
+            attributes,
+            metadata,
+        }
     }
 
     #[wasm_bindgen]
@@ -4082,15 +4733,24 @@ impl WasmInlineElement {
 /// Image element in Djot.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDjotImage {    src: String,    alt: String,    title: Option<String>,    attributes: Option<String>,}
-
+pub struct WasmDjotImage {
+    src: String,
+    alt: String,
+    title: Option<String>,
+    attributes: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmDjotImage {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(src: String, alt: String, title: Option<String>, attributes: Option<String>) -> WasmDjotImage {
-        WasmDjotImage { src: src, alt: alt, title: title, attributes: attributes }
+        WasmDjotImage {
+            src,
+            alt,
+            title,
+            attributes,
+        }
     }
 
     #[wasm_bindgen]
@@ -4143,15 +4803,24 @@ impl WasmDjotImage {
 /// Link element in Djot.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDjotLink {    url: String,    text: String,    title: Option<String>,    attributes: Option<String>,}
-
+pub struct WasmDjotLink {
+    url: String,
+    text: String,
+    title: Option<String>,
+    attributes: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmDjotLink {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(url: String, text: String, title: Option<String>, attributes: Option<String>) -> WasmDjotLink {
-        WasmDjotLink { url: url, text: text, title: title, attributes: attributes }
+        WasmDjotLink {
+            url,
+            text,
+            title,
+            attributes,
+        }
     }
 
     #[wasm_bindgen]
@@ -4204,15 +4873,17 @@ impl WasmDjotLink {
 /// Footnote in Djot.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmFootnote {    label: String,    content: Vec<WasmFormattedBlock>,}
-
+pub struct WasmFootnote {
+    label: String,
+    content: Vec<WasmFormattedBlock>,
+}
 
 #[wasm_bindgen]
 impl WasmFootnote {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(label: String, content: Vec<WasmFormattedBlock>) -> WasmFootnote {
-        WasmFootnote { label: label, content: content }
+        WasmFootnote { label, content }
     }
 
     #[wasm_bindgen]
@@ -4254,20 +4925,29 @@ impl WasmFootnote {
 /// and parent-child relationships are bidirectionally consistent.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDocumentStructure {    nodes: Vec<WasmDocumentNode>,    source_format: Option<String>,    relationships: Vec<WasmDocumentRelationship>,    node_types: Vec<String>,}
-
+pub struct WasmDocumentStructure {
+    nodes: Vec<WasmDocumentNode>,
+    source_format: Option<String>,
+    relationships: Vec<WasmDocumentRelationship>,
+    node_types: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmDocumentStructure {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            nodes: Option<Vec<WasmDocumentNode>>,
-            relationships: Option<Vec<WasmDocumentRelationship>>,
-            nodeTypes: Option<Vec<String>>,
-            sourceFormat: Option<String>,
-        ) -> WasmDocumentStructure {
-        WasmDocumentStructure { nodes: nodes.unwrap_or_default(), source_format: sourceFormat, relationships: relationships.unwrap_or_default(), node_types: nodeTypes.unwrap_or_default() }
+        nodes: Option<Vec<WasmDocumentNode>>,
+        relationships: Option<Vec<WasmDocumentRelationship>>,
+        nodeTypes: Option<Vec<String>>,
+        sourceFormat: Option<String>,
+    ) -> WasmDocumentStructure {
+        WasmDocumentStructure {
+            nodes: nodes.unwrap_or_default(),
+            source_format: sourceFormat,
+            relationships: relationships.unwrap_or_default(),
+            node_types: nodeTypes.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -4317,13 +4997,13 @@ impl WasmDocumentStructure {
     ///
     /// # Examples
     #[wasm_bindgen(js_name = "finalizeNodeTypes")]
-    pub fn finalize_node_types(&self, ) -> () {
+    pub fn finalize_node_types(&self) -> () {
         kreuzberg::DocumentStructure::from(self.clone()).finalize_node_types()
     }
 
     /// Check if the document structure is empty.
     #[wasm_bindgen(js_name = "isEmpty")]
-    pub fn is_empty(&self, ) -> bool {
+    pub fn is_empty(&self) -> bool {
         kreuzberg::DocumentStructure::from(self.clone()).is_empty()
     }
 
@@ -4337,15 +5017,18 @@ impl WasmDocumentStructure {
 /// A resolved relationship between two nodes in the document tree.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDocumentRelationship {    source: u32,    target: u32,    kind: WasmRelationshipKind,}
-
+pub struct WasmDocumentRelationship {
+    source: u32,
+    target: u32,
+    kind: WasmRelationshipKind,
+}
 
 #[wasm_bindgen]
 impl WasmDocumentRelationship {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(source: u32, target: u32, kind: WasmRelationshipKind) -> WasmDocumentRelationship {
-        WasmDocumentRelationship { source: source, target: target, kind: kind }
+        WasmDocumentRelationship { source, target, kind }
     }
 
     #[wasm_bindgen]
@@ -4391,8 +5074,18 @@ impl WasmDocumentRelationship {
 /// for tree structure, and metadata like page number, bounding box, and content layer.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDocumentNode {    id: String,    content: JsValue,    parent: Option<u32>,    children: Vec<u32>,    content_layer: WasmContentLayer,    page: Option<u32>,    page_end: Option<u32>,    bbox: Option<WasmBoundingBox>,    annotations: Vec<WasmTextAnnotation>,    attributes: Option<JsValue>,}
-
+pub struct WasmDocumentNode {
+    id: String,
+    content: JsValue,
+    parent: Option<u32>,
+    children: Vec<u32>,
+    content_layer: WasmContentLayer,
+    page: Option<u32>,
+    page_end: Option<u32>,
+    bbox: Option<WasmBoundingBox>,
+    annotations: Vec<WasmTextAnnotation>,
+    attributes: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmDocumentNode {
@@ -4400,18 +5093,29 @@ impl WasmDocumentNode {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            id: String,
-            content: JsValue,
-            children: Vec<u32>,
-            contentLayer: WasmContentLayer,
-            annotations: Vec<WasmTextAnnotation>,
-            parent: Option<u32>,
-            page: Option<u32>,
-            pageEnd: Option<u32>,
-            bbox: Option<WasmBoundingBox>,
-            attributes: Option<JsValue>,
-        ) -> WasmDocumentNode {
-        WasmDocumentNode { id: id, content: content, parent: parent, children: children, content_layer: contentLayer, page: page, page_end: pageEnd, bbox: bbox, annotations: annotations, attributes: attributes }
+        id: String,
+        content: JsValue,
+        children: Vec<u32>,
+        contentLayer: WasmContentLayer,
+        annotations: Vec<WasmTextAnnotation>,
+        parent: Option<u32>,
+        page: Option<u32>,
+        pageEnd: Option<u32>,
+        bbox: Option<WasmBoundingBox>,
+        attributes: Option<JsValue>,
+    ) -> WasmDocumentNode {
+        WasmDocumentNode {
+            id,
+            content,
+            parent,
+            children,
+            content_layer: contentLayer,
+            page,
+            page_end: pageEnd,
+            bbox,
+            annotations,
+            attributes,
+        }
     }
 
     #[wasm_bindgen]
@@ -4526,15 +5230,22 @@ impl WasmDocumentNode {
 /// Stores row/column dimensions and a flat list of cells with position info.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTableGrid {    rows: u32,    cols: u32,    cells: Vec<WasmGridCell>,}
-
+pub struct WasmTableGrid {
+    rows: u32,
+    cols: u32,
+    cells: Vec<WasmGridCell>,
+}
 
 #[wasm_bindgen]
 impl WasmTableGrid {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(rows: Option<u32>, cols: Option<u32>, cells: Option<Vec<WasmGridCell>>) -> WasmTableGrid {
-        WasmTableGrid { rows: rows.unwrap_or_default(), cols: cols.unwrap_or_default(), cells: cells.unwrap_or_default() }
+        WasmTableGrid {
+            rows: rows.unwrap_or_default(),
+            cols: cols.unwrap_or_default(),
+            cells: cells.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -4577,23 +5288,38 @@ impl WasmTableGrid {
 /// Individual grid cell with position and span metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmGridCell {    content: String,    row: u32,    col: u32,    row_span: u32,    col_span: u32,    is_header: bool,    bbox: Option<WasmBoundingBox>,}
-
+pub struct WasmGridCell {
+    content: String,
+    row: u32,
+    col: u32,
+    row_span: u32,
+    col_span: u32,
+    is_header: bool,
+    bbox: Option<WasmBoundingBox>,
+}
 
 #[wasm_bindgen]
 impl WasmGridCell {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            content: String,
-            row: u32,
-            col: u32,
-            rowSpan: u32,
-            colSpan: u32,
-            isHeader: bool,
-            bbox: Option<WasmBoundingBox>,
-        ) -> WasmGridCell {
-        WasmGridCell { content: content, row: row, col: col, row_span: rowSpan, col_span: colSpan, is_header: isHeader, bbox: bbox }
+        content: String,
+        row: u32,
+        col: u32,
+        rowSpan: u32,
+        colSpan: u32,
+        isHeader: bool,
+        bbox: Option<WasmBoundingBox>,
+    ) -> WasmGridCell {
+        WasmGridCell {
+            content,
+            row,
+            col,
+            row_span: rowSpan,
+            col_span: colSpan,
+            is_header: isHeader,
+            bbox,
+        }
     }
 
     #[wasm_bindgen]
@@ -4679,15 +5405,18 @@ impl WasmGridCell {
 /// enabling precise identification of formatted regions.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTextAnnotation {    start: u32,    end: u32,    kind: JsValue,}
-
+pub struct WasmTextAnnotation {
+    start: u32,
+    end: u32,
+    kind: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmTextAnnotation {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(start: u32, end: u32, kind: JsValue) -> WasmTextAnnotation {
-        WasmTextAnnotation { start: start, end: end, kind: kind }
+        WasmTextAnnotation { start, end, kind }
     }
 
     #[wasm_bindgen]
@@ -4730,15 +5459,32 @@ impl WasmTextAnnotation {
 /// A single named entity detected in the extracted text.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmEntity {    category: WasmEntityCategory,    text: String,    start: u32,    end: u32,    confidence: Option<f32>,}
-
+pub struct WasmEntity {
+    category: WasmEntityCategory,
+    text: String,
+    start: u32,
+    end: u32,
+    confidence: Option<f32>,
+}
 
 #[wasm_bindgen]
 impl WasmEntity {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(category: WasmEntityCategory, text: String, start: u32, end: u32, confidence: Option<f32>) -> WasmEntity {
-        WasmEntity { category: category, text: text, start: start, end: end, confidence: confidence }
+    pub fn new(
+        category: WasmEntityCategory,
+        text: String,
+        start: u32,
+        end: u32,
+        confidence: Option<f32>,
+    ) -> WasmEntity {
+        WasmEntity {
+            category,
+            text,
+            start,
+            end,
+            confidence,
+        }
     }
 
     #[wasm_bindgen]
@@ -4803,8 +5549,37 @@ impl WasmEntity {
 /// This is the main result type returned by all extraction functions.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmExtractionResult {    content: String,    mime_type: String,    metadata: WasmMetadata,    extraction_method: Option<WasmExtractionMethod>,    tables: Vec<WasmTable>,    detected_languages: Option<Vec<String>>,    chunks: Option<Vec<WasmChunk>>,    images: Option<Vec<WasmExtractedImage>>,    pages: Option<Vec<WasmPageContent>>,    elements: Option<Vec<WasmElement>>,    djot_content: Option<WasmDjotContent>,    ocr_elements: Option<Vec<WasmOcrElement>>,    document: Option<WasmDocumentStructure>,    quality_score: Option<f64>,    processing_warnings: Vec<WasmProcessingWarning>,    annotations: Option<Vec<WasmPdfAnnotation>>,    children: Option<Vec<WasmArchiveEntry>>,    uris: Option<Vec<WasmExtractedUri>>,    revisions: Option<Vec<WasmDocumentRevision>>,    structured_output: Option<JsValue>,    code_intelligence: Option<JsValue>,    llm_usage: Option<Vec<WasmLlmUsage>>,    entities: Option<Vec<WasmEntity>>,    summary: Option<WasmDocumentSummary>,    translation: Option<WasmTranslation>,    page_classifications: Option<Vec<WasmPageClassification>>,    redaction_report: Option<WasmRedactionReport>,    formatted_content: Option<String>,    ocr_internal_document: Option<String>,}
-
+pub struct WasmExtractionResult {
+    content: String,
+    mime_type: String,
+    metadata: WasmMetadata,
+    extraction_method: Option<WasmExtractionMethod>,
+    tables: Vec<WasmTable>,
+    detected_languages: Option<Vec<String>>,
+    chunks: Option<Vec<WasmChunk>>,
+    images: Option<Vec<WasmExtractedImage>>,
+    pages: Option<Vec<WasmPageContent>>,
+    elements: Option<Vec<WasmElement>>,
+    djot_content: Option<WasmDjotContent>,
+    ocr_elements: Option<Vec<WasmOcrElement>>,
+    document: Option<WasmDocumentStructure>,
+    quality_score: Option<f64>,
+    processing_warnings: Vec<WasmProcessingWarning>,
+    annotations: Option<Vec<WasmPdfAnnotation>>,
+    children: Option<Vec<WasmArchiveEntry>>,
+    uris: Option<Vec<WasmExtractedUri>>,
+    revisions: Option<Vec<WasmDocumentRevision>>,
+    structured_output: Option<JsValue>,
+    code_intelligence: Option<JsValue>,
+    llm_usage: Option<Vec<WasmLlmUsage>>,
+    entities: Option<Vec<WasmEntity>>,
+    summary: Option<WasmDocumentSummary>,
+    translation: Option<WasmTranslation>,
+    page_classifications: Option<Vec<WasmPageClassification>>,
+    redaction_report: Option<WasmRedactionReport>,
+    formatted_content: Option<String>,
+    ocr_internal_document: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmExtractionResult {
@@ -4812,36 +5587,66 @@ impl WasmExtractionResult {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            content: Option<String>,
-            mimeType: Option<String>,
-            metadata: Option<WasmMetadata>,
-            tables: Option<Vec<WasmTable>>,
-            processingWarnings: Option<Vec<WasmProcessingWarning>>,
-            extractionMethod: Option<WasmExtractionMethod>,
-            detectedLanguages: Option<Vec<String>>,
-            chunks: Option<Vec<WasmChunk>>,
-            images: Option<Vec<WasmExtractedImage>>,
-            pages: Option<Vec<WasmPageContent>>,
-            elements: Option<Vec<WasmElement>>,
-            djotContent: Option<WasmDjotContent>,
-            ocrElements: Option<Vec<WasmOcrElement>>,
-            document: Option<WasmDocumentStructure>,
-            qualityScore: Option<f64>,
-            annotations: Option<Vec<WasmPdfAnnotation>>,
-            children: Option<Vec<WasmArchiveEntry>>,
-            uris: Option<Vec<WasmExtractedUri>>,
-            revisions: Option<Vec<WasmDocumentRevision>>,
-            structuredOutput: Option<JsValue>,
-            llmUsage: Option<Vec<WasmLlmUsage>>,
-            entities: Option<Vec<WasmEntity>>,
-            summary: Option<WasmDocumentSummary>,
-            translation: Option<WasmTranslation>,
-            pageClassifications: Option<Vec<WasmPageClassification>>,
-            redactionReport: Option<WasmRedactionReport>,
-            formattedContent: Option<String>,
-            ocrInternalDocument: Option<String>,
-        ) -> WasmExtractionResult {
-        WasmExtractionResult { content: content.unwrap_or_default(), mime_type: mimeType.unwrap_or_default(), metadata: metadata.unwrap_or_default(), extraction_method: extractionMethod, tables: tables.unwrap_or_default(), detected_languages: detectedLanguages, chunks: chunks, images: images, pages: pages, elements: elements, djot_content: djotContent, ocr_elements: ocrElements, document: document, quality_score: qualityScore, processing_warnings: processingWarnings.unwrap_or_default(), annotations: annotations, children: children, uris: uris, revisions: revisions, structured_output: structuredOutput, code_intelligence: Default::default(), llm_usage: llmUsage, entities: entities, summary: summary, translation: translation, page_classifications: pageClassifications, redaction_report: redactionReport, formatted_content: formattedContent, ocr_internal_document: ocrInternalDocument }
+        content: Option<String>,
+        mimeType: Option<String>,
+        metadata: Option<WasmMetadata>,
+        tables: Option<Vec<WasmTable>>,
+        processingWarnings: Option<Vec<WasmProcessingWarning>>,
+        extractionMethod: Option<WasmExtractionMethod>,
+        detectedLanguages: Option<Vec<String>>,
+        chunks: Option<Vec<WasmChunk>>,
+        images: Option<Vec<WasmExtractedImage>>,
+        pages: Option<Vec<WasmPageContent>>,
+        elements: Option<Vec<WasmElement>>,
+        djotContent: Option<WasmDjotContent>,
+        ocrElements: Option<Vec<WasmOcrElement>>,
+        document: Option<WasmDocumentStructure>,
+        qualityScore: Option<f64>,
+        annotations: Option<Vec<WasmPdfAnnotation>>,
+        children: Option<Vec<WasmArchiveEntry>>,
+        uris: Option<Vec<WasmExtractedUri>>,
+        revisions: Option<Vec<WasmDocumentRevision>>,
+        structuredOutput: Option<JsValue>,
+        llmUsage: Option<Vec<WasmLlmUsage>>,
+        entities: Option<Vec<WasmEntity>>,
+        summary: Option<WasmDocumentSummary>,
+        translation: Option<WasmTranslation>,
+        pageClassifications: Option<Vec<WasmPageClassification>>,
+        redactionReport: Option<WasmRedactionReport>,
+        formattedContent: Option<String>,
+        ocrInternalDocument: Option<String>,
+    ) -> WasmExtractionResult {
+        WasmExtractionResult {
+            content: content.unwrap_or_default(),
+            mime_type: mimeType.unwrap_or_default(),
+            metadata: metadata.unwrap_or_default(),
+            extraction_method: extractionMethod,
+            tables: tables.unwrap_or_default(),
+            detected_languages: detectedLanguages,
+            chunks,
+            images,
+            pages,
+            elements,
+            djot_content: djotContent,
+            ocr_elements: ocrElements,
+            document,
+            quality_score: qualityScore,
+            processing_warnings: processingWarnings.unwrap_or_default(),
+            annotations,
+            children,
+            uris,
+            revisions,
+            structured_output: structuredOutput,
+            code_intelligence: Default::default(),
+            llm_usage: llmUsage,
+            entities,
+            summary,
+            translation,
+            page_classifications: pageClassifications,
+            redaction_report: redactionReport,
+            formatted_content: formattedContent,
+            ocr_internal_document: ocrInternalDocument,
+        }
     }
 
     #[wasm_bindgen]
@@ -5227,15 +6032,22 @@ impl WasmExtractionResult {
 /// enabled, each processable file produces its own full `ExtractionResult`.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmArchiveEntry {    path: String,    mime_type: String,    result: WasmExtractionResult,}
-
+pub struct WasmArchiveEntry {
+    path: String,
+    mime_type: String,
+    result: WasmExtractionResult,
+}
 
 #[wasm_bindgen]
 impl WasmArchiveEntry {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(path: String, mimeType: String, result: WasmExtractionResult) -> WasmArchiveEntry {
-        WasmArchiveEntry { path: path, mime_type: mimeType, result: result }
+        WasmArchiveEntry {
+            path,
+            mime_type: mimeType,
+            result,
+        }
     }
 
     #[wasm_bindgen]
@@ -5281,15 +6093,17 @@ impl WasmArchiveEntry {
 /// but may indicate degraded results.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmProcessingWarning {    source: String,    message: String,}
-
+pub struct WasmProcessingWarning {
+    source: String,
+    message: String,
+}
 
 #[wasm_bindgen]
 impl WasmProcessingWarning {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(source: String, message: String) -> WasmProcessingWarning {
-        WasmProcessingWarning { source: source, message: message }
+        WasmProcessingWarning { source, message }
     }
 
     #[wasm_bindgen]
@@ -5326,23 +6140,38 @@ impl WasmProcessingWarning {
 /// within one extraction (e.g. VLM OCR + structured extraction).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmLlmUsage {    model: String,    source: String,    input_tokens: Option<u64>,    output_tokens: Option<u64>,    total_tokens: Option<u64>,    estimated_cost: Option<f64>,    finish_reason: Option<String>,}
-
+pub struct WasmLlmUsage {
+    model: String,
+    source: String,
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+    total_tokens: Option<u64>,
+    estimated_cost: Option<f64>,
+    finish_reason: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmLlmUsage {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            model: Option<String>,
-            source: Option<String>,
-            inputTokens: Option<u64>,
-            outputTokens: Option<u64>,
-            totalTokens: Option<u64>,
-            estimatedCost: Option<f64>,
-            finishReason: Option<String>,
-        ) -> WasmLlmUsage {
-        WasmLlmUsage { model: model.unwrap_or_default(), source: source.unwrap_or_default(), input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: totalTokens, estimated_cost: estimatedCost, finish_reason: finishReason }
+        model: Option<String>,
+        source: Option<String>,
+        inputTokens: Option<u64>,
+        outputTokens: Option<u64>,
+        totalTokens: Option<u64>,
+        estimatedCost: Option<f64>,
+        finishReason: Option<String>,
+    ) -> WasmLlmUsage {
+        WasmLlmUsage {
+            model: model.unwrap_or_default(),
+            source: source.unwrap_or_default(),
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            total_tokens: totalTokens,
+            estimated_cost: estimatedCost,
+            finish_reason: finishReason,
+        }
     }
 
     #[wasm_bindgen]
@@ -5429,15 +6258,29 @@ impl WasmLlmUsage {
 /// is configured), and metadata about its position in the document.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmChunk {    content: String,    chunk_type: WasmChunkType,    embedding: Option<Vec<f32>>,    metadata: WasmChunkMetadata,}
-
+pub struct WasmChunk {
+    content: String,
+    chunk_type: WasmChunkType,
+    embedding: Option<Vec<f32>>,
+    metadata: WasmChunkMetadata,
+}
 
 #[wasm_bindgen]
 impl WasmChunk {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(content: String, chunkType: WasmChunkType, metadata: WasmChunkMetadata, embedding: Option<Vec<f32>>) -> WasmChunk {
-        WasmChunk { content: content, chunk_type: chunkType, embedding: embedding, metadata: metadata }
+    pub fn new(
+        content: String,
+        chunkType: WasmChunkType,
+        metadata: WasmChunkMetadata,
+        embedding: Option<Vec<f32>>,
+    ) -> WasmChunk {
+        WasmChunk {
+            content,
+            chunk_type: chunkType,
+            embedding,
+            metadata,
+        }
     }
 
     #[wasm_bindgen]
@@ -5492,15 +6335,16 @@ impl WasmChunk {
 /// Contains the heading hierarchy from document root to this chunk's section.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmHeadingContext {    headings: Vec<WasmHeadingLevel>,}
-
+pub struct WasmHeadingContext {
+    headings: Vec<WasmHeadingLevel>,
+}
 
 #[wasm_bindgen]
 impl WasmHeadingContext {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(headings: Vec<WasmHeadingLevel>) -> WasmHeadingContext {
-        WasmHeadingContext { headings: headings }
+        WasmHeadingContext { headings }
     }
 
     #[wasm_bindgen]
@@ -5523,15 +6367,17 @@ impl WasmHeadingContext {
 /// A single heading in the hierarchy.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmHeadingLevel {    level: u8,    text: String,}
-
+pub struct WasmHeadingLevel {
+    level: u8,
+    text: String,
+}
 
 #[wasm_bindgen]
 impl WasmHeadingLevel {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(level: u8, text: String) -> WasmHeadingLevel {
-        WasmHeadingLevel { level: level, text: text }
+        WasmHeadingLevel { level, text }
     }
 
     #[wasm_bindgen]
@@ -5564,8 +6410,17 @@ impl WasmHeadingLevel {
 /// Metadata about a chunk's position in the original document.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmChunkMetadata {    byte_start: usize,    byte_end: usize,    token_count: Option<usize>,    chunk_index: usize,    total_chunks: usize,    first_page: Option<u32>,    last_page: Option<u32>,    heading_context: Option<WasmHeadingContext>,    image_indices: Vec<u32>,}
-
+pub struct WasmChunkMetadata {
+    byte_start: usize,
+    byte_end: usize,
+    token_count: Option<usize>,
+    chunk_index: usize,
+    total_chunks: usize,
+    first_page: Option<u32>,
+    last_page: Option<u32>,
+    heading_context: Option<WasmHeadingContext>,
+    image_indices: Vec<u32>,
+}
 
 #[wasm_bindgen]
 impl WasmChunkMetadata {
@@ -5573,17 +6428,27 @@ impl WasmChunkMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            byteStart: usize,
-            byteEnd: usize,
-            chunkIndex: usize,
-            totalChunks: usize,
-            imageIndices: Vec<u32>,
-            tokenCount: Option<usize>,
-            firstPage: Option<u32>,
-            lastPage: Option<u32>,
-            headingContext: Option<WasmHeadingContext>,
-        ) -> WasmChunkMetadata {
-        WasmChunkMetadata { byte_start: byteStart, byte_end: byteEnd, token_count: tokenCount, chunk_index: chunkIndex, total_chunks: totalChunks, first_page: firstPage, last_page: lastPage, heading_context: headingContext, image_indices: imageIndices }
+        byteStart: usize,
+        byteEnd: usize,
+        chunkIndex: usize,
+        totalChunks: usize,
+        imageIndices: Vec<u32>,
+        tokenCount: Option<usize>,
+        firstPage: Option<u32>,
+        lastPage: Option<u32>,
+        headingContext: Option<WasmHeadingContext>,
+    ) -> WasmChunkMetadata {
+        WasmChunkMetadata {
+            byte_start: byteStart,
+            byte_end: byteEnd,
+            token_count: tokenCount,
+            chunk_index: chunkIndex,
+            total_chunks: totalChunks,
+            first_page: firstPage,
+            last_page: lastPage,
+            heading_context: headingContext,
+            image_indices: imageIndices,
+        }
     }
 
     #[wasm_bindgen]
@@ -5690,8 +6555,26 @@ impl WasmChunkMetadata {
 /// PIL.Image (Python), Sharp (Node.js), or other formats as needed.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmExtractedImage {    data: Vec<u8>,    format: String,    image_index: u32,    page_number: Option<u32>,    width: Option<u32>,    height: Option<u32>,    colorspace: Option<String>,    bits_per_component: Option<u32>,    is_mask: bool,    description: Option<String>,    ocr_result: Option<WasmExtractionResult>,    bounding_box: Option<WasmBoundingBox>,    source_path: Option<String>,    image_kind: Option<WasmImageKind>,    kind_confidence: Option<f32>,    cluster_id: Option<u32>,    caption: Option<String>,    qr_codes: Option<Vec<WasmQrCode>>,}
-
+pub struct WasmExtractedImage {
+    data: Vec<u8>,
+    format: String,
+    image_index: u32,
+    page_number: Option<u32>,
+    width: Option<u32>,
+    height: Option<u32>,
+    colorspace: Option<String>,
+    bits_per_component: Option<u32>,
+    is_mask: bool,
+    description: Option<String>,
+    ocr_result: Option<WasmExtractionResult>,
+    bounding_box: Option<WasmBoundingBox>,
+    source_path: Option<String>,
+    image_kind: Option<WasmImageKind>,
+    kind_confidence: Option<f32>,
+    cluster_id: Option<u32>,
+    caption: Option<String>,
+    qr_codes: Option<Vec<WasmQrCode>>,
+}
 
 #[wasm_bindgen]
 impl WasmExtractedImage {
@@ -5699,26 +6582,45 @@ impl WasmExtractedImage {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            data: Option<Vec<u8>>,
-            format: Option<String>,
-            imageIndex: Option<u32>,
-            isMask: Option<bool>,
-            pageNumber: Option<u32>,
-            width: Option<u32>,
-            height: Option<u32>,
-            colorspace: Option<String>,
-            bitsPerComponent: Option<u32>,
-            description: Option<String>,
-            ocrResult: Option<WasmExtractionResult>,
-            boundingBox: Option<WasmBoundingBox>,
-            sourcePath: Option<String>,
-            imageKind: Option<WasmImageKind>,
-            kindConfidence: Option<f32>,
-            clusterId: Option<u32>,
-            caption: Option<String>,
-            qrCodes: Option<Vec<WasmQrCode>>,
-        ) -> WasmExtractedImage {
-        WasmExtractedImage { data: data.unwrap_or_default(), format: format.unwrap_or_default(), image_index: imageIndex.unwrap_or_default(), page_number: pageNumber, width: width, height: height, colorspace: colorspace, bits_per_component: bitsPerComponent, is_mask: isMask.unwrap_or_default(), description: description, ocr_result: ocrResult, bounding_box: boundingBox, source_path: sourcePath, image_kind: imageKind, kind_confidence: kindConfidence, cluster_id: clusterId, caption: caption, qr_codes: qrCodes }
+        data: Option<Vec<u8>>,
+        format: Option<String>,
+        imageIndex: Option<u32>,
+        isMask: Option<bool>,
+        pageNumber: Option<u32>,
+        width: Option<u32>,
+        height: Option<u32>,
+        colorspace: Option<String>,
+        bitsPerComponent: Option<u32>,
+        description: Option<String>,
+        ocrResult: Option<WasmExtractionResult>,
+        boundingBox: Option<WasmBoundingBox>,
+        sourcePath: Option<String>,
+        imageKind: Option<WasmImageKind>,
+        kindConfidence: Option<f32>,
+        clusterId: Option<u32>,
+        caption: Option<String>,
+        qrCodes: Option<Vec<WasmQrCode>>,
+    ) -> WasmExtractedImage {
+        WasmExtractedImage {
+            data: data.unwrap_or_default(),
+            format: format.unwrap_or_default(),
+            image_index: imageIndex.unwrap_or_default(),
+            page_number: pageNumber,
+            width,
+            height,
+            colorspace,
+            bits_per_component: bitsPerComponent,
+            is_mask: isMask.unwrap_or_default(),
+            description,
+            ocr_result: ocrResult,
+            bounding_box: boundingBox,
+            source_path: sourcePath,
+            image_kind: imageKind,
+            kind_confidence: kindConfidence,
+            cluster_id: clusterId,
+            caption,
+            qr_codes: qrCodes,
+        }
     }
 
     #[wasm_bindgen]
@@ -5917,15 +6819,24 @@ impl WasmExtractedImage {
 /// Bounding box coordinates for element positioning.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmBoundingBox {    x0: f64,    y0: f64,    x1: f64,    y1: f64,}
-
+pub struct WasmBoundingBox {
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+}
 
 #[wasm_bindgen]
 impl WasmBoundingBox {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(x0: Option<f64>, y0: Option<f64>, x1: Option<f64>, y1: Option<f64>) -> WasmBoundingBox {
-        WasmBoundingBox { x0: x0.unwrap_or_default(), y0: y0.unwrap_or_default(), x1: x1.unwrap_or_default(), y1: y1.unwrap_or_default() }
+        WasmBoundingBox {
+            x0: x0.unwrap_or_default(),
+            y0: y0.unwrap_or_default(),
+            x1: x1.unwrap_or_default(),
+            y1: y1.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -5978,21 +6889,32 @@ impl WasmBoundingBox {
 /// Metadata for a semantic element.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmElementMetadata {    page_number: Option<u32>,    filename: Option<String>,    coordinates: Option<WasmBoundingBox>,    element_index: Option<usize>,    additional: JsValue,}
-
+pub struct WasmElementMetadata {
+    page_number: Option<u32>,
+    filename: Option<String>,
+    coordinates: Option<WasmBoundingBox>,
+    element_index: Option<usize>,
+    additional: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmElementMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            additional: JsValue,
-            pageNumber: Option<u32>,
-            filename: Option<String>,
-            coordinates: Option<WasmBoundingBox>,
-            elementIndex: Option<usize>,
-        ) -> WasmElementMetadata {
-        WasmElementMetadata { page_number: pageNumber, filename: filename, coordinates: coordinates, element_index: elementIndex, additional: additional }
+        additional: JsValue,
+        pageNumber: Option<u32>,
+        filename: Option<String>,
+        coordinates: Option<WasmBoundingBox>,
+        elementIndex: Option<usize>,
+    ) -> WasmElementMetadata {
+        WasmElementMetadata {
+            page_number: pageNumber,
+            filename,
+            coordinates,
+            element_index: elementIndex,
+            additional,
+        }
     }
 
     #[wasm_bindgen]
@@ -6058,15 +6980,29 @@ impl WasmElementMetadata {
 /// unique identifier, and metadata for tracking origin and position.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmElement {    element_id: String,    element_type: WasmElementType,    text: String,    metadata: WasmElementMetadata,}
-
+pub struct WasmElement {
+    element_id: String,
+    element_type: WasmElementType,
+    text: String,
+    metadata: WasmElementMetadata,
+}
 
 #[wasm_bindgen]
 impl WasmElement {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(elementId: String, elementType: WasmElementType, text: String, metadata: WasmElementMetadata) -> WasmElement {
-        WasmElement { element_id: elementId, element_type: elementType, text: text, metadata: metadata }
+    pub fn new(
+        elementId: String,
+        elementType: WasmElementType,
+        text: String,
+        metadata: WasmElementMetadata,
+    ) -> WasmElement {
+        WasmElement {
+            element_id: elementId,
+            element_type: elementType,
+            text,
+            metadata,
+        }
     }
 
     #[wasm_bindgen]
@@ -6122,15 +7058,26 @@ impl WasmElement {
 /// extracted content and metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmExcelWorkbook {    sheets: Vec<WasmExcelSheet>,    metadata: JsValue,    revisions: Option<Vec<WasmDocumentRevision>>,}
-
+pub struct WasmExcelWorkbook {
+    sheets: Vec<WasmExcelSheet>,
+    metadata: JsValue,
+    revisions: Option<Vec<WasmDocumentRevision>>,
+}
 
 #[wasm_bindgen]
 impl WasmExcelWorkbook {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(sheets: Vec<WasmExcelSheet>, metadata: JsValue, revisions: Option<Vec<WasmDocumentRevision>>) -> WasmExcelWorkbook {
-        WasmExcelWorkbook { sheets: sheets, metadata: metadata, revisions: revisions }
+    pub fn new(
+        sheets: Vec<WasmExcelSheet>,
+        metadata: JsValue,
+        revisions: Option<Vec<WasmDocumentRevision>>,
+    ) -> WasmExcelWorkbook {
+        WasmExcelWorkbook {
+            sheets,
+            metadata,
+            revisions,
+        }
     }
 
     #[wasm_bindgen]
@@ -6182,22 +7129,35 @@ impl WasmExcelWorkbook {
 /// converted to Markdown format and dimensional statistics.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmExcelSheet {    name: String,    markdown: String,    row_count: usize,    col_count: usize,    cell_count: usize,    table_cells: Option<JsValue>,}
-
+pub struct WasmExcelSheet {
+    name: String,
+    markdown: String,
+    row_count: usize,
+    col_count: usize,
+    cell_count: usize,
+    table_cells: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmExcelSheet {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            name: String,
-            markdown: String,
-            rowCount: usize,
-            colCount: usize,
-            cellCount: usize,
-            tableCells: Option<JsValue>,
-        ) -> WasmExcelSheet {
-        WasmExcelSheet { name: name, markdown: markdown, row_count: rowCount, col_count: colCount, cell_count: cellCount, table_cells: tableCells }
+        name: String,
+        markdown: String,
+        rowCount: usize,
+        colCount: usize,
+        cellCount: usize,
+        tableCells: Option<JsValue>,
+    ) -> WasmExcelSheet {
+        WasmExcelSheet {
+            name,
+            markdown,
+            row_count: rowCount,
+            col_count: colCount,
+            cell_count: cellCount,
+            table_cells: tableCells,
+        }
     }
 
     #[wasm_bindgen]
@@ -6273,15 +7233,22 @@ impl WasmExcelSheet {
 /// structural statistics about the XML document.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmXmlExtractionResult {    content: String,    element_count: usize,    unique_elements: Vec<String>,}
-
+pub struct WasmXmlExtractionResult {
+    content: String,
+    element_count: usize,
+    unique_elements: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmXmlExtractionResult {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(content: String, elementCount: usize, uniqueElements: Vec<String>) -> WasmXmlExtractionResult {
-        WasmXmlExtractionResult { content: content, element_count: elementCount, unique_elements: uniqueElements }
+        WasmXmlExtractionResult {
+            content,
+            element_count: elementCount,
+            unique_elements: uniqueElements,
+        }
     }
 
     #[wasm_bindgen]
@@ -6327,23 +7294,38 @@ impl WasmXmlExtractionResult {
 /// for Markdown files, structural elements like headers and links.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTextExtractionResult {    content: String,    line_count: usize,    word_count: usize,    character_count: usize,    headers: Option<Vec<String>>,    links: Option<JsValue>,    code_blocks: Option<JsValue>,}
-
+pub struct WasmTextExtractionResult {
+    content: String,
+    line_count: usize,
+    word_count: usize,
+    character_count: usize,
+    headers: Option<Vec<String>>,
+    links: Option<JsValue>,
+    code_blocks: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmTextExtractionResult {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            content: String,
-            lineCount: usize,
-            wordCount: usize,
-            characterCount: usize,
-            headers: Option<Vec<String>>,
-            links: Option<JsValue>,
-            codeBlocks: Option<JsValue>,
-        ) -> WasmTextExtractionResult {
-        WasmTextExtractionResult { content: content, line_count: lineCount, word_count: wordCount, character_count: characterCount, headers: headers, links: links, code_blocks: codeBlocks }
+        content: String,
+        lineCount: usize,
+        wordCount: usize,
+        characterCount: usize,
+        headers: Option<Vec<String>>,
+        links: Option<JsValue>,
+        codeBlocks: Option<JsValue>,
+    ) -> WasmTextExtractionResult {
+        WasmTextExtractionResult {
+            content,
+            line_count: lineCount,
+            word_count: wordCount,
+            character_count: characterCount,
+            headers,
+            links,
+            code_blocks: codeBlocks,
+        }
     }
 
     #[wasm_bindgen]
@@ -6428,8 +7410,20 @@ impl WasmTextExtractionResult {
 /// Contains extracted slide content, metadata, and embedded images/tables.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPptxExtractionResult {    content: String,    metadata: WasmPptxMetadata,    slide_count: usize,    image_count: usize,    table_count: usize,    images: Vec<WasmExtractedImage>,    page_structure: Option<WasmPageStructure>,    page_contents: Option<Vec<WasmPageContent>>,    document: Option<WasmDocumentStructure>,    hyperlinks: Vec<String>,    office_metadata: JsValue,    revisions: Option<Vec<WasmDocumentRevision>>,}
-
+pub struct WasmPptxExtractionResult {
+    content: String,
+    metadata: WasmPptxMetadata,
+    slide_count: usize,
+    image_count: usize,
+    table_count: usize,
+    images: Vec<WasmExtractedImage>,
+    page_structure: Option<WasmPageStructure>,
+    page_contents: Option<Vec<WasmPageContent>>,
+    document: Option<WasmDocumentStructure>,
+    hyperlinks: Vec<String>,
+    office_metadata: JsValue,
+    revisions: Option<Vec<WasmDocumentRevision>>,
+}
 
 #[wasm_bindgen]
 impl WasmPptxExtractionResult {
@@ -6437,20 +7431,33 @@ impl WasmPptxExtractionResult {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            content: String,
-            metadata: WasmPptxMetadata,
-            slideCount: usize,
-            imageCount: usize,
-            tableCount: usize,
-            images: Vec<WasmExtractedImage>,
-            hyperlinks: Vec<String>,
-            officeMetadata: JsValue,
-            pageStructure: Option<WasmPageStructure>,
-            pageContents: Option<Vec<WasmPageContent>>,
-            document: Option<WasmDocumentStructure>,
-            revisions: Option<Vec<WasmDocumentRevision>>,
-        ) -> WasmPptxExtractionResult {
-        WasmPptxExtractionResult { content: content, metadata: metadata, slide_count: slideCount, image_count: imageCount, table_count: tableCount, images: images, page_structure: pageStructure, page_contents: pageContents, document: document, hyperlinks: hyperlinks, office_metadata: officeMetadata, revisions: revisions }
+        content: String,
+        metadata: WasmPptxMetadata,
+        slideCount: usize,
+        imageCount: usize,
+        tableCount: usize,
+        images: Vec<WasmExtractedImage>,
+        hyperlinks: Vec<String>,
+        officeMetadata: JsValue,
+        pageStructure: Option<WasmPageStructure>,
+        pageContents: Option<Vec<WasmPageContent>>,
+        document: Option<WasmDocumentStructure>,
+        revisions: Option<Vec<WasmDocumentRevision>>,
+    ) -> WasmPptxExtractionResult {
+        WasmPptxExtractionResult {
+            content,
+            metadata,
+            slide_count: slideCount,
+            image_count: imageCount,
+            table_count: tableCount,
+            images,
+            page_structure: pageStructure,
+            page_contents: pageContents,
+            document,
+            hyperlinks,
+            office_metadata: officeMetadata,
+            revisions,
+        }
     }
 
     #[wasm_bindgen]
@@ -6598,8 +7605,20 @@ impl WasmPptxExtractionResult {
 /// including headers, body content, and attachments.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmEmailExtractionResult {    subject: Option<String>,    from_email: Option<String>,    to_emails: Vec<String>,    cc_emails: Vec<String>,    bcc_emails: Vec<String>,    date: Option<String>,    message_id: Option<String>,    plain_text: Option<String>,    html_content: Option<String>,    content: String,    attachments: Vec<WasmEmailAttachment>,    metadata: JsValue,}
-
+pub struct WasmEmailExtractionResult {
+    subject: Option<String>,
+    from_email: Option<String>,
+    to_emails: Vec<String>,
+    cc_emails: Vec<String>,
+    bcc_emails: Vec<String>,
+    date: Option<String>,
+    message_id: Option<String>,
+    plain_text: Option<String>,
+    html_content: Option<String>,
+    content: String,
+    attachments: Vec<WasmEmailAttachment>,
+    metadata: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmEmailExtractionResult {
@@ -6607,20 +7626,33 @@ impl WasmEmailExtractionResult {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            toEmails: Vec<String>,
-            ccEmails: Vec<String>,
-            bccEmails: Vec<String>,
-            content: String,
-            attachments: Vec<WasmEmailAttachment>,
-            metadata: JsValue,
-            subject: Option<String>,
-            fromEmail: Option<String>,
-            date: Option<String>,
-            messageId: Option<String>,
-            plainText: Option<String>,
-            htmlContent: Option<String>,
-        ) -> WasmEmailExtractionResult {
-        WasmEmailExtractionResult { subject: subject, from_email: fromEmail, to_emails: toEmails, cc_emails: ccEmails, bcc_emails: bccEmails, date: date, message_id: messageId, plain_text: plainText, html_content: htmlContent, content: content, attachments: attachments, metadata: metadata }
+        toEmails: Vec<String>,
+        ccEmails: Vec<String>,
+        bccEmails: Vec<String>,
+        content: String,
+        attachments: Vec<WasmEmailAttachment>,
+        metadata: JsValue,
+        subject: Option<String>,
+        fromEmail: Option<String>,
+        date: Option<String>,
+        messageId: Option<String>,
+        plainText: Option<String>,
+        htmlContent: Option<String>,
+    ) -> WasmEmailExtractionResult {
+        WasmEmailExtractionResult {
+            subject,
+            from_email: fromEmail,
+            to_emails: toEmails,
+            cc_emails: ccEmails,
+            bcc_emails: bccEmails,
+            date,
+            message_id: messageId,
+            plain_text: plainText,
+            html_content: htmlContent,
+            content,
+            attachments,
+            metadata,
+        }
     }
 
     #[wasm_bindgen]
@@ -6755,22 +7787,35 @@ impl WasmEmailExtractionResult {
 /// Contains metadata and optionally the content of an email attachment.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmEmailAttachment {    name: Option<String>,    filename: Option<String>,    mime_type: Option<String>,    size: Option<usize>,    is_image: bool,    data: Option<Vec<u8>>,}
-
+pub struct WasmEmailAttachment {
+    name: Option<String>,
+    filename: Option<String>,
+    mime_type: Option<String>,
+    size: Option<usize>,
+    is_image: bool,
+    data: Option<Vec<u8>>,
+}
 
 #[wasm_bindgen]
 impl WasmEmailAttachment {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            isImage: bool,
-            name: Option<String>,
-            filename: Option<String>,
-            mimeType: Option<String>,
-            size: Option<usize>,
-            data: Option<Vec<u8>>,
-        ) -> WasmEmailAttachment {
-        WasmEmailAttachment { name: name, filename: filename, mime_type: mimeType, size: size, is_image: isImage, data: data }
+        isImage: bool,
+        name: Option<String>,
+        filename: Option<String>,
+        mimeType: Option<String>,
+        size: Option<usize>,
+        data: Option<Vec<u8>>,
+    ) -> WasmEmailAttachment {
+        WasmEmailAttachment {
+            name,
+            filename,
+            mime_type: mimeType,
+            size,
+            is_image: isImage,
+            data,
+        }
     }
 
     #[wasm_bindgen]
@@ -6846,22 +7891,35 @@ impl WasmEmailAttachment {
 /// including recognized text and detected tables.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrExtractionResult {    content: String,    mime_type: String,    metadata: JsValue,    tables: Vec<WasmOcrTable>,    ocr_elements: Option<Vec<WasmOcrElement>>,    internal_document: Option<String>,}
-
+pub struct WasmOcrExtractionResult {
+    content: String,
+    mime_type: String,
+    metadata: JsValue,
+    tables: Vec<WasmOcrTable>,
+    ocr_elements: Option<Vec<WasmOcrElement>>,
+    internal_document: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmOcrExtractionResult {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            content: String,
-            mimeType: String,
-            metadata: JsValue,
-            tables: Vec<WasmOcrTable>,
-            ocrElements: Option<Vec<WasmOcrElement>>,
-            internalDocument: Option<String>,
-        ) -> WasmOcrExtractionResult {
-        WasmOcrExtractionResult { content: content, mime_type: mimeType, metadata: metadata, tables: tables, ocr_elements: ocrElements, internal_document: internalDocument }
+        content: String,
+        mimeType: String,
+        metadata: JsValue,
+        tables: Vec<WasmOcrTable>,
+        ocrElements: Option<Vec<WasmOcrElement>>,
+        internalDocument: Option<String>,
+    ) -> WasmOcrExtractionResult {
+        WasmOcrExtractionResult {
+            content,
+            mime_type: mimeType,
+            metadata,
+            tables,
+            ocr_elements: ocrElements,
+            internal_document: internalDocument,
+        }
     }
 
     #[wasm_bindgen]
@@ -6942,15 +8000,29 @@ impl WasmOcrExtractionResult {
 /// Represents a table structure recognized during OCR processing.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrTable {    cells: JsValue,    markdown: String,    page_number: u32,    bounding_box: Option<WasmOcrTableBoundingBox>,}
-
+pub struct WasmOcrTable {
+    cells: JsValue,
+    markdown: String,
+    page_number: u32,
+    bounding_box: Option<WasmOcrTableBoundingBox>,
+}
 
 #[wasm_bindgen]
 impl WasmOcrTable {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(cells: JsValue, markdown: String, pageNumber: u32, boundingBox: Option<WasmOcrTableBoundingBox>) -> WasmOcrTable {
-        WasmOcrTable { cells: cells, markdown: markdown, page_number: pageNumber, bounding_box: boundingBox }
+    pub fn new(
+        cells: JsValue,
+        markdown: String,
+        pageNumber: u32,
+        boundingBox: Option<WasmOcrTableBoundingBox>,
+    ) -> WasmOcrTable {
+        WasmOcrTable {
+            cells,
+            markdown,
+            page_number: pageNumber,
+            bounding_box: boundingBox,
+        }
     }
 
     #[wasm_bindgen]
@@ -7003,15 +8075,24 @@ impl WasmOcrTable {
 /// Bounding box for an OCR-detected table in pixel coordinates.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrTableBoundingBox {    left: u32,    top: u32,    right: u32,    bottom: u32,}
-
+pub struct WasmOcrTableBoundingBox {
+    left: u32,
+    top: u32,
+    right: u32,
+    bottom: u32,
+}
 
 #[wasm_bindgen]
 impl WasmOcrTableBoundingBox {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(left: u32, top: u32, right: u32, bottom: u32) -> WasmOcrTableBoundingBox {
-        WasmOcrTableBoundingBox { left: left, top: top, right: right, bottom: bottom }
+        WasmOcrTableBoundingBox {
+            left,
+            top,
+            right,
+            bottom,
+        }
     }
 
     #[wasm_bindgen]
@@ -7068,23 +8149,38 @@ impl WasmOcrTableBoundingBox {
 /// for different document types.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmImagePreprocessingConfig {    target_dpi: i32,    auto_rotate: bool,    deskew: bool,    denoise: bool,    contrast_enhance: bool,    binarization_method: String,    invert_colors: bool,}
-
+pub struct WasmImagePreprocessingConfig {
+    target_dpi: i32,
+    auto_rotate: bool,
+    deskew: bool,
+    denoise: bool,
+    contrast_enhance: bool,
+    binarization_method: String,
+    invert_colors: bool,
+}
 
 #[wasm_bindgen]
 impl WasmImagePreprocessingConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            targetDpi: Option<i32>,
-            autoRotate: Option<bool>,
-            deskew: Option<bool>,
-            denoise: Option<bool>,
-            contrastEnhance: Option<bool>,
-            binarizationMethod: Option<String>,
-            invertColors: Option<bool>,
-        ) -> WasmImagePreprocessingConfig {
-        WasmImagePreprocessingConfig { target_dpi: targetDpi.unwrap_or(300), auto_rotate: autoRotate.unwrap_or(true), deskew: deskew.unwrap_or(true), denoise: denoise.unwrap_or(false), contrast_enhance: contrastEnhance.unwrap_or(false), binarization_method: binarizationMethod.unwrap_or_else(|| "otsu".to_string()), invert_colors: invertColors.unwrap_or(false) }
+        targetDpi: Option<i32>,
+        autoRotate: Option<bool>,
+        deskew: Option<bool>,
+        denoise: Option<bool>,
+        contrastEnhance: Option<bool>,
+        binarizationMethod: Option<String>,
+        invertColors: Option<bool>,
+    ) -> WasmImagePreprocessingConfig {
+        WasmImagePreprocessingConfig {
+            target_dpi: targetDpi.unwrap_or(300),
+            auto_rotate: autoRotate.unwrap_or(true),
+            deskew: deskew.unwrap_or(true),
+            denoise: denoise.unwrap_or(false),
+            contrast_enhance: contrastEnhance.unwrap_or(false),
+            binarization_method: binarizationMethod.unwrap_or_else(|| "otsu".to_string()),
+            invert_colors: invertColors.unwrap_or(false),
+        }
     }
 
     #[wasm_bindgen(getter, js_name = "targetDpi")]
@@ -7171,8 +8267,29 @@ impl WasmImagePreprocessingConfig {
 /// for specific document types (invoices, handwriting, etc.).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTesseractConfig {    language: String,    psm: i32,    output_format: String,    oem: i32,    min_confidence: f64,    preprocessing: Option<WasmImagePreprocessingConfig>,    enable_table_detection: bool,    table_min_confidence: f64,    table_column_threshold: i32,    table_row_threshold_ratio: f64,    use_cache: bool,    classify_use_pre_adapted_templates: bool,    language_model_ngram_on: bool,    tessedit_dont_blkrej_good_wds: bool,    tessedit_dont_rowrej_good_wds: bool,    tessedit_enable_dict_correction: bool,    tessedit_char_whitelist: String,    tessedit_char_blacklist: String,    tessedit_use_primary_params_model: bool,    textord_space_size_is_variable: bool,    thresholding_method: bool,}
-
+pub struct WasmTesseractConfig {
+    language: String,
+    psm: i32,
+    output_format: String,
+    oem: i32,
+    min_confidence: f64,
+    preprocessing: Option<WasmImagePreprocessingConfig>,
+    enable_table_detection: bool,
+    table_min_confidence: f64,
+    table_column_threshold: i32,
+    table_row_threshold_ratio: f64,
+    use_cache: bool,
+    classify_use_pre_adapted_templates: bool,
+    language_model_ngram_on: bool,
+    tessedit_dont_blkrej_good_wds: bool,
+    tessedit_dont_rowrej_good_wds: bool,
+    tessedit_enable_dict_correction: bool,
+    tessedit_char_whitelist: String,
+    tessedit_char_blacklist: String,
+    tessedit_use_primary_params_model: bool,
+    textord_space_size_is_variable: bool,
+    thresholding_method: bool,
+}
 
 #[wasm_bindgen]
 impl WasmTesseractConfig {
@@ -7180,29 +8297,51 @@ impl WasmTesseractConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            language: Option<String>,
-            psm: Option<i32>,
-            outputFormat: Option<String>,
-            oem: Option<i32>,
-            minConfidence: Option<f64>,
-            enableTableDetection: Option<bool>,
-            tableMinConfidence: Option<f64>,
-            tableColumnThreshold: Option<i32>,
-            tableRowThresholdRatio: Option<f64>,
-            useCache: Option<bool>,
-            classifyUsePreAdaptedTemplates: Option<bool>,
-            languageModelNgramOn: Option<bool>,
-            tesseditDontBlkrejGoodWds: Option<bool>,
-            tesseditDontRowrejGoodWds: Option<bool>,
-            tesseditEnableDictCorrection: Option<bool>,
-            tesseditCharWhitelist: Option<String>,
-            tesseditCharBlacklist: Option<String>,
-            tesseditUsePrimaryParamsModel: Option<bool>,
-            textordSpaceSizeIsVariable: Option<bool>,
-            thresholdingMethod: Option<bool>,
-            preprocessing: Option<WasmImagePreprocessingConfig>,
-        ) -> WasmTesseractConfig {
-        WasmTesseractConfig { language: language.unwrap_or_else(|| "eng".to_string()), psm: psm.unwrap_or(3), output_format: outputFormat.unwrap_or_else(|| "markdown".to_string()), oem: oem.unwrap_or(3), min_confidence: minConfidence.unwrap_or(0.0), preprocessing: preprocessing, enable_table_detection: enableTableDetection.unwrap_or(true), table_min_confidence: tableMinConfidence.unwrap_or(0.0), table_column_threshold: tableColumnThreshold.unwrap_or(50), table_row_threshold_ratio: tableRowThresholdRatio.unwrap_or(0.5), use_cache: useCache.unwrap_or(true), classify_use_pre_adapted_templates: classifyUsePreAdaptedTemplates.unwrap_or(true), language_model_ngram_on: languageModelNgramOn.unwrap_or(false), tessedit_dont_blkrej_good_wds: tesseditDontBlkrejGoodWds.unwrap_or(true), tessedit_dont_rowrej_good_wds: tesseditDontRowrejGoodWds.unwrap_or(true), tessedit_enable_dict_correction: tesseditEnableDictCorrection.unwrap_or(true), tessedit_char_whitelist: tesseditCharWhitelist.unwrap_or_else(|| "".to_string()), tessedit_char_blacklist: tesseditCharBlacklist.unwrap_or_else(|| "".to_string()), tessedit_use_primary_params_model: tesseditUsePrimaryParamsModel.unwrap_or(true), textord_space_size_is_variable: textordSpaceSizeIsVariable.unwrap_or(true), thresholding_method: thresholdingMethod.unwrap_or(false) }
+        language: Option<String>,
+        psm: Option<i32>,
+        outputFormat: Option<String>,
+        oem: Option<i32>,
+        minConfidence: Option<f64>,
+        enableTableDetection: Option<bool>,
+        tableMinConfidence: Option<f64>,
+        tableColumnThreshold: Option<i32>,
+        tableRowThresholdRatio: Option<f64>,
+        useCache: Option<bool>,
+        classifyUsePreAdaptedTemplates: Option<bool>,
+        languageModelNgramOn: Option<bool>,
+        tesseditDontBlkrejGoodWds: Option<bool>,
+        tesseditDontRowrejGoodWds: Option<bool>,
+        tesseditEnableDictCorrection: Option<bool>,
+        tesseditCharWhitelist: Option<String>,
+        tesseditCharBlacklist: Option<String>,
+        tesseditUsePrimaryParamsModel: Option<bool>,
+        textordSpaceSizeIsVariable: Option<bool>,
+        thresholdingMethod: Option<bool>,
+        preprocessing: Option<WasmImagePreprocessingConfig>,
+    ) -> WasmTesseractConfig {
+        WasmTesseractConfig {
+            language: language.unwrap_or_else(|| "eng".to_string()),
+            psm: psm.unwrap_or(3),
+            output_format: outputFormat.unwrap_or_else(|| "markdown".to_string()),
+            oem: oem.unwrap_or(3),
+            min_confidence: minConfidence.unwrap_or(0.0),
+            preprocessing,
+            enable_table_detection: enableTableDetection.unwrap_or(true),
+            table_min_confidence: tableMinConfidence.unwrap_or(0.0),
+            table_column_threshold: tableColumnThreshold.unwrap_or(50),
+            table_row_threshold_ratio: tableRowThresholdRatio.unwrap_or(0.5),
+            use_cache: useCache.unwrap_or(true),
+            classify_use_pre_adapted_templates: classifyUsePreAdaptedTemplates.unwrap_or(true),
+            language_model_ngram_on: languageModelNgramOn.unwrap_or(false),
+            tessedit_dont_blkrej_good_wds: tesseditDontBlkrejGoodWds.unwrap_or(true),
+            tessedit_dont_rowrej_good_wds: tesseditDontRowrejGoodWds.unwrap_or(true),
+            tessedit_enable_dict_correction: tesseditEnableDictCorrection.unwrap_or(true),
+            tessedit_char_whitelist: tesseditCharWhitelist.unwrap_or_else(|| "".to_string()),
+            tessedit_char_blacklist: tesseditCharBlacklist.unwrap_or_else(|| "".to_string()),
+            tessedit_use_primary_params_model: tesseditUsePrimaryParamsModel.unwrap_or(true),
+            textord_space_size_is_variable: textordSpaceSizeIsVariable.unwrap_or(true),
+            thresholding_method: thresholdingMethod.unwrap_or(false),
+        }
     }
 
     #[wasm_bindgen(getter)]
@@ -7428,8 +8567,20 @@ impl WasmTesseractConfig {
 /// including DPI normalization, resizing, and resampling.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmImagePreprocessingMetadata {    original_dimensions: Vec<usize>,    original_dpi: Vec<f64>,    target_dpi: i32,    scale_factor: f64,    auto_adjusted: bool,    final_dpi: i32,    new_dimensions: Option<Vec<usize>>,    resample_method: String,    dimension_clamped: bool,    calculated_dpi: Option<i32>,    skipped_resize: bool,    resize_error: Option<String>,}
-
+pub struct WasmImagePreprocessingMetadata {
+    original_dimensions: Vec<usize>,
+    original_dpi: Vec<f64>,
+    target_dpi: i32,
+    scale_factor: f64,
+    auto_adjusted: bool,
+    final_dpi: i32,
+    new_dimensions: Option<Vec<usize>>,
+    resample_method: String,
+    dimension_clamped: bool,
+    calculated_dpi: Option<i32>,
+    skipped_resize: bool,
+    resize_error: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmImagePreprocessingMetadata {
@@ -7437,20 +8588,33 @@ impl WasmImagePreprocessingMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            originalDimensions: Vec<usize>,
-            originalDpi: Vec<f64>,
-            targetDpi: i32,
-            scaleFactor: f64,
-            autoAdjusted: bool,
-            finalDpi: i32,
-            resampleMethod: String,
-            dimensionClamped: bool,
-            skippedResize: bool,
-            newDimensions: Option<Vec<usize>>,
-            calculatedDpi: Option<i32>,
-            resizeError: Option<String>,
-        ) -> WasmImagePreprocessingMetadata {
-        WasmImagePreprocessingMetadata { original_dimensions: originalDimensions, original_dpi: originalDpi, target_dpi: targetDpi, scale_factor: scaleFactor, auto_adjusted: autoAdjusted, final_dpi: finalDpi, new_dimensions: newDimensions, resample_method: resampleMethod, dimension_clamped: dimensionClamped, calculated_dpi: calculatedDpi, skipped_resize: skippedResize, resize_error: resizeError }
+        originalDimensions: Vec<usize>,
+        originalDpi: Vec<f64>,
+        targetDpi: i32,
+        scaleFactor: f64,
+        autoAdjusted: bool,
+        finalDpi: i32,
+        resampleMethod: String,
+        dimensionClamped: bool,
+        skippedResize: bool,
+        newDimensions: Option<Vec<usize>>,
+        calculatedDpi: Option<i32>,
+        resizeError: Option<String>,
+    ) -> WasmImagePreprocessingMetadata {
+        WasmImagePreprocessingMetadata {
+            original_dimensions: originalDimensions,
+            original_dpi: originalDpi,
+            target_dpi: targetDpi,
+            scale_factor: scaleFactor,
+            auto_adjusted: autoAdjusted,
+            final_dpi: finalDpi,
+            new_dimensions: newDimensions,
+            resample_method: resampleMethod,
+            dimension_clamped: dimensionClamped,
+            calculated_dpi: calculatedDpi,
+            skipped_resize: skippedResize,
+            resize_error: resizeError,
+        }
     }
 
     #[wasm_bindgen]
@@ -7586,8 +8750,30 @@ impl WasmImagePreprocessingMetadata {
 /// via a discriminated union, and additional custom fields from postprocessors.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmMetadata {    title: Option<String>,    subject: Option<String>,    authors: Option<Vec<String>>,    keywords: Option<Vec<String>>,    language: Option<String>,    created_at: Option<String>,    modified_at: Option<String>,    created_by: Option<String>,    modified_by: Option<String>,    pages: Option<WasmPageStructure>,    format: Option<JsValue>,    image_preprocessing: Option<WasmImagePreprocessingMetadata>,    json_schema: Option<JsValue>,    error: Option<WasmErrorMetadata>,    extraction_duration_ms: Option<u64>,    category: Option<String>,    tags: Option<Vec<String>>,    document_version: Option<String>,    abstract_text: Option<String>,    output_format: Option<String>,    ocr_used: bool,    additional: JsValue,}
-
+pub struct WasmMetadata {
+    title: Option<String>,
+    subject: Option<String>,
+    authors: Option<Vec<String>>,
+    keywords: Option<Vec<String>>,
+    language: Option<String>,
+    created_at: Option<String>,
+    modified_at: Option<String>,
+    created_by: Option<String>,
+    modified_by: Option<String>,
+    pages: Option<WasmPageStructure>,
+    format: Option<JsValue>,
+    image_preprocessing: Option<WasmImagePreprocessingMetadata>,
+    json_schema: Option<JsValue>,
+    error: Option<WasmErrorMetadata>,
+    extraction_duration_ms: Option<u64>,
+    category: Option<String>,
+    tags: Option<Vec<String>>,
+    document_version: Option<String>,
+    abstract_text: Option<String>,
+    output_format: Option<String>,
+    ocr_used: bool,
+    additional: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmMetadata {
@@ -7595,30 +8781,53 @@ impl WasmMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            ocrUsed: Option<bool>,
-            additional: Option<JsValue>,
-            title: Option<String>,
-            subject: Option<String>,
-            authors: Option<Vec<String>>,
-            keywords: Option<Vec<String>>,
-            language: Option<String>,
-            createdAt: Option<String>,
-            modifiedAt: Option<String>,
-            createdBy: Option<String>,
-            modifiedBy: Option<String>,
-            pages: Option<WasmPageStructure>,
-            format: Option<JsValue>,
-            imagePreprocessing: Option<WasmImagePreprocessingMetadata>,
-            jsonSchema: Option<JsValue>,
-            error: Option<WasmErrorMetadata>,
-            extractionDurationMs: Option<u64>,
-            category: Option<String>,
-            tags: Option<Vec<String>>,
-            documentVersion: Option<String>,
-            abstractText: Option<String>,
-            outputFormat: Option<String>,
-        ) -> WasmMetadata {
-        WasmMetadata { title: title, subject: subject, authors: authors, keywords: keywords, language: language, created_at: createdAt, modified_at: modifiedAt, created_by: createdBy, modified_by: modifiedBy, pages: pages, format: format, image_preprocessing: imagePreprocessing, json_schema: jsonSchema, error: error, extraction_duration_ms: extractionDurationMs, category: category, tags: tags, document_version: documentVersion, abstract_text: abstractText, output_format: outputFormat, ocr_used: ocrUsed.unwrap_or_default(), additional: additional.unwrap_or_default() }
+        ocrUsed: Option<bool>,
+        additional: Option<JsValue>,
+        title: Option<String>,
+        subject: Option<String>,
+        authors: Option<Vec<String>>,
+        keywords: Option<Vec<String>>,
+        language: Option<String>,
+        createdAt: Option<String>,
+        modifiedAt: Option<String>,
+        createdBy: Option<String>,
+        modifiedBy: Option<String>,
+        pages: Option<WasmPageStructure>,
+        format: Option<JsValue>,
+        imagePreprocessing: Option<WasmImagePreprocessingMetadata>,
+        jsonSchema: Option<JsValue>,
+        error: Option<WasmErrorMetadata>,
+        extractionDurationMs: Option<u64>,
+        category: Option<String>,
+        tags: Option<Vec<String>>,
+        documentVersion: Option<String>,
+        abstractText: Option<String>,
+        outputFormat: Option<String>,
+    ) -> WasmMetadata {
+        WasmMetadata {
+            title,
+            subject,
+            authors,
+            keywords,
+            language,
+            created_at: createdAt,
+            modified_at: modifiedAt,
+            created_by: createdBy,
+            modified_by: modifiedBy,
+            pages,
+            format,
+            image_preprocessing: imagePreprocessing,
+            json_schema: jsonSchema,
+            error,
+            extraction_duration_ms: extractionDurationMs,
+            category,
+            tags,
+            document_version: documentVersion,
+            abstract_text: abstractText,
+            output_format: outputFormat,
+            ocr_used: ocrUsed.unwrap_or_default(),
+            additional: additional.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -7850,7 +9059,7 @@ impl WasmMetadata {
     /// Returns `true` when no metadata fields, format-specific metadata, or
     /// additional postprocessor fields are populated.
     #[wasm_bindgen(js_name = "isEmpty")]
-    pub fn is_empty(&self, ) -> bool {
+    pub fn is_empty(&self) -> bool {
         kreuzberg::Metadata::from(self.clone()).is_empty()
     }
 }
@@ -7861,15 +9070,20 @@ impl WasmMetadata {
 /// discriminant. Sheet count and sheet names are stored inside this struct.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmExcelMetadata {    sheet_count: Option<u32>,    sheet_names: Option<Vec<String>>,}
-
+pub struct WasmExcelMetadata {
+    sheet_count: Option<u32>,
+    sheet_names: Option<Vec<String>>,
+}
 
 #[wasm_bindgen]
 impl WasmExcelMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(sheetCount: Option<u32>, sheetNames: Option<Vec<String>>) -> WasmExcelMetadata {
-        WasmExcelMetadata { sheet_count: sheetCount, sheet_names: sheetNames }
+        WasmExcelMetadata {
+            sheet_count: sheetCount,
+            sheet_names: sheetNames,
+        }
     }
 
     #[wasm_bindgen]
@@ -7904,23 +9118,38 @@ impl WasmExcelMetadata {
 /// Includes sender/recipient information, message ID, and attachment list.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmEmailMetadata {    from_email: Option<String>,    from_name: Option<String>,    to_emails: Vec<String>,    cc_emails: Vec<String>,    bcc_emails: Vec<String>,    message_id: Option<String>,    attachments: Vec<String>,}
-
+pub struct WasmEmailMetadata {
+    from_email: Option<String>,
+    from_name: Option<String>,
+    to_emails: Vec<String>,
+    cc_emails: Vec<String>,
+    bcc_emails: Vec<String>,
+    message_id: Option<String>,
+    attachments: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmEmailMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            toEmails: Option<Vec<String>>,
-            ccEmails: Option<Vec<String>>,
-            bccEmails: Option<Vec<String>>,
-            attachments: Option<Vec<String>>,
-            fromEmail: Option<String>,
-            fromName: Option<String>,
-            messageId: Option<String>,
-        ) -> WasmEmailMetadata {
-        WasmEmailMetadata { from_email: fromEmail, from_name: fromName, to_emails: toEmails.unwrap_or_default(), cc_emails: ccEmails.unwrap_or_default(), bcc_emails: bccEmails.unwrap_or_default(), message_id: messageId, attachments: attachments.unwrap_or_default() }
+        toEmails: Option<Vec<String>>,
+        ccEmails: Option<Vec<String>>,
+        bccEmails: Option<Vec<String>>,
+        attachments: Option<Vec<String>>,
+        fromEmail: Option<String>,
+        fromName: Option<String>,
+        messageId: Option<String>,
+    ) -> WasmEmailMetadata {
+        WasmEmailMetadata {
+            from_email: fromEmail,
+            from_name: fromName,
+            to_emails: toEmails.unwrap_or_default(),
+            cc_emails: ccEmails.unwrap_or_default(),
+            bcc_emails: bccEmails.unwrap_or_default(),
+            message_id: messageId,
+            attachments: attachments.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -8005,21 +9234,32 @@ impl WasmEmailMetadata {
 /// Extracted from compressed archive files containing file lists and size information.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmArchiveMetadata {    format: String,    file_count: u32,    file_list: Vec<String>,    total_size: u64,    compressed_size: Option<u64>,}
-
+pub struct WasmArchiveMetadata {
+    format: String,
+    file_count: u32,
+    file_list: Vec<String>,
+    total_size: u64,
+    compressed_size: Option<u64>,
+}
 
 #[wasm_bindgen]
 impl WasmArchiveMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            format: Option<String>,
-            fileCount: Option<u32>,
-            fileList: Option<Vec<String>>,
-            totalSize: Option<u64>,
-            compressedSize: Option<u64>,
-        ) -> WasmArchiveMetadata {
-        WasmArchiveMetadata { format: format.unwrap_or_default(), file_count: fileCount.unwrap_or_default(), file_list: fileList.unwrap_or_default(), total_size: totalSize.unwrap_or_default(), compressed_size: compressedSize }
+        format: Option<String>,
+        fileCount: Option<u32>,
+        fileList: Option<Vec<String>>,
+        totalSize: Option<u64>,
+        compressedSize: Option<u64>,
+    ) -> WasmArchiveMetadata {
+        WasmArchiveMetadata {
+            format: format.unwrap_or_default(),
+            file_count: fileCount.unwrap_or_default(),
+            file_list: fileList.unwrap_or_default(),
+            total_size: totalSize.unwrap_or_default(),
+            compressed_size: compressedSize,
+        }
     }
 
     #[wasm_bindgen]
@@ -8084,15 +9324,29 @@ impl WasmArchiveMetadata {
 /// Includes dimensions, format, and EXIF data.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmImageMetadata {    width: u32,    height: u32,    format: String,    exif: JsValue,}
-
+pub struct WasmImageMetadata {
+    width: u32,
+    height: u32,
+    format: String,
+    exif: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmImageMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(width: Option<u32>, height: Option<u32>, format: Option<String>, exif: Option<JsValue>) -> WasmImageMetadata {
-        WasmImageMetadata { width: width.unwrap_or_default(), height: height.unwrap_or_default(), format: format.unwrap_or_default(), exif: exif.unwrap_or_default() }
+    pub fn new(
+        width: Option<u32>,
+        height: Option<u32>,
+        format: Option<String>,
+        exif: Option<JsValue>,
+    ) -> WasmImageMetadata {
+        WasmImageMetadata {
+            width: width.unwrap_or_default(),
+            height: height.unwrap_or_default(),
+            format: format.unwrap_or_default(),
+            exif: exif.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -8147,15 +9401,20 @@ impl WasmImageMetadata {
 /// Provides statistics about XML document structure.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmXmlMetadata {    element_count: u32,    unique_elements: Vec<String>,}
-
+pub struct WasmXmlMetadata {
+    element_count: u32,
+    unique_elements: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmXmlMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(elementCount: Option<u32>, uniqueElements: Option<Vec<String>>) -> WasmXmlMetadata {
-        WasmXmlMetadata { element_count: elementCount.unwrap_or_default(), unique_elements: uniqueElements.unwrap_or_default() }
+        WasmXmlMetadata {
+            element_count: elementCount.unwrap_or_default(),
+            unique_elements: uniqueElements.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -8191,22 +9450,35 @@ impl WasmXmlMetadata {
 /// for Markdown, structural elements like headers and links.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTextMetadata {    line_count: u32,    word_count: u32,    character_count: u32,    headers: Option<Vec<String>>,    links: Option<JsValue>,    code_blocks: Option<JsValue>,}
-
+pub struct WasmTextMetadata {
+    line_count: u32,
+    word_count: u32,
+    character_count: u32,
+    headers: Option<Vec<String>>,
+    links: Option<JsValue>,
+    code_blocks: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmTextMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            lineCount: Option<u32>,
-            wordCount: Option<u32>,
-            characterCount: Option<u32>,
-            headers: Option<Vec<String>>,
-            links: Option<JsValue>,
-            codeBlocks: Option<JsValue>,
-        ) -> WasmTextMetadata {
-        WasmTextMetadata { line_count: lineCount.unwrap_or_default(), word_count: wordCount.unwrap_or_default(), character_count: characterCount.unwrap_or_default(), headers: headers, links: links, code_blocks: codeBlocks }
+        lineCount: Option<u32>,
+        wordCount: Option<u32>,
+        characterCount: Option<u32>,
+        headers: Option<Vec<String>>,
+        links: Option<JsValue>,
+        codeBlocks: Option<JsValue>,
+    ) -> WasmTextMetadata {
+        WasmTextMetadata {
+            line_count: lineCount.unwrap_or_default(),
+            word_count: wordCount.unwrap_or_default(),
+            character_count: characterCount.unwrap_or_default(),
+            headers,
+            links,
+            code_blocks: codeBlocks,
+        }
     }
 
     #[wasm_bindgen]
@@ -8279,15 +9551,26 @@ impl WasmTextMetadata {
 /// Header/heading element metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmHeaderMetadata {    level: u8,    text: String,    id: Option<String>,    depth: u32,    html_offset: u32,}
-
+pub struct WasmHeaderMetadata {
+    level: u8,
+    text: String,
+    id: Option<String>,
+    depth: u32,
+    html_offset: u32,
+}
 
 #[wasm_bindgen]
 impl WasmHeaderMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(level: u8, text: String, depth: u32, htmlOffset: u32, id: Option<String>) -> WasmHeaderMetadata {
-        WasmHeaderMetadata { level: level, text: text, id: id, depth: depth, html_offset: htmlOffset }
+        WasmHeaderMetadata {
+            level,
+            text,
+            id,
+            depth,
+            html_offset: htmlOffset,
+        }
     }
 
     #[wasm_bindgen]
@@ -8350,22 +9633,35 @@ impl WasmHeaderMetadata {
 /// Link element metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmLinkMetadata {    href: String,    text: String,    title: Option<String>,    link_type: WasmLinkType,    rel: Vec<String>,    attributes: JsValue,}
-
+pub struct WasmLinkMetadata {
+    href: String,
+    text: String,
+    title: Option<String>,
+    link_type: WasmLinkType,
+    rel: Vec<String>,
+    attributes: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmLinkMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            href: String,
-            text: String,
-            linkType: WasmLinkType,
-            rel: Vec<String>,
-            attributes: JsValue,
-            title: Option<String>,
-        ) -> WasmLinkMetadata {
-        WasmLinkMetadata { href: href, text: text, title: title, link_type: linkType, rel: rel, attributes: attributes }
+        href: String,
+        text: String,
+        linkType: WasmLinkType,
+        rel: Vec<String>,
+        attributes: JsValue,
+        title: Option<String>,
+    ) -> WasmLinkMetadata {
+        WasmLinkMetadata {
+            href,
+            text,
+            title,
+            link_type: linkType,
+            rel,
+            attributes,
+        }
     }
 
     #[wasm_bindgen]
@@ -8438,22 +9734,35 @@ impl WasmLinkMetadata {
 /// Image element metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmImageMetadataType {    src: String,    alt: Option<String>,    title: Option<String>,    dimensions: Option<Vec<u32>>,    image_type: WasmImageType,    attributes: JsValue,}
-
+pub struct WasmImageMetadataType {
+    src: String,
+    alt: Option<String>,
+    title: Option<String>,
+    dimensions: Option<Vec<u32>>,
+    image_type: WasmImageType,
+    attributes: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmImageMetadataType {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            src: String,
-            imageType: WasmImageType,
-            attributes: JsValue,
-            alt: Option<String>,
-            title: Option<String>,
-            dimensions: Option<Vec<u32>>,
-        ) -> WasmImageMetadataType {
-        WasmImageMetadataType { src: src, alt: alt, title: title, dimensions: dimensions, image_type: imageType, attributes: attributes }
+        src: String,
+        imageType: WasmImageType,
+        attributes: JsValue,
+        alt: Option<String>,
+        title: Option<String>,
+        dimensions: Option<Vec<u32>>,
+    ) -> WasmImageMetadataType {
+        WasmImageMetadataType {
+            src,
+            alt,
+            title,
+            dimensions,
+            image_type: imageType,
+            attributes,
+        }
     }
 
     #[wasm_bindgen]
@@ -8526,15 +9835,22 @@ impl WasmImageMetadataType {
 /// Structured data (Schema.org, microdata, RDFa) block.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmStructuredData {    data_type: WasmStructuredDataType,    raw_json: String,    schema_type: Option<String>,}
-
+pub struct WasmStructuredData {
+    data_type: WasmStructuredDataType,
+    raw_json: String,
+    schema_type: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmStructuredData {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(dataType: WasmStructuredDataType, rawJson: String, schemaType: Option<String>) -> WasmStructuredData {
-        WasmStructuredData { data_type: dataType, raw_json: rawJson, schema_type: schemaType }
+        WasmStructuredData {
+            data_type: dataType,
+            raw_json: rawJson,
+            schema_type: schemaType,
+        }
     }
 
     #[wasm_bindgen]
@@ -8580,8 +9896,23 @@ impl WasmStructuredData {
 /// and extracted structural elements (headers, links, images, structured data).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmHtmlMetadata {    title: Option<String>,    description: Option<String>,    keywords: Vec<String>,    author: Option<String>,    canonical_url: Option<String>,    base_href: Option<String>,    language: Option<String>,    text_direction: Option<WasmTextDirection>,    open_graph: JsValue,    twitter_card: JsValue,    meta_tags: JsValue,    headers: Vec<WasmHeaderMetadata>,    links: Vec<WasmLinkMetadata>,    images: Vec<WasmImageMetadataType>,    structured_data: Vec<WasmStructuredData>,}
-
+pub struct WasmHtmlMetadata {
+    title: Option<String>,
+    description: Option<String>,
+    keywords: Vec<String>,
+    author: Option<String>,
+    canonical_url: Option<String>,
+    base_href: Option<String>,
+    language: Option<String>,
+    text_direction: Option<WasmTextDirection>,
+    open_graph: JsValue,
+    twitter_card: JsValue,
+    meta_tags: JsValue,
+    headers: Vec<WasmHeaderMetadata>,
+    links: Vec<WasmLinkMetadata>,
+    images: Vec<WasmImageMetadataType>,
+    structured_data: Vec<WasmStructuredData>,
+}
 
 #[wasm_bindgen]
 impl WasmHtmlMetadata {
@@ -8589,23 +9920,39 @@ impl WasmHtmlMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            keywords: Option<Vec<String>>,
-            openGraph: Option<JsValue>,
-            twitterCard: Option<JsValue>,
-            metaTags: Option<JsValue>,
-            headers: Option<Vec<WasmHeaderMetadata>>,
-            links: Option<Vec<WasmLinkMetadata>>,
-            images: Option<Vec<WasmImageMetadataType>>,
-            structuredData: Option<Vec<WasmStructuredData>>,
-            title: Option<String>,
-            description: Option<String>,
-            author: Option<String>,
-            canonicalUrl: Option<String>,
-            baseHref: Option<String>,
-            language: Option<String>,
-            textDirection: Option<WasmTextDirection>,
-        ) -> WasmHtmlMetadata {
-        WasmHtmlMetadata { title: title, description: description, keywords: keywords.unwrap_or_default(), author: author, canonical_url: canonicalUrl, base_href: baseHref, language: language, text_direction: textDirection, open_graph: openGraph.unwrap_or_default(), twitter_card: twitterCard.unwrap_or_default(), meta_tags: metaTags.unwrap_or_default(), headers: headers.unwrap_or_default(), links: links.unwrap_or_default(), images: images.unwrap_or_default(), structured_data: structuredData.unwrap_or_default() }
+        keywords: Option<Vec<String>>,
+        openGraph: Option<JsValue>,
+        twitterCard: Option<JsValue>,
+        metaTags: Option<JsValue>,
+        headers: Option<Vec<WasmHeaderMetadata>>,
+        links: Option<Vec<WasmLinkMetadata>>,
+        images: Option<Vec<WasmImageMetadataType>>,
+        structuredData: Option<Vec<WasmStructuredData>>,
+        title: Option<String>,
+        description: Option<String>,
+        author: Option<String>,
+        canonicalUrl: Option<String>,
+        baseHref: Option<String>,
+        language: Option<String>,
+        textDirection: Option<WasmTextDirection>,
+    ) -> WasmHtmlMetadata {
+        WasmHtmlMetadata {
+            title,
+            description,
+            keywords: keywords.unwrap_or_default(),
+            author,
+            canonical_url: canonicalUrl,
+            base_href: baseHref,
+            language,
+            text_direction: textDirection,
+            open_graph: openGraph.unwrap_or_default(),
+            twitter_card: twitterCard.unwrap_or_default(),
+            meta_tags: metaTags.unwrap_or_default(),
+            headers: headers.unwrap_or_default(),
+            links: links.unwrap_or_default(),
+            images: images.unwrap_or_default(),
+            structured_data: structuredData.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -8770,22 +10117,35 @@ impl WasmHtmlMetadata {
 /// Captures information about OCR processing configuration and results.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrMetadata {    language: String,    psm: i32,    output_format: String,    table_count: u32,    table_rows: Option<u32>,    table_cols: Option<u32>,}
-
+pub struct WasmOcrMetadata {
+    language: String,
+    psm: i32,
+    output_format: String,
+    table_count: u32,
+    table_rows: Option<u32>,
+    table_cols: Option<u32>,
+}
 
 #[wasm_bindgen]
 impl WasmOcrMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            language: Option<String>,
-            psm: Option<i32>,
-            outputFormat: Option<String>,
-            tableCount: Option<u32>,
-            tableRows: Option<u32>,
-            tableCols: Option<u32>,
-        ) -> WasmOcrMetadata {
-        WasmOcrMetadata { language: language.unwrap_or_default(), psm: psm.unwrap_or_default(), output_format: outputFormat.unwrap_or_default(), table_count: tableCount.unwrap_or_default(), table_rows: tableRows, table_cols: tableCols }
+        language: Option<String>,
+        psm: Option<i32>,
+        outputFormat: Option<String>,
+        tableCount: Option<u32>,
+        tableRows: Option<u32>,
+        tableCols: Option<u32>,
+    ) -> WasmOcrMetadata {
+        WasmOcrMetadata {
+            language: language.unwrap_or_default(),
+            psm: psm.unwrap_or_default(),
+            output_format: outputFormat.unwrap_or_default(),
+            table_count: tableCount.unwrap_or_default(),
+            table_rows: tableRows,
+            table_cols: tableCols,
+        }
     }
 
     #[wasm_bindgen]
@@ -8858,15 +10218,20 @@ impl WasmOcrMetadata {
 /// Error metadata (for batch operations).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmErrorMetadata {    error_type: String,    message: String,}
-
+pub struct WasmErrorMetadata {
+    error_type: String,
+    message: String,
+}
 
 #[wasm_bindgen]
 impl WasmErrorMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(errorType: String, message: String) -> WasmErrorMetadata {
-        WasmErrorMetadata { error_type: errorType, message: message }
+        WasmErrorMetadata {
+            error_type: errorType,
+            message,
+        }
     }
 
     #[wasm_bindgen]
@@ -8901,20 +10266,29 @@ impl WasmErrorMetadata {
 /// Extracted from PPTX files containing slide counts and presentation details.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPptxMetadata {    slide_count: u32,    slide_names: Vec<String>,    image_count: Option<u32>,    table_count: Option<u32>,}
-
+pub struct WasmPptxMetadata {
+    slide_count: u32,
+    slide_names: Vec<String>,
+    image_count: Option<u32>,
+    table_count: Option<u32>,
+}
 
 #[wasm_bindgen]
 impl WasmPptxMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            slideCount: Option<u32>,
-            slideNames: Option<Vec<String>>,
-            imageCount: Option<u32>,
-            tableCount: Option<u32>,
-        ) -> WasmPptxMetadata {
-        WasmPptxMetadata { slide_count: slideCount.unwrap_or_default(), slide_names: slideNames.unwrap_or_default(), image_count: imageCount, table_count: tableCount }
+        slideCount: Option<u32>,
+        slideNames: Option<Vec<String>>,
+        imageCount: Option<u32>,
+        tableCount: Option<u32>,
+    ) -> WasmPptxMetadata {
+        WasmPptxMetadata {
+            slide_count: slideCount.unwrap_or_default(),
+            slide_names: slideNames.unwrap_or_default(),
+            image_count: imageCount,
+            table_count: tableCount,
+        }
     }
 
     #[wasm_bindgen]
@@ -8967,21 +10341,32 @@ impl WasmPptxMetadata {
 /// CSV/TSV file metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmCsvMetadata {    row_count: u32,    column_count: u32,    delimiter: Option<String>,    has_header: bool,    column_types: Option<Vec<String>>,}
-
+pub struct WasmCsvMetadata {
+    row_count: u32,
+    column_count: u32,
+    delimiter: Option<String>,
+    has_header: bool,
+    column_types: Option<Vec<String>>,
+}
 
 #[wasm_bindgen]
 impl WasmCsvMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            rowCount: Option<u32>,
-            columnCount: Option<u32>,
-            hasHeader: Option<bool>,
-            delimiter: Option<String>,
-            columnTypes: Option<Vec<String>>,
-        ) -> WasmCsvMetadata {
-        WasmCsvMetadata { row_count: rowCount.unwrap_or_default(), column_count: columnCount.unwrap_or_default(), delimiter: delimiter, has_header: hasHeader.unwrap_or_default(), column_types: columnTypes }
+        rowCount: Option<u32>,
+        columnCount: Option<u32>,
+        hasHeader: Option<bool>,
+        delimiter: Option<String>,
+        columnTypes: Option<Vec<String>>,
+    ) -> WasmCsvMetadata {
+        WasmCsvMetadata {
+            row_count: rowCount.unwrap_or_default(),
+            column_count: columnCount.unwrap_or_default(),
+            delimiter,
+            has_header: hasHeader.unwrap_or_default(),
+            column_types: columnTypes,
+        }
     }
 
     #[wasm_bindgen]
@@ -9044,21 +10429,32 @@ impl WasmCsvMetadata {
 /// BibTeX bibliography metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmBibtexMetadata {    entry_count: usize,    citation_keys: Vec<String>,    authors: Vec<String>,    year_range: Option<WasmYearRange>,    entry_types: Option<JsValue>,}
-
+pub struct WasmBibtexMetadata {
+    entry_count: usize,
+    citation_keys: Vec<String>,
+    authors: Vec<String>,
+    year_range: Option<WasmYearRange>,
+    entry_types: Option<JsValue>,
+}
 
 #[wasm_bindgen]
 impl WasmBibtexMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            entryCount: Option<usize>,
-            citationKeys: Option<Vec<String>>,
-            authors: Option<Vec<String>>,
-            yearRange: Option<WasmYearRange>,
-            entryTypes: Option<JsValue>,
-        ) -> WasmBibtexMetadata {
-        WasmBibtexMetadata { entry_count: entryCount.unwrap_or_default(), citation_keys: citationKeys.unwrap_or_default(), authors: authors.unwrap_or_default(), year_range: yearRange, entry_types: entryTypes }
+        entryCount: Option<usize>,
+        citationKeys: Option<Vec<String>>,
+        authors: Option<Vec<String>>,
+        yearRange: Option<WasmYearRange>,
+        entryTypes: Option<JsValue>,
+    ) -> WasmBibtexMetadata {
+        WasmBibtexMetadata {
+            entry_count: entryCount.unwrap_or_default(),
+            citation_keys: citationKeys.unwrap_or_default(),
+            authors: authors.unwrap_or_default(),
+            year_range: yearRange,
+            entry_types: entryTypes,
+        }
     }
 
     #[wasm_bindgen]
@@ -9121,22 +10517,35 @@ impl WasmBibtexMetadata {
 /// Citation file metadata (RIS, PubMed, EndNote).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmCitationMetadata {    citation_count: usize,    format: Option<String>,    authors: Vec<String>,    year_range: Option<WasmYearRange>,    dois: Vec<String>,    keywords: Vec<String>,}
-
+pub struct WasmCitationMetadata {
+    citation_count: usize,
+    format: Option<String>,
+    authors: Vec<String>,
+    year_range: Option<WasmYearRange>,
+    dois: Vec<String>,
+    keywords: Vec<String>,
+}
 
 #[wasm_bindgen]
 impl WasmCitationMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            citationCount: Option<usize>,
-            authors: Option<Vec<String>>,
-            dois: Option<Vec<String>>,
-            keywords: Option<Vec<String>>,
-            format: Option<String>,
-            yearRange: Option<WasmYearRange>,
-        ) -> WasmCitationMetadata {
-        WasmCitationMetadata { citation_count: citationCount.unwrap_or_default(), format: format, authors: authors.unwrap_or_default(), year_range: yearRange, dois: dois.unwrap_or_default(), keywords: keywords.unwrap_or_default() }
+        citationCount: Option<usize>,
+        authors: Option<Vec<String>>,
+        dois: Option<Vec<String>>,
+        keywords: Option<Vec<String>>,
+        format: Option<String>,
+        yearRange: Option<WasmYearRange>,
+    ) -> WasmCitationMetadata {
+        WasmCitationMetadata {
+            citation_count: citationCount.unwrap_or_default(),
+            format,
+            authors: authors.unwrap_or_default(),
+            year_range: yearRange,
+            dois: dois.unwrap_or_default(),
+            keywords: keywords.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -9209,15 +10618,18 @@ impl WasmCitationMetadata {
 /// Year range for bibliographic metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmYearRange {    min: Option<u32>,    max: Option<u32>,    years: Vec<u32>,}
-
+pub struct WasmYearRange {
+    min: Option<u32>,
+    max: Option<u32>,
+    years: Vec<u32>,
+}
 
 #[wasm_bindgen]
 impl WasmYearRange {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(years: Vec<u32>, min: Option<u32>, max: Option<u32>) -> WasmYearRange {
-        WasmYearRange { min: min, max: max, years: years }
+        WasmYearRange { min, max, years }
     }
 
     #[wasm_bindgen]
@@ -9260,15 +10672,26 @@ impl WasmYearRange {
 /// FictionBook (FB2) metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmFictionBookMetadata {    genres: Vec<String>,    sequences: Vec<String>,    annotation: Option<String>,}
-
+pub struct WasmFictionBookMetadata {
+    genres: Vec<String>,
+    sequences: Vec<String>,
+    annotation: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmFictionBookMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(genres: Option<Vec<String>>, sequences: Option<Vec<String>>, annotation: Option<String>) -> WasmFictionBookMetadata {
-        WasmFictionBookMetadata { genres: genres.unwrap_or_default(), sequences: sequences.unwrap_or_default(), annotation: annotation }
+    pub fn new(
+        genres: Option<Vec<String>>,
+        sequences: Option<Vec<String>>,
+        annotation: Option<String>,
+    ) -> WasmFictionBookMetadata {
+        WasmFictionBookMetadata {
+            genres: genres.unwrap_or_default(),
+            sequences: sequences.unwrap_or_default(),
+            annotation,
+        }
     }
 
     #[wasm_bindgen]
@@ -9311,15 +10734,26 @@ impl WasmFictionBookMetadata {
 /// dBASE (DBF) file metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDbfMetadata {    record_count: usize,    field_count: usize,    fields: Vec<WasmDbfFieldInfo>,}
-
+pub struct WasmDbfMetadata {
+    record_count: usize,
+    field_count: usize,
+    fields: Vec<WasmDbfFieldInfo>,
+}
 
 #[wasm_bindgen]
 impl WasmDbfMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(recordCount: Option<usize>, fieldCount: Option<usize>, fields: Option<Vec<WasmDbfFieldInfo>>) -> WasmDbfMetadata {
-        WasmDbfMetadata { record_count: recordCount.unwrap_or_default(), field_count: fieldCount.unwrap_or_default(), fields: fields.unwrap_or_default() }
+    pub fn new(
+        recordCount: Option<usize>,
+        fieldCount: Option<usize>,
+        fields: Option<Vec<WasmDbfFieldInfo>>,
+    ) -> WasmDbfMetadata {
+        WasmDbfMetadata {
+            record_count: recordCount.unwrap_or_default(),
+            field_count: fieldCount.unwrap_or_default(),
+            fields: fields.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -9362,15 +10796,20 @@ impl WasmDbfMetadata {
 /// dBASE field information.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDbfFieldInfo {    name: String,    field_type: String,}
-
+pub struct WasmDbfFieldInfo {
+    name: String,
+    field_type: String,
+}
 
 #[wasm_bindgen]
 impl WasmDbfFieldInfo {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(name: String, fieldType: String) -> WasmDbfFieldInfo {
-        WasmDbfFieldInfo { name: name, field_type: fieldType }
+        WasmDbfFieldInfo {
+            name,
+            field_type: fieldType,
+        }
     }
 
     #[wasm_bindgen]
@@ -9403,20 +10842,29 @@ impl WasmDbfFieldInfo {
 /// JATS (Journal Article Tag Suite) metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmJatsMetadata {    copyright: Option<String>,    license: Option<String>,    history_dates: JsValue,    contributor_roles: Vec<WasmContributorRole>,}
-
+pub struct WasmJatsMetadata {
+    copyright: Option<String>,
+    license: Option<String>,
+    history_dates: JsValue,
+    contributor_roles: Vec<WasmContributorRole>,
+}
 
 #[wasm_bindgen]
 impl WasmJatsMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            historyDates: Option<JsValue>,
-            contributorRoles: Option<Vec<WasmContributorRole>>,
-            copyright: Option<String>,
-            license: Option<String>,
-        ) -> WasmJatsMetadata {
-        WasmJatsMetadata { copyright: copyright, license: license, history_dates: historyDates.unwrap_or_default(), contributor_roles: contributorRoles.unwrap_or_default() }
+        historyDates: Option<JsValue>,
+        contributorRoles: Option<Vec<WasmContributorRole>>,
+        copyright: Option<String>,
+        license: Option<String>,
+    ) -> WasmJatsMetadata {
+        WasmJatsMetadata {
+            copyright,
+            license,
+            history_dates: historyDates.unwrap_or_default(),
+            contributor_roles: contributorRoles.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -9469,15 +10917,17 @@ impl WasmJatsMetadata {
 /// JATS contributor with role.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmContributorRole {    name: String,    role: Option<String>,}
-
+pub struct WasmContributorRole {
+    name: String,
+    role: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmContributorRole {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(name: String, role: Option<String>) -> WasmContributorRole {
-        WasmContributorRole { name: name, role: role }
+        WasmContributorRole { name, role }
     }
 
     #[wasm_bindgen]
@@ -9510,22 +10960,35 @@ impl WasmContributorRole {
 /// EPUB metadata (Dublin Core extensions).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmEpubMetadata {    coverage: Option<String>,    dc_format: Option<String>,    relation: Option<String>,    source: Option<String>,    dc_type: Option<String>,    cover_image: Option<String>,}
-
+pub struct WasmEpubMetadata {
+    coverage: Option<String>,
+    dc_format: Option<String>,
+    relation: Option<String>,
+    source: Option<String>,
+    dc_type: Option<String>,
+    cover_image: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmEpubMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            coverage: Option<String>,
-            dcFormat: Option<String>,
-            relation: Option<String>,
-            source: Option<String>,
-            dcType: Option<String>,
-            coverImage: Option<String>,
-        ) -> WasmEpubMetadata {
-        WasmEpubMetadata { coverage: coverage, dc_format: dcFormat, relation: relation, source: source, dc_type: dcType, cover_image: coverImage }
+        coverage: Option<String>,
+        dcFormat: Option<String>,
+        relation: Option<String>,
+        source: Option<String>,
+        dcType: Option<String>,
+        coverImage: Option<String>,
+    ) -> WasmEpubMetadata {
+        WasmEpubMetadata {
+            coverage,
+            dc_format: dcFormat,
+            relation,
+            source,
+            dc_type: dcType,
+            cover_image: coverImage,
+        }
     }
 
     #[wasm_bindgen]
@@ -9598,15 +11061,18 @@ impl WasmEpubMetadata {
 /// Outlook PST archive metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPstMetadata {    message_count: usize,}
-
+pub struct WasmPstMetadata {
+    message_count: usize,
+}
 
 #[wasm_bindgen]
 impl WasmPstMetadata {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(messageCount: Option<usize>) -> WasmPstMetadata {
-        WasmPstMetadata { message_count: messageCount.unwrap_or_default() }
+        WasmPstMetadata {
+            message_count: messageCount.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -9632,15 +11098,20 @@ impl WasmPstMetadata {
 /// from recognition confidence (how confident about the actual text content).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrConfidence {    detection: Option<f64>,    recognition: f64,}
-
+pub struct WasmOcrConfidence {
+    detection: Option<f64>,
+    recognition: f64,
+}
 
 #[wasm_bindgen]
 impl WasmOcrConfidence {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(recognition: Option<f64>, detection: Option<f64>) -> WasmOcrConfidence {
-        WasmOcrConfidence { detection: detection, recognition: recognition.unwrap_or_default() }
+        WasmOcrConfidence {
+            detection,
+            recognition: recognition.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -9673,15 +11144,20 @@ impl WasmOcrConfidence {
 /// Rotation information for an OCR element.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrRotation {    angle_degrees: f64,    confidence: Option<f64>,}
-
+pub struct WasmOcrRotation {
+    angle_degrees: f64,
+    confidence: Option<f64>,
+}
 
 #[wasm_bindgen]
 impl WasmOcrRotation {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(angleDegrees: f64, confidence: Option<f64>) -> WasmOcrRotation {
-        WasmOcrRotation { angle_degrees: angleDegrees, confidence: confidence }
+        WasmOcrRotation {
+            angle_degrees: angleDegrees,
+            confidence,
+        }
     }
 
     #[wasm_bindgen]
@@ -9717,8 +11193,16 @@ impl WasmOcrRotation {
 /// from both Tesseract and PaddleOCR backends.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrElement {    text: String,    geometry: JsValue,    confidence: WasmOcrConfidence,    level: WasmOcrElementLevel,    rotation: Option<WasmOcrRotation>,    page_number: u32,    parent_id: Option<String>,    backend_metadata: JsValue,}
-
+pub struct WasmOcrElement {
+    text: String,
+    geometry: JsValue,
+    confidence: WasmOcrConfidence,
+    level: WasmOcrElementLevel,
+    rotation: Option<WasmOcrRotation>,
+    page_number: u32,
+    parent_id: Option<String>,
+    backend_metadata: JsValue,
+}
 
 #[wasm_bindgen]
 impl WasmOcrElement {
@@ -9726,16 +11210,25 @@ impl WasmOcrElement {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            text: Option<String>,
-            geometry: Option<JsValue>,
-            confidence: Option<WasmOcrConfidence>,
-            level: Option<WasmOcrElementLevel>,
-            pageNumber: Option<u32>,
-            backendMetadata: Option<JsValue>,
-            rotation: Option<WasmOcrRotation>,
-            parentId: Option<String>,
-        ) -> WasmOcrElement {
-        WasmOcrElement { text: text.unwrap_or_default(), geometry: geometry.unwrap_or_default(), confidence: confidence.unwrap_or_default(), level: level.unwrap_or_default(), rotation: rotation, page_number: pageNumber.unwrap_or_default(), parent_id: parentId, backend_metadata: backendMetadata.unwrap_or_default() }
+        text: Option<String>,
+        geometry: Option<JsValue>,
+        confidence: Option<WasmOcrConfidence>,
+        level: Option<WasmOcrElementLevel>,
+        pageNumber: Option<u32>,
+        backendMetadata: Option<JsValue>,
+        rotation: Option<WasmOcrRotation>,
+        parentId: Option<String>,
+    ) -> WasmOcrElement {
+        WasmOcrElement {
+            text: text.unwrap_or_default(),
+            geometry: geometry.unwrap_or_default(),
+            confidence: confidence.unwrap_or_default(),
+            level: level.unwrap_or_default(),
+            rotation,
+            page_number: pageNumber.unwrap_or_default(),
+            parent_id: parentId,
+            backend_metadata: backendMetadata.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -9830,20 +11323,29 @@ impl WasmOcrElement {
 /// Controls how OCR elements are extracted and filtered.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmOcrElementConfig {    include_elements: bool,    min_level: WasmOcrElementLevel,    min_confidence: f64,    build_hierarchy: bool,}
-
+pub struct WasmOcrElementConfig {
+    include_elements: bool,
+    min_level: WasmOcrElementLevel,
+    min_confidence: f64,
+    build_hierarchy: bool,
+}
 
 #[wasm_bindgen]
 impl WasmOcrElementConfig {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            includeElements: Option<bool>,
-            minLevel: Option<WasmOcrElementLevel>,
-            minConfidence: Option<f64>,
-            buildHierarchy: Option<bool>,
-        ) -> WasmOcrElementConfig {
-        WasmOcrElementConfig { include_elements: includeElements.unwrap_or_default(), min_level: minLevel.unwrap_or_default(), min_confidence: minConfidence.unwrap_or_default(), build_hierarchy: buildHierarchy.unwrap_or_default() }
+        includeElements: Option<bool>,
+        minLevel: Option<WasmOcrElementLevel>,
+        minConfidence: Option<f64>,
+        buildHierarchy: Option<bool>,
+    ) -> WasmOcrElementConfig {
+        WasmOcrElementConfig {
+            include_elements: includeElements.unwrap_or_default(),
+            min_level: minLevel.unwrap_or_default(),
+            min_confidence: minConfidence.unwrap_or_default(),
+            build_hierarchy: buildHierarchy.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -9899,20 +11401,29 @@ impl WasmOcrElementConfig {
 /// with character offset boundaries for chunk-to-page mapping.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageStructure {    total_count: u32,    unit_type: WasmPageUnitType,    boundaries: Option<Vec<WasmPageBoundary>>,    pages: Option<Vec<WasmPageInfo>>,}
-
+pub struct WasmPageStructure {
+    total_count: u32,
+    unit_type: WasmPageUnitType,
+    boundaries: Option<Vec<WasmPageBoundary>>,
+    pages: Option<Vec<WasmPageInfo>>,
+}
 
 #[wasm_bindgen]
 impl WasmPageStructure {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            totalCount: u32,
-            unitType: WasmPageUnitType,
-            boundaries: Option<Vec<WasmPageBoundary>>,
-            pages: Option<Vec<WasmPageInfo>>,
-        ) -> WasmPageStructure {
-        WasmPageStructure { total_count: totalCount, unit_type: unitType, boundaries: boundaries, pages: pages }
+        totalCount: u32,
+        unitType: WasmPageUnitType,
+        boundaries: Option<Vec<WasmPageBoundary>>,
+        pages: Option<Vec<WasmPageInfo>>,
+    ) -> WasmPageStructure {
+        WasmPageStructure {
+            total_count: totalCount,
+            unit_type: unitType,
+            boundaries,
+            pages,
+        }
     }
 
     #[wasm_bindgen]
@@ -9981,15 +11492,22 @@ impl WasmPageStructure {
 /// at valid UTF-8 character boundaries when using standard String methods (push_str, push, etc.).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageBoundary {    byte_start: usize,    byte_end: usize,    page_number: u32,}
-
+pub struct WasmPageBoundary {
+    byte_start: usize,
+    byte_end: usize,
+    page_number: u32,
+}
 
 #[wasm_bindgen]
 impl WasmPageBoundary {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(byteStart: usize, byteEnd: usize, pageNumber: u32) -> WasmPageBoundary {
-        WasmPageBoundary { byte_start: byteStart, byte_end: byteEnd, page_number: pageNumber }
+        WasmPageBoundary {
+            byte_start: byteStart,
+            byte_end: byteEnd,
+            page_number: pageNumber,
+        }
     }
 
     #[wasm_bindgen]
@@ -10035,8 +11553,16 @@ impl WasmPageBoundary {
 /// and visibility state (for presentations).
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageInfo {    number: u32,    title: Option<String>,    dimensions: Option<Vec<f64>>,    image_count: Option<u32>,    table_count: Option<u32>,    hidden: Option<bool>,    is_blank: Option<bool>,    has_vector_graphics: bool,}
-
+pub struct WasmPageInfo {
+    number: u32,
+    title: Option<String>,
+    dimensions: Option<Vec<f64>>,
+    image_count: Option<u32>,
+    table_count: Option<u32>,
+    hidden: Option<bool>,
+    is_blank: Option<bool>,
+    has_vector_graphics: bool,
+}
 
 #[wasm_bindgen]
 impl WasmPageInfo {
@@ -10044,16 +11570,25 @@ impl WasmPageInfo {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            number: u32,
-            hasVectorGraphics: bool,
-            title: Option<String>,
-            dimensions: Option<Vec<f64>>,
-            imageCount: Option<u32>,
-            tableCount: Option<u32>,
-            hidden: Option<bool>,
-            isBlank: Option<bool>,
-        ) -> WasmPageInfo {
-        WasmPageInfo { number: number, title: title, dimensions: dimensions, image_count: imageCount, table_count: tableCount, hidden: hidden, is_blank: isBlank, has_vector_graphics: hasVectorGraphics }
+        number: u32,
+        hasVectorGraphics: bool,
+        title: Option<String>,
+        dimensions: Option<Vec<f64>>,
+        imageCount: Option<u32>,
+        tableCount: Option<u32>,
+        hidden: Option<bool>,
+        isBlank: Option<bool>,
+    ) -> WasmPageInfo {
+        WasmPageInfo {
+            number,
+            title,
+            dimensions,
+            image_count: imageCount,
+            table_count: tableCount,
+            hidden,
+            is_blank: isBlank,
+            has_vector_graphics: hasVectorGraphics,
+        }
     }
 
     #[wasm_bindgen]
@@ -10159,8 +11694,18 @@ impl WasmPageInfo {
 /// by avoiding redundant copies during serialization.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageContent {    page_number: u32,    content: String,    tables: Vec<WasmTable>,    image_indices: Vec<u32>,    hierarchy: Option<WasmPageHierarchy>,    is_blank: Option<bool>,    layout_regions: Option<Vec<WasmLayoutRegion>>,    speaker_notes: Option<String>,    section_name: Option<String>,    sheet_name: Option<String>,}
-
+pub struct WasmPageContent {
+    page_number: u32,
+    content: String,
+    tables: Vec<WasmTable>,
+    image_indices: Vec<u32>,
+    hierarchy: Option<WasmPageHierarchy>,
+    is_blank: Option<bool>,
+    layout_regions: Option<Vec<WasmLayoutRegion>>,
+    speaker_notes: Option<String>,
+    section_name: Option<String>,
+    sheet_name: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmPageContent {
@@ -10168,18 +11713,29 @@ impl WasmPageContent {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            pageNumber: u32,
-            content: String,
-            tables: Vec<WasmTable>,
-            imageIndices: Vec<u32>,
-            hierarchy: Option<WasmPageHierarchy>,
-            isBlank: Option<bool>,
-            layoutRegions: Option<Vec<WasmLayoutRegion>>,
-            speakerNotes: Option<String>,
-            sectionName: Option<String>,
-            sheetName: Option<String>,
-        ) -> WasmPageContent {
-        WasmPageContent { page_number: pageNumber, content: content, tables: tables, image_indices: imageIndices, hierarchy: hierarchy, is_blank: isBlank, layout_regions: layoutRegions, speaker_notes: speakerNotes, section_name: sectionName, sheet_name: sheetName }
+        pageNumber: u32,
+        content: String,
+        tables: Vec<WasmTable>,
+        imageIndices: Vec<u32>,
+        hierarchy: Option<WasmPageHierarchy>,
+        isBlank: Option<bool>,
+        layoutRegions: Option<Vec<WasmLayoutRegion>>,
+        speakerNotes: Option<String>,
+        sectionName: Option<String>,
+        sheetName: Option<String>,
+    ) -> WasmPageContent {
+        WasmPageContent {
+            page_number: pageNumber,
+            content,
+            tables,
+            image_indices: imageIndices,
+            hierarchy,
+            is_blank: isBlank,
+            layout_regions: layoutRegions,
+            speaker_notes: speakerNotes,
+            section_name: sectionName,
+            sheet_name: sheetName,
+        }
     }
 
     #[wasm_bindgen]
@@ -10302,20 +11858,29 @@ impl WasmPageContent {
 /// with confidence scores and spatial positions.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmLayoutRegion {    class_name: String,    confidence: f64,    bounding_box: WasmBoundingBox,    area_fraction: f64,}
-
+pub struct WasmLayoutRegion {
+    class_name: String,
+    confidence: f64,
+    bounding_box: WasmBoundingBox,
+    area_fraction: f64,
+}
 
 #[wasm_bindgen]
 impl WasmLayoutRegion {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            className: Option<String>,
-            confidence: Option<f64>,
-            boundingBox: Option<WasmBoundingBox>,
-            areaFraction: Option<f64>,
-        ) -> WasmLayoutRegion {
-        WasmLayoutRegion { class_name: className.unwrap_or_default(), confidence: confidence.unwrap_or_default(), bounding_box: boundingBox.unwrap_or_default(), area_fraction: areaFraction.unwrap_or_default() }
+        className: Option<String>,
+        confidence: Option<f64>,
+        boundingBox: Option<WasmBoundingBox>,
+        areaFraction: Option<f64>,
+    ) -> WasmLayoutRegion {
+        WasmLayoutRegion {
+            class_name: className.unwrap_or_default(),
+            confidence: confidence.unwrap_or_default(),
+            bounding_box: boundingBox.unwrap_or_default(),
+            area_fraction: areaFraction.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -10371,15 +11936,20 @@ impl WasmLayoutRegion {
 /// blocks with heading levels (H1-H6) for semantic document structure.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmPageHierarchy {    block_count: u32,    blocks: Vec<WasmHierarchicalBlock>,}
-
+pub struct WasmPageHierarchy {
+    block_count: u32,
+    blocks: Vec<WasmHierarchicalBlock>,
+}
 
 #[wasm_bindgen]
 impl WasmPageHierarchy {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(blockCount: u32, blocks: Vec<WasmHierarchicalBlock>) -> WasmPageHierarchy {
-        WasmPageHierarchy { block_count: blockCount, blocks: blocks }
+        WasmPageHierarchy {
+            block_count: blockCount,
+            blocks,
+        }
     }
 
     #[wasm_bindgen]
@@ -10415,15 +11985,24 @@ impl WasmPageHierarchy {
 /// font size clustering and hierarchical analysis.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmHierarchicalBlock {    text: String,    font_size: f32,    level: String,    bbox: Option<Vec<f32>>,}
-
+pub struct WasmHierarchicalBlock {
+    text: String,
+    font_size: f32,
+    level: String,
+    bbox: Option<Vec<f32>>,
+}
 
 #[wasm_bindgen]
 impl WasmHierarchicalBlock {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(text: String, fontSize: f32, level: String, bbox: Option<Vec<f32>>) -> WasmHierarchicalBlock {
-        WasmHierarchicalBlock { text: text, font_size: fontSize, level: level, bbox: bbox }
+        WasmHierarchicalBlock {
+            text,
+            font_size: fontSize,
+            level,
+            bbox,
+        }
     }
 
     #[wasm_bindgen]
@@ -10476,15 +12055,22 @@ impl WasmHierarchicalBlock {
 /// One QR code decoded from an extracted image.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmQrCode {    payload: String,    confidence: Option<f32>,    bbox: Option<WasmQrBoundingBox>,}
-
+pub struct WasmQrCode {
+    payload: String,
+    confidence: Option<f32>,
+    bbox: Option<WasmQrBoundingBox>,
+}
 
 #[wasm_bindgen]
 impl WasmQrCode {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(payload: String, confidence: Option<f32>, bbox: Option<WasmQrBoundingBox>) -> WasmQrCode {
-        WasmQrCode { payload: payload, confidence: confidence, bbox: bbox }
+        WasmQrCode {
+            payload,
+            confidence,
+            bbox,
+        }
     }
 
     #[wasm_bindgen]
@@ -10527,15 +12113,19 @@ impl WasmQrCode {
 /// Pixel-space bounding box of a QR code inside its source image.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmQrBoundingBox {    x: u32,    y: u32,    width: u32,    height: u32,}
-
+pub struct WasmQrBoundingBox {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
 
 #[wasm_bindgen]
 impl WasmQrBoundingBox {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(x: u32, y: u32, width: u32, height: u32) -> WasmQrBoundingBox {
-        WasmQrBoundingBox { x: x, y: y, width: width, height: height }
+        WasmQrBoundingBox { x, y, width, height }
     }
 
     #[wasm_bindgen]
@@ -10593,15 +12183,20 @@ impl WasmQrBoundingBox {
 /// bytes are dropped at the end of the pipeline.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmRedactionReport {    findings: Vec<WasmRedactionFinding>,    total_redacted: u32,}
-
+pub struct WasmRedactionReport {
+    findings: Vec<WasmRedactionFinding>,
+    total_redacted: u32,
+}
 
 #[wasm_bindgen]
 impl WasmRedactionReport {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(findings: Vec<WasmRedactionFinding>, totalRedacted: u32) -> WasmRedactionReport {
-        WasmRedactionReport { findings: findings, total_redacted: totalRedacted }
+        WasmRedactionReport {
+            findings,
+            total_redacted: totalRedacted,
+        }
     }
 
     #[wasm_bindgen]
@@ -10634,21 +12229,32 @@ impl WasmRedactionReport {
 /// One redaction event: which span was rewritten, why, and with what.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmRedactionFinding {    start: u32,    end: u32,    category: WasmPiiCategory,    strategy: WasmRedactionStrategy,    replacement_token: String,}
-
+pub struct WasmRedactionFinding {
+    start: u32,
+    end: u32,
+    category: WasmPiiCategory,
+    strategy: WasmRedactionStrategy,
+    replacement_token: String,
+}
 
 #[wasm_bindgen]
 impl WasmRedactionFinding {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            start: u32,
-            end: u32,
-            category: WasmPiiCategory,
-            strategy: WasmRedactionStrategy,
-            replacementToken: String,
-        ) -> WasmRedactionFinding {
-        WasmRedactionFinding { start: start, end: end, category: category, strategy: strategy, replacement_token: replacementToken }
+        start: u32,
+        end: u32,
+        category: WasmPiiCategory,
+        strategy: WasmRedactionStrategy,
+        replacementToken: String,
+    ) -> WasmRedactionFinding {
+        WasmRedactionFinding {
+            start,
+            end,
+            category,
+            strategy,
+            replacement_token: replacementToken,
+        }
     }
 
     #[wasm_bindgen]
@@ -10715,15 +12321,19 @@ impl WasmRedactionFinding {
 /// `crate.diff` re-exports this type verbatim.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmCellChange {    row: usize,    col: usize,    from: String,    to: String,}
-
+pub struct WasmCellChange {
+    row: usize,
+    col: usize,
+    from: String,
+    to: String,
+}
 
 #[wasm_bindgen]
 impl WasmCellChange {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(row: usize, col: usize, from: String, to: String) -> WasmCellChange {
-        WasmCellChange { row: row, col: col, from: from, to: to }
+        WasmCellChange { row, col, from, to }
     }
 
     #[wasm_bindgen]
@@ -10781,22 +12391,35 @@ impl WasmCellChange {
 /// format-specific implementation is added.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDocumentRevision {    revision_id: String,    author: Option<String>,    timestamp: Option<String>,    kind: WasmRevisionKind,    anchor: Option<JsValue>,    delta: WasmRevisionDelta,}
-
+pub struct WasmDocumentRevision {
+    revision_id: String,
+    author: Option<String>,
+    timestamp: Option<String>,
+    kind: WasmRevisionKind,
+    anchor: Option<JsValue>,
+    delta: WasmRevisionDelta,
+}
 
 #[wasm_bindgen]
 impl WasmDocumentRevision {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            revisionId: String,
-            kind: WasmRevisionKind,
-            delta: WasmRevisionDelta,
-            author: Option<String>,
-            timestamp: Option<String>,
-            anchor: Option<JsValue>,
-        ) -> WasmDocumentRevision {
-        WasmDocumentRevision { revision_id: revisionId, author: author, timestamp: timestamp, kind: kind, anchor: anchor, delta: delta }
+        revisionId: String,
+        kind: WasmRevisionKind,
+        delta: WasmRevisionDelta,
+        author: Option<String>,
+        timestamp: Option<String>,
+        anchor: Option<JsValue>,
+    ) -> WasmDocumentRevision {
+        WasmDocumentRevision {
+            revision_id: revisionId,
+            author,
+            timestamp,
+            kind,
+            anchor,
+            delta,
+        }
     }
 
     #[wasm_bindgen]
@@ -10874,15 +12497,20 @@ impl WasmDocumentRevision {
 /// later enrichment pass.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmRevisionDelta {    content: JsValue,    table_changes: Vec<WasmCellChange>,}
-
+pub struct WasmRevisionDelta {
+    content: JsValue,
+    table_changes: Vec<WasmCellChange>,
+}
 
 #[wasm_bindgen]
 impl WasmRevisionDelta {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(content: Option<JsValue>, tableChanges: Option<Vec<WasmCellChange>>) -> WasmRevisionDelta {
-        WasmRevisionDelta { content: content.unwrap_or_default(), table_changes: tableChanges.unwrap_or_default() }
+        WasmRevisionDelta {
+            content: content.unwrap_or_default(),
+            table_changes: tableChanges.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -10915,15 +12543,22 @@ impl WasmRevisionDelta {
 /// Summary of an extracted document.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmDocumentSummary {    text: String,    strategy: WasmSummaryStrategy,    token_count: Option<u32>,}
-
+pub struct WasmDocumentSummary {
+    text: String,
+    strategy: WasmSummaryStrategy,
+    token_count: Option<u32>,
+}
 
 #[wasm_bindgen]
 impl WasmDocumentSummary {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(text: String, strategy: WasmSummaryStrategy, tokenCount: Option<u32>) -> WasmDocumentSummary {
-        WasmDocumentSummary { text: text, strategy: strategy, token_count: tokenCount }
+        WasmDocumentSummary {
+            text,
+            strategy,
+            token_count: tokenCount,
+        }
     }
 
     #[wasm_bindgen]
@@ -10969,20 +12604,29 @@ impl WasmDocumentSummary {
 /// Tables are converted to both structured cell data and Markdown format.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTable {    cells: JsValue,    markdown: String,    page_number: u32,    bounding_box: Option<WasmBoundingBox>,}
-
+pub struct WasmTable {
+    cells: JsValue,
+    markdown: String,
+    page_number: u32,
+    bounding_box: Option<WasmBoundingBox>,
+}
 
 #[wasm_bindgen]
 impl WasmTable {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(
-            cells: Option<JsValue>,
-            markdown: Option<String>,
-            pageNumber: Option<u32>,
-            boundingBox: Option<WasmBoundingBox>,
-        ) -> WasmTable {
-        WasmTable { cells: cells.unwrap_or_default(), markdown: markdown.unwrap_or_default(), page_number: pageNumber.unwrap_or_default(), bounding_box: boundingBox }
+        cells: Option<JsValue>,
+        markdown: Option<String>,
+        pageNumber: Option<u32>,
+        boundingBox: Option<WasmBoundingBox>,
+    ) -> WasmTable {
+        WasmTable {
+            cells: cells.unwrap_or_default(),
+            markdown: markdown.unwrap_or_default(),
+            page_number: pageNumber.unwrap_or_default(),
+            bounding_box: boundingBox,
+        }
     }
 
     #[wasm_bindgen]
@@ -11037,15 +12681,29 @@ impl WasmTable {
 /// Future extension point for rich table support with cell-level metadata.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTableCell {    content: String,    row_span: u32,    col_span: u32,    is_header: bool,}
-
+pub struct WasmTableCell {
+    content: String,
+    row_span: u32,
+    col_span: u32,
+    is_header: bool,
+}
 
 #[wasm_bindgen]
 impl WasmTableCell {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(content: Option<String>, rowSpan: Option<u32>, colSpan: Option<u32>, isHeader: Option<bool>) -> WasmTableCell {
-        WasmTableCell { content: content.unwrap_or_default(), row_span: rowSpan.unwrap_or_default(), col_span: colSpan.unwrap_or_default(), is_header: isHeader.unwrap_or_default() }
+    pub fn new(
+        content: Option<String>,
+        rowSpan: Option<u32>,
+        colSpan: Option<u32>,
+        isHeader: Option<bool>,
+    ) -> WasmTableCell {
+        WasmTableCell {
+            content: content.unwrap_or_default(),
+            row_span: rowSpan.unwrap_or_default(),
+            col_span: colSpan.unwrap_or_default(),
+            is_header: isHeader.unwrap_or_default(),
+        }
     }
 
     #[wasm_bindgen]
@@ -11103,15 +12761,29 @@ impl WasmTableCell {
 /// than duplicated here.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmTranslation {    target_lang: String,    source_lang: Option<String>,    content: String,    formatted_content: Option<String>,}
-
+pub struct WasmTranslation {
+    target_lang: String,
+    source_lang: Option<String>,
+    content: String,
+    formatted_content: Option<String>,
+}
 
 #[wasm_bindgen]
 impl WasmTranslation {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
-    pub fn new(targetLang: String, content: String, sourceLang: Option<String>, formattedContent: Option<String>) -> WasmTranslation {
-        WasmTranslation { target_lang: targetLang, source_lang: sourceLang, content: content, formatted_content: formattedContent }
+    pub fn new(
+        targetLang: String,
+        content: String,
+        sourceLang: Option<String>,
+        formattedContent: Option<String>,
+    ) -> WasmTranslation {
+        WasmTranslation {
+            target_lang: targetLang,
+            source_lang: sourceLang,
+            content,
+            formatted_content: formattedContent,
+        }
     }
 
     #[wasm_bindgen]
@@ -11168,15 +12840,19 @@ impl WasmTranslation {
 /// optional human-readable display text.
 #[derive(Clone, Default)]
 #[wasm_bindgen]
-pub struct WasmExtractedUri {    url: String,    label: Option<String>,    page: Option<u32>,    kind: WasmUriKind,}
-
+pub struct WasmExtractedUri {
+    url: String,
+    label: Option<String>,
+    page: Option<u32>,
+    kind: WasmUriKind,
+}
 
 #[wasm_bindgen]
 impl WasmExtractedUri {
     #[allow(non_snake_case)]
     #[wasm_bindgen(constructor)]
     pub fn new(url: String, kind: WasmUriKind, label: Option<String>, page: Option<u32>) -> WasmExtractedUri {
-        WasmExtractedUri { url: url, label: label, page: page, kind: kind }
+        WasmExtractedUri { url, label, page, kind }
     }
 
     #[wasm_bindgen]
@@ -11243,7 +12919,9 @@ pub enum WasmExecutionProviderType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmExecutionProviderType {
-    fn default() -> Self { Self::Auto }
+    fn default() -> Self {
+        Self::Auto
+    }
 }
 
 impl WasmExecutionProviderType {
@@ -11293,7 +12971,9 @@ pub enum WasmOutputFormat {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmOutputFormat {
-    fn default() -> Self { Self::Plain }
+    fn default() -> Self {
+        Self::Plain
+    }
 }
 
 impl WasmOutputFormat {
@@ -11336,7 +13016,9 @@ pub enum WasmNerBackendKind {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmNerBackendKind {
-    fn default() -> Self { Self::Onnx }
+    fn default() -> Self {
+        Self::Onnx
+    }
 }
 
 impl WasmNerBackendKind {
@@ -11392,21 +13074,33 @@ pub struct WasmVlmFallbackPolicy {
 #[wasm_bindgen]
 impl WasmVlmFallbackPolicy {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmVlmFallbackPolicy { Self::default() }
+    pub fn new() -> WasmVlmFallbackPolicy {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmVlmFallbackPolicy { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmVlmFallbackPolicy {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "mode")]
-    pub fn mode(&self) -> String { self.mode.clone() }
+    pub fn mode(&self) -> String {
+        self.mode.clone()
+    }
     #[wasm_bindgen(setter, js_name = "mode")]
-    pub fn set_mode(&mut self, value: String) { self.mode = value; }
+    pub fn set_mode(&mut self, value: String) {
+        self.mode = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "qualityThreshold")]
-    pub fn quality_threshold(&self) -> Option<f64> { self.quality_threshold.clone() }
+    pub fn quality_threshold(&self) -> Option<f64> {
+        self.quality_threshold.clone()
+    }
     #[wasm_bindgen(setter, js_name = "qualityThreshold")]
-    pub fn set_quality_threshold(&mut self, value: Option<f64>) { self.quality_threshold = value; }
+    pub fn set_quality_threshold(&mut self, value: Option<f64>) {
+        self.quality_threshold = value;
+    }
 }
 
 /// Type of text chunker to use.
@@ -11435,7 +13129,9 @@ pub enum WasmChunkerType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmChunkerType {
-    fn default() -> Self { Self::Text }
+    fn default() -> Self {
+        Self::Text
+    }
 }
 
 impl WasmChunkerType {
@@ -11481,26 +13177,42 @@ pub struct WasmChunkSizing {
 #[wasm_bindgen]
 impl WasmChunkSizing {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmChunkSizing { Self::default() }
+    pub fn new() -> WasmChunkSizing {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmChunkSizing { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmChunkSizing {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn r#type(&self) -> String { self.r#type.clone() }
+    pub fn r#type(&self) -> String {
+        self.r#type.clone()
+    }
     #[wasm_bindgen(setter, js_name = "type")]
-    pub fn set_type(&mut self, value: String) { self.r#type = value; }
+    pub fn set_type(&mut self, value: String) {
+        self.r#type = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "model")]
-    pub fn model(&self) -> Option<String> { self.model.clone() }
+    pub fn model(&self) -> Option<String> {
+        self.model.clone()
+    }
     #[wasm_bindgen(setter, js_name = "model")]
-    pub fn set_model(&mut self, value: Option<String>) { self.model = value; }
+    pub fn set_model(&mut self, value: Option<String>) {
+        self.model = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "cacheDir")]
-    pub fn cache_dir(&self) -> Option<String> { self.cache_dir.clone() }
+    pub fn cache_dir(&self) -> Option<String> {
+        self.cache_dir.clone()
+    }
     #[wasm_bindgen(setter, js_name = "cacheDir")]
-    pub fn set_cache_dir(&mut self, value: Option<String>) { self.cache_dir = value; }
+    pub fn set_cache_dir(&mut self, value: Option<String>) {
+        self.cache_dir = value;
+    }
 }
 
 /// Embedding model types supported by Kreuzberg.
@@ -11518,36 +13230,60 @@ pub struct WasmEmbeddingModelType {
 #[wasm_bindgen]
 impl WasmEmbeddingModelType {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmEmbeddingModelType { Self::default() }
+    pub fn new() -> WasmEmbeddingModelType {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmEmbeddingModelType { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmEmbeddingModelType {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn r#type(&self) -> String { self.r#type.clone() }
+    pub fn r#type(&self) -> String {
+        self.r#type.clone()
+    }
     #[wasm_bindgen(setter, js_name = "type")]
-    pub fn set_type(&mut self, value: String) { self.r#type = value; }
+    pub fn set_type(&mut self, value: String) {
+        self.r#type = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "name")]
-    pub fn name(&self) -> Option<String> { self.name.clone() }
+    pub fn name(&self) -> Option<String> {
+        self.name.clone()
+    }
     #[wasm_bindgen(setter, js_name = "name")]
-    pub fn set_name(&mut self, value: Option<String>) { self.name = value; }
+    pub fn set_name(&mut self, value: Option<String>) {
+        self.name = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "modelId")]
-    pub fn model_id(&self) -> Option<String> { self.model_id.clone() }
+    pub fn model_id(&self) -> Option<String> {
+        self.model_id.clone()
+    }
     #[wasm_bindgen(setter, js_name = "modelId")]
-    pub fn set_model_id(&mut self, value: Option<String>) { self.model_id = value; }
+    pub fn set_model_id(&mut self, value: Option<String>) {
+        self.model_id = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "dimensions")]
-    pub fn dimensions(&self) -> Option<usize> { self.dimensions.clone() }
+    pub fn dimensions(&self) -> Option<usize> {
+        self.dimensions.clone()
+    }
     #[wasm_bindgen(setter, js_name = "dimensions")]
-    pub fn set_dimensions(&mut self, value: Option<usize>) { self.dimensions = value; }
+    pub fn set_dimensions(&mut self, value: Option<usize>) {
+        self.dimensions = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "llm")]
-    pub fn llm(&self) -> Option<WasmLlmConfig> { self.llm.clone() }
+    pub fn llm(&self) -> Option<WasmLlmConfig> {
+        self.llm.clone()
+    }
     #[wasm_bindgen(setter, js_name = "llm")]
-    pub fn set_llm(&mut self, value: Option<WasmLlmConfig>) { self.llm = value; }
+    pub fn set_llm(&mut self, value: Option<WasmLlmConfig>) {
+        self.llm = value;
+    }
 }
 
 /// Type of list detection.
@@ -11563,7 +13299,9 @@ pub enum WasmListType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmListType {
-    fn default() -> Self { Self::Bullet }
+    fn default() -> Self {
+        Self::Bullet
+    }
 }
 
 impl WasmListType {
@@ -11602,7 +13340,9 @@ pub enum WasmOcrBackendType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmOcrBackendType {
-    fn default() -> Self { Self::Tesseract }
+    fn default() -> Self {
+        Self::Tesseract
+    }
 }
 
 impl WasmOcrBackendType {
@@ -11643,7 +13383,9 @@ pub enum WasmProcessingStage {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmProcessingStage {
-    fn default() -> Self { Self::Early }
+    fn default() -> Self {
+        Self::Early
+    }
 }
 
 impl WasmProcessingStage {
@@ -11683,7 +13425,9 @@ pub enum WasmPdfAnnotationType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmPdfAnnotationType {
-    fn default() -> Self { Self::Text }
+    fn default() -> Self {
+        Self::Text
+    }
 }
 
 impl WasmPdfAnnotationType {
@@ -11740,7 +13484,9 @@ pub enum WasmBlockType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmBlockType {
-    fn default() -> Self { Self::Paragraph }
+    fn default() -> Self {
+        Self::Paragraph
+    }
 }
 
 impl WasmBlockType {
@@ -11815,7 +13561,9 @@ pub enum WasmInlineType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmInlineType {
-    fn default() -> Self { Self::Text }
+    fn default() -> Self {
+        Self::Text
+    }
 }
 
 impl WasmInlineType {
@@ -11881,7 +13629,9 @@ pub enum WasmRelationshipKind {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmRelationshipKind {
-    fn default() -> Self { Self::FootnoteReference }
+    fn default() -> Self {
+        Self::FootnoteReference
+    }
 }
 
 impl WasmRelationshipKind {
@@ -11928,7 +13678,9 @@ pub enum WasmContentLayer {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmContentLayer {
-    fn default() -> Self { Self::Body }
+    fn default() -> Self {
+        Self::Body
+    }
 }
 
 impl WasmContentLayer {
@@ -11988,116 +13740,204 @@ pub struct WasmNodeContent {
 #[wasm_bindgen]
 impl WasmNodeContent {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmNodeContent { Self::default() }
+    pub fn new() -> WasmNodeContent {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmNodeContent { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmNodeContent {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "nodeType")]
-    pub fn node_type(&self) -> String { self.node_type.clone() }
+    pub fn node_type(&self) -> String {
+        self.node_type.clone()
+    }
     #[wasm_bindgen(setter, js_name = "nodeType")]
-    pub fn set_node_type(&mut self, value: String) { self.node_type = value; }
+    pub fn set_node_type(&mut self, value: String) {
+        self.node_type = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "text")]
-    pub fn text(&self) -> Option<String> { self.text.clone() }
+    pub fn text(&self) -> Option<String> {
+        self.text.clone()
+    }
     #[wasm_bindgen(setter, js_name = "text")]
-    pub fn set_text(&mut self, value: Option<String>) { self.text = value; }
+    pub fn set_text(&mut self, value: Option<String>) {
+        self.text = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "level")]
-    pub fn level(&self) -> Option<u8> { self.level.clone() }
+    pub fn level(&self) -> Option<u8> {
+        self.level.clone()
+    }
     #[wasm_bindgen(setter, js_name = "level")]
-    pub fn set_level(&mut self, value: Option<u8>) { self.level = value; }
+    pub fn set_level(&mut self, value: Option<u8>) {
+        self.level = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "ordered")]
-    pub fn ordered(&self) -> Option<bool> { self.ordered.clone() }
+    pub fn ordered(&self) -> Option<bool> {
+        self.ordered.clone()
+    }
     #[wasm_bindgen(setter, js_name = "ordered")]
-    pub fn set_ordered(&mut self, value: Option<bool>) { self.ordered = value; }
+    pub fn set_ordered(&mut self, value: Option<bool>) {
+        self.ordered = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "grid")]
-    pub fn grid(&self) -> Option<WasmTableGrid> { self.grid.clone() }
+    pub fn grid(&self) -> Option<WasmTableGrid> {
+        self.grid.clone()
+    }
     #[wasm_bindgen(setter, js_name = "grid")]
-    pub fn set_grid(&mut self, value: Option<WasmTableGrid>) { self.grid = value; }
+    pub fn set_grid(&mut self, value: Option<WasmTableGrid>) {
+        self.grid = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "description")]
-    pub fn description(&self) -> Option<String> { self.description.clone() }
+    pub fn description(&self) -> Option<String> {
+        self.description.clone()
+    }
     #[wasm_bindgen(setter, js_name = "description")]
-    pub fn set_description(&mut self, value: Option<String>) { self.description = value; }
+    pub fn set_description(&mut self, value: Option<String>) {
+        self.description = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "imageIndex")]
-    pub fn image_index(&self) -> Option<u32> { self.image_index.clone() }
+    pub fn image_index(&self) -> Option<u32> {
+        self.image_index.clone()
+    }
     #[wasm_bindgen(setter, js_name = "imageIndex")]
-    pub fn set_image_index(&mut self, value: Option<u32>) { self.image_index = value; }
+    pub fn set_image_index(&mut self, value: Option<u32>) {
+        self.image_index = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "src")]
-    pub fn src(&self) -> Option<String> { self.src.clone() }
+    pub fn src(&self) -> Option<String> {
+        self.src.clone()
+    }
     #[wasm_bindgen(setter, js_name = "src")]
-    pub fn set_src(&mut self, value: Option<String>) { self.src = value; }
+    pub fn set_src(&mut self, value: Option<String>) {
+        self.src = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "language")]
-    pub fn language(&self) -> Option<String> { self.language.clone() }
+    pub fn language(&self) -> Option<String> {
+        self.language.clone()
+    }
     #[wasm_bindgen(setter, js_name = "language")]
-    pub fn set_language(&mut self, value: Option<String>) { self.language = value; }
+    pub fn set_language(&mut self, value: Option<String>) {
+        self.language = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "label")]
-    pub fn label(&self) -> Option<String> { self.label.clone() }
+    pub fn label(&self) -> Option<String> {
+        self.label.clone()
+    }
     #[wasm_bindgen(setter, js_name = "label")]
-    pub fn set_label(&mut self, value: Option<String>) { self.label = value; }
+    pub fn set_label(&mut self, value: Option<String>) {
+        self.label = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "headingLevel")]
-    pub fn heading_level(&self) -> Option<u8> { self.heading_level.clone() }
+    pub fn heading_level(&self) -> Option<u8> {
+        self.heading_level.clone()
+    }
     #[wasm_bindgen(setter, js_name = "headingLevel")]
-    pub fn set_heading_level(&mut self, value: Option<u8>) { self.heading_level = value; }
+    pub fn set_heading_level(&mut self, value: Option<u8>) {
+        self.heading_level = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "headingText")]
-    pub fn heading_text(&self) -> Option<String> { self.heading_text.clone() }
+    pub fn heading_text(&self) -> Option<String> {
+        self.heading_text.clone()
+    }
     #[wasm_bindgen(setter, js_name = "headingText")]
-    pub fn set_heading_text(&mut self, value: Option<String>) { self.heading_text = value; }
+    pub fn set_heading_text(&mut self, value: Option<String>) {
+        self.heading_text = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "number")]
-    pub fn number(&self) -> Option<u32> { self.number.clone() }
+    pub fn number(&self) -> Option<u32> {
+        self.number.clone()
+    }
     #[wasm_bindgen(setter, js_name = "number")]
-    pub fn set_number(&mut self, value: Option<u32>) { self.number = value; }
+    pub fn set_number(&mut self, value: Option<u32>) {
+        self.number = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "title")]
-    pub fn title(&self) -> Option<String> { self.title.clone() }
+    pub fn title(&self) -> Option<String> {
+        self.title.clone()
+    }
     #[wasm_bindgen(setter, js_name = "title")]
-    pub fn set_title(&mut self, value: Option<String>) { self.title = value; }
+    pub fn set_title(&mut self, value: Option<String>) {
+        self.title = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "term")]
-    pub fn term(&self) -> Option<String> { self.term.clone() }
+    pub fn term(&self) -> Option<String> {
+        self.term.clone()
+    }
     #[wasm_bindgen(setter, js_name = "term")]
-    pub fn set_term(&mut self, value: Option<String>) { self.term = value; }
+    pub fn set_term(&mut self, value: Option<String>) {
+        self.term = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "definition")]
-    pub fn definition(&self) -> Option<String> { self.definition.clone() }
+    pub fn definition(&self) -> Option<String> {
+        self.definition.clone()
+    }
     #[wasm_bindgen(setter, js_name = "definition")]
-    pub fn set_definition(&mut self, value: Option<String>) { self.definition = value; }
+    pub fn set_definition(&mut self, value: Option<String>) {
+        self.definition = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "key")]
-    pub fn key(&self) -> Option<String> { self.key.clone() }
+    pub fn key(&self) -> Option<String> {
+        self.key.clone()
+    }
     #[wasm_bindgen(setter, js_name = "key")]
-    pub fn set_key(&mut self, value: Option<String>) { self.key = value; }
+    pub fn set_key(&mut self, value: Option<String>) {
+        self.key = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "kind")]
-    pub fn kind(&self) -> Option<String> { self.kind.clone() }
+    pub fn kind(&self) -> Option<String> {
+        self.kind.clone()
+    }
     #[wasm_bindgen(setter, js_name = "kind")]
-    pub fn set_kind(&mut self, value: Option<String>) { self.kind = value; }
+    pub fn set_kind(&mut self, value: Option<String>) {
+        self.kind = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "format")]
-    pub fn format(&self) -> Option<String> { self.format.clone() }
+    pub fn format(&self) -> Option<String> {
+        self.format.clone()
+    }
     #[wasm_bindgen(setter, js_name = "format")]
-    pub fn set_format(&mut self, value: Option<String>) { self.format = value; }
+    pub fn set_format(&mut self, value: Option<String>) {
+        self.format = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "content")]
-    pub fn content(&self) -> Option<String> { self.content.clone() }
+    pub fn content(&self) -> Option<String> {
+        self.content.clone()
+    }
     #[wasm_bindgen(setter, js_name = "content")]
-    pub fn set_content(&mut self, value: Option<String>) { self.content = value; }
+    pub fn set_content(&mut self, value: Option<String>) {
+        self.content = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "entries")]
-    pub fn entries(&self) -> Option<JsValue> { self.entries.clone() }
+    pub fn entries(&self) -> Option<JsValue> {
+        self.entries.clone()
+    }
     #[wasm_bindgen(setter, js_name = "entries")]
-    pub fn set_entries(&mut self, value: Option<JsValue>) { self.entries = value; }
+    pub fn set_entries(&mut self, value: Option<JsValue>) {
+        self.entries = value;
+    }
 }
 
 /// Types of inline text annotations.
@@ -12115,36 +13955,60 @@ pub struct WasmAnnotationKind {
 #[wasm_bindgen]
 impl WasmAnnotationKind {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmAnnotationKind { Self::default() }
+    pub fn new() -> WasmAnnotationKind {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmAnnotationKind { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmAnnotationKind {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "annotationType")]
-    pub fn annotation_type(&self) -> String { self.annotation_type.clone() }
+    pub fn annotation_type(&self) -> String {
+        self.annotation_type.clone()
+    }
     #[wasm_bindgen(setter, js_name = "annotationType")]
-    pub fn set_annotation_type(&mut self, value: String) { self.annotation_type = value; }
+    pub fn set_annotation_type(&mut self, value: String) {
+        self.annotation_type = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "url")]
-    pub fn url(&self) -> Option<String> { self.url.clone() }
+    pub fn url(&self) -> Option<String> {
+        self.url.clone()
+    }
     #[wasm_bindgen(setter, js_name = "url")]
-    pub fn set_url(&mut self, value: Option<String>) { self.url = value; }
+    pub fn set_url(&mut self, value: Option<String>) {
+        self.url = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "title")]
-    pub fn title(&self) -> Option<String> { self.title.clone() }
+    pub fn title(&self) -> Option<String> {
+        self.title.clone()
+    }
     #[wasm_bindgen(setter, js_name = "title")]
-    pub fn set_title(&mut self, value: Option<String>) { self.title = value; }
+    pub fn set_title(&mut self, value: Option<String>) {
+        self.title = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "value")]
-    pub fn value(&self) -> Option<String> { self.value.clone() }
+    pub fn value(&self) -> Option<String> {
+        self.value.clone()
+    }
     #[wasm_bindgen(setter, js_name = "value")]
-    pub fn set_value(&mut self, value: Option<String>) { self.value = value; }
+    pub fn set_value(&mut self, value: Option<String>) {
+        self.value = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "name")]
-    pub fn name(&self) -> Option<String> { self.name.clone() }
+    pub fn name(&self) -> Option<String> {
+        self.name.clone()
+    }
     #[wasm_bindgen(setter, js_name = "name")]
-    pub fn set_name(&mut self, value: Option<String>) { self.name = value; }
+    pub fn set_name(&mut self, value: Option<String>) {
+        self.name = value;
+    }
 }
 
 /// Standard entity categories produced by built-in NER backends.
@@ -12170,7 +14034,9 @@ pub enum WasmEntityCategory {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmEntityCategory {
-    fn default() -> Self { Self::Person }
+    fn default() -> Self {
+        Self::Person
+    }
 }
 
 impl WasmEntityCategory {
@@ -12222,7 +14088,9 @@ pub enum WasmExtractionMethod {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmExtractionMethod {
-    fn default() -> Self { Self::Native }
+    fn default() -> Self {
+        Self::Native
+    }
 }
 
 impl WasmExtractionMethod {
@@ -12272,7 +14140,9 @@ pub enum WasmChunkType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmChunkType {
-    fn default() -> Self { Self::Unknown }
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 impl WasmChunkType {
@@ -12337,7 +14207,9 @@ pub enum WasmImageKind {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmImageKind {
-    fn default() -> Self { Self::Photograph }
+    fn default() -> Self {
+        Self::Photograph
+    }
 }
 
 impl WasmImageKind {
@@ -12394,7 +14266,9 @@ pub enum WasmResultFormat {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmResultFormat {
-    fn default() -> Self { Self::Unified }
+    fn default() -> Self {
+        Self::Unified
+    }
 }
 
 impl WasmResultFormat {
@@ -12439,7 +14313,9 @@ pub enum WasmElementType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmElementType {
-    fn default() -> Self { Self::Title }
+    fn default() -> Self {
+        Self::Title
+    }
 }
 
 impl WasmElementType {
@@ -12494,21 +14370,33 @@ pub struct WasmFormatMetadata {
 #[wasm_bindgen]
 impl WasmFormatMetadata {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmFormatMetadata { Self::default() }
+    pub fn new() -> WasmFormatMetadata {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmFormatMetadata { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmFormatMetadata {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "formatType")]
-    pub fn format_type(&self) -> String { self.format_type.clone() }
+    pub fn format_type(&self) -> String {
+        self.format_type.clone()
+    }
     #[wasm_bindgen(setter, js_name = "formatType")]
-    pub fn set_format_type(&mut self, value: String) { self.format_type = value; }
+    pub fn set_format_type(&mut self, value: String) {
+        self.format_type = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "0")]
-    pub fn field_0(&self) -> Option<JsValue> { self._0.clone() }
+    pub fn field_0(&self) -> Option<JsValue> {
+        self._0.clone()
+    }
     #[wasm_bindgen(setter, js_name = "0")]
-    pub fn set_field_0(&mut self, value: Option<JsValue>) { self._0 = value; }
+    pub fn set_field_0(&mut self, value: Option<JsValue>) {
+        self._0 = value;
+    }
 }
 
 /// Text direction enumeration for HTML documents.
@@ -12523,7 +14411,9 @@ pub enum WasmTextDirection {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmTextDirection {
-    fn default() -> Self { Self::LeftToRight }
+    fn default() -> Self {
+        Self::LeftToRight
+    }
 }
 
 impl WasmTextDirection {
@@ -12562,7 +14452,9 @@ pub enum WasmLinkType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmLinkType {
-    fn default() -> Self { Self::Anchor }
+    fn default() -> Self {
+        Self::Anchor
+    }
 }
 
 impl WasmLinkType {
@@ -12605,7 +14497,9 @@ pub enum WasmImageType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmImageType {
-    fn default() -> Self { Self::DataUri }
+    fn default() -> Self {
+        Self::DataUri
+    }
 }
 
 impl WasmImageType {
@@ -12643,7 +14537,9 @@ pub enum WasmStructuredDataType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmStructuredDataType {
-    fn default() -> Self { Self::JsonLd }
+    fn default() -> Self {
+        Self::JsonLd
+    }
 }
 
 impl WasmStructuredDataType {
@@ -12686,41 +14582,69 @@ pub struct WasmOcrBoundingGeometry {
 #[wasm_bindgen]
 impl WasmOcrBoundingGeometry {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmOcrBoundingGeometry { Self::default() }
+    pub fn new() -> WasmOcrBoundingGeometry {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmOcrBoundingGeometry { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmOcrBoundingGeometry {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn r#type(&self) -> String { self.r#type.clone() }
+    pub fn r#type(&self) -> String {
+        self.r#type.clone()
+    }
     #[wasm_bindgen(setter, js_name = "type")]
-    pub fn set_type(&mut self, value: String) { self.r#type = value; }
+    pub fn set_type(&mut self, value: String) {
+        self.r#type = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "left")]
-    pub fn left(&self) -> Option<u32> { self.left.clone() }
+    pub fn left(&self) -> Option<u32> {
+        self.left.clone()
+    }
     #[wasm_bindgen(setter, js_name = "left")]
-    pub fn set_left(&mut self, value: Option<u32>) { self.left = value; }
+    pub fn set_left(&mut self, value: Option<u32>) {
+        self.left = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "top")]
-    pub fn top(&self) -> Option<u32> { self.top.clone() }
+    pub fn top(&self) -> Option<u32> {
+        self.top.clone()
+    }
     #[wasm_bindgen(setter, js_name = "top")]
-    pub fn set_top(&mut self, value: Option<u32>) { self.top = value; }
+    pub fn set_top(&mut self, value: Option<u32>) {
+        self.top = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "width")]
-    pub fn width(&self) -> Option<u32> { self.width.clone() }
+    pub fn width(&self) -> Option<u32> {
+        self.width.clone()
+    }
     #[wasm_bindgen(setter, js_name = "width")]
-    pub fn set_width(&mut self, value: Option<u32>) { self.width = value; }
+    pub fn set_width(&mut self, value: Option<u32>) {
+        self.width = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "height")]
-    pub fn height(&self) -> Option<u32> { self.height.clone() }
+    pub fn height(&self) -> Option<u32> {
+        self.height.clone()
+    }
     #[wasm_bindgen(setter, js_name = "height")]
-    pub fn set_height(&mut self, value: Option<u32>) { self.height = value; }
+    pub fn set_height(&mut self, value: Option<u32>) {
+        self.height = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "points")]
-    pub fn points(&self) -> Option<JsValue> { self.points.clone() }
+    pub fn points(&self) -> Option<JsValue> {
+        self.points.clone()
+    }
     #[wasm_bindgen(setter, js_name = "points")]
-    pub fn set_points(&mut self, value: Option<JsValue>) { self.points = value; }
+    pub fn set_points(&mut self, value: Option<JsValue>) {
+        self.points = value;
+    }
 }
 
 /// Hierarchical level of an OCR element.
@@ -12739,7 +14663,9 @@ pub enum WasmOcrElementLevel {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmOcrElementLevel {
-    fn default() -> Self { Self::Line }
+    fn default() -> Self {
+        Self::Line
+    }
 }
 
 impl WasmOcrElementLevel {
@@ -12779,7 +14705,9 @@ pub enum WasmPageUnitType {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmPageUnitType {
-    fn default() -> Self { Self::Page }
+    fn default() -> Self {
+        Self::Page
+    }
 }
 
 impl WasmPageUnitType {
@@ -12816,7 +14744,9 @@ pub enum WasmRedactionStrategy {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmRedactionStrategy {
-    fn default() -> Self { Self::Mask }
+    fn default() -> Self {
+        Self::Mask
+    }
 }
 
 impl WasmRedactionStrategy {
@@ -12864,7 +14794,9 @@ pub enum WasmPiiCategory {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmPiiCategory {
-    fn default() -> Self { Self::Email }
+    fn default() -> Self {
+        Self::Email
+    }
 }
 
 impl WasmPiiCategory {
@@ -12924,21 +14856,33 @@ pub struct WasmDiffLine {
 #[wasm_bindgen]
 impl WasmDiffLine {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmDiffLine { Self::default() }
+    pub fn new() -> WasmDiffLine {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmDiffLine { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmDiffLine {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "kind")]
-    pub fn kind(&self) -> String { self.kind.clone() }
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
     #[wasm_bindgen(setter, js_name = "kind")]
-    pub fn set_kind(&mut self, value: String) { self.kind = value; }
+    pub fn set_kind(&mut self, value: String) {
+        self.kind = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "0")]
-    pub fn field_0(&self) -> Option<String> { self._0.clone() }
+    pub fn field_0(&self) -> Option<String> {
+        self._0.clone()
+    }
     #[wasm_bindgen(setter, js_name = "0")]
-    pub fn set_field_0(&mut self, value: Option<String>) { self._0 = value; }
+    pub fn set_field_0(&mut self, value: Option<String>) {
+        self._0 = value;
+    }
 }
 
 /// Semantic classification of a tracked change.
@@ -12954,7 +14898,9 @@ pub enum WasmRevisionKind {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmRevisionKind {
-    fn default() -> Self { Self::Insertion }
+    fn default() -> Self {
+        Self::Insertion
+    }
 }
 
 impl WasmRevisionKind {
@@ -12996,41 +14942,69 @@ pub struct WasmRevisionAnchor {
 #[wasm_bindgen]
 impl WasmRevisionAnchor {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmRevisionAnchor { Self::default() }
+    pub fn new() -> WasmRevisionAnchor {
+        Self::default()
+    }
 
     #[wasm_bindgen]
     #[allow(clippy::should_implement_trait)]
-    pub fn default() -> WasmRevisionAnchor { <Self as ::core::default::Default>::default() }
+    pub fn default() -> WasmRevisionAnchor {
+        <Self as ::core::default::Default>::default()
+    }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn r#type(&self) -> String { self.r#type.clone() }
+    pub fn r#type(&self) -> String {
+        self.r#type.clone()
+    }
     #[wasm_bindgen(setter, js_name = "type")]
-    pub fn set_type(&mut self, value: String) { self.r#type = value; }
+    pub fn set_type(&mut self, value: String) {
+        self.r#type = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "index")]
-    pub fn index(&self) -> Option<usize> { self.index.clone() }
+    pub fn index(&self) -> Option<usize> {
+        self.index.clone()
+    }
     #[wasm_bindgen(setter, js_name = "index")]
-    pub fn set_index(&mut self, value: Option<usize>) { self.index = value; }
+    pub fn set_index(&mut self, value: Option<usize>) {
+        self.index = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "row")]
-    pub fn row(&self) -> Option<usize> { self.row.clone() }
+    pub fn row(&self) -> Option<usize> {
+        self.row.clone()
+    }
     #[wasm_bindgen(setter, js_name = "row")]
-    pub fn set_row(&mut self, value: Option<usize>) { self.row = value; }
+    pub fn set_row(&mut self, value: Option<usize>) {
+        self.row = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "col")]
-    pub fn col(&self) -> Option<usize> { self.col.clone() }
+    pub fn col(&self) -> Option<usize> {
+        self.col.clone()
+    }
     #[wasm_bindgen(setter, js_name = "col")]
-    pub fn set_col(&mut self, value: Option<usize>) { self.col = value; }
+    pub fn set_col(&mut self, value: Option<usize>) {
+        self.col = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "tableIndex")]
-    pub fn table_index(&self) -> Option<usize> { self.table_index.clone() }
+    pub fn table_index(&self) -> Option<usize> {
+        self.table_index.clone()
+    }
     #[wasm_bindgen(setter, js_name = "tableIndex")]
-    pub fn set_table_index(&mut self, value: Option<usize>) { self.table_index = value; }
+    pub fn set_table_index(&mut self, value: Option<usize>) {
+        self.table_index = value;
+    }
 
     #[wasm_bindgen(getter, js_name = "name")]
-    pub fn name(&self) -> Option<String> { self.name.clone() }
+    pub fn name(&self) -> Option<String> {
+        self.name.clone()
+    }
     #[wasm_bindgen(setter, js_name = "name")]
-    pub fn set_name(&mut self, value: Option<String>) { self.name = value; }
+    pub fn set_name(&mut self, value: Option<String>) {
+        self.name = value;
+    }
 }
 
 /// Summarisation strategy.
@@ -13044,7 +15018,9 @@ pub enum WasmSummaryStrategy {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmSummaryStrategy {
-    fn default() -> Self { Self::Extractive }
+    fn default() -> Self {
+        Self::Extractive
+    }
 }
 
 impl WasmSummaryStrategy {
@@ -13081,7 +15057,9 @@ pub enum WasmUriKind {
 
 #[allow(clippy::derivable_impls)]
 impl Default for WasmUriKind {
-    fn default() -> Self { Self::Hyperlink }
+    fn default() -> Self {
+        Self::Hyperlink
+    }
 }
 
 impl WasmUriKind {
@@ -13113,135 +15091,327 @@ impl WasmUriKind {
 
 #[derive(serde::Deserialize, Default)]
 #[serde(default)]
-pub struct ExtractionConfigInput {    #[serde(rename = "useCache")]    pub use_cache: Option<bool>,    #[serde(rename = "enableQualityProcessing")]    pub enable_quality_processing: Option<bool>,    #[serde(rename = "ocr")]    pub ocr: Option<kreuzberg::OcrConfig>,    #[serde(rename = "forceOcr")]    pub force_ocr: Option<bool>,    #[serde(rename = "forceOcrPages")]    pub force_ocr_pages: Option<Vec<u32>>,    #[serde(rename = "disableOcr")]    pub disable_ocr: Option<bool>,    #[serde(rename = "chunking")]    pub chunking: Option<kreuzberg::ChunkingConfig>,    #[serde(rename = "contentFilter")]    pub content_filter: Option<kreuzberg::ContentFilterConfig>,    #[serde(rename = "images")]    pub images: Option<kreuzberg::ImageExtractionConfig>,    #[cfg(feature = "pdf")]    #[serde(skip)]    pub pdf_options: Option<kreuzberg::PdfConfig>,    #[serde(rename = "tokenReduction")]    pub token_reduction: Option<kreuzberg::TokenReductionOptions>,    #[serde(rename = "languageDetection")]    pub language_detection: Option<kreuzberg::LanguageDetectionConfig>,    #[serde(rename = "pages")]    pub pages: Option<kreuzberg::PageConfig>,    #[cfg(any (feature = "keywords-yake" , feature = "keywords-rake"))]    #[serde(skip)]    pub keywords: Option<kreuzberg::KeywordConfig>,    #[serde(rename = "postprocessor")]    pub postprocessor: Option<kreuzberg::PostProcessorConfig>,    #[cfg(feature = "html")]    #[serde(skip)]    pub html_options: Option<String>,    #[cfg(feature = "html")]    #[serde(skip)]    pub html_output: Option<kreuzberg::HtmlOutputConfig>,    #[serde(rename = "extractionTimeoutSecs")]    pub extraction_timeout_secs: Option<u64>,    #[serde(rename = "maxConcurrentExtractions")]    pub max_concurrent_extractions: Option<usize>,    #[serde(rename = "resultFormat")]    pub result_format: Option<kreuzberg::ResultFormat>,    #[serde(rename = "securityLimits")]    pub security_limits: Option<kreuzberg::SecurityLimits>,    #[serde(rename = "maxEmbeddedFileBytes")]    pub max_embedded_file_bytes: Option<u64>,    #[serde(rename = "outputFormat")]    pub output_format: Option<kreuzberg::OutputFormat>,    #[cfg(feature = "layout-types")]    #[serde(skip)]    pub layout: Option<kreuzberg::LayoutDetectionConfig>,    #[serde(rename = "useLayoutForMarkdown")]    pub use_layout_for_markdown: Option<bool>,    #[serde(rename = "includeDocumentStructure")]    pub include_document_structure: Option<bool>,    #[serde(rename = "acceleration")]    pub acceleration: Option<kreuzberg::AccelerationConfig>,    #[serde(rename = "cacheNamespace")]    pub cache_namespace: Option<String>,    #[serde(rename = "cacheTtlSecs")]    pub cache_ttl_secs: Option<u64>,    #[serde(rename = "email")]    pub email: Option<kreuzberg::EmailConfig>,    #[serde(rename = "concurrency")]    pub concurrency: Option<String>,    #[serde(rename = "maxArchiveDepth")]    pub max_archive_depth: Option<usize>,    #[cfg(feature = "tree-sitter")]    #[serde(skip)]    pub tree_sitter: Option<kreuzberg::TreeSitterConfig>,    #[serde(rename = "structuredExtraction")]    pub structured_extraction: Option<kreuzberg::StructuredExtractionConfig>,    #[serde(rename = "ner")]    pub ner: Option<kreuzberg::NerConfig>,    #[serde(rename = "redaction")]    pub redaction: Option<kreuzberg::RedactionConfig>,    #[serde(rename = "summarization")]    pub summarization: Option<kreuzberg::SummarizationConfig>,    #[serde(rename = "translation")]    pub translation: Option<kreuzberg::TranslationConfig>,    #[serde(rename = "pageClassification")]    pub page_classification: Option<kreuzberg::PageClassificationConfig>,    #[serde(rename = "captioning")]    pub captioning: Option<kreuzberg::CaptioningConfig>,    #[serde(rename = "qrCodes")]    pub qr_codes: Option<bool>,    #[serde(rename = "cancelToken")]    pub cancel_token: Option<String>,}
+pub struct ExtractionConfigInput {
+    #[serde(rename = "useCache")]
+    pub use_cache: Option<bool>,
+    #[serde(rename = "enableQualityProcessing")]
+    pub enable_quality_processing: Option<bool>,
+    #[serde(rename = "ocr")]
+    pub ocr: Option<kreuzberg::OcrConfig>,
+    #[serde(rename = "forceOcr")]
+    pub force_ocr: Option<bool>,
+    #[serde(rename = "forceOcrPages")]
+    pub force_ocr_pages: Option<Vec<u32>>,
+    #[serde(rename = "disableOcr")]
+    pub disable_ocr: Option<bool>,
+    #[serde(rename = "chunking")]
+    pub chunking: Option<kreuzberg::ChunkingConfig>,
+    #[serde(rename = "contentFilter")]
+    pub content_filter: Option<kreuzberg::ContentFilterConfig>,
+    #[serde(rename = "images")]
+    pub images: Option<kreuzberg::ImageExtractionConfig>,
+    #[cfg(feature = "pdf")]
+    #[serde(skip)]
+    pub pdf_options: Option<kreuzberg::PdfConfig>,
+    #[serde(rename = "tokenReduction")]
+    pub token_reduction: Option<kreuzberg::TokenReductionOptions>,
+    #[serde(rename = "languageDetection")]
+    pub language_detection: Option<kreuzberg::LanguageDetectionConfig>,
+    #[serde(rename = "pages")]
+    pub pages: Option<kreuzberg::PageConfig>,
+    #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
+    #[serde(skip)]
+    pub keywords: Option<kreuzberg::KeywordConfig>,
+    #[serde(rename = "postprocessor")]
+    pub postprocessor: Option<kreuzberg::PostProcessorConfig>,
+    #[cfg(feature = "html")]
+    #[serde(skip)]
+    pub html_options: Option<String>,
+    #[cfg(feature = "html")]
+    #[serde(skip)]
+    pub html_output: Option<kreuzberg::HtmlOutputConfig>,
+    #[serde(rename = "extractionTimeoutSecs")]
+    pub extraction_timeout_secs: Option<u64>,
+    #[serde(rename = "maxConcurrentExtractions")]
+    pub max_concurrent_extractions: Option<usize>,
+    #[serde(rename = "resultFormat")]
+    pub result_format: Option<kreuzberg::ResultFormat>,
+    #[serde(rename = "securityLimits")]
+    pub security_limits: Option<kreuzberg::SecurityLimits>,
+    #[serde(rename = "maxEmbeddedFileBytes")]
+    pub max_embedded_file_bytes: Option<u64>,
+    #[serde(rename = "outputFormat")]
+    pub output_format: Option<kreuzberg::OutputFormat>,
+    #[cfg(feature = "layout-types")]
+    #[serde(skip)]
+    pub layout: Option<kreuzberg::LayoutDetectionConfig>,
+    #[serde(rename = "useLayoutForMarkdown")]
+    pub use_layout_for_markdown: Option<bool>,
+    #[serde(rename = "includeDocumentStructure")]
+    pub include_document_structure: Option<bool>,
+    #[serde(rename = "acceleration")]
+    pub acceleration: Option<kreuzberg::AccelerationConfig>,
+    #[serde(rename = "cacheNamespace")]
+    pub cache_namespace: Option<String>,
+    #[serde(rename = "cacheTtlSecs")]
+    pub cache_ttl_secs: Option<u64>,
+    #[serde(rename = "email")]
+    pub email: Option<kreuzberg::EmailConfig>,
+    #[serde(rename = "concurrency")]
+    pub concurrency: Option<String>,
+    #[serde(rename = "maxArchiveDepth")]
+    pub max_archive_depth: Option<usize>,
+    #[cfg(feature = "tree-sitter")]
+    #[serde(skip)]
+    pub tree_sitter: Option<kreuzberg::TreeSitterConfig>,
+    #[serde(rename = "structuredExtraction")]
+    pub structured_extraction: Option<kreuzberg::StructuredExtractionConfig>,
+    #[serde(rename = "ner")]
+    pub ner: Option<kreuzberg::NerConfig>,
+    #[serde(rename = "redaction")]
+    pub redaction: Option<kreuzberg::RedactionConfig>,
+    #[serde(rename = "summarization")]
+    pub summarization: Option<kreuzberg::SummarizationConfig>,
+    #[serde(rename = "translation")]
+    pub translation: Option<kreuzberg::TranslationConfig>,
+    #[serde(rename = "pageClassification")]
+    pub page_classification: Option<kreuzberg::PageClassificationConfig>,
+    #[serde(rename = "captioning")]
+    pub captioning: Option<kreuzberg::CaptioningConfig>,
+    #[serde(rename = "qrCodes")]
+    pub qr_codes: Option<bool>,
+    #[serde(rename = "cancelToken")]
+    pub cancel_token: Option<String>,
+}
 
 impl From<ExtractionConfigInput> for kreuzberg::ExtractionConfig {
-    fn from(val: ExtractionConfigInput) -> Self {        let mut out = Self::default();        if let Some(v) = val.use_cache {
+    fn from(val: ExtractionConfigInput) -> Self {
+        let mut out = Self::default();
+        if let Some(v) = val.use_cache {
             out.use_cache = v.into();
-        }        if let Some(v) = val.enable_quality_processing {
+        }
+        if let Some(v) = val.enable_quality_processing {
             out.enable_quality_processing = v.into();
-        }        if let Some(v) = val.ocr {
+        }
+        if let Some(v) = val.ocr {
             out.ocr = v.into();
-        }        if let Some(v) = val.force_ocr {
+        }
+        if let Some(v) = val.force_ocr {
             out.force_ocr = v.into();
-        }        if let Some(v) = val.force_ocr_pages {
+        }
+        if let Some(v) = val.force_ocr_pages {
             out.force_ocr_pages = v.into();
-        }        if let Some(v) = val.disable_ocr {
+        }
+        if let Some(v) = val.disable_ocr {
             out.disable_ocr = v.into();
-        }        if let Some(v) = val.chunking {
+        }
+        if let Some(v) = val.chunking {
             out.chunking = v.into();
-        }        if let Some(v) = val.content_filter {
+        }
+        if let Some(v) = val.content_filter {
             out.content_filter = v.into();
-        }        if let Some(v) = val.images {
+        }
+        if let Some(v) = val.images {
             out.images = v.into();
-        }        #[cfg(feature = "pdf")]        if let Some(v) = val.pdf_options {
+        }
+        #[cfg(feature = "pdf")]
+        if let Some(v) = val.pdf_options {
             out.pdf_options = v.into();
-        }        if let Some(v) = val.token_reduction {
+        }
+        if let Some(v) = val.token_reduction {
             out.token_reduction = v.into();
-        }        if let Some(v) = val.language_detection {
+        }
+        if let Some(v) = val.language_detection {
             out.language_detection = v.into();
-        }        if let Some(v) = val.pages {
+        }
+        if let Some(v) = val.pages {
             out.pages = v.into();
-        }        #[cfg(any (feature = "keywords-yake" , feature = "keywords-rake"))]        if let Some(v) = val.keywords {
+        }
+        #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
+        if let Some(v) = val.keywords {
             out.keywords = v.into();
-        }        if let Some(v) = val.postprocessor {
+        }
+        if let Some(v) = val.postprocessor {
             out.postprocessor = v.into();
-        }        #[cfg(feature = "html")]        if let Some(v) = val.html_options {
+        }
+        #[cfg(feature = "html")]
+        if let Some(v) = val.html_options {
             out.html_options = serde_json::from_str(&v).unwrap_or_default();
-        }        #[cfg(feature = "html")]        if let Some(v) = val.html_output {
+        }
+        #[cfg(feature = "html")]
+        if let Some(v) = val.html_output {
             out.html_output = v.into();
-        }        if let Some(v) = val.extraction_timeout_secs {
+        }
+        if let Some(v) = val.extraction_timeout_secs {
             out.extraction_timeout_secs = v.into();
-        }        if let Some(v) = val.max_concurrent_extractions {
+        }
+        if let Some(v) = val.max_concurrent_extractions {
             out.max_concurrent_extractions = v.into();
-        }        if let Some(v) = val.result_format {
+        }
+        if let Some(v) = val.result_format {
             out.result_format = v.into();
-        }        if let Some(v) = val.security_limits {
+        }
+        if let Some(v) = val.security_limits {
             out.security_limits = v.into();
-        }        if let Some(v) = val.max_embedded_file_bytes {
+        }
+        if let Some(v) = val.max_embedded_file_bytes {
             out.max_embedded_file_bytes = v.into();
-        }        if let Some(v) = val.output_format {
+        }
+        if let Some(v) = val.output_format {
             out.output_format = v.into();
-        }        #[cfg(feature = "layout-types")]        if let Some(v) = val.layout {
+        }
+        #[cfg(feature = "layout-types")]
+        if let Some(v) = val.layout {
             out.layout = v.into();
-        }        if let Some(v) = val.use_layout_for_markdown {
+        }
+        if let Some(v) = val.use_layout_for_markdown {
             out.use_layout_for_markdown = v.into();
-        }        if let Some(v) = val.include_document_structure {
+        }
+        if let Some(v) = val.include_document_structure {
             out.include_document_structure = v.into();
-        }        if let Some(v) = val.acceleration {
+        }
+        if let Some(v) = val.acceleration {
             out.acceleration = v.into();
-        }        if let Some(v) = val.cache_namespace {
+        }
+        if let Some(v) = val.cache_namespace {
             out.cache_namespace = v.into();
-        }        if let Some(v) = val.cache_ttl_secs {
+        }
+        if let Some(v) = val.cache_ttl_secs {
             out.cache_ttl_secs = v.into();
-        }        if let Some(v) = val.email {
+        }
+        if let Some(v) = val.email {
             out.email = v.into();
-        }        if let Some(v) = val.concurrency {
+        }
+        if let Some(v) = val.concurrency {
             out.concurrency = serde_json::from_str(&v).unwrap_or_default();
-        }        if let Some(v) = val.max_archive_depth {
+        }
+        if let Some(v) = val.max_archive_depth {
             out.max_archive_depth = v.into();
-        }        #[cfg(feature = "tree-sitter")]        if let Some(v) = val.tree_sitter {
+        }
+        #[cfg(feature = "tree-sitter")]
+        if let Some(v) = val.tree_sitter {
             out.tree_sitter = v.into();
-        }        if let Some(v) = val.structured_extraction {
+        }
+        if let Some(v) = val.structured_extraction {
             out.structured_extraction = v.into();
-        }        if let Some(v) = val.ner {
+        }
+        if let Some(v) = val.ner {
             out.ner = v.into();
-        }        if let Some(v) = val.redaction {
+        }
+        if let Some(v) = val.redaction {
             out.redaction = v.into();
-        }        if let Some(v) = val.summarization {
+        }
+        if let Some(v) = val.summarization {
             out.summarization = v.into();
-        }        if let Some(v) = val.translation {
+        }
+        if let Some(v) = val.translation {
             out.translation = v.into();
-        }        if let Some(v) = val.page_classification {
+        }
+        if let Some(v) = val.page_classification {
             out.page_classification = v.into();
-        }        if let Some(v) = val.captioning {
+        }
+        if let Some(v) = val.captioning {
             out.captioning = v.into();
-        }        if let Some(v) = val.qr_codes {
+        }
+        if let Some(v) = val.qr_codes {
             out.qr_codes = v.into();
-        }        if let Some(v) = val.cancel_token {
+        }
+        if let Some(v) = val.cancel_token {
             out.cancel_token = serde_json::from_str(&v).unwrap_or_default();
-        }        out    }
+        }
+        out
+    }
 }
-
 
 #[derive(serde::Deserialize, Default)]
 #[serde(default)]
-pub struct PageClassificationConfigInput {    #[serde(rename = "promptTemplate")]    pub prompt_template: Option<String>,    #[serde(rename = "labels")]    pub labels: Option<Vec<String>>,    #[serde(rename = "multiLabel")]    pub multi_label: Option<bool>,    #[serde(rename = "llm")]    pub llm: Option<kreuzberg::LlmConfig>,}
+pub struct PageClassificationConfigInput {
+    #[serde(rename = "promptTemplate")]
+    pub prompt_template: Option<String>,
+    #[serde(rename = "labels")]
+    pub labels: Option<Vec<String>>,
+    #[serde(rename = "multiLabel")]
+    pub multi_label: Option<bool>,
+    #[serde(rename = "llm")]
+    pub llm: Option<kreuzberg::LlmConfig>,
+}
 
 impl From<PageClassificationConfigInput> for kreuzberg::PageClassificationConfig {
-    fn from(val: PageClassificationConfigInput) -> Self {        Self {            prompt_template: val.prompt_template.map(|v| v.into()).unwrap_or_default(),            labels: val.labels.map(|v| v.into()).unwrap_or_default(),            multi_label: val.multi_label.map(|v| v.into()).unwrap_or_default(),            llm: val.llm.map(|v| v.into()).unwrap_or_default(),        }    }
+    fn from(val: PageClassificationConfigInput) -> Self {
+        Self {
+            prompt_template: val.prompt_template.map(|v| v.into()).unwrap_or_default(),
+            labels: val.labels.map(|v| v.into()).unwrap_or_default(),
+            multi_label: val.multi_label.map(|v| v.into()).unwrap_or_default(),
+            llm: val.llm.map(|v| v.into()).unwrap_or_default(),
+        }
+    }
 }
-
 
 #[derive(serde::Deserialize, Default)]
 #[serde(default)]
-pub struct RedactionConfigInput {    #[serde(rename = "categories")]    pub categories: Option<Vec<kreuzberg::PiiCategory>>,    #[serde(rename = "strategy")]    pub strategy: Option<kreuzberg::RedactionStrategy>,    #[serde(rename = "ner")]    pub ner: Option<kreuzberg::NerConfig>,    #[serde(rename = "preserveOffsets")]    pub preserve_offsets: Option<bool>,    #[serde(rename = "customTerms")]    pub custom_terms: Option<Vec<kreuzberg::RedactionTerm>>,    #[serde(rename = "customPatterns")]    pub custom_patterns: Option<Vec<kreuzberg::RedactionPattern>>,}
+pub struct RedactionConfigInput {
+    #[serde(rename = "categories")]
+    pub categories: Option<Vec<kreuzberg::PiiCategory>>,
+    #[serde(rename = "strategy")]
+    pub strategy: Option<kreuzberg::RedactionStrategy>,
+    #[serde(rename = "ner")]
+    pub ner: Option<kreuzberg::NerConfig>,
+    #[serde(rename = "preserveOffsets")]
+    pub preserve_offsets: Option<bool>,
+    #[serde(rename = "customTerms")]
+    pub custom_terms: Option<Vec<kreuzberg::RedactionTerm>>,
+    #[serde(rename = "customPatterns")]
+    pub custom_patterns: Option<Vec<kreuzberg::RedactionPattern>>,
+}
 
 impl From<RedactionConfigInput> for kreuzberg::RedactionConfig {
-    fn from(val: RedactionConfigInput) -> Self {        let mut out = Self::default();        if let Some(v) = val.categories {
+    fn from(val: RedactionConfigInput) -> Self {
+        let mut out = Self::default();
+        if let Some(v) = val.categories {
             out.categories = v.into();
-        }        if let Some(v) = val.strategy {
+        }
+        if let Some(v) = val.strategy {
             out.strategy = v.into();
-        }        if let Some(v) = val.ner {
+        }
+        if let Some(v) = val.ner {
             out.ner = v.into();
-        }        if let Some(v) = val.preserve_offsets {
+        }
+        if let Some(v) = val.preserve_offsets {
             out.preserve_offsets = v.into();
-        }        if let Some(v) = val.custom_terms {
+        }
+        if let Some(v) = val.custom_terms {
             out.custom_terms = v.into();
-        }        if let Some(v) = val.custom_patterns {
+        }
+        if let Some(v) = val.custom_patterns {
             out.custom_patterns = v.into();
-        }        out    }
+        }
+        out
+    }
 }
-
 
 #[derive(serde::Deserialize, Default)]
 #[serde(default)]
-pub struct TranslationConfigInput {    #[serde(rename = "targetLang")]    pub target_lang: Option<String>,    #[serde(rename = "sourceLang")]    pub source_lang: Option<String>,    #[serde(rename = "preserveMarkup")]    pub preserve_markup: Option<bool>,    #[serde(rename = "llm")]    pub llm: Option<kreuzberg::LlmConfig>,}
-
-impl From<TranslationConfigInput> for kreuzberg::TranslationConfig {
-    fn from(val: TranslationConfigInput) -> Self {        Self {            target_lang: val.target_lang.map(|v| v.into()).unwrap_or_default(),            source_lang: val.source_lang.map(|v| v.into()).unwrap_or_default(),            preserve_markup: val.preserve_markup.map(|v| v.into()).unwrap_or_default(),            llm: val.llm.map(|v| v.into()).unwrap_or_default(),        }    }
+pub struct TranslationConfigInput {
+    #[serde(rename = "targetLang")]
+    pub target_lang: Option<String>,
+    #[serde(rename = "sourceLang")]
+    pub source_lang: Option<String>,
+    #[serde(rename = "preserveMarkup")]
+    pub preserve_markup: Option<bool>,
+    #[serde(rename = "llm")]
+    pub llm: Option<kreuzberg::LlmConfig>,
 }
 
+impl From<TranslationConfigInput> for kreuzberg::TranslationConfig {
+    fn from(val: TranslationConfigInput) -> Self {
+        Self {
+            target_lang: val.target_lang.map(|v| v.into()).unwrap_or_default(),
+            source_lang: val.source_lang.map(|v| v.into()).unwrap_or_default(),
+            preserve_markup: val.preserve_markup.map(|v| v.into()).unwrap_or_default(),
+            llm: val.llm.map(|v| v.into()).unwrap_or_default(),
+        }
+    }
+}
 
 /// Extract content from a byte array.
 ///
@@ -13270,13 +15440,19 @@ impl From<TranslationConfigInput> for kreuzberg::TranslationConfig {
 /// # Example
 #[allow(clippy::missing_errors_doc)]
 #[wasm_bindgen(js_name = "extractBytes")]
-pub async fn extract_bytes(content: Vec<u8>, mime_type: String, config: JsValue) -> Result<WasmExtractionResult, JsValue> {
+pub async fn extract_bytes(
+    content: Vec<u8>,
+    mime_type: String,
+    config: JsValue,
+) -> Result<WasmExtractionResult, JsValue> {
     let config_core: kreuzberg::ExtractionConfig = if config.is_undefined() {
         kreuzberg::ExtractionConfig::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionConfig>(config).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionConfig>(config)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
-    let result = kreuzberg::extract_bytes(&content, &mime_type, &config_core).await
+    let result = kreuzberg::extract_bytes(&content, &mime_type, &config_core)
+        .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(WasmExtractionResult::from(result))
 }
@@ -13309,13 +15485,19 @@ pub async fn extract_bytes(content: Vec<u8>, mime_type: String, config: JsValue)
 /// # Example
 #[allow(clippy::missing_errors_doc)]
 #[wasm_bindgen(js_name = "extractFile")]
-pub async fn extract_file(path: String, mime_type: Option<String>, config: JsValue) -> Result<WasmExtractionResult, JsValue> {
+pub async fn extract_file(
+    path: String,
+    mime_type: Option<String>,
+    config: JsValue,
+) -> Result<WasmExtractionResult, JsValue> {
     let config_core: kreuzberg::ExtractionConfig = if config.is_undefined() {
         kreuzberg::ExtractionConfig::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionConfig>(config).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionConfig>(config)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
-    let result = kreuzberg::extract_file(std::path::PathBuf::from(path), mime_type.as_deref(), &config_core).await
+    let result = kreuzberg::extract_file(std::path::PathBuf::from(path), mime_type.as_deref(), &config_core)
+        .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(WasmExtractionResult::from(result))
 }
@@ -13386,7 +15568,10 @@ pub fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, JsValue
 /// from the four corner points of the grid.
 #[wasm_bindgen(js_name = "detectQrCodes")]
 pub fn detect_qr_codes(image_bytes: Vec<u8>, _format_hint: Option<String>) -> Vec<WasmQrCode> {
-    kreuzberg::extractors::qr::detect_qr_codes(&image_bytes, _format_hint.as_deref()).into_iter().map(Into::into).collect()
+    kreuzberg::extractors::qr::detect_qr_codes(&image_bytes, _format_hint.as_deref())
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 /// List the names of all registered embedding backends.
@@ -13434,7 +15619,8 @@ pub fn list_ocr_backends() -> Result<Vec<String>, JsValue> {
 #[allow(clippy::missing_errors_doc)]
 #[wasm_bindgen(js_name = "registerBuiltin")]
 pub fn register_builtin() -> Result<(), JsValue> {
-    let result = kreuzberg::plugins::processor::builtin::register_builtin().map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let result =
+        kreuzberg::plugins::processor::builtin::register_builtin().map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(result)
 }
 
@@ -13492,14 +15678,17 @@ pub async fn classify_pages(result: JsValue, config: JsValue) -> Result<(), JsVa
     let result_core: kreuzberg::ExtractionResult = if result.is_undefined() {
         kreuzberg::ExtractionResult::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionResult>(result).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionResult>(result)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
     let config_core: kreuzberg::PageClassificationConfig = if config.is_undefined() {
         kreuzberg::PageClassificationConfig::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::PageClassificationConfig>(config).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::PageClassificationConfig>(config)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
-    let result = kreuzberg::text::classification::classify_pages(&result_core, &config_core).await
+    let result = kreuzberg::text::classification::classify_pages(&result_core, &config_core)
+        .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(result)
 }
@@ -13512,21 +15701,27 @@ pub async fn redact(result: JsValue, config: JsValue) -> Result<(), JsValue> {
     let result_core: kreuzberg::ExtractionResult = if result.is_undefined() {
         kreuzberg::ExtractionResult::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionResult>(result).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionResult>(result)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
     let config_core: kreuzberg::RedactionConfig = if config.is_undefined() {
         kreuzberg::RedactionConfig::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::RedactionConfig>(config).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::RedactionConfig>(config)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
-    let result = kreuzberg::text::redaction::redact(&result_core, &config_core).await
+    let result = kreuzberg::text::redaction::redact(&result_core, &config_core)
+        .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(result)
 }
 
 #[wasm_bindgen(js_name = "findAll")]
 pub fn find_all(text: String) -> Vec<WasmPatternMatch> {
-    kreuzberg::text::redaction::patterns::ssn::find_all(&text).into_iter().map(Into::into).collect()
+    kreuzberg::text::redaction::patterns::ssn::find_all(&text)
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 /// Scan `text` for every PII category in `categories` and return all matches
@@ -13539,7 +15734,10 @@ pub fn find_all(text: String) -> Vec<WasmPatternMatch> {
 pub fn scan_text(text: String, categories: Vec<WasmPiiCategory>) -> Vec<WasmPatternMatch> {
     let categories_core: Vec<_> = categories.into_iter().map(Into::into).collect();
 
-    kreuzberg::text::redaction::patterns::scan_text(&text, &categories_core).into_iter().map(Into::into).collect()
+    kreuzberg::text::redaction::patterns::scan_text(&text, &categories_core)
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 /// Apply `strategy` to `original` for `category` and return the replacement token.
@@ -13547,7 +15745,12 @@ pub fn scan_text(text: String, categories: Vec<WasmPiiCategory>) -> Vec<WasmPatt
 /// The optional `counter` is required for `RedactionStrategy.TokenReplace`;
 /// other strategies ignore it.
 #[wasm_bindgen(js_name = "applyStrategy")]
-pub fn apply_strategy(_strategy: WasmRedactionStrategy, _original: String, _category: WasmPiiCategory, _counter: WasmTokenCounter) -> String {
+pub fn apply_strategy(
+    _strategy: WasmRedactionStrategy,
+    _original: String,
+    _category: WasmPiiCategory,
+    _counter: WasmTokenCounter,
+) -> String {
     String::from("[unimplemented: apply_strategy]")
 }
 
@@ -13581,14 +15784,17 @@ pub async fn translate_result(result: JsValue, config: JsValue) -> Result<(), Js
     let result_core: kreuzberg::ExtractionResult = if result.is_undefined() {
         kreuzberg::ExtractionResult::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionResult>(result).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::ExtractionResult>(result)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
     let config_core: kreuzberg::TranslationConfig = if config.is_undefined() {
         kreuzberg::TranslationConfig::default()
     } else {
-        serde_wasm_bindgen::from_value::<kreuzberg::TranslationConfig>(config).map_err(|e| JsValue::from_str(&e.to_string()))?
+        serde_wasm_bindgen::from_value::<kreuzberg::TranslationConfig>(config)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
     };
-    let result = kreuzberg::text::translation::translate_result(&result_core, &config_core).await
+    let result = kreuzberg::text::translation::translate_result(&result_core, &config_core)
+        .await
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(result)
 }
@@ -13608,264 +15814,293 @@ pub fn detect_mime_type(path: String, check_exists: bool) -> Result<String, JsVa
 mod __alef_wasm_bridge_ocrbackend {
     use super::*;
 
-/// Wrapper that bridges a foreign Wasm object to the `OcrBackend` trait.
-pub struct WasmOcrBackendBridge {
-    inner: wasm_bindgen::JsValue,
-    cached_name: String,
-}
-
-
-impl std::fmt::Debug for WasmOcrBackendBridge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmOcrBackendBridge")
-    }
-}
-
-
-impl WasmOcrBackendBridge {
-    /// Create a new bridge wrapping a JS object.
-    ///
-    /// Validates that the JS object provides all required methods.
-    pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("processImage")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "process_image"));
-        }        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("supportsLanguage")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "supports_language"));
-        }        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("backendType")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "backend_type"));
-        }
-        let cached_name = {
-            let key = wasm_bindgen::JsValue::from_str("name");
-            js_sys::Reflect::get(&js_obj, &key)
-                .ok()
-                .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
-                .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
-                .and_then(|v| v.as_string())
-                .unwrap_or_else(|| "wasm_bridge".to_string())
-        };
-
-        Ok(Self {
-            inner: js_obj,
-            cached_name,
-        })
-    }
-}
-
-
-impl kreuzberg::plugins::Plugin for WasmOcrBackendBridge {
-    fn name(&self) -> &str {
-        &self.cached_name
+    /// Wrapper that bridges a foreign Wasm object to the `OcrBackend` trait.
+    pub struct WasmOcrBackendBridge {
+        inner: wasm_bindgen::JsValue,
+        cached_name: String,
     }
 
-    fn version(&self) -> String {
-        let key = wasm_bindgen::JsValue::from_str("version");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        result.as_string().unwrap_or_default()
-    }
-
-    fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("initialize");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "initialize")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
-
-        // Convert result
-        Ok(())
-    }
-
-    fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("shutdown");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "shutdown")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
-
-        // Convert result
-        Ok(())
-    }
-}
-
-
-#[async_trait::async_trait(?Send)]impl kreuzberg::OcrBackend for WasmOcrBackendBridge {
-    async fn process_image(&self, image_bytes: &[u8], config: &kreuzberg::OcrConfig) -> std::result::Result<kreuzberg::ExtractionResult, kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("processImage");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "process_image")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "process_image")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "process_image")))?;
-
-        let args = js_sys::Array::new();
-        args.push(&js_sys::Uint8Array::from(image_bytes).into());
-        args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
-
-        let promise_val = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "process_image")))?;
-        let promise: js_sys::Promise = promise_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "process_image")))?;
-        let result = wasm_bindgen_futures::JsFuture::from(promise)
-            .await
-            .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
-
-        // Convert result
-        result.as_string()
-            .ok_or_else(|| kreuzberg::KreuzbergError::Other("Failed to convert result".to_string()))
-            .and_then(|s| serde_json::from_str::<kreuzberg::ExtractionResult>(&s).map_err(|e| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e))))
-    }
-
-
-    fn supports_language(&self, lang: &str) -> bool {
-        let key = wasm_bindgen::JsValue::from_str("supportsLanguage");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-        args.push(&wasm_bindgen::JsValue::from_str(lang));
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        // Convert JS boolean to Rust bool
-        result.as_bool().unwrap_or_default()
-    }
-
-
-    fn backend_type(&self) -> kreuzberg::OcrBackendType {
-        let key = wasm_bindgen::JsValue::from_str("backendType");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        // Convert bare enum string (non-JSON) to kreuzberg::OcrBackendType
-        result.as_string().and_then(|s| serde_json::from_str::<kreuzberg::OcrBackendType>(&format!("\"{}\"", s)).map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))).unwrap_or_default()
-    }
-
-}
-
-
-#[wasm_bindgen(js_name = "registerOcrBackend")]
-pub fn register_ocr_backend(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {    let required_methods = vec![        "processImage",        "supportsLanguage",        "backendType",    ];
-
-    for method_name in required_methods {
-        if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
-            return Err(wasm_bindgen::JsValue::from_str(&format!("Backend missing required method: {}", method_name)));
+    impl std::fmt::Debug for WasmOcrBackendBridge {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "WasmOcrBackendBridge")
         }
     }
-    let wrapper = WasmOcrBackendBridge::new(backend)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
-    let arc: std::sync::Arc<dyn kreuzberg::OcrBackend> = std::sync::Arc::new(wrapper);
 
-    let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
-    let mut registry = registry.write();
-    registry.register(arc)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl WasmOcrBackendBridge {
+        /// Create a new bridge wrapping a JS object.
+        ///
+        /// Validates that the JS object provides all required methods.
+        pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("processImage")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "process_image"));
+            }
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("supportsLanguage")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "supports_language"));
+            }
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("backendType")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "backend_type"));
+            }
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
 
+            Ok(Self {
+                inner: js_obj,
+                cached_name,
+            })
+        }
+    }
 
-#[wasm_bindgen(js_name = "unregisterOcrBackend")]
-pub fn unregister_ocr_backend(name: String) -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::ocr_backend::unregister_ocr_backend(&name).map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl kreuzberg::plugins::Plugin for WasmOcrBackendBridge {
+        fn name(&self) -> &str {
+            &self.cached_name
+        }
 
+        fn version(&self) -> String {
+            let key = wasm_bindgen::JsValue::from_str("version");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
 
-#[wasm_bindgen(js_name = "clearOcrBackends")]
-pub fn clear_ocr_backends() -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::ocr_backend::clear_ocr_backends().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
 
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            result.as_string().unwrap_or_default()
+        }
+
+        fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("initialize");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "initialize"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize"))
+            })?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
+
+            // Convert result
+            Ok(())
+        }
+
+        fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("shutdown");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "shutdown"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
+
+            // Convert result
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl kreuzberg::OcrBackend for WasmOcrBackendBridge {
+        async fn process_image(
+            &self,
+            image_bytes: &[u8],
+            config: &kreuzberg::OcrConfig,
+        ) -> std::result::Result<kreuzberg::ExtractionResult, kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("processImage");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "process_image"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "process_image")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "process_image"))
+            })?;
+
+            let args = js_sys::Array::new();
+            args.push(&js_sys::Uint8Array::from(image_bytes).into());
+            args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
+
+            let promise_val = func.apply(&self.inner, &args).map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "process_image"))
+            })?;
+            let promise: js_sys::Promise = promise_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "process_image"))
+            })?;
+            let result = wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
+
+            // Convert result
+            result
+                .as_string()
+                .ok_or_else(|| kreuzberg::KreuzbergError::Other("Failed to convert result".to_string()))
+                .and_then(|s| {
+                    serde_json::from_str::<kreuzberg::ExtractionResult>(&s)
+                        .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))
+                })
+        }
+
+        fn supports_language(&self, lang: &str) -> bool {
+            let key = wasm_bindgen::JsValue::from_str("supportsLanguage");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
+
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+            args.push(&wasm_bindgen::JsValue::from_str(lang));
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            // Convert JS boolean to Rust bool
+            result.as_bool().unwrap_or_default()
+        }
+
+        fn backend_type(&self) -> kreuzberg::OcrBackendType {
+            let key = wasm_bindgen::JsValue::from_str("backendType");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
+
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            // Convert bare enum string (non-JSON) to kreuzberg::OcrBackendType
+            result
+                .as_string()
+                .and_then(|s| {
+                    serde_json::from_str::<kreuzberg::OcrBackendType>(&format!("\"{}\"", s))
+                        .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))
+                })
+                .unwrap_or_default()
+        }
+    }
+
+    #[wasm_bindgen(js_name = "registerOcrBackend")]
+    pub fn register_ocr_backend(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {
+        let required_methods = vec!["processImage", "supportsLanguage", "backendType"];
+
+        for method_name in required_methods {
+            if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
+                return Err(wasm_bindgen::JsValue::from_str(&format!(
+                    "Backend missing required method: {}",
+                    method_name
+                )));
+            }
+        }
+        let wrapper = WasmOcrBackendBridge::new(backend).map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
+        let arc: std::sync::Arc<dyn kreuzberg::OcrBackend> = std::sync::Arc::new(wrapper);
+
+        let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
+        let mut registry = registry.write();
+        registry
+            .register(arc)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "unregisterOcrBackend")]
+    pub fn unregister_ocr_backend(name: String) -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::ocr_backend::unregister_ocr_backend(&name)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "clearOcrBackends")]
+    pub fn clear_ocr_backends() -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::ocr_backend::clear_ocr_backends()
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
 }
 #[cfg(target_arch = "wasm32")]
 pub use __alef_wasm_bridge_ocrbackend::*;
@@ -13874,227 +16109,252 @@ pub use __alef_wasm_bridge_ocrbackend::*;
 mod __alef_wasm_bridge_postprocessor {
     use super::*;
 
-/// Wrapper that bridges a foreign Wasm object to the `PostProcessor` trait.
-pub struct WasmPostProcessorBridge {
-    inner: wasm_bindgen::JsValue,
-    cached_name: String,
-}
-
-
-impl std::fmt::Debug for WasmPostProcessorBridge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmPostProcessorBridge")
-    }
-}
-
-
-impl WasmPostProcessorBridge {
-    /// Create a new bridge wrapping a JS object.
-    ///
-    /// Validates that the JS object provides all required methods.
-    pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("process")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "process"));
-        }        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("processingStage")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "processing_stage"));
-        }
-        let cached_name = {
-            let key = wasm_bindgen::JsValue::from_str("name");
-            js_sys::Reflect::get(&js_obj, &key)
-                .ok()
-                .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
-                .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
-                .and_then(|v| v.as_string())
-                .unwrap_or_else(|| "wasm_bridge".to_string())
-        };
-
-        Ok(Self {
-            inner: js_obj,
-            cached_name,
-        })
-    }
-}
-
-
-impl kreuzberg::plugins::Plugin for WasmPostProcessorBridge {
-    fn name(&self) -> &str {
-        &self.cached_name
+    /// Wrapper that bridges a foreign Wasm object to the `PostProcessor` trait.
+    pub struct WasmPostProcessorBridge {
+        inner: wasm_bindgen::JsValue,
+        cached_name: String,
     }
 
-    fn version(&self) -> String {
-        let key = wasm_bindgen::JsValue::from_str("version");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        result.as_string().unwrap_or_default()
-    }
-
-    fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("initialize");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "initialize")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
-
-        // Convert result
-        Ok(())
-    }
-
-    fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("shutdown");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "shutdown")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
-
-        // Convert result
-        Ok(())
-    }
-}
-
-
-#[async_trait::async_trait(?Send)]impl kreuzberg::PostProcessor for WasmPostProcessorBridge {
-    async fn process(&self, result: &mut kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("process");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "process")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "process")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "process")))?;
-
-        let args = js_sys::Array::new();
-        args.push(&serde_wasm_bindgen::to_value(result).unwrap_or(wasm_bindgen::JsValue::NULL));
-        args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
-
-        let promise_val = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "process")))?;
-        let promise: js_sys::Promise = promise_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "process")))?;
-        let result = wasm_bindgen_futures::JsFuture::from(promise)
-            .await
-            .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
-
-        // Convert result
-        Ok(())
-    }
-
-
-    fn processing_stage(&self) -> kreuzberg::ProcessingStage {
-        let key = wasm_bindgen::JsValue::from_str("processingStage");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        // Convert bare enum string (non-JSON) to kreuzberg::ProcessingStage
-        result.as_string().and_then(|s| serde_json::from_str::<kreuzberg::ProcessingStage>(&format!("\"{}\"", s)).map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))).unwrap_or_default()
-    }
-
-}
-
-
-#[wasm_bindgen(js_name = "registerPostProcessor")]
-pub fn register_post_processor(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {    let required_methods = vec![        "process",        "processingStage",    ];
-
-    for method_name in required_methods {
-        if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
-            return Err(wasm_bindgen::JsValue::from_str(&format!("Backend missing required method: {}", method_name)));
+    impl std::fmt::Debug for WasmPostProcessorBridge {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "WasmPostProcessorBridge")
         }
     }
-    let wrapper = WasmPostProcessorBridge::new(backend)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
-    let arc: std::sync::Arc<dyn kreuzberg::PostProcessor> = std::sync::Arc::new(wrapper);
 
-    let registry = kreuzberg::plugins::registry::get_post_processor_registry();
-    let mut registry = registry.write();
-    registry.register(arc)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl WasmPostProcessorBridge {
+        /// Create a new bridge wrapping a JS object.
+        ///
+        /// Validates that the JS object provides all required methods.
+        pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("process")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "process"));
+            }
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("processingStage")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "processing_stage"));
+            }
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
 
+            Ok(Self {
+                inner: js_obj,
+                cached_name,
+            })
+        }
+    }
 
-#[wasm_bindgen(js_name = "unregisterPostProcessor")]
-pub fn unregister_post_processor(name: String) -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::post_processor::unregister_post_processor(&name).map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl kreuzberg::plugins::Plugin for WasmPostProcessorBridge {
+        fn name(&self) -> &str {
+            &self.cached_name
+        }
 
+        fn version(&self) -> String {
+            let key = wasm_bindgen::JsValue::from_str("version");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
 
-#[wasm_bindgen(js_name = "clearPostProcessors")]
-pub fn clear_post_processors() -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::post_processor::clear_post_processors().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
 
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            result.as_string().unwrap_or_default()
+        }
+
+        fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("initialize");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "initialize"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize"))
+            })?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
+
+            // Convert result
+            Ok(())
+        }
+
+        fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("shutdown");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "shutdown"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
+
+            // Convert result
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl kreuzberg::PostProcessor for WasmPostProcessorBridge {
+        async fn process(
+            &self,
+            result: &mut kreuzberg::ExtractionResult,
+            config: &kreuzberg::ExtractionConfig,
+        ) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("process");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "process"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "process")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "process")))?;
+
+            let args = js_sys::Array::new();
+            args.push(&serde_wasm_bindgen::to_value(result).unwrap_or(wasm_bindgen::JsValue::NULL));
+            args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
+
+            let promise_val = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "process")))?;
+            let promise: js_sys::Promise = promise_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "process"))
+            })?;
+            let result = wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
+
+            // Convert result
+            Ok(())
+        }
+
+        fn processing_stage(&self) -> kreuzberg::ProcessingStage {
+            let key = wasm_bindgen::JsValue::from_str("processingStage");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
+
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            // Convert bare enum string (non-JSON) to kreuzberg::ProcessingStage
+            result
+                .as_string()
+                .and_then(|s| {
+                    serde_json::from_str::<kreuzberg::ProcessingStage>(&format!("\"{}\"", s))
+                        .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))
+                })
+                .unwrap_or_default()
+        }
+    }
+
+    #[wasm_bindgen(js_name = "registerPostProcessor")]
+    pub fn register_post_processor(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {
+        let required_methods = vec!["process", "processingStage"];
+
+        for method_name in required_methods {
+            if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
+                return Err(wasm_bindgen::JsValue::from_str(&format!(
+                    "Backend missing required method: {}",
+                    method_name
+                )));
+            }
+        }
+        let wrapper = WasmPostProcessorBridge::new(backend).map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
+        let arc: std::sync::Arc<dyn kreuzberg::PostProcessor> = std::sync::Arc::new(wrapper);
+
+        let registry = kreuzberg::plugins::registry::get_post_processor_registry();
+        let mut registry = registry.write();
+        registry
+            .register(arc)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "unregisterPostProcessor")]
+    pub fn unregister_post_processor(name: String) -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::post_processor::unregister_post_processor(&name)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "clearPostProcessors")]
+    pub fn clear_post_processors() -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::post_processor::clear_post_processors()
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
 }
 #[cfg(target_arch = "wasm32")]
 pub use __alef_wasm_bridge_postprocessor::*;
@@ -14103,193 +16363,211 @@ pub use __alef_wasm_bridge_postprocessor::*;
 mod __alef_wasm_bridge_validator {
     use super::*;
 
-/// Wrapper that bridges a foreign Wasm object to the `Validator` trait.
-pub struct WasmValidatorBridge {
-    inner: wasm_bindgen::JsValue,
-    cached_name: String,
-}
-
-
-impl std::fmt::Debug for WasmValidatorBridge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmValidatorBridge")
-    }
-}
-
-
-impl WasmValidatorBridge {
-    /// Create a new bridge wrapping a JS object.
-    ///
-    /// Validates that the JS object provides all required methods.
-    pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("validate")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "validate"));
-        }
-        let cached_name = {
-            let key = wasm_bindgen::JsValue::from_str("name");
-            js_sys::Reflect::get(&js_obj, &key)
-                .ok()
-                .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
-                .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
-                .and_then(|v| v.as_string())
-                .unwrap_or_else(|| "wasm_bridge".to_string())
-        };
-
-        Ok(Self {
-            inner: js_obj,
-            cached_name,
-        })
-    }
-}
-
-
-impl kreuzberg::plugins::Plugin for WasmValidatorBridge {
-    fn name(&self) -> &str {
-        &self.cached_name
+    /// Wrapper that bridges a foreign Wasm object to the `Validator` trait.
+    pub struct WasmValidatorBridge {
+        inner: wasm_bindgen::JsValue,
+        cached_name: String,
     }
 
-    fn version(&self) -> String {
-        let key = wasm_bindgen::JsValue::from_str("version");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        result.as_string().unwrap_or_default()
-    }
-
-    fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("initialize");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "initialize")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
-
-        // Convert result
-        Ok(())
-    }
-
-    fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("shutdown");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "shutdown")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
-
-        // Convert result
-        Ok(())
-    }
-}
-
-
-#[async_trait::async_trait(?Send)]impl kreuzberg::Validator for WasmValidatorBridge {
-    async fn validate(&self, result: &kreuzberg::ExtractionResult, config: &kreuzberg::ExtractionConfig) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("validate");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "validate")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "validate")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "validate")))?;
-
-        let args = js_sys::Array::new();
-        args.push(&serde_wasm_bindgen::to_value(result).unwrap_or(wasm_bindgen::JsValue::NULL));
-        args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
-
-        let promise_val = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "validate")))?;
-        let promise: js_sys::Promise = promise_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "validate")))?;
-        let result = wasm_bindgen_futures::JsFuture::from(promise)
-            .await
-            .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
-
-        // Convert result
-        Ok(())
-    }
-
-}
-
-
-#[wasm_bindgen(js_name = "registerValidator")]
-pub fn register_validator(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {    let required_methods = vec![        "validate",    ];
-
-    for method_name in required_methods {
-        if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
-            return Err(wasm_bindgen::JsValue::from_str(&format!("Backend missing required method: {}", method_name)));
+    impl std::fmt::Debug for WasmValidatorBridge {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "WasmValidatorBridge")
         }
     }
-    let wrapper = WasmValidatorBridge::new(backend)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
-    let arc: std::sync::Arc<dyn kreuzberg::Validator> = std::sync::Arc::new(wrapper);
 
-    let registry = kreuzberg::plugins::registry::get_validator_registry();
-    let mut registry = registry.write();
-    registry.register(arc)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl WasmValidatorBridge {
+        /// Create a new bridge wrapping a JS object.
+        ///
+        /// Validates that the JS object provides all required methods.
+        pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("validate")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "validate"));
+            }
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
 
+            Ok(Self {
+                inner: js_obj,
+                cached_name,
+            })
+        }
+    }
 
-#[wasm_bindgen(js_name = "unregisterValidator")]
-pub fn unregister_validator(name: String) -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::validator::unregister_validator(&name).map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl kreuzberg::plugins::Plugin for WasmValidatorBridge {
+        fn name(&self) -> &str {
+            &self.cached_name
+        }
 
+        fn version(&self) -> String {
+            let key = wasm_bindgen::JsValue::from_str("version");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
 
-#[wasm_bindgen(js_name = "clearValidators")]
-pub fn clear_validators() -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::validator::clear_validators().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
 
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            result.as_string().unwrap_or_default()
+        }
+
+        fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("initialize");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "initialize"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize"))
+            })?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
+
+            // Convert result
+            Ok(())
+        }
+
+        fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("shutdown");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "shutdown"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
+
+            // Convert result
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl kreuzberg::Validator for WasmValidatorBridge {
+        async fn validate(
+            &self,
+            result: &kreuzberg::ExtractionResult,
+            config: &kreuzberg::ExtractionConfig,
+        ) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("validate");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "validate"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "validate")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "validate")))?;
+
+            let args = js_sys::Array::new();
+            args.push(&serde_wasm_bindgen::to_value(result).unwrap_or(wasm_bindgen::JsValue::NULL));
+            args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
+
+            let promise_val = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "validate")))?;
+            let promise: js_sys::Promise = promise_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "validate"))
+            })?;
+            let result = wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
+
+            // Convert result
+            Ok(())
+        }
+    }
+
+    #[wasm_bindgen(js_name = "registerValidator")]
+    pub fn register_validator(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {
+        let required_methods = vec!["validate"];
+
+        for method_name in required_methods {
+            if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
+                return Err(wasm_bindgen::JsValue::from_str(&format!(
+                    "Backend missing required method: {}",
+                    method_name
+                )));
+            }
+        }
+        let wrapper = WasmValidatorBridge::new(backend).map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
+        let arc: std::sync::Arc<dyn kreuzberg::Validator> = std::sync::Arc::new(wrapper);
+
+        let registry = kreuzberg::plugins::registry::get_validator_registry();
+        let mut registry = registry.write();
+        registry
+            .register(arc)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "unregisterValidator")]
+    pub fn unregister_validator(name: String) -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::validator::unregister_validator(&name)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "clearValidators")]
+    pub fn clear_validators() -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::validator::clear_validators().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
 }
 #[cfg(target_arch = "wasm32")]
 pub use __alef_wasm_bridge_validator::*;
@@ -14298,228 +16576,253 @@ pub use __alef_wasm_bridge_validator::*;
 mod __alef_wasm_bridge_embeddingbackend {
     use super::*;
 
-/// Wrapper that bridges a foreign Wasm object to the `EmbeddingBackend` trait.
-pub struct WasmEmbeddingBackendBridge {
-    inner: wasm_bindgen::JsValue,
-    cached_name: String,
-}
-
-
-impl std::fmt::Debug for WasmEmbeddingBackendBridge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmEmbeddingBackendBridge")
-    }
-}
-
-
-impl WasmEmbeddingBackendBridge {
-    /// Create a new bridge wrapping a JS object.
-    ///
-    /// Validates that the JS object provides all required methods.
-    pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("dimensions")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "dimensions"));
-        }        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("embed")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "embed"));
-        }
-        let cached_name = {
-            let key = wasm_bindgen::JsValue::from_str("name");
-            js_sys::Reflect::get(&js_obj, &key)
-                .ok()
-                .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
-                .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
-                .and_then(|v| v.as_string())
-                .unwrap_or_else(|| "wasm_bridge".to_string())
-        };
-
-        Ok(Self {
-            inner: js_obj,
-            cached_name,
-        })
-    }
-}
-
-
-impl kreuzberg::plugins::Plugin for WasmEmbeddingBackendBridge {
-    fn name(&self) -> &str {
-        &self.cached_name
+    /// Wrapper that bridges a foreign Wasm object to the `EmbeddingBackend` trait.
+    pub struct WasmEmbeddingBackendBridge {
+        inner: wasm_bindgen::JsValue,
+        cached_name: String,
     }
 
-    fn version(&self) -> String {
-        let key = wasm_bindgen::JsValue::from_str("version");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        result.as_string().unwrap_or_default()
-    }
-
-    fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("initialize");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "initialize")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
-
-        // Convert result
-        Ok(())
-    }
-
-    fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("shutdown");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "shutdown")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
-
-        // Convert result
-        Ok(())
-    }
-}
-
-
-#[async_trait::async_trait(?Send)]impl kreuzberg::EmbeddingBackend for WasmEmbeddingBackendBridge {
-    fn dimensions(&self) -> usize {
-        let key = wasm_bindgen::JsValue::from_str("dimensions");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        // Convert JS result to usize
-        result.as_string().and_then(|s| serde_json::from_str::<usize>(&s).map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))).unwrap_or_default()
-    }
-
-
-    async fn embed(&self, texts: Vec<String>) -> std::result::Result<Vec<Vec<f32>>, kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("embed");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "embed")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "embed")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "embed")))?;
-
-        let args = js_sys::Array::new();
-        args.push(&serde_wasm_bindgen::to_value(&texts).unwrap_or(wasm_bindgen::JsValue::NULL));
-
-        let promise_val = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "embed")))?;
-        let promise: js_sys::Promise = promise_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "embed")))?;
-        let result = wasm_bindgen_futures::JsFuture::from(promise)
-            .await
-            .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
-
-        // Convert result
-        result.as_string()
-            .ok_or_else(|| kreuzberg::KreuzbergError::Other("Failed to convert result".to_string()))
-            .and_then(|s| serde_json::from_str::<Vec<Vec<f32>>>(&s).map_err(|e| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e))))
-    }
-
-}
-
-
-#[wasm_bindgen(js_name = "registerEmbeddingBackend")]
-pub fn register_embedding_backend(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {    let required_methods = vec![        "dimensions",        "embed",    ];
-
-    for method_name in required_methods {
-        if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
-            return Err(wasm_bindgen::JsValue::from_str(&format!("Backend missing required method: {}", method_name)));
+    impl std::fmt::Debug for WasmEmbeddingBackendBridge {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "WasmEmbeddingBackendBridge")
         }
     }
-    let wrapper = WasmEmbeddingBackendBridge::new(backend)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
-    let arc: std::sync::Arc<dyn kreuzberg::EmbeddingBackend> = std::sync::Arc::new(wrapper);
 
-    let registry = kreuzberg::plugins::registry::get_embedding_backend_registry();
-    let mut registry = registry.write();
-    registry.register(arc)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl WasmEmbeddingBackendBridge {
+        /// Create a new bridge wrapping a JS object.
+        ///
+        /// Validates that the JS object provides all required methods.
+        pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("dimensions")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "dimensions"));
+            }
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("embed")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "embed"));
+            }
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
 
+            Ok(Self {
+                inner: js_obj,
+                cached_name,
+            })
+        }
+    }
 
-#[wasm_bindgen(js_name = "unregisterEmbeddingBackend")]
-pub fn unregister_embedding_backend(name: String) -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::embedding_backend::unregister_embedding_backend(&name).map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl kreuzberg::plugins::Plugin for WasmEmbeddingBackendBridge {
+        fn name(&self) -> &str {
+            &self.cached_name
+        }
 
+        fn version(&self) -> String {
+            let key = wasm_bindgen::JsValue::from_str("version");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
 
-#[wasm_bindgen(js_name = "clearEmbeddingBackends")]
-pub fn clear_embedding_backends() -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::embedding_backend::clear_embedding_backends().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
 
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            result.as_string().unwrap_or_default()
+        }
+
+        fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("initialize");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "initialize"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize"))
+            })?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
+
+            // Convert result
+            Ok(())
+        }
+
+        fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("shutdown");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "shutdown"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
+
+            // Convert result
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl kreuzberg::EmbeddingBackend for WasmEmbeddingBackendBridge {
+        fn dimensions(&self) -> usize {
+            let key = wasm_bindgen::JsValue::from_str("dimensions");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
+
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            // Convert JS result to usize
+            result
+                .as_string()
+                .and_then(|s| {
+                    serde_json::from_str::<usize>(&s)
+                        .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))
+                })
+                .unwrap_or_default()
+        }
+
+        async fn embed(&self, texts: Vec<String>) -> std::result::Result<Vec<Vec<f32>>, kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("embed");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "embed"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "embed")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "embed")))?;
+
+            let args = js_sys::Array::new();
+            args.push(&serde_wasm_bindgen::to_value(&texts).unwrap_or(wasm_bindgen::JsValue::NULL));
+
+            let promise_val = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "embed")))?;
+            let promise: js_sys::Promise = promise_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "embed"))
+            })?;
+            let result = wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
+
+            // Convert result
+            result
+                .as_string()
+                .ok_or_else(|| kreuzberg::KreuzbergError::Other("Failed to convert result".to_string()))
+                .and_then(|s| {
+                    serde_json::from_str::<Vec<Vec<f32>>>(&s)
+                        .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))
+                })
+        }
+    }
+
+    #[wasm_bindgen(js_name = "registerEmbeddingBackend")]
+    pub fn register_embedding_backend(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {
+        let required_methods = vec!["dimensions", "embed"];
+
+        for method_name in required_methods {
+            if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
+                return Err(wasm_bindgen::JsValue::from_str(&format!(
+                    "Backend missing required method: {}",
+                    method_name
+                )));
+            }
+        }
+        let wrapper = WasmEmbeddingBackendBridge::new(backend).map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
+        let arc: std::sync::Arc<dyn kreuzberg::EmbeddingBackend> = std::sync::Arc::new(wrapper);
+
+        let registry = kreuzberg::plugins::registry::get_embedding_backend_registry();
+        let mut registry = registry.write();
+        registry
+            .register(arc)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "unregisterEmbeddingBackend")]
+    pub fn unregister_embedding_backend(name: String) -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::embedding_backend::unregister_embedding_backend(&name)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "clearEmbeddingBackends")]
+    pub fn clear_embedding_backends() -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::embedding_backend::clear_embedding_backends()
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
 }
 #[cfg(target_arch = "wasm32")]
 pub use __alef_wasm_bridge_embeddingbackend::*;
@@ -14528,235 +16831,268 @@ pub use __alef_wasm_bridge_embeddingbackend::*;
 mod __alef_wasm_bridge_documentextractor {
     use super::*;
 
-/// Wrapper that bridges a foreign Wasm object to the `DocumentExtractor` trait.
-pub struct WasmDocumentExtractorBridge {
-    inner: wasm_bindgen::JsValue,
-    cached_name: String,
-}
-
-
-impl std::fmt::Debug for WasmDocumentExtractorBridge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmDocumentExtractorBridge")
-    }
-}
-
-
-impl WasmDocumentExtractorBridge {
-    /// Create a new bridge wrapping a JS object.
-    ///
-    /// Validates that the JS object provides all required methods.
-    pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("extractBytes")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "extract_bytes"));
-        }        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("supportedMimeTypes")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "supported_mime_types"));
-        }
-        let cached_name = {
-            let key = wasm_bindgen::JsValue::from_str("name");
-            js_sys::Reflect::get(&js_obj, &key)
-                .ok()
-                .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
-                .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
-                .and_then(|v| v.as_string())
-                .unwrap_or_else(|| "wasm_bridge".to_string())
-        };
-
-        Ok(Self {
-            inner: js_obj,
-            cached_name,
-        })
-    }
-}
-
-
-impl kreuzberg::plugins::Plugin for WasmDocumentExtractorBridge {
-    fn name(&self) -> &str {
-        &self.cached_name
+    /// Wrapper that bridges a foreign Wasm object to the `DocumentExtractor` trait.
+    pub struct WasmDocumentExtractorBridge {
+        inner: wasm_bindgen::JsValue,
+        cached_name: String,
     }
 
-    fn version(&self) -> String {
-        let key = wasm_bindgen::JsValue::from_str("version");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        result.as_string().unwrap_or_default()
-    }
-
-    fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("initialize");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "initialize")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
-
-        // Convert result
-        Ok(())
-    }
-
-    fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("shutdown");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "shutdown")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
-
-        // Convert result
-        Ok(())
-    }
-}
-
-
-#[async_trait::async_trait(?Send)]impl kreuzberg::DocumentExtractor for WasmDocumentExtractorBridge {
-    async fn extract_bytes(&self, content: &[u8], mime_type: &str, config: &kreuzberg::ExtractionConfig) -> std::result::Result<kreuzberg::InternalDocument, kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("extractBytes");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "extract_bytes")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "extract_bytes")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "extract_bytes")))?;
-
-        let args = js_sys::Array::new();
-        args.push(&js_sys::Uint8Array::from(content).into());
-        args.push(&wasm_bindgen::JsValue::from_str(mime_type));
-        args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
-
-        let promise_val = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "extract_bytes")))?;
-        let promise: js_sys::Promise = promise_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "extract_bytes")))?;
-        let result = wasm_bindgen_futures::JsFuture::from(promise)
-            .await
-            .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
-
-        // Convert result
-        result.as_string()
-            .ok_or_else(|| kreuzberg::KreuzbergError::Other("Failed to convert result".to_string()))
-            .and_then(|s| serde_json::from_str::<kreuzberg::InternalDocument>(&s).map_err(|e| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e))))
-    }
-
-
-    fn supported_mime_types(&self) -> &[&str] {
-        let __types: Vec<String> = { let key = wasm_bindgen::JsValue::from_str("supportedMimeTypes");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        // Convert JS result to Vec<String>
-        result.as_string().and_then(|s| serde_json::from_str::<Vec<String>>(&s).map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))).unwrap_or_default()
-         };
-        let __strs: Vec<&'static str> = __types.into_iter()
-        .map(|s| -> &'static str { Box::leak(s.into_boxed_str()) })
-        .collect();
-        Box::leak(__strs.into_boxed_slice())
-    }
-
-}
-
-
-#[wasm_bindgen(js_name = "registerDocumentExtractor")]
-pub fn register_document_extractor(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {    let required_methods = vec![        "extractBytes",        "supportedMimeTypes",    ];
-
-    for method_name in required_methods {
-        if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
-            return Err(wasm_bindgen::JsValue::from_str(&format!("Backend missing required method: {}", method_name)));
+    impl std::fmt::Debug for WasmDocumentExtractorBridge {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "WasmDocumentExtractorBridge")
         }
     }
-    let wrapper = WasmDocumentExtractorBridge::new(backend)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
-    let arc: std::sync::Arc<dyn kreuzberg::DocumentExtractor> = std::sync::Arc::new(wrapper);
 
-    let registry = kreuzberg::plugins::registry::get_document_extractor_registry();
-    let mut registry = registry.write();
-    registry.register(arc)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl WasmDocumentExtractorBridge {
+        /// Create a new bridge wrapping a JS object.
+        ///
+        /// Validates that the JS object provides all required methods.
+        pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("extractBytes")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "extract_bytes"));
+            }
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("supportedMimeTypes")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "supported_mime_types"));
+            }
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
 
+            Ok(Self {
+                inner: js_obj,
+                cached_name,
+            })
+        }
+    }
 
-#[wasm_bindgen(js_name = "unregisterDocumentExtractor")]
-pub fn unregister_document_extractor(name: String) -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::document_extractor::unregister_document_extractor(&name).map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl kreuzberg::plugins::Plugin for WasmDocumentExtractorBridge {
+        fn name(&self) -> &str {
+            &self.cached_name
+        }
 
+        fn version(&self) -> String {
+            let key = wasm_bindgen::JsValue::from_str("version");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
 
-#[wasm_bindgen(js_name = "clearDocumentExtractors")]
-pub fn clear_document_extractors() -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::document_extractor::clear_document_extractors().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
 
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            result.as_string().unwrap_or_default()
+        }
+
+        fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("initialize");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "initialize"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize"))
+            })?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
+
+            // Convert result
+            Ok(())
+        }
+
+        fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("shutdown");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "shutdown"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
+
+            // Convert result
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl kreuzberg::DocumentExtractor for WasmDocumentExtractorBridge {
+        async fn extract_bytes(
+            &self,
+            content: &[u8],
+            mime_type: &str,
+            config: &kreuzberg::ExtractionConfig,
+        ) -> std::result::Result<kreuzberg::InternalDocument, kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("extractBytes");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "extract_bytes"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "extract_bytes")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "extract_bytes"))
+            })?;
+
+            let args = js_sys::Array::new();
+            args.push(&js_sys::Uint8Array::from(content).into());
+            args.push(&wasm_bindgen::JsValue::from_str(mime_type));
+            args.push(&serde_wasm_bindgen::to_value(config).unwrap_or(wasm_bindgen::JsValue::NULL));
+
+            let promise_val = func.apply(&self.inner, &args).map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "extract_bytes"))
+            })?;
+            let promise: js_sys::Promise = promise_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' did not return a Promise", "extract_bytes"))
+            })?;
+            let result = wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Promise rejected: {:?}", e)))?;
+
+            // Convert result
+            result
+                .as_string()
+                .ok_or_else(|| kreuzberg::KreuzbergError::Other("Failed to convert result".to_string()))
+                .and_then(|s| {
+                    serde_json::from_str::<kreuzberg::InternalDocument>(&s)
+                        .map_err(|e| kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e)))
+                })
+        }
+
+        fn supported_mime_types(&self) -> &[&str] {
+            let __types: Vec<String> = {
+                let key = wasm_bindgen::JsValue::from_str("supportedMimeTypes");
+                let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+                if !has_method {
+                    return Default::default();
+                }
+
+                let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                    Ok(f) => f,
+                    Err(_) => return Default::default(),
+                };
+
+                let func: js_sys::Function = match func_val.dyn_into() {
+                    Ok(f) => f,
+                    Err(_) => return Default::default(),
+                };
+
+                // Build args array
+                let args = js_sys::Array::new();
+
+                // Call the function
+                let result = match func.apply(&self.inner, &args) {
+                    Ok(r) => r,
+                    Err(_) => return Default::default(),
+                };
+
+                // Convert result
+                // Convert JS result to Vec<String>
+                result
+                    .as_string()
+                    .and_then(|s| {
+                        serde_json::from_str::<Vec<String>>(&s).map_err(|_| {
+                            kreuzberg::KreuzbergError::Other(format!("Failed to deserialize result: {}", e))
+                        })
+                    })
+                    .unwrap_or_default()
+            };
+            let __strs: Vec<&'static str> = __types
+                .into_iter()
+                .map(|s| -> &'static str { Box::leak(s.into_boxed_str()) })
+                .collect();
+            Box::leak(__strs.into_boxed_slice())
+        }
+    }
+
+    #[wasm_bindgen(js_name = "registerDocumentExtractor")]
+    pub fn register_document_extractor(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {
+        let required_methods = vec!["extractBytes", "supportedMimeTypes"];
+
+        for method_name in required_methods {
+            if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
+                return Err(wasm_bindgen::JsValue::from_str(&format!(
+                    "Backend missing required method: {}",
+                    method_name
+                )));
+            }
+        }
+        let wrapper = WasmDocumentExtractorBridge::new(backend).map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
+        let arc: std::sync::Arc<dyn kreuzberg::DocumentExtractor> = std::sync::Arc::new(wrapper);
+
+        let registry = kreuzberg::plugins::registry::get_document_extractor_registry();
+        let mut registry = registry.write();
+        registry
+            .register(arc)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "unregisterDocumentExtractor")]
+    pub fn unregister_document_extractor(name: String) -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::document_extractor::unregister_document_extractor(&name)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "clearDocumentExtractors")]
+    pub fn clear_document_extractors() -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::document_extractor::clear_document_extractors()
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
 }
 #[cfg(target_arch = "wasm32")]
 pub use __alef_wasm_bridge_documentextractor::*;
@@ -14765,1675 +17101,3748 @@ pub use __alef_wasm_bridge_documentextractor::*;
 mod __alef_wasm_bridge_renderer {
     use super::*;
 
-/// Wrapper that bridges a foreign Wasm object to the `Renderer` trait.
-pub struct WasmRendererBridge {
-    inner: wasm_bindgen::JsValue,
-    cached_name: String,
-}
-
-
-impl std::fmt::Debug for WasmRendererBridge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmRendererBridge")
-    }
-}
-
-
-impl WasmRendererBridge {
-    /// Create a new bridge wrapping a JS object.
-    ///
-    /// Validates that the JS object provides all required methods.
-    pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {        if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("render")).unwrap_or(false) {
-            return Err(format!("JS object missing required method: {}", "render"));
-        }
-        let cached_name = {
-            let key = wasm_bindgen::JsValue::from_str("name");
-            js_sys::Reflect::get(&js_obj, &key)
-                .ok()
-                .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
-                .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
-                .and_then(|v| v.as_string())
-                .unwrap_or_else(|| "wasm_bridge".to_string())
-        };
-
-        Ok(Self {
-            inner: js_obj,
-            cached_name,
-        })
-    }
-}
-
-
-impl kreuzberg::plugins::Plugin for WasmRendererBridge {
-    fn name(&self) -> &str {
-        &self.cached_name
+    /// Wrapper that bridges a foreign Wasm object to the `Renderer` trait.
+    pub struct WasmRendererBridge {
+        inner: wasm_bindgen::JsValue,
+        cached_name: String,
     }
 
-    fn version(&self) -> String {
-        let key = wasm_bindgen::JsValue::from_str("version");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Default::default();
-        }
-
-        let func_val = match js_sys::Reflect::get(&self.inner, &key) {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        let func: js_sys::Function = match func_val.dyn_into() {
-            Ok(f) => f,
-            Err(_) => return Default::default(),
-        };
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = match func.apply(&self.inner, &args) {
-            Ok(r) => r,
-            Err(_) => return Default::default(),
-        };
-
-        // Convert result
-        result.as_string().unwrap_or_default()
-    }
-
-    fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("initialize");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "initialize")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
-
-        // Convert result
-        Ok(())
-    }
-
-    fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("shutdown");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "shutdown")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
-
-        // Convert result
-        Ok(())
-    }
-}
-
-
-impl kreuzberg::Renderer for WasmRendererBridge {
-    fn render(&self, doc: &kreuzberg::InternalDocument) -> std::result::Result<String, kreuzberg::KreuzbergError> {
-        let key = wasm_bindgen::JsValue::from_str("render");
-        let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
-        if !has_method {
-            return Err(kreuzberg::KreuzbergError::Other(format!("Method '{}' not found on JS object", "render")));
-        }
-
-        let func_val = js_sys::Reflect::get(&self.inner, &key)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "render")))?;
-
-        let func: js_sys::Function = func_val.dyn_into()
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "render")))?;
-
-        // Build args array
-        let args = js_sys::Array::new();
-        args.push(&serde_wasm_bindgen::to_value(doc).unwrap_or(wasm_bindgen::JsValue::NULL));
-
-        // Call the function
-        let result = func.apply(&self.inner, &args)
-            .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "render")))?;
-
-        // Convert result
-        result.as_string()
-            .ok_or_else(|| kreuzberg::KreuzbergError::Other("Expected string return".to_string()))
-    }
-
-}
-
-
-#[wasm_bindgen(js_name = "registerRenderer")]
-pub fn register_renderer(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {    let required_methods = vec![        "render",    ];
-
-    for method_name in required_methods {
-        if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
-            return Err(wasm_bindgen::JsValue::from_str(&format!("Backend missing required method: {}", method_name)));
+    impl std::fmt::Debug for WasmRendererBridge {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "WasmRendererBridge")
         }
     }
-    let wrapper = WasmRendererBridge::new(backend)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
-    let arc: std::sync::Arc<dyn kreuzberg::Renderer> = std::sync::Arc::new(wrapper);
 
-    let registry = kreuzberg::plugins::registry::get_renderer_registry();
-    let mut registry = registry.write();
-    registry.register(arc)
-        .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl WasmRendererBridge {
+        /// Create a new bridge wrapping a JS object.
+        ///
+        /// Validates that the JS object provides all required methods.
+        pub fn new(js_obj: wasm_bindgen::JsValue) -> Result<Self, String> {
+            if !js_sys::Reflect::has(&js_obj, &wasm_bindgen::JsValue::from_str("render")).unwrap_or(false) {
+                return Err(format!("JS object missing required method: {}", "render"));
+            }
+            let cached_name = {
+                let key = wasm_bindgen::JsValue::from_str("name");
+                js_sys::Reflect::get(&js_obj, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+                    .and_then(|f| f.apply(&js_obj, &js_sys::Array::new()).ok())
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "wasm_bridge".to_string())
+            };
 
+            Ok(Self {
+                inner: js_obj,
+                cached_name,
+            })
+        }
+    }
 
-#[wasm_bindgen(js_name = "unregisterRenderer")]
-pub fn unregister_renderer(name: String) -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::renderer::unregister_renderer(&name).map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+    impl kreuzberg::plugins::Plugin for WasmRendererBridge {
+        fn name(&self) -> &str {
+            &self.cached_name
+        }
 
+        fn version(&self) -> String {
+            let key = wasm_bindgen::JsValue::from_str("version");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Default::default();
+            }
 
-#[wasm_bindgen(js_name = "clearRenderers")]
-pub fn clear_renderers() -> Result<(), wasm_bindgen::JsValue> {
-    kreuzberg::plugins::renderer::clear_renderers().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
-}
+            let func_val = match js_sys::Reflect::get(&self.inner, &key) {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
 
+            let func: js_sys::Function = match func_val.dyn_into() {
+                Ok(f) => f,
+                Err(_) => return Default::default(),
+            };
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = match func.apply(&self.inner, &args) {
+                Ok(r) => r,
+                Err(_) => return Default::default(),
+            };
+
+            // Convert result
+            result.as_string().unwrap_or_default()
+        }
+
+        fn initialize(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("initialize");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "initialize"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "initialize")))?;
+
+            let func: js_sys::Function = func_val.dyn_into().map_err(|_| {
+                kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "initialize"))
+            })?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "initialize")))?;
+
+            // Convert result
+            Ok(())
+        }
+
+        fn shutdown(&self) -> std::result::Result<(), kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("shutdown");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "shutdown"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "shutdown")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "shutdown")))?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "shutdown")))?;
+
+            // Convert result
+            Ok(())
+        }
+    }
+
+    impl kreuzberg::Renderer for WasmRendererBridge {
+        fn render(&self, doc: &kreuzberg::InternalDocument) -> std::result::Result<String, kreuzberg::KreuzbergError> {
+            let key = wasm_bindgen::JsValue::from_str("render");
+            let has_method = js_sys::Reflect::has(&self.inner, &key).unwrap_or(false);
+            if !has_method {
+                return Err(kreuzberg::KreuzbergError::Other(format!(
+                    "Method '{}' not found on JS object",
+                    "render"
+                )));
+            }
+
+            let func_val = js_sys::Reflect::get(&self.inner, &key)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to get method '{}'", "render")))?;
+
+            let func: js_sys::Function = func_val
+                .dyn_into()
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Method '{}' is not a function", "render")))?;
+
+            // Build args array
+            let args = js_sys::Array::new();
+            args.push(&serde_wasm_bindgen::to_value(doc).unwrap_or(wasm_bindgen::JsValue::NULL));
+
+            // Call the function
+            let result = func
+                .apply(&self.inner, &args)
+                .map_err(|_| kreuzberg::KreuzbergError::Other(format!("Failed to call method '{}'", "render")))?;
+
+            // Convert result
+            result
+                .as_string()
+                .ok_or_else(|| kreuzberg::KreuzbergError::Other("Expected string return".to_string()))
+        }
+    }
+
+    #[wasm_bindgen(js_name = "registerRenderer")]
+    pub fn register_renderer(backend: wasm_bindgen::JsValue) -> Result<(), wasm_bindgen::JsValue> {
+        let required_methods = vec!["render"];
+
+        for method_name in required_methods {
+            if !js_sys::Reflect::has(&backend, &wasm_bindgen::JsValue::from_str(method_name)).unwrap_or(false) {
+                return Err(wasm_bindgen::JsValue::from_str(&format!(
+                    "Backend missing required method: {}",
+                    method_name
+                )));
+            }
+        }
+        let wrapper = WasmRendererBridge::new(backend).map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
+        let arc: std::sync::Arc<dyn kreuzberg::Renderer> = std::sync::Arc::new(wrapper);
+
+        let registry = kreuzberg::plugins::registry::get_renderer_registry();
+        let mut registry = registry.write();
+        registry
+            .register(arc)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "unregisterRenderer")]
+    pub fn unregister_renderer(name: String) -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::renderer::unregister_renderer(&name)
+            .map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "clearRenderers")]
+    pub fn clear_renderers() -> Result<(), wasm_bindgen::JsValue> {
+        kreuzberg::plugins::renderer::clear_renderers().map_err(|e| wasm_bindgen::JsValue::from_str(&e.to_string()))
+    }
 }
 #[cfg(target_arch = "wasm32")]
 pub use __alef_wasm_bridge_renderer::*;
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::CacheStats> for WasmCacheStats {
-    fn from(val: kreuzberg::CacheStats) -> Self {        Self {            total_files: val.total_files,            total_size_mb: val.total_size_mb,            available_space_mb: val.available_space_mb,            oldest_file_age_days: val.oldest_file_age_days,            newest_file_age_days: val.newest_file_age_days,        }    }
+    fn from(val: kreuzberg::CacheStats) -> Self {
+        Self {
+            total_files: val.total_files,
+            total_size_mb: val.total_size_mb,
+            available_space_mb: val.available_space_mb,
+            oldest_file_age_days: val.oldest_file_age_days,
+            newest_file_age_days: val.newest_file_age_days,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmAccelerationConfig> for kreuzberg::AccelerationConfig {
-    fn from(val: WasmAccelerationConfig) -> Self {        Self {            provider: val.provider.into(),            device_id: val.device_id,        }    }
+    fn from(val: WasmAccelerationConfig) -> Self {
+        Self {
+            provider: val.provider.into(),
+            device_id: val.device_id,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::AccelerationConfig> for WasmAccelerationConfig {
-    fn from(val: kreuzberg::AccelerationConfig) -> Self {        Self {            provider: val.provider.into(),            device_id: val.device_id,        }    }
+    fn from(val: kreuzberg::AccelerationConfig) -> Self {
+        Self {
+            provider: val.provider.into(),
+            device_id: val.device_id,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmCaptioningConfig> for kreuzberg::core::config::CaptioningConfig {
-    fn from(val: WasmCaptioningConfig) -> Self {        Self {            llm: val.llm.into(),            prompt: val.prompt,            min_image_area: val.min_image_area,        }    }
+    fn from(val: WasmCaptioningConfig) -> Self {
+        Self {
+            llm: val.llm.into(),
+            prompt: val.prompt,
+            min_image_area: val.min_image_area,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::CaptioningConfig> for WasmCaptioningConfig {
-    fn from(val: kreuzberg::core::config::CaptioningConfig) -> Self {        Self {            llm: val.llm.into(),            prompt: val.prompt,            min_image_area: val.min_image_area,        }    }
+    fn from(val: kreuzberg::core::config::CaptioningConfig) -> Self {
+        Self {
+            llm: val.llm.into(),
+            prompt: val.prompt,
+            min_image_area: val.min_image_area,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageClassificationConfig> for kreuzberg::core::config::PageClassificationConfig {
-    fn from(val: WasmPageClassificationConfig) -> Self {        Self {            prompt_template: val.prompt_template,            labels: val.labels.into_iter().collect(),            multi_label: val.multi_label,            llm: val.llm.into(),        }    }
+    fn from(val: WasmPageClassificationConfig) -> Self {
+        Self {
+            prompt_template: val.prompt_template,
+            labels: val.labels.into_iter().collect(),
+            multi_label: val.multi_label,
+            llm: val.llm.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::PageClassificationConfig> for WasmPageClassificationConfig {
-    fn from(val: kreuzberg::core::config::PageClassificationConfig) -> Self {        Self {            prompt_template: val.prompt_template,            labels: val.labels.into_iter().collect(),            multi_label: val.multi_label,            llm: val.llm.into(),        }    }
+    fn from(val: kreuzberg::core::config::PageClassificationConfig) -> Self {
+        Self {
+            prompt_template: val.prompt_template,
+            labels: val.labels.into_iter().collect(),
+            multi_label: val.multi_label,
+            llm: val.llm.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmContentFilterConfig> for kreuzberg::ContentFilterConfig {
-    fn from(val: WasmContentFilterConfig) -> Self {        Self {            include_headers: val.include_headers,            include_footers: val.include_footers,            strip_repeating_text: val.strip_repeating_text,            include_watermarks: val.include_watermarks,        }    }
+    fn from(val: WasmContentFilterConfig) -> Self {
+        Self {
+            include_headers: val.include_headers,
+            include_footers: val.include_footers,
+            strip_repeating_text: val.strip_repeating_text,
+            include_watermarks: val.include_watermarks,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ContentFilterConfig> for WasmContentFilterConfig {
-    fn from(val: kreuzberg::ContentFilterConfig) -> Self {        Self {            include_headers: val.include_headers,            include_footers: val.include_footers,            strip_repeating_text: val.strip_repeating_text,            include_watermarks: val.include_watermarks,        }    }
+    fn from(val: kreuzberg::ContentFilterConfig) -> Self {
+        Self {
+            include_headers: val.include_headers,
+            include_footers: val.include_footers,
+            strip_repeating_text: val.strip_repeating_text,
+            include_watermarks: val.include_watermarks,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmEmailConfig> for kreuzberg::EmailConfig {
-    fn from(val: WasmEmailConfig) -> Self {        Self {            msg_fallback_codepage: val.msg_fallback_codepage,        }    }
+    fn from(val: WasmEmailConfig) -> Self {
+        Self {
+            msg_fallback_codepage: val.msg_fallback_codepage,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::EmailConfig> for WasmEmailConfig {
-    fn from(val: kreuzberg::EmailConfig) -> Self {        Self {            msg_fallback_codepage: val.msg_fallback_codepage,        }    }
+    fn from(val: kreuzberg::EmailConfig) -> Self {
+        Self {
+            msg_fallback_codepage: val.msg_fallback_codepage,
+        }
+    }
 }
 
-
-#[allow(clippy::needless_update)]#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+#[allow(clippy::needless_update)]
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmExtractionConfig> for kreuzberg::ExtractionConfig {
-    fn from(val: WasmExtractionConfig) -> Self {        Self {            use_cache: val.use_cache,            enable_quality_processing: val.enable_quality_processing,            ocr: val.ocr.map(Into::into),            force_ocr: val.force_ocr,            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),            disable_ocr: val.disable_ocr,            chunking: val.chunking.map(Into::into),            content_filter: val.content_filter.map(Into::into),            images: val.images.map(Into::into),            token_reduction: val.token_reduction.map(Into::into),            language_detection: val.language_detection.map(Into::into),            pages: val.pages.map(Into::into),            postprocessor: val.postprocessor.map(Into::into),            html_options: Default::default(),            extraction_timeout_secs: val.extraction_timeout_secs,            max_concurrent_extractions: val.max_concurrent_extractions,            result_format: val.result_format.into(),            security_limits: val.security_limits.map(Into::into),            max_embedded_file_bytes: val.max_embedded_file_bytes,            output_format: val.output_format.into(),            use_layout_for_markdown: val.use_layout_for_markdown,            include_document_structure: val.include_document_structure,            acceleration: val.acceleration.map(Into::into),            cache_namespace: val.cache_namespace,            cache_ttl_secs: val.cache_ttl_secs,            email: val.email.map(Into::into),            concurrency: Default::default(),            max_archive_depth: val.max_archive_depth,            structured_extraction: val.structured_extraction.map(Into::into),            ner: val.ner.map(Into::into),            redaction: val.redaction.map(Into::into),            summarization: val.summarization.map(Into::into),            translation: val.translation.map(Into::into),            page_classification: val.page_classification.map(Into::into),            captioning: val.captioning.map(Into::into),            qr_codes: val.qr_codes,            cancel_token: Default::default(),            ..Default::default()        }    }
+    fn from(val: WasmExtractionConfig) -> Self {
+        Self {
+            use_cache: val.use_cache,
+            enable_quality_processing: val.enable_quality_processing,
+            ocr: val.ocr.map(Into::into),
+            force_ocr: val.force_ocr,
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),
+            disable_ocr: val.disable_ocr,
+            chunking: val.chunking.map(Into::into),
+            content_filter: val.content_filter.map(Into::into),
+            images: val.images.map(Into::into),
+            token_reduction: val.token_reduction.map(Into::into),
+            language_detection: val.language_detection.map(Into::into),
+            pages: val.pages.map(Into::into),
+            postprocessor: val.postprocessor.map(Into::into),
+            html_options: Default::default(),
+            extraction_timeout_secs: val.extraction_timeout_secs,
+            max_concurrent_extractions: val.max_concurrent_extractions,
+            result_format: val.result_format.into(),
+            security_limits: val.security_limits.map(Into::into),
+            max_embedded_file_bytes: val.max_embedded_file_bytes,
+            output_format: val.output_format.into(),
+            use_layout_for_markdown: val.use_layout_for_markdown,
+            include_document_structure: val.include_document_structure,
+            acceleration: val.acceleration.map(Into::into),
+            cache_namespace: val.cache_namespace,
+            cache_ttl_secs: val.cache_ttl_secs,
+            email: val.email.map(Into::into),
+            concurrency: Default::default(),
+            max_archive_depth: val.max_archive_depth,
+            structured_extraction: val.structured_extraction.map(Into::into),
+            ner: val.ner.map(Into::into),
+            redaction: val.redaction.map(Into::into),
+            summarization: val.summarization.map(Into::into),
+            translation: val.translation.map(Into::into),
+            page_classification: val.page_classification.map(Into::into),
+            captioning: val.captioning.map(Into::into),
+            qr_codes: val.qr_codes,
+            cancel_token: Default::default(),
+            ..Default::default()
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ExtractionConfig> for WasmExtractionConfig {
-    fn from(val: kreuzberg::ExtractionConfig) -> Self {        Self {            use_cache: val.use_cache,            enable_quality_processing: val.enable_quality_processing,            ocr: val.ocr.map(Into::into),            force_ocr: val.force_ocr,            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),            disable_ocr: val.disable_ocr,            chunking: val.chunking.map(Into::into),            content_filter: val.content_filter.map(Into::into),            images: val.images.map(Into::into),            token_reduction: val.token_reduction.map(Into::into),            language_detection: val.language_detection.map(Into::into),            pages: val.pages.map(Into::into),            postprocessor: val.postprocessor.map(Into::into),            html_options: val.html_options.as_ref().map(|v| format!("{v:?}")),            extraction_timeout_secs: val.extraction_timeout_secs,            max_concurrent_extractions: val.max_concurrent_extractions,            result_format: val.result_format.into(),            security_limits: val.security_limits.map(Into::into),            max_embedded_file_bytes: val.max_embedded_file_bytes,            output_format: val.output_format.into(),            use_layout_for_markdown: val.use_layout_for_markdown,            include_document_structure: val.include_document_structure,            acceleration: val.acceleration.map(Into::into),            cache_namespace: val.cache_namespace,            cache_ttl_secs: val.cache_ttl_secs,            email: val.email.map(Into::into),            concurrency: val.concurrency.as_ref().map(|v| format!("{v:?}")),            max_archive_depth: val.max_archive_depth,            structured_extraction: val.structured_extraction.map(Into::into),            ner: val.ner.map(Into::into),            redaction: val.redaction.map(Into::into),            summarization: val.summarization.map(Into::into),            translation: val.translation.map(Into::into),            page_classification: val.page_classification.map(Into::into),            captioning: val.captioning.map(Into::into),            qr_codes: val.qr_codes,            cancel_token: val.cancel_token.as_ref().map(|v| format!("{v:?}")),        }    }
+    fn from(val: kreuzberg::ExtractionConfig) -> Self {
+        Self {
+            use_cache: val.use_cache,
+            enable_quality_processing: val.enable_quality_processing,
+            ocr: val.ocr.map(Into::into),
+            force_ocr: val.force_ocr,
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),
+            disable_ocr: val.disable_ocr,
+            chunking: val.chunking.map(Into::into),
+            content_filter: val.content_filter.map(Into::into),
+            images: val.images.map(Into::into),
+            token_reduction: val.token_reduction.map(Into::into),
+            language_detection: val.language_detection.map(Into::into),
+            pages: val.pages.map(Into::into),
+            postprocessor: val.postprocessor.map(Into::into),
+            html_options: val.html_options.as_ref().map(|v| format!("{v:?}")),
+            extraction_timeout_secs: val.extraction_timeout_secs,
+            max_concurrent_extractions: val.max_concurrent_extractions,
+            result_format: val.result_format.into(),
+            security_limits: val.security_limits.map(Into::into),
+            max_embedded_file_bytes: val.max_embedded_file_bytes,
+            output_format: val.output_format.into(),
+            use_layout_for_markdown: val.use_layout_for_markdown,
+            include_document_structure: val.include_document_structure,
+            acceleration: val.acceleration.map(Into::into),
+            cache_namespace: val.cache_namespace,
+            cache_ttl_secs: val.cache_ttl_secs,
+            email: val.email.map(Into::into),
+            concurrency: val.concurrency.as_ref().map(|v| format!("{v:?}")),
+            max_archive_depth: val.max_archive_depth,
+            structured_extraction: val.structured_extraction.map(Into::into),
+            ner: val.ner.map(Into::into),
+            redaction: val.redaction.map(Into::into),
+            summarization: val.summarization.map(Into::into),
+            translation: val.translation.map(Into::into),
+            page_classification: val.page_classification.map(Into::into),
+            captioning: val.captioning.map(Into::into),
+            qr_codes: val.qr_codes,
+            cancel_token: val.cancel_token.as_ref().map(|v| format!("{v:?}")),
+        }
+    }
 }
 
-
-#[allow(clippy::needless_update)]#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+#[allow(clippy::needless_update)]
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmFileExtractionConfig> for kreuzberg::FileExtractionConfig {
-    fn from(val: WasmFileExtractionConfig) -> Self {        Self {            enable_quality_processing: val.enable_quality_processing,            ocr: val.ocr.map(Into::into),            force_ocr: val.force_ocr,            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),            disable_ocr: val.disable_ocr,            chunking: val.chunking.map(Into::into),            content_filter: val.content_filter.map(Into::into),            images: val.images.map(Into::into),            token_reduction: val.token_reduction.map(Into::into),            language_detection: val.language_detection.map(Into::into),            pages: val.pages.map(Into::into),            postprocessor: val.postprocessor.map(Into::into),            html_options: Default::default(),            result_format: val.result_format.map(Into::into),            output_format: val.output_format.map(Into::into),            include_document_structure: val.include_document_structure,            timeout_secs: val.timeout_secs,            structured_extraction: val.structured_extraction.map(Into::into),            ..Default::default()        }    }
+    fn from(val: WasmFileExtractionConfig) -> Self {
+        Self {
+            enable_quality_processing: val.enable_quality_processing,
+            ocr: val.ocr.map(Into::into),
+            force_ocr: val.force_ocr,
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),
+            disable_ocr: val.disable_ocr,
+            chunking: val.chunking.map(Into::into),
+            content_filter: val.content_filter.map(Into::into),
+            images: val.images.map(Into::into),
+            token_reduction: val.token_reduction.map(Into::into),
+            language_detection: val.language_detection.map(Into::into),
+            pages: val.pages.map(Into::into),
+            postprocessor: val.postprocessor.map(Into::into),
+            html_options: Default::default(),
+            result_format: val.result_format.map(Into::into),
+            output_format: val.output_format.map(Into::into),
+            include_document_structure: val.include_document_structure,
+            timeout_secs: val.timeout_secs,
+            structured_extraction: val.structured_extraction.map(Into::into),
+            ..Default::default()
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::FileExtractionConfig> for WasmFileExtractionConfig {
-    fn from(val: kreuzberg::FileExtractionConfig) -> Self {        Self {            enable_quality_processing: val.enable_quality_processing,            ocr: val.ocr.map(Into::into),            force_ocr: val.force_ocr,            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),            disable_ocr: val.disable_ocr,            chunking: val.chunking.map(Into::into),            content_filter: val.content_filter.map(Into::into),            images: val.images.map(Into::into),            token_reduction: val.token_reduction.map(Into::into),            language_detection: val.language_detection.map(Into::into),            pages: val.pages.map(Into::into),            postprocessor: val.postprocessor.map(Into::into),            html_options: val.html_options.as_ref().map(|v| format!("{v:?}")),            result_format: val.result_format.map(Into::into),            output_format: val.output_format.map(Into::into),            include_document_structure: val.include_document_structure,            timeout_secs: val.timeout_secs,            structured_extraction: val.structured_extraction.map(Into::into),        }    }
+    fn from(val: kreuzberg::FileExtractionConfig) -> Self {
+        Self {
+            enable_quality_processing: val.enable_quality_processing,
+            ocr: val.ocr.map(Into::into),
+            force_ocr: val.force_ocr,
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().collect()),
+            disable_ocr: val.disable_ocr,
+            chunking: val.chunking.map(Into::into),
+            content_filter: val.content_filter.map(Into::into),
+            images: val.images.map(Into::into),
+            token_reduction: val.token_reduction.map(Into::into),
+            language_detection: val.language_detection.map(Into::into),
+            pages: val.pages.map(Into::into),
+            postprocessor: val.postprocessor.map(Into::into),
+            html_options: val.html_options.as_ref().map(|v| format!("{v:?}")),
+            result_format: val.result_format.map(Into::into),
+            output_format: val.output_format.map(Into::into),
+            include_document_structure: val.include_document_structure,
+            timeout_secs: val.timeout_secs,
+            structured_extraction: val.structured_extraction.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmBatchBytesItem> for kreuzberg::BatchBytesItem {
-    fn from(val: WasmBatchBytesItem) -> Self {        Self {            content: val.content.to_vec().into(),            mime_type: val.mime_type,            config: val.config.map(Into::into),        }    }
+    fn from(val: WasmBatchBytesItem) -> Self {
+        Self {
+            content: val.content.to_vec().into(),
+            mime_type: val.mime_type,
+            config: val.config.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::BatchBytesItem> for WasmBatchBytesItem {
-    fn from(val: kreuzberg::BatchBytesItem) -> Self {        Self {            content: val.content.to_vec().into(),            mime_type: val.mime_type,            config: val.config.map(Into::into),        }    }
+    fn from(val: kreuzberg::BatchBytesItem) -> Self {
+        Self {
+            content: val.content.to_vec().into(),
+            mime_type: val.mime_type,
+            config: val.config.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmBatchFileItem> for kreuzberg::BatchFileItem {
-    fn from(val: WasmBatchFileItem) -> Self {        Self {            path: val.path.into(),            config: val.config.map(Into::into),        }    }
+    fn from(val: WasmBatchFileItem) -> Self {
+        Self {
+            path: val.path.into(),
+            config: val.config.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::BatchFileItem> for WasmBatchFileItem {
-    fn from(val: kreuzberg::BatchFileItem) -> Self {        Self {            path: val.path.to_string_lossy().to_string(),            config: val.config.map(Into::into),        }    }
+    fn from(val: kreuzberg::BatchFileItem) -> Self {
+        Self {
+            path: val.path.to_string_lossy().to_string(),
+            config: val.config.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmImageExtractionConfig> for kreuzberg::ImageExtractionConfig {
-    fn from(val: WasmImageExtractionConfig) -> Self {        Self {            extract_images: val.extract_images,            target_dpi: val.target_dpi,            max_image_dimension: val.max_image_dimension,            inject_placeholders: val.inject_placeholders,            auto_adjust_dpi: val.auto_adjust_dpi,            min_dpi: val.min_dpi,            max_dpi: val.max_dpi,            max_images_per_page: val.max_images_per_page,            classify: val.classify,            include_page_rasters: val.include_page_rasters,            run_ocr_on_images: val.run_ocr_on_images,            ocr_text_only: val.ocr_text_only,            append_ocr_text: val.append_ocr_text,        }    }
+    fn from(val: WasmImageExtractionConfig) -> Self {
+        Self {
+            extract_images: val.extract_images,
+            target_dpi: val.target_dpi,
+            max_image_dimension: val.max_image_dimension,
+            inject_placeholders: val.inject_placeholders,
+            auto_adjust_dpi: val.auto_adjust_dpi,
+            min_dpi: val.min_dpi,
+            max_dpi: val.max_dpi,
+            max_images_per_page: val.max_images_per_page,
+            classify: val.classify,
+            include_page_rasters: val.include_page_rasters,
+            run_ocr_on_images: val.run_ocr_on_images,
+            ocr_text_only: val.ocr_text_only,
+            append_ocr_text: val.append_ocr_text,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ImageExtractionConfig> for WasmImageExtractionConfig {
-    fn from(val: kreuzberg::ImageExtractionConfig) -> Self {        Self {            extract_images: val.extract_images,            target_dpi: val.target_dpi,            max_image_dimension: val.max_image_dimension,            inject_placeholders: val.inject_placeholders,            auto_adjust_dpi: val.auto_adjust_dpi,            min_dpi: val.min_dpi,            max_dpi: val.max_dpi,            max_images_per_page: val.max_images_per_page,            classify: val.classify,            include_page_rasters: val.include_page_rasters,            run_ocr_on_images: val.run_ocr_on_images,            ocr_text_only: val.ocr_text_only,            append_ocr_text: val.append_ocr_text,        }    }
+    fn from(val: kreuzberg::ImageExtractionConfig) -> Self {
+        Self {
+            extract_images: val.extract_images,
+            target_dpi: val.target_dpi,
+            max_image_dimension: val.max_image_dimension,
+            inject_placeholders: val.inject_placeholders,
+            auto_adjust_dpi: val.auto_adjust_dpi,
+            min_dpi: val.min_dpi,
+            max_dpi: val.max_dpi,
+            max_images_per_page: val.max_images_per_page,
+            classify: val.classify,
+            include_page_rasters: val.include_page_rasters,
+            run_ocr_on_images: val.run_ocr_on_images,
+            ocr_text_only: val.ocr_text_only,
+            append_ocr_text: val.append_ocr_text,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTokenReductionOptions> for kreuzberg::TokenReductionOptions {
-    fn from(val: WasmTokenReductionOptions) -> Self {        Self {            mode: val.mode,            preserve_important_words: val.preserve_important_words,        }    }
+    fn from(val: WasmTokenReductionOptions) -> Self {
+        Self {
+            mode: val.mode,
+            preserve_important_words: val.preserve_important_words,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::TokenReductionOptions> for WasmTokenReductionOptions {
-    fn from(val: kreuzberg::TokenReductionOptions) -> Self {        Self {            mode: val.mode,            preserve_important_words: val.preserve_important_words,        }    }
+    fn from(val: kreuzberg::TokenReductionOptions) -> Self {
+        Self {
+            mode: val.mode,
+            preserve_important_words: val.preserve_important_words,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmLanguageDetectionConfig> for kreuzberg::LanguageDetectionConfig {
-    fn from(val: WasmLanguageDetectionConfig) -> Self {        Self {            enabled: val.enabled,            min_confidence: val.min_confidence,            detect_multiple: val.detect_multiple,        }    }
+    fn from(val: WasmLanguageDetectionConfig) -> Self {
+        Self {
+            enabled: val.enabled,
+            min_confidence: val.min_confidence,
+            detect_multiple: val.detect_multiple,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::LanguageDetectionConfig> for WasmLanguageDetectionConfig {
-    fn from(val: kreuzberg::LanguageDetectionConfig) -> Self {        Self {            enabled: val.enabled,            min_confidence: val.min_confidence,            detect_multiple: val.detect_multiple,        }    }
+    fn from(val: kreuzberg::LanguageDetectionConfig) -> Self {
+        Self {
+            enabled: val.enabled,
+            min_confidence: val.min_confidence,
+            detect_multiple: val.detect_multiple,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmLlmConfig> for kreuzberg::LlmConfig {
-    fn from(val: WasmLlmConfig) -> Self {        Self {            model: val.model,            api_key: val.api_key,            base_url: val.base_url,            timeout_secs: val.timeout_secs,            max_retries: val.max_retries,            temperature: val.temperature,            max_tokens: val.max_tokens,        }    }
+    fn from(val: WasmLlmConfig) -> Self {
+        Self {
+            model: val.model,
+            api_key: val.api_key,
+            base_url: val.base_url,
+            timeout_secs: val.timeout_secs,
+            max_retries: val.max_retries,
+            temperature: val.temperature,
+            max_tokens: val.max_tokens,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::LlmConfig> for WasmLlmConfig {
-    fn from(val: kreuzberg::LlmConfig) -> Self {        Self {            model: val.model,            api_key: val.api_key,            base_url: val.base_url,            timeout_secs: val.timeout_secs,            max_retries: val.max_retries,            temperature: val.temperature,            max_tokens: val.max_tokens,        }    }
+    fn from(val: kreuzberg::LlmConfig) -> Self {
+        Self {
+            model: val.model,
+            api_key: val.api_key,
+            base_url: val.base_url,
+            timeout_secs: val.timeout_secs,
+            max_retries: val.max_retries,
+            temperature: val.temperature,
+            max_tokens: val.max_tokens,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmStructuredExtractionConfig> for kreuzberg::StructuredExtractionConfig {
-    fn from(val: WasmStructuredExtractionConfig) -> Self {        Self {            schema: serde_wasm_bindgen::from_value(val.schema.clone()).unwrap_or_default(),            schema_name: val.schema_name,            schema_description: val.schema_description,            strict: val.strict,            prompt: val.prompt,            llm: val.llm.into(),        }    }
+    fn from(val: WasmStructuredExtractionConfig) -> Self {
+        Self {
+            schema: serde_wasm_bindgen::from_value(val.schema.clone()).unwrap_or_default(),
+            schema_name: val.schema_name,
+            schema_description: val.schema_description,
+            strict: val.strict,
+            prompt: val.prompt,
+            llm: val.llm.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::StructuredExtractionConfig> for WasmStructuredExtractionConfig {
-    fn from(val: kreuzberg::StructuredExtractionConfig) -> Self {        Self {            schema: serde_wasm_bindgen::to_value(&val.schema).unwrap_or(JsValue::NULL),            schema_name: val.schema_name,            schema_description: val.schema_description,            strict: val.strict,            prompt: val.prompt,            llm: val.llm.into(),        }    }
+    fn from(val: kreuzberg::StructuredExtractionConfig) -> Self {
+        Self {
+            schema: serde_wasm_bindgen::to_value(&val.schema).unwrap_or(JsValue::NULL),
+            schema_name: val.schema_name,
+            schema_description: val.schema_description,
+            strict: val.strict,
+            prompt: val.prompt,
+            llm: val.llm.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmNerConfig> for kreuzberg::core::config::NerConfig {
-    fn from(val: WasmNerConfig) -> Self {        Self {            backend: val.backend.into(),            categories: val.categories.into_iter().map(Into::into).collect(),            model: val.model,            llm: val.llm.map(Into::into),            custom_labels: val.custom_labels.into_iter().collect(),        }    }
+    fn from(val: WasmNerConfig) -> Self {
+        Self {
+            backend: val.backend.into(),
+            categories: val.categories.into_iter().map(Into::into).collect(),
+            model: val.model,
+            llm: val.llm.map(Into::into),
+            custom_labels: val.custom_labels.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::NerConfig> for WasmNerConfig {
-    fn from(val: kreuzberg::core::config::NerConfig) -> Self {        Self {            backend: val.backend.into(),            categories: val.categories.into_iter().map(Into::into).collect(),            model: val.model,            llm: val.llm.map(Into::into),            custom_labels: val.custom_labels.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::core::config::NerConfig) -> Self {
+        Self {
+            backend: val.backend.into(),
+            categories: val.categories.into_iter().map(Into::into).collect(),
+            model: val.model,
+            llm: val.llm.map(Into::into),
+            custom_labels: val.custom_labels.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrQualityThresholds> for kreuzberg::OcrQualityThresholds {
-    fn from(val: WasmOcrQualityThresholds) -> Self {        Self {            min_total_non_whitespace: val.min_total_non_whitespace,            min_non_whitespace_per_page: val.min_non_whitespace_per_page,            min_meaningful_word_len: val.min_meaningful_word_len,            min_meaningful_words: val.min_meaningful_words,            min_alnum_ratio: val.min_alnum_ratio,            min_garbage_chars: val.min_garbage_chars,            max_fragmented_word_ratio: val.max_fragmented_word_ratio,            critical_fragmented_word_ratio: val.critical_fragmented_word_ratio,            min_avg_word_length: val.min_avg_word_length,            min_words_for_avg_length_check: val.min_words_for_avg_length_check,            min_consecutive_repeat_ratio: val.min_consecutive_repeat_ratio,            min_words_for_repeat_check: val.min_words_for_repeat_check,            substantive_min_chars: val.substantive_min_chars,            non_text_min_chars: val.non_text_min_chars,            alnum_ws_ratio_threshold: val.alnum_ws_ratio_threshold,            pipeline_min_quality: val.pipeline_min_quality,        }    }
+    fn from(val: WasmOcrQualityThresholds) -> Self {
+        Self {
+            min_total_non_whitespace: val.min_total_non_whitespace,
+            min_non_whitespace_per_page: val.min_non_whitespace_per_page,
+            min_meaningful_word_len: val.min_meaningful_word_len,
+            min_meaningful_words: val.min_meaningful_words,
+            min_alnum_ratio: val.min_alnum_ratio,
+            min_garbage_chars: val.min_garbage_chars,
+            max_fragmented_word_ratio: val.max_fragmented_word_ratio,
+            critical_fragmented_word_ratio: val.critical_fragmented_word_ratio,
+            min_avg_word_length: val.min_avg_word_length,
+            min_words_for_avg_length_check: val.min_words_for_avg_length_check,
+            min_consecutive_repeat_ratio: val.min_consecutive_repeat_ratio,
+            min_words_for_repeat_check: val.min_words_for_repeat_check,
+            substantive_min_chars: val.substantive_min_chars,
+            non_text_min_chars: val.non_text_min_chars,
+            alnum_ws_ratio_threshold: val.alnum_ws_ratio_threshold,
+            pipeline_min_quality: val.pipeline_min_quality,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrQualityThresholds> for WasmOcrQualityThresholds {
-    fn from(val: kreuzberg::OcrQualityThresholds) -> Self {        Self {            min_total_non_whitespace: val.min_total_non_whitespace,            min_non_whitespace_per_page: val.min_non_whitespace_per_page,            min_meaningful_word_len: val.min_meaningful_word_len,            min_meaningful_words: val.min_meaningful_words,            min_alnum_ratio: val.min_alnum_ratio,            min_garbage_chars: val.min_garbage_chars,            max_fragmented_word_ratio: val.max_fragmented_word_ratio,            critical_fragmented_word_ratio: val.critical_fragmented_word_ratio,            min_avg_word_length: val.min_avg_word_length,            min_words_for_avg_length_check: val.min_words_for_avg_length_check,            min_consecutive_repeat_ratio: val.min_consecutive_repeat_ratio,            min_words_for_repeat_check: val.min_words_for_repeat_check,            substantive_min_chars: val.substantive_min_chars,            non_text_min_chars: val.non_text_min_chars,            alnum_ws_ratio_threshold: val.alnum_ws_ratio_threshold,            pipeline_min_quality: val.pipeline_min_quality,        }    }
+    fn from(val: kreuzberg::OcrQualityThresholds) -> Self {
+        Self {
+            min_total_non_whitespace: val.min_total_non_whitespace,
+            min_non_whitespace_per_page: val.min_non_whitespace_per_page,
+            min_meaningful_word_len: val.min_meaningful_word_len,
+            min_meaningful_words: val.min_meaningful_words,
+            min_alnum_ratio: val.min_alnum_ratio,
+            min_garbage_chars: val.min_garbage_chars,
+            max_fragmented_word_ratio: val.max_fragmented_word_ratio,
+            critical_fragmented_word_ratio: val.critical_fragmented_word_ratio,
+            min_avg_word_length: val.min_avg_word_length,
+            min_words_for_avg_length_check: val.min_words_for_avg_length_check,
+            min_consecutive_repeat_ratio: val.min_consecutive_repeat_ratio,
+            min_words_for_repeat_check: val.min_words_for_repeat_check,
+            substantive_min_chars: val.substantive_min_chars,
+            non_text_min_chars: val.non_text_min_chars,
+            alnum_ws_ratio_threshold: val.alnum_ws_ratio_threshold,
+            pipeline_min_quality: val.pipeline_min_quality,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrPipelineStage> for kreuzberg::OcrPipelineStage {
-    fn from(val: WasmOcrPipelineStage) -> Self {        Self {            backend: val.backend,            priority: val.priority,            language: val.language,            tesseract_config: val.tesseract_config.map(Into::into),            paddle_ocr_config: val.paddle_ocr_config.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            vlm_config: val.vlm_config.map(Into::into),            backend_options: val.backend_options.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),        }    }
+    fn from(val: WasmOcrPipelineStage) -> Self {
+        Self {
+            backend: val.backend,
+            priority: val.priority,
+            language: val.language,
+            tesseract_config: val.tesseract_config.map(Into::into),
+            paddle_ocr_config: val
+                .paddle_ocr_config
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            vlm_config: val.vlm_config.map(Into::into),
+            backend_options: val
+                .backend_options
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrPipelineStage> for WasmOcrPipelineStage {
-    fn from(val: kreuzberg::OcrPipelineStage) -> Self {        Self {            backend: val.backend,            priority: val.priority,            language: val.language,            tesseract_config: val.tesseract_config.map(Into::into),            paddle_ocr_config: val.paddle_ocr_config.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            vlm_config: val.vlm_config.map(Into::into),            backend_options: val.backend_options.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),        }    }
+    fn from(val: kreuzberg::OcrPipelineStage) -> Self {
+        Self {
+            backend: val.backend,
+            priority: val.priority,
+            language: val.language,
+            tesseract_config: val.tesseract_config.map(Into::into),
+            paddle_ocr_config: val
+                .paddle_ocr_config
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            vlm_config: val.vlm_config.map(Into::into),
+            backend_options: val
+                .backend_options
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrPipelineConfig> for kreuzberg::OcrPipelineConfig {
-    fn from(val: WasmOcrPipelineConfig) -> Self {        Self {            stages: val.stages.into_iter().map(Into::into).collect(),            quality_thresholds: val.quality_thresholds.into(),        }    }
+    fn from(val: WasmOcrPipelineConfig) -> Self {
+        Self {
+            stages: val.stages.into_iter().map(Into::into).collect(),
+            quality_thresholds: val.quality_thresholds.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrPipelineConfig> for WasmOcrPipelineConfig {
-    fn from(val: kreuzberg::OcrPipelineConfig) -> Self {        Self {            stages: val.stages.into_iter().map(Into::into).collect(),            quality_thresholds: val.quality_thresholds.into(),        }    }
+    fn from(val: kreuzberg::OcrPipelineConfig) -> Self {
+        Self {
+            stages: val.stages.into_iter().map(Into::into).collect(),
+            quality_thresholds: val.quality_thresholds.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrConfig> for kreuzberg::OcrConfig {
-    fn from(val: WasmOcrConfig) -> Self {        Self {            enabled: val.enabled,            backend: val.backend,            language: val.language,            tesseract_config: val.tesseract_config.map(Into::into),            output_format: val.output_format.map(Into::into),            paddle_ocr_config: val.paddle_ocr_config.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            backend_options: val.backend_options.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            element_config: val.element_config.map(Into::into),            quality_thresholds: val.quality_thresholds.map(Into::into),            pipeline: val.pipeline.map(Into::into),            auto_rotate: val.auto_rotate,            vlm_fallback: serde_wasm_bindgen::from_value(val.vlm_fallback.clone()).unwrap_or_default(),            vlm_config: val.vlm_config.map(Into::into),            vlm_prompt: val.vlm_prompt,            acceleration: val.acceleration.map(Into::into),            tessdata_bytes: val.tessdata_bytes.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),        }    }
+    fn from(val: WasmOcrConfig) -> Self {
+        Self {
+            enabled: val.enabled,
+            backend: val.backend,
+            language: val.language,
+            tesseract_config: val.tesseract_config.map(Into::into),
+            output_format: val.output_format.map(Into::into),
+            paddle_ocr_config: val
+                .paddle_ocr_config
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            backend_options: val
+                .backend_options
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            element_config: val.element_config.map(Into::into),
+            quality_thresholds: val.quality_thresholds.map(Into::into),
+            pipeline: val.pipeline.map(Into::into),
+            auto_rotate: val.auto_rotate,
+            vlm_fallback: serde_wasm_bindgen::from_value(val.vlm_fallback.clone()).unwrap_or_default(),
+            vlm_config: val.vlm_config.map(Into::into),
+            vlm_prompt: val.vlm_prompt,
+            acceleration: val.acceleration.map(Into::into),
+            tessdata_bytes: val
+                .tessdata_bytes
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrConfig> for WasmOcrConfig {
-    fn from(val: kreuzberg::OcrConfig) -> Self {        Self {            enabled: val.enabled,            backend: val.backend,            language: val.language,            tesseract_config: val.tesseract_config.map(Into::into),            output_format: val.output_format.map(Into::into),            paddle_ocr_config: val.paddle_ocr_config.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            backend_options: val.backend_options.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            element_config: val.element_config.map(Into::into),            quality_thresholds: val.quality_thresholds.map(Into::into),            pipeline: val.pipeline.map(Into::into),            auto_rotate: val.auto_rotate,            vlm_fallback: serde_wasm_bindgen::to_value(&val.vlm_fallback).unwrap_or(JsValue::NULL),            vlm_config: val.vlm_config.map(Into::into),            vlm_prompt: val.vlm_prompt,            acceleration: val.acceleration.map(Into::into),            tessdata_bytes: val.tessdata_bytes.as_ref().and_then(|v| serde_json::to_string(v).ok()).and_then(|s| js_sys::JSON::parse(&s).ok()),        }    }
+    fn from(val: kreuzberg::OcrConfig) -> Self {
+        Self {
+            enabled: val.enabled,
+            backend: val.backend,
+            language: val.language,
+            tesseract_config: val.tesseract_config.map(Into::into),
+            output_format: val.output_format.map(Into::into),
+            paddle_ocr_config: val
+                .paddle_ocr_config
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            backend_options: val
+                .backend_options
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            element_config: val.element_config.map(Into::into),
+            quality_thresholds: val.quality_thresholds.map(Into::into),
+            pipeline: val.pipeline.map(Into::into),
+            auto_rotate: val.auto_rotate,
+            vlm_fallback: serde_wasm_bindgen::to_value(&val.vlm_fallback).unwrap_or(JsValue::NULL),
+            vlm_config: val.vlm_config.map(Into::into),
+            vlm_prompt: val.vlm_prompt,
+            acceleration: val.acceleration.map(Into::into),
+            tessdata_bytes: val
+                .tessdata_bytes
+                .as_ref()
+                .and_then(|v| serde_json::to_string(v).ok())
+                .and_then(|s| js_sys::JSON::parse(&s).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageConfig> for kreuzberg::PageConfig {
-    fn from(val: WasmPageConfig) -> Self {        Self {            extract_pages: val.extract_pages,            insert_page_markers: val.insert_page_markers,            marker_format: val.marker_format,        }    }
+    fn from(val: WasmPageConfig) -> Self {
+        Self {
+            extract_pages: val.extract_pages,
+            insert_page_markers: val.insert_page_markers,
+            marker_format: val.marker_format,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PageConfig> for WasmPageConfig {
-    fn from(val: kreuzberg::PageConfig) -> Self {        Self {            extract_pages: val.extract_pages,            insert_page_markers: val.insert_page_markers,            marker_format: val.marker_format,        }    }
+    fn from(val: kreuzberg::PageConfig) -> Self {
+        Self {
+            extract_pages: val.extract_pages,
+            insert_page_markers: val.insert_page_markers,
+            marker_format: val.marker_format,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPostProcessorConfig> for kreuzberg::PostProcessorConfig {
-    fn from(val: WasmPostProcessorConfig) -> Self {        Self {            enabled: val.enabled,            enabled_processors: val.enabled_processors.map(|v| v.into_iter().collect()),            disabled_processors: val.disabled_processors.map(|v| v.into_iter().collect()),            enabled_set: val.enabled_set.map(|v| v.into_iter().collect()),            disabled_set: val.disabled_set.map(|v| v.into_iter().collect()),        }    }
+    fn from(val: WasmPostProcessorConfig) -> Self {
+        Self {
+            enabled: val.enabled,
+            enabled_processors: val.enabled_processors.map(|v| v.into_iter().collect()),
+            disabled_processors: val.disabled_processors.map(|v| v.into_iter().collect()),
+            enabled_set: val.enabled_set.map(|v| v.into_iter().collect()),
+            disabled_set: val.disabled_set.map(|v| v.into_iter().collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PostProcessorConfig> for WasmPostProcessorConfig {
-    fn from(val: kreuzberg::PostProcessorConfig) -> Self {        Self {            enabled: val.enabled,            enabled_processors: val.enabled_processors.map(|v| v.into_iter().collect()),            disabled_processors: val.disabled_processors.map(|v| v.into_iter().collect()),            enabled_set: val.enabled_set.map(|v| v.into_iter().collect()),            disabled_set: val.disabled_set.map(|v| v.into_iter().collect()),        }    }
+    fn from(val: kreuzberg::PostProcessorConfig) -> Self {
+        Self {
+            enabled: val.enabled,
+            enabled_processors: val.enabled_processors.map(|v| v.into_iter().collect()),
+            disabled_processors: val.disabled_processors.map(|v| v.into_iter().collect()),
+            enabled_set: val.enabled_set.map(|v| v.into_iter().collect()),
+            disabled_set: val.disabled_set.map(|v| v.into_iter().collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmChunkingConfig> for kreuzberg::ChunkingConfig {
-    fn from(val: WasmChunkingConfig) -> Self {        Self {            max_characters: val.max_characters,            overlap: val.overlap,            trim: val.trim,            chunker_type: val.chunker_type.into(),            embedding: val.embedding.map(Into::into),            preset: val.preset,            sizing: serde_wasm_bindgen::from_value(val.sizing.clone()).unwrap_or_default(),            prepend_heading_context: val.prepend_heading_context,            topic_threshold: val.topic_threshold,        }    }
+    fn from(val: WasmChunkingConfig) -> Self {
+        Self {
+            max_characters: val.max_characters,
+            overlap: val.overlap,
+            trim: val.trim,
+            chunker_type: val.chunker_type.into(),
+            embedding: val.embedding.map(Into::into),
+            preset: val.preset,
+            sizing: serde_wasm_bindgen::from_value(val.sizing.clone()).unwrap_or_default(),
+            prepend_heading_context: val.prepend_heading_context,
+            topic_threshold: val.topic_threshold,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ChunkingConfig> for WasmChunkingConfig {
-    fn from(val: kreuzberg::ChunkingConfig) -> Self {        Self {            max_characters: val.max_characters,            overlap: val.overlap,            trim: val.trim,            chunker_type: val.chunker_type.into(),            embedding: val.embedding.map(Into::into),            preset: val.preset,            sizing: serde_wasm_bindgen::to_value(&val.sizing).unwrap_or(JsValue::NULL),            prepend_heading_context: val.prepend_heading_context,            topic_threshold: val.topic_threshold,        }    }
+    fn from(val: kreuzberg::ChunkingConfig) -> Self {
+        Self {
+            max_characters: val.max_characters,
+            overlap: val.overlap,
+            trim: val.trim,
+            chunker_type: val.chunker_type.into(),
+            embedding: val.embedding.map(Into::into),
+            preset: val.preset,
+            sizing: serde_wasm_bindgen::to_value(&val.sizing).unwrap_or(JsValue::NULL),
+            prepend_heading_context: val.prepend_heading_context,
+            topic_threshold: val.topic_threshold,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmEmbeddingConfig> for kreuzberg::EmbeddingConfig {
-    fn from(val: WasmEmbeddingConfig) -> Self {        Self {            model: serde_wasm_bindgen::from_value(val.model.clone()).unwrap_or_default(),            normalize: val.normalize,            batch_size: val.batch_size,            show_download_progress: val.show_download_progress,            cache_dir: val.cache_dir.map(Into::into),            acceleration: val.acceleration.map(Into::into),            max_embed_duration_secs: val.max_embed_duration_secs,        }    }
+    fn from(val: WasmEmbeddingConfig) -> Self {
+        Self {
+            model: serde_wasm_bindgen::from_value(val.model.clone()).unwrap_or_default(),
+            normalize: val.normalize,
+            batch_size: val.batch_size,
+            show_download_progress: val.show_download_progress,
+            cache_dir: val.cache_dir.map(Into::into),
+            acceleration: val.acceleration.map(Into::into),
+            max_embed_duration_secs: val.max_embed_duration_secs,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::EmbeddingConfig> for WasmEmbeddingConfig {
-    fn from(val: kreuzberg::EmbeddingConfig) -> Self {        Self {            model: serde_wasm_bindgen::to_value(&val.model).unwrap_or(JsValue::NULL),            normalize: val.normalize,            batch_size: val.batch_size,            show_download_progress: val.show_download_progress,            cache_dir: val.cache_dir.map(|p| p.to_string_lossy().to_string()),            acceleration: val.acceleration.map(Into::into),            max_embed_duration_secs: val.max_embed_duration_secs,        }    }
+    fn from(val: kreuzberg::EmbeddingConfig) -> Self {
+        Self {
+            model: serde_wasm_bindgen::to_value(&val.model).unwrap_or(JsValue::NULL),
+            normalize: val.normalize,
+            batch_size: val.batch_size,
+            show_download_progress: val.show_download_progress,
+            cache_dir: val.cache_dir.map(|p| p.to_string_lossy().to_string()),
+            acceleration: val.acceleration.map(Into::into),
+            max_embed_duration_secs: val.max_embed_duration_secs,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmRedactionConfig> for kreuzberg::core::config::RedactionConfig {
-    fn from(val: WasmRedactionConfig) -> Self {        Self {            categories: val.categories.into_iter().map(Into::into).collect(),            strategy: val.strategy.into(),            ner: val.ner.map(Into::into),            preserve_offsets: val.preserve_offsets,            custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),            custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmRedactionConfig) -> Self {
+        Self {
+            categories: val.categories.into_iter().map(Into::into).collect(),
+            strategy: val.strategy.into(),
+            ner: val.ner.map(Into::into),
+            preserve_offsets: val.preserve_offsets,
+            custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
+            custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::RedactionConfig> for WasmRedactionConfig {
-    fn from(val: kreuzberg::core::config::RedactionConfig) -> Self {        Self {            categories: val.categories.into_iter().map(Into::into).collect(),            strategy: val.strategy.into(),            ner: val.ner.map(Into::into),            preserve_offsets: val.preserve_offsets,            custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),            custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::core::config::RedactionConfig) -> Self {
+        Self {
+            categories: val.categories.into_iter().map(Into::into).collect(),
+            strategy: val.strategy.into(),
+            ner: val.ner.map(Into::into),
+            preserve_offsets: val.preserve_offsets,
+            custom_terms: val.custom_terms.into_iter().map(Into::into).collect(),
+            custom_patterns: val.custom_patterns.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmRedactionTerm> for kreuzberg::core::config::redaction::RedactionTerm {
-    fn from(val: WasmRedactionTerm) -> Self {        Self {            label: val.label,            value: val.value,            case_sensitive: val.case_sensitive,        }    }
+    fn from(val: WasmRedactionTerm) -> Self {
+        Self {
+            label: val.label,
+            value: val.value,
+            case_sensitive: val.case_sensitive,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::redaction::RedactionTerm> for WasmRedactionTerm {
-    fn from(val: kreuzberg::core::config::redaction::RedactionTerm) -> Self {        Self {            label: val.label,            value: val.value,            case_sensitive: val.case_sensitive,        }    }
+    fn from(val: kreuzberg::core::config::redaction::RedactionTerm) -> Self {
+        Self {
+            label: val.label,
+            value: val.value,
+            case_sensitive: val.case_sensitive,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmRedactionPattern> for kreuzberg::core::config::redaction::RedactionPattern {
-    fn from(val: WasmRedactionPattern) -> Self {        Self {            label: val.label,            pattern: val.pattern,            case_sensitive: val.case_sensitive,        }    }
+    fn from(val: WasmRedactionPattern) -> Self {
+        Self {
+            label: val.label,
+            pattern: val.pattern,
+            case_sensitive: val.case_sensitive,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::redaction::RedactionPattern> for WasmRedactionPattern {
-    fn from(val: kreuzberg::core::config::redaction::RedactionPattern) -> Self {        Self {            label: val.label,            pattern: val.pattern,            case_sensitive: val.case_sensitive,        }    }
+    fn from(val: kreuzberg::core::config::redaction::RedactionPattern) -> Self {
+        Self {
+            label: val.label,
+            pattern: val.pattern,
+            case_sensitive: val.case_sensitive,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmSummarizationConfig> for kreuzberg::core::config::SummarizationConfig {
-    fn from(val: WasmSummarizationConfig) -> Self {        Self {            strategy: val.strategy.into(),            max_tokens: val.max_tokens,            llm: val.llm.map(Into::into),        }    }
+    fn from(val: WasmSummarizationConfig) -> Self {
+        Self {
+            strategy: val.strategy.into(),
+            max_tokens: val.max_tokens,
+            llm: val.llm.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::SummarizationConfig> for WasmSummarizationConfig {
-    fn from(val: kreuzberg::core::config::SummarizationConfig) -> Self {        Self {            strategy: val.strategy.into(),            max_tokens: val.max_tokens,            llm: val.llm.map(Into::into),        }    }
+    fn from(val: kreuzberg::core::config::SummarizationConfig) -> Self {
+        Self {
+            strategy: val.strategy.into(),
+            max_tokens: val.max_tokens,
+            llm: val.llm.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTranslationConfig> for kreuzberg::core::config::TranslationConfig {
-    fn from(val: WasmTranslationConfig) -> Self {        Self {            target_lang: val.target_lang,            source_lang: val.source_lang,            preserve_markup: val.preserve_markup,            llm: val.llm.into(),        }    }
+    fn from(val: WasmTranslationConfig) -> Self {
+        Self {
+            target_lang: val.target_lang,
+            source_lang: val.source_lang,
+            preserve_markup: val.preserve_markup,
+            llm: val.llm.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::core::config::TranslationConfig> for WasmTranslationConfig {
-    fn from(val: kreuzberg::core::config::TranslationConfig) -> Self {        Self {            target_lang: val.target_lang,            source_lang: val.source_lang,            preserve_markup: val.preserve_markup,            llm: val.llm.into(),        }    }
+    fn from(val: kreuzberg::core::config::TranslationConfig) -> Self {
+        Self {
+            target_lang: val.target_lang,
+            source_lang: val.source_lang,
+            preserve_markup: val.preserve_markup,
+            llm: val.llm.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::SupportedFormat> for WasmSupportedFormat {
-    fn from(val: kreuzberg::SupportedFormat) -> Self {        Self {            extension: val.extension,            mime_type: val.mime_type,        }    }
+    fn from(val: kreuzberg::SupportedFormat) -> Self {
+        Self {
+            extension: val.extension,
+            mime_type: val.mime_type,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::extraction::structured::StructuredDataResult> for WasmStructuredDataResult {
-    fn from(val: kreuzberg::extraction::structured::StructuredDataResult) -> Self {        Self {            content: val.content,            format: val.format.to_string(),            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default()).unwrap_or(JsValue::NULL),            text_fields: val.text_fields.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::extraction::structured::StructuredDataResult) -> Self {
+        Self {
+            content: val.content,
+            format: val.format.to_string(),
+            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            text_fields: val.text_fields.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties> for WasmXlsxAppProperties {
-    fn from(val: kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties) -> Self {        Self {            application: val.application,            app_version: val.app_version,            doc_security: val.doc_security,            scale_crop: val.scale_crop,            links_up_to_date: val.links_up_to_date,            shared_doc: val.shared_doc,            hyperlinks_changed: val.hyperlinks_changed,            company: val.company,            worksheet_names: val.worksheet_names.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::extraction::office_metadata::app_properties::XlsxAppProperties) -> Self {
+        Self {
+            application: val.application,
+            app_version: val.app_version,
+            doc_security: val.doc_security,
+            scale_crop: val.scale_crop,
+            links_up_to_date: val.links_up_to_date,
+            shared_doc: val.shared_doc,
+            hyperlinks_changed: val.hyperlinks_changed,
+            company: val.company,
+            worksheet_names: val.worksheet_names.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties> for WasmPptxAppProperties {
-    fn from(val: kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties) -> Self {        Self {            application: val.application,            app_version: val.app_version,            total_time: val.total_time,            company: val.company,            doc_security: val.doc_security,            scale_crop: val.scale_crop,            links_up_to_date: val.links_up_to_date,            shared_doc: val.shared_doc,            hyperlinks_changed: val.hyperlinks_changed,            slides: val.slides,            notes: val.notes,            hidden_slides: val.hidden_slides,            multimedia_clips: val.multimedia_clips,            presentation_format: val.presentation_format,            slide_titles: val.slide_titles.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::extraction::office_metadata::app_properties::PptxAppProperties) -> Self {
+        Self {
+            application: val.application,
+            app_version: val.app_version,
+            total_time: val.total_time,
+            company: val.company,
+            doc_security: val.doc_security,
+            scale_crop: val.scale_crop,
+            links_up_to_date: val.links_up_to_date,
+            shared_doc: val.shared_doc,
+            hyperlinks_changed: val.hyperlinks_changed,
+            slides: val.slides,
+            notes: val.notes,
+            hidden_slides: val.hidden_slides,
+            multimedia_clips: val.multimedia_clips,
+            presentation_format: val.presentation_format,
+            slide_titles: val.slide_titles.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmSecurityLimits> for kreuzberg::SecurityLimits {
-    fn from(val: WasmSecurityLimits) -> Self {        Self {            max_archive_size: val.max_archive_size,            max_compression_ratio: val.max_compression_ratio,            max_files_in_archive: val.max_files_in_archive,            max_nesting_depth: val.max_nesting_depth,            max_entity_length: val.max_entity_length,            max_content_size: val.max_content_size,            max_iterations: val.max_iterations,            max_xml_depth: val.max_xml_depth,            max_table_cells: val.max_table_cells,        }    }
+    fn from(val: WasmSecurityLimits) -> Self {
+        Self {
+            max_archive_size: val.max_archive_size,
+            max_compression_ratio: val.max_compression_ratio,
+            max_files_in_archive: val.max_files_in_archive,
+            max_nesting_depth: val.max_nesting_depth,
+            max_entity_length: val.max_entity_length,
+            max_content_size: val.max_content_size,
+            max_iterations: val.max_iterations,
+            max_xml_depth: val.max_xml_depth,
+            max_table_cells: val.max_table_cells,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::SecurityLimits> for WasmSecurityLimits {
-    fn from(val: kreuzberg::SecurityLimits) -> Self {        Self {            max_archive_size: val.max_archive_size,            max_compression_ratio: val.max_compression_ratio,            max_files_in_archive: val.max_files_in_archive,            max_nesting_depth: val.max_nesting_depth,            max_entity_length: val.max_entity_length,            max_content_size: val.max_content_size,            max_iterations: val.max_iterations,            max_xml_depth: val.max_xml_depth,            max_table_cells: val.max_table_cells,        }    }
+    fn from(val: kreuzberg::SecurityLimits) -> Self {
+        Self {
+            max_archive_size: val.max_archive_size,
+            max_compression_ratio: val.max_compression_ratio,
+            max_files_in_archive: val.max_files_in_archive,
+            max_nesting_depth: val.max_nesting_depth,
+            max_entity_length: val.max_entity_length,
+            max_content_size: val.max_content_size,
+            max_iterations: val.max_iterations,
+            max_xml_depth: val.max_xml_depth,
+            max_table_cells: val.max_table_cells,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmGlineBackend> for kreuzberg::text::ner::gline::GlineBackend {
-    fn from(val: WasmGlineBackend) -> Self {        Self {            repo_id: val.repo_id,            model_path: val.model_path.into(),            tokenizer_path: val.tokenizer_path.into(),        }    }
+    fn from(val: WasmGlineBackend) -> Self {
+        Self {
+            repo_id: val.repo_id,
+            model_path: val.model_path.into(),
+            tokenizer_path: val.tokenizer_path.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::text::ner::gline::GlineBackend> for WasmGlineBackend {
-    fn from(val: kreuzberg::text::ner::gline::GlineBackend) -> Self {        Self {            repo_id: val.repo_id,            model_path: val.model_path.to_string_lossy().to_string(),            tokenizer_path: val.tokenizer_path.to_string_lossy().to_string(),        }    }
+    fn from(val: kreuzberg::text::ner::gline::GlineBackend) -> Self {
+        Self {
+            repo_id: val.repo_id,
+            model_path: val.model_path.to_string_lossy().to_string(),
+            tokenizer_path: val.tokenizer_path.to_string_lossy().to_string(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPatternMatch> for kreuzberg::text::redaction::patterns::PatternMatch {
-    fn from(val: WasmPatternMatch) -> Self {        Self {            start: val.start,            end: val.end,            category: val.category.into(),            text: val.text,        }    }
+    fn from(val: WasmPatternMatch) -> Self {
+        Self {
+            start: val.start,
+            end: val.end,
+            category: val.category.into(),
+            text: val.text,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::text::redaction::patterns::PatternMatch> for WasmPatternMatch {
-    fn from(val: kreuzberg::text::redaction::patterns::PatternMatch) -> Self {        Self {            start: val.start,            end: val.end,            category: val.category.into(),            text: val.text,        }    }
+    fn from(val: kreuzberg::text::redaction::patterns::PatternMatch) -> Self {
+        Self {
+            start: val.start,
+            end: val.end,
+            category: val.category.into(),
+            text: val.text,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPdfAnnotation> for kreuzberg::PdfAnnotation {
-    fn from(val: WasmPdfAnnotation) -> Self {        Self {            annotation_type: val.annotation_type.into(),            content: val.content,            page_number: val.page_number,            bounding_box: val.bounding_box.map(Into::into),        }    }
+    fn from(val: WasmPdfAnnotation) -> Self {
+        Self {
+            annotation_type: val.annotation_type.into(),
+            content: val.content,
+            page_number: val.page_number,
+            bounding_box: val.bounding_box.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PdfAnnotation> for WasmPdfAnnotation {
-    fn from(val: kreuzberg::PdfAnnotation) -> Self {        Self {            annotation_type: val.annotation_type.into(),            content: val.content,            page_number: val.page_number,            bounding_box: val.bounding_box.map(Into::into),        }    }
+    fn from(val: kreuzberg::PdfAnnotation) -> Self {
+        Self {
+            annotation_type: val.annotation_type.into(),
+            content: val.content,
+            page_number: val.page_number,
+            bounding_box: val.bounding_box.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageClassification> for kreuzberg::PageClassification {
-    fn from(val: WasmPageClassification) -> Self {        Self {            page_number: val.page_number,            labels: val.labels.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmPageClassification) -> Self {
+        Self {
+            page_number: val.page_number,
+            labels: val.labels.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PageClassification> for WasmPageClassification {
-    fn from(val: kreuzberg::PageClassification) -> Self {        Self {            page_number: val.page_number,            labels: val.labels.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::PageClassification) -> Self {
+        Self {
+            page_number: val.page_number,
+            labels: val.labels.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmClassificationLabel> for kreuzberg::ClassificationLabel {
-    fn from(val: WasmClassificationLabel) -> Self {        Self {            label: val.label,            confidence: val.confidence,        }    }
+    fn from(val: WasmClassificationLabel) -> Self {
+        Self {
+            label: val.label,
+            confidence: val.confidence,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ClassificationLabel> for WasmClassificationLabel {
-    fn from(val: kreuzberg::ClassificationLabel) -> Self {        Self {            label: val.label,            confidence: val.confidence,        }    }
+    fn from(val: kreuzberg::ClassificationLabel) -> Self {
+        Self {
+            label: val.label,
+            confidence: val.confidence,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDjotContent> for kreuzberg::DjotContent {
-    fn from(val: WasmDjotContent) -> Self {        Self {            plain_text: val.plain_text,            blocks: val.blocks.into_iter().map(Into::into).collect(),            metadata: val.metadata.into(),            tables: val.tables.into_iter().map(Into::into).collect(),            images: val.images.into_iter().map(Into::into).collect(),            links: val.links.into_iter().map(Into::into).collect(),            footnotes: val.footnotes.into_iter().map(Into::into).collect(),            attributes: Default::default(),        }    }
+    fn from(val: WasmDjotContent) -> Self {
+        Self {
+            plain_text: val.plain_text,
+            blocks: val.blocks.into_iter().map(Into::into).collect(),
+            metadata: val.metadata.into(),
+            tables: val.tables.into_iter().map(Into::into).collect(),
+            images: val.images.into_iter().map(Into::into).collect(),
+            links: val.links.into_iter().map(Into::into).collect(),
+            footnotes: val.footnotes.into_iter().map(Into::into).collect(),
+            attributes: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DjotContent> for WasmDjotContent {
-    fn from(val: kreuzberg::DjotContent) -> Self {        Self {            plain_text: val.plain_text,            blocks: val.blocks.into_iter().map(Into::into).collect(),            metadata: val.metadata.into(),            tables: val.tables.into_iter().map(Into::into).collect(),            images: val.images.into_iter().map(Into::into).collect(),            links: val.links.into_iter().map(Into::into).collect(),            footnotes: val.footnotes.into_iter().map(Into::into).collect(),            attributes: val.attributes.iter().map(|i| format!("{:?}", i)).collect(),        }    }
+    fn from(val: kreuzberg::DjotContent) -> Self {
+        Self {
+            plain_text: val.plain_text,
+            blocks: val.blocks.into_iter().map(Into::into).collect(),
+            metadata: val.metadata.into(),
+            tables: val.tables.into_iter().map(Into::into).collect(),
+            images: val.images.into_iter().map(Into::into).collect(),
+            links: val.links.into_iter().map(Into::into).collect(),
+            footnotes: val.footnotes.into_iter().map(Into::into).collect(),
+            attributes: val.attributes.iter().map(|i| format!("{:?}", i)).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmFormattedBlock> for kreuzberg::FormattedBlock {
-    fn from(val: WasmFormattedBlock) -> Self {        Self {            block_type: val.block_type.into(),            level: val.level,            inline_content: val.inline_content.into_iter().map(Into::into).collect(),            attributes: Default::default(),            language: val.language,            code: val.code,            children: val.children.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmFormattedBlock) -> Self {
+        Self {
+            block_type: val.block_type.into(),
+            level: val.level,
+            inline_content: val.inline_content.into_iter().map(Into::into).collect(),
+            attributes: Default::default(),
+            language: val.language,
+            code: val.code,
+            children: val.children.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::FormattedBlock> for WasmFormattedBlock {
-    fn from(val: kreuzberg::FormattedBlock) -> Self {        Self {            block_type: val.block_type.into(),            level: val.level,            inline_content: val.inline_content.into_iter().map(Into::into).collect(),            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),            language: val.language,            code: val.code,            children: val.children.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::FormattedBlock) -> Self {
+        Self {
+            block_type: val.block_type.into(),
+            level: val.level,
+            inline_content: val.inline_content.into_iter().map(Into::into).collect(),
+            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),
+            language: val.language,
+            code: val.code,
+            children: val.children.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmInlineElement> for kreuzberg::InlineElement {
-    fn from(val: WasmInlineElement) -> Self {        Self {            element_type: val.element_type.into(),            content: val.content,            attributes: Default::default(),            metadata: val.metadata.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),        }    }
+    fn from(val: WasmInlineElement) -> Self {
+        Self {
+            element_type: val.element_type.into(),
+            content: val.content,
+            attributes: Default::default(),
+            metadata: val
+                .metadata
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::InlineElement> for WasmInlineElement {
-    fn from(val: kreuzberg::InlineElement) -> Self {        Self {            element_type: val.element_type.into(),            content: val.content,            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),            metadata: val.metadata.as_ref().and_then(|v| serde_json::to_string(v).ok()).and_then(|s| js_sys::JSON::parse(&s).ok()),        }    }
+    fn from(val: kreuzberg::InlineElement) -> Self {
+        Self {
+            element_type: val.element_type.into(),
+            content: val.content,
+            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),
+            metadata: val
+                .metadata
+                .as_ref()
+                .and_then(|v| serde_json::to_string(v).ok())
+                .and_then(|s| js_sys::JSON::parse(&s).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDjotImage> for kreuzberg::DjotImage {
-    fn from(val: WasmDjotImage) -> Self {        Self {            src: val.src,            alt: val.alt,            title: val.title,            attributes: Default::default(),        }    }
+    fn from(val: WasmDjotImage) -> Self {
+        Self {
+            src: val.src,
+            alt: val.alt,
+            title: val.title,
+            attributes: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DjotImage> for WasmDjotImage {
-    fn from(val: kreuzberg::DjotImage) -> Self {        Self {            src: val.src,            alt: val.alt,            title: val.title,            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),        }    }
+    fn from(val: kreuzberg::DjotImage) -> Self {
+        Self {
+            src: val.src,
+            alt: val.alt,
+            title: val.title,
+            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDjotLink> for kreuzberg::DjotLink {
-    fn from(val: WasmDjotLink) -> Self {        Self {            url: val.url,            text: val.text,            title: val.title,            attributes: Default::default(),        }    }
+    fn from(val: WasmDjotLink) -> Self {
+        Self {
+            url: val.url,
+            text: val.text,
+            title: val.title,
+            attributes: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DjotLink> for WasmDjotLink {
-    fn from(val: kreuzberg::DjotLink) -> Self {        Self {            url: val.url,            text: val.text,            title: val.title,            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),        }    }
+    fn from(val: kreuzberg::DjotLink) -> Self {
+        Self {
+            url: val.url,
+            text: val.text,
+            title: val.title,
+            attributes: val.attributes.as_ref().map(|v| format!("{v:?}")),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmFootnote> for kreuzberg::Footnote {
-    fn from(val: WasmFootnote) -> Self {        Self {            label: val.label,            content: val.content.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmFootnote) -> Self {
+        Self {
+            label: val.label,
+            content: val.content.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::Footnote> for WasmFootnote {
-    fn from(val: kreuzberg::Footnote) -> Self {        Self {            label: val.label,            content: val.content.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::Footnote) -> Self {
+        Self {
+            label: val.label,
+            content: val.content.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDocumentStructure> for kreuzberg::DocumentStructure {
-    fn from(val: WasmDocumentStructure) -> Self {        Self {            nodes: val.nodes.into_iter().map(Into::into).collect(),            source_format: val.source_format,            relationships: val.relationships.into_iter().map(Into::into).collect(),            node_types: val.node_types.into_iter().collect(),        }    }
+    fn from(val: WasmDocumentStructure) -> Self {
+        Self {
+            nodes: val.nodes.into_iter().map(Into::into).collect(),
+            source_format: val.source_format,
+            relationships: val.relationships.into_iter().map(Into::into).collect(),
+            node_types: val.node_types.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DocumentStructure> for WasmDocumentStructure {
-    fn from(val: kreuzberg::DocumentStructure) -> Self {        Self {            nodes: val.nodes.into_iter().map(Into::into).collect(),            source_format: val.source_format,            relationships: val.relationships.into_iter().map(Into::into).collect(),            node_types: val.node_types.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::DocumentStructure) -> Self {
+        Self {
+            nodes: val.nodes.into_iter().map(Into::into).collect(),
+            source_format: val.source_format,
+            relationships: val.relationships.into_iter().map(Into::into).collect(),
+            node_types: val.node_types.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDocumentRelationship> for kreuzberg::DocumentRelationship {
-    fn from(val: WasmDocumentRelationship) -> Self {        Self {            source: kreuzberg::NodeIndex(val.source),            target: kreuzberg::NodeIndex(val.target),            kind: val.kind.into(),        }    }
+    fn from(val: WasmDocumentRelationship) -> Self {
+        Self {
+            source: kreuzberg::NodeIndex(val.source),
+            target: kreuzberg::NodeIndex(val.target),
+            kind: val.kind.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DocumentRelationship> for WasmDocumentRelationship {
-    fn from(val: kreuzberg::DocumentRelationship) -> Self {        Self {            source: val.source.0,            target: val.target.0,            kind: val.kind.into(),        }    }
+    fn from(val: kreuzberg::DocumentRelationship) -> Self {
+        Self {
+            source: val.source.0,
+            target: val.target.0,
+            kind: val.kind.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDocumentNode> for kreuzberg::DocumentNode {
-    fn from(val: WasmDocumentNode) -> Self {        Self {            id: Default::default(),            content: serde_wasm_bindgen::from_value(val.content.clone()).unwrap_or_default(),            parent: (val.parent).map(kreuzberg::NodeIndex),            children: (val.children.into_iter().collect::<Vec<_>>()).into_iter().map(kreuzberg::NodeIndex).collect(),            content_layer: val.content_layer.into(),            page: val.page,            page_end: val.page_end,            bbox: val.bbox.map(Into::into),            annotations: val.annotations.into_iter().map(Into::into).collect(),            attributes: val.attributes.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),        }    }
+    fn from(val: WasmDocumentNode) -> Self {
+        Self {
+            id: Default::default(),
+            content: serde_wasm_bindgen::from_value(val.content.clone()).unwrap_or_default(),
+            parent: (val.parent).map(kreuzberg::NodeIndex),
+            children: (val.children.into_iter().collect::<Vec<_>>())
+                .into_iter()
+                .map(kreuzberg::NodeIndex)
+                .collect(),
+            content_layer: val.content_layer.into(),
+            page: val.page,
+            page_end: val.page_end,
+            bbox: val.bbox.map(Into::into),
+            annotations: val.annotations.into_iter().map(Into::into).collect(),
+            attributes: val
+                .attributes
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DocumentNode> for WasmDocumentNode {
-    fn from(val: kreuzberg::DocumentNode) -> Self {        Self {            id: format!("{:?}", val.id),            content: serde_wasm_bindgen::to_value(&val.content).unwrap_or(JsValue::NULL),            parent: val.parent.map(|v| v.0),            children: val.children.iter().map(|v| v.0).collect::<Vec<_>>().into_iter().collect(),            content_layer: val.content_layer.into(),            page: val.page,            page_end: val.page_end,            bbox: val.bbox.map(Into::into),            annotations: val.annotations.into_iter().map(Into::into).collect(),            attributes: val.attributes.as_ref().and_then(|v| serde_json::to_string(v).ok()).and_then(|s| js_sys::JSON::parse(&s).ok()),        }    }
+    fn from(val: kreuzberg::DocumentNode) -> Self {
+        Self {
+            id: format!("{:?}", val.id),
+            content: serde_wasm_bindgen::to_value(&val.content).unwrap_or(JsValue::NULL),
+            parent: val.parent.map(|v| v.0),
+            children: val
+                .children
+                .iter()
+                .map(|v| v.0)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .collect(),
+            content_layer: val.content_layer.into(),
+            page: val.page,
+            page_end: val.page_end,
+            bbox: val.bbox.map(Into::into),
+            annotations: val.annotations.into_iter().map(Into::into).collect(),
+            attributes: val
+                .attributes
+                .as_ref()
+                .and_then(|v| serde_json::to_string(v).ok())
+                .and_then(|s| js_sys::JSON::parse(&s).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTableGrid> for kreuzberg::TableGrid {
-    fn from(val: WasmTableGrid) -> Self {        Self {            rows: val.rows,            cols: val.cols,            cells: val.cells.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmTableGrid) -> Self {
+        Self {
+            rows: val.rows,
+            cols: val.cols,
+            cells: val.cells.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::TableGrid> for WasmTableGrid {
-    fn from(val: kreuzberg::TableGrid) -> Self {        Self {            rows: val.rows,            cols: val.cols,            cells: val.cells.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::TableGrid) -> Self {
+        Self {
+            rows: val.rows,
+            cols: val.cols,
+            cells: val.cells.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmGridCell> for kreuzberg::GridCell {
-    fn from(val: WasmGridCell) -> Self {        Self {            content: val.content,            row: val.row,            col: val.col,            row_span: val.row_span,            col_span: val.col_span,            is_header: val.is_header,            bbox: val.bbox.map(Into::into),        }    }
+    fn from(val: WasmGridCell) -> Self {
+        Self {
+            content: val.content,
+            row: val.row,
+            col: val.col,
+            row_span: val.row_span,
+            col_span: val.col_span,
+            is_header: val.is_header,
+            bbox: val.bbox.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::GridCell> for WasmGridCell {
-    fn from(val: kreuzberg::GridCell) -> Self {        Self {            content: val.content,            row: val.row,            col: val.col,            row_span: val.row_span,            col_span: val.col_span,            is_header: val.is_header,            bbox: val.bbox.map(Into::into),        }    }
+    fn from(val: kreuzberg::GridCell) -> Self {
+        Self {
+            content: val.content,
+            row: val.row,
+            col: val.col,
+            row_span: val.row_span,
+            col_span: val.col_span,
+            is_header: val.is_header,
+            bbox: val.bbox.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTextAnnotation> for kreuzberg::TextAnnotation {
-    fn from(val: WasmTextAnnotation) -> Self {        Self {            start: val.start,            end: val.end,            kind: serde_wasm_bindgen::from_value(val.kind.clone()).unwrap_or_default(),        }    }
+    fn from(val: WasmTextAnnotation) -> Self {
+        Self {
+            start: val.start,
+            end: val.end,
+            kind: serde_wasm_bindgen::from_value(val.kind.clone()).unwrap_or_default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::TextAnnotation> for WasmTextAnnotation {
-    fn from(val: kreuzberg::TextAnnotation) -> Self {        Self {            start: val.start,            end: val.end,            kind: serde_wasm_bindgen::to_value(&val.kind).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::TextAnnotation) -> Self {
+        Self {
+            start: val.start,
+            end: val.end,
+            kind: serde_wasm_bindgen::to_value(&val.kind).unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmEntity> for kreuzberg::Entity {
-    fn from(val: WasmEntity) -> Self {        Self {            category: val.category.into(),            text: val.text,            start: val.start,            end: val.end,            confidence: val.confidence,        }    }
+    fn from(val: WasmEntity) -> Self {
+        Self {
+            category: val.category.into(),
+            text: val.text,
+            start: val.start,
+            end: val.end,
+            confidence: val.confidence,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::Entity> for WasmEntity {
-    fn from(val: kreuzberg::Entity) -> Self {        Self {            category: val.category.into(),            text: val.text,            start: val.start,            end: val.end,            confidence: val.confidence,        }    }
+    fn from(val: kreuzberg::Entity) -> Self {
+        Self {
+            category: val.category.into(),
+            text: val.text,
+            start: val.start,
+            end: val.end,
+            confidence: val.confidence,
+        }
+    }
 }
 
-
-#[allow(clippy::needless_update)]#[allow(clippy::redundant_closure, clippy::useless_conversion)]
+#[allow(clippy::needless_update)]
+#[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmExtractionResult> for kreuzberg::ExtractionResult {
-    fn from(val: WasmExtractionResult) -> Self {        Self {            content: val.content,            mime_type: val.mime_type.into(),            metadata: val.metadata.into(),            extraction_method: val.extraction_method.map(Into::into),            tables: val.tables.into_iter().map(Into::into).collect(),            detected_languages: val.detected_languages.map(|v| v.into_iter().collect()),            chunks: val.chunks.map(|v| v.into_iter().map(Into::into).collect()),            images: val.images.map(|v| v.into_iter().map(Into::into).collect()),            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),            elements: val.elements.map(|v| v.into_iter().map(Into::into).collect()),            djot_content: val.djot_content.map(Into::into),            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),            document: val.document.map(Into::into),            quality_score: val.quality_score,            processing_warnings: val.processing_warnings.into_iter().map(Into::into).collect(),            annotations: val.annotations.map(|v| v.into_iter().map(Into::into).collect()),            children: val.children.map(|v| v.into_iter().map(Into::into).collect()),            uris: val.uris.map(|v| v.into_iter().map(Into::into).collect()),            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),            structured_output: val.structured_output.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            code_intelligence: val.code_intelligence.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            llm_usage: val.llm_usage.map(|v| v.into_iter().map(Into::into).collect()),            entities: val.entities.map(|v| v.into_iter().map(Into::into).collect()),            summary: val.summary.map(Into::into),            translation: val.translation.map(Into::into),            page_classifications: val.page_classifications.map(|v| v.into_iter().map(Into::into).collect()),            redaction_report: val.redaction_report.map(Into::into),            formatted_content: val.formatted_content,            ocr_internal_document: Default::default(),            ..Default::default()        }    }
+    fn from(val: WasmExtractionResult) -> Self {
+        Self {
+            content: val.content,
+            mime_type: val.mime_type.into(),
+            metadata: val.metadata.into(),
+            extraction_method: val.extraction_method.map(Into::into),
+            tables: val.tables.into_iter().map(Into::into).collect(),
+            detected_languages: val.detected_languages.map(|v| v.into_iter().collect()),
+            chunks: val.chunks.map(|v| v.into_iter().map(Into::into).collect()),
+            images: val.images.map(|v| v.into_iter().map(Into::into).collect()),
+            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),
+            elements: val.elements.map(|v| v.into_iter().map(Into::into).collect()),
+            djot_content: val.djot_content.map(Into::into),
+            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),
+            document: val.document.map(Into::into),
+            quality_score: val.quality_score,
+            processing_warnings: val.processing_warnings.into_iter().map(Into::into).collect(),
+            annotations: val.annotations.map(|v| v.into_iter().map(Into::into).collect()),
+            children: val.children.map(|v| v.into_iter().map(Into::into).collect()),
+            uris: val.uris.map(|v| v.into_iter().map(Into::into).collect()),
+            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),
+            structured_output: val
+                .structured_output
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            code_intelligence: val
+                .code_intelligence
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            llm_usage: val.llm_usage.map(|v| v.into_iter().map(Into::into).collect()),
+            entities: val.entities.map(|v| v.into_iter().map(Into::into).collect()),
+            summary: val.summary.map(Into::into),
+            translation: val.translation.map(Into::into),
+            page_classifications: val
+                .page_classifications
+                .map(|v| v.into_iter().map(Into::into).collect()),
+            redaction_report: val.redaction_report.map(Into::into),
+            formatted_content: val.formatted_content,
+            ocr_internal_document: Default::default(),
+            ..Default::default()
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ExtractionResult> for WasmExtractionResult {
-    fn from(val: kreuzberg::ExtractionResult) -> Self {        Self {            content: val.content,            mime_type: val.mime_type.to_string(),            metadata: val.metadata.into(),            extraction_method: val.extraction_method.map(Into::into),            tables: val.tables.into_iter().map(Into::into).collect(),            detected_languages: val.detected_languages.map(|v| v.into_iter().collect()),            chunks: val.chunks.map(|v| v.into_iter().map(Into::into).collect()),            images: val.images.map(|v| v.into_iter().map(Into::into).collect()),            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),            elements: val.elements.map(|v| v.into_iter().map(Into::into).collect()),            djot_content: val.djot_content.map(Into::into),            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),            document: val.document.map(Into::into),            quality_score: val.quality_score,            processing_warnings: val.processing_warnings.into_iter().map(Into::into).collect(),            annotations: val.annotations.map(|v| v.into_iter().map(Into::into).collect()),            children: val.children.map(|v| v.into_iter().map(Into::into).collect()),            uris: val.uris.map(|v| v.into_iter().map(Into::into).collect()),            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),            structured_output: val.structured_output.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            code_intelligence: val.code_intelligence.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            llm_usage: val.llm_usage.map(|v| v.into_iter().map(Into::into).collect()),            entities: val.entities.map(|v| v.into_iter().map(Into::into).collect()),            summary: val.summary.map(Into::into),            translation: val.translation.map(Into::into),            page_classifications: val.page_classifications.map(|v| v.into_iter().map(Into::into).collect()),            redaction_report: val.redaction_report.map(Into::into),            formatted_content: val.formatted_content,            ocr_internal_document: val.ocr_internal_document.as_ref().map(|v| format!("{v:?}")),        }    }
+    fn from(val: kreuzberg::ExtractionResult) -> Self {
+        Self {
+            content: val.content,
+            mime_type: val.mime_type.to_string(),
+            metadata: val.metadata.into(),
+            extraction_method: val.extraction_method.map(Into::into),
+            tables: val.tables.into_iter().map(Into::into).collect(),
+            detected_languages: val.detected_languages.map(|v| v.into_iter().collect()),
+            chunks: val.chunks.map(|v| v.into_iter().map(Into::into).collect()),
+            images: val.images.map(|v| v.into_iter().map(Into::into).collect()),
+            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),
+            elements: val.elements.map(|v| v.into_iter().map(Into::into).collect()),
+            djot_content: val.djot_content.map(Into::into),
+            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),
+            document: val.document.map(Into::into),
+            quality_score: val.quality_score,
+            processing_warnings: val.processing_warnings.into_iter().map(Into::into).collect(),
+            annotations: val.annotations.map(|v| v.into_iter().map(Into::into).collect()),
+            children: val.children.map(|v| v.into_iter().map(Into::into).collect()),
+            uris: val.uris.map(|v| v.into_iter().map(Into::into).collect()),
+            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),
+            structured_output: val
+                .structured_output
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            code_intelligence: val
+                .code_intelligence
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            llm_usage: val.llm_usage.map(|v| v.into_iter().map(Into::into).collect()),
+            entities: val.entities.map(|v| v.into_iter().map(Into::into).collect()),
+            summary: val.summary.map(Into::into),
+            translation: val.translation.map(Into::into),
+            page_classifications: val
+                .page_classifications
+                .map(|v| v.into_iter().map(Into::into).collect()),
+            redaction_report: val.redaction_report.map(Into::into),
+            formatted_content: val.formatted_content,
+            ocr_internal_document: val.ocr_internal_document.as_ref().map(|v| format!("{v:?}")),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmArchiveEntry> for kreuzberg::ArchiveEntry {
-    fn from(val: WasmArchiveEntry) -> Self {        Self {            path: val.path,            mime_type: val.mime_type,            result: Box::new(val.result.into()),        }    }
+    fn from(val: WasmArchiveEntry) -> Self {
+        Self {
+            path: val.path,
+            mime_type: val.mime_type,
+            result: Box::new(val.result.into()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ArchiveEntry> for WasmArchiveEntry {
-    fn from(val: kreuzberg::ArchiveEntry) -> Self {        Self {            path: val.path,            mime_type: val.mime_type,            result: (*val.result).into(),        }    }
+    fn from(val: kreuzberg::ArchiveEntry) -> Self {
+        Self {
+            path: val.path,
+            mime_type: val.mime_type,
+            result: (*val.result).into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmProcessingWarning> for kreuzberg::ProcessingWarning {
-    fn from(val: WasmProcessingWarning) -> Self {        Self {            source: val.source.into(),            message: val.message.into(),        }    }
+    fn from(val: WasmProcessingWarning) -> Self {
+        Self {
+            source: val.source.into(),
+            message: val.message.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ProcessingWarning> for WasmProcessingWarning {
-    fn from(val: kreuzberg::ProcessingWarning) -> Self {        Self {            source: val.source.to_string(),            message: val.message.to_string(),        }    }
+    fn from(val: kreuzberg::ProcessingWarning) -> Self {
+        Self {
+            source: val.source.to_string(),
+            message: val.message.to_string(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmLlmUsage> for kreuzberg::LlmUsage {
-    fn from(val: WasmLlmUsage) -> Self {        Self {            model: val.model,            source: val.source,            input_tokens: val.input_tokens,            output_tokens: val.output_tokens,            total_tokens: val.total_tokens,            estimated_cost: val.estimated_cost,            finish_reason: val.finish_reason,        }    }
+    fn from(val: WasmLlmUsage) -> Self {
+        Self {
+            model: val.model,
+            source: val.source,
+            input_tokens: val.input_tokens,
+            output_tokens: val.output_tokens,
+            total_tokens: val.total_tokens,
+            estimated_cost: val.estimated_cost,
+            finish_reason: val.finish_reason,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::LlmUsage> for WasmLlmUsage {
-    fn from(val: kreuzberg::LlmUsage) -> Self {        Self {            model: val.model,            source: val.source,            input_tokens: val.input_tokens,            output_tokens: val.output_tokens,            total_tokens: val.total_tokens,            estimated_cost: val.estimated_cost,            finish_reason: val.finish_reason,        }    }
+    fn from(val: kreuzberg::LlmUsage) -> Self {
+        Self {
+            model: val.model,
+            source: val.source,
+            input_tokens: val.input_tokens,
+            output_tokens: val.output_tokens,
+            total_tokens: val.total_tokens,
+            estimated_cost: val.estimated_cost,
+            finish_reason: val.finish_reason,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmChunk> for kreuzberg::Chunk {
-    fn from(val: WasmChunk) -> Self {        Self {            content: val.content,            chunk_type: val.chunk_type.into(),            embedding: val.embedding.map(|v| v.into_iter().collect()),            metadata: val.metadata.into(),        }    }
+    fn from(val: WasmChunk) -> Self {
+        Self {
+            content: val.content,
+            chunk_type: val.chunk_type.into(),
+            embedding: val.embedding.map(|v| v.into_iter().collect()),
+            metadata: val.metadata.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::Chunk> for WasmChunk {
-    fn from(val: kreuzberg::Chunk) -> Self {        Self {            content: val.content,            chunk_type: val.chunk_type.into(),            embedding: val.embedding.map(|v| v.into_iter().collect()),            metadata: val.metadata.into(),        }    }
+    fn from(val: kreuzberg::Chunk) -> Self {
+        Self {
+            content: val.content,
+            chunk_type: val.chunk_type.into(),
+            embedding: val.embedding.map(|v| v.into_iter().collect()),
+            metadata: val.metadata.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmHeadingContext> for kreuzberg::HeadingContext {
-    fn from(val: WasmHeadingContext) -> Self {        Self {            headings: val.headings.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmHeadingContext) -> Self {
+        Self {
+            headings: val.headings.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::HeadingContext> for WasmHeadingContext {
-    fn from(val: kreuzberg::HeadingContext) -> Self {        Self {            headings: val.headings.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::HeadingContext) -> Self {
+        Self {
+            headings: val.headings.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmHeadingLevel> for kreuzberg::HeadingLevel {
-    fn from(val: WasmHeadingLevel) -> Self {        Self {            level: val.level,            text: val.text,        }    }
+    fn from(val: WasmHeadingLevel) -> Self {
+        Self {
+            level: val.level,
+            text: val.text,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::HeadingLevel> for WasmHeadingLevel {
-    fn from(val: kreuzberg::HeadingLevel) -> Self {        Self {            level: val.level,            text: val.text,        }    }
+    fn from(val: kreuzberg::HeadingLevel) -> Self {
+        Self {
+            level: val.level,
+            text: val.text,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmChunkMetadata> for kreuzberg::ChunkMetadata {
-    fn from(val: WasmChunkMetadata) -> Self {        Self {            byte_start: val.byte_start,            byte_end: val.byte_end,            token_count: val.token_count,            chunk_index: val.chunk_index,            total_chunks: val.total_chunks,            first_page: val.first_page,            last_page: val.last_page,            heading_context: val.heading_context.map(Into::into),            image_indices: val.image_indices.into_iter().collect(),        }    }
+    fn from(val: WasmChunkMetadata) -> Self {
+        Self {
+            byte_start: val.byte_start,
+            byte_end: val.byte_end,
+            token_count: val.token_count,
+            chunk_index: val.chunk_index,
+            total_chunks: val.total_chunks,
+            first_page: val.first_page,
+            last_page: val.last_page,
+            heading_context: val.heading_context.map(Into::into),
+            image_indices: val.image_indices.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ChunkMetadata> for WasmChunkMetadata {
-    fn from(val: kreuzberg::ChunkMetadata) -> Self {        Self {            byte_start: val.byte_start,            byte_end: val.byte_end,            token_count: val.token_count,            chunk_index: val.chunk_index,            total_chunks: val.total_chunks,            first_page: val.first_page,            last_page: val.last_page,            heading_context: val.heading_context.map(Into::into),            image_indices: val.image_indices.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::ChunkMetadata) -> Self {
+        Self {
+            byte_start: val.byte_start,
+            byte_end: val.byte_end,
+            token_count: val.token_count,
+            chunk_index: val.chunk_index,
+            total_chunks: val.total_chunks,
+            first_page: val.first_page,
+            last_page: val.last_page,
+            heading_context: val.heading_context.map(Into::into),
+            image_indices: val.image_indices.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmExtractedImage> for kreuzberg::ExtractedImage {
-    fn from(val: WasmExtractedImage) -> Self {        Self {            data: val.data.to_vec().into(),            format: val.format.into(),            image_index: val.image_index,            page_number: val.page_number,            width: val.width,            height: val.height,            colorspace: val.colorspace,            bits_per_component: val.bits_per_component,            is_mask: val.is_mask,            description: val.description,            ocr_result: val.ocr_result.map(Into::into).map(Box::new),            bounding_box: val.bounding_box.map(Into::into),            source_path: val.source_path,            image_kind: val.image_kind.map(Into::into),            kind_confidence: val.kind_confidence,            cluster_id: val.cluster_id,            caption: val.caption,            qr_codes: val.qr_codes.map(|v| v.into_iter().map(Into::into).collect()),        }    }
+    fn from(val: WasmExtractedImage) -> Self {
+        Self {
+            data: val.data.to_vec().into(),
+            format: val.format.into(),
+            image_index: val.image_index,
+            page_number: val.page_number,
+            width: val.width,
+            height: val.height,
+            colorspace: val.colorspace,
+            bits_per_component: val.bits_per_component,
+            is_mask: val.is_mask,
+            description: val.description,
+            ocr_result: val.ocr_result.map(Into::into).map(Box::new),
+            bounding_box: val.bounding_box.map(Into::into),
+            source_path: val.source_path,
+            image_kind: val.image_kind.map(Into::into),
+            kind_confidence: val.kind_confidence,
+            cluster_id: val.cluster_id,
+            caption: val.caption,
+            qr_codes: val.qr_codes.map(|v| v.into_iter().map(Into::into).collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ExtractedImage> for WasmExtractedImage {
-    fn from(val: kreuzberg::ExtractedImage) -> Self {        Self {            data: val.data.to_vec().into(),            format: val.format.to_string(),            image_index: val.image_index,            page_number: val.page_number,            width: val.width,            height: val.height,            colorspace: val.colorspace,            bits_per_component: val.bits_per_component,            is_mask: val.is_mask,            description: val.description,            ocr_result: val.ocr_result.map(|v| (*v).into()),            bounding_box: val.bounding_box.map(Into::into),            source_path: val.source_path,            image_kind: val.image_kind.map(Into::into),            kind_confidence: val.kind_confidence,            cluster_id: val.cluster_id,            caption: val.caption,            qr_codes: val.qr_codes.map(|v| v.into_iter().map(Into::into).collect()),        }    }
+    fn from(val: kreuzberg::ExtractedImage) -> Self {
+        Self {
+            data: val.data.to_vec().into(),
+            format: val.format.to_string(),
+            image_index: val.image_index,
+            page_number: val.page_number,
+            width: val.width,
+            height: val.height,
+            colorspace: val.colorspace,
+            bits_per_component: val.bits_per_component,
+            is_mask: val.is_mask,
+            description: val.description,
+            ocr_result: val.ocr_result.map(|v| (*v).into()),
+            bounding_box: val.bounding_box.map(Into::into),
+            source_path: val.source_path,
+            image_kind: val.image_kind.map(Into::into),
+            kind_confidence: val.kind_confidence,
+            cluster_id: val.cluster_id,
+            caption: val.caption,
+            qr_codes: val.qr_codes.map(|v| v.into_iter().map(Into::into).collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmBoundingBox> for kreuzberg::BoundingBox {
-    fn from(val: WasmBoundingBox) -> Self {        Self {            x0: val.x0,            y0: val.y0,            x1: val.x1,            y1: val.y1,        }    }
+    fn from(val: WasmBoundingBox) -> Self {
+        Self {
+            x0: val.x0,
+            y0: val.y0,
+            x1: val.x1,
+            y1: val.y1,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::BoundingBox> for WasmBoundingBox {
-    fn from(val: kreuzberg::BoundingBox) -> Self {        Self {            x0: val.x0,            y0: val.y0,            x1: val.x1,            y1: val.y1,        }    }
+    fn from(val: kreuzberg::BoundingBox) -> Self {
+        Self {
+            x0: val.x0,
+            y0: val.y0,
+            x1: val.x1,
+            y1: val.y1,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmElementMetadata> for kreuzberg::ElementMetadata {
-    fn from(val: WasmElementMetadata) -> Self {        Self {            page_number: val.page_number,            filename: val.filename,            coordinates: val.coordinates.map(Into::into),            element_index: val.element_index,            additional: serde_wasm_bindgen::from_value(val.additional.clone()).unwrap_or_default(),        }    }
+    fn from(val: WasmElementMetadata) -> Self {
+        Self {
+            page_number: val.page_number,
+            filename: val.filename,
+            coordinates: val.coordinates.map(Into::into),
+            element_index: val.element_index,
+            additional: serde_wasm_bindgen::from_value(val.additional.clone()).unwrap_or_default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ElementMetadata> for WasmElementMetadata {
-    fn from(val: kreuzberg::ElementMetadata) -> Self {        Self {            page_number: val.page_number,            filename: val.filename,            coordinates: val.coordinates.map(Into::into),            element_index: val.element_index,            additional: js_sys::JSON::parse(&serde_json::to_string(&val.additional).unwrap_or_default()).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::ElementMetadata) -> Self {
+        Self {
+            page_number: val.page_number,
+            filename: val.filename,
+            coordinates: val.coordinates.map(Into::into),
+            element_index: val.element_index,
+            additional: js_sys::JSON::parse(&serde_json::to_string(&val.additional).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmElement> for kreuzberg::Element {
-    fn from(val: WasmElement) -> Self {        Self {            element_id: Default::default(),            element_type: val.element_type.into(),            text: val.text,            metadata: val.metadata.into(),        }    }
+    fn from(val: WasmElement) -> Self {
+        Self {
+            element_id: Default::default(),
+            element_type: val.element_type.into(),
+            text: val.text,
+            metadata: val.metadata.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::Element> for WasmElement {
-    fn from(val: kreuzberg::Element) -> Self {        Self {            element_id: format!("{:?}", val.element_id),            element_type: val.element_type.into(),            text: val.text,            metadata: val.metadata.into(),        }    }
+    fn from(val: kreuzberg::Element) -> Self {
+        Self {
+            element_id: format!("{:?}", val.element_id),
+            element_type: val.element_type.into(),
+            text: val.text,
+            metadata: val.metadata.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ExcelWorkbook> for WasmExcelWorkbook {
-    fn from(val: kreuzberg::ExcelWorkbook) -> Self {        Self {            sheets: val.sheets.into_iter().map(Into::into).collect(),            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default()).unwrap_or(JsValue::NULL),            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),        }    }
+    fn from(val: kreuzberg::ExcelWorkbook) -> Self {
+        Self {
+            sheets: val.sheets.into_iter().map(Into::into).collect(),
+            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ExcelSheet> for WasmExcelSheet {
-    fn from(val: kreuzberg::ExcelSheet) -> Self {        Self {            name: val.name,            markdown: val.markdown,            row_count: val.row_count,            col_count: val.col_count,            cell_count: val.cell_count,            table_cells: val.table_cells.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),        }    }
+    fn from(val: kreuzberg::ExcelSheet) -> Self {
+        Self {
+            name: val.name,
+            markdown: val.markdown,
+            row_count: val.row_count,
+            col_count: val.col_count,
+            cell_count: val.cell_count,
+            table_cells: val
+                .table_cells
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::XmlExtractionResult> for WasmXmlExtractionResult {
-    fn from(val: kreuzberg::XmlExtractionResult) -> Self {        Self {            content: val.content,            element_count: val.element_count,            unique_elements: val.unique_elements.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::XmlExtractionResult) -> Self {
+        Self {
+            content: val.content,
+            element_count: val.element_count,
+            unique_elements: val.unique_elements.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::TextExtractionResult> for WasmTextExtractionResult {
-    fn from(val: kreuzberg::TextExtractionResult) -> Self {        Self {            content: val.content,            line_count: val.line_count,            word_count: val.word_count,            character_count: val.character_count,            headers: val.headers.map(|v| v.into_iter().collect()),            links: val.links.as_ref().and_then(|v| serde_wasm_bindgen::to_value(&v.iter().map(|(a, b)| vec![a.to_string(), b.to_string()]).collect::<Vec<Vec<String>>>()).ok()),            code_blocks: val.code_blocks.as_ref().and_then(|v| serde_wasm_bindgen::to_value(&v.iter().map(|(a, b)| vec![a.to_string(), b.to_string()]).collect::<Vec<Vec<String>>>()).ok()),        }    }
+    fn from(val: kreuzberg::TextExtractionResult) -> Self {
+        Self {
+            content: val.content,
+            line_count: val.line_count,
+            word_count: val.word_count,
+            character_count: val.character_count,
+            headers: val.headers.map(|v| v.into_iter().collect()),
+            links: val.links.as_ref().and_then(|v| {
+                serde_wasm_bindgen::to_value(
+                    &v.iter()
+                        .map(|(a, b)| vec![a.to_string(), b.to_string()])
+                        .collect::<Vec<Vec<String>>>(),
+                )
+                .ok()
+            }),
+            code_blocks: val.code_blocks.as_ref().and_then(|v| {
+                serde_wasm_bindgen::to_value(
+                    &v.iter()
+                        .map(|(a, b)| vec![a.to_string(), b.to_string()])
+                        .collect::<Vec<Vec<String>>>(),
+                )
+                .ok()
+            }),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PptxExtractionResult> for WasmPptxExtractionResult {
-    fn from(val: kreuzberg::PptxExtractionResult) -> Self {        Self {            content: val.content,            metadata: val.metadata.into(),            slide_count: val.slide_count,            image_count: val.image_count,            table_count: val.table_count,            images: val.images.into_iter().map(Into::into).collect(),            page_structure: val.page_structure.map(Into::into),            page_contents: val.page_contents.map(|v| v.into_iter().map(Into::into).collect()),            document: val.document.map(Into::into),            hyperlinks: val.hyperlinks.iter().map(|i| format!("{:?}", i)).collect(),            office_metadata: js_sys::JSON::parse(&serde_json::to_string(&val.office_metadata).unwrap_or_default()).unwrap_or(JsValue::NULL),            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),        }    }
+    fn from(val: kreuzberg::PptxExtractionResult) -> Self {
+        Self {
+            content: val.content,
+            metadata: val.metadata.into(),
+            slide_count: val.slide_count,
+            image_count: val.image_count,
+            table_count: val.table_count,
+            images: val.images.into_iter().map(Into::into).collect(),
+            page_structure: val.page_structure.map(Into::into),
+            page_contents: val.page_contents.map(|v| v.into_iter().map(Into::into).collect()),
+            document: val.document.map(Into::into),
+            hyperlinks: val.hyperlinks.iter().map(|i| format!("{:?}", i)).collect(),
+            office_metadata: js_sys::JSON::parse(&serde_json::to_string(&val.office_metadata).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            revisions: val.revisions.map(|v| v.into_iter().map(Into::into).collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::EmailExtractionResult> for WasmEmailExtractionResult {
-    fn from(val: kreuzberg::EmailExtractionResult) -> Self {        Self {            subject: val.subject,            from_email: val.from_email,            to_emails: val.to_emails.into_iter().collect(),            cc_emails: val.cc_emails.into_iter().collect(),            bcc_emails: val.bcc_emails.into_iter().collect(),            date: val.date,            message_id: val.message_id,            plain_text: val.plain_text,            html_content: val.html_content,            content: val.content,            attachments: val.attachments.into_iter().map(Into::into).collect(),            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default()).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::EmailExtractionResult) -> Self {
+        Self {
+            subject: val.subject,
+            from_email: val.from_email,
+            to_emails: val.to_emails.into_iter().collect(),
+            cc_emails: val.cc_emails.into_iter().collect(),
+            bcc_emails: val.bcc_emails.into_iter().collect(),
+            date: val.date,
+            message_id: val.message_id,
+            plain_text: val.plain_text,
+            html_content: val.html_content,
+            content: val.content,
+            attachments: val.attachments.into_iter().map(Into::into).collect(),
+            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::EmailAttachment> for WasmEmailAttachment {
-    fn from(val: kreuzberg::EmailAttachment) -> Self {        Self {            name: val.name,            filename: val.filename,            mime_type: val.mime_type,            size: val.size,            is_image: val.is_image,            data: val.data.map(|v| v.to_vec().into()),        }    }
+    fn from(val: kreuzberg::EmailAttachment) -> Self {
+        Self {
+            name: val.name,
+            filename: val.filename,
+            mime_type: val.mime_type,
+            size: val.size,
+            is_image: val.is_image,
+            data: val.data.map(|v| v.to_vec().into()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrExtractionResult> for kreuzberg::OcrExtractionResult {
-    fn from(val: WasmOcrExtractionResult) -> Self {        Self {            content: val.content,            mime_type: val.mime_type,            metadata: serde_wasm_bindgen::from_value(val.metadata.clone()).unwrap_or_default(),            tables: val.tables.into_iter().map(Into::into).collect(),            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),            internal_document: Default::default(),        }    }
+    fn from(val: WasmOcrExtractionResult) -> Self {
+        Self {
+            content: val.content,
+            mime_type: val.mime_type,
+            metadata: serde_wasm_bindgen::from_value(val.metadata.clone()).unwrap_or_default(),
+            tables: val.tables.into_iter().map(Into::into).collect(),
+            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),
+            internal_document: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrExtractionResult> for WasmOcrExtractionResult {
-    fn from(val: kreuzberg::OcrExtractionResult) -> Self {        Self {            content: val.content,            mime_type: val.mime_type,            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default()).unwrap_or(JsValue::NULL),            tables: val.tables.into_iter().map(Into::into).collect(),            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),            internal_document: val.internal_document.as_ref().map(|v| format!("{v:?}")),        }    }
+    fn from(val: kreuzberg::OcrExtractionResult) -> Self {
+        Self {
+            content: val.content,
+            mime_type: val.mime_type,
+            metadata: js_sys::JSON::parse(&serde_json::to_string(&val.metadata).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            tables: val.tables.into_iter().map(Into::into).collect(),
+            ocr_elements: val.ocr_elements.map(|v| v.into_iter().map(Into::into).collect()),
+            internal_document: val.internal_document.as_ref().map(|v| format!("{v:?}")),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrTable> for kreuzberg::OcrTable {
-    fn from(val: WasmOcrTable) -> Self {        Self {            cells: serde_wasm_bindgen::from_value(val.cells.clone()).unwrap_or_default(),            markdown: val.markdown,            page_number: val.page_number,            bounding_box: val.bounding_box.map(Into::into),        }    }
+    fn from(val: WasmOcrTable) -> Self {
+        Self {
+            cells: serde_wasm_bindgen::from_value(val.cells.clone()).unwrap_or_default(),
+            markdown: val.markdown,
+            page_number: val.page_number,
+            bounding_box: val.bounding_box.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrTable> for WasmOcrTable {
-    fn from(val: kreuzberg::OcrTable) -> Self {        Self {            cells: serde_wasm_bindgen::to_value(&val.cells).unwrap_or(JsValue::NULL),            markdown: val.markdown,            page_number: val.page_number,            bounding_box: val.bounding_box.map(Into::into),        }    }
+    fn from(val: kreuzberg::OcrTable) -> Self {
+        Self {
+            cells: serde_wasm_bindgen::to_value(&val.cells).unwrap_or(JsValue::NULL),
+            markdown: val.markdown,
+            page_number: val.page_number,
+            bounding_box: val.bounding_box.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrTableBoundingBox> for kreuzberg::OcrTableBoundingBox {
-    fn from(val: WasmOcrTableBoundingBox) -> Self {        Self {            left: val.left,            top: val.top,            right: val.right,            bottom: val.bottom,        }    }
+    fn from(val: WasmOcrTableBoundingBox) -> Self {
+        Self {
+            left: val.left,
+            top: val.top,
+            right: val.right,
+            bottom: val.bottom,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrTableBoundingBox> for WasmOcrTableBoundingBox {
-    fn from(val: kreuzberg::OcrTableBoundingBox) -> Self {        Self {            left: val.left,            top: val.top,            right: val.right,            bottom: val.bottom,        }    }
+    fn from(val: kreuzberg::OcrTableBoundingBox) -> Self {
+        Self {
+            left: val.left,
+            top: val.top,
+            right: val.right,
+            bottom: val.bottom,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmImagePreprocessingConfig> for kreuzberg::ImagePreprocessingConfig {
-    fn from(val: WasmImagePreprocessingConfig) -> Self {        Self {            target_dpi: val.target_dpi,            auto_rotate: val.auto_rotate,            deskew: val.deskew,            denoise: val.denoise,            contrast_enhance: val.contrast_enhance,            binarization_method: val.binarization_method,            invert_colors: val.invert_colors,        }    }
+    fn from(val: WasmImagePreprocessingConfig) -> Self {
+        Self {
+            target_dpi: val.target_dpi,
+            auto_rotate: val.auto_rotate,
+            deskew: val.deskew,
+            denoise: val.denoise,
+            contrast_enhance: val.contrast_enhance,
+            binarization_method: val.binarization_method,
+            invert_colors: val.invert_colors,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ImagePreprocessingConfig> for WasmImagePreprocessingConfig {
-    fn from(val: kreuzberg::ImagePreprocessingConfig) -> Self {        Self {            target_dpi: val.target_dpi,            auto_rotate: val.auto_rotate,            deskew: val.deskew,            denoise: val.denoise,            contrast_enhance: val.contrast_enhance,            binarization_method: val.binarization_method,            invert_colors: val.invert_colors,        }    }
+    fn from(val: kreuzberg::ImagePreprocessingConfig) -> Self {
+        Self {
+            target_dpi: val.target_dpi,
+            auto_rotate: val.auto_rotate,
+            deskew: val.deskew,
+            denoise: val.denoise,
+            contrast_enhance: val.contrast_enhance,
+            binarization_method: val.binarization_method,
+            invert_colors: val.invert_colors,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTesseractConfig> for kreuzberg::TesseractConfig {
-    fn from(val: WasmTesseractConfig) -> Self {        Self {            language: val.language,            psm: val.psm,            output_format: val.output_format,            oem: val.oem,            min_confidence: val.min_confidence,            preprocessing: val.preprocessing.map(Into::into),            enable_table_detection: val.enable_table_detection,            table_min_confidence: val.table_min_confidence,            table_column_threshold: val.table_column_threshold,            table_row_threshold_ratio: val.table_row_threshold_ratio,            use_cache: val.use_cache,            classify_use_pre_adapted_templates: val.classify_use_pre_adapted_templates,            language_model_ngram_on: val.language_model_ngram_on,            tessedit_dont_blkrej_good_wds: val.tessedit_dont_blkrej_good_wds,            tessedit_dont_rowrej_good_wds: val.tessedit_dont_rowrej_good_wds,            tessedit_enable_dict_correction: val.tessedit_enable_dict_correction,            tessedit_char_whitelist: val.tessedit_char_whitelist,            tessedit_char_blacklist: val.tessedit_char_blacklist,            tessedit_use_primary_params_model: val.tessedit_use_primary_params_model,            textord_space_size_is_variable: val.textord_space_size_is_variable,            thresholding_method: val.thresholding_method,        }    }
+    fn from(val: WasmTesseractConfig) -> Self {
+        Self {
+            language: val.language,
+            psm: val.psm,
+            output_format: val.output_format,
+            oem: val.oem,
+            min_confidence: val.min_confidence,
+            preprocessing: val.preprocessing.map(Into::into),
+            enable_table_detection: val.enable_table_detection,
+            table_min_confidence: val.table_min_confidence,
+            table_column_threshold: val.table_column_threshold,
+            table_row_threshold_ratio: val.table_row_threshold_ratio,
+            use_cache: val.use_cache,
+            classify_use_pre_adapted_templates: val.classify_use_pre_adapted_templates,
+            language_model_ngram_on: val.language_model_ngram_on,
+            tessedit_dont_blkrej_good_wds: val.tessedit_dont_blkrej_good_wds,
+            tessedit_dont_rowrej_good_wds: val.tessedit_dont_rowrej_good_wds,
+            tessedit_enable_dict_correction: val.tessedit_enable_dict_correction,
+            tessedit_char_whitelist: val.tessedit_char_whitelist,
+            tessedit_char_blacklist: val.tessedit_char_blacklist,
+            tessedit_use_primary_params_model: val.tessedit_use_primary_params_model,
+            textord_space_size_is_variable: val.textord_space_size_is_variable,
+            thresholding_method: val.thresholding_method,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::TesseractConfig> for WasmTesseractConfig {
-    fn from(val: kreuzberg::TesseractConfig) -> Self {        Self {            language: val.language,            psm: val.psm,            output_format: val.output_format,            oem: val.oem,            min_confidence: val.min_confidence,            preprocessing: val.preprocessing.map(Into::into),            enable_table_detection: val.enable_table_detection,            table_min_confidence: val.table_min_confidence,            table_column_threshold: val.table_column_threshold,            table_row_threshold_ratio: val.table_row_threshold_ratio,            use_cache: val.use_cache,            classify_use_pre_adapted_templates: val.classify_use_pre_adapted_templates,            language_model_ngram_on: val.language_model_ngram_on,            tessedit_dont_blkrej_good_wds: val.tessedit_dont_blkrej_good_wds,            tessedit_dont_rowrej_good_wds: val.tessedit_dont_rowrej_good_wds,            tessedit_enable_dict_correction: val.tessedit_enable_dict_correction,            tessedit_char_whitelist: val.tessedit_char_whitelist,            tessedit_char_blacklist: val.tessedit_char_blacklist,            tessedit_use_primary_params_model: val.tessedit_use_primary_params_model,            textord_space_size_is_variable: val.textord_space_size_is_variable,            thresholding_method: val.thresholding_method,        }    }
+    fn from(val: kreuzberg::TesseractConfig) -> Self {
+        Self {
+            language: val.language,
+            psm: val.psm,
+            output_format: val.output_format,
+            oem: val.oem,
+            min_confidence: val.min_confidence,
+            preprocessing: val.preprocessing.map(Into::into),
+            enable_table_detection: val.enable_table_detection,
+            table_min_confidence: val.table_min_confidence,
+            table_column_threshold: val.table_column_threshold,
+            table_row_threshold_ratio: val.table_row_threshold_ratio,
+            use_cache: val.use_cache,
+            classify_use_pre_adapted_templates: val.classify_use_pre_adapted_templates,
+            language_model_ngram_on: val.language_model_ngram_on,
+            tessedit_dont_blkrej_good_wds: val.tessedit_dont_blkrej_good_wds,
+            tessedit_dont_rowrej_good_wds: val.tessedit_dont_rowrej_good_wds,
+            tessedit_enable_dict_correction: val.tessedit_enable_dict_correction,
+            tessedit_char_whitelist: val.tessedit_char_whitelist,
+            tessedit_char_blacklist: val.tessedit_char_blacklist,
+            tessedit_use_primary_params_model: val.tessedit_use_primary_params_model,
+            textord_space_size_is_variable: val.textord_space_size_is_variable,
+            thresholding_method: val.thresholding_method,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmImagePreprocessingMetadata> for kreuzberg::ImagePreprocessingMetadata {
-    fn from(val: WasmImagePreprocessingMetadata) -> Self {        Self {            original_dimensions: Default::default(),            original_dpi: Default::default(),            target_dpi: val.target_dpi,            scale_factor: val.scale_factor,            auto_adjusted: val.auto_adjusted,            final_dpi: val.final_dpi,            new_dimensions: Default::default(),            resample_method: val.resample_method,            dimension_clamped: val.dimension_clamped,            calculated_dpi: val.calculated_dpi,            skipped_resize: val.skipped_resize,            resize_error: val.resize_error,        }    }
+    fn from(val: WasmImagePreprocessingMetadata) -> Self {
+        Self {
+            original_dimensions: Default::default(),
+            original_dpi: Default::default(),
+            target_dpi: val.target_dpi,
+            scale_factor: val.scale_factor,
+            auto_adjusted: val.auto_adjusted,
+            final_dpi: val.final_dpi,
+            new_dimensions: Default::default(),
+            resample_method: val.resample_method,
+            dimension_clamped: val.dimension_clamped,
+            calculated_dpi: val.calculated_dpi,
+            skipped_resize: val.skipped_resize,
+            resize_error: val.resize_error,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ImagePreprocessingMetadata> for WasmImagePreprocessingMetadata {
-    fn from(val: kreuzberg::ImagePreprocessingMetadata) -> Self {        Self {            original_dimensions: vec![val.original_dimensions.0 as _, val.original_dimensions.1 as _],            original_dpi: vec![val.original_dpi.0 as _, val.original_dpi.1 as _],            target_dpi: val.target_dpi,            scale_factor: val.scale_factor,            auto_adjusted: val.auto_adjusted,            final_dpi: val.final_dpi,            new_dimensions: val.new_dimensions.map(|t| { let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect(); arr }),            resample_method: val.resample_method,            dimension_clamped: val.dimension_clamped,            calculated_dpi: val.calculated_dpi,            skipped_resize: val.skipped_resize,            resize_error: val.resize_error,        }    }
+    fn from(val: kreuzberg::ImagePreprocessingMetadata) -> Self {
+        Self {
+            original_dimensions: vec![val.original_dimensions.0 as _, val.original_dimensions.1 as _],
+            original_dpi: vec![val.original_dpi.0 as _, val.original_dpi.1 as _],
+            target_dpi: val.target_dpi,
+            scale_factor: val.scale_factor,
+            auto_adjusted: val.auto_adjusted,
+            final_dpi: val.final_dpi,
+            new_dimensions: val.new_dimensions.map(|t| {
+                let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect();
+                arr
+            }),
+            resample_method: val.resample_method,
+            dimension_clamped: val.dimension_clamped,
+            calculated_dpi: val.calculated_dpi,
+            skipped_resize: val.skipped_resize,
+            resize_error: val.resize_error,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmMetadata> for kreuzberg::Metadata {
-    fn from(val: WasmMetadata) -> Self {        Self {            title: val.title,            subject: val.subject,            authors: val.authors.map(|v| v.into_iter().collect()),            keywords: val.keywords.map(|v| v.into_iter().collect()),            language: val.language,            created_at: val.created_at,            modified_at: val.modified_at,            created_by: val.created_by,            modified_by: val.modified_by,            pages: val.pages.map(Into::into),            format: val.format.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            image_preprocessing: val.image_preprocessing.map(Into::into),            json_schema: val.json_schema.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            error: val.error.map(Into::into),            extraction_duration_ms: val.extraction_duration_ms,            category: val.category,            tags: val.tags.map(|v| v.into_iter().collect()),            document_version: val.document_version,            abstract_text: val.abstract_text,            output_format: val.output_format,            ocr_used: val.ocr_used,            additional: serde_wasm_bindgen::from_value(val.additional.clone()).unwrap_or_default(),        }    }
+    fn from(val: WasmMetadata) -> Self {
+        Self {
+            title: val.title,
+            subject: val.subject,
+            authors: val.authors.map(|v| v.into_iter().collect()),
+            keywords: val.keywords.map(|v| v.into_iter().collect()),
+            language: val.language,
+            created_at: val.created_at,
+            modified_at: val.modified_at,
+            created_by: val.created_by,
+            modified_by: val.modified_by,
+            pages: val.pages.map(Into::into),
+            format: val
+                .format
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            image_preprocessing: val.image_preprocessing.map(Into::into),
+            json_schema: val
+                .json_schema
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            error: val.error.map(Into::into),
+            extraction_duration_ms: val.extraction_duration_ms,
+            category: val.category,
+            tags: val.tags.map(|v| v.into_iter().collect()),
+            document_version: val.document_version,
+            abstract_text: val.abstract_text,
+            output_format: val.output_format,
+            ocr_used: val.ocr_used,
+            additional: serde_wasm_bindgen::from_value(val.additional.clone()).unwrap_or_default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::Metadata> for WasmMetadata {
-    fn from(val: kreuzberg::Metadata) -> Self {        Self {            title: val.title,            subject: val.subject,            authors: val.authors.map(|v| v.into_iter().collect()),            keywords: val.keywords.map(|v| v.into_iter().collect()),            language: val.language,            created_at: val.created_at,            modified_at: val.modified_at,            created_by: val.created_by,            modified_by: val.modified_by,            pages: val.pages.map(Into::into),            format: val.format.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            image_preprocessing: val.image_preprocessing.map(Into::into),            json_schema: val.json_schema.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            error: val.error.map(Into::into),            extraction_duration_ms: val.extraction_duration_ms,            category: val.category,            tags: val.tags.map(|v| v.into_iter().collect()),            document_version: val.document_version,            abstract_text: val.abstract_text,            output_format: val.output_format,            ocr_used: val.ocr_used,            additional: js_sys::JSON::parse(&serde_json::to_string(&val.additional).unwrap_or_default()).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::Metadata) -> Self {
+        Self {
+            title: val.title,
+            subject: val.subject,
+            authors: val.authors.map(|v| v.into_iter().collect()),
+            keywords: val.keywords.map(|v| v.into_iter().collect()),
+            language: val.language,
+            created_at: val.created_at,
+            modified_at: val.modified_at,
+            created_by: val.created_by,
+            modified_by: val.modified_by,
+            pages: val.pages.map(Into::into),
+            format: val.format.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            image_preprocessing: val.image_preprocessing.map(Into::into),
+            json_schema: val
+                .json_schema
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            error: val.error.map(Into::into),
+            extraction_duration_ms: val.extraction_duration_ms,
+            category: val.category,
+            tags: val.tags.map(|v| v.into_iter().collect()),
+            document_version: val.document_version,
+            abstract_text: val.abstract_text,
+            output_format: val.output_format,
+            ocr_used: val.ocr_used,
+            additional: js_sys::JSON::parse(&serde_json::to_string(&val.additional).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmExcelMetadata> for kreuzberg::ExcelMetadata {
-    fn from(val: WasmExcelMetadata) -> Self {        Self {            sheet_count: val.sheet_count,            sheet_names: val.sheet_names.map(|v| v.into_iter().collect()),        }    }
+    fn from(val: WasmExcelMetadata) -> Self {
+        Self {
+            sheet_count: val.sheet_count,
+            sheet_names: val.sheet_names.map(|v| v.into_iter().collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ExcelMetadata> for WasmExcelMetadata {
-    fn from(val: kreuzberg::ExcelMetadata) -> Self {        Self {            sheet_count: val.sheet_count,            sheet_names: val.sheet_names.map(|v| v.into_iter().collect()),        }    }
+    fn from(val: kreuzberg::ExcelMetadata) -> Self {
+        Self {
+            sheet_count: val.sheet_count,
+            sheet_names: val.sheet_names.map(|v| v.into_iter().collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmEmailMetadata> for kreuzberg::EmailMetadata {
-    fn from(val: WasmEmailMetadata) -> Self {        Self {            from_email: val.from_email,            from_name: val.from_name,            to_emails: val.to_emails.into_iter().collect(),            cc_emails: val.cc_emails.into_iter().collect(),            bcc_emails: val.bcc_emails.into_iter().collect(),            message_id: val.message_id,            attachments: val.attachments.into_iter().collect(),        }    }
+    fn from(val: WasmEmailMetadata) -> Self {
+        Self {
+            from_email: val.from_email,
+            from_name: val.from_name,
+            to_emails: val.to_emails.into_iter().collect(),
+            cc_emails: val.cc_emails.into_iter().collect(),
+            bcc_emails: val.bcc_emails.into_iter().collect(),
+            message_id: val.message_id,
+            attachments: val.attachments.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::EmailMetadata> for WasmEmailMetadata {
-    fn from(val: kreuzberg::EmailMetadata) -> Self {        Self {            from_email: val.from_email,            from_name: val.from_name,            to_emails: val.to_emails.into_iter().collect(),            cc_emails: val.cc_emails.into_iter().collect(),            bcc_emails: val.bcc_emails.into_iter().collect(),            message_id: val.message_id,            attachments: val.attachments.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::EmailMetadata) -> Self {
+        Self {
+            from_email: val.from_email,
+            from_name: val.from_name,
+            to_emails: val.to_emails.into_iter().collect(),
+            cc_emails: val.cc_emails.into_iter().collect(),
+            bcc_emails: val.bcc_emails.into_iter().collect(),
+            message_id: val.message_id,
+            attachments: val.attachments.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmArchiveMetadata> for kreuzberg::ArchiveMetadata {
-    fn from(val: WasmArchiveMetadata) -> Self {        Self {            format: val.format.into(),            file_count: val.file_count,            file_list: val.file_list.into_iter().collect(),            total_size: val.total_size,            compressed_size: val.compressed_size,        }    }
+    fn from(val: WasmArchiveMetadata) -> Self {
+        Self {
+            format: val.format.into(),
+            file_count: val.file_count,
+            file_list: val.file_list.into_iter().collect(),
+            total_size: val.total_size,
+            compressed_size: val.compressed_size,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ArchiveMetadata> for WasmArchiveMetadata {
-    fn from(val: kreuzberg::ArchiveMetadata) -> Self {        Self {            format: val.format.to_string(),            file_count: val.file_count,            file_list: val.file_list.into_iter().collect(),            total_size: val.total_size,            compressed_size: val.compressed_size,        }    }
+    fn from(val: kreuzberg::ArchiveMetadata) -> Self {
+        Self {
+            format: val.format.to_string(),
+            file_count: val.file_count,
+            file_list: val.file_list.into_iter().collect(),
+            total_size: val.total_size,
+            compressed_size: val.compressed_size,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmImageMetadata> for kreuzberg::ImageMetadata {
-    fn from(val: WasmImageMetadata) -> Self {        Self {            width: val.width,            height: val.height,            format: val.format,            exif: serde_wasm_bindgen::from_value(val.exif.clone()).unwrap_or_default(),        }    }
+    fn from(val: WasmImageMetadata) -> Self {
+        Self {
+            width: val.width,
+            height: val.height,
+            format: val.format,
+            exif: serde_wasm_bindgen::from_value(val.exif.clone()).unwrap_or_default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ImageMetadata> for WasmImageMetadata {
-    fn from(val: kreuzberg::ImageMetadata) -> Self {        Self {            width: val.width,            height: val.height,            format: val.format,            exif: js_sys::JSON::parse(&serde_json::to_string(&val.exif).unwrap_or_default()).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::ImageMetadata) -> Self {
+        Self {
+            width: val.width,
+            height: val.height,
+            format: val.format,
+            exif: js_sys::JSON::parse(&serde_json::to_string(&val.exif).unwrap_or_default()).unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmXmlMetadata> for kreuzberg::XmlMetadata {
-    fn from(val: WasmXmlMetadata) -> Self {        Self {            element_count: val.element_count,            unique_elements: val.unique_elements.into_iter().collect(),        }    }
+    fn from(val: WasmXmlMetadata) -> Self {
+        Self {
+            element_count: val.element_count,
+            unique_elements: val.unique_elements.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::XmlMetadata> for WasmXmlMetadata {
-    fn from(val: kreuzberg::XmlMetadata) -> Self {        Self {            element_count: val.element_count,            unique_elements: val.unique_elements.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::XmlMetadata) -> Self {
+        Self {
+            element_count: val.element_count,
+            unique_elements: val.unique_elements.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTextMetadata> for kreuzberg::TextMetadata {
-    fn from(val: WasmTextMetadata) -> Self {        Self {            line_count: val.line_count,            word_count: val.word_count,            character_count: val.character_count,            headers: val.headers.map(|v| v.into_iter().collect()),            links: Default::default(),            code_blocks: Default::default(),        }    }
+    fn from(val: WasmTextMetadata) -> Self {
+        Self {
+            line_count: val.line_count,
+            word_count: val.word_count,
+            character_count: val.character_count,
+            headers: val.headers.map(|v| v.into_iter().collect()),
+            links: Default::default(),
+            code_blocks: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::TextMetadata> for WasmTextMetadata {
-    fn from(val: kreuzberg::TextMetadata) -> Self {        Self {            line_count: val.line_count,            word_count: val.word_count,            character_count: val.character_count,            headers: val.headers.map(|v| v.into_iter().collect()),            links: val.links.as_ref().and_then(|v| serde_wasm_bindgen::to_value(&v.iter().map(|(a, b)| vec![a.to_string(), b.to_string()]).collect::<Vec<Vec<String>>>()).ok()),            code_blocks: val.code_blocks.as_ref().and_then(|v| serde_wasm_bindgen::to_value(&v.iter().map(|(a, b)| vec![a.to_string(), b.to_string()]).collect::<Vec<Vec<String>>>()).ok()),        }    }
+    fn from(val: kreuzberg::TextMetadata) -> Self {
+        Self {
+            line_count: val.line_count,
+            word_count: val.word_count,
+            character_count: val.character_count,
+            headers: val.headers.map(|v| v.into_iter().collect()),
+            links: val.links.as_ref().and_then(|v| {
+                serde_wasm_bindgen::to_value(
+                    &v.iter()
+                        .map(|(a, b)| vec![a.to_string(), b.to_string()])
+                        .collect::<Vec<Vec<String>>>(),
+                )
+                .ok()
+            }),
+            code_blocks: val.code_blocks.as_ref().and_then(|v| {
+                serde_wasm_bindgen::to_value(
+                    &v.iter()
+                        .map(|(a, b)| vec![a.to_string(), b.to_string()])
+                        .collect::<Vec<Vec<String>>>(),
+                )
+                .ok()
+            }),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmHeaderMetadata> for kreuzberg::HeaderMetadata {
-    fn from(val: WasmHeaderMetadata) -> Self {        Self {            level: val.level,            text: val.text,            id: val.id,            depth: val.depth,            html_offset: val.html_offset,        }    }
+    fn from(val: WasmHeaderMetadata) -> Self {
+        Self {
+            level: val.level,
+            text: val.text,
+            id: val.id,
+            depth: val.depth,
+            html_offset: val.html_offset,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::HeaderMetadata> for WasmHeaderMetadata {
-    fn from(val: kreuzberg::HeaderMetadata) -> Self {        Self {            level: val.level,            text: val.text,            id: val.id,            depth: val.depth,            html_offset: val.html_offset,        }    }
+    fn from(val: kreuzberg::HeaderMetadata) -> Self {
+        Self {
+            level: val.level,
+            text: val.text,
+            id: val.id,
+            depth: val.depth,
+            html_offset: val.html_offset,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmLinkMetadata> for kreuzberg::LinkMetadata {
-    fn from(val: WasmLinkMetadata) -> Self {        Self {            href: val.href,            text: val.text,            title: val.title,            link_type: val.link_type.into(),            rel: val.rel.into_iter().collect(),            attributes: Default::default(),        }    }
+    fn from(val: WasmLinkMetadata) -> Self {
+        Self {
+            href: val.href,
+            text: val.text,
+            title: val.title,
+            link_type: val.link_type.into(),
+            rel: val.rel.into_iter().collect(),
+            attributes: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::LinkMetadata> for WasmLinkMetadata {
-    fn from(val: kreuzberg::LinkMetadata) -> Self {        Self {            href: val.href,            text: val.text,            title: val.title,            link_type: val.link_type.into(),            rel: val.rel.into_iter().collect(),            attributes: serde_wasm_bindgen::to_value(&val.attributes.iter().map(|(a, b)| vec![a.to_string(), b.to_string()]).collect::<Vec<Vec<String>>>()).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::LinkMetadata) -> Self {
+        Self {
+            href: val.href,
+            text: val.text,
+            title: val.title,
+            link_type: val.link_type.into(),
+            rel: val.rel.into_iter().collect(),
+            attributes: serde_wasm_bindgen::to_value(
+                &val.attributes
+                    .iter()
+                    .map(|(a, b)| vec![a.to_string(), b.to_string()])
+                    .collect::<Vec<Vec<String>>>(),
+            )
+            .unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmImageMetadataType> for kreuzberg::ImageMetadataType {
-    fn from(val: WasmImageMetadataType) -> Self {        Self {            src: val.src,            alt: val.alt,            title: val.title,            dimensions: Default::default(),            image_type: val.image_type.into(),            attributes: Default::default(),        }    }
+    fn from(val: WasmImageMetadataType) -> Self {
+        Self {
+            src: val.src,
+            alt: val.alt,
+            title: val.title,
+            dimensions: Default::default(),
+            image_type: val.image_type.into(),
+            attributes: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ImageMetadataType> for WasmImageMetadataType {
-    fn from(val: kreuzberg::ImageMetadataType) -> Self {        Self {            src: val.src,            alt: val.alt,            title: val.title,            dimensions: val.dimensions.map(|t| { let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect(); arr }),            image_type: val.image_type.into(),            attributes: serde_wasm_bindgen::to_value(&val.attributes.iter().map(|(a, b)| vec![a.to_string(), b.to_string()]).collect::<Vec<Vec<String>>>()).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::ImageMetadataType) -> Self {
+        Self {
+            src: val.src,
+            alt: val.alt,
+            title: val.title,
+            dimensions: val.dimensions.map(|t| {
+                let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect();
+                arr
+            }),
+            image_type: val.image_type.into(),
+            attributes: serde_wasm_bindgen::to_value(
+                &val.attributes
+                    .iter()
+                    .map(|(a, b)| vec![a.to_string(), b.to_string()])
+                    .collect::<Vec<Vec<String>>>(),
+            )
+            .unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmStructuredData> for kreuzberg::StructuredData {
-    fn from(val: WasmStructuredData) -> Self {        Self {            data_type: val.data_type.into(),            raw_json: val.raw_json,            schema_type: val.schema_type,        }    }
+    fn from(val: WasmStructuredData) -> Self {
+        Self {
+            data_type: val.data_type.into(),
+            raw_json: val.raw_json,
+            schema_type: val.schema_type,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::StructuredData> for WasmStructuredData {
-    fn from(val: kreuzberg::StructuredData) -> Self {        Self {            data_type: val.data_type.into(),            raw_json: val.raw_json,            schema_type: val.schema_type,        }    }
+    fn from(val: kreuzberg::StructuredData) -> Self {
+        Self {
+            data_type: val.data_type.into(),
+            raw_json: val.raw_json,
+            schema_type: val.schema_type,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmHtmlMetadata> for kreuzberg::HtmlMetadata {
-    fn from(val: WasmHtmlMetadata) -> Self {        Self {            title: val.title,            description: val.description,            keywords: val.keywords.into_iter().collect(),            author: val.author,            canonical_url: val.canonical_url,            base_href: val.base_href,            language: val.language,            text_direction: val.text_direction.map(Into::into),            open_graph: serde_wasm_bindgen::from_value(val.open_graph.clone()).unwrap_or_default(),            twitter_card: serde_wasm_bindgen::from_value(val.twitter_card.clone()).unwrap_or_default(),            meta_tags: serde_wasm_bindgen::from_value(val.meta_tags.clone()).unwrap_or_default(),            headers: val.headers.into_iter().map(Into::into).collect(),            links: val.links.into_iter().map(Into::into).collect(),            images: val.images.into_iter().map(Into::into).collect(),            structured_data: val.structured_data.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmHtmlMetadata) -> Self {
+        Self {
+            title: val.title,
+            description: val.description,
+            keywords: val.keywords.into_iter().collect(),
+            author: val.author,
+            canonical_url: val.canonical_url,
+            base_href: val.base_href,
+            language: val.language,
+            text_direction: val.text_direction.map(Into::into),
+            open_graph: serde_wasm_bindgen::from_value(val.open_graph.clone()).unwrap_or_default(),
+            twitter_card: serde_wasm_bindgen::from_value(val.twitter_card.clone()).unwrap_or_default(),
+            meta_tags: serde_wasm_bindgen::from_value(val.meta_tags.clone()).unwrap_or_default(),
+            headers: val.headers.into_iter().map(Into::into).collect(),
+            links: val.links.into_iter().map(Into::into).collect(),
+            images: val.images.into_iter().map(Into::into).collect(),
+            structured_data: val.structured_data.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::HtmlMetadata> for WasmHtmlMetadata {
-    fn from(val: kreuzberg::HtmlMetadata) -> Self {        Self {            title: val.title,            description: val.description,            keywords: val.keywords.into_iter().collect(),            author: val.author,            canonical_url: val.canonical_url,            base_href: val.base_href,            language: val.language,            text_direction: val.text_direction.map(Into::into),            open_graph: js_sys::JSON::parse(&serde_json::to_string(&val.open_graph).unwrap_or_default()).unwrap_or(JsValue::NULL),            twitter_card: js_sys::JSON::parse(&serde_json::to_string(&val.twitter_card).unwrap_or_default()).unwrap_or(JsValue::NULL),            meta_tags: js_sys::JSON::parse(&serde_json::to_string(&val.meta_tags).unwrap_or_default()).unwrap_or(JsValue::NULL),            headers: val.headers.into_iter().map(Into::into).collect(),            links: val.links.into_iter().map(Into::into).collect(),            images: val.images.into_iter().map(Into::into).collect(),            structured_data: val.structured_data.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::HtmlMetadata) -> Self {
+        Self {
+            title: val.title,
+            description: val.description,
+            keywords: val.keywords.into_iter().collect(),
+            author: val.author,
+            canonical_url: val.canonical_url,
+            base_href: val.base_href,
+            language: val.language,
+            text_direction: val.text_direction.map(Into::into),
+            open_graph: js_sys::JSON::parse(&serde_json::to_string(&val.open_graph).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            twitter_card: js_sys::JSON::parse(&serde_json::to_string(&val.twitter_card).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            meta_tags: js_sys::JSON::parse(&serde_json::to_string(&val.meta_tags).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            headers: val.headers.into_iter().map(Into::into).collect(),
+            links: val.links.into_iter().map(Into::into).collect(),
+            images: val.images.into_iter().map(Into::into).collect(),
+            structured_data: val.structured_data.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrMetadata> for kreuzberg::OcrMetadata {
-    fn from(val: WasmOcrMetadata) -> Self {        Self {            language: val.language,            psm: val.psm,            output_format: val.output_format,            table_count: val.table_count,            table_rows: val.table_rows,            table_cols: val.table_cols,        }    }
+    fn from(val: WasmOcrMetadata) -> Self {
+        Self {
+            language: val.language,
+            psm: val.psm,
+            output_format: val.output_format,
+            table_count: val.table_count,
+            table_rows: val.table_rows,
+            table_cols: val.table_cols,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrMetadata> for WasmOcrMetadata {
-    fn from(val: kreuzberg::OcrMetadata) -> Self {        Self {            language: val.language,            psm: val.psm,            output_format: val.output_format,            table_count: val.table_count,            table_rows: val.table_rows,            table_cols: val.table_cols,        }    }
+    fn from(val: kreuzberg::OcrMetadata) -> Self {
+        Self {
+            language: val.language,
+            psm: val.psm,
+            output_format: val.output_format,
+            table_count: val.table_count,
+            table_rows: val.table_rows,
+            table_cols: val.table_cols,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmErrorMetadata> for kreuzberg::ErrorMetadata {
-    fn from(val: WasmErrorMetadata) -> Self {        Self {            error_type: val.error_type,            message: val.message,        }    }
+    fn from(val: WasmErrorMetadata) -> Self {
+        Self {
+            error_type: val.error_type,
+            message: val.message,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ErrorMetadata> for WasmErrorMetadata {
-    fn from(val: kreuzberg::ErrorMetadata) -> Self {        Self {            error_type: val.error_type,            message: val.message,        }    }
+    fn from(val: kreuzberg::ErrorMetadata) -> Self {
+        Self {
+            error_type: val.error_type,
+            message: val.message,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPptxMetadata> for kreuzberg::PptxMetadata {
-    fn from(val: WasmPptxMetadata) -> Self {        Self {            slide_count: val.slide_count,            slide_names: val.slide_names.into_iter().collect(),            image_count: val.image_count,            table_count: val.table_count,        }    }
+    fn from(val: WasmPptxMetadata) -> Self {
+        Self {
+            slide_count: val.slide_count,
+            slide_names: val.slide_names.into_iter().collect(),
+            image_count: val.image_count,
+            table_count: val.table_count,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PptxMetadata> for WasmPptxMetadata {
-    fn from(val: kreuzberg::PptxMetadata) -> Self {        Self {            slide_count: val.slide_count,            slide_names: val.slide_names.into_iter().collect(),            image_count: val.image_count,            table_count: val.table_count,        }    }
+    fn from(val: kreuzberg::PptxMetadata) -> Self {
+        Self {
+            slide_count: val.slide_count,
+            slide_names: val.slide_names.into_iter().collect(),
+            image_count: val.image_count,
+            table_count: val.table_count,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmCsvMetadata> for kreuzberg::CsvMetadata {
-    fn from(val: WasmCsvMetadata) -> Self {        Self {            row_count: val.row_count,            column_count: val.column_count,            delimiter: val.delimiter,            has_header: val.has_header,            column_types: val.column_types.map(|v| v.into_iter().collect()),        }    }
+    fn from(val: WasmCsvMetadata) -> Self {
+        Self {
+            row_count: val.row_count,
+            column_count: val.column_count,
+            delimiter: val.delimiter,
+            has_header: val.has_header,
+            column_types: val.column_types.map(|v| v.into_iter().collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::CsvMetadata> for WasmCsvMetadata {
-    fn from(val: kreuzberg::CsvMetadata) -> Self {        Self {            row_count: val.row_count,            column_count: val.column_count,            delimiter: val.delimiter,            has_header: val.has_header,            column_types: val.column_types.map(|v| v.into_iter().collect()),        }    }
+    fn from(val: kreuzberg::CsvMetadata) -> Self {
+        Self {
+            row_count: val.row_count,
+            column_count: val.column_count,
+            delimiter: val.delimiter,
+            has_header: val.has_header,
+            column_types: val.column_types.map(|v| v.into_iter().collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmBibtexMetadata> for kreuzberg::BibtexMetadata {
-    fn from(val: WasmBibtexMetadata) -> Self {        Self {            entry_count: val.entry_count,            citation_keys: val.citation_keys.into_iter().collect(),            authors: val.authors.into_iter().collect(),            year_range: val.year_range.map(Into::into),            entry_types: val.entry_types.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),        }    }
+    fn from(val: WasmBibtexMetadata) -> Self {
+        Self {
+            entry_count: val.entry_count,
+            citation_keys: val.citation_keys.into_iter().collect(),
+            authors: val.authors.into_iter().collect(),
+            year_range: val.year_range.map(Into::into),
+            entry_types: val
+                .entry_types
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::BibtexMetadata> for WasmBibtexMetadata {
-    fn from(val: kreuzberg::BibtexMetadata) -> Self {        Self {            entry_count: val.entry_count,            citation_keys: val.citation_keys.into_iter().collect(),            authors: val.authors.into_iter().collect(),            year_range: val.year_range.map(Into::into),            entry_types: val.entry_types.as_ref().and_then(|v| serde_json::to_string(v).ok()).and_then(|s| js_sys::JSON::parse(&s).ok()),        }    }
+    fn from(val: kreuzberg::BibtexMetadata) -> Self {
+        Self {
+            entry_count: val.entry_count,
+            citation_keys: val.citation_keys.into_iter().collect(),
+            authors: val.authors.into_iter().collect(),
+            year_range: val.year_range.map(Into::into),
+            entry_types: val
+                .entry_types
+                .as_ref()
+                .and_then(|v| serde_json::to_string(v).ok())
+                .and_then(|s| js_sys::JSON::parse(&s).ok()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmCitationMetadata> for kreuzberg::CitationMetadata {
-    fn from(val: WasmCitationMetadata) -> Self {        Self {            citation_count: val.citation_count,            format: val.format,            authors: val.authors.into_iter().collect(),            year_range: val.year_range.map(Into::into),            dois: val.dois.into_iter().collect(),            keywords: val.keywords.into_iter().collect(),        }    }
+    fn from(val: WasmCitationMetadata) -> Self {
+        Self {
+            citation_count: val.citation_count,
+            format: val.format,
+            authors: val.authors.into_iter().collect(),
+            year_range: val.year_range.map(Into::into),
+            dois: val.dois.into_iter().collect(),
+            keywords: val.keywords.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::CitationMetadata> for WasmCitationMetadata {
-    fn from(val: kreuzberg::CitationMetadata) -> Self {        Self {            citation_count: val.citation_count,            format: val.format,            authors: val.authors.into_iter().collect(),            year_range: val.year_range.map(Into::into),            dois: val.dois.into_iter().collect(),            keywords: val.keywords.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::CitationMetadata) -> Self {
+        Self {
+            citation_count: val.citation_count,
+            format: val.format,
+            authors: val.authors.into_iter().collect(),
+            year_range: val.year_range.map(Into::into),
+            dois: val.dois.into_iter().collect(),
+            keywords: val.keywords.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmYearRange> for kreuzberg::YearRange {
-    fn from(val: WasmYearRange) -> Self {        Self {            min: val.min,            max: val.max,            years: val.years.into_iter().collect(),        }    }
+    fn from(val: WasmYearRange) -> Self {
+        Self {
+            min: val.min,
+            max: val.max,
+            years: val.years.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::YearRange> for WasmYearRange {
-    fn from(val: kreuzberg::YearRange) -> Self {        Self {            min: val.min,            max: val.max,            years: val.years.into_iter().collect(),        }    }
+    fn from(val: kreuzberg::YearRange) -> Self {
+        Self {
+            min: val.min,
+            max: val.max,
+            years: val.years.into_iter().collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmFictionBookMetadata> for kreuzberg::FictionBookMetadata {
-    fn from(val: WasmFictionBookMetadata) -> Self {        Self {            genres: val.genres.into_iter().collect(),            sequences: val.sequences.into_iter().collect(),            annotation: val.annotation,        }    }
+    fn from(val: WasmFictionBookMetadata) -> Self {
+        Self {
+            genres: val.genres.into_iter().collect(),
+            sequences: val.sequences.into_iter().collect(),
+            annotation: val.annotation,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::FictionBookMetadata> for WasmFictionBookMetadata {
-    fn from(val: kreuzberg::FictionBookMetadata) -> Self {        Self {            genres: val.genres.into_iter().collect(),            sequences: val.sequences.into_iter().collect(),            annotation: val.annotation,        }    }
+    fn from(val: kreuzberg::FictionBookMetadata) -> Self {
+        Self {
+            genres: val.genres.into_iter().collect(),
+            sequences: val.sequences.into_iter().collect(),
+            annotation: val.annotation,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDbfMetadata> for kreuzberg::DbfMetadata {
-    fn from(val: WasmDbfMetadata) -> Self {        Self {            record_count: val.record_count,            field_count: val.field_count,            fields: val.fields.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmDbfMetadata) -> Self {
+        Self {
+            record_count: val.record_count,
+            field_count: val.field_count,
+            fields: val.fields.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DbfMetadata> for WasmDbfMetadata {
-    fn from(val: kreuzberg::DbfMetadata) -> Self {        Self {            record_count: val.record_count,            field_count: val.field_count,            fields: val.fields.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::DbfMetadata) -> Self {
+        Self {
+            record_count: val.record_count,
+            field_count: val.field_count,
+            fields: val.fields.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDbfFieldInfo> for kreuzberg::DbfFieldInfo {
-    fn from(val: WasmDbfFieldInfo) -> Self {        Self {            name: val.name,            field_type: val.field_type,        }    }
+    fn from(val: WasmDbfFieldInfo) -> Self {
+        Self {
+            name: val.name,
+            field_type: val.field_type,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DbfFieldInfo> for WasmDbfFieldInfo {
-    fn from(val: kreuzberg::DbfFieldInfo) -> Self {        Self {            name: val.name,            field_type: val.field_type,        }    }
+    fn from(val: kreuzberg::DbfFieldInfo) -> Self {
+        Self {
+            name: val.name,
+            field_type: val.field_type,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmJatsMetadata> for kreuzberg::JatsMetadata {
-    fn from(val: WasmJatsMetadata) -> Self {        Self {            copyright: val.copyright,            license: val.license,            history_dates: serde_wasm_bindgen::from_value(val.history_dates.clone()).unwrap_or_default(),            contributor_roles: val.contributor_roles.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmJatsMetadata) -> Self {
+        Self {
+            copyright: val.copyright,
+            license: val.license,
+            history_dates: serde_wasm_bindgen::from_value(val.history_dates.clone()).unwrap_or_default(),
+            contributor_roles: val.contributor_roles.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::JatsMetadata> for WasmJatsMetadata {
-    fn from(val: kreuzberg::JatsMetadata) -> Self {        Self {            copyright: val.copyright,            license: val.license,            history_dates: js_sys::JSON::parse(&serde_json::to_string(&val.history_dates).unwrap_or_default()).unwrap_or(JsValue::NULL),            contributor_roles: val.contributor_roles.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::JatsMetadata) -> Self {
+        Self {
+            copyright: val.copyright,
+            license: val.license,
+            history_dates: js_sys::JSON::parse(&serde_json::to_string(&val.history_dates).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+            contributor_roles: val.contributor_roles.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmContributorRole> for kreuzberg::ContributorRole {
-    fn from(val: WasmContributorRole) -> Self {        Self {            name: val.name,            role: val.role,        }    }
+    fn from(val: WasmContributorRole) -> Self {
+        Self {
+            name: val.name,
+            role: val.role,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ContributorRole> for WasmContributorRole {
-    fn from(val: kreuzberg::ContributorRole) -> Self {        Self {            name: val.name,            role: val.role,        }    }
+    fn from(val: kreuzberg::ContributorRole) -> Self {
+        Self {
+            name: val.name,
+            role: val.role,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmEpubMetadata> for kreuzberg::EpubMetadata {
-    fn from(val: WasmEpubMetadata) -> Self {        Self {            coverage: val.coverage,            dc_format: val.dc_format,            relation: val.relation,            source: val.source,            dc_type: val.dc_type,            cover_image: val.cover_image,        }    }
+    fn from(val: WasmEpubMetadata) -> Self {
+        Self {
+            coverage: val.coverage,
+            dc_format: val.dc_format,
+            relation: val.relation,
+            source: val.source,
+            dc_type: val.dc_type,
+            cover_image: val.cover_image,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::EpubMetadata> for WasmEpubMetadata {
-    fn from(val: kreuzberg::EpubMetadata) -> Self {        Self {            coverage: val.coverage,            dc_format: val.dc_format,            relation: val.relation,            source: val.source,            dc_type: val.dc_type,            cover_image: val.cover_image,        }    }
+    fn from(val: kreuzberg::EpubMetadata) -> Self {
+        Self {
+            coverage: val.coverage,
+            dc_format: val.dc_format,
+            relation: val.relation,
+            source: val.source,
+            dc_type: val.dc_type,
+            cover_image: val.cover_image,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPstMetadata> for kreuzberg::PstMetadata {
-    fn from(val: WasmPstMetadata) -> Self {        Self {            message_count: val.message_count,        }    }
+    fn from(val: WasmPstMetadata) -> Self {
+        Self {
+            message_count: val.message_count,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PstMetadata> for WasmPstMetadata {
-    fn from(val: kreuzberg::PstMetadata) -> Self {        Self {            message_count: val.message_count,        }    }
+    fn from(val: kreuzberg::PstMetadata) -> Self {
+        Self {
+            message_count: val.message_count,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrConfidence> for kreuzberg::OcrConfidence {
-    fn from(val: WasmOcrConfidence) -> Self {        Self {            detection: val.detection,            recognition: val.recognition,        }    }
+    fn from(val: WasmOcrConfidence) -> Self {
+        Self {
+            detection: val.detection,
+            recognition: val.recognition,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrConfidence> for WasmOcrConfidence {
-    fn from(val: kreuzberg::OcrConfidence) -> Self {        Self {            detection: val.detection,            recognition: val.recognition,        }    }
+    fn from(val: kreuzberg::OcrConfidence) -> Self {
+        Self {
+            detection: val.detection,
+            recognition: val.recognition,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrRotation> for kreuzberg::OcrRotation {
-    fn from(val: WasmOcrRotation) -> Self {        Self {            angle_degrees: val.angle_degrees,            confidence: val.confidence,        }    }
+    fn from(val: WasmOcrRotation) -> Self {
+        Self {
+            angle_degrees: val.angle_degrees,
+            confidence: val.confidence,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrRotation> for WasmOcrRotation {
-    fn from(val: kreuzberg::OcrRotation) -> Self {        Self {            angle_degrees: val.angle_degrees,            confidence: val.confidence,        }    }
+    fn from(val: kreuzberg::OcrRotation) -> Self {
+        Self {
+            angle_degrees: val.angle_degrees,
+            confidence: val.confidence,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrElement> for kreuzberg::OcrElement {
-    fn from(val: WasmOcrElement) -> Self {        Self {            text: val.text,            geometry: serde_wasm_bindgen::from_value(val.geometry.clone()).unwrap_or_default(),            confidence: val.confidence.into(),            level: val.level.into(),            rotation: val.rotation.map(Into::into),            page_number: val.page_number,            parent_id: val.parent_id,            backend_metadata: serde_wasm_bindgen::from_value(val.backend_metadata.clone()).unwrap_or_default(),        }    }
+    fn from(val: WasmOcrElement) -> Self {
+        Self {
+            text: val.text,
+            geometry: serde_wasm_bindgen::from_value(val.geometry.clone()).unwrap_or_default(),
+            confidence: val.confidence.into(),
+            level: val.level.into(),
+            rotation: val.rotation.map(Into::into),
+            page_number: val.page_number,
+            parent_id: val.parent_id,
+            backend_metadata: serde_wasm_bindgen::from_value(val.backend_metadata.clone()).unwrap_or_default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrElement> for WasmOcrElement {
-    fn from(val: kreuzberg::OcrElement) -> Self {        Self {            text: val.text,            geometry: serde_wasm_bindgen::to_value(&val.geometry).unwrap_or(JsValue::NULL),            confidence: val.confidence.into(),            level: val.level.into(),            rotation: val.rotation.map(Into::into),            page_number: val.page_number,            parent_id: val.parent_id,            backend_metadata: js_sys::JSON::parse(&serde_json::to_string(&val.backend_metadata).unwrap_or_default()).unwrap_or(JsValue::NULL),        }    }
+    fn from(val: kreuzberg::OcrElement) -> Self {
+        Self {
+            text: val.text,
+            geometry: serde_wasm_bindgen::to_value(&val.geometry).unwrap_or(JsValue::NULL),
+            confidence: val.confidence.into(),
+            level: val.level.into(),
+            rotation: val.rotation.map(Into::into),
+            page_number: val.page_number,
+            parent_id: val.parent_id,
+            backend_metadata: js_sys::JSON::parse(&serde_json::to_string(&val.backend_metadata).unwrap_or_default())
+                .unwrap_or(JsValue::NULL),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmOcrElementConfig> for kreuzberg::OcrElementConfig {
-    fn from(val: WasmOcrElementConfig) -> Self {        Self {            include_elements: val.include_elements,            min_level: val.min_level.into(),            min_confidence: val.min_confidence,            build_hierarchy: val.build_hierarchy,        }    }
+    fn from(val: WasmOcrElementConfig) -> Self {
+        Self {
+            include_elements: val.include_elements,
+            min_level: val.min_level.into(),
+            min_confidence: val.min_confidence,
+            build_hierarchy: val.build_hierarchy,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::OcrElementConfig> for WasmOcrElementConfig {
-    fn from(val: kreuzberg::OcrElementConfig) -> Self {        Self {            include_elements: val.include_elements,            min_level: val.min_level.into(),            min_confidence: val.min_confidence,            build_hierarchy: val.build_hierarchy,        }    }
+    fn from(val: kreuzberg::OcrElementConfig) -> Self {
+        Self {
+            include_elements: val.include_elements,
+            min_level: val.min_level.into(),
+            min_confidence: val.min_confidence,
+            build_hierarchy: val.build_hierarchy,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageStructure> for kreuzberg::PageStructure {
-    fn from(val: WasmPageStructure) -> Self {        Self {            total_count: val.total_count,            unit_type: val.unit_type.into(),            boundaries: val.boundaries.map(|v| v.into_iter().map(Into::into).collect()),            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),        }    }
+    fn from(val: WasmPageStructure) -> Self {
+        Self {
+            total_count: val.total_count,
+            unit_type: val.unit_type.into(),
+            boundaries: val.boundaries.map(|v| v.into_iter().map(Into::into).collect()),
+            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PageStructure> for WasmPageStructure {
-    fn from(val: kreuzberg::PageStructure) -> Self {        Self {            total_count: val.total_count,            unit_type: val.unit_type.into(),            boundaries: val.boundaries.map(|v| v.into_iter().map(Into::into).collect()),            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),        }    }
+    fn from(val: kreuzberg::PageStructure) -> Self {
+        Self {
+            total_count: val.total_count,
+            unit_type: val.unit_type.into(),
+            boundaries: val.boundaries.map(|v| v.into_iter().map(Into::into).collect()),
+            pages: val.pages.map(|v| v.into_iter().map(Into::into).collect()),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageBoundary> for kreuzberg::PageBoundary {
-    fn from(val: WasmPageBoundary) -> Self {        Self {            byte_start: val.byte_start,            byte_end: val.byte_end,            page_number: val.page_number,        }    }
+    fn from(val: WasmPageBoundary) -> Self {
+        Self {
+            byte_start: val.byte_start,
+            byte_end: val.byte_end,
+            page_number: val.page_number,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PageBoundary> for WasmPageBoundary {
-    fn from(val: kreuzberg::PageBoundary) -> Self {        Self {            byte_start: val.byte_start,            byte_end: val.byte_end,            page_number: val.page_number,        }    }
+    fn from(val: kreuzberg::PageBoundary) -> Self {
+        Self {
+            byte_start: val.byte_start,
+            byte_end: val.byte_end,
+            page_number: val.page_number,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageInfo> for kreuzberg::PageInfo {
-    fn from(val: WasmPageInfo) -> Self {        Self {            number: val.number,            title: val.title,            dimensions: Default::default(),            image_count: val.image_count,            table_count: val.table_count,            hidden: val.hidden,            is_blank: val.is_blank,            has_vector_graphics: val.has_vector_graphics,        }    }
+    fn from(val: WasmPageInfo) -> Self {
+        Self {
+            number: val.number,
+            title: val.title,
+            dimensions: Default::default(),
+            image_count: val.image_count,
+            table_count: val.table_count,
+            hidden: val.hidden,
+            is_blank: val.is_blank,
+            has_vector_graphics: val.has_vector_graphics,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PageInfo> for WasmPageInfo {
-    fn from(val: kreuzberg::PageInfo) -> Self {        Self {            number: val.number,            title: val.title,            dimensions: val.dimensions.map(|t| { let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect(); arr }),            image_count: val.image_count,            table_count: val.table_count,            hidden: val.hidden,            is_blank: val.is_blank,            has_vector_graphics: val.has_vector_graphics,        }    }
+    fn from(val: kreuzberg::PageInfo) -> Self {
+        Self {
+            number: val.number,
+            title: val.title,
+            dimensions: val.dimensions.map(|t| {
+                let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect();
+                arr
+            }),
+            image_count: val.image_count,
+            table_count: val.table_count,
+            hidden: val.hidden,
+            is_blank: val.is_blank,
+            has_vector_graphics: val.has_vector_graphics,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageContent> for kreuzberg::PageContent {
-    fn from(val: WasmPageContent) -> Self {        Self {            page_number: val.page_number,            content: val.content,            tables: val.tables.into_iter().map(|v| std::sync::Arc::new(v.into())).collect(),            image_indices: val.image_indices.into_iter().collect(),            hierarchy: val.hierarchy.map(Into::into),            is_blank: val.is_blank,            layout_regions: val.layout_regions.map(|v| v.into_iter().map(Into::into).collect()),            speaker_notes: val.speaker_notes,            section_name: val.section_name,            sheet_name: val.sheet_name,        }    }
+    fn from(val: WasmPageContent) -> Self {
+        Self {
+            page_number: val.page_number,
+            content: val.content,
+            tables: val.tables.into_iter().map(|v| std::sync::Arc::new(v.into())).collect(),
+            image_indices: val.image_indices.into_iter().collect(),
+            hierarchy: val.hierarchy.map(Into::into),
+            is_blank: val.is_blank,
+            layout_regions: val.layout_regions.map(|v| v.into_iter().map(Into::into).collect()),
+            speaker_notes: val.speaker_notes,
+            section_name: val.section_name,
+            sheet_name: val.sheet_name,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PageContent> for WasmPageContent {
-    fn from(val: kreuzberg::PageContent) -> Self {        Self {            page_number: val.page_number,            content: val.content,            tables: val.tables.into_iter().map(|v| (*v).clone().into()).collect(),            image_indices: val.image_indices.into_iter().collect(),            hierarchy: val.hierarchy.map(Into::into),            is_blank: val.is_blank,            layout_regions: val.layout_regions.map(|v| v.into_iter().map(Into::into).collect()),            speaker_notes: val.speaker_notes,            section_name: val.section_name,            sheet_name: val.sheet_name,        }    }
+    fn from(val: kreuzberg::PageContent) -> Self {
+        Self {
+            page_number: val.page_number,
+            content: val.content,
+            tables: val.tables.into_iter().map(|v| (*v).clone().into()).collect(),
+            image_indices: val.image_indices.into_iter().collect(),
+            hierarchy: val.hierarchy.map(Into::into),
+            is_blank: val.is_blank,
+            layout_regions: val.layout_regions.map(|v| v.into_iter().map(Into::into).collect()),
+            speaker_notes: val.speaker_notes,
+            section_name: val.section_name,
+            sheet_name: val.sheet_name,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmLayoutRegion> for kreuzberg::LayoutRegion {
-    fn from(val: WasmLayoutRegion) -> Self {        Self {            class_name: val.class_name,            confidence: val.confidence,            bounding_box: val.bounding_box.into(),            area_fraction: val.area_fraction,        }    }
+    fn from(val: WasmLayoutRegion) -> Self {
+        Self {
+            class_name: val.class_name,
+            confidence: val.confidence,
+            bounding_box: val.bounding_box.into(),
+            area_fraction: val.area_fraction,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::LayoutRegion> for WasmLayoutRegion {
-    fn from(val: kreuzberg::LayoutRegion) -> Self {        Self {            class_name: val.class_name,            confidence: val.confidence,            bounding_box: val.bounding_box.into(),            area_fraction: val.area_fraction,        }    }
+    fn from(val: kreuzberg::LayoutRegion) -> Self {
+        Self {
+            class_name: val.class_name,
+            confidence: val.confidence,
+            bounding_box: val.bounding_box.into(),
+            area_fraction: val.area_fraction,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmPageHierarchy> for kreuzberg::PageHierarchy {
-    fn from(val: WasmPageHierarchy) -> Self {        Self {            block_count: val.block_count,            blocks: val.blocks.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmPageHierarchy) -> Self {
+        Self {
+            block_count: val.block_count,
+            blocks: val.blocks.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::PageHierarchy> for WasmPageHierarchy {
-    fn from(val: kreuzberg::PageHierarchy) -> Self {        Self {            block_count: val.block_count,            blocks: val.blocks.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::PageHierarchy) -> Self {
+        Self {
+            block_count: val.block_count,
+            blocks: val.blocks.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmHierarchicalBlock> for kreuzberg::HierarchicalBlock {
-    fn from(val: WasmHierarchicalBlock) -> Self {        Self {            text: val.text,            font_size: val.font_size,            level: val.level,            bbox: Default::default(),        }    }
+    fn from(val: WasmHierarchicalBlock) -> Self {
+        Self {
+            text: val.text,
+            font_size: val.font_size,
+            level: val.level,
+            bbox: Default::default(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::HierarchicalBlock> for WasmHierarchicalBlock {
-    fn from(val: kreuzberg::HierarchicalBlock) -> Self {        Self {            text: val.text,            font_size: val.font_size,            level: val.level,            bbox: val.bbox.map(|t| { let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect(); arr }),        }    }
+    fn from(val: kreuzberg::HierarchicalBlock) -> Self {
+        Self {
+            text: val.text,
+            font_size: val.font_size,
+            level: val.level,
+            bbox: val.bbox.map(|t| {
+                let arr: Vec<_> = [t.0, t.1].into_iter().map(|v| v as _).collect();
+                arr
+            }),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmQrCode> for kreuzberg::QrCode {
-    fn from(val: WasmQrCode) -> Self {        Self {            payload: val.payload,            confidence: val.confidence,            bbox: val.bbox.map(Into::into),        }    }
+    fn from(val: WasmQrCode) -> Self {
+        Self {
+            payload: val.payload,
+            confidence: val.confidence,
+            bbox: val.bbox.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::QrCode> for WasmQrCode {
-    fn from(val: kreuzberg::QrCode) -> Self {        Self {            payload: val.payload,            confidence: val.confidence,            bbox: val.bbox.map(Into::into),        }    }
+    fn from(val: kreuzberg::QrCode) -> Self {
+        Self {
+            payload: val.payload,
+            confidence: val.confidence,
+            bbox: val.bbox.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmQrBoundingBox> for kreuzberg::QrBoundingBox {
-    fn from(val: WasmQrBoundingBox) -> Self {        Self {            x: val.x,            y: val.y,            width: val.width,            height: val.height,        }    }
+    fn from(val: WasmQrBoundingBox) -> Self {
+        Self {
+            x: val.x,
+            y: val.y,
+            width: val.width,
+            height: val.height,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::QrBoundingBox> for WasmQrBoundingBox {
-    fn from(val: kreuzberg::QrBoundingBox) -> Self {        Self {            x: val.x,            y: val.y,            width: val.width,            height: val.height,        }    }
+    fn from(val: kreuzberg::QrBoundingBox) -> Self {
+        Self {
+            x: val.x,
+            y: val.y,
+            width: val.width,
+            height: val.height,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmRedactionReport> for kreuzberg::RedactionReport {
-    fn from(val: WasmRedactionReport) -> Self {        Self {            findings: val.findings.into_iter().map(Into::into).collect(),            total_redacted: val.total_redacted,        }    }
+    fn from(val: WasmRedactionReport) -> Self {
+        Self {
+            findings: val.findings.into_iter().map(Into::into).collect(),
+            total_redacted: val.total_redacted,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::RedactionReport> for WasmRedactionReport {
-    fn from(val: kreuzberg::RedactionReport) -> Self {        Self {            findings: val.findings.into_iter().map(Into::into).collect(),            total_redacted: val.total_redacted,        }    }
+    fn from(val: kreuzberg::RedactionReport) -> Self {
+        Self {
+            findings: val.findings.into_iter().map(Into::into).collect(),
+            total_redacted: val.total_redacted,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmRedactionFinding> for kreuzberg::RedactionFinding {
-    fn from(val: WasmRedactionFinding) -> Self {        Self {            start: val.start,            end: val.end,            category: val.category.into(),            strategy: val.strategy.into(),            replacement_token: val.replacement_token,        }    }
+    fn from(val: WasmRedactionFinding) -> Self {
+        Self {
+            start: val.start,
+            end: val.end,
+            category: val.category.into(),
+            strategy: val.strategy.into(),
+            replacement_token: val.replacement_token,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::RedactionFinding> for WasmRedactionFinding {
-    fn from(val: kreuzberg::RedactionFinding) -> Self {        Self {            start: val.start,            end: val.end,            category: val.category.into(),            strategy: val.strategy.into(),            replacement_token: val.replacement_token,        }    }
+    fn from(val: kreuzberg::RedactionFinding) -> Self {
+        Self {
+            start: val.start,
+            end: val.end,
+            category: val.category.into(),
+            strategy: val.strategy.into(),
+            replacement_token: val.replacement_token,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmCellChange> for kreuzberg::CellChange {
-    fn from(val: WasmCellChange) -> Self {        Self {            row: val.row,            col: val.col,            from: val.from,            to: val.to,        }    }
+    fn from(val: WasmCellChange) -> Self {
+        Self {
+            row: val.row,
+            col: val.col,
+            from: val.from,
+            to: val.to,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::CellChange> for WasmCellChange {
-    fn from(val: kreuzberg::CellChange) -> Self {        Self {            row: val.row,            col: val.col,            from: val.from,            to: val.to,        }    }
+    fn from(val: kreuzberg::CellChange) -> Self {
+        Self {
+            row: val.row,
+            col: val.col,
+            from: val.from,
+            to: val.to,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDocumentRevision> for kreuzberg::DocumentRevision {
-    fn from(val: WasmDocumentRevision) -> Self {        Self {            revision_id: val.revision_id,            author: val.author,            timestamp: val.timestamp,            kind: val.kind.into(),            anchor: val.anchor.as_ref().and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),            delta: val.delta.into(),        }    }
+    fn from(val: WasmDocumentRevision) -> Self {
+        Self {
+            revision_id: val.revision_id,
+            author: val.author,
+            timestamp: val.timestamp,
+            kind: val.kind.into(),
+            anchor: val
+                .anchor
+                .as_ref()
+                .and_then(|v| serde_wasm_bindgen::from_value(v.clone()).ok()),
+            delta: val.delta.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DocumentRevision> for WasmDocumentRevision {
-    fn from(val: kreuzberg::DocumentRevision) -> Self {        Self {            revision_id: val.revision_id,            author: val.author,            timestamp: val.timestamp,            kind: val.kind.into(),            anchor: val.anchor.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),            delta: val.delta.into(),        }    }
+    fn from(val: kreuzberg::DocumentRevision) -> Self {
+        Self {
+            revision_id: val.revision_id,
+            author: val.author,
+            timestamp: val.timestamp,
+            kind: val.kind.into(),
+            anchor: val.anchor.as_ref().and_then(|v| serde_wasm_bindgen::to_value(v).ok()),
+            delta: val.delta.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmRevisionDelta> for kreuzberg::RevisionDelta {
-    fn from(val: WasmRevisionDelta) -> Self {        Self {            content: serde_wasm_bindgen::from_value(val.content.clone()).unwrap_or_default(),            table_changes: val.table_changes.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: WasmRevisionDelta) -> Self {
+        Self {
+            content: serde_wasm_bindgen::from_value(val.content.clone()).unwrap_or_default(),
+            table_changes: val.table_changes.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::RevisionDelta> for WasmRevisionDelta {
-    fn from(val: kreuzberg::RevisionDelta) -> Self {        Self {            content: serde_wasm_bindgen::to_value(&val.content).unwrap_or(JsValue::NULL),            table_changes: val.table_changes.into_iter().map(Into::into).collect(),        }    }
+    fn from(val: kreuzberg::RevisionDelta) -> Self {
+        Self {
+            content: serde_wasm_bindgen::to_value(&val.content).unwrap_or(JsValue::NULL),
+            table_changes: val.table_changes.into_iter().map(Into::into).collect(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmDocumentSummary> for kreuzberg::DocumentSummary {
-    fn from(val: WasmDocumentSummary) -> Self {        Self {            text: val.text,            strategy: val.strategy.into(),            token_count: val.token_count,        }    }
+    fn from(val: WasmDocumentSummary) -> Self {
+        Self {
+            text: val.text,
+            strategy: val.strategy.into(),
+            token_count: val.token_count,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::DocumentSummary> for WasmDocumentSummary {
-    fn from(val: kreuzberg::DocumentSummary) -> Self {        Self {            text: val.text,            strategy: val.strategy.into(),            token_count: val.token_count,        }    }
+    fn from(val: kreuzberg::DocumentSummary) -> Self {
+        Self {
+            text: val.text,
+            strategy: val.strategy.into(),
+            token_count: val.token_count,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTable> for kreuzberg::Table {
-    fn from(val: WasmTable) -> Self {        Self {            cells: serde_wasm_bindgen::from_value(val.cells.clone()).unwrap_or_default(),            markdown: val.markdown,            page_number: val.page_number,            bounding_box: val.bounding_box.map(Into::into),        }    }
+    fn from(val: WasmTable) -> Self {
+        Self {
+            cells: serde_wasm_bindgen::from_value(val.cells.clone()).unwrap_or_default(),
+            markdown: val.markdown,
+            page_number: val.page_number,
+            bounding_box: val.bounding_box.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::Table> for WasmTable {
-    fn from(val: kreuzberg::Table) -> Self {        Self {            cells: serde_wasm_bindgen::to_value(&val.cells).unwrap_or(JsValue::NULL),            markdown: val.markdown,            page_number: val.page_number,            bounding_box: val.bounding_box.map(Into::into),        }    }
+    fn from(val: kreuzberg::Table) -> Self {
+        Self {
+            cells: serde_wasm_bindgen::to_value(&val.cells).unwrap_or(JsValue::NULL),
+            markdown: val.markdown,
+            page_number: val.page_number,
+            bounding_box: val.bounding_box.map(Into::into),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::TableCell> for WasmTableCell {
-    fn from(val: kreuzberg::TableCell) -> Self {        Self {            content: val.content,            row_span: val.row_span,            col_span: val.col_span,            is_header: val.is_header,        }    }
+    fn from(val: kreuzberg::TableCell) -> Self {
+        Self {
+            content: val.content,
+            row_span: val.row_span,
+            col_span: val.col_span,
+            is_header: val.is_header,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmTranslation> for kreuzberg::Translation {
-    fn from(val: WasmTranslation) -> Self {        Self {            target_lang: val.target_lang,            source_lang: val.source_lang,            content: val.content,            formatted_content: val.formatted_content,        }    }
+    fn from(val: WasmTranslation) -> Self {
+        Self {
+            target_lang: val.target_lang,
+            source_lang: val.source_lang,
+            content: val.content,
+            formatted_content: val.formatted_content,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::Translation> for WasmTranslation {
-    fn from(val: kreuzberg::Translation) -> Self {        Self {            target_lang: val.target_lang,            source_lang: val.source_lang,            content: val.content,            formatted_content: val.formatted_content,        }    }
+    fn from(val: kreuzberg::Translation) -> Self {
+        Self {
+            target_lang: val.target_lang,
+            source_lang: val.source_lang,
+            content: val.content,
+            formatted_content: val.formatted_content,
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<WasmExtractedUri> for kreuzberg::ExtractedUri {
-    fn from(val: WasmExtractedUri) -> Self {        Self {            url: val.url,            label: val.label,            page: val.page,            kind: val.kind.into(),        }    }
+    fn from(val: WasmExtractedUri) -> Self {
+        Self {
+            url: val.url,
+            label: val.label,
+            page: val.page,
+            kind: val.kind.into(),
+        }
+    }
 }
-
 
 #[allow(clippy::redundant_closure, clippy::useless_conversion)]
 impl From<kreuzberg::ExtractedUri> for WasmExtractedUri {
-    fn from(val: kreuzberg::ExtractedUri) -> Self {        Self {            url: val.url,            label: val.label,            page: val.page,            kind: val.kind.into(),        }    }
+    fn from(val: kreuzberg::ExtractedUri) -> Self {
+        Self {
+            url: val.url,
+            label: val.label,
+            page: val.page,
+            kind: val.kind.into(),
+        }
+    }
 }
-
 
 impl From<WasmExecutionProviderType> for kreuzberg::ExecutionProviderType {
     fn from(val: WasmExecutionProviderType) -> Self {
-        match val {            WasmExecutionProviderType::Auto => Self::Auto,            WasmExecutionProviderType::Cpu => Self::Cpu,            WasmExecutionProviderType::CoreMl => Self::CoreMl,            WasmExecutionProviderType::Cuda => Self::Cuda,            WasmExecutionProviderType::TensorRt => Self::TensorRt,        }
+        match val {
+            WasmExecutionProviderType::Auto => Self::Auto,
+            WasmExecutionProviderType::Cpu => Self::Cpu,
+            WasmExecutionProviderType::CoreMl => Self::CoreMl,
+            WasmExecutionProviderType::Cuda => Self::Cuda,
+            WasmExecutionProviderType::TensorRt => Self::TensorRt,
+        }
     }
 }
-
 
 impl From<kreuzberg::ExecutionProviderType> for WasmExecutionProviderType {
     fn from(val: kreuzberg::ExecutionProviderType) -> Self {
-        match val {            kreuzberg::ExecutionProviderType::Auto => Self::Auto,            kreuzberg::ExecutionProviderType::Cpu => Self::Cpu,            kreuzberg::ExecutionProviderType::CoreMl => Self::CoreMl,            kreuzberg::ExecutionProviderType::Cuda => Self::Cuda,            kreuzberg::ExecutionProviderType::TensorRt => Self::TensorRt,        }
+        match val {
+            kreuzberg::ExecutionProviderType::Auto => Self::Auto,
+            kreuzberg::ExecutionProviderType::Cpu => Self::Cpu,
+            kreuzberg::ExecutionProviderType::CoreMl => Self::CoreMl,
+            kreuzberg::ExecutionProviderType::Cuda => Self::Cuda,
+            kreuzberg::ExecutionProviderType::TensorRt => Self::TensorRt,
+        }
     }
 }
-
 
 impl From<WasmOutputFormat> for kreuzberg::OutputFormat {
     fn from(val: WasmOutputFormat) -> Self {
-        match val {            WasmOutputFormat::Plain => Self::Plain,            WasmOutputFormat::Markdown => Self::Markdown,            WasmOutputFormat::Djot => Self::Djot,            WasmOutputFormat::Html => Self::Html,            WasmOutputFormat::Json => Self::Json,            WasmOutputFormat::Structured => Self::Structured,            WasmOutputFormat::Custom => Self::Custom(Default::default()),        }
+        match val {
+            WasmOutputFormat::Plain => Self::Plain,
+            WasmOutputFormat::Markdown => Self::Markdown,
+            WasmOutputFormat::Djot => Self::Djot,
+            WasmOutputFormat::Html => Self::Html,
+            WasmOutputFormat::Json => Self::Json,
+            WasmOutputFormat::Structured => Self::Structured,
+            WasmOutputFormat::Custom => Self::Custom(Default::default()),
+        }
     }
 }
-
 
 impl From<kreuzberg::OutputFormat> for WasmOutputFormat {
     fn from(val: kreuzberg::OutputFormat) -> Self {
-        match val {            kreuzberg::OutputFormat::Plain => Self::Plain,            kreuzberg::OutputFormat::Markdown => Self::Markdown,            kreuzberg::OutputFormat::Djot => Self::Djot,            kreuzberg::OutputFormat::Html => Self::Html,            kreuzberg::OutputFormat::Json => Self::Json,            kreuzberg::OutputFormat::Structured => Self::Structured,            kreuzberg::OutputFormat::Custom(..) => Self::Custom,        }
+        match val {
+            kreuzberg::OutputFormat::Plain => Self::Plain,
+            kreuzberg::OutputFormat::Markdown => Self::Markdown,
+            kreuzberg::OutputFormat::Djot => Self::Djot,
+            kreuzberg::OutputFormat::Html => Self::Html,
+            kreuzberg::OutputFormat::Json => Self::Json,
+            kreuzberg::OutputFormat::Structured => Self::Structured,
+            kreuzberg::OutputFormat::Custom(..) => Self::Custom,
+        }
     }
 }
-
 
 impl From<WasmNerBackendKind> for kreuzberg::core::config::NerBackendKind {
     fn from(val: WasmNerBackendKind) -> Self {
-        match val {            WasmNerBackendKind::Onnx => Self::Onnx,            WasmNerBackendKind::Llm => Self::Llm,        }
+        match val {
+            WasmNerBackendKind::Onnx => Self::Onnx,
+            WasmNerBackendKind::Llm => Self::Llm,
+        }
     }
 }
-
 
 impl From<kreuzberg::core::config::NerBackendKind> for WasmNerBackendKind {
     fn from(val: kreuzberg::core::config::NerBackendKind) -> Self {
-        match val {            kreuzberg::core::config::NerBackendKind::Onnx => Self::Onnx,            kreuzberg::core::config::NerBackendKind::Llm => Self::Llm,        }
+        match val {
+            kreuzberg::core::config::NerBackendKind::Onnx => Self::Onnx,
+            kreuzberg::core::config::NerBackendKind::Llm => Self::Llm,
+        }
     }
 }
-
 
 impl From<WasmVlmFallbackPolicy> for kreuzberg::VlmFallbackPolicy {
     fn from(val: WasmVlmFallbackPolicy) -> Self {
         match val.mode.as_str() {
             "disabled" => Self::Disabled,
-            "on_low_quality" => Self::OnLowQuality { quality_threshold: val.quality_threshold.clone().unwrap_or_default() },
+            "on_low_quality" => Self::OnLowQuality {
+                quality_threshold: val.quality_threshold.clone().unwrap_or_default(),
+            },
             "always" => Self::Always,
             _ => Self::Disabled,
         }
@@ -16461,23 +20870,34 @@ impl From<kreuzberg::VlmFallbackPolicy> for WasmVlmFallbackPolicy {
 
 impl From<WasmChunkerType> for kreuzberg::ChunkerType {
     fn from(val: WasmChunkerType) -> Self {
-        match val {            WasmChunkerType::Text => Self::Text,            WasmChunkerType::Markdown => Self::Markdown,            WasmChunkerType::Yaml => Self::Yaml,            WasmChunkerType::Semantic => Self::Semantic,        }
+        match val {
+            WasmChunkerType::Text => Self::Text,
+            WasmChunkerType::Markdown => Self::Markdown,
+            WasmChunkerType::Yaml => Self::Yaml,
+            WasmChunkerType::Semantic => Self::Semantic,
+        }
     }
 }
-
 
 impl From<kreuzberg::ChunkerType> for WasmChunkerType {
     fn from(val: kreuzberg::ChunkerType) -> Self {
-        match val {            kreuzberg::ChunkerType::Text => Self::Text,            kreuzberg::ChunkerType::Markdown => Self::Markdown,            kreuzberg::ChunkerType::Yaml => Self::Yaml,            kreuzberg::ChunkerType::Semantic => Self::Semantic,        }
+        match val {
+            kreuzberg::ChunkerType::Text => Self::Text,
+            kreuzberg::ChunkerType::Markdown => Self::Markdown,
+            kreuzberg::ChunkerType::Yaml => Self::Yaml,
+            kreuzberg::ChunkerType::Semantic => Self::Semantic,
+        }
     }
 }
-
 
 impl From<WasmChunkSizing> for kreuzberg::ChunkSizing {
     fn from(val: WasmChunkSizing) -> Self {
         match val.r#type.as_str() {
             "characters" => Self::Characters,
-            "tokenizer" => Self::Tokenizer { model: val.model.clone().unwrap_or_default(), cache_dir: val.cache_dir.clone().map(Into::into) },
+            "tokenizer" => Self::Tokenizer {
+                model: val.model.clone().unwrap_or_default(),
+                cache_dir: val.cache_dir.clone().map(Into::into),
+            },
             _ => Self::Characters,
         }
     }
@@ -16503,11 +20923,22 @@ impl From<kreuzberg::ChunkSizing> for WasmChunkSizing {
 impl From<WasmEmbeddingModelType> for kreuzberg::EmbeddingModelType {
     fn from(val: WasmEmbeddingModelType) -> Self {
         match val.r#type.as_str() {
-            "preset" => Self::Preset { name: val.name.clone().unwrap_or_default() },
-            "custom" => Self::Custom { model_id: val.model_id.clone().unwrap_or_default(), dimensions: val.dimensions.clone().unwrap_or_default() },
-            "llm" => Self::Llm { llm: val.llm.clone().map(Into::into).unwrap_or_default() },
-            "plugin" => Self::Plugin { name: val.name.clone().unwrap_or_default() },
-            _ => Self::Preset { name: Default::default() },
+            "preset" => Self::Preset {
+                name: val.name.clone().unwrap_or_default(),
+            },
+            "custom" => Self::Custom {
+                model_id: val.model_id.clone().unwrap_or_default(),
+                dimensions: val.dimensions.clone().unwrap_or_default(),
+            },
+            "llm" => Self::Llm {
+                llm: val.llm.clone().map(Into::into).unwrap_or_default(),
+            },
+            "plugin" => Self::Plugin {
+                name: val.name.clone().unwrap_or_default(),
+            },
+            _ => Self::Preset {
+                name: Default::default(),
+            },
         }
     }
 }
@@ -16549,119 +20980,281 @@ impl From<kreuzberg::EmbeddingModelType> for WasmEmbeddingModelType {
 
 impl From<kreuzberg::extraction::transform::ListType> for WasmListType {
     fn from(val: kreuzberg::extraction::transform::ListType) -> Self {
-        match val {            kreuzberg::extraction::transform::ListType::Bullet => Self::Bullet,            kreuzberg::extraction::transform::ListType::Numbered => Self::Numbered,            kreuzberg::extraction::transform::ListType::Lettered => Self::Lettered,            kreuzberg::extraction::transform::ListType::Indented => Self::Indented,        }
+        match val {
+            kreuzberg::extraction::transform::ListType::Bullet => Self::Bullet,
+            kreuzberg::extraction::transform::ListType::Numbered => Self::Numbered,
+            kreuzberg::extraction::transform::ListType::Lettered => Self::Lettered,
+            kreuzberg::extraction::transform::ListType::Indented => Self::Indented,
+        }
     }
 }
-
 
 impl From<kreuzberg::OcrBackendType> for WasmOcrBackendType {
     fn from(val: kreuzberg::OcrBackendType) -> Self {
-        match val {            kreuzberg::OcrBackendType::Tesseract => Self::Tesseract,            kreuzberg::OcrBackendType::EasyOCR => Self::EasyOCR,            kreuzberg::OcrBackendType::PaddleOCR => Self::PaddleOCR,            kreuzberg::OcrBackendType::Custom => Self::Custom,        }
+        match val {
+            kreuzberg::OcrBackendType::Tesseract => Self::Tesseract,
+            kreuzberg::OcrBackendType::EasyOCR => Self::EasyOCR,
+            kreuzberg::OcrBackendType::PaddleOCR => Self::PaddleOCR,
+            kreuzberg::OcrBackendType::Custom => Self::Custom,
+        }
     }
 }
-
 
 impl From<kreuzberg::ProcessingStage> for WasmProcessingStage {
     fn from(val: kreuzberg::ProcessingStage) -> Self {
-        match val {            kreuzberg::ProcessingStage::Early => Self::Early,            kreuzberg::ProcessingStage::Middle => Self::Middle,            kreuzberg::ProcessingStage::Late => Self::Late,        }
+        match val {
+            kreuzberg::ProcessingStage::Early => Self::Early,
+            kreuzberg::ProcessingStage::Middle => Self::Middle,
+            kreuzberg::ProcessingStage::Late => Self::Late,
+        }
     }
 }
-
 
 impl From<WasmPdfAnnotationType> for kreuzberg::PdfAnnotationType {
     fn from(val: WasmPdfAnnotationType) -> Self {
-        match val {            WasmPdfAnnotationType::Text => Self::Text,            WasmPdfAnnotationType::Highlight => Self::Highlight,            WasmPdfAnnotationType::Link => Self::Link,            WasmPdfAnnotationType::Stamp => Self::Stamp,            WasmPdfAnnotationType::Underline => Self::Underline,            WasmPdfAnnotationType::StrikeOut => Self::StrikeOut,            WasmPdfAnnotationType::Other => Self::Other,        }
+        match val {
+            WasmPdfAnnotationType::Text => Self::Text,
+            WasmPdfAnnotationType::Highlight => Self::Highlight,
+            WasmPdfAnnotationType::Link => Self::Link,
+            WasmPdfAnnotationType::Stamp => Self::Stamp,
+            WasmPdfAnnotationType::Underline => Self::Underline,
+            WasmPdfAnnotationType::StrikeOut => Self::StrikeOut,
+            WasmPdfAnnotationType::Other => Self::Other,
+        }
     }
 }
-
 
 impl From<kreuzberg::PdfAnnotationType> for WasmPdfAnnotationType {
     fn from(val: kreuzberg::PdfAnnotationType) -> Self {
-        match val {            kreuzberg::PdfAnnotationType::Text => Self::Text,            kreuzberg::PdfAnnotationType::Highlight => Self::Highlight,            kreuzberg::PdfAnnotationType::Link => Self::Link,            kreuzberg::PdfAnnotationType::Stamp => Self::Stamp,            kreuzberg::PdfAnnotationType::Underline => Self::Underline,            kreuzberg::PdfAnnotationType::StrikeOut => Self::StrikeOut,            kreuzberg::PdfAnnotationType::Other => Self::Other,        }
+        match val {
+            kreuzberg::PdfAnnotationType::Text => Self::Text,
+            kreuzberg::PdfAnnotationType::Highlight => Self::Highlight,
+            kreuzberg::PdfAnnotationType::Link => Self::Link,
+            kreuzberg::PdfAnnotationType::Stamp => Self::Stamp,
+            kreuzberg::PdfAnnotationType::Underline => Self::Underline,
+            kreuzberg::PdfAnnotationType::StrikeOut => Self::StrikeOut,
+            kreuzberg::PdfAnnotationType::Other => Self::Other,
+        }
     }
 }
-
 
 impl From<WasmBlockType> for kreuzberg::BlockType {
     fn from(val: WasmBlockType) -> Self {
-        match val {            WasmBlockType::Paragraph => Self::Paragraph,            WasmBlockType::Heading => Self::Heading,            WasmBlockType::Blockquote => Self::Blockquote,            WasmBlockType::CodeBlock => Self::CodeBlock,            WasmBlockType::ListItem => Self::ListItem,            WasmBlockType::OrderedList => Self::OrderedList,            WasmBlockType::BulletList => Self::BulletList,            WasmBlockType::TaskList => Self::TaskList,            WasmBlockType::DefinitionList => Self::DefinitionList,            WasmBlockType::DefinitionTerm => Self::DefinitionTerm,            WasmBlockType::DefinitionDescription => Self::DefinitionDescription,            WasmBlockType::Div => Self::Div,            WasmBlockType::Section => Self::Section,            WasmBlockType::ThematicBreak => Self::ThematicBreak,            WasmBlockType::RawBlock => Self::RawBlock,            WasmBlockType::MathDisplay => Self::MathDisplay,        }
+        match val {
+            WasmBlockType::Paragraph => Self::Paragraph,
+            WasmBlockType::Heading => Self::Heading,
+            WasmBlockType::Blockquote => Self::Blockquote,
+            WasmBlockType::CodeBlock => Self::CodeBlock,
+            WasmBlockType::ListItem => Self::ListItem,
+            WasmBlockType::OrderedList => Self::OrderedList,
+            WasmBlockType::BulletList => Self::BulletList,
+            WasmBlockType::TaskList => Self::TaskList,
+            WasmBlockType::DefinitionList => Self::DefinitionList,
+            WasmBlockType::DefinitionTerm => Self::DefinitionTerm,
+            WasmBlockType::DefinitionDescription => Self::DefinitionDescription,
+            WasmBlockType::Div => Self::Div,
+            WasmBlockType::Section => Self::Section,
+            WasmBlockType::ThematicBreak => Self::ThematicBreak,
+            WasmBlockType::RawBlock => Self::RawBlock,
+            WasmBlockType::MathDisplay => Self::MathDisplay,
+        }
     }
 }
-
 
 impl From<kreuzberg::BlockType> for WasmBlockType {
     fn from(val: kreuzberg::BlockType) -> Self {
-        match val {            kreuzberg::BlockType::Paragraph => Self::Paragraph,            kreuzberg::BlockType::Heading => Self::Heading,            kreuzberg::BlockType::Blockquote => Self::Blockquote,            kreuzberg::BlockType::CodeBlock => Self::CodeBlock,            kreuzberg::BlockType::ListItem => Self::ListItem,            kreuzberg::BlockType::OrderedList => Self::OrderedList,            kreuzberg::BlockType::BulletList => Self::BulletList,            kreuzberg::BlockType::TaskList => Self::TaskList,            kreuzberg::BlockType::DefinitionList => Self::DefinitionList,            kreuzberg::BlockType::DefinitionTerm => Self::DefinitionTerm,            kreuzberg::BlockType::DefinitionDescription => Self::DefinitionDescription,            kreuzberg::BlockType::Div => Self::Div,            kreuzberg::BlockType::Section => Self::Section,            kreuzberg::BlockType::ThematicBreak => Self::ThematicBreak,            kreuzberg::BlockType::RawBlock => Self::RawBlock,            kreuzberg::BlockType::MathDisplay => Self::MathDisplay,        }
+        match val {
+            kreuzberg::BlockType::Paragraph => Self::Paragraph,
+            kreuzberg::BlockType::Heading => Self::Heading,
+            kreuzberg::BlockType::Blockquote => Self::Blockquote,
+            kreuzberg::BlockType::CodeBlock => Self::CodeBlock,
+            kreuzberg::BlockType::ListItem => Self::ListItem,
+            kreuzberg::BlockType::OrderedList => Self::OrderedList,
+            kreuzberg::BlockType::BulletList => Self::BulletList,
+            kreuzberg::BlockType::TaskList => Self::TaskList,
+            kreuzberg::BlockType::DefinitionList => Self::DefinitionList,
+            kreuzberg::BlockType::DefinitionTerm => Self::DefinitionTerm,
+            kreuzberg::BlockType::DefinitionDescription => Self::DefinitionDescription,
+            kreuzberg::BlockType::Div => Self::Div,
+            kreuzberg::BlockType::Section => Self::Section,
+            kreuzberg::BlockType::ThematicBreak => Self::ThematicBreak,
+            kreuzberg::BlockType::RawBlock => Self::RawBlock,
+            kreuzberg::BlockType::MathDisplay => Self::MathDisplay,
+        }
     }
 }
-
 
 impl From<WasmInlineType> for kreuzberg::InlineType {
     fn from(val: WasmInlineType) -> Self {
-        match val {            WasmInlineType::Text => Self::Text,            WasmInlineType::Strong => Self::Strong,            WasmInlineType::Emphasis => Self::Emphasis,            WasmInlineType::Highlight => Self::Highlight,            WasmInlineType::Subscript => Self::Subscript,            WasmInlineType::Superscript => Self::Superscript,            WasmInlineType::Insert => Self::Insert,            WasmInlineType::Delete => Self::Delete,            WasmInlineType::Code => Self::Code,            WasmInlineType::Link => Self::Link,            WasmInlineType::Image => Self::Image,            WasmInlineType::Span => Self::Span,            WasmInlineType::Math => Self::Math,            WasmInlineType::RawInline => Self::RawInline,            WasmInlineType::FootnoteRef => Self::FootnoteRef,            WasmInlineType::Symbol => Self::Symbol,        }
+        match val {
+            WasmInlineType::Text => Self::Text,
+            WasmInlineType::Strong => Self::Strong,
+            WasmInlineType::Emphasis => Self::Emphasis,
+            WasmInlineType::Highlight => Self::Highlight,
+            WasmInlineType::Subscript => Self::Subscript,
+            WasmInlineType::Superscript => Self::Superscript,
+            WasmInlineType::Insert => Self::Insert,
+            WasmInlineType::Delete => Self::Delete,
+            WasmInlineType::Code => Self::Code,
+            WasmInlineType::Link => Self::Link,
+            WasmInlineType::Image => Self::Image,
+            WasmInlineType::Span => Self::Span,
+            WasmInlineType::Math => Self::Math,
+            WasmInlineType::RawInline => Self::RawInline,
+            WasmInlineType::FootnoteRef => Self::FootnoteRef,
+            WasmInlineType::Symbol => Self::Symbol,
+        }
     }
 }
-
 
 impl From<kreuzberg::InlineType> for WasmInlineType {
     fn from(val: kreuzberg::InlineType) -> Self {
-        match val {            kreuzberg::InlineType::Text => Self::Text,            kreuzberg::InlineType::Strong => Self::Strong,            kreuzberg::InlineType::Emphasis => Self::Emphasis,            kreuzberg::InlineType::Highlight => Self::Highlight,            kreuzberg::InlineType::Subscript => Self::Subscript,            kreuzberg::InlineType::Superscript => Self::Superscript,            kreuzberg::InlineType::Insert => Self::Insert,            kreuzberg::InlineType::Delete => Self::Delete,            kreuzberg::InlineType::Code => Self::Code,            kreuzberg::InlineType::Link => Self::Link,            kreuzberg::InlineType::Image => Self::Image,            kreuzberg::InlineType::Span => Self::Span,            kreuzberg::InlineType::Math => Self::Math,            kreuzberg::InlineType::RawInline => Self::RawInline,            kreuzberg::InlineType::FootnoteRef => Self::FootnoteRef,            kreuzberg::InlineType::Symbol => Self::Symbol,        }
+        match val {
+            kreuzberg::InlineType::Text => Self::Text,
+            kreuzberg::InlineType::Strong => Self::Strong,
+            kreuzberg::InlineType::Emphasis => Self::Emphasis,
+            kreuzberg::InlineType::Highlight => Self::Highlight,
+            kreuzberg::InlineType::Subscript => Self::Subscript,
+            kreuzberg::InlineType::Superscript => Self::Superscript,
+            kreuzberg::InlineType::Insert => Self::Insert,
+            kreuzberg::InlineType::Delete => Self::Delete,
+            kreuzberg::InlineType::Code => Self::Code,
+            kreuzberg::InlineType::Link => Self::Link,
+            kreuzberg::InlineType::Image => Self::Image,
+            kreuzberg::InlineType::Span => Self::Span,
+            kreuzberg::InlineType::Math => Self::Math,
+            kreuzberg::InlineType::RawInline => Self::RawInline,
+            kreuzberg::InlineType::FootnoteRef => Self::FootnoteRef,
+            kreuzberg::InlineType::Symbol => Self::Symbol,
+        }
     }
 }
-
 
 impl From<WasmRelationshipKind> for kreuzberg::RelationshipKind {
     fn from(val: WasmRelationshipKind) -> Self {
-        match val {            WasmRelationshipKind::FootnoteReference => Self::FootnoteReference,            WasmRelationshipKind::CitationReference => Self::CitationReference,            WasmRelationshipKind::InternalLink => Self::InternalLink,            WasmRelationshipKind::Caption => Self::Caption,            WasmRelationshipKind::Label => Self::Label,            WasmRelationshipKind::TocEntry => Self::TocEntry,            WasmRelationshipKind::CrossReference => Self::CrossReference,        }
+        match val {
+            WasmRelationshipKind::FootnoteReference => Self::FootnoteReference,
+            WasmRelationshipKind::CitationReference => Self::CitationReference,
+            WasmRelationshipKind::InternalLink => Self::InternalLink,
+            WasmRelationshipKind::Caption => Self::Caption,
+            WasmRelationshipKind::Label => Self::Label,
+            WasmRelationshipKind::TocEntry => Self::TocEntry,
+            WasmRelationshipKind::CrossReference => Self::CrossReference,
+        }
     }
 }
-
 
 impl From<kreuzberg::RelationshipKind> for WasmRelationshipKind {
     fn from(val: kreuzberg::RelationshipKind) -> Self {
-        match val {            kreuzberg::RelationshipKind::FootnoteReference => Self::FootnoteReference,            kreuzberg::RelationshipKind::CitationReference => Self::CitationReference,            kreuzberg::RelationshipKind::InternalLink => Self::InternalLink,            kreuzberg::RelationshipKind::Caption => Self::Caption,            kreuzberg::RelationshipKind::Label => Self::Label,            kreuzberg::RelationshipKind::TocEntry => Self::TocEntry,            kreuzberg::RelationshipKind::CrossReference => Self::CrossReference,        }
+        match val {
+            kreuzberg::RelationshipKind::FootnoteReference => Self::FootnoteReference,
+            kreuzberg::RelationshipKind::CitationReference => Self::CitationReference,
+            kreuzberg::RelationshipKind::InternalLink => Self::InternalLink,
+            kreuzberg::RelationshipKind::Caption => Self::Caption,
+            kreuzberg::RelationshipKind::Label => Self::Label,
+            kreuzberg::RelationshipKind::TocEntry => Self::TocEntry,
+            kreuzberg::RelationshipKind::CrossReference => Self::CrossReference,
+        }
     }
 }
-
 
 impl From<WasmContentLayer> for kreuzberg::ContentLayer {
     fn from(val: WasmContentLayer) -> Self {
-        match val {            WasmContentLayer::Body => Self::Body,            WasmContentLayer::Header => Self::Header,            WasmContentLayer::Footer => Self::Footer,            WasmContentLayer::Footnote => Self::Footnote,        }
+        match val {
+            WasmContentLayer::Body => Self::Body,
+            WasmContentLayer::Header => Self::Header,
+            WasmContentLayer::Footer => Self::Footer,
+            WasmContentLayer::Footnote => Self::Footnote,
+        }
     }
 }
-
 
 impl From<kreuzberg::ContentLayer> for WasmContentLayer {
     fn from(val: kreuzberg::ContentLayer) -> Self {
-        match val {            kreuzberg::ContentLayer::Body => Self::Body,            kreuzberg::ContentLayer::Header => Self::Header,            kreuzberg::ContentLayer::Footer => Self::Footer,            kreuzberg::ContentLayer::Footnote => Self::Footnote,        }
+        match val {
+            kreuzberg::ContentLayer::Body => Self::Body,
+            kreuzberg::ContentLayer::Header => Self::Header,
+            kreuzberg::ContentLayer::Footer => Self::Footer,
+            kreuzberg::ContentLayer::Footnote => Self::Footnote,
+        }
     }
 }
-
 
 impl From<WasmNodeContent> for kreuzberg::NodeContent {
     fn from(val: WasmNodeContent) -> Self {
         match val.node_type.as_str() {
-            "title" => Self::Title { text: val.text.clone().unwrap_or_default() },
-            "heading" => Self::Heading { level: val.level.clone().unwrap_or_default(), text: val.text.clone().unwrap_or_default() },
-            "paragraph" => Self::Paragraph { text: val.text.clone().unwrap_or_default() },
-            "list" => Self::List { ordered: val.ordered.clone().unwrap_or_default() },
-            "list_item" => Self::ListItem { text: val.text.clone().unwrap_or_default() },
-            "table" => Self::Table { grid: val.grid.clone().map(Into::into).unwrap_or_default() },
-            "image" => Self::Image { description: val.description.clone(), image_index: val.image_index.clone(), src: val.src.clone() },
-            "code" => Self::Code { text: val.text.clone().unwrap_or_default(), language: val.language.clone() },
+            "title" => Self::Title {
+                text: val.text.clone().unwrap_or_default(),
+            },
+            "heading" => Self::Heading {
+                level: val.level.clone().unwrap_or_default(),
+                text: val.text.clone().unwrap_or_default(),
+            },
+            "paragraph" => Self::Paragraph {
+                text: val.text.clone().unwrap_or_default(),
+            },
+            "list" => Self::List {
+                ordered: val.ordered.clone().unwrap_or_default(),
+            },
+            "list_item" => Self::ListItem {
+                text: val.text.clone().unwrap_or_default(),
+            },
+            "table" => Self::Table {
+                grid: val.grid.clone().map(Into::into).unwrap_or_default(),
+            },
+            "image" => Self::Image {
+                description: val.description.clone(),
+                image_index: val.image_index.clone(),
+                src: val.src.clone(),
+            },
+            "code" => Self::Code {
+                text: val.text.clone().unwrap_or_default(),
+                language: val.language.clone(),
+            },
             "quote" => Self::Quote,
-            "formula" => Self::Formula { text: val.text.clone().unwrap_or_default() },
-            "footnote" => Self::Footnote { text: val.text.clone().unwrap_or_default() },
-            "group" => Self::Group { label: val.label.clone(), heading_level: val.heading_level.clone(), heading_text: val.heading_text.clone() },
+            "formula" => Self::Formula {
+                text: val.text.clone().unwrap_or_default(),
+            },
+            "footnote" => Self::Footnote {
+                text: val.text.clone().unwrap_or_default(),
+            },
+            "group" => Self::Group {
+                label: val.label.clone(),
+                heading_level: val.heading_level.clone(),
+                heading_text: val.heading_text.clone(),
+            },
             "page_break" => Self::PageBreak,
-            "slide" => Self::Slide { number: val.number.clone().unwrap_or_default(), title: val.title.clone() },
+            "slide" => Self::Slide {
+                number: val.number.clone().unwrap_or_default(),
+                title: val.title.clone(),
+            },
             "definition_list" => Self::DefinitionList,
-            "definition_item" => Self::DefinitionItem { term: val.term.clone().unwrap_or_default(), definition: val.definition.clone().unwrap_or_default() },
-            "citation" => Self::Citation { key: val.key.clone().unwrap_or_default(), text: val.text.clone().unwrap_or_default() },
-            "admonition" => Self::Admonition { kind: val.kind.clone().unwrap_or_default(), title: val.title.clone() },
-            "raw_block" => Self::RawBlock { format: val.format.clone().unwrap_or_default(), content: val.content.clone().unwrap_or_default() },
-            "metadata_block" => Self::MetadataBlock { entries: val.entries.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<Vec<(String, String)>>(v.clone()).ok()).unwrap_or_default() },
-            _ => Self::Title { text: Default::default() },
+            "definition_item" => Self::DefinitionItem {
+                term: val.term.clone().unwrap_or_default(),
+                definition: val.definition.clone().unwrap_or_default(),
+            },
+            "citation" => Self::Citation {
+                key: val.key.clone().unwrap_or_default(),
+                text: val.text.clone().unwrap_or_default(),
+            },
+            "admonition" => Self::Admonition {
+                kind: val.kind.clone().unwrap_or_default(),
+                title: val.title.clone(),
+            },
+            "raw_block" => Self::RawBlock {
+                format: val.format.clone().unwrap_or_default(),
+                content: val.content.clone().unwrap_or_default(),
+            },
+            "metadata_block" => Self::MetadataBlock {
+                entries: val
+                    .entries
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<Vec<(String, String)>>(v.clone()).ok())
+                    .unwrap_or_default(),
+            },
+            _ => Self::Title {
+                text: Default::default(),
+            },
         }
     }
 }
@@ -16807,17 +21400,21 @@ impl From<kreuzberg::NodeContent> for WasmNodeContent {
                 text: None,
                 title: None,
             },
-            kreuzberg::NodeContent::Image { description, image_index, src } => Self {
+            kreuzberg::NodeContent::Image {
+                description,
+                image_index,
+                src,
+            } => Self {
                 node_type: "image".to_string(),
                 content: None,
                 definition: None,
-                description: description,
+                description,
                 entries: None,
                 format: None,
                 grid: None,
                 heading_level: None,
                 heading_text: None,
-                image_index: image_index,
+                image_index,
                 key: None,
                 kind: None,
                 label: None,
@@ -16825,7 +21422,7 @@ impl From<kreuzberg::NodeContent> for WasmNodeContent {
                 level: None,
                 number: None,
                 ordered: None,
-                src: src,
+                src,
                 term: None,
                 text: None,
                 title: None,
@@ -16844,7 +21441,7 @@ impl From<kreuzberg::NodeContent> for WasmNodeContent {
                 key: None,
                 kind: None,
                 label: None,
-                language: language,
+                language,
                 level: None,
                 number: None,
                 ordered: None,
@@ -16922,7 +21519,11 @@ impl From<kreuzberg::NodeContent> for WasmNodeContent {
                 text: Some(text),
                 title: None,
             },
-            kreuzberg::NodeContent::Group { label, heading_level, heading_text } => Self {
+            kreuzberg::NodeContent::Group {
+                label,
+                heading_level,
+                heading_text,
+            } => Self {
                 node_type: "group".to_string(),
                 content: None,
                 definition: None,
@@ -16930,12 +21531,12 @@ impl From<kreuzberg::NodeContent> for WasmNodeContent {
                 entries: None,
                 format: None,
                 grid: None,
-                heading_level: heading_level,
-                heading_text: heading_text,
+                heading_level,
+                heading_text,
                 image_index: None,
                 key: None,
                 kind: None,
-                label: label,
+                label,
                 language: None,
                 level: None,
                 number: None,
@@ -16989,7 +21590,7 @@ impl From<kreuzberg::NodeContent> for WasmNodeContent {
                 src: None,
                 term: None,
                 text: None,
-                title: title,
+                title,
             },
             kreuzberg::NodeContent::DefinitionList => Self {
                 node_type: "definition_list".to_string(),
@@ -17081,7 +21682,7 @@ impl From<kreuzberg::NodeContent> for WasmNodeContent {
                 src: None,
                 term: None,
                 text: None,
-                title: title,
+                title,
             },
             kreuzberg::NodeContent::RawBlock { format, content } => Self {
                 node_type: "raw_block".to_string(),
@@ -17143,11 +21744,21 @@ impl From<WasmAnnotationKind> for kreuzberg::AnnotationKind {
             "code" => Self::Code,
             "subscript" => Self::Subscript,
             "superscript" => Self::Superscript,
-            "link" => Self::Link { url: val.url.clone().unwrap_or_default(), title: val.title.clone() },
+            "link" => Self::Link {
+                url: val.url.clone().unwrap_or_default(),
+                title: val.title.clone(),
+            },
             "highlight" => Self::Highlight,
-            "color" => Self::Color { value: val.value.clone().unwrap_or_default() },
-            "font_size" => Self::FontSize { value: val.value.clone().unwrap_or_default() },
-            "custom" => Self::Custom { name: val.name.clone().unwrap_or_default(), value: val.value.clone() },
+            "color" => Self::Color {
+                value: val.value.clone().unwrap_or_default(),
+            },
+            "font_size" => Self::FontSize {
+                value: val.value.clone().unwrap_or_default(),
+            },
+            "custom" => Self::Custom {
+                name: val.name.clone().unwrap_or_default(),
+                value: val.value.clone(),
+            },
             _ => Self::Bold,
         }
     }
@@ -17208,7 +21819,7 @@ impl From<kreuzberg::AnnotationKind> for WasmAnnotationKind {
             kreuzberg::AnnotationKind::Link { url, title } => Self {
                 annotation_type: "link".to_string(),
                 name: None,
-                title: title,
+                title,
                 url: Some(url),
                 value: None,
             },
@@ -17238,7 +21849,7 @@ impl From<kreuzberg::AnnotationKind> for WasmAnnotationKind {
                 name: Some(name),
                 title: None,
                 url: None,
-                value: value,
+                value,
             },
         }
     }
@@ -17246,110 +21857,309 @@ impl From<kreuzberg::AnnotationKind> for WasmAnnotationKind {
 
 impl From<WasmEntityCategory> for kreuzberg::EntityCategory {
     fn from(val: WasmEntityCategory) -> Self {
-        match val {            WasmEntityCategory::Person => Self::Person,            WasmEntityCategory::Organization => Self::Organization,            WasmEntityCategory::Location => Self::Location,            WasmEntityCategory::Date => Self::Date,            WasmEntityCategory::Time => Self::Time,            WasmEntityCategory::Money => Self::Money,            WasmEntityCategory::Percent => Self::Percent,            WasmEntityCategory::Email => Self::Email,            WasmEntityCategory::Phone => Self::Phone,            WasmEntityCategory::Url => Self::Url,            WasmEntityCategory::Custom => Self::Custom(Default::default()),        }
+        match val {
+            WasmEntityCategory::Person => Self::Person,
+            WasmEntityCategory::Organization => Self::Organization,
+            WasmEntityCategory::Location => Self::Location,
+            WasmEntityCategory::Date => Self::Date,
+            WasmEntityCategory::Time => Self::Time,
+            WasmEntityCategory::Money => Self::Money,
+            WasmEntityCategory::Percent => Self::Percent,
+            WasmEntityCategory::Email => Self::Email,
+            WasmEntityCategory::Phone => Self::Phone,
+            WasmEntityCategory::Url => Self::Url,
+            WasmEntityCategory::Custom => Self::Custom(Default::default()),
+        }
     }
 }
-
 
 impl From<kreuzberg::EntityCategory> for WasmEntityCategory {
     fn from(val: kreuzberg::EntityCategory) -> Self {
-        match val {            kreuzberg::EntityCategory::Person => Self::Person,            kreuzberg::EntityCategory::Organization => Self::Organization,            kreuzberg::EntityCategory::Location => Self::Location,            kreuzberg::EntityCategory::Date => Self::Date,            kreuzberg::EntityCategory::Time => Self::Time,            kreuzberg::EntityCategory::Money => Self::Money,            kreuzberg::EntityCategory::Percent => Self::Percent,            kreuzberg::EntityCategory::Email => Self::Email,            kreuzberg::EntityCategory::Phone => Self::Phone,            kreuzberg::EntityCategory::Url => Self::Url,            kreuzberg::EntityCategory::Custom(..) => Self::Custom,        }
+        match val {
+            kreuzberg::EntityCategory::Person => Self::Person,
+            kreuzberg::EntityCategory::Organization => Self::Organization,
+            kreuzberg::EntityCategory::Location => Self::Location,
+            kreuzberg::EntityCategory::Date => Self::Date,
+            kreuzberg::EntityCategory::Time => Self::Time,
+            kreuzberg::EntityCategory::Money => Self::Money,
+            kreuzberg::EntityCategory::Percent => Self::Percent,
+            kreuzberg::EntityCategory::Email => Self::Email,
+            kreuzberg::EntityCategory::Phone => Self::Phone,
+            kreuzberg::EntityCategory::Url => Self::Url,
+            kreuzberg::EntityCategory::Custom(..) => Self::Custom,
+        }
     }
 }
-
 
 impl From<WasmExtractionMethod> for kreuzberg::ExtractionMethod {
     fn from(val: WasmExtractionMethod) -> Self {
-        match val {            WasmExtractionMethod::Native => Self::Native,            WasmExtractionMethod::Ocr => Self::Ocr,            WasmExtractionMethod::Mixed => Self::Mixed,        }
+        match val {
+            WasmExtractionMethod::Native => Self::Native,
+            WasmExtractionMethod::Ocr => Self::Ocr,
+            WasmExtractionMethod::Mixed => Self::Mixed,
+        }
     }
 }
-
 
 impl From<kreuzberg::ExtractionMethod> for WasmExtractionMethod {
     fn from(val: kreuzberg::ExtractionMethod) -> Self {
-        match val {            kreuzberg::ExtractionMethod::Native => Self::Native,            kreuzberg::ExtractionMethod::Ocr => Self::Ocr,            kreuzberg::ExtractionMethod::Mixed => Self::Mixed,        }
+        match val {
+            kreuzberg::ExtractionMethod::Native => Self::Native,
+            kreuzberg::ExtractionMethod::Ocr => Self::Ocr,
+            kreuzberg::ExtractionMethod::Mixed => Self::Mixed,
+        }
     }
 }
-
 
 impl From<WasmChunkType> for kreuzberg::ChunkType {
     fn from(val: WasmChunkType) -> Self {
-        match val {            WasmChunkType::Heading => Self::Heading,            WasmChunkType::PartyList => Self::PartyList,            WasmChunkType::Definitions => Self::Definitions,            WasmChunkType::OperativeClause => Self::OperativeClause,            WasmChunkType::SignatureBlock => Self::SignatureBlock,            WasmChunkType::Schedule => Self::Schedule,            WasmChunkType::TableLike => Self::TableLike,            WasmChunkType::Formula => Self::Formula,            WasmChunkType::CodeBlock => Self::CodeBlock,            WasmChunkType::Image => Self::Image,            WasmChunkType::OrgChart => Self::OrgChart,            WasmChunkType::Diagram => Self::Diagram,            WasmChunkType::Unknown => Self::Unknown,        }
+        match val {
+            WasmChunkType::Heading => Self::Heading,
+            WasmChunkType::PartyList => Self::PartyList,
+            WasmChunkType::Definitions => Self::Definitions,
+            WasmChunkType::OperativeClause => Self::OperativeClause,
+            WasmChunkType::SignatureBlock => Self::SignatureBlock,
+            WasmChunkType::Schedule => Self::Schedule,
+            WasmChunkType::TableLike => Self::TableLike,
+            WasmChunkType::Formula => Self::Formula,
+            WasmChunkType::CodeBlock => Self::CodeBlock,
+            WasmChunkType::Image => Self::Image,
+            WasmChunkType::OrgChart => Self::OrgChart,
+            WasmChunkType::Diagram => Self::Diagram,
+            WasmChunkType::Unknown => Self::Unknown,
+        }
     }
 }
-
 
 impl From<kreuzberg::ChunkType> for WasmChunkType {
     fn from(val: kreuzberg::ChunkType) -> Self {
-        match val {            kreuzberg::ChunkType::Heading => Self::Heading,            kreuzberg::ChunkType::PartyList => Self::PartyList,            kreuzberg::ChunkType::Definitions => Self::Definitions,            kreuzberg::ChunkType::OperativeClause => Self::OperativeClause,            kreuzberg::ChunkType::SignatureBlock => Self::SignatureBlock,            kreuzberg::ChunkType::Schedule => Self::Schedule,            kreuzberg::ChunkType::TableLike => Self::TableLike,            kreuzberg::ChunkType::Formula => Self::Formula,            kreuzberg::ChunkType::CodeBlock => Self::CodeBlock,            kreuzberg::ChunkType::Image => Self::Image,            kreuzberg::ChunkType::OrgChart => Self::OrgChart,            kreuzberg::ChunkType::Diagram => Self::Diagram,            kreuzberg::ChunkType::Unknown => Self::Unknown,        }
+        match val {
+            kreuzberg::ChunkType::Heading => Self::Heading,
+            kreuzberg::ChunkType::PartyList => Self::PartyList,
+            kreuzberg::ChunkType::Definitions => Self::Definitions,
+            kreuzberg::ChunkType::OperativeClause => Self::OperativeClause,
+            kreuzberg::ChunkType::SignatureBlock => Self::SignatureBlock,
+            kreuzberg::ChunkType::Schedule => Self::Schedule,
+            kreuzberg::ChunkType::TableLike => Self::TableLike,
+            kreuzberg::ChunkType::Formula => Self::Formula,
+            kreuzberg::ChunkType::CodeBlock => Self::CodeBlock,
+            kreuzberg::ChunkType::Image => Self::Image,
+            kreuzberg::ChunkType::OrgChart => Self::OrgChart,
+            kreuzberg::ChunkType::Diagram => Self::Diagram,
+            kreuzberg::ChunkType::Unknown => Self::Unknown,
+        }
     }
 }
-
 
 impl From<WasmImageKind> for kreuzberg::ImageKind {
     fn from(val: WasmImageKind) -> Self {
-        match val {            WasmImageKind::Photograph => Self::Photograph,            WasmImageKind::Diagram => Self::Diagram,            WasmImageKind::Chart => Self::Chart,            WasmImageKind::Drawing => Self::Drawing,            WasmImageKind::TextBlock => Self::TextBlock,            WasmImageKind::Decoration => Self::Decoration,            WasmImageKind::Logo => Self::Logo,            WasmImageKind::Icon => Self::Icon,            WasmImageKind::TileFragment => Self::TileFragment,            WasmImageKind::Mask => Self::Mask,            WasmImageKind::PageRaster => Self::PageRaster,            WasmImageKind::Unknown => Self::Unknown,        }
+        match val {
+            WasmImageKind::Photograph => Self::Photograph,
+            WasmImageKind::Diagram => Self::Diagram,
+            WasmImageKind::Chart => Self::Chart,
+            WasmImageKind::Drawing => Self::Drawing,
+            WasmImageKind::TextBlock => Self::TextBlock,
+            WasmImageKind::Decoration => Self::Decoration,
+            WasmImageKind::Logo => Self::Logo,
+            WasmImageKind::Icon => Self::Icon,
+            WasmImageKind::TileFragment => Self::TileFragment,
+            WasmImageKind::Mask => Self::Mask,
+            WasmImageKind::PageRaster => Self::PageRaster,
+            WasmImageKind::Unknown => Self::Unknown,
+        }
     }
 }
-
 
 impl From<kreuzberg::ImageKind> for WasmImageKind {
     fn from(val: kreuzberg::ImageKind) -> Self {
-        match val {            kreuzberg::ImageKind::Photograph => Self::Photograph,            kreuzberg::ImageKind::Diagram => Self::Diagram,            kreuzberg::ImageKind::Chart => Self::Chart,            kreuzberg::ImageKind::Drawing => Self::Drawing,            kreuzberg::ImageKind::TextBlock => Self::TextBlock,            kreuzberg::ImageKind::Decoration => Self::Decoration,            kreuzberg::ImageKind::Logo => Self::Logo,            kreuzberg::ImageKind::Icon => Self::Icon,            kreuzberg::ImageKind::TileFragment => Self::TileFragment,            kreuzberg::ImageKind::Mask => Self::Mask,            kreuzberg::ImageKind::PageRaster => Self::PageRaster,            kreuzberg::ImageKind::Unknown => Self::Unknown,        }
+        match val {
+            kreuzberg::ImageKind::Photograph => Self::Photograph,
+            kreuzberg::ImageKind::Diagram => Self::Diagram,
+            kreuzberg::ImageKind::Chart => Self::Chart,
+            kreuzberg::ImageKind::Drawing => Self::Drawing,
+            kreuzberg::ImageKind::TextBlock => Self::TextBlock,
+            kreuzberg::ImageKind::Decoration => Self::Decoration,
+            kreuzberg::ImageKind::Logo => Self::Logo,
+            kreuzberg::ImageKind::Icon => Self::Icon,
+            kreuzberg::ImageKind::TileFragment => Self::TileFragment,
+            kreuzberg::ImageKind::Mask => Self::Mask,
+            kreuzberg::ImageKind::PageRaster => Self::PageRaster,
+            kreuzberg::ImageKind::Unknown => Self::Unknown,
+        }
     }
 }
-
 
 impl From<WasmResultFormat> for kreuzberg::ResultFormat {
     fn from(val: WasmResultFormat) -> Self {
-        match val {            WasmResultFormat::Unified => Self::Unified,            WasmResultFormat::ElementBased => Self::ElementBased,        }
+        match val {
+            WasmResultFormat::Unified => Self::Unified,
+            WasmResultFormat::ElementBased => Self::ElementBased,
+        }
     }
 }
-
 
 impl From<kreuzberg::ResultFormat> for WasmResultFormat {
     fn from(val: kreuzberg::ResultFormat) -> Self {
-        match val {            kreuzberg::ResultFormat::Unified => Self::Unified,            kreuzberg::ResultFormat::ElementBased => Self::ElementBased,        }
+        match val {
+            kreuzberg::ResultFormat::Unified => Self::Unified,
+            kreuzberg::ResultFormat::ElementBased => Self::ElementBased,
+        }
     }
 }
-
 
 impl From<WasmElementType> for kreuzberg::ElementType {
     fn from(val: WasmElementType) -> Self {
-        match val {            WasmElementType::Title => Self::Title,            WasmElementType::NarrativeText => Self::NarrativeText,            WasmElementType::Heading => Self::Heading,            WasmElementType::ListItem => Self::ListItem,            WasmElementType::Table => Self::Table,            WasmElementType::Image => Self::Image,            WasmElementType::PageBreak => Self::PageBreak,            WasmElementType::CodeBlock => Self::CodeBlock,            WasmElementType::BlockQuote => Self::BlockQuote,            WasmElementType::Footer => Self::Footer,            WasmElementType::Header => Self::Header,        }
+        match val {
+            WasmElementType::Title => Self::Title,
+            WasmElementType::NarrativeText => Self::NarrativeText,
+            WasmElementType::Heading => Self::Heading,
+            WasmElementType::ListItem => Self::ListItem,
+            WasmElementType::Table => Self::Table,
+            WasmElementType::Image => Self::Image,
+            WasmElementType::PageBreak => Self::PageBreak,
+            WasmElementType::CodeBlock => Self::CodeBlock,
+            WasmElementType::BlockQuote => Self::BlockQuote,
+            WasmElementType::Footer => Self::Footer,
+            WasmElementType::Header => Self::Header,
+        }
     }
 }
-
 
 impl From<kreuzberg::ElementType> for WasmElementType {
     fn from(val: kreuzberg::ElementType) -> Self {
-        match val {            kreuzberg::ElementType::Title => Self::Title,            kreuzberg::ElementType::NarrativeText => Self::NarrativeText,            kreuzberg::ElementType::Heading => Self::Heading,            kreuzberg::ElementType::ListItem => Self::ListItem,            kreuzberg::ElementType::Table => Self::Table,            kreuzberg::ElementType::Image => Self::Image,            kreuzberg::ElementType::PageBreak => Self::PageBreak,            kreuzberg::ElementType::CodeBlock => Self::CodeBlock,            kreuzberg::ElementType::BlockQuote => Self::BlockQuote,            kreuzberg::ElementType::Footer => Self::Footer,            kreuzberg::ElementType::Header => Self::Header,        }
+        match val {
+            kreuzberg::ElementType::Title => Self::Title,
+            kreuzberg::ElementType::NarrativeText => Self::NarrativeText,
+            kreuzberg::ElementType::Heading => Self::Heading,
+            kreuzberg::ElementType::ListItem => Self::ListItem,
+            kreuzberg::ElementType::Table => Self::Table,
+            kreuzberg::ElementType::Image => Self::Image,
+            kreuzberg::ElementType::PageBreak => Self::PageBreak,
+            kreuzberg::ElementType::CodeBlock => Self::CodeBlock,
+            kreuzberg::ElementType::BlockQuote => Self::BlockQuote,
+            kreuzberg::ElementType::Footer => Self::Footer,
+            kreuzberg::ElementType::Header => Self::Header,
+        }
     }
 }
-
 
 impl From<WasmFormatMetadata> for kreuzberg::FormatMetadata {
     fn from(val: WasmFormatMetadata) -> Self {
         match val.format_type.as_str() {
-            "pdf" => Self::Pdf(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::PdfMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "docx" => Self::Docx(Box::new(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::DocxMetadata>(v.clone()).ok()).unwrap_or_default())),
-            "excel" => Self::Excel(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::ExcelMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "email" => Self::Email(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::EmailMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "pptx" => Self::Pptx(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::PptxMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "archive" => Self::Archive(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::ArchiveMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "image" => Self::Image(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::ImageMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "xml" => Self::Xml(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::XmlMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "text" => Self::Text(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::TextMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "html" => Self::Html(Box::new(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::HtmlMetadata>(v.clone()).ok()).unwrap_or_default())),
-            "ocr" => Self::Ocr(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::OcrMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "csv" => Self::Csv(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::CsvMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "bibtex" => Self::Bibtex(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::BibtexMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "citation" => Self::Citation(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::CitationMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "fiction_book" => Self::FictionBook(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::FictionBookMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "dbf" => Self::Dbf(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::DbfMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "jats" => Self::Jats(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::JatsMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "epub" => Self::Epub(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::EpubMetadata>(v.clone()).ok()).unwrap_or_default()),
-            "pst" => Self::Pst(val._0.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::PstMetadata>(v.clone()).ok()).unwrap_or_default()),
+            "pdf" => Self::Pdf(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::PdfMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "docx" => Self::Docx(Box::new(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::DocxMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            )),
+            "excel" => Self::Excel(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::ExcelMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "email" => Self::Email(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::EmailMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "pptx" => Self::Pptx(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::PptxMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "archive" => Self::Archive(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::ArchiveMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "image" => Self::Image(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::ImageMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "xml" => Self::Xml(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::XmlMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "text" => Self::Text(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::TextMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "html" => Self::Html(Box::new(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::HtmlMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            )),
+            "ocr" => Self::Ocr(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::OcrMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "csv" => Self::Csv(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::CsvMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "bibtex" => Self::Bibtex(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::BibtexMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "citation" => Self::Citation(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::CitationMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "fiction_book" => Self::FictionBook(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::FictionBookMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "dbf" => Self::Dbf(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::DbfMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "jats" => Self::Jats(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::JatsMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "epub" => Self::Epub(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::EpubMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
+            "pst" => Self::Pst(
+                val._0
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<kreuzberg::PstMetadata>(v.clone()).ok())
+                    .unwrap_or_default(),
+            ),
             "code" => Self::Code(Default::default()),
             _ => Self::Pdf(Default::default()),
         }
@@ -17445,66 +22255,114 @@ impl From<kreuzberg::FormatMetadata> for WasmFormatMetadata {
 
 impl From<WasmTextDirection> for kreuzberg::TextDirection {
     fn from(val: WasmTextDirection) -> Self {
-        match val {            WasmTextDirection::LeftToRight => Self::LeftToRight,            WasmTextDirection::RightToLeft => Self::RightToLeft,            WasmTextDirection::Auto => Self::Auto,        }
+        match val {
+            WasmTextDirection::LeftToRight => Self::LeftToRight,
+            WasmTextDirection::RightToLeft => Self::RightToLeft,
+            WasmTextDirection::Auto => Self::Auto,
+        }
     }
 }
-
 
 impl From<kreuzberg::TextDirection> for WasmTextDirection {
     fn from(val: kreuzberg::TextDirection) -> Self {
-        match val {            kreuzberg::TextDirection::LeftToRight => Self::LeftToRight,            kreuzberg::TextDirection::RightToLeft => Self::RightToLeft,            kreuzberg::TextDirection::Auto => Self::Auto,        }
+        match val {
+            kreuzberg::TextDirection::LeftToRight => Self::LeftToRight,
+            kreuzberg::TextDirection::RightToLeft => Self::RightToLeft,
+            kreuzberg::TextDirection::Auto => Self::Auto,
+        }
     }
 }
-
 
 impl From<WasmLinkType> for kreuzberg::LinkType {
     fn from(val: WasmLinkType) -> Self {
-        match val {            WasmLinkType::Anchor => Self::Anchor,            WasmLinkType::Internal => Self::Internal,            WasmLinkType::External => Self::External,            WasmLinkType::Email => Self::Email,            WasmLinkType::Phone => Self::Phone,            WasmLinkType::Other => Self::Other,        }
+        match val {
+            WasmLinkType::Anchor => Self::Anchor,
+            WasmLinkType::Internal => Self::Internal,
+            WasmLinkType::External => Self::External,
+            WasmLinkType::Email => Self::Email,
+            WasmLinkType::Phone => Self::Phone,
+            WasmLinkType::Other => Self::Other,
+        }
     }
 }
-
 
 impl From<kreuzberg::LinkType> for WasmLinkType {
     fn from(val: kreuzberg::LinkType) -> Self {
-        match val {            kreuzberg::LinkType::Anchor => Self::Anchor,            kreuzberg::LinkType::Internal => Self::Internal,            kreuzberg::LinkType::External => Self::External,            kreuzberg::LinkType::Email => Self::Email,            kreuzberg::LinkType::Phone => Self::Phone,            kreuzberg::LinkType::Other => Self::Other,        }
+        match val {
+            kreuzberg::LinkType::Anchor => Self::Anchor,
+            kreuzberg::LinkType::Internal => Self::Internal,
+            kreuzberg::LinkType::External => Self::External,
+            kreuzberg::LinkType::Email => Self::Email,
+            kreuzberg::LinkType::Phone => Self::Phone,
+            kreuzberg::LinkType::Other => Self::Other,
+        }
     }
 }
-
 
 impl From<WasmImageType> for kreuzberg::ImageType {
     fn from(val: WasmImageType) -> Self {
-        match val {            WasmImageType::DataUri => Self::DataUri,            WasmImageType::InlineSvg => Self::InlineSvg,            WasmImageType::External => Self::External,            WasmImageType::Relative => Self::Relative,        }
+        match val {
+            WasmImageType::DataUri => Self::DataUri,
+            WasmImageType::InlineSvg => Self::InlineSvg,
+            WasmImageType::External => Self::External,
+            WasmImageType::Relative => Self::Relative,
+        }
     }
 }
-
 
 impl From<kreuzberg::ImageType> for WasmImageType {
     fn from(val: kreuzberg::ImageType) -> Self {
-        match val {            kreuzberg::ImageType::DataUri => Self::DataUri,            kreuzberg::ImageType::InlineSvg => Self::InlineSvg,            kreuzberg::ImageType::External => Self::External,            kreuzberg::ImageType::Relative => Self::Relative,        }
+        match val {
+            kreuzberg::ImageType::DataUri => Self::DataUri,
+            kreuzberg::ImageType::InlineSvg => Self::InlineSvg,
+            kreuzberg::ImageType::External => Self::External,
+            kreuzberg::ImageType::Relative => Self::Relative,
+        }
     }
 }
-
 
 impl From<WasmStructuredDataType> for kreuzberg::StructuredDataType {
     fn from(val: WasmStructuredDataType) -> Self {
-        match val {            WasmStructuredDataType::JsonLd => Self::JsonLd,            WasmStructuredDataType::Microdata => Self::Microdata,            WasmStructuredDataType::RDFa => Self::RDFa,        }
+        match val {
+            WasmStructuredDataType::JsonLd => Self::JsonLd,
+            WasmStructuredDataType::Microdata => Self::Microdata,
+            WasmStructuredDataType::RDFa => Self::RDFa,
+        }
     }
 }
-
 
 impl From<kreuzberg::StructuredDataType> for WasmStructuredDataType {
     fn from(val: kreuzberg::StructuredDataType) -> Self {
-        match val {            kreuzberg::StructuredDataType::JsonLd => Self::JsonLd,            kreuzberg::StructuredDataType::Microdata => Self::Microdata,            kreuzberg::StructuredDataType::RDFa => Self::RDFa,        }
+        match val {
+            kreuzberg::StructuredDataType::JsonLd => Self::JsonLd,
+            kreuzberg::StructuredDataType::Microdata => Self::Microdata,
+            kreuzberg::StructuredDataType::RDFa => Self::RDFa,
+        }
     }
 }
-
 
 impl From<WasmOcrBoundingGeometry> for kreuzberg::OcrBoundingGeometry {
     fn from(val: WasmOcrBoundingGeometry) -> Self {
         match val.r#type.as_str() {
-            "rectangle" => Self::Rectangle { left: val.left.clone().unwrap_or_default(), top: val.top.clone().unwrap_or_default(), width: val.width.clone().unwrap_or_default(), height: val.height.clone().unwrap_or_default() },
-            "quadrilateral" => Self::Quadrilateral { points: val.points.as_ref().and_then(|v| serde_wasm_bindgen::from_value::<[(u32,u32); 4]>(v.clone()).ok()).unwrap_or_default() },
-            _ => Self::Rectangle { left: Default::default(), top: Default::default(), width: Default::default(), height: Default::default() },
+            "rectangle" => Self::Rectangle {
+                left: val.left.clone().unwrap_or_default(),
+                top: val.top.clone().unwrap_or_default(),
+                width: val.width.clone().unwrap_or_default(),
+                height: val.height.clone().unwrap_or_default(),
+            },
+            "quadrilateral" => Self::Quadrilateral {
+                points: val
+                    .points
+                    .as_ref()
+                    .and_then(|v| serde_wasm_bindgen::from_value::<[(u32, u32); 4]>(v.clone()).ok())
+                    .unwrap_or_default(),
+            },
+            _ => Self::Rectangle {
+                left: Default::default(),
+                top: Default::default(),
+                width: Default::default(),
+                height: Default::default(),
+            },
         }
     }
 }
@@ -17512,7 +22370,12 @@ impl From<WasmOcrBoundingGeometry> for kreuzberg::OcrBoundingGeometry {
 impl From<kreuzberg::OcrBoundingGeometry> for WasmOcrBoundingGeometry {
     fn from(val: kreuzberg::OcrBoundingGeometry) -> Self {
         match val {
-            kreuzberg::OcrBoundingGeometry::Rectangle { left, top, width, height } => Self {
+            kreuzberg::OcrBoundingGeometry::Rectangle {
+                left,
+                top,
+                width,
+                height,
+            } => Self {
                 r#type: "rectangle".to_string(),
                 height: Some(height),
                 left: Some(left),
@@ -17534,59 +22397,107 @@ impl From<kreuzberg::OcrBoundingGeometry> for WasmOcrBoundingGeometry {
 
 impl From<WasmOcrElementLevel> for kreuzberg::OcrElementLevel {
     fn from(val: WasmOcrElementLevel) -> Self {
-        match val {            WasmOcrElementLevel::Word => Self::Word,            WasmOcrElementLevel::Line => Self::Line,            WasmOcrElementLevel::Block => Self::Block,            WasmOcrElementLevel::Page => Self::Page,        }
+        match val {
+            WasmOcrElementLevel::Word => Self::Word,
+            WasmOcrElementLevel::Line => Self::Line,
+            WasmOcrElementLevel::Block => Self::Block,
+            WasmOcrElementLevel::Page => Self::Page,
+        }
     }
 }
-
 
 impl From<kreuzberg::OcrElementLevel> for WasmOcrElementLevel {
     fn from(val: kreuzberg::OcrElementLevel) -> Self {
-        match val {            kreuzberg::OcrElementLevel::Word => Self::Word,            kreuzberg::OcrElementLevel::Line => Self::Line,            kreuzberg::OcrElementLevel::Block => Self::Block,            kreuzberg::OcrElementLevel::Page => Self::Page,        }
+        match val {
+            kreuzberg::OcrElementLevel::Word => Self::Word,
+            kreuzberg::OcrElementLevel::Line => Self::Line,
+            kreuzberg::OcrElementLevel::Block => Self::Block,
+            kreuzberg::OcrElementLevel::Page => Self::Page,
+        }
     }
 }
-
 
 impl From<WasmPageUnitType> for kreuzberg::PageUnitType {
     fn from(val: WasmPageUnitType) -> Self {
-        match val {            WasmPageUnitType::Page => Self::Page,            WasmPageUnitType::Slide => Self::Slide,            WasmPageUnitType::Sheet => Self::Sheet,        }
+        match val {
+            WasmPageUnitType::Page => Self::Page,
+            WasmPageUnitType::Slide => Self::Slide,
+            WasmPageUnitType::Sheet => Self::Sheet,
+        }
     }
 }
-
 
 impl From<kreuzberg::PageUnitType> for WasmPageUnitType {
     fn from(val: kreuzberg::PageUnitType) -> Self {
-        match val {            kreuzberg::PageUnitType::Page => Self::Page,            kreuzberg::PageUnitType::Slide => Self::Slide,            kreuzberg::PageUnitType::Sheet => Self::Sheet,        }
+        match val {
+            kreuzberg::PageUnitType::Page => Self::Page,
+            kreuzberg::PageUnitType::Slide => Self::Slide,
+            kreuzberg::PageUnitType::Sheet => Self::Sheet,
+        }
     }
 }
-
 
 impl From<WasmRedactionStrategy> for kreuzberg::RedactionStrategy {
     fn from(val: WasmRedactionStrategy) -> Self {
-        match val {            WasmRedactionStrategy::Mask => Self::Mask,            WasmRedactionStrategy::Hash => Self::Hash,            WasmRedactionStrategy::TokenReplace => Self::TokenReplace,            WasmRedactionStrategy::Drop => Self::Drop,        }
+        match val {
+            WasmRedactionStrategy::Mask => Self::Mask,
+            WasmRedactionStrategy::Hash => Self::Hash,
+            WasmRedactionStrategy::TokenReplace => Self::TokenReplace,
+            WasmRedactionStrategy::Drop => Self::Drop,
+        }
     }
 }
-
 
 impl From<kreuzberg::RedactionStrategy> for WasmRedactionStrategy {
     fn from(val: kreuzberg::RedactionStrategy) -> Self {
-        match val {            kreuzberg::RedactionStrategy::Mask => Self::Mask,            kreuzberg::RedactionStrategy::Hash => Self::Hash,            kreuzberg::RedactionStrategy::TokenReplace => Self::TokenReplace,            kreuzberg::RedactionStrategy::Drop => Self::Drop,        }
+        match val {
+            kreuzberg::RedactionStrategy::Mask => Self::Mask,
+            kreuzberg::RedactionStrategy::Hash => Self::Hash,
+            kreuzberg::RedactionStrategy::TokenReplace => Self::TokenReplace,
+            kreuzberg::RedactionStrategy::Drop => Self::Drop,
+        }
     }
 }
-
 
 impl From<WasmPiiCategory> for kreuzberg::PiiCategory {
     fn from(val: WasmPiiCategory) -> Self {
-        match val {            WasmPiiCategory::Email => Self::Email,            WasmPiiCategory::Phone => Self::Phone,            WasmPiiCategory::Ssn => Self::Ssn,            WasmPiiCategory::CreditCard => Self::CreditCard,            WasmPiiCategory::PostalCode => Self::PostalCode,            WasmPiiCategory::IpAddress => Self::IpAddress,            WasmPiiCategory::Iban => Self::Iban,            WasmPiiCategory::SwiftBic => Self::SwiftBic,            WasmPiiCategory::DateOfBirth => Self::DateOfBirth,            WasmPiiCategory::Person => Self::Person,            WasmPiiCategory::Organization => Self::Organization,            WasmPiiCategory::Location => Self::Location,            WasmPiiCategory::Custom => Self::Custom(Default::default()),        }
+        match val {
+            WasmPiiCategory::Email => Self::Email,
+            WasmPiiCategory::Phone => Self::Phone,
+            WasmPiiCategory::Ssn => Self::Ssn,
+            WasmPiiCategory::CreditCard => Self::CreditCard,
+            WasmPiiCategory::PostalCode => Self::PostalCode,
+            WasmPiiCategory::IpAddress => Self::IpAddress,
+            WasmPiiCategory::Iban => Self::Iban,
+            WasmPiiCategory::SwiftBic => Self::SwiftBic,
+            WasmPiiCategory::DateOfBirth => Self::DateOfBirth,
+            WasmPiiCategory::Person => Self::Person,
+            WasmPiiCategory::Organization => Self::Organization,
+            WasmPiiCategory::Location => Self::Location,
+            WasmPiiCategory::Custom => Self::Custom(Default::default()),
+        }
     }
 }
-
 
 impl From<kreuzberg::PiiCategory> for WasmPiiCategory {
     fn from(val: kreuzberg::PiiCategory) -> Self {
-        match val {            kreuzberg::PiiCategory::Email => Self::Email,            kreuzberg::PiiCategory::Phone => Self::Phone,            kreuzberg::PiiCategory::Ssn => Self::Ssn,            kreuzberg::PiiCategory::CreditCard => Self::CreditCard,            kreuzberg::PiiCategory::PostalCode => Self::PostalCode,            kreuzberg::PiiCategory::IpAddress => Self::IpAddress,            kreuzberg::PiiCategory::Iban => Self::Iban,            kreuzberg::PiiCategory::SwiftBic => Self::SwiftBic,            kreuzberg::PiiCategory::DateOfBirth => Self::DateOfBirth,            kreuzberg::PiiCategory::Person => Self::Person,            kreuzberg::PiiCategory::Organization => Self::Organization,            kreuzberg::PiiCategory::Location => Self::Location,            kreuzberg::PiiCategory::Custom(..) => Self::Custom,        }
+        match val {
+            kreuzberg::PiiCategory::Email => Self::Email,
+            kreuzberg::PiiCategory::Phone => Self::Phone,
+            kreuzberg::PiiCategory::Ssn => Self::Ssn,
+            kreuzberg::PiiCategory::CreditCard => Self::CreditCard,
+            kreuzberg::PiiCategory::PostalCode => Self::PostalCode,
+            kreuzberg::PiiCategory::IpAddress => Self::IpAddress,
+            kreuzberg::PiiCategory::Iban => Self::Iban,
+            kreuzberg::PiiCategory::SwiftBic => Self::SwiftBic,
+            kreuzberg::PiiCategory::DateOfBirth => Self::DateOfBirth,
+            kreuzberg::PiiCategory::Person => Self::Person,
+            kreuzberg::PiiCategory::Organization => Self::Organization,
+            kreuzberg::PiiCategory::Location => Self::Location,
+            kreuzberg::PiiCategory::Custom(..) => Self::Custom,
+        }
     }
 }
-
 
 impl From<WasmDiffLine> for kreuzberg::DiffLine {
     fn from(val: WasmDiffLine) -> Self {
@@ -17620,27 +22531,50 @@ impl From<kreuzberg::DiffLine> for WasmDiffLine {
 
 impl From<WasmRevisionKind> for kreuzberg::RevisionKind {
     fn from(val: WasmRevisionKind) -> Self {
-        match val {            WasmRevisionKind::Insertion => Self::Insertion,            WasmRevisionKind::Deletion => Self::Deletion,            WasmRevisionKind::FormatChange => Self::FormatChange,            WasmRevisionKind::Comment => Self::Comment,        }
+        match val {
+            WasmRevisionKind::Insertion => Self::Insertion,
+            WasmRevisionKind::Deletion => Self::Deletion,
+            WasmRevisionKind::FormatChange => Self::FormatChange,
+            WasmRevisionKind::Comment => Self::Comment,
+        }
     }
 }
-
 
 impl From<kreuzberg::RevisionKind> for WasmRevisionKind {
     fn from(val: kreuzberg::RevisionKind) -> Self {
-        match val {            kreuzberg::RevisionKind::Insertion => Self::Insertion,            kreuzberg::RevisionKind::Deletion => Self::Deletion,            kreuzberg::RevisionKind::FormatChange => Self::FormatChange,            kreuzberg::RevisionKind::Comment => Self::Comment,        }
+        match val {
+            kreuzberg::RevisionKind::Insertion => Self::Insertion,
+            kreuzberg::RevisionKind::Deletion => Self::Deletion,
+            kreuzberg::RevisionKind::FormatChange => Self::FormatChange,
+            kreuzberg::RevisionKind::Comment => Self::Comment,
+        }
     }
 }
-
 
 impl From<WasmRevisionAnchor> for kreuzberg::RevisionAnchor {
     fn from(val: WasmRevisionAnchor) -> Self {
         match val.r#type.as_str() {
-            "paragraph" => Self::Paragraph { index: val.index.clone().unwrap_or_default() },
-            "table_cell" => Self::TableCell { row: val.row.clone().unwrap_or_default(), col: val.col.clone().unwrap_or_default(), table_index: val.table_index.clone().unwrap_or_default() },
-            "page" => Self::Page { index: val.index.clone().unwrap_or_default() },
-            "slide" => Self::Slide { index: val.index.clone().unwrap_or_default() },
-            "sheet" => Self::Sheet { index: val.index.clone().unwrap_or_default(), name: val.name.clone() },
-            _ => Self::Paragraph { index: Default::default() },
+            "paragraph" => Self::Paragraph {
+                index: val.index.clone().unwrap_or_default(),
+            },
+            "table_cell" => Self::TableCell {
+                row: val.row.clone().unwrap_or_default(),
+                col: val.col.clone().unwrap_or_default(),
+                table_index: val.table_index.clone().unwrap_or_default(),
+            },
+            "page" => Self::Page {
+                index: val.index.clone().unwrap_or_default(),
+            },
+            "slide" => Self::Slide {
+                index: val.index.clone().unwrap_or_default(),
+            },
+            "sheet" => Self::Sheet {
+                index: val.index.clone().unwrap_or_default(),
+                name: val.name.clone(),
+            },
+            _ => Self::Paragraph {
+                index: Default::default(),
+            },
         }
     }
 }
@@ -17684,7 +22618,7 @@ impl From<kreuzberg::RevisionAnchor> for WasmRevisionAnchor {
                 r#type: "sheet".to_string(),
                 col: None,
                 index: Some(index),
-                name: name,
+                name,
                 row: None,
                 table_index: None,
             },
@@ -17694,40 +22628,72 @@ impl From<kreuzberg::RevisionAnchor> for WasmRevisionAnchor {
 
 impl From<WasmSummaryStrategy> for kreuzberg::SummaryStrategy {
     fn from(val: WasmSummaryStrategy) -> Self {
-        match val {            WasmSummaryStrategy::Extractive => Self::Extractive,            WasmSummaryStrategy::Abstractive => Self::Abstractive,        }
+        match val {
+            WasmSummaryStrategy::Extractive => Self::Extractive,
+            WasmSummaryStrategy::Abstractive => Self::Abstractive,
+        }
     }
 }
-
 
 impl From<kreuzberg::SummaryStrategy> for WasmSummaryStrategy {
     fn from(val: kreuzberg::SummaryStrategy) -> Self {
-        match val {            kreuzberg::SummaryStrategy::Extractive => Self::Extractive,            kreuzberg::SummaryStrategy::Abstractive => Self::Abstractive,        }
+        match val {
+            kreuzberg::SummaryStrategy::Extractive => Self::Extractive,
+            kreuzberg::SummaryStrategy::Abstractive => Self::Abstractive,
+        }
     }
 }
-
 
 impl From<WasmUriKind> for kreuzberg::UriKind {
     fn from(val: WasmUriKind) -> Self {
-        match val {            WasmUriKind::Hyperlink => Self::Hyperlink,            WasmUriKind::Image => Self::Image,            WasmUriKind::Anchor => Self::Anchor,            WasmUriKind::Citation => Self::Citation,            WasmUriKind::Reference => Self::Reference,            WasmUriKind::Email => Self::Email,        }
+        match val {
+            WasmUriKind::Hyperlink => Self::Hyperlink,
+            WasmUriKind::Image => Self::Image,
+            WasmUriKind::Anchor => Self::Anchor,
+            WasmUriKind::Citation => Self::Citation,
+            WasmUriKind::Reference => Self::Reference,
+            WasmUriKind::Email => Self::Email,
+        }
     }
 }
-
 
 impl From<kreuzberg::UriKind> for WasmUriKind {
     fn from(val: kreuzberg::UriKind) -> Self {
-        match val {            kreuzberg::UriKind::Hyperlink => Self::Hyperlink,            kreuzberg::UriKind::Image => Self::Image,            kreuzberg::UriKind::Anchor => Self::Anchor,            kreuzberg::UriKind::Citation => Self::Citation,            kreuzberg::UriKind::Reference => Self::Reference,            kreuzberg::UriKind::Email => Self::Email,        }
+        match val {
+            kreuzberg::UriKind::Hyperlink => Self::Hyperlink,
+            kreuzberg::UriKind::Image => Self::Image,
+            kreuzberg::UriKind::Anchor => Self::Anchor,
+            kreuzberg::UriKind::Citation => Self::Citation,
+            kreuzberg::UriKind::Reference => Self::Reference,
+            kreuzberg::UriKind::Email => Self::Email,
+        }
     }
 }
-
 
 /// Return the error code string for a `kreuzberg::error::KreuzbergError` variant.
 #[allow(dead_code)]
 fn kreuzberg_error_error_code(e: &kreuzberg::error::KreuzbergError) -> &'static str {
     #[allow(unreachable_patterns)]
-    match e {        kreuzberg::error::KreuzbergError::Io(..) => "io",        kreuzberg::error::KreuzbergError::Parsing { .. } => "parsing",        kreuzberg::error::KreuzbergError::Ocr { .. } => "ocr",        kreuzberg::error::KreuzbergError::Validation { .. } => "validation",        kreuzberg::error::KreuzbergError::Cache { .. } => "cache",        kreuzberg::error::KreuzbergError::ImageProcessing { .. } => "image_processing",        kreuzberg::error::KreuzbergError::Serialization { .. } => "serialization",        kreuzberg::error::KreuzbergError::MissingDependency(..) => "missing_dependency",        kreuzberg::error::KreuzbergError::Plugin { .. } => "plugin",        kreuzberg::error::KreuzbergError::LockPoisoned(..) => "lock_poisoned",        kreuzberg::error::KreuzbergError::UnsupportedFormat(..) => "unsupported_format",        kreuzberg::error::KreuzbergError::Embedding { .. } => "embedding",        kreuzberg::error::KreuzbergError::Timeout { .. } => "timeout",        kreuzberg::error::KreuzbergError::Cancelled => "cancelled",        kreuzberg::error::KreuzbergError::Security { .. } => "security",        kreuzberg::error::KreuzbergError::Other(..) => "other",        _ => "kreuzberg_error",
+    match e {
+        kreuzberg::error::KreuzbergError::Io(..) => "io",
+        kreuzberg::error::KreuzbergError::Parsing { .. } => "parsing",
+        kreuzberg::error::KreuzbergError::Ocr { .. } => "ocr",
+        kreuzberg::error::KreuzbergError::Validation { .. } => "validation",
+        kreuzberg::error::KreuzbergError::Cache { .. } => "cache",
+        kreuzberg::error::KreuzbergError::ImageProcessing { .. } => "image_processing",
+        kreuzberg::error::KreuzbergError::Serialization { .. } => "serialization",
+        kreuzberg::error::KreuzbergError::MissingDependency(..) => "missing_dependency",
+        kreuzberg::error::KreuzbergError::Plugin { .. } => "plugin",
+        kreuzberg::error::KreuzbergError::LockPoisoned(..) => "lock_poisoned",
+        kreuzberg::error::KreuzbergError::UnsupportedFormat(..) => "unsupported_format",
+        kreuzberg::error::KreuzbergError::Embedding { .. } => "embedding",
+        kreuzberg::error::KreuzbergError::Timeout { .. } => "timeout",
+        kreuzberg::error::KreuzbergError::Cancelled => "cancelled",
+        kreuzberg::error::KreuzbergError::Security { .. } => "security",
+        kreuzberg::error::KreuzbergError::Other(..) => "other",
+        _ => "kreuzberg_error",
     }
 }
-
 
 /// Convert a `kreuzberg::error::KreuzbergError` error to a `JsValue` object with `code` and `message` fields.
 #[allow(dead_code)]

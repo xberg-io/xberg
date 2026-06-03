@@ -15398,7 +15398,7 @@ int32_t kreuzberg_redact(const KREUZBERGExtractionResult *result,
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
  */
-char *kreuzberg_find_all(const char *text);
+char *kreuzberg_find_all(const char *_text);
 
 /**
  * Return the byte length of the C string most recently returned by `kreuzberg_find_all` on this
@@ -15419,8 +15419,8 @@ uintptr_t kreuzberg_find_all_len(const char *_text);
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
  */
-char *kreuzberg_scan_text(const char *text,
-                          const char *categories);
+char *kreuzberg_scan_text(const char *_text,
+                          const char *_categories);
 
 /**
  * Return the byte length of the C string most recently returned by `kreuzberg_scan_text` on this

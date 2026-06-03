@@ -10417,7 +10417,7 @@ pub unsafe extern "C" fn kreuzberg_token_counter_next_token(
         set_last_error(1, "Null pointer passed for parameter 'category'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees category is a valid pointer.
+    // SAFETY: null check above guarantees category is a valid non-null pointer.
     let category_rs = unsafe { &*category };
     if original.is_null() {
         set_last_error(1, "Null pointer passed for parameter 'original'");
@@ -13446,7 +13446,7 @@ pub unsafe extern "C" fn kreuzberg_extraction_result_from_ocr(
         set_last_error(1, "Null pointer passed for parameter 'ocr'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees ocr is a valid pointer.
+    // SAFETY: null check above guarantees ocr is a valid non-null pointer.
     let ocr_rs = unsafe { &*ocr }.clone();
     let result = kreuzberg::ExtractionResult::from_ocr(ocr_rs);
     Box::into_raw(Box::new(result))
@@ -33650,7 +33650,7 @@ pub unsafe extern "C" fn kreuzberg_extract_bytes(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result =
         get_ffi_runtime().block_on(async { kreuzberg::extract_bytes(&content_rs, &mime_type_rs, &config_rs).await });
@@ -33724,7 +33724,7 @@ pub unsafe extern "C" fn kreuzberg_extract_file(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = get_ffi_runtime()
         .block_on(async { kreuzberg::extract_file(path_rs, mime_type_rs.as_deref(), &config_rs).await });
@@ -33792,7 +33792,7 @@ pub unsafe extern "C" fn kreuzberg_extract_file_sync(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = kreuzberg::extract_file_sync(path_rs, mime_type_rs.as_deref(), &config_rs);
     match result {
@@ -33856,7 +33856,7 @@ pub unsafe extern "C" fn kreuzberg_extract_bytes_sync(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = kreuzberg::extract_bytes_sync(&content_rs, &mime_type_rs, &config_rs);
     match result {
@@ -33917,7 +33917,7 @@ pub unsafe extern "C" fn kreuzberg_batch_extract_files_sync(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = kreuzberg::batch_extract_files_sync(items_rs, &config_rs);
     match result {
@@ -34010,7 +34010,7 @@ pub unsafe extern "C" fn kreuzberg_batch_extract_bytes_sync(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = kreuzberg::batch_extract_bytes_sync(items_rs, &config_rs);
     match result {
@@ -34130,7 +34130,7 @@ pub unsafe extern "C" fn kreuzberg_batch_extract_files(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = get_ffi_runtime().block_on(async { kreuzberg::batch_extract_files(items_rs, &config_rs).await });
     match result {
@@ -34245,7 +34245,7 @@ pub unsafe extern "C" fn kreuzberg_batch_extract_bytes(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = get_ffi_runtime().block_on(async { kreuzberg::batch_extract_bytes(items_rs, &config_rs).await });
     match result {
@@ -34814,16 +34814,16 @@ pub unsafe extern "C" fn kreuzberg_classify_pages(
         set_last_error(1, "Null pointer passed for parameter 'result'");
         return -1;
     }
-    // SAFETY: null check above guarantees result is a valid pointer.
-    let result_rs = unsafe { &*result };
+    // SAFETY: null check above guarantees result is a valid non-null pointer.
+    let result_rs = unsafe { &mut *result };
     if config.is_null() {
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return -1;
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = get_ffi_runtime()
-        .block_on(async { kreuzberg::text::classification::classify_pages(&result_rs, &config_rs).await });
+        .block_on(async { kreuzberg::text::classification::classify_pages(&mut result_rs, &config_rs).await });
     match result {
         Ok(()) => 0,
         Err(e) => {
@@ -34987,15 +34987,16 @@ pub unsafe extern "C" fn kreuzberg_redact(
         set_last_error(1, "Null pointer passed for parameter 'result'");
         return -1;
     }
-    // SAFETY: null check above guarantees result is a valid pointer.
-    let result_rs = unsafe { &*result };
+    // SAFETY: null check above guarantees result is a valid non-null pointer.
+    let result_rs = unsafe { &mut *result };
     if config.is_null() {
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return -1;
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
-    let result = get_ffi_runtime().block_on(async { kreuzberg::text::redaction::redact(&result_rs, &config_rs).await });
+    let result =
+        get_ffi_runtime().block_on(async { kreuzberg::text::redaction::redact(&mut result_rs, &config_rs).await });
     match result {
         Ok(()) => 0,
         Err(e) => {
@@ -35008,39 +35009,10 @@ pub unsafe extern "C" fn kreuzberg_redact(
 /// \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
 /// freed with the appropriate free function.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kreuzberg_find_all(text: *const std::ffi::c_char) -> *mut std::ffi::c_char {
+pub unsafe extern "C" fn kreuzberg_find_all(_text: *const std::ffi::c_char) -> *mut std::ffi::c_char {
     clear_last_error();
-    if text.is_null() {
-        set_last_error(1, "Null pointer passed for parameter 'text'");
-        return std::ptr::null_mut();
-    }
-    // SAFETY: null check above guarantees text is a valid pointer; string is valid UTF-8 from caller.
-    let text_rs = match unsafe { CStr::from_ptr(text) }.to_str() {
-        Ok(s) => s.to_string(),
-        Err(_) => {
-            set_last_error(1, "Invalid UTF-8 in parameter 'text'");
-            return std::ptr::null_mut();
-        }
-    };
-    let result = kreuzberg::text::redaction::patterns::ssn::find_all(&text_rs);
-    {
-        match serde_json::to_string(&result) {
-            Ok(__alef_return) => match CString::new(__alef_return) {
-                Ok(cs) => {
-                    set_last_return_len(cs.as_bytes().len());
-                    cs.into_raw()
-                }
-                Err(_) => {
-                    set_last_return_len(0);
-                    std::ptr::null_mut()
-                }
-            },
-            Err(_) => {
-                set_last_return_len(0);
-                std::ptr::null_mut()
-            }
-        }
-    }
+    set_last_error(99, "Not implemented: find_all");
+    std::ptr::null_mut()
 }
 
 /// Return the byte length of the C string most recently returned by `kreuzberg_find_all` on this
@@ -35063,60 +35035,12 @@ pub unsafe extern "C" fn kreuzberg_find_all_len(_text: *const std::ffi::c_char) 
 /// freed with the appropriate free function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kreuzberg_scan_text(
-    text: *const std::ffi::c_char,
-    categories: *const std::ffi::c_char,
+    _text: *const std::ffi::c_char,
+    _categories: *const std::ffi::c_char,
 ) -> *mut std::ffi::c_char {
     clear_last_error();
-    if text.is_null() {
-        set_last_error(1, "Null pointer passed for parameter 'text'");
-        return std::ptr::null_mut();
-    }
-    // SAFETY: null check above guarantees text is a valid pointer; string is valid UTF-8 from caller.
-    let text_rs = match unsafe { CStr::from_ptr(text) }.to_str() {
-        Ok(s) => s.to_string(),
-        Err(_) => {
-            set_last_error(1, "Invalid UTF-8 in parameter 'text'");
-            return std::ptr::null_mut();
-        }
-    };
-    if categories.is_null() {
-        set_last_error(1, "Null pointer passed for parameter 'categories'");
-        return std::ptr::null_mut();
-    }
-    // SAFETY: null check above guarantees categories is a valid pointer; string is valid UTF-8 from caller.
-    let categories_rs_str = match unsafe { CStr::from_ptr(categories) }.to_str() {
-        Ok(s) => s,
-        Err(_) => {
-            set_last_error(1, "Invalid UTF-8 in parameter 'categories'");
-            return std::ptr::null_mut();
-        }
-    };
-    let categories_rs = match serde_json::from_str::<Vec<kreuzberg::PiiCategory>>(categories_rs_str) {
-        Ok(v) => v,
-        Err(e) => {
-            set_last_error(2, &e.to_string());
-            return std::ptr::null_mut();
-        }
-    };
-    let result = kreuzberg::text::redaction::patterns::scan_text(&text_rs, &categories_rs);
-    {
-        match serde_json::to_string(&result) {
-            Ok(__alef_return) => match CString::new(__alef_return) {
-                Ok(cs) => {
-                    set_last_return_len(cs.as_bytes().len());
-                    cs.into_raw()
-                }
-                Err(_) => {
-                    set_last_return_len(0);
-                    std::ptr::null_mut()
-                }
-            },
-            Err(_) => {
-                set_last_return_len(0);
-                std::ptr::null_mut()
-            }
-        }
-    }
+    set_last_error(99, "Not implemented: scan_text");
+    std::ptr::null_mut()
 }
 
 /// Return the byte length of the C string most recently returned by `kreuzberg_scan_text` on this
@@ -35169,16 +35093,16 @@ pub unsafe extern "C" fn kreuzberg_apply_strategy(
         set_last_error(1, "Null pointer passed for parameter 'category'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees category is a valid pointer.
+    // SAFETY: null check above guarantees category is a valid non-null pointer.
     let category_rs = unsafe { &*category };
     if counter.is_null() {
         set_last_error(1, "Null pointer passed for parameter 'counter'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees counter is a valid pointer.
-    let counter_rs = unsafe { &*counter };
+    // SAFETY: null check above guarantees counter is a valid non-null pointer.
+    let counter_rs = unsafe { &mut *counter };
     let result =
-        kreuzberg::text::redaction::strategy::apply_strategy(strategy_rs, &original_rs, &category_rs, &counter_rs);
+        kreuzberg::text::redaction::strategy::apply_strategy(strategy_rs, &original_rs, &category_rs, &mut counter_rs);
     {
         let __alef_return = result.to_string();
         match CString::new(__alef_return) {
@@ -35362,16 +35286,16 @@ pub unsafe extern "C" fn kreuzberg_translate_result(
         set_last_error(1, "Null pointer passed for parameter 'result'");
         return -1;
     }
-    // SAFETY: null check above guarantees result is a valid pointer.
-    let result_rs = unsafe { &*result };
+    // SAFETY: null check above guarantees result is a valid non-null pointer.
+    let result_rs = unsafe { &mut *result };
     if config.is_null() {
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return -1;
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = get_ffi_runtime()
-        .block_on(async { kreuzberg::text::translation::translate_result(&result_rs, &config_rs).await });
+        .block_on(async { kreuzberg::text::translation::translate_result(&mut result_rs, &config_rs).await });
     match result {
         Ok(()) => 0,
         Err(e) => {
@@ -35412,19 +35336,19 @@ pub unsafe extern "C" fn kreuzberg_compare(
         set_last_error(1, "Null pointer passed for parameter 'a'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees a is a valid pointer.
+    // SAFETY: null check above guarantees a is a valid non-null pointer.
     let a_rs = unsafe { &*a };
     if b.is_null() {
         set_last_error(1, "Null pointer passed for parameter 'b'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees b is a valid pointer.
+    // SAFETY: null check above guarantees b is a valid non-null pointer.
     let b_rs = unsafe { &*b };
     if opts.is_null() {
         set_last_error(1, "Null pointer passed for parameter 'opts'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees opts is a valid pointer.
+    // SAFETY: null check above guarantees opts is a valid non-null pointer.
     let opts_rs = unsafe { &*opts };
     let result = kreuzberg::compare(&a_rs, &b_rs, &opts_rs);
     Box::into_raw(Box::new(result))
@@ -35509,7 +35433,7 @@ pub unsafe extern "C" fn kreuzberg_extract_region_with_vlm(
         set_last_error(1, "Null pointer passed for parameter 'llm_config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees llm_config is a valid pointer.
+    // SAFETY: null check above guarantees llm_config is a valid non-null pointer.
     let llm_config_rs = unsafe { &*llm_config };
     let custom_prompt_rs = if custom_prompt.is_null() {
         None
@@ -35746,7 +35670,7 @@ pub unsafe extern "C" fn kreuzberg_embed_texts_async(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = get_ffi_runtime().block_on(async { kreuzberg::embed_texts_async(texts_rs, &config_rs).await });
     match result {
@@ -35958,7 +35882,7 @@ pub unsafe extern "C" fn kreuzberg_embed_texts(
         set_last_error(1, "Null pointer passed for parameter 'config'");
         return std::ptr::null_mut();
     }
-    // SAFETY: null check above guarantees config is a valid pointer.
+    // SAFETY: null check above guarantees config is a valid non-null pointer.
     let config_rs = unsafe { &*config };
     let result = kreuzberg::embed_texts(texts_rs, &config_rs);
     match result {

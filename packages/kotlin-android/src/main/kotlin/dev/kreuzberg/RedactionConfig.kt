@@ -28,7 +28,7 @@ data class RedactionConfig(
     /** Categories to redact. Empty means "every category supported by the engine." */
     val categories: List<PiiCategory> = emptyList(),
     /** Strategy applied to every match. */
-    val strategy: RedactionStrategy,
+    val strategy: RedactionStrategy = RedactionStrategy.MASK,
     /**
      * Optional NER backend — required to redact PERSON / ORGANIZATION / LOCATION
      * categories (the pure-Rust pattern engine only covers regex-detectable PII).

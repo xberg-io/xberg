@@ -17,6 +17,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
   spec.extensions    = ["ext/kreuzberg_rb/native/extconf.rb"]
 
-  spec.add_dependency "rb_sys", "~> 0.9"
+  spec.add_dependency "rb_sys", ">= 0.9, < 0.9.128"
   spec.add_dependency "sorbet-runtime", "~> 0.5"
 end

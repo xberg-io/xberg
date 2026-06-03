@@ -10274,7 +10274,7 @@ pub fn batch_extract_files_sync(
             .collect::<Vec<_>>(),
         &kreuzberg::ExtractionConfig::from(config),
     )
-    .map(|v| v.into_iter().map(ExtractionResult::from).collect())
+    .map(|v| v.into_iter().map(ExtractionResult::from).collect::<Vec<_>>())
     .map_err(|e| e.to_string())
 }
 
@@ -10332,7 +10332,7 @@ pub async fn batch_extract_files(
         &kreuzberg::ExtractionConfig::from(config),
     )
     .await
-    .map(|v| v.into_iter().map(ExtractionResult::from).collect())
+    .map(|v| v.into_iter().map(ExtractionResult::from).collect::<Vec<_>>())
     .map_err(|e| e.to_string())
 }
 
@@ -10419,7 +10419,7 @@ pub fn get_extensions_for_mime(mime_type: String) -> Result<Vec<String>, String>
 /// as high-confidence by convention), and the pixel-space bounding box derived
 /// from the four corner points of the grid.
 pub fn detect_qr_codes(image_bytes: Vec<u8>, _format_hint: Option<String>) -> Vec<QrCode> {
-    (|v| v.into_iter().map(QrCode::from).collect())(kreuzberg::extractors::qr::detect_qr_codes(
+    (|v| v.into_iter().map(QrCode::from).collect::<Vec<_>>())(kreuzberg::extractors::qr::detect_qr_codes(
         &image_bytes,
         _format_hint.as_deref(),
     ))
@@ -10513,7 +10513,7 @@ pub fn list_validators() -> Result<Vec<String>, String> {
 /// a half-populated vector.
 pub async fn classify_pages(result: ExtractionResult, config: PageClassificationConfig) -> Result<(), String> {
     kreuzberg::text::classification::classify_pages(
-        &kreuzberg::ExtractionResult::from(result),
+        &mut kreuzberg::ExtractionResult::from(result),
         &kreuzberg::core::config::PageClassificationConfig::from(config),
     )
     .await
@@ -10548,7 +10548,7 @@ pub fn known_models() -> Vec<String> {
 /// rewrite every textual field. Populates `result.redaction_report`.
 pub async fn redact(result: ExtractionResult, config: RedactionConfig) -> Result<(), String> {
     kreuzberg::text::redaction::redact(
-        &kreuzberg::ExtractionResult::from(result),
+        &mut kreuzberg::ExtractionResult::from(result),
         &kreuzberg::core::config::RedactionConfig::from(config),
     )
     .await
@@ -10557,7 +10557,9 @@ pub async fn redact(result: ExtractionResult, config: RedactionConfig) -> Result
 }
 
 pub fn find_all(text: String) -> Vec<PatternMatch> {
-    (|v| v.into_iter().map(PatternMatch::from).collect())(kreuzberg::text::redaction::patterns::ssn::find_all(&text))
+    (|v| v.into_iter().map(PatternMatch::from).collect::<Vec<_>>())(
+        kreuzberg::text::redaction::patterns::ssn::find_all(&text),
+    )
 }
 
 /// Scan `text` for every PII category in `categories` and return all matches
@@ -10567,9 +10569,14 @@ pub fn find_all(text: String) -> Vec<PatternMatch> {
 /// Person / Organization / Location are *not* covered by the pattern engine —
 /// they must be supplied by a NER backend through the redaction engine.
 pub fn scan_text(text: String, categories: Vec<PiiCategory>) -> Vec<PatternMatch> {
-    (|v| v.into_iter().map(PatternMatch::from).collect())(kreuzberg::text::redaction::patterns::scan_text(
+    (|v| v.into_iter().map(PatternMatch::from).collect::<Vec<_>>())(kreuzberg::text::redaction::patterns::scan_text(
         &text,
-        unsafe { std::mem::transmute::<*const PiiCategory, *const kreuzberg::PiiCategory>(categories.as_ptr()) },
+        unsafe {
+            std::slice::from_raw_parts(
+                std::mem::transmute::<*const PiiCategory, *const kreuzberg::PiiCategory>(categories.as_ptr()),
+                categories.len(),
+            )
+        },
     ))
 }
 
@@ -10587,7 +10594,7 @@ pub fn apply_strategy(
         unsafe { std::mem::transmute::<RedactionStrategy, kreuzberg::RedactionStrategy>(strategy) },
         &original,
         unsafe { std::mem::transmute::<&PiiCategory, &kreuzberg::PiiCategory>(&category) },
-        &counter.inner,
+        &mut counter.inner,
     )
     .to_string()
 }
@@ -10638,7 +10645,7 @@ pub async fn summarize_with_llm(
 /// `result.llm_usage`.
 pub async fn translate_result(result: ExtractionResult, config: TranslationConfig) -> Result<(), String> {
     kreuzberg::text::translation::translate_result(
-        &kreuzberg::ExtractionResult::from(result),
+        &mut kreuzberg::ExtractionResult::from(result),
         &kreuzberg::core::config::TranslationConfig::from(config),
     )
     .await

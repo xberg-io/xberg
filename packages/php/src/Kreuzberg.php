@@ -52,7 +52,7 @@ string $content, string $mime_type, ExtractionConfig $config): ExtractionResult
     public static function extractFile(
 string $path, ?string $mime_type = null, ?ExtractionConfig $config = null): ExtractionResult
     {
-        return \Kreuzberg\KreuzbergApi::extractFile($path, $mime_type, $config ?? new ExtractionConfig()); // delegate to native extension class
+        return \Kreuzberg\KreuzbergApi::extractFile($path, $mime_type, $config); // delegate to native extension class
     }
     /**
      * Synchronous wrapper for `extract_file`.
@@ -75,7 +75,7 @@ string $path, ?string $mime_type = null, ?ExtractionConfig $config = null): Extr
     public static function extractFileSync(
 string $path, ?string $mime_type = null, ?ExtractionConfig $config = null): ExtractionResult
     {
-        return \Kreuzberg\KreuzbergApi::extractFileSync($path, $mime_type, $config ?? new ExtractionConfig()); // delegate to native extension class
+        return \Kreuzberg\KreuzbergApi::extractFileSync($path, $mime_type, $config); // delegate to native extension class
     }
     /**
      * Synchronous wrapper for `extract_bytes`.

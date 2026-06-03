@@ -523,8 +523,8 @@ class KreuzbergBridge {
   /// Run pattern redaction (and optional NER-driven redaction) over `result` and
   /// rewrite every textual field. Populates `result.redaction_report`.
   /// throws anyhow::Error on failure
-  static Future<void> redact(ExtractionResult result, RedactionConfig config) async {
-    return await rust_bridge.redact(result: result, config: config);
+  static Future<void> redact(ExtractionResult result, [RedactionConfig? config]) async {
+    return await rust_bridge.redact(result: result, config: config ?? RedactionConfig(categories: [], strategy: RedactionStrategy.mask, ner: null, preserveOffsets: true, customTerms: [], customPatterns: []));
   }
 
   static Future<List<PatternMatch>> findAll(String text) async {
