@@ -15,7 +15,7 @@ extend-ignore-re = [
   # Unicode escapes (e.g. \u{0065})
   "'\\\\u\\{[0-9a-fA-F]+\\}'",
   # Foreign language text in test strings and OCR backend language lists
-  '"[^"]*(?:programa|cursos|ist ein|künstliche|excepcional|utiliza|transforme|Exemple|Dies ist|internacional|Hauptstadt)[^"]*"',
+  '"[^"]*(?:programa|cursos|ist ein|künstliche|excepcional|utiliza|transforme|Exemple|Dies ist|internacional|Hauptstadt|Der Vertrag legt|Supportvereinbarung)[^"]*"',
   # GPU runner name
   "runner-gpu-l4",
 ]

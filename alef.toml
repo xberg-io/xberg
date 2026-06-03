@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.21.8"
+alef_version = "0.22.0"
 languages = [
   "python",
   "node",
@@ -831,11 +831,19 @@ fields_array = [
 # accessor shape via per-language backend conventions and do not consult
 # this set.
 fields_method_calls = []
+# result_fields enumerates root-type fields of the call's return value
+# (`ExtractionResult`). The PHP and Rust e2e codegens use this both to
+# validate assertion paths and to derive the root type — the unique TypeDef
+# whose field names are a superset of this list. Every entry MUST actually
+# exist on `ExtractionResult`. The previous `result` entry was a stale alias
+# that collides with `result_var = "result"` and broke `derive_root_type`
+# (no type has a literal `result` field), forcing PHP getter classification
+# to fall through to the global bare-name union and emit
+# `$result->getContent()` instead of `$result->content`.
 result_fields = [
   "content",
   "mime_type",
   "djot_content",
-  "result",
 ]
 
 [crates.e2e.call]
