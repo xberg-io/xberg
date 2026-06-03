@@ -207,14 +207,37 @@ pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &Extractio
             .filter(|s| !s.is_empty())
             .or_else(|| result.metadata.pages.as_ref().and_then(|ps| ps.boundaries.as_deref()));
 
-        // Pass formatted_content (markdown) for heading context resolution when available.
-        // Plain-text rendering strips heading markers, but the markdown chunker needs them
-        // to build the heading hierarchy for chunk metadata.
-        let heading_source = result.formatted_content.as_deref();
+        // When a non-plain output format is requested, formatted_content holds the
+        // pre-rendered output (markdown, HTML, etc.) that will become result.content after
+        // apply_output_format.  Chunk it directly so chunks[].content carries the same
+        // formatted representation as the top-level content field.
+        //
+        // Page boundaries were computed against plain-text content via recompute_boundaries_from_pages
+        // and cannot be remapped to the formatted string without re-derivation; they are omitted
+        // in the non-plain path (chunk page metadata is a follow-up improvement).
+        //
+        // When output_format == Plain, formatted_content may be temporarily set as a heading
+        // source only (the chunker_only_markdown path in mod.rs).  In that case chunk the plain
+        // content and pass formatted_content as heading_source so the markdown chunker can build
+        // heading hierarchy without altering chunk content.
+        let (chunk_input, effective_page_boundaries, heading_source) =
+            if config.output_format != crate::core::config::OutputFormat::Plain {
+                match result.formatted_content.as_deref() {
+                    Some(formatted) => (formatted, None, None),
+                    None => (result.content.as_str(), page_boundaries, None),
+                }
+            } else {
+                (
+                    result.content.as_str(),
+                    page_boundaries,
+                    result.formatted_content.as_deref(),
+                )
+            };
+
         match crate::chunking::chunk_text_with_heading_source(
-            &result.content,
+            chunk_input,
             chunking_config,
-            page_boundaries,
+            effective_page_boundaries,
             heading_source,
         ) {
             Ok(chunking_result) => {
@@ -457,5 +480,129 @@ mod tests {
         assert_eq!(&content[boundaries[0].byte_start..boundaries[0].byte_end], p1_norm);
         assert_eq!(&content[boundaries[1].byte_start..boundaries[1].byte_end], p2_norm);
         assert_eq!(&content[boundaries[2].byte_start..boundaries[2].byte_end], p3_norm);
+    }
+
+    // --- Issue #1073: chunk content must match output_format ---
+
+    fn make_result_with_formatted(plain: &str, formatted: &str) -> ExtractionResult {
+        ExtractionResult {
+            content: plain.to_string(),
+            formatted_content: Some(formatted.to_string()),
+            mime_type: std::borrow::Cow::Borrowed("application/pdf"),
+            ..Default::default()
+        }
+    }
+
+    fn markdown_chunking_config() -> crate::core::config::ExtractionConfig {
+        crate::core::config::ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Markdown,
+            chunking: Some(crate::core::config::ChunkingConfig {
+                max_characters: 2000,
+                overlap: 0,
+                trim: true,
+                chunker_type: crate::chunking::ChunkerType::Markdown,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn chunks_content_is_markdown_when_output_format_is_markdown() {
+        let plain = "SH-001 Luca Bianchi Common Germany 3500000\nSH-002 Jeni Doe Common Singapore 2800000";
+        let markdown = "| SH-001 | Luca Bianchi | Common | Germany | 3,500,000 |\n\
+                        | SH-002 | Jeni Doe | Common | Singapore | 2,800,000 |";
+
+        let config = markdown_chunking_config();
+        let mut result = make_result_with_formatted(plain, markdown);
+
+        execute_chunking(&mut result, &config).unwrap();
+
+        let chunks = result.chunks.expect("chunks must be populated");
+        assert!(!chunks.is_empty());
+        for chunk in &chunks {
+            assert!(
+                chunk.content.contains('|'),
+                "chunk content must be markdown (contain '|'), got: {:?}",
+                chunk.content
+            );
+        }
+        // Plain space-separated form must not appear
+        for chunk in &chunks {
+            assert!(
+                !chunk.content.starts_with("SH-001 Luca"),
+                "chunk content must not be plain text, got: {:?}",
+                chunk.content
+            );
+        }
+        // formatted_content must not be consumed (apply_output_format needs it)
+        assert!(
+            result.formatted_content.is_some(),
+            "formatted_content must not be consumed by chunking"
+        );
+    }
+
+    #[test]
+    fn chunks_content_is_plain_when_output_format_is_plain() {
+        // output_format=Plain with markdown chunker: chunks must stay plain text even when
+        // formatted_content is temporarily set for heading-context (chunker_only_markdown path).
+        let plain = "# Heading\n\nRow one content\nRow two content";
+        let heading_source = "# Heading\n\nRow one content\nRow two content";
+
+        let config = crate::core::config::ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Plain,
+            chunking: Some(crate::core::config::ChunkingConfig {
+                max_characters: 2000,
+                overlap: 0,
+                trim: true,
+                chunker_type: crate::chunking::ChunkerType::Markdown,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut result = ExtractionResult {
+            content: plain.to_string(),
+            formatted_content: Some(heading_source.to_string()), // simulates chunker_only_markdown
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+
+        execute_chunking(&mut result, &config).unwrap();
+
+        let chunks = result.chunks.expect("chunks must be populated");
+        assert!(!chunks.is_empty());
+        // Content must come from plain, not re-formatted
+        let all_content: String = chunks.iter().map(|c| c.content.as_str()).collect::<Vec<_>>().join(" ");
+        assert!(
+            all_content.contains("Row one content") || all_content.contains("Heading"),
+            "plain-mode chunks must contain source text, got: {:?}",
+            all_content
+        );
+        // formatted_content must not be consumed
+        assert!(
+            result.formatted_content.is_some(),
+            "Plain path must not consume formatted_content"
+        );
+    }
+
+    #[test]
+    fn chunks_content_matches_when_no_formatted_content_and_markdown_format() {
+        // Edge: output_format=Markdown but formatted_content is None (e.g. structured extractor)
+        // Chunker must fall back to result.content without panicking.
+        let plain = "Some plain text without markdown pre-render";
+
+        let config = markdown_chunking_config();
+        let mut result = ExtractionResult {
+            content: plain.to_string(),
+            formatted_content: None,
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+
+        execute_chunking(&mut result, &config).unwrap();
+
+        let chunks = result.chunks.expect("chunks must be populated");
+        assert!(!chunks.is_empty());
+        assert_eq!(chunks[0].content, plain);
     }
 }
