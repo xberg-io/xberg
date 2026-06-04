@@ -206,7 +206,7 @@ mod tests {
             ElementKind::OcrText {
                 level: OcrElementLevel::Line,
             },
-            "Para1\n   \nPara2",  // middle line is whitespace-only
+            "Para1\n   \nPara2", // middle line is whitespace-only
             0,
         );
         elem.bbox = Some(BoundingBox {
@@ -223,7 +223,10 @@ mod tests {
         let para = &paragraphs[0];
 
         // Full text MUST be preserved including the whitespace line
-        assert_eq!(para.text, "Para1\n   \nPara2", "Text must preserve whitespace-only lines");
+        assert_eq!(
+            para.text, "Para1\n   \nPara2",
+            "Text must preserve whitespace-only lines"
+        );
 
         // Word count should be 2 (Para1, Para2) - whitespace line doesn't contribute
         assert_eq!(para.word_count, 2, "Word count should only count non-blank words");
@@ -232,11 +235,17 @@ mod tests {
         assert_eq!(para.lines.len(), 2, "Lines array should skip whitespace-only lines");
 
         // Check that line positions are correct (respecting the blank line's y offset)
-        let line_height = (70.0 - 10.0) / 3.0;  // 3 lines of text (including blank)
+        let line_height = (70.0 - 10.0) / 3.0; // 3 lines of text (including blank)
         let para_1_y = 1000.0 - 10.0 - 0.0 * line_height;
-        let para_2_y = 1000.0 - 10.0 - 2.0 * line_height;  // Uses original_idx of 2
-        assert!((para.lines[0].baseline_y - para_1_y).abs() < 0.1, "Line 1 Y position incorrect");
-        assert!((para.lines[1].baseline_y - para_2_y).abs() < 0.1, "Line 2 Y position incorrect");
+        let para_2_y = 1000.0 - 10.0 - 2.0 * line_height; // Uses original_idx of 2
+        assert!(
+            (para.lines[0].baseline_y - para_1_y).abs() < 0.1,
+            "Line 1 Y position incorrect"
+        );
+        assert!(
+            (para.lines[1].baseline_y - para_2_y).abs() < 0.1,
+            "Line 2 Y position incorrect"
+        );
     }
 
     /// Test that blank lines in OCR elements don't affect vertical positioning.
@@ -250,14 +259,14 @@ mod tests {
             ElementKind::OcrText {
                 level: OcrElementLevel::Line,
             },
-            "Line1\n\nLine3",  // blank line in middle
+            "Line1\n\nLine3", // blank line in middle
             0,
         );
         elem.bbox = Some(BoundingBox {
             x0: 10.0,
             y0: 10.0,
             x1: 100.0,
-            y1: 90.0,  // 80 pixel height for 3 lines = ~26.67 per line
+            y1: 90.0, // 80 pixel height for 3 lines = ~26.67 per line
         });
         doc.push_element(elem);
 
