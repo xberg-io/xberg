@@ -1807,6 +1807,8 @@ mod tests {
     fn test_evaluate_per_page_ocr_collects_all_failing_pages() {
         use crate::types::PageBoundary;
 
+        // `good`: 72 chars of alnum-dense prose — alnum_ratio well above threshold, passes quality check.
+        // `bad`: 5 chars of whitespace + punctuation only — alnum_ratio ≈ 0, triggers fallback deterministically.
         let good = "This page has plenty of meaningful searchable text content for extraction.";
         let bad = " . ; ";
         // Layout: good, bad, good, bad — failing pages should be [2, 4].

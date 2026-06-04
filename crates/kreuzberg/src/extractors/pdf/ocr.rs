@@ -39,6 +39,9 @@ pub struct OcrFallbackDecision {
     pub avg_alnum: f64,
     pub fallback: bool,
     pub failing_pages: Vec<u32>,
+    /// Set to `true` when the aggregate document quality check triggered `fallback`,
+    /// independently of any per-page analysis. When this is true the gate routes to
+    /// `RunFallback` (full OCR) regardless of whether `failing_pages` is populated.
     pub whole_doc_failure: bool,
 }
 
@@ -86,6 +89,10 @@ pub(crate) fn evaluate_ocr_skip_gate(
     } else if has_substantive_doc && !decision.fallback {
         OcrGateOutcome::SkipSubstantive
     } else if decision.fallback {
+        // `failing_pages` is empty when `evaluate_native_text_for_ocr` triggered the
+        // fallback with no page boundaries available — there were no boundaries to
+        // enumerate, so we must treat the whole document as failed rather than routing
+        // to per-page mode with an empty page list.
         if decision.whole_doc_failure || decision.failing_pages.is_empty() {
             OcrGateOutcome::RunFallback
         } else {
@@ -311,6 +318,10 @@ pub(crate) fn evaluate_per_page_ocr(
         _ => return evaluate_native_text_for_ocr(native_text, page_count, thresholds),
     };
 
+    // The document-level check runs first so `whole_doc_failure` can be set even for
+    // fully degraded documents. The per-page scan below still runs in that case to
+    // populate `failing_pages` for telemetry and logging; the gate ignores it when
+    // `whole_doc_failure` is true.
     let mut document_decision = evaluate_native_text_for_ocr(native_text, page_count, thresholds);
 
     let mut failing_pages: Vec<u32> = Vec::with_capacity(boundaries.len());
