@@ -208,14 +208,14 @@ mod tests {
             ElementKind::OcrText {
                 level: OcrElementLevel::Line,
             },
-            "Line1\n\nLine3",  // blank line in middle
+            "Line1\n\nLine3", // blank line in middle
             0,
         );
         elem.bbox = Some(BoundingBox {
             x0: 10.0,
             y0: 10.0,
             x1: 100.0,
-            y1: 90.0,  // 80 pixel height for 3 lines = ~26.67 per line
+            y1: 90.0, // 80 pixel height for 3 lines = ~26.67 per line
         });
         doc.push_element(elem);
 
@@ -230,8 +230,8 @@ mod tests {
         assert_eq!(para.lines.len(), 2);
 
         // Check vertical spacing: should be at correct y-positions
-        let line_height = 80.0 / 3.0;  // total_height / num_lines
-        let base_y = 90.0 - 10.0;  // pdf_top = page_h - y0; but y0 is 10, page_h is 1000, so pdf_top = 990
+        let _line_height = 80.0 / 3.0; // total_height / num_lines
+        let _base_y = 90.0 - 10.0; // pdf_top = page_h - y0; but y0 is 10, page_h is 1000, so pdf_top = 990
 
         // Wait, let me recalculate: y0=10, y1=90, page_h=1000
         // pdf_bottom = 1000 - 90 = 910

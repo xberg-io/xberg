@@ -318,11 +318,14 @@ pub(crate) fn evaluate_per_page_ocr(
         _ => return evaluate_native_text_for_ocr(native_text, page_count, thresholds),
     };
 
-    // The document-level check runs first so `whole_doc_failure` can be set even for
-    // fully degraded documents. The per-page scan below still runs in that case to
-    // populate `failing_pages` for telemetry and logging; the gate ignores it when
-    // `whole_doc_failure` is true.
     let mut document_decision = evaluate_native_text_for_ocr(native_text, page_count, thresholds);
+
+    // The doc-level check already condemned the whole document — per-page scanning
+    // would be O(N) wasted work because the gate routes to RunFallback regardless of
+    // `failing_pages` when `whole_doc_failure` is true.
+    if document_decision.whole_doc_failure {
+        return document_decision;
+    }
 
     let mut failing_pages: Vec<u32> = Vec::with_capacity(boundaries.len());
     let mut valid_boundary_count: usize = 0;

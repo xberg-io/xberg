@@ -360,6 +360,11 @@ impl PdfExtractor {
                         }
                     }
                 }
+                // Intentional asymmetry with RunFallback: RunFallback is suppressed when
+                // `run_ocr_on_images=true` because image-level OCR serves as the fallback.
+                // RunFallbackOnPages targets specific pages that failed native quality,
+                // which is independent of image extraction — suppressing it would silently
+                // skip OCR on text pages that need it.
                 ocr::OcrGateOutcome::RunFallbackOnPages(pages) => match boundaries.as_deref() {
                     Some(bounds) if !bounds.is_empty() => {
                         match ocr::extract_mixed_ocr_native(&native_text, bounds, &pages, content, config, path).await {
@@ -1874,7 +1879,14 @@ mod tests {
 
         let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &OcrQualityThresholds::default());
         assert!(decision.fallback);
-        assert_eq!(decision.failing_pages, vec![1, 2]);
+        // When all pages fail, the doc-level check fires first and whole_doc_failure is
+        // set before the per-page scan runs. The per-page scan is skipped (early return)
+        // so failing_pages is empty — that's correct; the gate uses whole_doc_failure to
+        // route to RunFallback, not the page list.
+        assert!(
+            decision.failing_pages.is_empty(),
+            "doc-level failure fires before per-page scan when all pages fail"
+        );
         assert!(
             decision.whole_doc_failure,
             "all pages failing must set whole_doc_failure so gate routes to RunFallback"
