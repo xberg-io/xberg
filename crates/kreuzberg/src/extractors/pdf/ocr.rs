@@ -38,6 +38,8 @@ pub struct OcrFallbackDecision {
     pub avg_non_whitespace: f64,
     pub avg_alnum: f64,
     pub fallback: bool,
+    pub failing_pages: Vec<u32>,
+    pub whole_doc_failure: bool,
 }
 
 /// Which branch the OCR skip gate selects, given pre-rendered doc presence,
@@ -49,8 +51,10 @@ pub(crate) enum OcrGateOutcome {
     SkipNonText,
     /// Pre-rendered doc is substantive and no per-page fallback is needed — skip OCR.
     SkipSubstantive,
-    /// A per-page quality check flagged a scanned page — run OCR fallback.
+    /// A document-level quality check flagged the entire document — OCR every page.
     RunFallback,
+    /// A per-page quality check flagged a scanned page — run OCR fallback.
+    RunFallbackOnPages(Vec<u32>),
     /// Insufficient native text or no structured doc available — use native text.
     UseNative,
 }
@@ -66,7 +70,7 @@ pub(crate) fn evaluate_ocr_skip_gate(
     pre_rendered_doc_present: bool,
     total_chars: usize,
     alnum_ws_ratio: f64,
-    decision_fallback: bool,
+    decision: &OcrFallbackDecision,
     thresholds: &crate::core::config::OcrQualityThresholds,
 ) -> OcrGateOutcome {
     let skip_for_non_text = pre_rendered_doc_present
@@ -79,10 +83,14 @@ pub(crate) fn evaluate_ocr_skip_gate(
 
     if skip_for_non_text {
         OcrGateOutcome::SkipNonText
-    } else if has_substantive_doc && !decision_fallback {
+    } else if has_substantive_doc && !decision.fallback {
         OcrGateOutcome::SkipSubstantive
-    } else if decision_fallback {
-        OcrGateOutcome::RunFallback
+    } else if decision.fallback {
+        if decision.whole_doc_failure || decision.failing_pages.is_empty() {
+            OcrGateOutcome::RunFallback
+        } else {
+            OcrGateOutcome::RunFallbackOnPages(decision.failing_pages.clone())
+        }
     } else {
         OcrGateOutcome::UseNative
     }
@@ -198,6 +206,8 @@ pub(crate) fn evaluate_native_text_for_ocr(
             avg_non_whitespace: 0.0,
             avg_alnum: 0.0,
             fallback: true,
+            failing_pages: Vec::new(),
+            whole_doc_failure: true,
         };
     }
 
@@ -239,6 +249,8 @@ pub(crate) fn evaluate_native_text_for_ocr(
         avg_non_whitespace,
         avg_alnum,
         fallback,
+        failing_pages: Vec::new(),
+        whole_doc_failure: fallback,
     }
 }
 
@@ -301,17 +313,31 @@ pub(crate) fn evaluate_per_page_ocr(
 
     let mut document_decision = evaluate_native_text_for_ocr(native_text, page_count, thresholds);
 
+    let mut failing_pages: Vec<u32> = Vec::with_capacity(boundaries.len());
+    let mut valid_boundary_count: usize = 0;
     for boundary in boundaries {
         if boundary.byte_end > native_text.len() || boundary.byte_start > boundary.byte_end {
             continue;
         }
+        valid_boundary_count += 1;
         let page_text = &native_text[boundary.byte_start..boundary.byte_end];
         if evaluate_native_text_for_ocr(page_text, Some(1), thresholds).fallback {
-            document_decision.fallback = true;
-            return document_decision;
+            failing_pages.push(boundary.page_number);
         }
     }
 
+    if !failing_pages.is_empty() {
+        document_decision.fallback = true;
+        // If every valid page boundary failed the per-page check, treat this as a
+        // whole-document failure so the gate routes to RunFallback
+        // (ExtractionMethod::Ocr) rather than RunFallbackOnPages
+        // (ExtractionMethod::Mixed). A document where every page needs OCR is
+        // not a "mixed" document.
+        if failing_pages.len() == valid_boundary_count {
+            document_decision.whole_doc_failure = true;
+        }
+    }
+    document_decision.failing_pages = failing_pages;
     document_decision
 }
 
