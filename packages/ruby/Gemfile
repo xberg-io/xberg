@@ -6,7 +6,7 @@ gemspec
 
 group :development do
   gem "rake-compiler", "~> 1.2"
-  gem "rb_sys", ">= 0.9"
+  gem "rb_sys", ">= 0.9", "< 0.9.128"
   gem "rspec", "~> 3.0"
   gem "rubocop", "~> 1.0"
   gem "rubocop-performance", "~> 1.0"

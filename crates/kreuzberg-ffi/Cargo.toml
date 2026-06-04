@@ -40,7 +40,7 @@ kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.3", features = ["full",
 kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.3", features = ["android-target"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.3", features = ["pdf", "ocr", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate-types", "layout-types", "paddle-ocr-types", "embedding-presets", "tokio-runtime", "api", "mcp", "quality"] }
+kreuzberg = { path = "../kreuzberg", version = "5.0.0-rc.3", features = ["pdf", "ocr", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate-types", "layout-types", "paddle-ocr-types", "embedding-presets", "redaction", "diff", "qr-codes", "summarization", "tokio-runtime", "api", "mcp", "quality"] }
 
 
 [build-dependencies]

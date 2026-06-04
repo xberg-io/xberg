@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.22.23"
+alef_version = "0.22.24"
 languages = [
   "python",
   "node",
@@ -412,6 +412,10 @@ features = [
   "layout-types",
   "paddle-ocr-types",
   "embedding-presets",
+  "redaction",
+  "diff",
+  "qr-codes",
+  "summarization",
   "tokio-runtime",
   "api",
   "mcp",

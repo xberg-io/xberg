@@ -171,15 +171,22 @@ pub use text::{ReductionLevel, TokenReductionConfig};
 ))]
 pub use text::ner::llm::LlmBackend;
 
-// Stub for Android x86_64 (no ORT prebuilt), so alef-generated bindings compile.
-// See feature flag policy: android-target excludes ner-llm.
-#[cfg(all(not(feature = "ner-llm"), all(target_os = "android", target_arch = "x86_64")))]
+// Stub for targets without ner-llm (Android x86_64, Windows, WASM), so alef-generated bindings compile.
+#[cfg(any(
+    all(not(feature = "ner-llm"), target_os = "windows"),
+    all(not(feature = "ner-llm"), target_arch = "wasm32"),
+    all(not(feature = "ner-llm"), all(target_os = "android", target_arch = "x86_64"))
+))]
 #[derive(Clone, Debug)]
 pub struct LlmBackend {
     _config: LlmConfig,
 }
 
-#[cfg(all(not(feature = "ner-llm"), all(target_os = "android", target_arch = "x86_64")))]
+#[cfg(any(
+    all(not(feature = "ner-llm"), target_os = "windows"),
+    all(not(feature = "ner-llm"), target_arch = "wasm32"),
+    all(not(feature = "ner-llm"), all(target_os = "android", target_arch = "x86_64"))
+))]
 impl LlmBackend {
     pub fn new(config: LlmConfig) -> Self {
         Self { _config: config }
@@ -209,9 +216,12 @@ impl LlmBackend {
 #[cfg(feature = "ner-onnx")]
 pub use text::ner::gline::GlineBackend;
 
-// Stub for Android x86_64 (no ORT prebuilt), so alef-generated bindings compile.
-// See feature flag policy: android-target excludes ner-onnx.
-#[cfg(all(not(feature = "ner-onnx"), all(target_os = "android", target_arch = "x86_64")))]
+// Stub for targets without ner-onnx (Android x86_64, Windows, WASM), so alef-generated bindings compile.
+#[cfg(any(
+    all(not(feature = "ner-onnx"), target_os = "windows"),
+    all(not(feature = "ner-onnx"), target_arch = "wasm32"),
+    all(not(feature = "ner-onnx"), all(target_os = "android", target_arch = "x86_64"))
+))]
 #[derive(Clone, Debug)]
 pub struct GlineBackend {
     pub repo_id: String,
@@ -219,7 +229,11 @@ pub struct GlineBackend {
     pub tokenizer_path: std::path::PathBuf,
 }
 
-#[cfg(all(not(feature = "ner-onnx"), all(target_os = "android", target_arch = "x86_64")))]
+#[cfg(any(
+    all(not(feature = "ner-onnx"), target_os = "windows"),
+    all(not(feature = "ner-onnx"), target_arch = "wasm32"),
+    all(not(feature = "ner-onnx"), all(target_os = "android", target_arch = "x86_64"))
+))]
 impl GlineBackend {
     pub fn new(_repo_id: Option<&str>) -> Result<Self> {
         Err(crate::KreuzbergError::Other(
