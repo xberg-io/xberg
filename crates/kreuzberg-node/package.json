@@ -106,16 +106,16 @@
 		"version": "napi version"
 	},
 	"devDependencies": {
-		"@napi-rs/cli": "^3.6.2",
+		"@napi-rs/cli": "^3.7.0",
 		"@types/archiver": "^7.0.0",
-		"@types/node": "^25.8.0",
+		"@types/node": "^25.9.1",
 		"@types/which": "^3.0.4",
-		"@vitest/coverage-v8": "^4.1.6",
+		"@vitest/coverage-v8": "^4.1.8",
 		"archiver": "^8.0.0",
-		"oxlint": "^1.65.0",
+		"oxlint": "^1.68.0",
 		"tsup": "^8.5.1",
 		"typescript": "^6.0.3",
-		"vitest": "^4.1.6"
+		"vitest": "^4.1.8"
 	},
 	"dependencies": {
 		"@emnapi/runtime": "1.10.0",

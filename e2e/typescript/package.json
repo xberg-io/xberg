@@ -12,10 +12,10 @@
 		"@kreuzberg/node": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/node": "^25.8.0",
-		"@vitest/ui": "^4.1.6",
-		"oxlint": "^1.65.0",
+		"@types/node": "^25.9.1",
+		"@vitest/ui": "^4.1.8",
+		"oxlint": "^1.68.0",
 		"typescript": "^6.0.3",
-		"vitest": "^4.1.6"
+		"vitest": "^4.1.8"
 	}
 }

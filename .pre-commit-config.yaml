@@ -14,7 +14,7 @@ repos:
 
   # AI-Rulez: auto-generate AI assistant configuration files
   - repo: https://github.com/Goldziher/ai-rulez
-    rev: v4.1.6
+    rev: v4.3.2
     hooks:
       - id: ai-rulez-generate
 
@@ -37,7 +37,7 @@ repos:
 
   # TOML formatting
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: "v2.21.2"
+    rev: "v2.23.0"
     hooks:
       - id: pyproject-fmt
 
@@ -55,7 +55,7 @@ repos:
 
   # Python: ruff (linting + formatting) + mypy (type checking)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
+    rev: v0.15.16
     hooks:
       - id: ruff
         args: [--fix]
@@ -101,21 +101,21 @@ repos:
       - id: cargo-machete
 
   - repo: https://github.com/EmbarkStudios/cargo-deny
-    rev: 0.19.6
+    rev: 0.19.8
     hooks:
       - id: cargo-deny
         args: ["check"]
 
   # JavaScript/TypeScript/JSON/CSS: biome (formatting + linting with autofixes)
   - repo: https://github.com/biomejs/pre-commit
-    rev: v2.4.15
+    rev: v2.4.16
     hooks:
       - id: biome-format
         exclude: ^tools/benchmark-harness/fixtures/
       - id: biome-lint
 
   - repo: https://github.com/oxc-project/mirrors-oxlint
-    rev: v1.65.0
+    rev: v1.68.0
     hooks:
       - id: oxlint
         args: ["--fix"]
@@ -170,7 +170,7 @@ repos:
 
   # Markdown: linting
   - repo: https://github.com/rvben/rumdl-pre-commit
-    rev: "v0.1.93"
+    rev: "v0.2.7"
     hooks:
       - id: rumdl-fmt
         exclude: '^(test_apps/|tools/benchmark-harness/vendored/|docs/index\.md|docs/getting-started/installation\.md)'
@@ -187,7 +187,7 @@ repos:
 
   # Spelling: fast Rust-based spell checker
   - repo: https://github.com/crate-ci/typos
-    rev: v1.46.2
+    rev: v1.47.2
     hooks:
       - id: typos
         args: [--force-exclude]

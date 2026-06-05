@@ -259,7 +259,7 @@ cfb = { workspace = true, optional = true }
 chardetng = { version = "1.0.0", optional = true }
 chrono = { workspace = true, optional = true }
 comrak = { workspace = true }
-dashmap = "6.1"
+dashmap = "6.2"
 dbase = { workspace = true, optional = true }
 dirs = "6"
 encoding_rs = { version = "0.8.35" }
@@ -294,9 +294,9 @@ kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "4.9.8", opti
 libc = { workspace = true }
 liter-llm = { workspace = true, optional = true }
 log = { workspace = true }
-lopdf = { version = "0.40.0", optional = true }
+lopdf = { version = "0.41.0", optional = true }
 mail-parser = { version = "0.11.3", optional = true }
-memchr = "2.8.0"
+memchr = "2.8.1"
 memmap2 = { workspace = true }
 mime_guess = "2.0"
 minijinja = { workspace = true, optional = true }
@@ -340,9 +340,9 @@ sevenz-rust2 = { version = "0.20.2", optional = true }
 sha2 = { version = "0.11", optional = true }
 simdutf8 = { version = "0.1", optional = true }
 snap = { version = "1.1", optional = true }
-tar = { version = "0.4.45", optional = true }
+tar = { version = "0.4.46", optional = true }
 tempfile = { workspace = true, optional = true }
-text-splitter = { version = "0.30.1", features = ["markdown"], optional = true }
+text-splitter = { version = "0.31.0", features = ["markdown"], optional = true }
 thiserror = { workspace = true }
 tiff = { version = "0.11", optional = true }
 # Pinned to 0.22 — text-splitter 0.30.1 ChunkSizer impl + embeddings/add_special_tokens
@@ -357,7 +357,7 @@ toml = { workspace = true }
 tower = { version = "0.5", features = ["timeout", "limit", "util"], optional = true }
 tower-http = { version = "0.6", features = ["cors", "trace", "limit", "catch-panic", "request-id", "sensitive-headers", "compression-full"], optional = true }
 tracing = { workspace = true }
-tracing-opentelemetry = { version = "0.32", optional = true }
+tracing-opentelemetry = { version = "0.33", optional = true }
 unicode-normalization = { version = "0.1.25", optional = true }
 urlencoding = "2"
 utoipa = { version = "5.5", features = ["axum_extras"], optional = true }
@@ -411,8 +411,8 @@ dotenvy = "0.15"
 filetime = "0.2"
 image = { workspace = true, default-features = false, features = ["png"] }
 jsonschema = "0.46"
-serial_test = "3.4.0"
-tar = "0.4.45"
+serial_test = "3.5.0"
+tar = "0.4.46"
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"] }
 tokio-test = "0.4"

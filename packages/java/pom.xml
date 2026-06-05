@@ -39,7 +39,7 @@
         <junit.version>5.11.4</junit.version>
         <maven.version>3.9.11</maven.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
-        <maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
+        <maven-surefire-plugin.version>3.6.0-M1</maven-surefire-plugin.version>
         <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
         <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
         <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
@@ -51,13 +51,13 @@
         <versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
         <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
         <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
-        <checkstyle.version>13.4.2</checkstyle.version>
+        <checkstyle.version>13.5.0</checkstyle.version>
         <pmd.version>7.19.0</pmd.version>
         <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
-        <spotless-maven-plugin.version>3.5.1</spotless-maven-plugin.version>
+        <spotless-maven-plugin.version>3.6.0</spotless-maven-plugin.version>
         <central-publishing-plugin.version>0.10.0</central-publishing-plugin.version>
         <!-- Skip GPG signing by default, only enable for publish profile -->
         <gpg.skip>true</gpg.skip>
@@ -67,7 +67,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.21.3</version>
+            <version>2.22.0</version>
         </dependency>
         <dependency>
             <groupId>org.jspecify</groupId>
@@ -77,7 +77,7 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>6.1.0-M1</version>
+            <version>6.1.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>

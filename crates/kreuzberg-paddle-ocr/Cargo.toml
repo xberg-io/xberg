@@ -33,7 +33,7 @@ image = { workspace = true }
 
 # Crate-specific dependencies (not in workspace)
 # Disable rayon - OCR parallelism is handled at higher level
-imageproc = { version = "0.26", default-features = false }
+imageproc = { version = "0.27", default-features = false }
 ndarray = "0.17"
 ort = { workspace = true, features = ["ndarray"] }
 # Workspace dependencies
