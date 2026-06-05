@@ -223,6 +223,7 @@ jobs:
         uses: kreuzberg-dev/actions/setup-rust@v1
         with:
           cache-key-prefix: e2e-${{ matrix.lang }}
+          use-sccache: "true"
 
       - name: Download FFI artifacts
         uses: actions/download-artifact@v8

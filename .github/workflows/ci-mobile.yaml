@@ -60,6 +60,7 @@ jobs:
       - uses: kreuzberg-dev/actions/setup-rust@v1
         with:
           cache-key-prefix: ci-mobile-android-${{ matrix.abi }}
+          use-sccache: "true"
       - uses: kreuzberg-dev/actions/setup-android-ndk@v1
       - name: cargo ndk check kreuzberg-dart
         run: cargo ndk --target ${{ matrix.abi }} --platform 21 -- check -p kreuzberg-dart
@@ -81,6 +82,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           cache-key-prefix: ci-mobile-ios-${{ matrix.target }}
+          use-sccache: "true"
       - name: cargo check kreuzberg-dart
         run: cargo check -p kreuzberg-dart --target ${{ matrix.target }}
       - name: cargo check kreuzberg-swift
