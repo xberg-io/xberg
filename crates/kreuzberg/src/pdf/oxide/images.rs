@@ -7,7 +7,9 @@ use super::OxideDocument;
 use crate::cancellation::CancellationToken;
 use crate::pdf::error::{PdfError, Result};
 use bytes::Bytes;
+use image::{DynamicImage, ImageFormat};
 use std::borrow::Cow;
+use std::io::Cursor;
 
 /// Extract at most `limit` images from a page by walking its XObject resource dictionary.
 ///
@@ -142,6 +144,61 @@ fn extract_n_images_from_xobject_resources(
     Ok(images)
 }
 
+/// Re-encode raw PDF pixel data as a PNG buffer.
+///
+/// pdf_oxide emits `ImageData::Raw` without self-describing headers. Re-encoding
+/// to PNG makes the buffer probeable by `load_image_for_ocr`,
+/// `extract_image_metadata`, VLM pipelines, etc.
+///
+/// Returns `Err` if the pixel buffer length does not match `w × h × bpp` or if
+/// PNG encoding fails.
+fn raw_pixels_to_png(w: u32, h: u32, format: &pdf_oxide::extractors::PixelFormat, pixels: &[u8]) -> Result<Bytes> {
+    let dynamic = match *format {
+        pdf_oxide::extractors::PixelFormat::Grayscale => {
+            let buf = image::GrayImage::from_raw(w, h, pixels.to_vec()).ok_or_else(|| {
+                PdfError::ExtractionFailed(format!(
+                    "grayscale pixel buffer ({} bytes) does not fit {}×{} image",
+                    pixels.len(),
+                    w,
+                    h
+                ))
+            })?;
+            DynamicImage::ImageLuma8(buf)
+        }
+        pdf_oxide::extractors::PixelFormat::RGB => {
+            let buf = image::RgbImage::from_raw(w, h, pixels.to_vec()).ok_or_else(|| {
+                PdfError::ExtractionFailed(format!(
+                    "RGB pixel buffer ({} bytes) does not fit {}×{} image",
+                    pixels.len(),
+                    w,
+                    h
+                ))
+            })?;
+            DynamicImage::ImageRgb8(buf)
+        }
+        pdf_oxide::extractors::PixelFormat::CMYK => {
+            let mut rgb = Vec::with_capacity((pixels.len() / 4) * 3);
+            for chunk in pixels.chunks_exact(4) {
+                let c = chunk[0] as f32 / 255.0;
+                let m = chunk[1] as f32 / 255.0;
+                let y = chunk[2] as f32 / 255.0;
+                let k = chunk[3] as f32 / 255.0;
+                rgb.push(((1.0 - c) * (1.0 - k) * 255.0) as u8);
+                rgb.push(((1.0 - m) * (1.0 - k) * 255.0) as u8);
+                rgb.push(((1.0 - y) * (1.0 - k) * 255.0) as u8);
+            }
+            let buf = image::RgbImage::from_raw(w, h, rgb)
+                .ok_or_else(|| PdfError::ExtractionFailed(format!("CMYK→RGB buffer does not fit {}×{} image", w, h)))?;
+            DynamicImage::ImageRgb8(buf)
+        }
+    };
+    let mut png_bytes = Vec::new();
+    dynamic
+        .write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png)
+        .map_err(|e| PdfError::ExtractionFailed(format!("PNG re-encode of raw PDF image failed: {e}")))?;
+    Ok(Bytes::from(png_bytes))
+}
+
 /// Extract full image data from all pages of a PDF.
 ///
 /// Returns a `Vec<ExtractedImage>` with complete image data and metadata.
@@ -222,8 +279,18 @@ pub(crate) fn extract_images_with_data(
                 pdf_oxide::extractors::ImageData::Jpeg(jpeg_bytes) => {
                     (Bytes::copy_from_slice(jpeg_bytes), Cow::Borrowed("jpeg"))
                 }
-                pdf_oxide::extractors::ImageData::Raw { pixels, format: _ } => {
-                    (Bytes::copy_from_slice(pixels), Cow::Borrowed("raw"))
+                pdf_oxide::extractors::ImageData::Raw { pixels, format } => {
+                    match raw_pixels_to_png(oxide_img.width(), oxide_img.height(), format, pixels) {
+                        Ok(bytes) => (bytes, Cow::Borrowed("png")),
+                        Err(e) => {
+                            tracing::warn!(
+                                page = page_number,
+                                image_index = global_index,
+                                "skipping raw PDF image that could not be re-encoded: {e}"
+                            );
+                            continue;
+                        }
+                    }
                 }
             };
 
@@ -261,6 +328,88 @@ mod tests {
     use super::*;
     use crate::cancellation::CancellationToken;
     use std::path::PathBuf;
+
+    const PNG_MAGIC: &[u8] = b"\x89PNG";
+
+    #[test]
+    fn test_raw_pixels_to_png_grayscale() {
+        // 2×2 grayscale: 4 bytes, one per pixel.
+        let pixels: Vec<u8> = vec![0x00, 0x80, 0xc0, 0xff];
+        let result = raw_pixels_to_png(2, 2, &pdf_oxide::extractors::PixelFormat::Grayscale, &pixels);
+        let bytes = result.expect("grayscale 2×2 must encode without error");
+        assert!(
+            bytes.starts_with(PNG_MAGIC),
+            "output must be a PNG; got {:02x?}",
+            &bytes[..4.min(bytes.len())]
+        );
+    }
+
+    #[test]
+    fn test_raw_pixels_to_png_rgb() {
+        // 2×2 RGB: 12 bytes, 3 per pixel.
+        let pixels: Vec<u8> = vec![
+            0xff, 0x00, 0x00, // red
+            0x00, 0xff, 0x00, // green
+            0x00, 0x00, 0xff, // blue
+            0xff, 0xff, 0xff, // white
+        ];
+        let result = raw_pixels_to_png(2, 2, &pdf_oxide::extractors::PixelFormat::RGB, &pixels);
+        let bytes = result.expect("RGB 2×2 must encode without error");
+        assert!(
+            bytes.starts_with(PNG_MAGIC),
+            "output must be a PNG; got {:02x?}",
+            &bytes[..4.min(bytes.len())]
+        );
+    }
+
+    #[test]
+    fn test_raw_pixels_to_png_cmyk_converts_to_rgb_png() {
+        // 1×2 CMYK: 8 bytes, 4 per pixel.
+        // (0,0,0,255) = pure black; (0,0,0,0) = white.
+        let pixels: Vec<u8> = vec![0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00];
+        let result = raw_pixels_to_png(1, 2, &pdf_oxide::extractors::PixelFormat::CMYK, &pixels);
+        let bytes = result.expect("CMYK 1×2 must encode without error");
+        assert!(
+            bytes.starts_with(PNG_MAGIC),
+            "output must be a PNG; got {:02x?}",
+            &bytes[..4.min(bytes.len())]
+        );
+        // Verify the PNG decodes to an RGB image (CMYK was converted to RGB before encoding).
+        let decoded = image::load_from_memory(&bytes).expect("decoded PNG must be valid");
+        assert_eq!(decoded.width(), 1);
+        assert_eq!(decoded.height(), 2);
+    }
+
+    #[test]
+    fn test_raw_pixels_to_png_size_mismatch_returns_error() {
+        // 4×4 grayscale needs 16 bytes; supply only 4 — must be an error, not a panic.
+        let pixels: Vec<u8> = vec![0x00, 0x80, 0xc0, 0xff];
+        let result = raw_pixels_to_png(4, 4, &pdf_oxide::extractors::PixelFormat::Grayscale, &pixels);
+        assert!(
+            result.is_err(),
+            "mismatched buffer size must return Err, not Ok or panic"
+        );
+    }
+
+    #[test]
+    fn test_raw_pixels_to_png_rgb_size_mismatch_returns_error() {
+        // 2×2 RGB needs 12 bytes; supply 9 (divisible by 3 but wrong total).
+        let pixels: Vec<u8> = vec![0xff; 9];
+        let result = raw_pixels_to_png(2, 2, &pdf_oxide::extractors::PixelFormat::RGB, &pixels);
+        assert!(result.is_err(), "mismatched RGB buffer must return Err");
+    }
+
+    #[test]
+    fn test_raw_pixels_to_png_cmyk_odd_length_returns_error() {
+        // 1×1 CMYK needs exactly 4 bytes; supply 3. chunks_exact(4) drops the remainder,
+        // producing an empty rgb vec. from_raw(1, 1, []) returns None → must be Err, not panic.
+        let pixels: Vec<u8> = vec![0x00, 0x00, 0x00];
+        let result = raw_pixels_to_png(1, 1, &pdf_oxide::extractors::PixelFormat::CMYK, &pixels);
+        assert!(
+            result.is_err(),
+            "CMYK buffer whose length is not a multiple of 4 must return Err, not panic"
+        );
+    }
 
     fn test_documents_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **pdf**: per-page OCR fallback now targets only the specific pages that fail the native-text quality check instead of falling back to full-document OCR on the first failing page. This prevents abnormal memory growth when processing PDF pipelines containing a single scanned page.
 
+- **pdf (#1077)**: non-JPEG embedded images extracted via pdf_oxide (Raw pixel data without self-describing headers, common in Acrobat Sign/Word PDFs) are now re-encoded to PNG bytes using the PDF-provided width/height/colorspace/bits metadata before storing in ExtractedImage. This makes the data always probeable/loadable by load_image_for_ocr, extract_image_metadata, VLM etc., eliminating "image dimension probe failed: The image format could not be determined" during image_ocr. JPEG images unchanged.
+
 - **ffi/windows**: expose `LlmBackend` via new `ner-llm-types` type-only feature for Windows FFI bindings so structured extraction compiles on Windows.
 
 - **ocr**: preserve vertical spacing in paragraph baselines when filtering blank lines from OCR elements. This fixes 1.6% TF1 loss for Tesseract and 3.6% for PaddleOCR on OCR-extracted documents.

@@ -1284,6 +1284,70 @@ fn test_include_page_rasters_emits_warning_on_document_level_ocr_bypass() {
     );
 }
 
+/// Regression test for #1077: PDFs containing ImageData::Raw images (non-DCT embedded
+/// images common in Acrobat Sign / Word exports) must extract without "image dimension
+/// probe failed" errors. Raw pixel buffers are re-encoded to PNG so they are probeable
+/// by load_image_for_ocr, extract_image_metadata, and VLM pipelines.
+///
+/// Fixture: user_reports/mp_axmp_rec_en.pdf — the original bug reproducer.
+#[test]
+fn test_regression_1077_raw_pdf_images_re_encoded_as_png() {
+    use kreuzberg::core::config::ImageExtractionConfig;
+
+    let path = test_documents_dir().join("user_reports/mp_axmp_rec_en.pdf");
+    if !path.exists() {
+        eprintln!("SKIP: user_reports/mp_axmp_rec_en.pdf not present");
+        return;
+    }
+
+    let config = ExtractionConfig {
+        images: Some(ImageExtractionConfig {
+            extract_images: true,
+            ..Default::default()
+        }),
+        use_cache: false,
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    // Before the fix this errored with
+    // "image dimension probe failed: The image format could not be determined".
+    let result = rt
+        .block_on(extract_file(&path, None, &config))
+        .expect("extraction of mp_axmp_rec_en.pdf must succeed without probe errors");
+
+    let images = result
+        .images
+        .as_ref()
+        .expect("images must be Some when extract_images=true");
+
+    assert!(
+        !images.is_empty(),
+        "mp_axmp_rec_en.pdf must yield at least one extracted image"
+    );
+
+    // At least one image must carry format="png" — that is the re-encoded Raw image.
+    // Before the fix, raw images were stored as headerless pixel dumps; after the fix
+    // they are PNG-encoded and probeable.
+    let png_images: Vec<_> = images.iter().filter(|img| img.format == "png").collect();
+    assert!(
+        !png_images.is_empty(),
+        "at least one image must have format=\"png\" (re-encoded from Raw pixel data); \
+         got formats: {:?}",
+        images.iter().map(|i| i.format.as_ref()).collect::<Vec<_>>()
+    );
+
+    // Every png-format image must start with the PNG magic bytes.
+    for img in &png_images {
+        assert!(
+            img.data.starts_with(b"\x89PNG"),
+            "image at index {} has format=\"png\" but data does not start with PNG magic bytes; \
+             first 4 bytes: {:02x?}",
+            img.image_index,
+            &img.data[..4.min(img.data.len())]
+        );
+    }
+}
+
 /// `image_indices` on chunks must be empty when image extraction is disabled.
 #[cfg(feature = "chunking")]
 #[test]
