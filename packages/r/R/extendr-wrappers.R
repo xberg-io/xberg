@@ -172,7 +172,7 @@ get_extensions_for_mime <- function(mime_type) .Call("wrap__get_extensions_for_m
 #' @param _format_hint Character string.
 #' @return List of qrcode object (list with class attribute).
 #' @export
-detect_qr_codes <- function(image_bytes, _format_hint = NULL) .Call("wrap__detect_qr_codes", image_bytes, _format_hint, PACKAGE = "kreuzberg")
+detect_qr_codes <- function(image_bytes, format_hint = NULL) .Call("wrap__detect_qr_codes", image_bytes, format_hint, PACKAGE = "kreuzberg")
 #' List the names of all registered embedding backends
 #'
 #' Used by `kreuzberg-cli`, the api/mcp endpoints, and generated language
@@ -337,6 +337,10 @@ extract_region_with_vlm <- function(image_bytes, image_mime, region_kind, llm_co
 #'
 #' Returns raw PNG-encoded bytes for the specified page at the given DPI.
 #' Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+#'
+#' For pages with extreme dimensions (very wide vector diagrams, etc.) the
+#' effective DPI may be automatically reduced to avoid rasterizer failure.
+#' A warning is logged when this happens.
 #' @param pdf_bytes Raw PDF file bytes.
 #' @param page_index Zero-based page index.
 #' @param dpi Resolution in dots per inch (default: 150).
@@ -362,7 +366,7 @@ detect_mime_type <- function(path, check_exists) .Call("wrap__detect_mime_type",
 #' @param _config EmbeddingConfig object (list with class attribute).
 #' @return List of list of numeric.
 #' @export
-embed_texts_async <- function(_texts, _config = EmbeddingConfig$default()) .Call("wrap__embed_texts_async", _texts, _config, PACKAGE = "kreuzberg")
+embed_texts_async <- function(texts, config = EmbeddingConfig$default()) .Call("wrap__embed_texts_async", texts, config, PACKAGE = "kreuzberg")
 #' Get an embedding preset by name
 #'
 #' Returns `None` if no preset with the given name exists. Returns an owned
@@ -3685,7 +3689,6 @@ DiffLine <- new.env(parent = emptyenv())
 #' @return A ExecutionProviderType enum value
 #' @export
 ExecutionProviderType  <- function() list() |> structure(class = "ExecutionProviderType")
-
 #' Create a HtmlTheme enum value
 #'
 #' Returns the default HtmlTheme variant.
@@ -3693,7 +3696,6 @@ ExecutionProviderType  <- function() list() |> structure(class = "ExecutionProvi
 #' @return A HtmlTheme enum value
 #' @export
 HtmlTheme  <- function() list() |> structure(class = "HtmlTheme")
-
 #' Create a TableModel enum value
 #'
 #' Returns the default TableModel variant.
@@ -3701,7 +3703,6 @@ HtmlTheme  <- function() list() |> structure(class = "HtmlTheme")
 #' @return A TableModel enum value
 #' @export
 TableModel  <- function() list() |> structure(class = "TableModel")
-
 #' Create a NerBackendKind enum value
 #'
 #' Returns the default NerBackendKind variant.
@@ -3709,7 +3710,6 @@ TableModel  <- function() list() |> structure(class = "TableModel")
 #' @return A NerBackendKind enum value
 #' @export
 NerBackendKind  <- function() list() |> structure(class = "NerBackendKind")
-
 #' Create a ChunkerType enum value
 #'
 #' Returns the default ChunkerType variant.
@@ -3717,7 +3717,6 @@ NerBackendKind  <- function() list() |> structure(class = "NerBackendKind")
 #' @return A ChunkerType enum value
 #' @export
 ChunkerType  <- function() list() |> structure(class = "ChunkerType")
-
 #' Create a WhisperModel enum value
 #'
 #' Returns the default WhisperModel variant.
@@ -3725,7 +3724,6 @@ ChunkerType  <- function() list() |> structure(class = "ChunkerType")
 #' @return A WhisperModel enum value
 #' @export
 WhisperModel  <- function() list() |> structure(class = "WhisperModel")
-
 #' Create a CodeContentMode enum value
 #'
 #' Returns the default CodeContentMode variant.
@@ -3733,7 +3731,6 @@ WhisperModel  <- function() list() |> structure(class = "WhisperModel")
 #' @return A CodeContentMode enum value
 #' @export
 CodeContentMode  <- function() list() |> structure(class = "CodeContentMode")
-
 #' Create a ListType enum value
 #'
 #' Returns the default ListType variant.
@@ -3741,7 +3738,6 @@ CodeContentMode  <- function() list() |> structure(class = "CodeContentMode")
 #' @return A ListType enum value
 #' @export
 ListType  <- function() list() |> structure(class = "ListType")
-
 #' Create a OcrBackendType enum value
 #'
 #' Returns the default OcrBackendType variant.
@@ -3749,7 +3745,6 @@ ListType  <- function() list() |> structure(class = "ListType")
 #' @return A OcrBackendType enum value
 #' @export
 OcrBackendType  <- function() list() |> structure(class = "OcrBackendType")
-
 #' Create a ProcessingStage enum value
 #'
 #' Returns the default ProcessingStage variant.
@@ -3757,7 +3752,6 @@ OcrBackendType  <- function() list() |> structure(class = "OcrBackendType")
 #' @return A ProcessingStage enum value
 #' @export
 ProcessingStage  <- function() list() |> structure(class = "ProcessingStage")
-
 #' Create a ReductionLevel enum value
 #'
 #' Returns the default ReductionLevel variant.
@@ -3765,7 +3759,6 @@ ProcessingStage  <- function() list() |> structure(class = "ProcessingStage")
 #' @return A ReductionLevel enum value
 #' @export
 ReductionLevel  <- function() list() |> structure(class = "ReductionLevel")
-
 #' Create a PdfAnnotationType enum value
 #'
 #' Returns the default PdfAnnotationType variant.
@@ -3773,7 +3766,6 @@ ReductionLevel  <- function() list() |> structure(class = "ReductionLevel")
 #' @return A PdfAnnotationType enum value
 #' @export
 PdfAnnotationType  <- function() list() |> structure(class = "PdfAnnotationType")
-
 #' Create a BlockType enum value
 #'
 #' Returns the default BlockType variant.
@@ -3781,7 +3773,6 @@ PdfAnnotationType  <- function() list() |> structure(class = "PdfAnnotationType"
 #' @return A BlockType enum value
 #' @export
 BlockType  <- function() list() |> structure(class = "BlockType")
-
 #' Create a InlineType enum value
 #'
 #' Returns the default InlineType variant.
@@ -3789,7 +3780,6 @@ BlockType  <- function() list() |> structure(class = "BlockType")
 #' @return A InlineType enum value
 #' @export
 InlineType  <- function() list() |> structure(class = "InlineType")
-
 #' Create a RelationshipKind enum value
 #'
 #' Returns the default RelationshipKind variant.
@@ -3797,7 +3787,6 @@ InlineType  <- function() list() |> structure(class = "InlineType")
 #' @return A RelationshipKind enum value
 #' @export
 RelationshipKind  <- function() list() |> structure(class = "RelationshipKind")
-
 #' Create a ContentLayer enum value
 #'
 #' Returns the default ContentLayer variant.
@@ -3805,7 +3794,6 @@ RelationshipKind  <- function() list() |> structure(class = "RelationshipKind")
 #' @return A ContentLayer enum value
 #' @export
 ContentLayer  <- function() list() |> structure(class = "ContentLayer")
-
 #' Create a ExtractionMethod enum value
 #'
 #' Returns the default ExtractionMethod variant.
@@ -3813,7 +3801,6 @@ ContentLayer  <- function() list() |> structure(class = "ContentLayer")
 #' @return A ExtractionMethod enum value
 #' @export
 ExtractionMethod  <- function() list() |> structure(class = "ExtractionMethod")
-
 #' Create a ChunkType enum value
 #'
 #' Returns the default ChunkType variant.
@@ -3821,7 +3808,6 @@ ExtractionMethod  <- function() list() |> structure(class = "ExtractionMethod")
 #' @return A ChunkType enum value
 #' @export
 ChunkType  <- function() list() |> structure(class = "ChunkType")
-
 #' Create a ImageKind enum value
 #'
 #' Returns the default ImageKind variant.
@@ -3829,7 +3815,6 @@ ChunkType  <- function() list() |> structure(class = "ChunkType")
 #' @return A ImageKind enum value
 #' @export
 ImageKind  <- function() list() |> structure(class = "ImageKind")
-
 #' Create a ResultFormat enum value
 #'
 #' Returns the default ResultFormat variant.
@@ -3837,7 +3822,6 @@ ImageKind  <- function() list() |> structure(class = "ImageKind")
 #' @return A ResultFormat enum value
 #' @export
 ResultFormat  <- function() list() |> structure(class = "ResultFormat")
-
 #' Create a ElementType enum value
 #'
 #' Returns the default ElementType variant.
@@ -3845,7 +3829,6 @@ ResultFormat  <- function() list() |> structure(class = "ResultFormat")
 #' @return A ElementType enum value
 #' @export
 ElementType  <- function() list() |> structure(class = "ElementType")
-
 #' Create a TextDirection enum value
 #'
 #' Returns the default TextDirection variant.
@@ -3853,7 +3836,6 @@ ElementType  <- function() list() |> structure(class = "ElementType")
 #' @return A TextDirection enum value
 #' @export
 TextDirection  <- function() list() |> structure(class = "TextDirection")
-
 #' Create a LinkType enum value
 #'
 #' Returns the default LinkType variant.
@@ -3861,7 +3843,6 @@ TextDirection  <- function() list() |> structure(class = "TextDirection")
 #' @return A LinkType enum value
 #' @export
 LinkType  <- function() list() |> structure(class = "LinkType")
-
 #' Create a ImageType enum value
 #'
 #' Returns the default ImageType variant.
@@ -3869,7 +3850,6 @@ LinkType  <- function() list() |> structure(class = "LinkType")
 #' @return A ImageType enum value
 #' @export
 ImageType  <- function() list() |> structure(class = "ImageType")
-
 #' Create a StructuredDataType enum value
 #'
 #' Returns the default StructuredDataType variant.
@@ -3877,7 +3857,6 @@ ImageType  <- function() list() |> structure(class = "ImageType")
 #' @return A StructuredDataType enum value
 #' @export
 StructuredDataType  <- function() list() |> structure(class = "StructuredDataType")
-
 #' Create a OcrElementLevel enum value
 #'
 #' Returns the default OcrElementLevel variant.
@@ -3885,7 +3864,6 @@ StructuredDataType  <- function() list() |> structure(class = "StructuredDataTyp
 #' @return A OcrElementLevel enum value
 #' @export
 OcrElementLevel  <- function() list() |> structure(class = "OcrElementLevel")
-
 #' Create a PageUnitType enum value
 #'
 #' Returns the default PageUnitType variant.
@@ -3893,7 +3871,6 @@ OcrElementLevel  <- function() list() |> structure(class = "OcrElementLevel")
 #' @return A PageUnitType enum value
 #' @export
 PageUnitType  <- function() list() |> structure(class = "PageUnitType")
-
 #' Create a RedactionStrategy enum value
 #'
 #' Returns the default RedactionStrategy variant.
@@ -3901,7 +3878,6 @@ PageUnitType  <- function() list() |> structure(class = "PageUnitType")
 #' @return A RedactionStrategy enum value
 #' @export
 RedactionStrategy  <- function() list() |> structure(class = "RedactionStrategy")
-
 #' Create a RevisionKind enum value
 #'
 #' Returns the default RevisionKind variant.
@@ -3909,7 +3885,6 @@ RedactionStrategy  <- function() list() |> structure(class = "RedactionStrategy"
 #' @return A RevisionKind enum value
 #' @export
 RevisionKind  <- function() list() |> structure(class = "RevisionKind")
-
 #' Create a SummaryStrategy enum value
 #'
 #' Returns the default SummaryStrategy variant.
@@ -3917,7 +3892,6 @@ RevisionKind  <- function() list() |> structure(class = "RevisionKind")
 #' @return A SummaryStrategy enum value
 #' @export
 SummaryStrategy  <- function() list() |> structure(class = "SummaryStrategy")
-
 #' Create a UriKind enum value
 #'
 #' Returns the default UriKind variant.
@@ -3925,7 +3899,6 @@ SummaryStrategy  <- function() list() |> structure(class = "SummaryStrategy")
 #' @return A UriKind enum value
 #' @export
 UriKind  <- function() list() |> structure(class = "UriKind")
-
 #' Create a RegionKind enum value
 #'
 #' Returns the default RegionKind variant.
@@ -3933,7 +3906,6 @@ UriKind  <- function() list() |> structure(class = "UriKind")
 #' @return A RegionKind enum value
 #' @export
 RegionKind  <- function() list() |> structure(class = "RegionKind")
-
 #' Create a KeywordAlgorithm enum value
 #'
 #' Returns the default KeywordAlgorithm variant.
@@ -3941,7 +3913,6 @@ RegionKind  <- function() list() |> structure(class = "RegionKind")
 #' @return A KeywordAlgorithm enum value
 #' @export
 KeywordAlgorithm  <- function() list() |> structure(class = "KeywordAlgorithm")
-
 #' Create a PSMMode enum value
 #'
 #' Returns the default PSMMode variant.
@@ -3949,7 +3920,6 @@ KeywordAlgorithm  <- function() list() |> structure(class = "KeywordAlgorithm")
 #' @return A PSMMode enum value
 #' @export
 PSMMode  <- function() list() |> structure(class = "PSMMode")
-
 #' Create a PaddleLanguage enum value
 #'
 #' Returns the default PaddleLanguage variant.
@@ -3957,7 +3927,6 @@ PSMMode  <- function() list() |> structure(class = "PSMMode")
 #' @return A PaddleLanguage enum value
 #' @export
 PaddleLanguage  <- function() list() |> structure(class = "PaddleLanguage")
-
 #' Create a LayoutClass enum value
 #'
 #' Returns the default LayoutClass variant.
@@ -3965,7 +3934,6 @@ PaddleLanguage  <- function() list() |> structure(class = "PaddleLanguage")
 #' @return A LayoutClass enum value
 #' @export
 LayoutClass  <- function() list() |> structure(class = "LayoutClass")
-
 #' How chunk size is measured
 #'
 #' Defaults to `Characters` (Unicode character count). When using token-based sizing,

@@ -10,30 +10,22 @@ import RustBridge
 /// a Rust trait from the host side.
 public protocol SwiftPostProcessorBridge: SwiftPluginBridge {
     func process(result: String, config: String) throws -> Void
-
     func processingStage() -> String
-
     func shouldProcess(result: String, config: String) -> Bool
-
     func estimatedDurationMs(result: String) -> UInt64
-
     func priority() -> Int32
-
 }
 
 public extension SwiftPostProcessorBridge {
     func shouldProcess(result: String, config: String) -> Bool {
         return true
     }
-
     func estimatedDurationMs(result: String) -> UInt64 {
         return 0
     }
-
     func priority() -> Int32 {
         return 50
     }
-
 }
 
 /// Internal adapter wrapping a `SwiftPostProcessorBridge` conformer.
@@ -54,27 +46,22 @@ final class SwiftPostProcessorAdapter {
             return marshal_error_result(error)
         }
     }
-
     func processingStageCall() -> String {
         let result = self.bridge.processingStage()
         return result
     }
-
     func shouldProcessCall(result: String, config: String) -> Bool {
         let result = self.bridge.shouldProcess(result: result, config: config)
         return result
     }
-
     func estimatedDurationMsCall(result: String) -> UInt64 {
         let result = self.bridge.estimatedDurationMs(result: result)
         return result
     }
-
     func priorityCall() -> Int32 {
         let result = self.bridge.priority()
         return result
     }
-
 }
 
 // MARK: - Marshalling helpers

@@ -10,7 +10,6 @@ import RustBridge
 /// a Rust trait from the host side.
 public protocol SwiftRendererBridge: SwiftPluginBridge {
     func render(doc: String) throws -> String
-
 }
 
 public extension SwiftRendererBridge {
@@ -29,12 +28,11 @@ final class SwiftRendererAdapter {
     func renderCall(doc: String) throws -> String {
         do {
             let result = try self.bridge.render(doc: doc)
-            return marshal_ok_result(result)
+            return marshal_ok_result(String(result))
         } catch {
             return marshal_error_result(error)
         }
     }
-
 }
 
 // MARK: - Marshalling helpers

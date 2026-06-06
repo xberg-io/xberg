@@ -31,7 +31,7 @@ let package = Package(
     // Depends on RustBridgeC so generated Swift files can use the C types.
     .binaryTarget(
       name: "RustBridge",
-      url: "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v__ALEF_SWIFT_VERSION__/Kreuzberg-rs.artifactbundle.zip",
+      url: "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v5.0.0-rc.3/Kreuzberg-rs.artifactbundle.zip",
       checksum: "__ALEF_SWIFT_CHECKSUM__"
     ),
     .target(

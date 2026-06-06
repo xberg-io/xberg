@@ -10,44 +10,31 @@ import RustBridge
 /// a Rust trait from the host side.
 public protocol SwiftOcrBackendBridge: SwiftPluginBridge {
     func processImage(imageBytes: Data, config: String) throws -> String
-
     func processImageFile(path: URL, config: String) throws -> String
-
     func supportsLanguage(lang: String) -> Bool
-
     func backendType() -> String
-
     func supportedLanguages() -> [String]
-
     func supportsTableDetection() -> Bool
-
     func supportsDocumentProcessing() -> Bool
-
     func processDocument(path: URL, config: String) throws -> String
-
 }
 
 public extension SwiftOcrBackendBridge {
     func processImageFile(path: URL, config: String) throws -> String {
         return "{}"
     }
-
     func supportedLanguages() -> [String] {
         return []
     }
-
     func supportsTableDetection() -> Bool {
         return true
     }
-
     func supportsDocumentProcessing() -> Bool {
         return true
     }
-
     func processDocument(path: URL, config: String) throws -> String {
         return "{}"
     }
-
 }
 
 /// Internal adapter wrapping a `SwiftOcrBackendBridge` conformer.
@@ -72,7 +59,6 @@ final class SwiftOcrBackendAdapter {
             return marshal_error_result(error)
         }
     }
-
     func processImageFileCall(path: URL, config: String) throws -> String {
         do {
             let result = try self.bridge.processImageFile(path: path, config: config)
@@ -85,32 +71,26 @@ final class SwiftOcrBackendAdapter {
             return marshal_error_result(error)
         }
     }
-
     func supportsLanguageCall(lang: String) -> Bool {
         let result = self.bridge.supportsLanguage(lang: lang)
         return result
     }
-
     func backendTypeCall() -> String {
         let result = self.bridge.backendType()
         return result
     }
-
     func supportedLanguagesCall() -> [String] {
         let result = self.bridge.supportedLanguages()
         return result
     }
-
     func supportsTableDetectionCall() -> Bool {
         let result = self.bridge.supportsTableDetection()
         return result
     }
-
     func supportsDocumentProcessingCall() -> Bool {
         let result = self.bridge.supportsDocumentProcessing()
         return result
     }
-
     func processDocumentCall(path: URL, config: String) throws -> String {
         do {
             let result = try self.bridge.processDocument(path: path, config: config)
@@ -123,7 +103,6 @@ final class SwiftOcrBackendAdapter {
             return marshal_error_result(error)
         }
     }
-
 }
 
 // MARK: - Marshalling helpers

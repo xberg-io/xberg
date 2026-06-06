@@ -433,9 +433,9 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "biblatex"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53d0c374feba1b9a59042a7c1cf00ce7c34b977b9134fe7c42b08e5183729f66"
+checksum = "591eba69b7c085632e22ca03606f0bbea68d53bbe26c8962e2d549af20c6a561"
 dependencies = [
  "paste",
  "roman-numerals-rs",
@@ -6265,9 +6265,9 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-language-pack"
-version = "1.9.0-rc.20"
+version = "1.9.0-rc.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddc04d05ead0552aae1d3700a263a02c762b62ad72a6c197f0c05dddc277d631"
+checksum = "7ffcae99546edf76f27e4630191bcd175fa443d3a594a5ec7493ba8f2346acff"
 dependencies = [
  "ahash",
  "cc",

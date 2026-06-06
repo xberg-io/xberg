@@ -15688,6 +15688,10 @@ uintptr_t kreuzberg_extract_region_with_vlm_len(const uint8_t *_image_bytes,
  *
  * Returns raw PNG-encoded bytes for the specified page at the given DPI.
  * Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+ *
+ * For pages with extreme dimensions (very wide vector diagrams, etc.) the
+ * effective DPI may be automatically reduced to avoid rasterizer failure.
+ * A warning is logged when this happens.
  * \param pdf_bytes Raw PDF file bytes
  * \param page_index Zero-based page index
  * \param dpi Resolution in dots per inch (default: 150)

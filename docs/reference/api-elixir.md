@@ -828,6 +828,10 @@ Render a single PDF page to PNG bytes.
 Returns raw PNG-encoded bytes for the specified page at the given DPI.
 Uses pdf_oxide with tiny-skia for pure-Rust rendering.
 
+For pages with extreme dimensions (very wide vector diagrams, etc.) the
+effective DPI may be automatically reduced to avoid rasterizer failure.
+A warning is logged when this happens.
+
 **Errors:**
 
 Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,

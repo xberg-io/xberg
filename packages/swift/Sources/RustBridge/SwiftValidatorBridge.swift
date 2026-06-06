@@ -10,22 +10,17 @@ import RustBridge
 /// a Rust trait from the host side.
 public protocol SwiftValidatorBridge: SwiftPluginBridge {
     func validate(result: String, config: String) throws -> Void
-
     func shouldValidate(result: String, config: String) -> Bool
-
     func priority() -> Int32
-
 }
 
 public extension SwiftValidatorBridge {
     func shouldValidate(result: String, config: String) -> Bool {
         return true
     }
-
     func priority() -> Int32 {
         return 50
     }
-
 }
 
 /// Internal adapter wrapping a `SwiftValidatorBridge` conformer.
@@ -46,17 +41,14 @@ final class SwiftValidatorAdapter {
             return marshal_error_result(error)
         }
     }
-
     func shouldValidateCall(result: String, config: String) -> Bool {
         let result = self.bridge.shouldValidate(result: result, config: config)
         return result
     }
-
     func priorityCall() -> Int32 {
         let result = self.bridge.priority()
         return result
     }
-
 }
 
 // MARK: - Marshalling helpers

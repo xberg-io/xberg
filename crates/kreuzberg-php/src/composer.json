@@ -34,7 +34,7 @@
   "extra": {
     "pie": {
       "binary": {
-        "url-template": "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v{Version}/php_kreuzberg-{Version}_php{PhpVersion}-{Arch}-{OS}-{Libc}-nodebug-{TSMode}.tgz"
+        "url-template": "https://github.com/kreuzberg-dev/kreuzberg/releases/download/v{Version}/php_kreuzberg-{Version}_php{PhpVersion}-{Arch}-{OS}-{Libc}-{TSMode}.tgz"
       }
     }
   }

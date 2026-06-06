@@ -10,49 +10,38 @@ import RustBridge
 public func unregisterOcrBackend(name: String) throws {
     try RustBridge.unregisterOcrBackend(name)
 }
-
 public func unregisterPostProcessor(name: String) throws {
     try RustBridge.unregisterPostProcessor(name)
 }
-
 public func unregisterValidator(name: String) throws {
     try RustBridge.unregisterValidator(name)
 }
-
 public func unregisterEmbeddingBackend(name: String) throws {
     try RustBridge.unregisterEmbeddingBackend(name)
 }
-
 public func unregisterDocumentExtractor(name: String) throws {
     try RustBridge.unregisterDocumentExtractor(name)
 }
-
 public func unregisterRenderer(name: String) throws {
     try RustBridge.unregisterRenderer(name)
 }
-
 // MARK: - Bridge → Box register overloads
 
 public func registerOcrBackend(_ bridge: any SwiftOcrBackendBridge) throws {
     try registerOcrBackend(SwiftOcrBackendBox(bridge))
 }
-
 public func registerPostProcessor(_ bridge: any SwiftPostProcessorBridge) throws {
     try registerPostProcessor(SwiftPostProcessorBox(bridge))
 }
-
 public func registerValidator(_ bridge: any SwiftValidatorBridge) throws {
     try registerValidator(SwiftValidatorBox(bridge))
 }
-
 public func registerEmbeddingBackend(_ bridge: any SwiftEmbeddingBackendBridge) throws {
     try registerEmbeddingBackend(SwiftEmbeddingBackendBox(bridge))
 }
-
 public func registerDocumentExtractor(_ bridge: any SwiftDocumentExtractorBridge) throws {
     try registerDocumentExtractor(SwiftDocumentExtractorBox(bridge))
 }
-
 public func registerRenderer(_ bridge: any SwiftRendererBridge) throws {
     try registerRenderer(SwiftRendererBox(bridge))
 }

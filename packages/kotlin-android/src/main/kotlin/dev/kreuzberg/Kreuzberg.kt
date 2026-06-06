@@ -109,7 +109,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeExtractBytes(content, mimeType, mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
-
     /**
      * Extract content from a byte array.
      *
@@ -132,7 +131,6 @@ object Kreuzberg {
      */
     suspend fun extractBytesAsync(content: ByteArray, mimeType: String, config: ExtractionConfig): ExtractionResult =
         withContext(Dispatchers.IO) { extractBytes(content, mimeType, config) }
-
     /**
      * Extract content from a file.
      *
@@ -158,7 +156,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeExtractFile(path, mimeType ?: "", mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
-
     /**
      * Extract content from a file.
      *
@@ -182,7 +179,6 @@ object Kreuzberg {
      */
     suspend fun extractFileAsync(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult =
         withContext(Dispatchers.IO) { extractFile(path, mimeType, config) }
-
     /**
      * Synchronous wrapper for `extract_file`.
      *
@@ -199,7 +195,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeExtractFileSync(path, mimeType ?: "", mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
-
     /**
      * Synchronous wrapper for `extract_file`.
      *
@@ -214,7 +209,6 @@ object Kreuzberg {
      */
     suspend fun extractFileSyncAsync(path: String, mimeType: String? = null, config: ExtractionConfig): ExtractionResult =
         withContext(Dispatchers.IO) { extractFileSync(path, mimeType, config) }
-
     /**
      * Synchronous wrapper for `extract_bytes`.
      *
@@ -228,7 +222,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeExtractBytesSync(content, mimeType, mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, ExtractionResult::class.java)
     }
-
     /**
      * Synchronous wrapper for `extract_bytes`.
      *
@@ -240,7 +233,6 @@ object Kreuzberg {
      */
     suspend fun extractBytesSyncAsync(content: ByteArray, mimeType: String, config: ExtractionConfig): ExtractionResult =
         withContext(Dispatchers.IO) { extractBytesSync(content, mimeType, config) }
-
     /**
      * Synchronous wrapper for `batch_extract_files`.
      *
@@ -251,7 +243,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeBatchExtractFilesSync(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
-
     /**
      * Synchronous wrapper for `batch_extract_files`.
      *
@@ -260,7 +251,6 @@ object Kreuzberg {
      */
     suspend fun batchExtractFilesSyncAsync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> =
         withContext(Dispatchers.IO) { batchExtractFilesSync(items, config) }
-
     /**
      * Synchronous wrapper for `batch_extract_bytes`.
      *
@@ -273,7 +263,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeBatchExtractBytesSync(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
-
     /**
      * Synchronous wrapper for `batch_extract_bytes`.
      *
@@ -284,7 +273,6 @@ object Kreuzberg {
      */
     suspend fun batchExtractBytesSyncAsync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> =
         withContext(Dispatchers.IO) { batchExtractBytesSync(items, config) }
-
     /**
      * Extract content from multiple files concurrently.
      *
@@ -320,7 +308,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeBatchExtractFiles(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
-
     /**
      * Extract content from multiple files concurrently.
      *
@@ -354,7 +341,6 @@ object Kreuzberg {
      */
     suspend fun batchExtractFilesAsync(items: List<BatchFileItem>, config: ExtractionConfig): List<ExtractionResult> =
         withContext(Dispatchers.IO) { batchExtractFiles(items, config) }
-
     /**
      * Extract content from multiple byte arrays concurrently.
      *
@@ -384,7 +370,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeBatchExtractBytes(mapper.writeValueAsString(items), mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, object : TypeReference<List<ExtractionResult>>() {})
     }
-
     /**
      * Extract content from multiple byte arrays concurrently.
      *
@@ -412,7 +397,6 @@ object Kreuzberg {
      */
     suspend fun batchExtractBytesAsync(items: List<BatchBytesItem>, config: ExtractionConfig): List<ExtractionResult> =
         withContext(Dispatchers.IO) { batchExtractBytes(items, config) }
-
     /**
      * Detect MIME type from raw file bytes.
      *
@@ -444,7 +428,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeGetExtensionsForMime(mimeType)
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /**
      * Get file extensions for a given MIME type.
      *
@@ -456,7 +439,6 @@ object Kreuzberg {
      */
     suspend fun getExtensionsForMimeAsync(mimeType: String): List<String> =
         withContext(Dispatchers.IO) { getExtensionsForMime(mimeType) }
-
     /**
      * Detect QR codes in the bytes of an `ExtractedImage`.
      *
@@ -481,7 +463,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeDetectQrCodes(imageBytes, formatHint ?: "")
         return mapper.readValue(resultJson, object : TypeReference<List<QrCode>>() {})
     }
-
     /**
      * Detect QR codes in the bytes of an `ExtractedImage`.
      *
@@ -504,7 +485,6 @@ object Kreuzberg {
      */
     suspend fun detectQrCodesAsync(imageBytes: ByteArray, formatHint: String? = null): List<QrCode> =
         withContext(Dispatchers.IO) { detectQrCodes(imageBytes, formatHint) }
-
     /**
      * Clear all embedding backends from the global registry.
      *
@@ -526,7 +506,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeListEmbeddingBackends()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /**
      * List the names of all registered embedding backends.
      *
@@ -535,17 +514,14 @@ object Kreuzberg {
      */
     suspend fun listEmbeddingBackendsAsync(): List<String> =
         withContext(Dispatchers.IO) { listEmbeddingBackends() }
-
     /** List names of all registered document extractors. */
     fun listDocumentExtractors(): List<String> {
         val resultJson = KreuzbergBridge.nativeListDocumentExtractors()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /** List names of all registered document extractors. */
     suspend fun listDocumentExtractorsAsync(): List<String> =
         withContext(Dispatchers.IO) { listDocumentExtractors() }
-
     /**
      * Clear all document extractors from the global registry.
      *
@@ -570,7 +546,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeListOcrBackends()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /**
      * List all registered OCR backends.
      *
@@ -582,7 +557,6 @@ object Kreuzberg {
      */
     suspend fun listOcrBackendsAsync(): List<String> =
         withContext(Dispatchers.IO) { listOcrBackends() }
-
     /**
      * Clear all OCR backends from the global registry.
      *
@@ -619,7 +593,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeListPostProcessors()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /**
      * List all registered post-processor names.
      *
@@ -633,7 +606,6 @@ object Kreuzberg {
      */
     suspend fun listPostProcessorsAsync(): List<String> =
         withContext(Dispatchers.IO) { listPostProcessors() }
-
     /** Remove all registered post-processors. */
     fun clearPostProcessors(): Unit = KreuzbergBridge.nativeClearPostProcessors()
     /**
@@ -647,7 +619,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeListRenderers()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /**
      * List names of all registered renderers.
      *
@@ -657,7 +628,6 @@ object Kreuzberg {
      */
     suspend fun listRenderersAsync(): List<String> =
         withContext(Dispatchers.IO) { listRenderers() }
-
     /**
      * Clear all renderers from the global registry.
      *
@@ -675,11 +645,9 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeListValidators()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /** List names of all registered validators. */
     suspend fun listValidatorsAsync(): List<String> =
         withContext(Dispatchers.IO) { listValidators() }
-
     /** Remove all registered validators. */
     fun clearValidators(): Unit = KreuzbergBridge.nativeClearValidators()
     /**
@@ -709,11 +677,9 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeKnownModels()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /** All NER models kreuzberg knows about (used by `--all-ner-models`). */
     suspend fun knownModelsAsync(): List<String> =
         withContext(Dispatchers.IO) { knownModels() }
-
     /**
      * Run pattern redaction (and optional NER-driven redaction) over `result` and
      * rewrite every textual field. Populates `result.redaction_report`.
@@ -723,10 +689,8 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeFindAll(text)
         return mapper.readValue(resultJson, object : TypeReference<List<PatternMatch>>() {})
     }
-
     suspend fun findAllAsync(text: String): List<PatternMatch> =
         withContext(Dispatchers.IO) { findAll(text) }
-
     /**
      * Scan `text` for every PII category in `categories` and return all matches
      * in source-byte order.
@@ -739,7 +703,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeScanText(text, mapper.writeValueAsString(categories))
         return mapper.readValue(resultJson, object : TypeReference<List<PatternMatch>>() {})
     }
-
     /**
      * Scan `text` for every PII category in `categories` and return all matches
      * in source-byte order.
@@ -750,7 +713,6 @@ object Kreuzberg {
      */
     suspend fun scanTextAsync(text: String, categories: List<PiiCategory>): List<PatternMatch> =
         withContext(Dispatchers.IO) { scanText(text, categories) }
-
     /**
      * Score and return the top-N sentences from `text`, joined in original order.
      *
@@ -784,7 +746,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeCompare(mapper.writeValueAsString(a), mapper.writeValueAsString(b), mapper.writeValueAsString(opts))
         return mapper.readValue(resultJson, ExtractionDiff::class.java)
     }
-
     /**
      * Compare two extraction results and return a structured diff.
      *
@@ -793,7 +754,6 @@ object Kreuzberg {
      */
     suspend fun compareAsync(a: ExtractionResult, b: ExtractionResult, opts: DiffOptions): ExtractionDiff =
         withContext(Dispatchers.IO) { compare(a, b, opts) }
-
     /**
      * Extract content from a pre-cropped image region using a VLM.
      *
@@ -818,6 +778,10 @@ object Kreuzberg {
      * Returns raw PNG-encoded bytes for the specified page at the given DPI.
      * Uses pdf_oxide with tiny-skia for pure-Rust rendering.
      *
+     * For pages with extreme dimensions (very wide vector diagrams, etc.) the
+     * effective DPI may be automatically reduced to avoid rasterizer failure.
+     * A warning is logged when this happens.
+     *
      * **Errors:**
      *
      * Returns `KreuzbergError.Parsing` if the PDF cannot be opened, authenticated,
@@ -840,7 +804,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeEmbedTexts(mapper.writeValueAsString(texts), mapper.writeValueAsString(config))
         return mapper.readValue(resultJson, object : TypeReference<List<List<Float>>>() {})
     }
-
     /**
      * Embed a list of texts using the configured embedding model.
      *
@@ -848,7 +811,6 @@ object Kreuzberg {
      */
     suspend fun embedTextsAsync(texts: List<String>, config: EmbeddingConfig): List<List<Float>> =
         withContext(Dispatchers.IO) { embedTexts(texts, config) }
-
     /**
      * Get an embedding preset by name.
      *
@@ -865,7 +827,6 @@ object Kreuzberg {
         val resultJson = KreuzbergBridge.nativeListEmbeddingPresets()
         return mapper.readValue(resultJson, object : TypeReference<List<String>>() {})
     }
-
     /**
      * List the names of all available embedding presets.
      *
@@ -873,5 +834,4 @@ object Kreuzberg {
      */
     suspend fun listEmbeddingPresetsAsync(): List<String> =
         withContext(Dispatchers.IO) { listEmbeddingPresets() }
-
 }

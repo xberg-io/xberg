@@ -10,30 +10,22 @@ import RustBridge
 /// a Rust trait from the host side.
 public protocol SwiftDocumentExtractorBridge: SwiftPluginBridge {
     func extractBytes(content: Data, mimeType: String, config: String) throws -> String
-
     func extractFile(path: URL, mimeType: String, config: String) throws -> String
-
     func supportedMimeTypes() -> [String]
-
     func priority() -> Int32
-
     func canHandle(path: URL, mimeType: String) -> Bool
-
 }
 
 public extension SwiftDocumentExtractorBridge {
     func extractFile(path: URL, mimeType: String, config: String) throws -> String {
         return "{}"
     }
-
     func priority() -> Int32 {
         return 50
     }
-
     func canHandle(path: URL, mimeType: String) -> Bool {
         return true
     }
-
 }
 
 /// Internal adapter wrapping a `SwiftDocumentExtractorBridge` conformer.
@@ -58,7 +50,6 @@ final class SwiftDocumentExtractorAdapter {
             return marshal_error_result(error)
         }
     }
-
     func extractFileCall(path: URL, mimeType: String, config: String) throws -> String {
         do {
             let result = try self.bridge.extractFile(path: path, mimeType: mimeType, config: config)
@@ -71,22 +62,18 @@ final class SwiftDocumentExtractorAdapter {
             return marshal_error_result(error)
         }
     }
-
     func supportedMimeTypesCall() -> [String] {
         let result = self.bridge.supportedMimeTypes()
         return result
     }
-
     func priorityCall() -> Int32 {
         let result = self.bridge.priority()
         return result
     }
-
     func canHandleCall(path: URL, mimeType: String) -> Bool {
         let result = self.bridge.canHandle(path: path, mimeType: mimeType)
         return result
     }
-
 }
 
 // MARK: - Marshalling helpers

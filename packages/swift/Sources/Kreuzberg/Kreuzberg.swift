@@ -3,7 +3,6 @@
 
 import Foundation
 import RustBridge
-
 public struct CacheStats: Codable, Sendable, Hashable {
     public let totalFiles: UInt
     public let totalSizeMb: Double
@@ -7969,77 +7968,63 @@ public func extractBytes(_ content: [UInt8], _ mimeType: String, _ configJson: S
     let config = try extractionConfigFromJson(configJson)
     return try await extractBytes(content: content, mimeType: mimeType, config: config)
 }
-
 public func extractFile(_ path: String, _ mimeType: String?, _ configJson: String) async throws -> ExtractionResult {
     let config = try extractionConfigFromJson(configJson)
     return try await extractFile(path: path, mimeType: mimeType, config: config)
 }
-
 public func extractFileSync(_ path: String, _ mimeType: String?, _ configJson: String) throws -> ExtractionResult {
     let config = try extractionConfigFromJson(configJson)
     return try extractFileSync(path: path, mimeType: mimeType, config: config)
 }
-
 public func extractBytesSync(_ content: [UInt8], _ mimeType: String, _ configJson: String) throws -> ExtractionResult {
     let config = try extractionConfigFromJson(configJson)
     return try extractBytesSync(content: content, mimeType: mimeType, config: config)
 }
-
 public func batchExtractFilesSync(_ items: [BatchFileItem], _ configJson: String) throws -> [ExtractionResult] {
     let config = try extractionConfigFromJson(configJson)
     return try batchExtractFilesSync(items: items, config: config)
 }
-
 public func batchExtractBytesSync(_ items: [BatchBytesItem], _ configJson: String) throws -> [ExtractionResult] {
     let config = try extractionConfigFromJson(configJson)
     return try batchExtractBytesSync(items: items, config: config)
 }
-
 public func batchExtractFiles(_ items: [BatchFileItem], _ configJson: String) async throws -> [ExtractionResult] {
     let config = try extractionConfigFromJson(configJson)
     return try await batchExtractFiles(items: items, config: config)
 }
-
 public func batchExtractBytes(_ items: [BatchBytesItem], _ configJson: String) async throws -> [ExtractionResult] {
     let config = try extractionConfigFromJson(configJson)
     return try await batchExtractBytes(items: items, config: config)
 }
-
 public func classifyPages(_ resultJson: String, _ configJson: String) async throws -> Void {
     let result = try extractionResultFromJson(resultJson)
     let config = try pageClassificationConfigFromJson(configJson)
     return try await classifyPages(result: result, config: config)
 }
-
 public func redact(_ resultJson: String, _ configJson: String) async throws -> Void {
-    let config = try redactionConfigFromJson(configJson)
     let result = try extractionResultFromJson(resultJson)
+    let config = try redactionConfigFromJson(configJson)
     return try await redact(result: result, config: config)
 }
-
 public func translateResult(_ resultJson: String, _ configJson: String) async throws -> Void {
-    let config = try translationConfigFromJson(configJson)
     let result = try extractionResultFromJson(resultJson)
+    let config = try translationConfigFromJson(configJson)
     return try await translateResult(result: result, config: config)
 }
-
 public func compare(_ aJson: String, _ bJson: String, _ optsJson: String) throws -> ExtractionDiff {
     let a = try extractionResultFromJson(aJson)
     let b = try extractionResultFromJson(bJson)
     let opts = try diffOptionsFromJson(optsJson)
     return try compare(a: a, b: b, opts: opts)
 }
-
 public func extractRegionWithVlm(_ imageBytes: [UInt8], _ imageMime: String, _ regionKind: RegionKind, _ llmConfigJson: String, _ customPrompt: String?) async throws -> String {
     let llmConfig = try llmConfigFromJson(llmConfigJson)
     return try await extractRegionWithVlm(imageBytes: imageBytes, imageMime: imageMime, regionKind: regionKind, llmConfig: llmConfig, customPrompt: customPrompt)
 }
-
 public func embedTextsAsync(_ texts: [String], _ configJson: String) async throws -> [[Float]] {
     let config = try embeddingConfigFromJson(configJson)
     return try await embedTextsAsync(texts: texts, config: config)
 }
-
 // MARK: - From-JSON Helpers
 // Public helpers that decode JSON into first-class Swift types.
 // First-class struct types (Codable) use JSONDecoder directly.
@@ -8049,982 +8034,777 @@ public func cacheStatsFromJson(_ json: String) throws -> CacheStats {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(CacheStats.self, from: data)
 }
-
 public func accelerationConfigFromJson(_ json: String) throws -> AccelerationConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(AccelerationConfig.self, from: data)
 }
-
 public func captioningConfigFromJson(_ json: String) throws -> CaptioningConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(CaptioningConfig.self, from: data)
 }
-
 public func pageClassificationConfigFromJson(_ json: String) throws -> PageClassificationConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageClassificationConfig.self, from: data)
 }
-
 public func contentFilterConfigFromJson(_ json: String) throws -> ContentFilterConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ContentFilterConfig.self, from: data)
 }
-
 public func emailConfigFromJson(_ json: String) throws -> EmailConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(EmailConfig.self, from: data)
 }
-
 public func extractionConfigFromJson(_ json: String) throws -> ExtractionConfig {
     return try RustBridge.extractionConfigFromJson(json)
 }
-
 public func fileExtractionConfigFromJson(_ json: String) throws -> FileExtractionConfig {
     return try RustBridge.fileExtractionConfigFromJson(json)
 }
-
 public func batchBytesItemFromJson(_ json: String) throws -> BatchBytesItem {
     return try RustBridge.batchBytesItemFromJson(json)
 }
-
 public func batchFileItemFromJson(_ json: String) throws -> BatchFileItem {
     return try RustBridge.batchFileItemFromJson(json)
 }
-
 public func imageExtractionConfigFromJson(_ json: String) throws -> ImageExtractionConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ImageExtractionConfig.self, from: data)
 }
-
 public func tokenReductionOptionsFromJson(_ json: String) throws -> TokenReductionOptions {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TokenReductionOptions.self, from: data)
 }
-
 public func languageDetectionConfigFromJson(_ json: String) throws -> LanguageDetectionConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LanguageDetectionConfig.self, from: data)
 }
-
 public func htmlOutputConfigFromJson(_ json: String) throws -> HtmlOutputConfig {
     return try RustBridge.htmlOutputConfigFromJson(json)
 }
-
 public func layoutDetectionConfigFromJson(_ json: String) throws -> LayoutDetectionConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LayoutDetectionConfig.self, from: data)
 }
-
 public func llmConfigFromJson(_ json: String) throws -> LlmConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LlmConfig.self, from: data)
 }
-
 public func structuredExtractionConfigFromJson(_ json: String) throws -> StructuredExtractionConfig {
     return try RustBridge.structuredExtractionConfigFromJson(json)
 }
-
 public func nerConfigFromJson(_ json: String) throws -> NerConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(NerConfig.self, from: data)
 }
-
 public func ocrQualityThresholdsFromJson(_ json: String) throws -> OcrQualityThresholds {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrQualityThresholds.self, from: data)
 }
-
 public func ocrPipelineStageFromJson(_ json: String) throws -> OcrPipelineStage {
     return try RustBridge.ocrPipelineStageFromJson(json)
 }
-
 public func ocrPipelineConfigFromJson(_ json: String) throws -> OcrPipelineConfig {
     return try RustBridge.ocrPipelineConfigFromJson(json)
 }
-
 public func ocrConfigFromJson(_ json: String) throws -> OcrConfig {
     return try RustBridge.ocrConfigFromJson(json)
 }
-
 public func pageConfigFromJson(_ json: String) throws -> PageConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageConfig.self, from: data)
 }
-
 public func pdfConfigFromJson(_ json: String) throws -> PdfConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PdfConfig.self, from: data)
 }
-
 public func hierarchyConfigFromJson(_ json: String) throws -> HierarchyConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(HierarchyConfig.self, from: data)
 }
-
 public func postProcessorConfigFromJson(_ json: String) throws -> PostProcessorConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PostProcessorConfig.self, from: data)
 }
-
 public func chunkingConfigFromJson(_ json: String) throws -> ChunkingConfig {
     return try RustBridge.chunkingConfigFromJson(json)
 }
-
 public func embeddingConfigFromJson(_ json: String) throws -> EmbeddingConfig {
     return try RustBridge.embeddingConfigFromJson(json)
 }
-
 public func redactionConfigFromJson(_ json: String) throws -> RedactionConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RedactionConfig.self, from: data)
 }
-
 public func redactionTermFromJson(_ json: String) throws -> RedactionTerm {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RedactionTerm.self, from: data)
 }
-
 public func redactionPatternFromJson(_ json: String) throws -> RedactionPattern {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RedactionPattern.self, from: data)
 }
-
 public func summarizationConfigFromJson(_ json: String) throws -> SummarizationConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(SummarizationConfig.self, from: data)
 }
-
 public func transcriptionConfigFromJson(_ json: String) throws -> TranscriptionConfig {
     return try RustBridge.transcriptionConfigFromJson(json)
 }
-
 public func translationConfigFromJson(_ json: String) throws -> TranslationConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TranslationConfig.self, from: data)
 }
-
 public func treeSitterConfigFromJson(_ json: String) throws -> TreeSitterConfig {
     return try RustBridge.treeSitterConfigFromJson(json)
 }
-
 public func treeSitterProcessConfigFromJson(_ json: String) throws -> TreeSitterProcessConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TreeSitterProcessConfig.self, from: data)
 }
-
 public func supportedFormatFromJson(_ json: String) throws -> SupportedFormat {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(SupportedFormat.self, from: data)
 }
-
 public func serverConfigFromJson(_ json: String) throws -> ServerConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ServerConfig.self, from: data)
 }
-
 public func structuredDataResultFromJson(_ json: String) throws -> StructuredDataResult {
     return try RustBridge.structuredDataResultFromJson(json)
 }
-
 public func docxAppPropertiesFromJson(_ json: String) throws -> DocxAppProperties {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DocxAppProperties.self, from: data)
 }
-
 public func xlsxAppPropertiesFromJson(_ json: String) throws -> XlsxAppProperties {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(XlsxAppProperties.self, from: data)
 }
-
 public func pptxAppPropertiesFromJson(_ json: String) throws -> PptxAppProperties {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PptxAppProperties.self, from: data)
 }
-
 public func corePropertiesFromJson(_ json: String) throws -> CoreProperties {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(CoreProperties.self, from: data)
 }
-
 public func securityLimitsFromJson(_ json: String) throws -> SecurityLimits {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(SecurityLimits.self, from: data)
 }
-
 public func tokenReductionConfigFromJson(_ json: String) throws -> TokenReductionConfig {
     return try RustBridge.tokenReductionConfigFromJson(json)
 }
-
 public func patternMatchFromJson(_ json: String) throws -> PatternMatch {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PatternMatch.self, from: data)
 }
-
 public func pdfAnnotationFromJson(_ json: String) throws -> PdfAnnotation {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PdfAnnotation.self, from: data)
 }
-
 public func pageClassificationFromJson(_ json: String) throws -> PageClassification {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageClassification.self, from: data)
 }
-
 public func classificationLabelFromJson(_ json: String) throws -> ClassificationLabel {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ClassificationLabel.self, from: data)
 }
-
 public func djotContentFromJson(_ json: String) throws -> DjotContent {
     return try RustBridge.djotContentFromJson(json)
 }
-
 public func formattedBlockFromJson(_ json: String) throws -> FormattedBlock {
     return try RustBridge.formattedBlockFromJson(json)
 }
-
 public func inlineElementFromJson(_ json: String) throws -> InlineElement {
     return try RustBridge.inlineElementFromJson(json)
 }
-
 public func djotImageFromJson(_ json: String) throws -> DjotImage {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DjotImage.self, from: data)
 }
-
 public func djotLinkFromJson(_ json: String) throws -> DjotLink {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DjotLink.self, from: data)
 }
-
 public func footnoteFromJson(_ json: String) throws -> Footnote {
     return try RustBridge.footnoteFromJson(json)
 }
-
 public func documentStructureFromJson(_ json: String) throws -> DocumentStructure {
     return try RustBridge.documentStructureFromJson(json)
 }
-
 public func documentRelationshipFromJson(_ json: String) throws -> DocumentRelationship {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DocumentRelationship.self, from: data)
 }
-
 public func documentNodeFromJson(_ json: String) throws -> DocumentNode {
     return try RustBridge.documentNodeFromJson(json)
 }
-
 public func tableGridFromJson(_ json: String) throws -> TableGrid {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TableGrid.self, from: data)
 }
-
 public func gridCellFromJson(_ json: String) throws -> GridCell {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(GridCell.self, from: data)
 }
-
 public func textAnnotationFromJson(_ json: String) throws -> TextAnnotation {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TextAnnotation.self, from: data)
 }
-
 public func entityFromJson(_ json: String) throws -> Entity {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(Entity.self, from: data)
 }
-
 public func extractionResultFromJson(_ json: String) throws -> ExtractionResult {
     return try RustBridge.extractionResultFromJson(json)
 }
-
 public func archiveEntryFromJson(_ json: String) throws -> ArchiveEntry {
     return try RustBridge.archiveEntryFromJson(json)
 }
-
 public func processingWarningFromJson(_ json: String) throws -> ProcessingWarning {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ProcessingWarning.self, from: data)
 }
-
 public func llmUsageFromJson(_ json: String) throws -> LlmUsage {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LlmUsage.self, from: data)
 }
-
 public func chunkFromJson(_ json: String) throws -> Chunk {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(Chunk.self, from: data)
 }
-
 public func headingContextFromJson(_ json: String) throws -> HeadingContext {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(HeadingContext.self, from: data)
 }
-
 public func headingLevelFromJson(_ json: String) throws -> HeadingLevel {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(HeadingLevel.self, from: data)
 }
-
 public func chunkMetadataFromJson(_ json: String) throws -> ChunkMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ChunkMetadata.self, from: data)
 }
-
 public func extractedImageFromJson(_ json: String) throws -> ExtractedImage {
     return try RustBridge.extractedImageFromJson(json)
 }
-
 public func boundingBoxFromJson(_ json: String) throws -> BoundingBox {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(BoundingBox.self, from: data)
 }
-
 public func elementMetadataFromJson(_ json: String) throws -> ElementMetadata {
     return try RustBridge.elementMetadataFromJson(json)
 }
-
 public func elementFromJson(_ json: String) throws -> Element {
     return try RustBridge.elementFromJson(json)
 }
-
 public func excelWorkbookFromJson(_ json: String) throws -> ExcelWorkbook {
     return try RustBridge.excelWorkbookFromJson(json)
 }
-
 public func excelSheetFromJson(_ json: String) throws -> ExcelSheet {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ExcelSheet.self, from: data)
 }
-
 public func xmlExtractionResultFromJson(_ json: String) throws -> XmlExtractionResult {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(XmlExtractionResult.self, from: data)
 }
-
 public func textExtractionResultFromJson(_ json: String) throws -> TextExtractionResult {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TextExtractionResult.self, from: data)
 }
-
 public func pptxExtractionResultFromJson(_ json: String) throws -> PptxExtractionResult {
     return try RustBridge.pptxExtractionResultFromJson(json)
 }
-
 public func emailExtractionResultFromJson(_ json: String) throws -> EmailExtractionResult {
     return try RustBridge.emailExtractionResultFromJson(json)
 }
-
 public func emailAttachmentFromJson(_ json: String) throws -> EmailAttachment {
     return try RustBridge.emailAttachmentFromJson(json)
 }
-
 public func ocrExtractionResultFromJson(_ json: String) throws -> OcrExtractionResult {
     return try RustBridge.ocrExtractionResultFromJson(json)
 }
-
 public func ocrTableFromJson(_ json: String) throws -> OcrTable {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrTable.self, from: data)
 }
-
 public func ocrTableBoundingBoxFromJson(_ json: String) throws -> OcrTableBoundingBox {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrTableBoundingBox.self, from: data)
 }
-
 public func imagePreprocessingConfigFromJson(_ json: String) throws -> ImagePreprocessingConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ImagePreprocessingConfig.self, from: data)
 }
-
 public func tesseractConfigFromJson(_ json: String) throws -> TesseractConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TesseractConfig.self, from: data)
 }
-
 public func imagePreprocessingMetadataFromJson(_ json: String) throws -> ImagePreprocessingMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ImagePreprocessingMetadata.self, from: data)
 }
-
 public func metadataFromJson(_ json: String) throws -> Metadata {
     return try RustBridge.metadataFromJson(json)
 }
-
 public func excelMetadataFromJson(_ json: String) throws -> ExcelMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ExcelMetadata.self, from: data)
 }
-
 public func emailMetadataFromJson(_ json: String) throws -> EmailMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(EmailMetadata.self, from: data)
 }
-
 public func archiveMetadataFromJson(_ json: String) throws -> ArchiveMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ArchiveMetadata.self, from: data)
 }
-
 public func imageMetadataFromJson(_ json: String) throws -> ImageMetadata {
     return try RustBridge.imageMetadataFromJson(json)
 }
-
 public func xmlMetadataFromJson(_ json: String) throws -> XmlMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(XmlMetadata.self, from: data)
 }
-
 public func textMetadataFromJson(_ json: String) throws -> TextMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TextMetadata.self, from: data)
 }
-
 public func headerMetadataFromJson(_ json: String) throws -> HeaderMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(HeaderMetadata.self, from: data)
 }
-
 public func linkMetadataFromJson(_ json: String) throws -> LinkMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LinkMetadata.self, from: data)
 }
-
 public func imageMetadataTypeFromJson(_ json: String) throws -> ImageMetadataType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ImageMetadataType.self, from: data)
 }
-
 public func structuredDataFromJson(_ json: String) throws -> StructuredData {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(StructuredData.self, from: data)
 }
-
 public func htmlMetadataFromJson(_ json: String) throws -> HtmlMetadata {
     return try RustBridge.htmlMetadataFromJson(json)
 }
-
 public func ocrMetadataFromJson(_ json: String) throws -> OcrMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrMetadata.self, from: data)
 }
-
 public func errorMetadataFromJson(_ json: String) throws -> ErrorMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ErrorMetadata.self, from: data)
 }
-
 public func pptxMetadataFromJson(_ json: String) throws -> PptxMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PptxMetadata.self, from: data)
 }
-
 public func docxMetadataFromJson(_ json: String) throws -> DocxMetadata {
     return try RustBridge.docxMetadataFromJson(json)
 }
-
 public func csvMetadataFromJson(_ json: String) throws -> CsvMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(CsvMetadata.self, from: data)
 }
-
 public func bibtexMetadataFromJson(_ json: String) throws -> BibtexMetadata {
     return try RustBridge.bibtexMetadataFromJson(json)
 }
-
 public func citationMetadataFromJson(_ json: String) throws -> CitationMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(CitationMetadata.self, from: data)
 }
-
 public func yearRangeFromJson(_ json: String) throws -> YearRange {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(YearRange.self, from: data)
 }
-
 public func fictionBookMetadataFromJson(_ json: String) throws -> FictionBookMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(FictionBookMetadata.self, from: data)
 }
-
 public func dbfMetadataFromJson(_ json: String) throws -> DbfMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DbfMetadata.self, from: data)
 }
-
 public func dbfFieldInfoFromJson(_ json: String) throws -> DbfFieldInfo {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DbfFieldInfo.self, from: data)
 }
-
 public func jatsMetadataFromJson(_ json: String) throws -> JatsMetadata {
     return try RustBridge.jatsMetadataFromJson(json)
 }
-
 public func contributorRoleFromJson(_ json: String) throws -> ContributorRole {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ContributorRole.self, from: data)
 }
-
 public func epubMetadataFromJson(_ json: String) throws -> EpubMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(EpubMetadata.self, from: data)
 }
-
 public func pstMetadataFromJson(_ json: String) throws -> PstMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PstMetadata.self, from: data)
 }
-
 public func audioMetadataFromJson(_ json: String) throws -> AudioMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(AudioMetadata.self, from: data)
 }
-
 public func ocrConfidenceFromJson(_ json: String) throws -> OcrConfidence {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrConfidence.self, from: data)
 }
-
 public func ocrRotationFromJson(_ json: String) throws -> OcrRotation {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrRotation.self, from: data)
 }
-
 public func ocrElementFromJson(_ json: String) throws -> OcrElement {
     return try RustBridge.ocrElementFromJson(json)
 }
-
 public func ocrElementConfigFromJson(_ json: String) throws -> OcrElementConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrElementConfig.self, from: data)
 }
-
 public func pageStructureFromJson(_ json: String) throws -> PageStructure {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageStructure.self, from: data)
 }
-
 public func pageBoundaryFromJson(_ json: String) throws -> PageBoundary {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageBoundary.self, from: data)
 }
-
 public func pageInfoFromJson(_ json: String) throws -> PageInfo {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageInfo.self, from: data)
 }
-
 public func pageContentFromJson(_ json: String) throws -> PageContent {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageContent.self, from: data)
 }
-
 public func layoutRegionFromJson(_ json: String) throws -> LayoutRegion {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LayoutRegion.self, from: data)
 }
-
 public func pageHierarchyFromJson(_ json: String) throws -> PageHierarchy {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageHierarchy.self, from: data)
 }
-
 public func hierarchicalBlockFromJson(_ json: String) throws -> HierarchicalBlock {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(HierarchicalBlock.self, from: data)
 }
-
 public func qrCodeFromJson(_ json: String) throws -> QrCode {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(QrCode.self, from: data)
 }
-
 public func qrBoundingBoxFromJson(_ json: String) throws -> QrBoundingBox {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(QrBoundingBox.self, from: data)
 }
-
 public func redactionReportFromJson(_ json: String) throws -> RedactionReport {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RedactionReport.self, from: data)
 }
-
 public func redactionFindingFromJson(_ json: String) throws -> RedactionFinding {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RedactionFinding.self, from: data)
 }
-
 public func cellChangeFromJson(_ json: String) throws -> CellChange {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(CellChange.self, from: data)
 }
-
 public func documentRevisionFromJson(_ json: String) throws -> DocumentRevision {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DocumentRevision.self, from: data)
 }
-
 public func revisionDeltaFromJson(_ json: String) throws -> RevisionDelta {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RevisionDelta.self, from: data)
 }
-
 public func documentSummaryFromJson(_ json: String) throws -> DocumentSummary {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DocumentSummary.self, from: data)
 }
-
 public func tableFromJson(_ json: String) throws -> Table {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(Table.self, from: data)
 }
-
 public func tableCellFromJson(_ json: String) throws -> TableCell {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TableCell.self, from: data)
 }
-
 public func translationFromJson(_ json: String) throws -> Translation {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(Translation.self, from: data)
 }
-
 public func extractedUriFromJson(_ json: String) throws -> ExtractedUri {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ExtractedUri.self, from: data)
 }
-
 public func detectResponseFromJson(_ json: String) throws -> DetectResponse {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DetectResponse.self, from: data)
 }
-
 public func diffOptionsFromJson(_ json: String) throws -> DiffOptions {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DiffOptions.self, from: data)
 }
-
 public func extractionDiffFromJson(_ json: String) throws -> ExtractionDiff {
     return try RustBridge.extractionDiffFromJson(json)
 }
-
 public func diffHunkFromJson(_ json: String) throws -> DiffHunk {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DiffHunk.self, from: data)
 }
-
 public func tableDiffFromJson(_ json: String) throws -> TableDiff {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TableDiff.self, from: data)
 }
-
 public func embeddedChangesFromJson(_ json: String) throws -> EmbeddedChanges {
     return try RustBridge.embeddedChangesFromJson(json)
 }
-
 public func embeddedDiffFromJson(_ json: String) throws -> EmbeddedDiff {
     return try RustBridge.embeddedDiffFromJson(json)
 }
-
 public func yakeParamsFromJson(_ json: String) throws -> YakeParams {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(YakeParams.self, from: data)
 }
-
 public func rakeParamsFromJson(_ json: String) throws -> RakeParams {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RakeParams.self, from: data)
 }
-
 public func keywordConfigFromJson(_ json: String) throws -> KeywordConfig {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(KeywordConfig.self, from: data)
 }
-
 public func keywordFromJson(_ json: String) throws -> Keyword {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(Keyword.self, from: data)
 }
-
 public func paddleOcrConfigFromJson(_ json: String) throws -> PaddleOcrConfig {
     return try RustBridge.paddleOcrConfigFromJson(json)
 }
-
 public func modelPathsFromJson(_ json: String) throws -> ModelPaths {
     return try RustBridge.modelPathsFromJson(json)
 }
-
 public func orientationResultFromJson(_ json: String) throws -> OrientationResult {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OrientationResult.self, from: data)
 }
-
 public func bBoxFromJson(_ json: String) throws -> BBox {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(BBox.self, from: data)
 }
-
 public func layoutDetectionFromJson(_ json: String) throws -> LayoutDetection {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LayoutDetection.self, from: data)
 }
-
 public func recognizedTableFromJson(_ json: String) throws -> RecognizedTable {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RecognizedTable.self, from: data)
 }
-
 public func detectionResultFromJson(_ json: String) throws -> DetectionResult {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DetectionResult.self, from: data)
 }
-
 public func embeddedFileFromJson(_ json: String) throws -> EmbeddedFile {
     return try RustBridge.embeddedFileFromJson(json)
 }
-
 public func pdfMetadataFromJson(_ json: String) throws -> PdfMetadata {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PdfMetadata.self, from: data)
 }
-
 public func executionProviderTypeFromJson(_ json: String) throws -> ExecutionProviderType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ExecutionProviderType.self, from: data)
 }
-
 public func outputFormatFromJson(_ json: String) throws -> OutputFormat {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OutputFormat.self, from: data)
 }
-
 public func htmlThemeFromJson(_ json: String) throws -> HtmlTheme {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(HtmlTheme.self, from: data)
 }
-
 public func tableModelFromJson(_ json: String) throws -> TableModel {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TableModel.self, from: data)
 }
-
 public func nerBackendKindFromJson(_ json: String) throws -> NerBackendKind {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(NerBackendKind.self, from: data)
 }
-
 public func vlmFallbackPolicyFromJson(_ json: String) throws -> VlmFallbackPolicy {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(VlmFallbackPolicy.self, from: data)
 }
-
 public func chunkerTypeFromJson(_ json: String) throws -> ChunkerType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ChunkerType.self, from: data)
 }
-
 public func chunkSizingFromJson(_ json: String) throws -> ChunkSizing {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ChunkSizing.self, from: data)
 }
-
 public func embeddingModelTypeFromJson(_ json: String) throws -> EmbeddingModelType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(EmbeddingModelType.self, from: data)
 }
-
 public func whisperModelFromJson(_ json: String) throws -> WhisperModel {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(WhisperModel.self, from: data)
 }
-
 public func codeContentModeFromJson(_ json: String) throws -> CodeContentMode {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(CodeContentMode.self, from: data)
 }
-
 public func ocrBackendTypeFromJson(_ json: String) throws -> OcrBackendType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrBackendType.self, from: data)
 }
-
 public func processingStageFromJson(_ json: String) throws -> ProcessingStage {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ProcessingStage.self, from: data)
 }
-
 public func reductionLevelFromJson(_ json: String) throws -> ReductionLevel {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ReductionLevel.self, from: data)
 }
-
 public func pdfAnnotationTypeFromJson(_ json: String) throws -> PdfAnnotationType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PdfAnnotationType.self, from: data)
 }
-
 public func blockTypeFromJson(_ json: String) throws -> BlockType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(BlockType.self, from: data)
 }
-
 public func inlineTypeFromJson(_ json: String) throws -> InlineType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(InlineType.self, from: data)
 }
-
 public func relationshipKindFromJson(_ json: String) throws -> RelationshipKind {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RelationshipKind.self, from: data)
 }
-
 public func contentLayerFromJson(_ json: String) throws -> ContentLayer {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ContentLayer.self, from: data)
 }
-
 public func nodeContentFromJson(_ json: String) throws -> NodeContent {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(NodeContent.self, from: data)
 }
-
 public func annotationKindFromJson(_ json: String) throws -> AnnotationKind {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(AnnotationKind.self, from: data)
 }
-
 public func entityCategoryFromJson(_ json: String) throws -> EntityCategory {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(EntityCategory.self, from: data)
 }
-
 public func extractionMethodFromJson(_ json: String) throws -> ExtractionMethod {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ExtractionMethod.self, from: data)
 }
-
 public func chunkTypeFromJson(_ json: String) throws -> ChunkType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ChunkType.self, from: data)
 }
-
 public func imageKindFromJson(_ json: String) throws -> ImageKind {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ImageKind.self, from: data)
 }
-
 public func resultFormatFromJson(_ json: String) throws -> ResultFormat {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ResultFormat.self, from: data)
 }
-
 public func elementTypeFromJson(_ json: String) throws -> ElementType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ElementType.self, from: data)
 }
-
 public func formatMetadataFromJson(_ json: String) throws -> FormatMetadata {
     return try RustBridge.formatMetadataFromJson(json)
 }
-
 public func textDirectionFromJson(_ json: String) throws -> TextDirection {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(TextDirection.self, from: data)
 }
-
 public func linkTypeFromJson(_ json: String) throws -> LinkType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LinkType.self, from: data)
 }
-
 public func imageTypeFromJson(_ json: String) throws -> ImageType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(ImageType.self, from: data)
 }
-
 public func structuredDataTypeFromJson(_ json: String) throws -> StructuredDataType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(StructuredDataType.self, from: data)
 }
-
 public func ocrBoundingGeometryFromJson(_ json: String) throws -> OcrBoundingGeometry {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrBoundingGeometry.self, from: data)
 }
-
 public func ocrElementLevelFromJson(_ json: String) throws -> OcrElementLevel {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(OcrElementLevel.self, from: data)
 }
-
 public func pageUnitTypeFromJson(_ json: String) throws -> PageUnitType {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PageUnitType.self, from: data)
 }
-
 public func redactionStrategyFromJson(_ json: String) throws -> RedactionStrategy {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RedactionStrategy.self, from: data)
 }
-
 public func piiCategoryFromJson(_ json: String) throws -> PiiCategory {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PiiCategory.self, from: data)
 }
-
 public func diffLineFromJson(_ json: String) throws -> DiffLine {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(DiffLine.self, from: data)
 }
-
 public func revisionKindFromJson(_ json: String) throws -> RevisionKind {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RevisionKind.self, from: data)
 }
-
 public func revisionAnchorFromJson(_ json: String) throws -> RevisionAnchor {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RevisionAnchor.self, from: data)
 }
-
 public func summaryStrategyFromJson(_ json: String) throws -> SummaryStrategy {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(SummaryStrategy.self, from: data)
 }
-
 public func uriKindFromJson(_ json: String) throws -> UriKind {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(UriKind.self, from: data)
 }
-
 public func regionKindFromJson(_ json: String) throws -> RegionKind {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(RegionKind.self, from: data)
 }
-
 public func keywordAlgorithmFromJson(_ json: String) throws -> KeywordAlgorithm {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(KeywordAlgorithm.self, from: data)
 }
-
 public func psmModeFromJson(_ json: String) throws -> PSMMode {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PSMMode.self, from: data)
 }
-
 public func paddleLanguageFromJson(_ json: String) throws -> PaddleLanguage {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(PaddleLanguage.self, from: data)
 }
-
 public func layoutClassFromJson(_ json: String) throws -> LayoutClass {
     let data = json.data(using: .utf8) ?? Data()
     return try JSONDecoder().decode(LayoutClass.self, from: data)
 }
-
 // MARK: - Free-function Forwarders
 // Re-export every public free function on the source Rust crate as a
 // top-level `public func` on the host module so consumers do not need to
@@ -9566,7 +9346,7 @@ public func extractRegionWithVlm(imageBytes: [UInt8], imageMime: String, regionK
         let _rb_imageBytes: RustVec<UInt8> = { let v = RustVec<UInt8>(); for b in imageBytes { v.push(value: b) }; return v }()
         let _rb_regionKind = try String(data: JSONEncoder().encode(regionKind), encoding: .utf8) ?? "null"
         let _rb_llmConfig = try llmConfig.intoRust()
-        let result = try RustBridge.extractRegionWithVlm(_rb_imageBytes, RustString(imageMime), _rb_regionKind, _rb_llmConfig, customPrompt)
+        let result = try RustBridge.extractRegionWithVlm(_rb_imageBytes, imageMime, _rb_regionKind, _rb_llmConfig, customPrompt)
         return result.toString()
     }.value
 }
@@ -9575,6 +9355,10 @@ public func extractRegionWithVlm(imageBytes: [UInt8], imageMime: String, regionK
 ///
 /// Returns raw PNG-encoded bytes for the specified page at the given DPI.
 /// Uses pdf_oxide with tiny-skia for pure-Rust rendering.
+///
+/// For pages with extreme dimensions (very wide vector diagrams, etc.) the
+/// effective DPI may be automatically reduced to avoid rasterizer failure.
+/// A warning is logged when this happens.
 ///
 /// # Arguments
 ///
