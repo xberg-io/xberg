@@ -524,6 +524,11 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
+
       - name: Build NAPI binding
         uses: kreuzberg-dev/actions/build-node-napi@v1
         with:
@@ -1020,6 +1025,11 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
+
       - uses: kreuzberg-dev/actions/build-csharp-natives@v1
         with:
           target: ${{ matrix.target }}
@@ -1280,6 +1290,10 @@ jobs:
       - uses: kreuzberg-dev/actions/setup-rust@v1
         with:
           target: ${{ matrix.target }}
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: "1.24.2"
       - name: Build Dart server native
         run: cargo build -p kreuzberg-dart --release --target ${{ matrix.target }}
         shell: bash
