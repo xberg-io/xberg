@@ -1,6 +1,6 @@
 // JNI bindings for kreuzberg library.
 // Delegates to FFI (kreuzberg-ffi) for all operations.
-#![allow(non_snake_case, unsafe_code, unsafe_attr_outside_unsafe, deprecated)]
+#![allow(non_snake_case, unsafe_code, unsafe_attr_outside_unsafe, deprecated, missing_docs)]
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;

@@ -35,6 +35,8 @@
 //! | [`stats`] | Percentile calculations (R-7 interpolation) and NaN sanitization. |
 //! | [`types`] | Core data types (`BenchmarkResult`, `QualityMetrics`, etc.). |
 
+#![allow(missing_docs)]
+
 pub mod adapter;
 pub mod adapters;
 pub mod aggregate;

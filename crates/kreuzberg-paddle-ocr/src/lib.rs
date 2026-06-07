@@ -15,6 +15,7 @@
 //! This vendored version is relicensed to MIT with the original author's copyright retained.
 
 #![allow(clippy::too_many_arguments)]
+#![allow(missing_docs)]
 
 pub mod angle_net;
 pub mod base_net;

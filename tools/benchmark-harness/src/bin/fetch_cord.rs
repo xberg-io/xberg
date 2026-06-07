@@ -1,3 +1,5 @@
+//! Fetch and extract corpus reference data for benchmark quality scoring.
+
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use clap::Parser;

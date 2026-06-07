@@ -8,6 +8,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::cmp_null)]
+#![allow(missing_docs)]
 
 //! # kreuzberg-tesseract
 //!
