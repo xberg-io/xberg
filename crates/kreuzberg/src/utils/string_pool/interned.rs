@@ -1,14 +1,14 @@
 //! Interned string type and trait implementations.
 //!
-//! This module provides the `InternedString` type which wraps an Arc<String>
+//! This module provides the `InternedString` type which wraps an `Arc<String>`
 //! to enable string deduplication and pointer-based comparisons.
 
 use std::sync::Arc;
 
 /// A reference to an interned string stored in an Arc.
 ///
-/// This wraps an Arc<String> and provides convenient access to the string content.
-/// Multiple calls with the same string content will share the same Arc, reducing memory usage.
+/// This wraps an `Arc<String>` and provides convenient access to the string content.
+/// Multiple calls with the same string content will share the same `Arc`, reducing memory usage.
 #[cfg_attr(alef, alef(skip))]
 #[derive(Clone)]
 pub struct InternedString(pub(super) Arc<String>);

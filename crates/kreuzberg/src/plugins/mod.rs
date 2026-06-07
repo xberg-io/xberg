@@ -212,20 +212,24 @@ pub use validator::{Validator, clear_validators, list_validators, register_valid
 // alias modules expose the lifecycle wrappers at the alef-derived path so the
 // generated code resolves without forcing a kreuzberg-side rename or alef-side
 // path-override field.
+/// Re-exports for the OCR backend plugin type, used by alef-generated bindings.
 pub mod ocr_backend {
     pub use super::{OcrBackend, clear_ocr_backends, list_ocr_backends, register_ocr_backend, unregister_ocr_backend};
 }
+/// Re-exports for the post-processor plugin type, used by alef-generated bindings.
 pub mod post_processor {
     pub use super::{
         PostProcessor, clear_post_processors, list_post_processors, register_post_processor, unregister_post_processor,
     };
 }
+/// Re-exports for the embedding backend plugin type, used by alef-generated bindings.
 pub mod embedding_backend {
     pub use super::{
         EmbeddingBackend, clear_embedding_backends, list_embedding_backends, register_embedding_backend,
         unregister_embedding_backend,
     };
 }
+/// Re-exports for the document extractor plugin type, used by alef-generated bindings.
 pub mod document_extractor {
     pub use super::{
         DocumentExtractor, clear_document_extractors, list_document_extractors, register_document_extractor,

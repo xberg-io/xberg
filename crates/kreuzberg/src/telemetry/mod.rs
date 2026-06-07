@@ -3,9 +3,9 @@
 //! This module provides:
 //! - **Semantic conventions** ([`conventions`]) — constant attribute and metric
 //!   names following the `kreuzberg.*` namespace.
-//! - **Span helpers** ([`spans`]) — functions to create properly-attributed
+//! - **Span helpers** (`spans`) — functions to create properly-attributed
 //!   tracing spans (requires `otel` feature).
-//! - **Metrics instruments** ([`metrics`]) — counters, histograms, and gauges
+//! - **Metrics instruments** (`metrics`) — counters, histograms, and gauges
 //!   for monitoring extraction operations (requires `otel` feature).
 //!
 //! The `conventions` module is always available (it's just string constants).

@@ -24,12 +24,18 @@ use super::cleanup::smart_cleanup_cache;
 /// Minimum seconds between automatic cleanup runs (5 minutes).
 const CLEANUP_INTERVAL_SECS: u64 = 300;
 
+/// Aggregate statistics for a kreuzberg cache directory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
+    /// Total number of files currently in the cache directory.
     pub total_files: usize,
+    /// Combined size of all cache files in megabytes.
     pub total_size_mb: f64,
+    /// Free disk space available on the cache volume, in megabytes.
     pub available_space_mb: f64,
+    /// Age of the oldest cache file in days (0.0 if the cache is empty).
     pub oldest_file_age_days: f64,
+    /// Age of the most recently written cache file in days (0.0 if the cache is empty).
     pub newest_file_age_days: f64,
 }
 
@@ -44,6 +50,11 @@ pub(super) struct CacheScanResult {
     pub(super) stats: CacheStats,
     pub(super) entries: Vec<CacheEntry>,
 }
+/// Thread-safe, filesystem-backed cache with automatic LRU-style eviction.
+///
+/// `GenericCache` stores opaque blobs keyed by a content-hash string. It tracks
+/// in-flight deletions to prevent read-during-delete races and periodically runs
+/// a background cleanup that enforces the configured age and size limits.
 #[cfg_attr(alef, alef(skip))]
 pub struct GenericCache {
     cache_dir: PathBuf,

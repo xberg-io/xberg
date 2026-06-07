@@ -60,7 +60,7 @@ use std::sync::Arc;
 /// # Contract
 ///
 /// - `embed(texts)` MUST return exactly `texts.len()` vectors, each of length
-///   `self.dimensions()`. The dispatcher in [`crate::embeddings::embed_texts`]
+///   `self.dimensions()`. The dispatcher in `crate::embeddings::embed_texts`
 ///   validates this before returning to downstream consumers; a non-conforming
 ///   backend surfaces as a `KreuzbergError::Validation`, not a panic.
 /// - `embed` may be called from any thread. Its future must be `Send`
@@ -80,13 +80,12 @@ use std::sync::Arc;
 ///
 /// # Runtime
 ///
-/// The synchronous [`crate::embed_texts`] entry uses
+/// The synchronous `embed_texts` entry uses
 /// [`tokio::task::block_in_place`] to await the trait's async `embed`, which
 /// requires a multi-thread tokio runtime. Callers running inside a
 /// `current_thread` runtime (e.g. `#[tokio::test]` without `flavor = "multi_thread"`,
 /// or `tokio::runtime::Builder::new_current_thread()`) must use
-/// [`crate::embed_texts_async`] instead, which awaits directly without
-/// `block_in_place`.
+/// `embed_texts_async` instead, which awaits directly without `block_in_place`.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait EmbeddingBackend: Plugin {

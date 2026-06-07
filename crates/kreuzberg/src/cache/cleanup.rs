@@ -93,6 +93,11 @@ pub(super) fn scan_cache_directory(cache_dir: &str) -> Result<CacheScanResult> {
     })
 }
 
+/// Return aggregate statistics for the cache directory at `cache_dir`.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be read or its metadata cannot be queried.
 #[cfg_attr(alef, alef(skip))]
 pub fn get_cache_metadata(cache_dir: &str) -> Result<CacheStats> {
     let scan_result = scan_cache_directory(cache_dir)?;
@@ -196,6 +201,14 @@ pub(crate) fn smart_cleanup_cache(
     cleanup_cache(cache_dir, max_age_days, max_size_mb, target_ratio)
 }
 
+/// Delete every file in `cache_dir`, returning the count and total size (MB) removed.
+///
+/// Returns `(0, 0.0)` if the directory does not exist. Files that cannot be removed
+/// are skipped with a debug log; errors do not abort the clearing operation.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be read.
 #[cfg_attr(alef, alef(skip))]
 pub fn clear_cache_directory(cache_dir: &str) -> Result<(usize, f64)> {
     let dir_path = Path::new(cache_dir);

@@ -25,6 +25,7 @@ pub mod classification;
 
 // Stub module when classification feature is disabled (wasm-target, android-target have no ORT).
 #[cfg(not(feature = "classification"))]
+/// Page-classification API stub (classification feature not enabled on this target).
 pub mod classification {
     use crate::{ExtractionResult, PageClassificationConfig, Result};
 
@@ -42,6 +43,7 @@ pub mod ner;
 // Stub module for Android x86_64 when ner feature is disabled (android-target has no ORT prebuilt).
 // Allows alef-generated bindings to reference types and functions without compilation errors.
 #[cfg(not(feature = "ner"))]
+/// Named-entity recognition API stub (ner feature not enabled on this target).
 pub mod ner {
     use crate::Result;
     use std::path::PathBuf;
@@ -77,6 +79,7 @@ pub mod translation;
 
 // Stub module when translation feature is disabled (wasm-target, android-target have no ORT).
 #[cfg(not(feature = "translation"))]
+/// Translation API stub (translation feature not enabled on this target).
 pub mod translation {
     use crate::{ExtractionResult, Result, TranslationConfig};
 

@@ -11,11 +11,14 @@ pub mod quality;
 #[cfg(feature = "quality")]
 pub mod string_utils;
 
+/// JSON helper utilities for safe value traversal and extraction.
 pub mod json_utils;
+/// Markdown post-processing helpers used by extractors that emit Markdown output.
 pub mod markdown_utils;
 pub mod pool;
 pub mod pool_sizing;
 pub mod string_pool;
+/// XML helper utilities for tag-name extraction and attribute traversal.
 pub mod xml_utils;
 
 #[cfg(feature = "quality")]

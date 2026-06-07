@@ -132,12 +132,19 @@ pub const ERROR_MESSAGE: &str = "error.message";
 // Operation values (for use with OPERATION)
 // ---------------------------------------------------------------------------
 
+/// Canonical values for the `kreuzberg.operation` span attribute.
 pub mod operations {
+    /// Single-file extraction by path.
     pub const EXTRACT_FILE: &str = "extract_file";
+    /// Single-file extraction from an in-memory byte slice.
     pub const EXTRACT_BYTES: &str = "extract_bytes";
+    /// Batch extraction of multiple inputs.
     pub const BATCH_EXTRACT: &str = "batch_extract";
+    /// Full extraction pipeline (extraction + post-processing + validation).
     pub const PIPELINE: &str = "pipeline";
+    /// Cache read attempt (hit or miss).
     pub const CACHE_LOOKUP: &str = "cache_lookup";
+    /// Cache write after a successful extraction.
     pub const CACHE_WRITE: &str = "cache_write";
 }
 
@@ -145,14 +152,23 @@ pub mod operations {
 // Pipeline stage values (for use with PIPELINE_STAGE)
 // ---------------------------------------------------------------------------
 
+/// Canonical values for the `kreuzberg.pipeline.stage` span attribute.
 pub mod stages {
+    /// Core document extraction stage.
     pub const EXTRACTION: &str = "extraction";
+    /// Early post-processing (runs before middle and late processors).
     pub const POST_PROCESSING_EARLY: &str = "post_processing.early";
+    /// Middle post-processing priority band.
     pub const POST_PROCESSING_MIDDLE: &str = "post_processing.middle";
+    /// Late post-processing (runs after middle processors).
     pub const POST_PROCESSING_LATE: &str = "post_processing.late";
+    /// Validator pass after post-processing.
     pub const VALIDATION: &str = "validation";
+    /// Text chunking stage.
     pub const CHUNKING: &str = "chunking";
+    /// Language detection stage.
     pub const LANGUAGE_DETECTION: &str = "language_detection";
+    /// Token-reduction / summarization stage.
     pub const TOKEN_REDUCTION: &str = "token_reduction";
 }
 
@@ -160,6 +176,7 @@ pub mod stages {
 // Metric names
 // ---------------------------------------------------------------------------
 
+/// Canonical OpenTelemetry metric names in the `kreuzberg.*` namespace.
 pub mod metrics {
     /// Counter: total extractions (labels: mime_type, extractor, status).
     pub const EXTRACTION_TOTAL: &str = "kreuzberg.extraction.total";
