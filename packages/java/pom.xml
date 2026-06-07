@@ -299,15 +299,15 @@
                         <ruleset>/rulesets/java/quickstart.xml</ruleset>
                     </rulesets>
                     <!--
-                        CPD threshold raised above the default 100 tokens because alef-generated
-                        streaming method bodies (`streamItems`, `batchStreamItems`, etc.) share
-                        an identical iterator-driving loop by design (per-stream-handle JNI
-                        externs differ, the surrounding plumbing is the same). The shared block
-                        is ~106 tokens — well within the default. 200 is the smallest threshold
-                        that lets two streaming methods coexist in the same handle class without
-                        a false-positive while still catching genuine large-scale duplication.
+                        Exclude alef-generated sources from CPD analysis. Alef's template-based
+                        code generation naturally produces duplications across record types
+                        (builders, getters, factory methods); these are structural artifacts of
+                        polyglot generation and not maintainability issues. Only hand-written
+                        Java code under src/main/java/ is subject to CPD enforcement.
                     -->
-                    <minimumTokens>200</minimumTokens>
+                    <excludeRoots>
+                        <excludeRoot>${project.basedir}/dev</excludeRoot>
+                    </excludeRoots>
                 </configuration>
                 <executions>
                     <execution>

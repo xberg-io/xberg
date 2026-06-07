@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **java**: exclude alef-generated sources from CPD (Copy-Paste Detector) analysis in Maven PMD. Alef's template-based polyglot code generation naturally produces duplications across record types (builders, getters, factory methods); these are structural artifacts of generation and not maintainability issues. Only hand-written code under `src/main/java/` is now subject to CPD enforcement.
+
 - **node**: add explicit `js_name` macro parameters to all `register_*` trait-bridge trait functions (`registerOcrBackend`, `registerDocumentExtractor`, `registerRenderer`, `registerEmbeddingBackend`, `registerPostProcessor`, `registerValidator`). Without explicit `js_name`, NAPI's default snake-to-camelCase conversion was unreliable, causing the e2e test fixture to fail at the `registerRenderer()` call with "Cannot convert undefined or null to object".
 
 - **r**: drop ORT-dependent features (`paddle-ocr`, `layout-detection`, `embeddings`, `auto-rotate`) from R extension. The R binding links a static Rust library but does not have access to ORT's dynamic libraries at runtime, causing undefined symbol errors (`OrtGetApiBase`). R uses only document format extraction and API/MCP features, which are ORT-free. New feature set: `no-ort-target + api + mcp`.
