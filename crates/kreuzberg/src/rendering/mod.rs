@@ -1,9 +1,9 @@
 //! Unified rendering of document content to output formats.
 //!
-//! - [`render_markdown`] — GFM Markdown (via comrak)
-//! - [`render_html`] — HTML5 (via comrak)
-//! - [`render_djot`] — Djot markup
-//! - [`render_plain`] — Plain text (no formatting)
+//! - `render_markdown` — GFM Markdown (via comrak)
+//! - `render_html` — HTML5 (via comrak)
+//! - `render_djot` — Djot markup
+//! - `render_plain` — Plain text (no formatting)
 
 pub(crate) mod common;
 mod comrak_bridge;
