@@ -16,66 +16,10 @@ repos:
 - repo: https://github.com/kreuzberg-dev/pre-commit-hooks
   rev: v2.1.9
   hooks:
-    # AI governance
-    - id: ai-rulez-generate
+    # Alef verification
+    - id: alef-verify
 
-    # File safety
-    - id: trailing-whitespace
-    - id: end-of-file-fixer
-    - id: check-merge-conflict
-    - id: check-added-large-files
-      exclude: uv.lock|docs/benchmarks/app/
-    - id: detect-private-key
-    - id: check-case-conflict
-    - id: check-executables-have-shebangs
-      # Rust inner attributes (`#![cfg(...)]`, `#![allow(...)]`) start with `#!`
-      # and trip this hook; .rs files never have a real shebang.
-      exclude: \.rs$
-    - id: check-shebang-scripts-are-executable
-      exclude: \.rs$
-    - id: mixed-line-ending
-    - id: typos
-      args: ["--force-exclude"]
-    - id: check-json
-    - id: check-yaml
-      args:
-      - --allow-multiple-documents
-      - --unsafe
-      exclude: ^charts/
-    - id: check-toml
-
-    # GitHub Actions
-    - id: actionlint
-    - id: gh-actions-updater
-
-    # Shell
-    - id: shfmt
-      args: ["-w", "-i", "2"]
-    - id: shellcheck
-      args:
-      - -x
-
-    # Markdown
-    - id: rumdl-fmt
-      exclude: ^templates/
-    - id: markdownlint-rumdl-strict
-      # Strict 120-char hard limit (incl. code blocks + tables) is too aggressive
-      # for long-form docs with kubectl manifests, kreuzberg JSON config
-      # examples, comparison tables, install matrices, audit notes, generated
-      # READMEs/templates, and prose that legitimately exceeds the cap inside
-      # fenced blocks. Non-strict `rumdl-fmt` still runs over these files.
-      exclude: ^(docs/|audit-notes/|skills/|templates/|tools/|scripts/|docker/|\.ai-rulez/|\.github/|crates/[^/]+/(README|patches/README)\.md$|ATTRIBUTIONS\.md$|SECURITY\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|README\.md$)
-    - id: textlint
-      files: ^docs/.*\.md$
-      exclude: ^docs/(reference/|api-|snippets/|migration/)
-      args:
-      - --fix
-      - --config
-      - .textlintrc.json
-
-    # Rust — cargo-check dropped in v2.0.0; cargo-clippy with -D warnings supersedes it
-    - id: cargo-fmt
-      args: ["--all"]
+    # Cargo / Rust
     - id: cargo-clippy
       args:
       - --fix
@@ -113,10 +57,53 @@ repos:
       # are subject to the cap. Shrink this list when files are split.
       exclude: ^(crates/kreuzberg-cli/src/commands/overrides\.rs|crates/kreuzberg-jni/src/lib\.rs|crates/kreuzberg-tesseract/build\.rs|crates/kreuzberg-tesseract/src/api\.rs|crates/kreuzberg/src/api/handlers\.rs|crates/kreuzberg/src/chunking/core\.rs|crates/kreuzberg/src/core/config/ocr\.rs|crates/kreuzberg/src/core/mime\.rs|crates/kreuzberg/src/embeddings/mod\.rs|crates/kreuzberg/src/extraction/archive/mod\.rs|crates/kreuzberg/src/extraction/derive\.rs|crates/kreuzberg/src/extraction/docx/math\.rs|crates/kreuzberg/src/extraction/docx/parser\.rs|crates/kreuzberg/src/extraction/docx/styles\.rs|crates/kreuzberg/src/extraction/docx/table\.rs|crates/kreuzberg/src/extraction/email\.rs|crates/kreuzberg/src/extraction/excel\.rs|crates/kreuzberg/src/extraction/html/structure\.rs|crates/kreuzberg/src/extraction/image_kind\.rs|crates/kreuzberg/src/extraction/pptx/mod\.rs|crates/kreuzberg/src/extractors/docbook\.rs|crates/kreuzberg/src/extractors/docx\.rs|crates/kreuzberg/src/extractors/fictionbook\.rs|crates/kreuzberg/src/extractors/html\.rs|crates/kreuzberg/src/extractors/jats/mod\.rs|crates/kreuzberg/src/extractors/latex/mod\.rs|crates/kreuzberg/src/extractors/markdown\.rs|crates/kreuzberg/src/extractors/mdx\.rs|crates/kreuzberg/src/extractors/odt\.rs|crates/kreuzberg/src/extractors/orgmode\.rs|crates/kreuzberg/src/extractors/pdf/mod\.rs|crates/kreuzberg/src/extractors/pdf/ocr\.rs|crates/kreuzberg/src/extractors/rst\.rs|crates/kreuzberg/src/extractors/rtf/parser\.rs|crates/kreuzberg/src/extractors/typst\.rs|crates/kreuzberg/src/layout/models/tatr\.rs|crates/kreuzberg/src/mcp/server\.rs|crates/kreuzberg/src/ocr/hocr_parser\.rs|crates/kreuzberg/src/ocr/processor/execution\.rs|crates/kreuzberg/src/paddle_ocr/model_manager\.rs|crates/kreuzberg/src/pdf/oxide/table\.rs|crates/kreuzberg/src/pdf/structure/assembly\.rs|crates/kreuzberg/src/pdf/structure/classify\.rs|crates/kreuzberg/src/pdf/structure/layout_classify\.rs|crates/kreuzberg/src/pdf/structure/pipeline\.rs|crates/kreuzberg/src/pdf/table_reconstruct\.rs|crates/kreuzberg/src/rendering/comrak_bridge\.rs|crates/kreuzberg/src/stopwords/mod\.rs|crates/kreuzberg/src/types/document_structure\.rs|crates/kreuzberg/src/types/internal\.rs|crates/kreuzberg/src/types/internal_builder\.rs|crates/kreuzberg/src/types/metadata\.rs|tools/benchmark-harness/src/adapters/subprocess\.rs|tools/benchmark-harness/src/aggregate\.rs|tools/benchmark-harness/src/comparison\.rs|tools/benchmark-harness/src/main\.rs|tools/benchmark-harness/src/markdown_quality\.rs|tools/benchmark-harness/src/noise_detection\.rs|tools/benchmark-harness/src/runner\.rs|tools/benchmark-harness/src/sizes\.rs)$
 
-    # Python
-    - id: pyproject-fmt
+    # Linters and checks
+    - id: ai-rulez-generate
+
+    - id: check-merge-conflict
+    - id: check-added-large-files
+      exclude: uv.lock|docs/benchmarks/app/
+    - id: detect-private-key
+    - id: check-case-conflict
+    - id: check-executables-have-shebangs
+      # Rust inner attributes (`#![cfg(...)]`, `#![allow(...)]`) start with `#!`
+      # and trip this hook; .rs files never have a real shebang.
+      exclude: \.rs$
+    - id: check-shebang-scripts-are-executable
+      exclude: \.rs$
+    - id: typos
+      args: ["--force-exclude"]
+    - id: check-json
+    - id: check-yaml
+      args:
+      - --allow-multiple-documents
+      - --unsafe
+      exclude: ^charts/
+    - id: check-toml
+
+    - id: actionlint
+    - id: gh-actions-updater
+
+    - id: shellcheck
+      args:
+      - -x
+
+    - id: markdownlint-rumdl-strict
+      # Strict 120-char hard limit (incl. code blocks + tables) is too aggressive
+      # for long-form docs with kubectl manifests, kreuzberg JSON config
+      # examples, comparison tables, install matrices, audit notes, generated
+      # READMEs/templates, and prose that legitimately exceeds the cap inside
+      # fenced blocks. Non-strict `rumdl-fmt` still runs over these files.
+      exclude: ^(docs/|audit-notes/|skills/|templates/|tools/|scripts/|docker/|\.ai-rulez/|\.github/|crates/[^/]+/(README|patches/README)\.md$|ATTRIBUTIONS\.md$|SECURITY\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|README\.md$)
+    - id: textlint
+      files: ^docs/.*\.md$
+      exclude: ^docs/(reference/|api-|snippets/|migration/)
+      args:
+      - --fix
+      - --config
+      - .textlintrc.json
+
     - id: ruff
-    - id: ruff-format
     - id: mypy
       files: ^(lib|src|kreuzberg|tools)/.*\.py$
       exclude: e2e/|tests/|scripts/
@@ -124,23 +111,16 @@ repos:
       files: ^packages/python/.*\.py$
       exclude: ^packages/python/(tests/|.*_native\.py$)
 
-    # JS/TS
     - id: oxlint
-    - id: oxfmt
     - id: tsc-typecheck
     - id: tsdoc-lint
 
-    # Go
-    - id: go-fmt
-      exclude: ^(e2e/|test_apps/|tools/)
     - id: golangci-lint
       exclude: ^(e2e/|test_apps/|tools/)
     - id: govulncheck
       exclude: ^(e2e/|test_apps/|tools/)
     - id: godoc-lint
 
-    # Java
-    - id: palantir-java-format
     - id: checkstyle
       args:
       - -c
@@ -155,11 +135,6 @@ repos:
     - id: javadoc-lint
       files: ^packages/java/src/main/.*\.java$
 
-    # Kotlin (Android target)
-    - id: ktfmt
-      args:
-      - --kotlinlang-style
-      files: ^packages/kotlin-android/.*\.kts?$
     - id: detekt
       args:
       - --build-upon-default-config
@@ -168,41 +143,26 @@ repos:
       files: ^packages/kotlin-android/.*\.kts?$
     - id: kotlin-dokka
 
-    # Ruby
-    - id: rubocop
-      files: ^packages/ruby/.*\.rb$
     - id: rubocop-lint
       files: ^packages/ruby/.*\.(rb|rbs)$
     - id: steep
       files: ^packages/ruby/.*\.(rb|rbs)$
     - id: yard-coverage
 
-    # C#
-    - id: dotnet-format
-      files: ^packages/csharp/.*\.cs$
     - id: dotnet-format-check
       files: ^packages/csharp/.*\.cs$
     - id: cs-xmldoc-lint
       files: ^packages/csharp/Kreuzberg/.*\.cs$
 
-    # PHP
-    - id: php-cs-fixer
-      files: ^packages/php/.*\.php$
     - id: phpstan
       files: ^packages/php/.*\.php$
     - id: phpdoc-lint
       files: ^packages/php/src/.*\.php$
 
-    # Elixir
-    - id: mix-format
-      files: ^packages/elixir/
     - id: mix-credo
       files: ^packages/elixir/
     - id: ex-doc-coverage
 
-    # R
-    - id: air-format
-      files: ^packages/r/.*\.[Rr]$
     - id: air-check
       files: ^packages/r/.*\.[Rr]$
     - id: lintr
@@ -210,43 +170,26 @@ repos:
     - id: roxygen2-check
       files: ^packages/r/R/.*\.R$
 
-    # Swift
-    - id: swift-format
-      files: ^packages/swift/.*\.swift$
     - id: swiftlint
       files: ^packages/swift/.*\.swift$
     - id: swift-doc-coverage
 
-    # Dart
-    - id: dart-format
-      files: ^packages/dart/.*\.dart$
     - id: dart-analyze
       files: ^packages/dart/.*\.dart$
     - id: dart-doc-lint
       files: ^packages/dart/lib/.*\.dart$
       exclude: ^packages/dart/lib/src/rust/
 
-    # Zig
-    - id: zig-fmt
-      files: ^packages/zig/.*\.zig$
     - id: zig-build-check
       files: ^packages/zig/.*\.zig$
     - id: zig-doc-lint
 
-    # Alef bindings (this repo consumes alef-generated bindings)
-    - id: alef-verify
-    - id: alef-sync-versions
-    - id: alef-docs-fresh
-    - id: alef-snippets-validate
-
-    # preserved from prior config
-    - id: clang-format
-      args:
-      - --style=file
-      files: ^crates/kreuzberg-ffi/tests/c/
     - id: clang-tidy
       files: ^crates/kreuzberg-ffi/tests/c/
     - id: cppcheck
+    - id: alef-docs-fresh
+    - id: alef-snippets-validate
+
     - id: helm-lint
       files: ^charts/.*/(Chart\.yaml|templates/.+\.ya?ml)$
     - id: kubeconform
@@ -255,3 +198,44 @@ repos:
       - -summary
       files: ^charts/.*/templates/.+\.ya?ml$
       exclude: ^charts/.*/(values|Chart)\.ya?ml$
+
+    # Formatters
+    - id: trailing-whitespace
+    - id: end-of-file-fixer
+    - id: mixed-line-ending
+    - id: shfmt
+      args: ["-w", "-i", "2"]
+    - id: rumdl-fmt
+      exclude: ^templates/
+    - id: cargo-fmt
+      args: ["--all"]
+    - id: pyproject-fmt
+    - id: ruff-format
+    - id: oxfmt
+    - id: go-fmt
+      exclude: ^(e2e/|test_apps/|tools/)
+    - id: palantir-java-format
+    - id: ktfmt
+      args:
+      - --kotlinlang-style
+      files: ^packages/kotlin-android/.*\.kts?$
+    - id: rubocop
+      files: ^packages/ruby/.*\.rb$
+    - id: dotnet-format
+      files: ^packages/csharp/.*\.cs$
+    - id: php-cs-fixer
+      files: ^packages/php/.*\.php$
+    - id: mix-format
+      files: ^packages/elixir/
+    - id: air-format
+      files: ^packages/r/.*\.[Rr]$
+    - id: swift-format
+      files: ^packages/swift/.*\.swift$
+    - id: dart-format
+      files: ^packages/dart/.*\.dart$
+    - id: zig-fmt
+      files: ^packages/zig/.*\.zig$
+    - id: clang-format
+      args:
+      - --style=file
+      files: ^crates/kreuzberg-ffi/tests/c/
