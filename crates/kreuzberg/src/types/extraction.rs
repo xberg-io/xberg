@@ -775,6 +775,7 @@ pub struct ElementMetadata {
 pub struct Element {
     /// Unique element identifier
     #[cfg_attr(alef, alef(skip))]
+    #[serde(skip)]
     pub element_id: ElementId,
     /// Semantic type of this element
     pub element_type: ElementType,

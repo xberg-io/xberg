@@ -64,28 +64,28 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
         }
       }
 
-      // Compute RID (runtime identifier) from platform and architecture.
+      // Compute RID (runtime identifier) from platform and architecture using Abi.current().
+      // This is more reliable than parsing Platform.version.
       String? computeRid() {
+        final abi = Abi.current();
         final os = Platform.operatingSystem;
-        // Use Dart's Platform.version to detect architecture.
-        // Format: "Dart <version> (stable) ... on \"<os> <arch>\""
-        final version = Platform.version;
-        final archMatch = version.contains('x86_64') ? 'x64'
-            : version.contains('aarch64') || version.contains('arm64') ? 'arm64'
-            : version.contains('armv7') ? 'arm'
-            : null;
-        if (archMatch == null) return null;
 
-        switch (os) {
-          case 'linux':
-            return 'linux-$archMatch';
-          case 'macos':
-            return 'macos-$archMatch';
-          case 'windows':
-            return 'windows-$archMatch';
-          default:
-            return null;
+        // Map from (os, Abi) to RID string.
+        String? ridFromAbi() {
+          if (os == 'linux') {
+            if (abi == Abi.linuxX64) return 'linux-x64';
+            if (abi == Abi.linuxArm64) return 'linux-arm64';
+          } else if (os == 'macos') {
+            if (abi == Abi.macosX64) return 'macos-x64';
+            if (abi == Abi.macosArm64) return 'macos-arm64';
+          } else if (os == 'windows') {
+            if (abi == Abi.windowsX64) return 'windows-x64';
+            if (abi == Abi.windowsArm64) return 'windows-arm64';
+          }
+          return null;
         }
+
+        return ridFromAbi();
       }
 
       final rid = computeRid();

@@ -132,17 +132,19 @@
                                 <!-- Define source and destination paths -->
                                 <!-- Use basedir to resolve workspace root more robustly -->
                                 <property name="workspace.root" value="${project.basedir}/../.." />
-                                <property name="native.source" value="${workspace.root}/target/release/${native.lib.name}" />
+                                <!-- Try ffi/lib (pre-built distribution) first, then workspace/target/release (local build) -->
+                                <available file="${project.basedir}/ffi/lib/${native.lib.name}" property="ffi.lib.path" value="${project.basedir}/ffi/lib" />
+                                <condition property="native.source.dir" value="${ffi.lib.path}" else="${workspace.root}/target/release">
+                                    <isset property="ffi.lib.path" />
+                                </condition>
+                                <property name="native.source" value="${native.source.dir}/${native.lib.name}" />
                                 <property name="native.dest.dir" value="${project.basedir}/src/main/resources/natives/${natives.rid}" />
                                 <!-- Copy native library if it exists -->
                                 <available file="${native.source}" property="native.lib.exists" />
-                                <condition property="should.fail.on.copy.error">
-                                    <isset property="native.lib.exists" />
-                                </condition>
                                 <echo message="Copying native library from ${native.source} to ${native.dest.dir} (RID: ${natives.rid})" />
                                 <echo message="Native library exists: ${native.lib.exists}" />
                                 <mkdir dir="${native.dest.dir}" />
-                                <copy file="${native.source}" todir="${native.dest.dir}" failonerror="true" verbose="true" />
+                                <copy file="${native.source}" todir="${native.dest.dir}" failonerror="false" verbose="true" />
                                 <!-- Verify copy succeeded and library is in correct location -->
                                 <condition property="copy.failed">
                                     <and>

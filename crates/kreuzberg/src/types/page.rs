@@ -81,7 +81,7 @@ pub struct PageInfo {
     pub title: Option<String>,
 
     /// Dimensions in points (PDF) or pixels (images): (width, height)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip)]
     #[cfg_attr(feature = "api", schema(value_type = Option<[f64; 2]>))]
     #[cfg_attr(alef, alef(skip))]
     pub dimensions: Option<(f64, f64)>,

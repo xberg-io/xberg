@@ -219,6 +219,7 @@ pub enum RelationshipKind {
 pub struct DocumentNode {
     /// Deterministic identifier (hash of content + position).
     #[cfg_attr(alef, alef(skip))]
+    #[serde(skip)]
     pub id: NodeId,
 
     /// Node content — tagged enum, type-specific data only.

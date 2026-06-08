@@ -121,6 +121,7 @@ pub enum FormatMetadata {
     /// Code metadata (tree-sitter analysis results, not exposed in bindings).
     #[cfg(feature = "tree-sitter")]
     #[cfg_attr(alef, alef(skip))]
+    #[serde(skip)]
     #[doc(hidden)]
     Code(CodeMetadataInner),
 }
