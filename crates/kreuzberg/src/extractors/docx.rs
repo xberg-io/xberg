@@ -1230,7 +1230,7 @@ impl DocumentExtractor for DocxExtractor {
         // always resolves in doc.images. When image extraction is enabled, populate
         // actual binary data; otherwise create placeholder entries with description
         // and source_path so the renderer can produce meaningful markdown references.
-        let extract_image_data = config.images.as_ref().is_some_and(|i| i.extract_images);
+        let extract_image_data = config.needs_image_data();
         let mut extracted_images = Vec::with_capacity(drawings.len());
         for (idx, drawing) in drawings.iter().enumerate() {
             let description = drawing.doc_properties.as_ref().and_then(|dp| dp.description.clone());

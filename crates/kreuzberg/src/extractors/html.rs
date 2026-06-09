@@ -511,7 +511,7 @@ impl SyncExtractor for HtmlExtractor {
         }
 
         // Extract inline images when image extraction is configured
-        let should_extract_images = config.images.as_ref().map(|i| i.extract_images).unwrap_or(false);
+        let should_extract_images = config.needs_image_data();
 
         if should_extract_images {
             let image_html_options =

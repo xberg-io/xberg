@@ -615,17 +615,31 @@ impl ExtractionConfig {
     /// For text-only extractions (no OCR, no image extraction), skipping image
     /// decompression can improve CPU utilization by 5-10% by avoiding wasteful
     /// image I/O and processing when results won't be used.
+    /// Returns `true` when image binary data should be extracted.
+    ///
+    /// True when `config.images.extract_images` is set **or** when captioning is
+    /// configured — captioning requires image bytes regardless of whether the caller
+    /// also requested `images` extraction.
+    pub fn needs_image_data(&self) -> bool {
+        self.images.as_ref().is_some_and(|i| i.extract_images) || self.captioning.is_some()
+    }
+
+    /// Returns `true` when any image processing is needed during extraction.
+    ///
+    /// # Optimization Impact
+    ///
+    /// For text-only extractions (no OCR, no image extraction, no captioning), skipping
+    /// image decompression can improve CPU utilization by 5-10% by avoiding wasteful
+    /// image I/O and processing when results won't be used.
     pub fn needs_image_processing(&self) -> bool {
         let ocr_enabled = !self.effective_disable_ocr() && (self.ocr.is_some() || self.force_ocr);
-
-        let image_extraction_enabled = self.images.as_ref().map(|i| i.extract_images).unwrap_or(false);
 
         #[cfg(feature = "layout-detection")]
         let layout_enabled = self.layout.is_some();
         #[cfg(not(feature = "layout-detection"))]
         let layout_enabled = false;
 
-        ocr_enabled || image_extraction_enabled || layout_enabled
+        ocr_enabled || self.needs_image_data() || layout_enabled
     }
 }
 

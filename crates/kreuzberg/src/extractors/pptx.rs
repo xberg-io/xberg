@@ -336,7 +336,7 @@ impl DocumentExtractor for PptxExtractor {
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         tracing::debug!(format = "pptx", size_bytes = content.len(), "extraction starting");
-        let extract_images = config.images.as_ref().is_some_and(|img| img.extract_images);
+        let extract_images = config.needs_image_data();
         let inject_placeholders = config
             .images
             .as_ref()
@@ -430,7 +430,7 @@ impl DocumentExtractor for PptxExtractor {
             .to_str()
             .ok_or_else(|| crate::KreuzbergError::validation("Invalid file path".to_string()))?;
 
-        let extract_images = config.images.as_ref().is_some_and(|img| img.extract_images);
+        let extract_images = config.needs_image_data();
         let inject_placeholders = config
             .images
             .as_ref()

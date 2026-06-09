@@ -126,9 +126,7 @@ pub(crate) fn read_image_file(path: &Path, image_index: u32) -> Option<Extracted
 /// `base_dir`, reads the file, and appends the result to `doc.images`.
 /// No-op when image extraction is disabled in `config`.
 pub(crate) fn resolve_image_uris(doc: &mut InternalDocument, base_dir: &Path, config: &ExtractionConfig) {
-    let image_extraction_enabled = config.images.as_ref().is_some_and(|img| img.extract_images);
-
-    if !image_extraction_enabled {
+    if !config.needs_image_data() {
         return;
     }
 

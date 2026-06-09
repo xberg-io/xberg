@@ -140,13 +140,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   building for that target, so non-Windows builds are unaffected. Same fix unblocks Elixir NIF
   Windows build (recurring failure since rc.7).
 
-- **captioning**: image bytes not preserved on OCR path for standalone image files when
-  captioning is configured. `ImageExtractor` built `extracted_image` but discarded it when
-  OCR ran, leaving `CaptioningProcessor` with nothing to caption. Now injects the image
-  into `InternalDocument.images` when `config.captioning` is set. Also emits a
-  `ProcessingWarning` when `captioning` is configured but `result.images` is `None`
-  (document-file case where `config.images` was not set), replacing the previous silent
-  no-op. (#732)
+- **captioning**: captioning was a no-op for all image paths — `CaptioningProcessor` never
+  received image bytes. Two root causes: (1) `ImageExtractor` built `extracted_image` on
+  the OCR path but passed `None` to `build_image_internal_document`, discarding the bytes;
+  (2) all document extractors (DOCX, PDF, PPTX, HTML, Markdown) gated binary image
+  extraction on `config.images.extract_images`, so setting only `config.captioning` left
+  them with empty data. Fix: add `ExtractionConfig::needs_image_data()` — true when
+  `images.extract_images` or `captioning` is set — and use it in every extractor image
+  gate and in `needs_image_processing()`. Also emits a `ProcessingWarning` when captioning
+  is configured but `result.images` is `None`. (#732)
 
 ## [5.0.0-rc.10] - 2026-06-09
 

@@ -94,8 +94,8 @@ pub(crate) fn extract_all_from_oxide_document(
 
     // --- Extracted images (data + OCR) ---
     // Positions are derived from extracted data — no separate decompression pass needed.
-    let images_extraction_enabled = config.images.as_ref().map(|c| c.extract_images).unwrap_or(false)
-        || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
+    let images_extraction_enabled =
+        config.needs_image_data() || config.pdf_options.as_ref().map(|p| p.extract_images).unwrap_or(false);
 
     let ocr_inline_images = config
         .pdf_options
