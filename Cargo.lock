@@ -3819,6 +3819,7 @@ dependencies = [
  "anstyle",
  "anyhow",
  "base64 0.22.1",
+ "bytes",
  "clap",
  "clap_complete",
  "kreuzberg",

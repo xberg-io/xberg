@@ -71,11 +71,12 @@ use commands::serve_command;
 use commands::{
     batch_command, chunk_command, clear_command, extract_command,
     extract_structured::{ExtractStructuredArgs, extract_structured_command},
-    load_config, manifest_command, stats_command, warm_command,
+    load_config, manifest_command, stats_command, validate_batch_paths, validate_chunk_params, validate_file_exists,
+    validate_output_dir, warm_command,
 };
 use kreuzberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 use serde_json::json;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Kreuzberg document intelligence CLI
 #[derive(Parser)]
@@ -122,6 +123,16 @@ enum Commands {
         /// Controls how the CLI displays results, not the extraction content format.
         #[arg(short, long, default_value = "text")]
         format: WireFormat,
+
+        /// Directory where extracted image files are written (text/toon output only).
+        ///
+        /// When `--extract-images true` is used with text or toon format, the markdown content
+        /// references image files by name (e.g. `image_0.png`). Pass this flag to control where
+        /// those files land. Defaults to the current working directory when not specified.
+        /// Ignored for `--format json` because JSON embeds image bytes inline.
+        /// The directory must already exist.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
 
         /// Extraction configuration overrides
         #[command(flatten)]
@@ -192,6 +203,16 @@ enum Commands {
         /// Controls how the CLI displays results, not the extraction content format.
         #[arg(short, long, default_value = "json")]
         format: WireFormat,
+
+        /// Directory where extracted image files are written (text/toon output only).
+        ///
+        /// When `--extract-images true` is used with text or toon format, the markdown content
+        /// references image files by name (e.g. `image_0.png`). Pass this flag to control where
+        /// those files land. Defaults to the current working directory when not specified.
+        /// Ignored for `--format json` because JSON embeds image bytes inline.
+        /// The directory must already exist.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
 
         /// Extraction configuration overrides
         #[command(flatten)]
@@ -532,95 +553,6 @@ impl From<ContentOutputFormatArg> for ContentOutputFormat {
     }
 }
 
-/// Validates that a file exists and is accessible.
-///
-/// Checks that the path exists in the filesystem and points to a regular file
-/// (not a directory or special file). Provides user-friendly error messages if validation fails.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - The path does not exist in the filesystem
-/// - The path exists but is not a regular file (e.g., is a directory)
-fn validate_file_exists(path: &Path) -> Result<()> {
-    if !path.exists() {
-        anyhow::bail!(
-            "File not found: '{}'. Please check that the file exists and is accessible.",
-            path.display()
-        );
-    }
-    if !path.is_file() {
-        anyhow::bail!(
-            "Path is not a file: '{}'. Please provide a path to a regular file.",
-            path.display()
-        );
-    }
-    Ok(())
-}
-
-/// Validates chunking parameters for correctness.
-///
-/// Ensures that chunking configuration makes sense: size must be positive and reasonable,
-/// and overlap must be smaller than chunk size. This prevents common configuration errors
-/// that would lead to cryptic failures from the underlying library.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - `chunk_size` is 0 (must be at least 1 character)
-/// - `chunk_size` exceeds 1,000,000 characters (to prevent excessive memory usage)
-/// - `chunk_overlap` is greater than or equal to `chunk_size` (overlap must be smaller)
-fn validate_chunk_params(chunk_size: Option<usize>, chunk_overlap: Option<usize>) -> Result<()> {
-    if let Some(size) = chunk_size {
-        if size == 0 {
-            anyhow::bail!("Invalid chunk size: {}. Chunk size must be greater than 0.", size);
-        }
-        if size > 1_000_000 {
-            anyhow::bail!(
-                "Invalid chunk size: {}. Chunk size must be less than 1,000,000 characters to avoid excessive memory usage.",
-                size
-            );
-        }
-    }
-
-    if let Some(overlap) = chunk_overlap
-        && let Some(size) = chunk_size
-        && overlap >= size
-    {
-        anyhow::bail!(
-            "Invalid chunk overlap: {}. Overlap ({}) must be less than chunk size ({}).",
-            overlap,
-            overlap,
-            size
-        );
-    }
-
-    Ok(())
-}
-
-/// Validates batch extraction paths for correctness.
-///
-/// Ensures that at least one file path is provided and that all paths point to valid,
-/// accessible files. This prevents processing empty batches or failing mid-batch due
-/// to invalid paths.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - The paths array is empty (at least one file is required)
-/// - Any path does not exist or is not a regular file
-fn validate_batch_paths(paths: &[PathBuf]) -> Result<()> {
-    if paths.is_empty() {
-        anyhow::bail!("No files provided for batch extraction. Please provide at least one file path.");
-    }
-
-    for (i, path) in paths.iter().enumerate() {
-        validate_file_exists(path).with_context(|| format!("Invalid file at position {}", i + 1))?;
-    }
-
-    Ok(())
-}
-
 /// Apply inline JSON or base64 JSON overrides to an extraction config.
 fn apply_json_overrides(
     config: &mut kreuzberg::ExtractionConfig,
@@ -672,16 +604,20 @@ fn main() -> Result<()> {
             config_json_base64,
             mime_type,
             format,
+            output_dir,
             overrides,
         } => {
             validate_file_exists(&path)?;
+            if let Some(ref dir) = output_dir {
+                validate_output_dir(dir)?;
+            }
             overrides.validate()?;
 
             let mut config = load_config(config_path)?;
             apply_json_overrides(&mut config, config_json, config_json_base64)?;
             overrides.apply(&mut config);
 
-            extract_command(path, config, mime_type, format)?;
+            extract_command(path, config, mime_type, format, output_dir)?;
         }
 
         Commands::ExtractStructured {
@@ -716,10 +652,14 @@ fn main() -> Result<()> {
             config_json,
             config_json_base64,
             format,
+            output_dir,
             overrides,
             file_configs,
         } => {
             validate_batch_paths(&paths)?;
+            if let Some(ref dir) = output_dir {
+                validate_output_dir(dir)?;
+            }
             overrides.validate()?;
 
             let mut config = load_config(config_path)?;
@@ -740,7 +680,7 @@ fn main() -> Result<()> {
             } else {
                 None
             };
-            batch_command(paths, file_configs_map, config, format)?;
+            batch_command(paths, file_configs_map, config, format, output_dir)?;
         }
 
         Commands::Detect { path, format } => {

@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   async, embeddings, error, format_specific, summarization).
 - **PHP bindings: nullable params on non-tail-optional positions.** alef 0.23.46 emits
   `?T $param = null` when the parameter slot is optional but a later required slot follows.
+- **CLI `--extract-images` now writes image files to disk.** The text and toon
+  output paths in `extract` and `batch` commands previously discarded extracted
+  images. A new `--output-dir <DIR>` flag controls where `image_N.ext` files
+  land; omitting it defaults to the current working directory. The JSON output
+  path is unaffected — it continues to embed image bytes inline. Closes #1084.
 - **Maven publish suppresses CPD/PMD via property-level skips.** The
   `publish` profile in `packages/java/pom.xml` now sets `<cpd.skip>true</cpd.skip>`
   and `<pmd.skip>true</pmd.skip>` in its `<properties>` block. The previous

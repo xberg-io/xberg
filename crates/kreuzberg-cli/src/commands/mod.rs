@@ -36,6 +36,79 @@ pub use server::mcp_command;
 #[cfg(feature = "api")]
 pub use server::serve_command;
 
+/// Validates that a directory exists and is accessible.
+///
+/// # Errors
+///
+/// Returns an error if the path does not exist or is not a directory.
+pub fn validate_output_dir(path: &std::path::Path) -> Result<()> {
+    if !path.exists() {
+        anyhow::bail!(
+            "Output directory not found: '{}'. Create the directory before running.",
+            path.display()
+        );
+    }
+    if !path.is_dir() {
+        anyhow::bail!("Output path is not a directory: '{}'.", path.display());
+    }
+    Ok(())
+}
+
+/// Validates that a file exists and is accessible.
+pub fn validate_file_exists(path: &std::path::Path) -> Result<()> {
+    if !path.exists() {
+        anyhow::bail!(
+            "File not found: '{}'. Please check that the file exists and is accessible.",
+            path.display()
+        );
+    }
+    if !path.is_file() {
+        anyhow::bail!(
+            "Path is not a file: '{}'. Please provide a path to a regular file.",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+/// Validates chunking parameters for correctness.
+pub fn validate_chunk_params(chunk_size: Option<usize>, chunk_overlap: Option<usize>) -> Result<()> {
+    if let Some(size) = chunk_size {
+        if size == 0 {
+            anyhow::bail!("Invalid chunk size: {}. Chunk size must be greater than 0.", size);
+        }
+        if size > 1_000_000 {
+            anyhow::bail!(
+                "Invalid chunk size: {}. Chunk size must be less than 1,000,000 characters to avoid excessive memory usage.",
+                size
+            );
+        }
+    }
+    if let Some(overlap) = chunk_overlap
+        && let Some(size) = chunk_size
+        && overlap >= size
+    {
+        anyhow::bail!(
+            "Invalid chunk overlap: {}. Overlap ({}) must be less than chunk size ({}).",
+            overlap,
+            overlap,
+            size
+        );
+    }
+    Ok(())
+}
+
+/// Validates batch extraction paths for correctness.
+pub fn validate_batch_paths(paths: &[std::path::PathBuf]) -> Result<()> {
+    if paths.is_empty() {
+        anyhow::bail!("No files provided for batch extraction. Please provide at least one file path.");
+    }
+    for (i, path) in paths.iter().enumerate() {
+        validate_file_exists(path).with_context(|| format!("Invalid file at position {}", i + 1))?;
+    }
+    Ok(())
+}
+
 /// Read text from stdin, trimming whitespace.
 pub fn read_stdin() -> Result<String> {
     let mut input = String::new();
