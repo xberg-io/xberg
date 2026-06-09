@@ -492,6 +492,9 @@ impl DocumentExtractor for ImageExtractor {
                     Ok(mut doc) => {
                         doc.metadata.format = Some(crate::types::FormatMetadata::Image(image_metadata));
                         doc.mime_type = mime_type.to_string();
+                        if config.captioning.is_some() {
+                            doc.images.push(extracted_image.clone());
+                        }
                         return Ok(doc);
                     }
                     Err(e) => {
@@ -506,6 +509,9 @@ impl DocumentExtractor for ImageExtractor {
                 let mut doc = self.extract_with_ocr(content, mime_type, config).await?;
                 doc.metadata.format = Some(crate::types::FormatMetadata::Image(image_metadata));
                 doc.mime_type = mime_type.to_string();
+                if config.captioning.is_some() {
+                    doc.images.push(extracted_image);
+                }
                 return Ok(doc);
             }
         }
@@ -813,5 +819,181 @@ mod tests {
         assert!(supported.contains(&"image/x-ms-bmp"));
         assert!(supported.contains(&"image/x-tiff"));
         assert!(supported.contains(&"image/x-portable-anymap"));
+    }
+
+    /// Regression test for #732: when captioning is configured and OCR runs,
+    /// doc.images must contain the raw image bytes so CaptioningProcessor can act.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    async fn test_extract_with_ocr_populates_images_for_captioning() {
+        use crate::core::config::{CaptioningConfig, LlmConfig, OcrConfig};
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
+        use crate::types::ExtractionResult;
+
+        let mut png_buf = std::io::Cursor::new(Vec::new());
+        image::ImageBuffer::<image::Rgb<u8>, _>::from_pixel(1, 1, image::Rgb([255u8, 255, 255]))
+            .write_to(&mut png_buf, image::ImageFormat::Png)
+            .expect("failed to encode test PNG");
+        let png_1x1 = png_buf.into_inner();
+
+        /// A minimal mock OCR backend that returns empty text.
+        struct EmptyOcrBackend;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for EmptyOcrBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], _config: &OcrConfig) -> crate::Result<ExtractionResult> {
+                Ok(ExtractionResult {
+                    content: String::new(),
+                    ..Default::default()
+                })
+            }
+        }
+
+        impl Plugin for EmptyOcrBackend {
+            fn name(&self) -> &str {
+                "empty-ocr-732"
+            }
+            fn version(&self) -> String {
+                "0.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        register_ocr_backend(std::sync::Arc::new(EmptyOcrBackend)).unwrap();
+        struct BackendGuard(&'static str);
+        impl Drop for BackendGuard {
+            fn drop(&mut self) {
+                let _ = unregister_ocr_backend(self.0);
+            }
+        }
+        let _guard = BackendGuard("empty-ocr-732");
+
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "empty-ocr-732".to_string(),
+                ..Default::default()
+            }),
+            captioning: Some(CaptioningConfig {
+                llm: LlmConfig {
+                    model: "openai/gpt-4o-mini".to_string(),
+                    ..Default::default()
+                },
+                prompt: None,
+                min_image_area: 0,
+            }),
+            ..Default::default()
+        };
+
+        let extractor = ImageExtractor::new();
+        let doc = extractor.extract_bytes(&png_1x1, "image/png", &config).await.unwrap();
+
+        assert_eq!(
+            doc.images.len(),
+            1,
+            "doc.images must contain the raw image (regression of #732)"
+        );
+        assert!(!doc.images[0].data.is_empty(), "image data must be non-empty");
+    }
+
+    /// Full-pipeline regression for #732: InternalDocument.images must survive the
+    /// derive.rs conversion so ExtractionResult.images is Some after run_pipeline.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    async fn test_pipeline_images_some_after_ocr_with_captioning() {
+        use crate::core::config::{CaptioningConfig, LlmConfig, OcrConfig};
+        use crate::core::pipeline::run_pipeline;
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
+        use crate::types::ExtractionResult;
+
+        let mut png_buf = std::io::Cursor::new(Vec::new());
+        image::ImageBuffer::<image::Rgb<u8>, _>::from_pixel(1, 1, image::Rgb([255u8, 255, 255]))
+            .write_to(&mut png_buf, image::ImageFormat::Png)
+            .expect("failed to encode test PNG");
+        let png_1x1 = png_buf.into_inner();
+
+        struct EmptyOcrBackend732b;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for EmptyOcrBackend732b {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], _config: &OcrConfig) -> crate::Result<ExtractionResult> {
+                Ok(ExtractionResult {
+                    content: String::new(),
+                    ..Default::default()
+                })
+            }
+        }
+        impl Plugin for EmptyOcrBackend732b {
+            fn name(&self) -> &str {
+                "empty-ocr-732b"
+            }
+            fn version(&self) -> String {
+                "0.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        register_ocr_backend(std::sync::Arc::new(EmptyOcrBackend732b)).unwrap();
+        struct BackendGuard(&'static str);
+        impl Drop for BackendGuard {
+            fn drop(&mut self) {
+                let _ = unregister_ocr_backend(self.0);
+            }
+        }
+        let _guard = BackendGuard("empty-ocr-732b");
+
+        // min_image_area = u32::MAX so CaptioningProcessor skips the 1×1 image,
+        // avoiding real VLM calls while still exercising the full pipeline.
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "empty-ocr-732b".to_string(),
+                ..Default::default()
+            }),
+            captioning: Some(CaptioningConfig {
+                llm: LlmConfig {
+                    model: "openai/gpt-4o-mini".to_string(),
+                    ..Default::default()
+                },
+                prompt: None,
+                min_image_area: u32::MAX,
+            }),
+            ..Default::default()
+        };
+
+        let extractor = ImageExtractor::new();
+        let doc = extractor.extract_bytes(&png_1x1, "image/png", &config).await.unwrap();
+        assert_eq!(doc.images.len(), 1, "InternalDocument must have image before pipeline");
+
+        let result = run_pipeline(doc, &config).await.unwrap();
+        assert!(
+            result.images.is_some(),
+            "ExtractionResult.images must be Some after pipeline — regression of #732"
+        );
+        assert_eq!(
+            result.images.unwrap().len(),
+            1,
+            "image count must survive the derive.rs conversion"
+        );
     }
 }

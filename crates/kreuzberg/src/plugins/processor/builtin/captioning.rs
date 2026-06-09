@@ -52,6 +52,13 @@ impl PostProcessor for CaptioningProcessor {
             return Ok(());
         };
         let Some(images) = result.images.as_mut() else {
+            result.processing_warnings.push(crate::types::ProcessingWarning {
+                source: std::borrow::Cow::Borrowed("captioning"),
+                message: std::borrow::Cow::Borrowed(
+                    "captioning configured but no images were extracted; \
+                     set config.images to enable image extraction from documents",
+                ),
+            });
             return Ok(());
         };
         if images.is_empty() {
@@ -240,6 +247,27 @@ mod tests {
     fn unknown_dimensions_pass_through() {
         let image = image_with(None, None, false);
         assert!(image_is_caption_candidate(&image, 1_000));
+    }
+
+    #[tokio::test]
+    async fn warns_when_no_images_extracted() {
+        let p = CaptioningProcessor;
+        let cfg = ExtractionConfig {
+            captioning: Some(caption_config(1000)),
+            ..Default::default()
+        };
+        let mut result = ExtractionResult {
+            content: "x".to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+        // result.images is None — simulates forgetting config.images
+        p.process(&mut result, &cfg).await.unwrap();
+        let warnings = result.processing_warnings;
+        assert!(
+            warnings.iter().any(|w| w.source == "captioning"),
+            "expected captioning warning when images is None; got: {warnings:?}"
+        );
     }
 
     #[test]

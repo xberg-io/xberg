@@ -128,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the default `package-dir: packages/python` split-layout fallback, which cd's into the
   package dir and lets maturin resolve `manifest-path` from pyproject.toml's `[tool.maturin]`
   section itself.
+
 - **Windows MSVC CRT mismatch in PHP and Elixir cdylibs.** Linking `kreuzberg_php.dll` /
   `kreuzberg_nif.dll` on `x86_64-pc-windows-msvc` failed with
   `LNK1319: mismatch detected for 'RuntimeLibrary': MT_StaticRelease vs MD_DynamicRelease`.
@@ -138,6 +139,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.cargo/config.toml [env]`. cc-rs honors these target-suffixed env vars only when actually
   building for that target, so non-Windows builds are unaffected. Same fix unblocks Elixir NIF
   Windows build (recurring failure since rc.7).
+
+- **captioning**: image bytes not preserved on OCR path for standalone image files when
+  captioning is configured. `ImageExtractor` built `extracted_image` but discarded it when
+  OCR ran, leaving `CaptioningProcessor` with nothing to caption. Now injects the image
+  into `InternalDocument.images` when `config.captioning` is set. Also emits a
+  `ProcessingWarning` when `captioning` is configured but `result.images` is `None`
+  (document-file case where `config.images` was not set), replacing the previous silent
+  no-op. (#732)
 
 ## [5.0.0-rc.10] - 2026-06-09
 
