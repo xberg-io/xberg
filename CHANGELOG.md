@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **r**: fix macOS dylib rpath so ORT loads at R extension runtime. `packages/r/src/rust/build.rs` now adds `-Wl,-rpath,@loader_path` linker flag on macOS, enabling the final R extension `.so` to locate transitively-linked dylibs like `libonnxruntime.dylib` at load time. Without this, R's `dyn.load` via `library.dynam2` failed with `undefined symbol: OrtGetApiBase` in CI on arm64-apple-darwin, blocking all R e2e tests. This matches the pattern applied to C# FFI in commit b5bc5d7791.
+
 - **Publish Release WASM job now non-blocking via `continue-on-error`.** Build WASM package job
   consistently hits GHA runner OOM during the linker stage (~9 min in) due to cold-build memory
   pressure on `ubuntu-latest` (8GB RAM). Runner preemption ("runner shutdown signal") terminates
