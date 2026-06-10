@@ -15,6 +15,10 @@ tasks:
       - task: smoke:r
       - task: smoke:rust
       - task: smoke:wasm
+      - task: smoke:dart
+      - task: smoke:zig
+      - task: smoke:swift
+      - task: smoke:kotlin_android
 
   smoke:python:
     desc: Run Python test_app smoke test
@@ -91,6 +95,31 @@ tasks:
     cmds:
       - pnpm install
       - pnpm exec vitest run tests/smoke.test.ts
+
+  smoke:dart:
+    desc: Run Dart test_app smoke test
+    dir: "{{.ROOT_DIR}}/test_apps/dart"
+    cmds:
+      - dart pub get
+      - dart test test/smoke_test.dart
+
+  smoke:zig:
+    desc: Run Zig test_app smoke test
+    dir: "{{.ROOT_DIR}}/test_apps/zig"
+    cmds:
+      - zig build test --test-filter "smoke"
+
+  smoke:swift:
+    desc: Run Swift test_app smoke test
+    dir: "{{.ROOT_DIR}}/test_apps/swift_e2e"
+    cmds:
+      - swift test --filter SmokeTests
+
+  smoke:kotlin_android:
+    desc: Run Kotlin Android test_app smoke test
+    dir: "{{.ROOT_DIR}}/test_apps/kotlin_android"
+    cmds:
+      - ./gradlew test --tests "*SmokeTest"
 
   comprehensive:
     desc: Run all test_app comprehensive tests
