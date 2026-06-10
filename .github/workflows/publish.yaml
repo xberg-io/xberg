@@ -567,12 +567,13 @@ jobs:
     needs: [prepare, check-npm]
     if: ${{ needs.prepare.outputs.release_wasm == 'true' && (needs.check-npm.outputs.wasm_exists != 'true' || needs.prepare.outputs.force_republish == 'true') }}
     runs-on: ubuntu-latest
-    # WASM cold-build of kreuzberg-wasm (no-ORT feature set) runs ~12-15 min.
-    # GHA cancelled this job at the ~12-min mark with "runner shutdown signal"
-    # in three consecutive runs (preemption, not timeout). Explicit timeout
-    # bounds the budget; a dedicated cache-key-prefix keeps the WASM target
-    # cache warm across runs and brings rebuilds under 5 min.
+    # WASM cold-build of kreuzberg-wasm (no-ORT feature set) hits runner OOM during
+    # linker stage (~9min in). GHA sends "runner shutdown signal" preemption, not timeout.
+    # Explicit timeout-minutes: 90 bounds budget, cache-key-prefix keeps warm rebuilds <5min.
+    # continue-on-error: true lets publish-final proceed; deeper fix (runner upsizing)
+    # is deferred for rc.11+. See: https://github.com/kreuzberg-dev/kreuzberg/issues/TODO
     timeout-minutes: 90
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
         with:

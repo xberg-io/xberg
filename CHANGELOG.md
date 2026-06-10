@@ -9,7 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Root Taskfile now includes test-apps task namespace.** Added `test-apps` to the root
+  `Taskfile.yml` includes block with proper `{{.ROOT_DIR}}` path resolution. Smoke and
+  comprehensive test tasks for all 11 languages now accessible via `task test-apps:smoke:*`.
+
 ### Fixed
+
+- **Publish Release WASM job now non-blocking via `continue-on-error`.** Build WASM package job
+  consistently hits GHA runner OOM during the linker stage (~9 min in) due to cold-build memory
+  pressure on `ubuntu-latest` (8GB RAM). Runner preemption ("runner shutdown signal") terminates
+  the job before timeout expires. Set `continue-on-error: true` so Publish-Final job proceeds
+  regardless of WASM build outcome. Deeper fix (runner upsizing or two-stage build) deferred
+  to rc.11+. WASM package still publishes if npm cache was warm from previous rc or from
+  parallel `publish-wasm` job success.
 
 - **`FormatMetadata::Code` now serializes correctly.** The `#[serde(skip)]` annotation on the
   `Code` variant caused `serde_json::to_string` (and every `*_to_json` FFI call) to return an
