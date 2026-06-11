@@ -207,7 +207,7 @@ To use embeddings functionality:
 
 ## Supported Formats
 
-90+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
+92 file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
 
 ### Office Documents
 
@@ -360,7 +360,7 @@ Elastic License 2.0 (ELv2) - see [LICENSE](LICENSE) for details. See [https://ww
 
 ### What is Kreuzberg?
 
-Kreuzberg is a polyglot document intelligence framework with a Rust core. It extracts text, metadata, and code intelligence from 90+ file formats and 300+ programming languages at native speeds without needing a GPU. It provides native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, C, and WebAssembly.
+Kreuzberg is a polyglot document intelligence framework with a Rust core. It extracts text, metadata, and code intelligence from 92 file formats and 306 programming languages at native speeds without needing a GPU. It provides native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, C, and WebAssembly.
 
 ### How does Kreuzberg differ from other document extraction tools?
 
