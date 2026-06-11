@@ -1347,6 +1347,15 @@ async = false
 returns_result = true
 args = [{ name = "mime_type", field = "input.mime_type", type = "string" }]
 
+[crates.e2e.calls.list_supported_formats]
+result_is_simple = true
+result_is_array = true
+function = "list_supported_formats"
+module = "kreuzberg"
+async = false
+returns_result = false
+args = []
+
 [crates.e2e.calls.batch_extract_files]
 function = "batch_extract_files"
 module = "kreuzberg"

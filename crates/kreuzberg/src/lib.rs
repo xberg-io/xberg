@@ -365,8 +365,8 @@ pub use tree_sitter_language_pack::{
     SymbolInfo, SymbolKind, process as process_code,
 };
 
-// ── MIME / Format Info — public API (3 functions) ────────────────────────────
-pub use core::mime::{SupportedFormat, detect_mime_type_from_bytes, get_extensions_for_mime};
+// ── MIME / Format Info — public API (4 functions + 1 type) ───────────────────
+pub use core::mime::{SupportedFormat, detect_mime_type_from_bytes, get_extensions_for_mime, list_supported_formats};
 
 /// Detect the MIME type of a file at the given path.
 ///

@@ -904,10 +904,16 @@ pub fn get_extensions_for_mime(mime_type: &str) -> Result<Vec<String>> {
 
 /// List all supported document formats.
 ///
-/// Returns a list of all file extensions and their corresponding MIME types
-/// that Kreuzberg can process. Derived from the centralized [`FORMATS`] registry.
+/// Returns every file extension Kreuzberg recognizes together with its
+/// corresponding MIME type, derived from the central format registry.
+/// Formats that have no registered file extension (such as source code,
+/// which is detected dynamically) are not included.
 ///
 /// The list is sorted alphabetically by file extension.
+///
+/// # Returns
+///
+/// A vector of [`SupportedFormat`] entries sorted by extension.
 ///
 /// # Example
 ///
@@ -918,7 +924,6 @@ pub fn get_extensions_for_mime(mime_type: &str) -> Result<Vec<String>> {
 /// assert!(!formats.is_empty());
 /// assert!(formats.iter().any(|f| f.extension == "pdf"));
 /// ```
-#[cfg_attr(alef, alef(skip))]
 pub fn list_supported_formats() -> Vec<SupportedFormat> {
     let mut formats: Vec<SupportedFormat> = EXT_TO_MIME
         .iter()

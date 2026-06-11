@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`list_supported_formats()` is now part of the public crate root and
+  every language binding.** Returns every file extension Kreuzberg
+  recognizes with its corresponding MIME type, so callers can derive
+  ingestion policy from the library instead of maintaining their own
+  extension whitelists. The function already backed the CLI
+  (`kreuzberg formats`), REST API (`GET /formats`), and MCP server; it
+  is now exported from the crate root and exposed in every binding via
+  the alef catalog. ([#1091](https://github.com/kreuzberg-dev/kreuzberg/issues/1091))
+
 - **[v5.0.0] reranking: cross-encoder reordering with optional liter-llm wiring.**
   New top-level `rerank` / `rerank_async` API, `RerankerConfig` with
   Preset/Custom/Llm/Plugin variants, `RerankerBackend` plugin trait +
