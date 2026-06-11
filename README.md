@@ -364,7 +364,7 @@ Kreuzberg is a polyglot document intelligence framework with a Rust core. It ext
 
 ### How does Kreuzberg differ from other document extraction tools?
 
-- **Kreuzberg**: Rust core, 92 formats, 300+ languages, polyglot bindings, code intelligence via tree-sitter, VLM OCR, native speeds, no GPU needed
+- **Kreuzberg**: Rust core, 92 formats, 306 languages, polyglot bindings, code intelligence via tree-sitter, VLM OCR, native speeds, no GPU needed
 - **Apache Tika**: Java-based, broader format support, but slower, no code intelligence, no VLM OCR
 - **pdfplumber**: Python-only, PDF focus, slower, no code intelligence
 - **unstructured**: Python-based, good format coverage, but slower, requires more dependencies
@@ -373,7 +373,7 @@ Kreuzberg's Rust core with SIMD optimizations and parallelism delivers 10-100x f
 
 ### What are Kreuzberg's key features?
 
-- **Code intelligence** — Extract functions, classes, imports, symbols, docstrings from 300+ languages via tree-sitter
+- **Code intelligence** — Extract functions, classes, imports, symbols, docstrings from 306 languages via tree-sitter
 - **Extensible architecture** — Plugin system for custom OCR backends, validators, post-processors, document extractors, renderers
 - **Polyglot bindings** — Native bindings for 16 languages (Rust, Python, Node.js, Ruby, Go, Java, Kotlin, C#, PHP, Elixir, R, Dart, Swift, Zig, C, WebAssembly)
 - **92 file formats** — PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
