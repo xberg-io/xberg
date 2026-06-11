@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import dev.kreuzberg.Kreuzberg
 import dev.kreuzberg.DocumentExtractorBridge
 import dev.kreuzberg.IDocumentExtractor
+import dev.kreuzberg.*
 
 /** E2e tests for category: document_extractor_management. */
 class DocumentExtractorManagementTest {

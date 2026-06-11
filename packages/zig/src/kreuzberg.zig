@@ -4858,9 +4858,7 @@ pub fn extract_bytes(content: []const u8, mime_type: []const u8, config: []const
     return blk: {
         const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
         c.kreuzberg_extraction_result_free(_result.?);
-        if (_json_ptr == null) {
-            return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
-        }
+        if (_json_ptr == null) return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
         defer _free_string(_json_ptr);
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
@@ -4911,9 +4909,7 @@ pub fn extract_file(path: []const u8, mime_type: ?[]const u8, config: []const u8
     return blk: {
         const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
         c.kreuzberg_extraction_result_free(_result.?);
-        if (_json_ptr == null) {
-            return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
-        }
+        if (_json_ptr == null) return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
         defer _free_string(_json_ptr);
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
@@ -4955,9 +4951,7 @@ pub fn extract_file_sync(path: []const u8, mime_type: ?[]const u8, config: []con
     return blk: {
         const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
         c.kreuzberg_extraction_result_free(_result.?);
-        if (_json_ptr == null) {
-            return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
-        }
+        if (_json_ptr == null) return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
         defer _free_string(_json_ptr);
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);
@@ -4993,9 +4987,7 @@ pub fn extract_bytes_sync(content: []const u8, mime_type: []const u8, config: []
     return blk: {
         const _json_ptr = c.kreuzberg_extraction_result_to_json(_result.?);
         c.kreuzberg_extraction_result_free(_result.?);
-        if (_json_ptr == null) {
-            return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
-        }
+        if (_json_ptr == null) return _first_error(KreuzbergError); // FFI to_json returned NULL — surface first declared variant rather than crashing on null-slice
         defer _free_string(_json_ptr);
         const slice = std.mem.sliceTo(_json_ptr, 0);
         const owned = try std.heap.c_allocator.dupe(u8, slice);

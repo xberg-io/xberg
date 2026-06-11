@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import dev.kreuzberg.Kreuzberg
 import dev.kreuzberg.EmbeddingBackendBridge
 import dev.kreuzberg.IEmbeddingBackend
+import dev.kreuzberg.*
 
 /** E2e tests for category: embedding_backend_management. */
 class EmbeddingBackendManagementTest {

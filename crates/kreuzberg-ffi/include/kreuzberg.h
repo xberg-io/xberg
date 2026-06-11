@@ -306,9 +306,9 @@ typedef struct KREUZBERGDjotLink KREUZBERGDjotLink;
  *     fn shutdown(&self) -> Result<()> { Ok(()) }
  * }
  *
- * #[async_trait]
+ * #`async_trait`
  * impl DocumentExtractor for PremiumPdfExtractor {
- *     async fn extract_bytes(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig)
+ *     async fn extract_bytes(&self, content: &`u8`, mime_type: &str, config: &ExtractionConfig)
  *         -> Result<InternalDocument> {
  *         // Premium extraction logic with better accuracy
  *         let mut doc = InternalDocument::new("pdf");
@@ -453,7 +453,7 @@ typedef struct KREUZBERGEmbeddedFile KREUZBERGEmbeddedFile;
  *   validates this before returning to downstream consumers; a non-conforming
  *   backend surfaces as a `KreuzbergError::Validation`, not a panic.
  * - `embed` may be called from any thread. Its future must be `Send`
- *   (enforced by `async_trait` when `#[async_trait]` is used on non-WASM targets).
+ *   (enforced by `async_trait` when `#`async_trait`` is used on non-WASM targets).
  * - `dimensions()` is called exactly once at registration, immediately after
  *   `initialize()` succeeds. The returned value is cached by the registry and
  *   used for all subsequent shape validation. Lazy-loading implementations can
@@ -470,9 +470,9 @@ typedef struct KREUZBERGEmbeddedFile KREUZBERGEmbeddedFile;
  * # Runtime
  *
  * The synchronous `embed_texts` entry uses
- * [`tokio::task::block_in_place`] to await the trait's async `embed`, which
+ * `tokio.task.block_in_place` to await the trait's async `embed`, which
  * requires a multi-thread tokio runtime. Callers running inside a
- * `current_thread` runtime (e.g. `#[tokio::test]` without `flavor = "multi_thread"`,
+ * `current_thread` runtime (e.g. `#`tokio.test`` without `flavor = "multi_thread"`,
  * or `tokio::runtime::Builder::new_current_thread()`) must use
  * `embed_texts_async` instead, which awaits directly without `block_in_place`.
  */
@@ -820,7 +820,7 @@ typedef struct KREUZBERGLlmBackend KREUZBERGLlmBackend;
  * Each feature (VLM OCR, VLM embeddings, structured extraction) carries
  * its own `LlmConfig`, allowing different providers per feature.
  * \code
- * [structured_extraction.llm]
+ * `structured_extraction.llm`
  * model = "openai/gpt-4o"
  * api_key = "sk-..."  # or use KREUZBERG_LLM_API_KEY env var
  * \endcode
@@ -892,9 +892,9 @@ typedef struct KREUZBERGNodeContent KREUZBERGNodeContent;
  *     fn shutdown(&self) -> Result<()> { Ok(()) }
  * }
  *
- * #[async_trait]
+ * #`async_trait`
  * impl OcrBackend for CustomOcrBackend {
- *     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
+ *     async fn process_image(&self, image_bytes: &`u8`, config: &OcrConfig) -> Result<ExtractionResult> {
  *         // Implement OCR logic here
  *         Ok(ExtractionResult {
  *             content: "Extracted text".to_string(),
@@ -1236,7 +1236,7 @@ typedef struct KREUZBERGPlugin KREUZBERGPlugin;
  *     fn shutdown(&self) -> Result<()> { Ok(()) }
  * }
  *
- * #[async_trait]
+ * #`async_trait`
  * impl PostProcessor for WordCountProcessor {
  *     async fn process(&self, result: &mut ExtractionResult, config: &ExtractionConfig)
  *         -> Result<()> {
@@ -1330,7 +1330,7 @@ typedef struct KREUZBERGRedactionFinding KREUZBERGRedactionFinding;
  *
  * The pattern is compiled with the Rust `regex` crate (no look-around). Case
  * sensitivity is encoded in the pattern via the `(?i)` inline flag when
- * [`Self::case_sensitive`] is `false`.
+ * `Self.case_sensitive` is `false`.
  */
 typedef struct KREUZBERGRedactionPattern KREUZBERGRedactionPattern;
 /**
@@ -1351,7 +1351,7 @@ typedef struct KREUZBERGRedactionStrategy KREUZBERGRedactionStrategy;
  *
  * Matched as a regex-escaped substring (so callers do not need to escape
  * metacharacters themselves). Case-insensitive by default â set
- * [`Self::case_sensitive`] to `true` for exact byte-match semantics.
+ * `Self.case_sensitive` to `true` for exact byte-match semantics.
  */
 typedef struct KREUZBERGRedactionTerm KREUZBERGRedactionTerm;
 /**
@@ -1371,21 +1371,21 @@ typedef struct KREUZBERGRegionKind KREUZBERGRegionKind;
  */
 typedef struct KREUZBERGRelationshipKind KREUZBERGRelationshipKind;
 /**
- * Trait for document renderers that convert [`InternalDocument`] to output strings.
+ * Trait for document renderers that convert `InternalDocument` to output strings.
  *
  * Renderers are typically stateless converters that transform the internal
  * document representation into a specific output format (Markdown, HTML,
- * Djot, plain text, etc.). They participate in the standard [`Plugin`]
+ * Djot, plain text, etc.). They participate in the standard `Plugin`
  * lifecycle so custom renderers can be registered from any supported binding
  * language.
  *
- * The format name is exposed via [`Plugin::name`]. For stateless renderers
- * the [`Plugin`] lifecycle methods (`version`, `initialize`, `shutdown`) all
+ * The format name is exposed via `Plugin.name`. For stateless renderers
+ * the `Plugin` lifecycle methods (`version`, `initialize`, `shutdown`) all
  * take no-op defaults and need not be overridden.
  *
  * # Thread Safety
  *
- * Renderers must be `Send + Sync` (inherited from [`Plugin`]).
+ * Renderers must be `Send + Sync` (inherited from `Plugin`).
  * \code
  * use kreuzberg::plugins::{Plugin, Renderer};
  * use kreuzberg::types::internal::InternalDocument;
@@ -1470,17 +1470,17 @@ typedef struct KREUZBERGStructuredDataType KREUZBERGStructuredDataType;
  * Sends extracted document content to a VLM with a JSON schema,
  * returning structured data that conforms to the schema.
  * \code
- * [structured_extraction]
+ * `structured_extraction`
  * schema_name = "invoice_data"
  * strict = true
  *
- * [structured_extraction.schema]
+ * `structured_extraction.schema`
  * type = "object"
  * properties.vendor = { type = "string" }
  * properties.total = { type = "number" }
  * required = ["vendor", "total"]
  *
- * [structured_extraction.llm]
+ * `structured_extraction.llm`
  * model = "openai/gpt-4o"
  * \endcode
  */
@@ -1564,7 +1564,7 @@ typedef struct KREUZBERGTextExtractionResult KREUZBERGTextExtractionResult;
  */
 typedef struct KREUZBERGTextMetadata KREUZBERGTextMetadata;
 /**
- * Per-category running counter for [`RedactionStrategy::TokenReplace`].
+ * Per-category running counter for `RedactionStrategy.TokenReplace`.
  */
 typedef struct KREUZBERGTokenCounter KREUZBERGTokenCounter;
 /**
@@ -1589,7 +1589,7 @@ typedef struct KREUZBERGTokenReductionOptions KREUZBERGTokenReductionOptions;
  * All fields have sensible defaults. The recommended starting point is:
  *
  * ```toml
- * [extraction.transcription]
+ * `extraction.transcription`
  * enabled = true
  * model = "tiny"
  * ```
@@ -1616,11 +1616,11 @@ typedef struct KREUZBERGTranslationConfig KREUZBERGTranslationConfig;
  * # Example (TOML)
  *
  * ```toml
- * [tree_sitter]
+ * `tree_sitter`
  * languages = ["python", "rust"]
  * groups = ["web"]
  *
- * [tree_sitter.process]
+ * `tree_sitter.process`
  * structure = true
  * comments = true
  * docstrings = true
@@ -1679,7 +1679,7 @@ typedef struct KREUZBERGUriKind KREUZBERGUriKind;
  *     fn shutdown(&self) -> Result<()> { Ok(()) }
  * }
  *
- * #[async_trait]
+ * #`async_trait`
  * impl Validator for MinimumLengthValidator {
  *     async fn validate(&self, result: &ExtractionResult, config: &ExtractionConfig)
  *         -> Result<()> {
@@ -1699,20 +1699,20 @@ typedef struct KREUZBERGValidator KREUZBERGValidator;
 /**
  * Policy controlling when VLM (Vision Language Model) OCR is used as a fallback.
  *
- * This knob is syntactic sugar over the explicit [`OcrPipelineConfig`] stage
+ * This knob is syntactic sugar over the explicit `OcrPipelineConfig` stage
  * ordering. When `vlm_fallback` is set and `pipeline` is `None`, an equivalent
  * pipeline is synthesised at extraction time:
  *
- * - [`VlmFallbackPolicy::Disabled`] â no synthesis; single-backend mode (default).
- * - [`VlmFallbackPolicy::OnLowQuality`] â tries the classical backend first; if the
+ * - `VlmFallbackPolicy.Disabled` â no synthesis; single-backend mode (default).
+ * - `VlmFallbackPolicy.OnLowQuality` â tries the classical backend first; if the
  *   result scores below `quality_threshold`, tries VLM.
- * - [`VlmFallbackPolicy::Always`] â skips the classical backend and sends every page
+ * - `VlmFallbackPolicy.Always` â skips the classical backend and sends every page
  *   to the VLM.
  *
- * When [`OcrConfig::pipeline`] is explicitly set, `vlm_fallback` is ignored â the
+ * When `OcrConfig.pipeline` is explicitly set, `vlm_fallback` is ignored â the
  * explicit pipeline takes precedence.
- * \note Both `OnLowQuality` and `Always` require [`OcrConfig::vlm_config`] to be `Some`.
- * Constructing an [`OcrConfig`] with one of these policies but no `vlm_config` is
+ * \note Both `OnLowQuality` and `Always` require `OcrConfig.vlm_config` to be `Some`.
+ * Constructing an `OcrConfig` with one of these policies but no `vlm_config` is
  * detected by `OcrConfig::validate` and will surface as a
  * `Validation` error at extraction time, not a panic.
  * \code
@@ -4919,7 +4919,7 @@ KREUZBERGRedactionConfig *kreuzberg_redaction_config_default(void);
 /**
  * Validate user-supplied terms and patterns at config-construction time.
  *
- * Compiles every [`RedactionPattern::pattern`] (with the case-insensitive
+ * Compiles every `RedactionPattern.pattern` (with the case-insensitive
  * inline flag where applicable) and returns the first compilation error so
  * the caller can reject the config before the redaction pipeline runs.
  * Pure terms (regex-escaped) cannot fail to compile, but the function
@@ -15137,7 +15137,7 @@ uintptr_t kreuzberg_batch_extract_bytes_sync_len(const char *_items,
  * configured via `ExtractionConfig::max_concurrent_extractions` or defaults
  * to `(num_cpus * 1.5).ceil()`.
  *
- * Each file can optionally specify a [`FileExtractionConfig`] that overrides specific
+ * Each file can optionally specify a `FileExtractionConfig` that overrides specific
  * fields from the batch-level `config`. Pass `None` for a file to use the batch defaults.
  * Batch-level settings like `max_concurrent_extractions` and `use_cache` are always
  * taken from the batch-level `config`.
@@ -15202,7 +15202,7 @@ uintptr_t kreuzberg_batch_extract_files_len(const char *_items,
  * configured via `ExtractionConfig::max_concurrent_extractions` or defaults
  * to `(num_cpus * 1.5).ceil()`.
  *
- * Each item can optionally specify a [`FileExtractionConfig`] that overrides specific
+ * Each item can optionally specify a `FileExtractionConfig` that overrides specific
  * fields from the batch-level `config`. Pass `None` as the config to use
  * the batch-level defaults for that item.
  * \param items Vector of `BatchBytesItem` structs, each containing content bytes, MIME type, and
@@ -15569,7 +15569,7 @@ int32_t kreuzberg_redact(KREUZBERGExtractionResult *result,
  * `language` is an ISO 639 (or locale) code used to pick a stopword list;
  * pass `None` (or an unknown code) to fall back to English.
  * `max_tokens` bounds the summary length by whitespace-separated tokens;
- * `None` falls back to [`DEFAULT_MAX_TOKENS`].
+ * `None` falls back to `DEFAULT_MAX_TOKENS`.
  * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must be
  * freed with the appropriate free function.
  */
@@ -15613,7 +15613,7 @@ int32_t kreuzberg_translate_result(KREUZBERGExtractionResult *result,
  * Compare two extraction results and return a structured diff.
  *
  * The comparison is purely structural â no I/O, no side effects. All fields
- * of [`ExtractionDiff`] are populated according to the provided [`DiffOptions`].
+ * of `ExtractionDiff` are populated according to the provided `DiffOptions`.
  * \param a â the "before" extraction result
  * \param b â the "after" extraction result
  * \param opts â controls which sections are compared and optional truncation

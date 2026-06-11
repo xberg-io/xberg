@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import dev.kreuzberg.Kreuzberg
 import dev.kreuzberg.PostProcessorBridge
 import dev.kreuzberg.IPostProcessor
+import dev.kreuzberg.*
 
 /** E2e tests for category: post_processor_management. */
 class PostProcessorManagementTest {

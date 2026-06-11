@@ -7,12 +7,12 @@
 import 'package:test/test.dart';
 import 'dart:typed_data';
 import 'package:kreuzberg/kreuzberg.dart';
+import 'package:kreuzberg/kreuzberg.dart' show Validator;
 import 'package:kreuzberg/kreuzberg.dart' show OcrBackend;
 import 'package:kreuzberg/kreuzberg.dart' show EmbeddingBackend;
-import 'package:kreuzberg/kreuzberg.dart' show DocumentExtractor;
-import 'package:kreuzberg/kreuzberg.dart' show Validator;
 import 'package:kreuzberg/kreuzberg.dart' show PostProcessor;
 import 'package:kreuzberg/kreuzberg.dart' show Renderer;
+import 'package:kreuzberg/kreuzberg.dart' show DocumentExtractor;
 import 'package:kreuzberg/src/kreuzberg_bridge_generated/frb_generated.dart' show RustLib;
 
 // E2e tests for category: plugin_api
@@ -87,7 +87,7 @@ class TestStubRegisterOcrBackendTraitBridge extends OcrBackend {
   Future<ExtractionResult> processImage(Uint8List imageBytes, OcrConfig config) async => throw UnimplementedError();
   Future<ExtractionResult> processImageFile(String path, OcrConfig config) async => throw UnimplementedError();
   Future<bool> supportsLanguage(String lang) async => false;
-  Future<OcrBackendType> backendType() async => throw UnimplementedError();
+  Future<OcrBackendType> backendType() async => OcrBackendType.tesseract;
   Future<List<String>> supportedLanguages() async => [];
   Future<bool> supportsTableDetection() async => false;
   Future<bool> supportsDocumentProcessing() async => false;
@@ -111,7 +111,7 @@ Future<OcrBackendDartImpl> _createTestStubRegisterOcrBackendTraitBridgeWrapper()
 class TestStubRegisterPostProcessorTraitBridge extends PostProcessor {
   String get name => 'register_post_processor_trait_bridge';
   Future<void> process(ExtractionResult result, ExtractionConfig config) async => null;
-  Future<ProcessingStage> processingStage() async => throw UnimplementedError();
+  Future<ProcessingStage> processingStage() async => ProcessingStage.early;
   Future<bool> shouldProcess(ExtractionResult result, ExtractionConfig config) async => false;
   Future<int> estimatedDurationMs(ExtractionResult result) async => 1;
   Future<int> priority() async => 1;

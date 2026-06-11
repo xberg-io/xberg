@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import dev.kreuzberg.Kreuzberg
 import dev.kreuzberg.RendererBridge
 import dev.kreuzberg.IRenderer
+import dev.kreuzberg.*
 
 /** E2e tests for category: renderer_management. */
 class RendererManagementTest {
