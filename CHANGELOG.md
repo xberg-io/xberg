@@ -73,6 +73,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **pdf: `result.pages[*].isBlank` now reflects OCR content for scanned/rasterized PDFs.**
+  When OCR (including VLM) wrote text into existing `PageContent` entries, `is_blank` was
+  never recalculated — it retained the stale value from native text extraction, which is
+  always `Some(true)` for pages with no text layer. All four write sites in the OCR
+  page-assembly block now call `is_page_text_blank` after every content mutation.
+  ([#1095](https://github.com/kreuzberg-dev/kreuzberg/issues/1095))
+
 - **reranker: `RerankError` migrated to `thiserror`.** Matches the rest
   of the library and `rust-conventions`.
 
