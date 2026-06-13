@@ -383,6 +383,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **chunking: `chunks[*].firstPage` / `lastPage` now populated for non-plain output formats.**
+  When `output_format` is `markdown`, `html`, or `djot`, page boundaries were computed against
+  `result.content` (plain text) and then unconditionally dropped because those offsets are invalid
+  for the formatted string. The pipeline now re-runs `recompute_boundaries_from_pages` against
+  `formatted_content` directly — the page text substrings are still present verbatim inside the
+  formatted string so the substring search returns valid byte offsets into it. Chunks therefore
+  carry accurate `firstPage`/`lastPage` provenance whenever `result.pages` is populated.
+  ([#1105](https://github.com/kreuzberg-dev/kreuzberg/issues/1105))
+
 - **rendering: fixed panic when a non-`Item` block element appears directly under
   a `List` node before any `ListItem`.** The comrak AST builder now synthesises an
   implicit `Item` wrapper instead of falling back onto the bare `List`, which violated
