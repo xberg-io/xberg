@@ -443,6 +443,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page-assembly block now call `is_page_text_blank` after every content mutation.
   ([#1095](https://github.com/kreuzberg-dev/kreuzberg/issues/1095))
 
+- **`ImagePreprocessingConfig` default `auto_rotate` changed from `true` to `false`; server
+  no longer aborts (exit 133 / SIGTRAP) when `preprocessing` is set in the server config.**
+  The previous default caused `TessBaseAPIDetectOrientationScript` to be called on every
+  image, which can propagate a C++ exception through Tesseract's `-fno-exceptions` frames
+  into Rust's `extern "C-unwind"` boundary, triggering a runtime abort. A C++ exception-
+  barrier shim now wraps the five most dangerous Tesseract C API calls on native builds so
+  that any escaping exception is converted to a graceful error return instead of aborting the
+  process. To keep auto-rotation, set `auto_rotate: true` explicitly.
+  ([#1089](https://github.com/kreuzberg-dev/kreuzberg/issues/1089))
+
 - **reranker: `RerankError` migrated to `thiserror`.** Matches the rest
   of the library and `rust-conventions`.
 

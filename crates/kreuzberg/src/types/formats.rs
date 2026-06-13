@@ -284,7 +284,7 @@ impl Default for ImagePreprocessingConfig {
     fn default() -> Self {
         Self {
             target_dpi: 300,
-            auto_rotate: true,
+            auto_rotate: false,
             deskew: true,
             denoise: false,
             contrast_enhance: false,

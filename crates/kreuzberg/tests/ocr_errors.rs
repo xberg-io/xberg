@@ -719,3 +719,71 @@ fn test_ocr_with_invalid_binarization_method() {
         }
     }
 }
+
+#[test]
+fn test_preprocessing_default_does_not_crash() {
+    if skip_if_missing("images/test_hello_world.png") {
+        return;
+    }
+
+    use kreuzberg::types::ImagePreprocessingConfig;
+
+    let file_path = get_test_file_path("images/test_hello_world.png");
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            backend: "tesseract".to_string(),
+            language: "eng".to_string(),
+            tesseract_config: Some(TesseractConfig {
+                preprocessing: Some(ImagePreprocessingConfig::default()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        force_ocr: false,
+        ..Default::default()
+    };
+
+    let result = extract_file_sync(&file_path, None, &config);
+    assert!(
+        result.is_ok(),
+        "preprocessing with default config must not crash the process: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn test_auto_rotate_true_does_not_abort() {
+    if skip_if_missing("images/test_hello_world.png") {
+        return;
+    }
+
+    use kreuzberg::types::ImagePreprocessingConfig;
+
+    let file_path = get_test_file_path("images/test_hello_world.png");
+    let config = ExtractionConfig {
+        ocr: Some(OcrConfig {
+            backend: "tesseract".to_string(),
+            language: "eng".to_string(),
+            tesseract_config: Some(TesseractConfig {
+                preprocessing: Some(ImagePreprocessingConfig {
+                    auto_rotate: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        force_ocr: false,
+        ..Default::default()
+    };
+
+    // Whether osd.traineddata is present or absent, the shim catches any C++ exception
+    // from TessBaseAPIDetectOrientationScript and converts it to a graceful Err, which
+    // execution.rs then handles with a warn+continue, so OCR always completes.
+    let result = extract_file_sync(&file_path, None, &config);
+    assert!(
+        result.is_ok(),
+        "auto_rotate: true must complete extraction, not abort: {:?}",
+        result.err()
+    );
+}
