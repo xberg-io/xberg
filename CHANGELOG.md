@@ -383,13 +383,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **chunking: `chunks[*].firstPage` / `lastPage` now populated for non-plain output formats.**
-  When `output_format` is `markdown`, `html`, or `djot`, page boundaries were computed against
-  `result.content` (plain text) and then unconditionally dropped because those offsets are invalid
-  for the formatted string. The pipeline now re-runs `recompute_boundaries_from_pages` against
-  `formatted_content` directly — the page text substrings are still present verbatim inside the
-  formatted string so the substring search returns valid byte offsets into it. Chunks therefore
-  carry accurate `firstPage`/`lastPage` provenance whenever `result.pages` is populated.
+- **chunking: `chunks[*].firstPage` / `lastPage` now populated for `markdown` and `djot` output.**
+  Page boundaries were computed against `result.content` (plain text) and then unconditionally
+  dropped for non-plain output formats, because those byte offsets are invalid for the formatted
+  string. The pipeline now re-runs `recompute_boundaries_from_pages` against `formatted_content`
+  directly — page text substrings appear verbatim in markdown/djot output, so the substring search
+  returns valid byte offsets. Chunks therefore carry accurate `firstPage`/`lastPage` provenance
+  whenever `result.pages` is populated.
+  **Limitation:** `output_format = html` uses verbatim substring search on the HTML-escaped string.
+  Pages whose text contains `&`, `<`, or `>` will not match (e.g. `"AT&T"` becomes `"AT&amp;T"`)
+  and silently produce no provenance for that page.
   ([#1105](https://github.com/kreuzberg-dev/kreuzberg/issues/1105))
 
 - **rendering: fixed panic when a non-`Item` block element appears directly under
