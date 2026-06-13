@@ -780,6 +780,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "chunking")]
     #[test]
     fn chunks_content_matches_when_no_formatted_content_and_markdown_format() {
         // Edge: output_format=Markdown but formatted_content is None (e.g. structured extractor)
