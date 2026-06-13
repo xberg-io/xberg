@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-py"
-version = "5.0.0-rc.10"
+version = "5.0.0-rc.11"
 edition = "2024"
 license = "Elastic-2.0"
 description = "High-performance document intelligence library"
@@ -26,7 +26,7 @@ extension-module = ["pyo3/extension-module", "pyo3/abi3-py310"]
 
 [dependencies]
 async-trait = "0.1"
-kreuzberg = { version = "5.0.0-rc.10", path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
+kreuzberg = { version = "5.0.0-rc.11", path = "../kreuzberg", features = ["full", "pdf", "ocr", "paddle-ocr", "paddle-ocr-types", "layout-detection", "layout-types", "embeddings", "embedding-presets", "reranker", "reranker-presets", "chunking", "keywords-yake", "keywords-rake", "language-detection", "html", "tree-sitter", "office", "email", "archives", "stopwords", "auto-rotate", "auto-rotate-types", "tokio-runtime", "api", "mcp", "liter-llm", "quality"] }
 pyo3 = { version = "0.29" }
 pyo3-async-runtimes = { version = "0.29", features = ["tokio-runtime"] }
 serde = { version = "1", features = ["derive"] }

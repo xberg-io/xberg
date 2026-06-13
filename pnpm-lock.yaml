@@ -35,28 +35,6 @@ importers:
       '@napi-rs/cli':
         specifier: ^3.6.2
         version: 3.7.0(@emnapi/core@1.11.0)(@emnapi/runtime@1.11.0)(@types/node@22.19.20)
-    optionalDependencies:
-      '@kreuzberg/node-darwin-arm64':
-        specifier: 5.0.0-rc.10
-        version: 5.0.0-rc.10
-      '@kreuzberg/node-darwin-x64':
-        specifier: 5.0.0-rc.10
-        version: 5.0.0-rc.10
-      '@kreuzberg/node-linux-arm64-gnu':
-        specifier: 5.0.0-rc.10
-        version: 5.0.0-rc.10
-      '@kreuzberg/node-linux-x64-gnu':
-        specifier: 5.0.0-rc.10
-        version: 5.0.0-rc.10
-      '@kreuzberg/node-linux-x64-musl':
-        specifier: 5.0.0-rc.10
-        version: 5.0.0-rc.10
-      '@kreuzberg/node-win32-arm64-msvc':
-        specifier: 5.0.0-rc.10
-        version: 5.0.0-rc.10
-      '@kreuzberg/node-win32-x64-msvc':
-        specifier: 5.0.0-rc.10
-        version: 5.0.0-rc.10
 
   crates/kreuzberg-wasm: {}
 
@@ -412,51 +390,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@kreuzberg/node-darwin-arm64@5.0.0-rc.10':
-    resolution: {integrity: sha512-opIFei5thNkEDWn/TSycNYLUIoMgQdEzU6sJjdiIQ8o+jqwkVPBz/dZ3ucFFkD4XexTCm0Dg1fIAGGy+1Qxpog==}
-    engines: {node: '>= 18'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@kreuzberg/node-darwin-x64@5.0.0-rc.10':
-    resolution: {integrity: sha512-sHOVqG44Ebf0ttY1a1/pPTaBkttSHycFoQAsaDjAdqCjXEc7yTsuWfqXP8RFh5BlZ5VQg0zA6a4I5Oz/O/Kq8Q==}
-    engines: {node: '>= 18'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@kreuzberg/node-linux-arm64-gnu@5.0.0-rc.10':
-    resolution: {integrity: sha512-5OBhVSGEWAYmD0rtcwygUKkpVbRTsP+W3Z0qKjyV7VMKz0RED9qby5ZrGlFSDTZeILkfdqxfszyXY+L5SHvmww==}
-    engines: {node: '>= 18'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@kreuzberg/node-linux-x64-gnu@5.0.0-rc.10':
-    resolution: {integrity: sha512-G4L8vXuaWkuC00h00BGokykn4cH/KI5/K02VWVT4ovLgdOLdy/qe0BubDF4JUH44yirXSsOaC6bgMu49q7CSAA==}
-    engines: {node: '>= 18'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@kreuzberg/node-linux-x64-musl@5.0.0-rc.10':
-    resolution: {integrity: sha512-hk3MYZ1K6jsoJccIiu0TAs1ODyaQR2aB1XU54jaz1gb5QBB3gd8h5DNzqTVajg8X+Z8dtLIcChZKVWJbASapVQ==}
-    engines: {node: '>= 18'}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@kreuzberg/node-win32-arm64-msvc@5.0.0-rc.10':
-    resolution: {integrity: sha512-LcD59km/Ag5ptSoWXSl37ua/Q83VmCTxEWdWH5bVHB0o/pVIWA/ogPzWOmG/CoMaXkh7AYRSy0oV8yfV5HjlrQ==}
-    engines: {node: '>= 18'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@kreuzberg/node-win32-x64-msvc@5.0.0-rc.10':
-    resolution: {integrity: sha512-V9xng3MNLR3+xic42mD1kSnNJgRc+5qGzGK7N78e1ZQURnYjVxdyYuK6EwVegFDEruvmOZU8HcpmhImEL0f31w==}
-    engines: {node: '>= 18'}
-    cpu: [x64]
-    os: [win32]
 
   '@napi-rs/cli@3.7.0':
     resolution: {integrity: sha512-3d3+rmxlOIV/G1zPWeX4PCxuYnhcCQM2BvY9rtimC8RO0dFR9gtYP+Grov+WoduZtfWRj5N1XvytWeRxxCk5zw==}
@@ -1690,27 +1623,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@kreuzberg/node-darwin-arm64@5.0.0-rc.10':
-    optional: true
-
-  '@kreuzberg/node-darwin-x64@5.0.0-rc.10':
-    optional: true
-
-  '@kreuzberg/node-linux-arm64-gnu@5.0.0-rc.10':
-    optional: true
-
-  '@kreuzberg/node-linux-x64-gnu@5.0.0-rc.10':
-    optional: true
-
-  '@kreuzberg/node-linux-x64-musl@5.0.0-rc.10':
-    optional: true
-
-  '@kreuzberg/node-win32-arm64-msvc@5.0.0-rc.10':
-    optional: true
-
-  '@kreuzberg/node-win32-x64-msvc@5.0.0-rc.10':
-    optional: true
 
   '@napi-rs/cli@3.7.0(@emnapi/core@1.11.0)(@emnapi/runtime@1.11.0)(@types/node@22.19.20)':
     dependencies:

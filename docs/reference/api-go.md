@@ -2,7 +2,7 @@
 title: "Go API Reference"
 ---
 
-## Go API Reference <span class="version-badge">v5.0.0-rc.10</span>
+## Go API Reference <span class="version-badge">v5.0.0-rc.11</span>
 
 ### Functions
 
@@ -1890,7 +1890,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 | `Content` | `NodeContent` | — | Node content — tagged enum, type-specific data only. |
 | `Parent` | `*uint32` | `nil` | Parent node index (`nil` = root-level node). |
 | `Children` | `[]uint32` | `/* serde(default) */` | Child node indices in reading order. |
-| `ContentLayer` | `ContentLayer` | `/* serde(default) */` | Content layer classification. |
+| `ContentLayer` | `ContentLayer` | `/* serde(default) */` | Content layer classification. Always serialised — Kotlin-Android (and any other typed binding) treats the field as non-nullable, so omitting it from the JSON wire would break consumer deserialisation.  `#[serde(default)]` covers the missing-field case on inbound JSON. |
 | `Page` | `*uint32` | `nil` | Page number where this node starts (1-indexed). |
 | `PageEnd` | `*uint32` | `nil` | Page number where this node ends (for multi-page tables/sections). |
 | `Bbox` | `*BoundingBox` | `nil` | Bounding box in document coordinates. |

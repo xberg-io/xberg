@@ -183,6 +183,12 @@ pub use text::{ReductionLevel, TokenReductionConfig};
 ))]
 pub use text::ner::llm::LlmBackend;
 
+// Re-export the NerBackend trait at crate root so consumers (e.g. the alef-generated
+// JNI shim) can call trait methods like `detect` / `detect_with_custom` on
+// `&LlmBackend` after a simple `use core_crate::*;`.
+#[cfg(feature = "ner-llm")]
+pub use text::ner::NerBackend;
+
 // Stub for targets without ner-llm (Windows, Android x86_64, WASM), so alef-generated bindings compile.
 #[cfg(any(
     all(not(feature = "ner-llm"), target_arch = "wasm32"),

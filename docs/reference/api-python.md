@@ -2,7 +2,7 @@
 title: "Python API Reference"
 ---
 
-## Python API Reference <span class="version-badge">v5.0.0-rc.10</span>
+## Python API Reference <span class="version-badge">v5.0.0-rc.11</span>
 
 ### Functions
 
@@ -1939,7 +1939,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 | `content` | `NodeContent` | — | Node content — tagged enum, type-specific data only. |
 | `parent` | `int \| None` | `None` | Parent node index (`None` = root-level node). |
 | `children` | `list[int]` | `/* serde(default) */` | Child node indices in reading order. |
-| `content_layer` | `ContentLayer` | `/* serde(default) */` | Content layer classification. |
+| `content_layer` | `ContentLayer` | `/* serde(default) */` | Content layer classification. Always serialised — Kotlin-Android (and any other typed binding) treats the field as non-nullable, so omitting it from the JSON wire would break consumer deserialisation.  `#[serde(default)]` covers the missing-field case on inbound JSON. |
 | `page` | `int \| None` | `None` | Page number where this node starts (1-indexed). |
 | `page_end` | `int \| None` | `None` | Page number where this node ends (for multi-page tables/sections). |
 | `bbox` | `BoundingBox \| None` | `None` | Bounding box in document coordinates. |

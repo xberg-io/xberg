@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "kreuzberg"
-  spec.version = "5.0.0.pre.rc.10"
+  spec.version = "5.0.0.pre.rc.11"
   spec.authors       = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]
   spec.summary       = "High-performance document intelligence library"
   spec.description   = "High-performance document intelligence library"
@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.license       = "Elastic-2.0"
 
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = [">= 3.2.0", "< 4.0"]
   spec.metadata["keywords"] = %w[document extraction ocr pdf text].join(",")
   spec.metadata["rubygems_mfa_required"] = "true"
 

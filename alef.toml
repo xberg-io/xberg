@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.24.16"
+alef_version = "0.24.17"
 languages = [
   "python",
   "node",
@@ -529,6 +529,13 @@ namespace = "dev.kreuzberg"
 artifact_id = "kreuzberg-android"
 group_id = "dev.kreuzberg"
 abis = ["arm64-v8a", "x86_64"]
+# `features = ["full"]` is consumed by the JNI scaffolder (see
+# `alef::scaffold::languages::jni`) to populate the kreuzberg dependency in
+# `crates/kreuzberg-jni/Cargo.toml`. Without it the umbrella dep is featureless,
+# so the JNI shim binds against kreuzberg's stub fallbacks — which take
+# `&mut ExtractionResult` for what should be borrow-only ops — and the
+# generated `Java_*` shims fail to compile with mismatched-borrow errors.
+features = ["full"]
 exclude_types = [
   # Internal DTO type used by plugin trait-bridges; marshalled as JSON strings at FFI boundary.
   # Not exposed in the Kotlin Android interface — methods that would reference it use String instead.
@@ -544,7 +551,10 @@ exclude_functions = [
 [crates.jni]
 # JNI shim crate that emits Java_* symbols for all JNI functions and trait-bridge
 # registrations. Paired with kotlin_android backend to provide type-safe calling
-# interface from Kotlin to Rust core via JNI.
+# interface from Kotlin to Rust core via JNI.  Feature selection for the
+# kreuzberg umbrella dependency lives in `[crates.kotlin_android] features`
+# above — the JNI scaffolder reads from there so the same feature set is
+# applied to both the AAR and the host-side test build.
 
 [crates.swift]
 module_name = "Kreuzberg"
@@ -3696,7 +3706,7 @@ path = "../../packages/zig"
 # Placeholder until v5.0.0-rc.4 ships and the tarball SHA is known.
 # Update post-release with the real Zig multihash for
 # https://github.com/kreuzberg-dev/kreuzberg/releases/download/v{version}/kreuzberg-zig-v{version}.tar.gz
-hash = "kreuzberg-5.0.0-rc.10-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+hash = "kreuzberg-5.0.0-rc.11-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 # Point WASM e2e at the wasm-pack `nodejs` target. The default `pkg/` is the
 # bundler target whose JS glue uses `import * as foo from "env"` statements

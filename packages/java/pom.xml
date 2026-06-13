@@ -6,7 +6,7 @@
 
     <groupId>dev.kreuzberg</groupId>
     <artifactId>kreuzberg</artifactId>
-    <version>5.0.0-rc.10</version>
+    <version>5.0.0-rc.11</version>
     <packaging>jar</packaging>
 
     <name>kreuzberg</name>
@@ -70,12 +70,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.22.0</version>
+            <version>2.21.2</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jdk8</artifactId>
-            <version>2.22.0</version>
+            <version>2.21.2</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

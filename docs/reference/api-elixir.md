@@ -2,7 +2,7 @@
 title: "Elixir API Reference"
 ---
 
-## Elixir API Reference <span class="version-badge">v5.0.0-rc.10</span>
+## Elixir API Reference <span class="version-badge">v5.0.0-rc.11</span>
 
 ### Functions
 
@@ -1986,7 +1986,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 | `content` | `NodeContent` | — | Node content — tagged enum, type-specific data only. |
 | `parent` | `integer() \| nil` | `nil` | Parent node index (`nil` = root-level node). |
 | `children` | `list(integer())` | `/* serde(default) */` | Child node indices in reading order. |
-| `content_layer` | `ContentLayer` | `/* serde(default) */` | Content layer classification. |
+| `content_layer` | `ContentLayer` | `/* serde(default) */` | Content layer classification. Always serialised — Kotlin-Android (and any other typed binding) treats the field as non-nullable, so omitting it from the JSON wire would break consumer deserialisation.  `#[serde(default)]` covers the missing-field case on inbound JSON. |
 | `page` | `integer() \| nil` | `nil` | Page number where this node starts (1-indexed). |
 | `page_end` | `integer() \| nil` | `nil` | Page number where this node ends (for multi-page tables/sections). |
 | `bbox` | `BoundingBox \| nil` | `nil` | Bounding box in document coordinates. |

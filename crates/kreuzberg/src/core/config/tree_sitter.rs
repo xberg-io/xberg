@@ -155,6 +155,7 @@ impl From<&TreeSitterProcessConfig> for tree_sitter_language_pack::ProcessConfig
             symbols: p.symbols,
             diagnostics: p.diagnostics,
             chunk_max_size: p.chunk_max_size,
+            ..Default::default()
         }
     }
 }

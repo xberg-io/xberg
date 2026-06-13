@@ -2,7 +2,7 @@
 title: "C API Reference"
 ---
 
-## C API Reference <span class="version-badge">v5.0.0-rc.10</span>
+## C API Reference <span class="version-badge">v5.0.0-rc.11</span>
 
 ### Functions
 
@@ -1890,7 +1890,7 @@ for tree structure, and metadata like page number, bounding box, and content lay
 | `content` | `KreuzbergNodeContent` | — | Node content — tagged enum, type-specific data only. |
 | `parent` | `uint32_t*` | `NULL` | Parent node index (`NULL` = root-level node). |
 | `children` | `uint32_t*` | `/* serde(default) */` | Child node indices in reading order. |
-| `content_layer` | `KreuzbergContentLayer` | `/* serde(default) */` | Content layer classification. |
+| `content_layer` | `KreuzbergContentLayer` | `/* serde(default) */` | Content layer classification. Always serialised — Kotlin-Android (and any other typed binding) treats the field as non-nullable, so omitting it from the JSON wire would break consumer deserialisation.  `#[serde(default)]` covers the missing-field case on inbound JSON. |
 | `page` | `uint32_t*` | `NULL` | Page number where this node starts (1-indexed). |
 | `page_end` | `uint32_t*` | `NULL` | Page number where this node ends (for multi-page tables/sections). |
 | `bbox` | `KreuzbergBoundingBox*` | `NULL` | Bounding box in document coordinates. |

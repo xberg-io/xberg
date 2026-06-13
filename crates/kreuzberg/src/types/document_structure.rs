@@ -234,7 +234,12 @@ pub struct DocumentNode {
     pub children: Vec<NodeIndex>,
 
     /// Content layer classification.
-    #[serde(default, skip_serializing_if = "ContentLayer::is_default")]
+    ///
+    /// Always serialised — Kotlin-Android (and any other typed binding) treats
+    /// the field as non-nullable, so omitting it from the JSON wire would
+    /// break consumer deserialisation.  `#[serde(default)]` covers the
+    /// missing-field case on inbound JSON.
+    #[serde(default)]
     pub content_layer: ContentLayer,
 
     /// Page number where this node starts (1-indexed).

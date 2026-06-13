@@ -25,7 +25,7 @@ default-members = ["crates/kreuzberg", "crates/kreuzberg-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "5.0.0-rc.10"
+version = "5.0.0-rc.11"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]
@@ -61,7 +61,7 @@ html-to-markdown-rs = { version = "3.6.1", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"
-kreuzberg = { path = "./crates/kreuzberg", version = "5.0.0-rc.10", default-features = false }
+kreuzberg = { path = "./crates/kreuzberg", version = "5.0.0-rc.11", default-features = false }
 
 lazy_static = "1.5.0"
 libc = "0.2.186"
