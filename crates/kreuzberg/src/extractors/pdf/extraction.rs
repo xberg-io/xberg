@@ -62,7 +62,9 @@ pub(crate) fn extract_all_from_oxide_document(
     //   1. native  — strict Lines strategy (≥3 cols), high precision
     //   2. bordered — relaxed Lines strategy (≥2 cols), catches 2-column bordered tables
     //   3. heuristic — text-edge fallback for unruled tables (invoice line items, etc.)
-    // Use `unwrap_or_default` so individual failures don't block extraction.
+    // Individual tier failures must not block text extraction — each falls back to an
+    // empty vec and logs at warn so operators can diagnose missing tables without losing
+    // the rest of the document.
     // Skipped entirely when `pdf_options.extract_tables` is `false`.
     let extract_tables_flag = config.pdf_options.as_ref().is_none_or(|opts| opts.extract_tables);
     let allow_single_column = config
@@ -70,14 +72,23 @@ pub(crate) fn extract_all_from_oxide_document(
         .as_ref()
         .is_some_and(|o| o.allow_single_column_tables);
     let tables = if extract_tables_flag {
-        let mut combined = crate::pdf::oxide::table::extract_tables_native(&mut doc).unwrap_or_default();
+        let mut combined = crate::pdf::oxide::table::extract_tables_native(&mut doc).unwrap_or_else(|e| {
+            tracing::warn!("pdf_oxide native table extraction failed, skipping tables: {e}");
+            Vec::new()
+        });
         let native_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
-        let bordered = crate::pdf::oxide::table::extract_tables_bordered(&mut doc, &native_pages).unwrap_or_default();
+        let bordered = crate::pdf::oxide::table::extract_tables_bordered(&mut doc, &native_pages).unwrap_or_else(|e| {
+            tracing::warn!("pdf_oxide bordered table extraction failed, skipping tables: {e}");
+            Vec::new()
+        });
         combined.extend(bordered);
         let covered_pages: std::collections::HashSet<u32> = combined.iter().map(|t| t.page_number).collect();
         let heuristic =
             crate::pdf::oxide::table::extract_tables_heuristic(&mut doc, allow_single_column, &covered_pages)
-                .unwrap_or_default();
+                .unwrap_or_else(|e| {
+                    tracing::warn!("pdf_oxide heuristic table extraction failed, skipping tables: {e}");
+                    Vec::new()
+                });
         combined.extend(heuristic);
         combined
     } else {

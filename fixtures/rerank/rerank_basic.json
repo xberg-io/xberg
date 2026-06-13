@@ -1,7 +1,7 @@
 {
   "id": "rerank_basic",
   "category": "rerank",
-  "description": "rerank: basic plugin-based reranking with registered mock backend",
+  "description": "rerank: plugin model with no backend registered returns an error",
   "call": "rerank",
   "input": {
     "query": "What is machine learning?",
@@ -19,7 +19,7 @@
   },
   "assertions": [
     {
-      "type": "not_error"
+      "type": "error"
     }
   ]
 }

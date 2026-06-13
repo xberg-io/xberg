@@ -18,7 +18,7 @@ use crate::internal_builder::InternalDocumentBuilder;
 use crate::plugins::DocumentExtractor;
 use crate::plugins::Plugin;
 use crate::types::internal::InternalDocument;
-use crate::types::metadata::{CodeMetadataInner, FormatMetadata, Metadata};
+use crate::types::metadata::{FormatMetadata, Metadata};
 #[cfg_attr(alef, alef(skip))]
 /// Source code extractor using tree-sitter language pack.
 ///
@@ -89,7 +89,7 @@ impl CodeExtractor {
 
         let mut doc = builder.build();
         doc.metadata = Metadata {
-            format: Some(FormatMetadata::Code(CodeMetadataInner(result))),
+            format: Some(FormatMetadata::Code),
             ..Default::default()
         };
         doc.mime_type = SOURCE_CODE_MIME_TYPE.to_string();

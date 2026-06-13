@@ -114,16 +114,42 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
         }
       }
 
-      // As a last resort on macOS, try to open the framework with an absolute path
-      // constructed from the current working directory. This handles cases where the
-      // package's native library is staged in the cwd (e.g., during local test runs
-      // or CI). Without this, flutter_rust_bridge's default loader would try a
-      // relative path, which hardened runtimes reject.
-      if (Platform.isMacOS) {
-        final cwdFramework = File('${Directory.current.path}/kreuzberg_dart.framework/kreuzberg_dart');
-        if (cwdFramework.existsSync()) {
-          return ExternalLibrary.open(cwdFramework.path);
+      // As a last resort, resolve the running test/script's package root via
+      // `Platform.script` and search standard RID-relative locations there.
+      // Critical on macOS: `Directory.current` under hardened-runtime `dart` is
+      // the dart binary's own bin dir (relative-path dlopen rejected), whereas
+      // `Platform.script` resolves to the running .dart file's absolute URI,
+      // from which we can walk up to find the package root (the dir containing
+      // `pubspec.yaml`) and look for the bundled native library at standard
+      // paths. This handles the case where `Isolate.resolvePackageUri`
+      // resolution did not yield the actual staging location (e.g., a path
+      // dependency in local development, or a test_app whose host package
+      // contains the native lib directly rather than via the bridged package).
+      try {
+        final scriptPath = Platform.script.toFilePath();
+        var dir = File(scriptPath).parent;
+        while (dir.parent.path != dir.path
+            && !File('${dir.path}/pubspec.yaml').existsSync()) {
+          dir = dir.parent;
         }
+        if (File('${dir.path}/pubspec.yaml').existsSync()) {
+          final rid = computeRid();
+          final searchRoots = <String>[
+            if (rid != null) '${dir.path}/lib/src/native/$rid',
+            '${dir.path}/lib',
+            dir.path,
+          ];
+          for (final root in searchRoots) {
+            for (final candidate in candidates) {
+              final libPath = '$root/$candidate';
+              if (File(libPath).existsSync()) {
+                return ExternalLibrary.open(libPath);
+              }
+            }
+          }
+        }
+      } catch (_) {
+        // fall through to default loader
       }
     } catch (_) {
       // Fall through to the default loader on any resolution failure.
@@ -12748,6 +12774,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return FormatMetadata_Audio(
           field0: dco_decode_box_autoadd_audio_metadata(raw[1]),
         );
+      case 20:
+        return FormatMetadata_Code();
       default:
         throw Exception("unreachable");
     }
@@ -18714,6 +18742,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 19:
         var var_field0 = sse_decode_box_autoadd_audio_metadata(deserializer);
         return FormatMetadata_Audio(field0: var_field0);
+      case 20:
+        return FormatMetadata_Code();
       default:
         throw UnimplementedError('');
     }
@@ -26063,6 +26093,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case FormatMetadata_Audio(field0: final field0):
         sse_encode_i_32(19, serializer);
         sse_encode_box_autoadd_audio_metadata(field0, serializer);
+      case FormatMetadata_Code():
+        sse_encode_i_32(20, serializer);
     }
   }
 

@@ -1,7 +1,7 @@
 {
   "id": "async_rerank",
   "category": "rerank_async_pending",
-  "description": "rerank_async: basic async reranking with registered mock backend",
+  "description": "rerank_async: plugin model with no backend registered returns an error",
   "call": "rerank_async",
   "input": {
     "query": "neural networks",
@@ -19,7 +19,7 @@
   },
   "assertions": [
     {
-      "type": "not_error"
+      "type": "error"
     }
   ]
 }

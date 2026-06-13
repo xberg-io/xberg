@@ -131,7 +131,7 @@ fn cstring_ptr_to_jstring(env: &mut JNIEnv, ptr: *mut std::ffi::c_char) -> jstri
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytes<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     content: JString<'local>,
@@ -217,7 +217,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesImpl
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFileImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFile<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
@@ -282,7 +282,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFileImpl<
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFileSyncImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFileSync<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
@@ -353,7 +353,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractFileSyncI
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesSyncImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesSync<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     content: JString<'local>,
@@ -433,7 +433,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeExtractBytesSync
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractFilesSyncImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractFilesSync<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     items: JString<'local>,
@@ -487,7 +487,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractFile
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractBytesSyncImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractBytesSync<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     items: JString<'local>,
@@ -541,7 +541,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractByte
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractFilesImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractFiles<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     items: JString<'local>,
@@ -595,7 +595,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractFile
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractBytesImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractBytes<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     items: JString<'local>,
@@ -653,7 +653,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeBatchExtractByte
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeDetectMimeTypeFromBytesImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeDetectMimeTypeFromBytes<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     content: JString<'local>,
@@ -681,7 +681,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeDetectMimeTypeFr
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeDetectMimeTypeImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeDetectMimeType<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
@@ -713,7 +713,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeDetectMimeTypeIm
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeGetExtensionsForMimeImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeGetExtensionsForMime<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     mime_type: JString<'local>,
@@ -749,7 +749,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeGetExtensionsFor
 // API for async embedding operations.
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListEmbeddingPresetsImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListEmbeddingPresets<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
@@ -769,7 +769,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListEmbeddingPre
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeGetEmbeddingPresetImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeGetEmbeddingPreset<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     name: JString<'local>,
@@ -809,7 +809,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeGetEmbeddingPres
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListEmbeddingBackendsImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListEmbeddingBackends<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
@@ -829,7 +829,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListEmbeddingBac
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearEmbeddingBackendsImpl(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearEmbeddingBackends(
     mut env: JNIEnv,
     _class: JClass,
 ) {
@@ -855,7 +855,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearEmbeddingBa
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListDocumentExtractorsImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListDocumentExtractors<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
@@ -875,7 +875,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListDocumentExtr
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearDocumentExtractorsImpl(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearDocumentExtractors(
     mut env: JNIEnv,
     _class: JClass,
 ) {
@@ -900,7 +900,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearDocumentExt
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListOcrBackendsImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListOcrBackends<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
@@ -920,7 +920,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListOcrBackendsI
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearOcrBackendsImpl(mut env: JNIEnv, _class: JClass) {
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearOcrBackends(mut env: JNIEnv, _class: JClass) {
     // SAFETY: Function takes no parameters other than out_error
     let mut err_ptr = std::ptr::null_mut();
     let code = unsafe { kreuzberg_clear_ocr_backend(&mut err_ptr) };
@@ -942,7 +942,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearOcrBackends
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListPostProcessorsImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListPostProcessors<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
@@ -962,10 +962,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListPostProcesso
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearPostProcessorsImpl(
-    mut env: JNIEnv,
-    _class: JClass,
-) {
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearPostProcessors(mut env: JNIEnv, _class: JClass) {
     // SAFETY: Function takes no parameters other than out_error
     let mut err_ptr = std::ptr::null_mut();
     let code = unsafe { kreuzberg_clear_post_processor(&mut err_ptr) };
@@ -987,7 +984,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearPostProcess
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListRenderersImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListRenderers<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
@@ -1007,7 +1004,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListRenderersImp
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearRenderersImpl(mut env: JNIEnv, _class: JClass) {
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearRenderers(mut env: JNIEnv, _class: JClass) {
     // SAFETY: Function takes no parameters other than out_error
     let mut err_ptr = std::ptr::null_mut();
     let code = unsafe { kreuzberg_clear_renderer(&mut err_ptr) };
@@ -1029,7 +1026,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearRenderersIm
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListValidatorsImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListValidators<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
@@ -1049,7 +1046,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeListValidatorsIm
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearValidatorsImpl(mut env: JNIEnv, _class: JClass) {
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearValidators(mut env: JNIEnv, _class: JClass) {
     // SAFETY: Function takes no parameters other than out_error
     let mut err_ptr = std::ptr::null_mut();
     let code = unsafe { kreuzberg_clear_validator(&mut err_ptr) };
@@ -1075,7 +1072,7 @@ pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeClearValidatorsI
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeRenderPdfPageToPngImpl<'local>(
+pub extern "system" fn Java_dev_kreuzberg_KreuzbergBridge_nativeRenderPdfPageToPng<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     pdf_bytes: JString<'local>,

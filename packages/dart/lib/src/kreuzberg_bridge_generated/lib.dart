@@ -5759,6 +5759,10 @@ sealed class FormatMetadata with _$FormatMetadata {
   /// Metadata extracted from an audio or video file.
   const factory FormatMetadata.audio({required AudioMetadata field0}) =
       FormatMetadata_Audio;
+
+  /// Code (tree-sitter analyzable source). The structured analysis result is exposed
+  /// via `ExtractionResult::code_intelligence`; this variant only tags the format.
+  const factory FormatMetadata.code() = FormatMetadata_Code;
 }
 
 /// Block-level element in a Djot document.

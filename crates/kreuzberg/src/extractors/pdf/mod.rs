@@ -425,6 +425,7 @@ impl PdfExtractor {
 
                     for (page, text) in pages.iter_mut().zip(pts) {
                         page.content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
+                        page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
                     }
 
                     // Special case for VLM models that return a single string for a multi-page PDF:
@@ -432,6 +433,7 @@ impl PdfExtractor {
                     if pts_len == 1 && pages_len > 1 {
                         for p in pages.iter_mut().skip(1) {
                             p.content.clear();
+                            p.is_blank = Some(true);
                         }
                     }
                 } else {
@@ -439,17 +441,21 @@ impl PdfExtractor {
                     page_contents = Some(
                         pts.into_iter()
                             .enumerate()
-                            .map(|(i, text)| crate::types::PageContent {
-                                page_number: (i + 1) as u32,
-                                content: crate::pdf::text::fix_pdf_control_chars(&text).into_owned(),
-                                tables: Vec::new(),
-                                image_indices: vec![],
-                                hierarchy: None,
-                                is_blank: None,
-                                layout_regions: None,
-                                speaker_notes: None,
-                                section_name: None,
-                                sheet_name: None,
+                            .map(|(i, text)| {
+                                let content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
+                                let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&content));
+                                crate::types::PageContent {
+                                    page_number: (i + 1) as u32,
+                                    content,
+                                    tables: Vec::new(),
+                                    image_indices: vec![],
+                                    hierarchy: None,
+                                    is_blank,
+                                    layout_regions: None,
+                                    speaker_notes: None,
+                                    section_name: None,
+                                    sheet_name: None,
+                                }
                             })
                             .collect(),
                     );
@@ -462,6 +468,7 @@ impl PdfExtractor {
                 for page in pages.iter_mut() {
                     if let Some(ocr_text) = results_map.get(&page.page_number) {
                         page.content = crate::pdf::text::fix_pdf_control_chars(ocr_text).into_owned();
+                        page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
                     }
                 }
             }
@@ -1491,17 +1498,173 @@ mod tests {
         let pages_len = pages.len();
 
         for (page, text) in pages.iter_mut().zip(pts) {
-            page.content = text;
+            page.content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
+            page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
         }
         if pts_len == 1 && pages_len > 1 {
             for p in pages.iter_mut().skip(1) {
                 p.content.clear();
+                p.is_blank = Some(true);
             }
         }
 
         assert_eq!(pages[0].content, vlm_text, "page 1 should carry the VLM text");
         assert!(pages[1].content.is_empty(), "page 2 must be cleared by VLM guard");
         assert!(pages[2].content.is_empty(), "page 3 must be cleared by VLM guard");
+        // is_blank must be recalculated to match the updated content (issue #1095).
+        assert_eq!(
+            pages[0].is_blank,
+            Some(false),
+            "page 1 has VLM content so must not be blank"
+        );
+        assert_eq!(pages[1].is_blank, Some(true), "page 2 was cleared so must be blank");
+        assert_eq!(pages[2].is_blank, Some(true), "page 3 was cleared so must be blank");
+    }
+
+    /// Regression for #1095: when OCR texts are written into existing PageContent entries,
+    /// is_blank must be recalculated from the new content, not left stale from native extraction.
+    ///
+    /// Simulates scanned PDF pages (all blank natively) receiving OCR content.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_ocr_page_texts_update_is_blank_on_existing_pages() {
+        use crate::extraction::blank_detection::is_page_text_blank;
+        use crate::types::PageContent;
+
+        let pts = vec!["page one content".to_string(), "page two content".to_string()];
+        let pts_len = pts.len();
+
+        // Simulate scanned PDF: pages created by native extraction with empty content
+        // and is_blank=Some(true) — the value that persisted before the fix.
+        let mut pages: Vec<PageContent> = (1u32..=2u32)
+            .map(|n| PageContent {
+                page_number: n,
+                content: String::new(),
+                tables: Vec::new(),
+                image_indices: Vec::new(),
+                hierarchy: None,
+                is_blank: Some(true),
+                layout_regions: None,
+                speaker_notes: None,
+                section_name: None,
+                sheet_name: None,
+            })
+            .collect();
+        let pages_len = pages.len();
+
+        for (page, text) in pages.iter_mut().zip(pts) {
+            page.content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
+            page.is_blank = Some(is_page_text_blank(&page.content));
+        }
+        if pts_len == 1 && pages_len > 1 {
+            for p in pages.iter_mut().skip(1) {
+                p.content.clear();
+                p.is_blank = Some(true);
+            }
+        }
+
+        assert_eq!(
+            pages[0].is_blank,
+            Some(false),
+            "page with OCR content must not be blank"
+        );
+        assert_eq!(
+            pages[1].is_blank,
+            Some(false),
+            "page with OCR content must not be blank"
+        );
+    }
+
+    /// Regression for #1095: pages built from OCR texts when no native pages exist
+    /// must have is_blank derived from the OCR content, not left as None.
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_ocr_scratch_pages_is_blank_set_from_content() {
+        use crate::extraction::blank_detection::is_page_text_blank;
+        use crate::types::PageContent;
+
+        let pts = vec!["substantial ocr content".to_string(), String::new()];
+
+        let page_contents: Vec<PageContent> = pts
+            .into_iter()
+            .enumerate()
+            .map(|(i, text)| {
+                let content = crate::pdf::text::fix_pdf_control_chars(&text).into_owned();
+                let is_blank = Some(is_page_text_blank(&content));
+                PageContent {
+                    page_number: (i + 1) as u32,
+                    content,
+                    tables: Vec::new(),
+                    image_indices: vec![],
+                    hierarchy: None,
+                    is_blank,
+                    layout_regions: None,
+                    speaker_notes: None,
+                    section_name: None,
+                    sheet_name: None,
+                }
+            })
+            .collect();
+
+        assert_eq!(
+            page_contents[0].is_blank,
+            Some(false),
+            "page with content must not be blank"
+        );
+        assert_eq!(
+            page_contents[1].is_blank,
+            Some(true),
+            "page with empty content must be blank"
+        );
+    }
+
+    /// Integration regression for #1095: force_ocr on a scanned (non-searchable) PDF with
+    /// extract_pages=true must produce pages where is_blank reflects OCR content, not stale
+    /// native-extraction state.
+    #[tokio::test]
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[serial]
+    async fn test_force_ocr_sets_is_blank_from_ocr_content() {
+        use crate::core::config::{OcrConfig, PageConfig};
+
+        let _backend = register_mock_ocr_backend("is-blank-fix-1095", "extracted ocr text content here");
+        let extractor = PdfExtractor::new();
+        let config = ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "is-blank-fix-1095".to_string(),
+                language: "eng".to_string(),
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let pdf_path = pdf_test_document("non_searchable.pdf");
+        let content = std::fs::read(&pdf_path).unwrap_or_else(|e| panic!("non_searchable.pdf must be readable: {e}"));
+        let result = extractor
+            .extract_bytes(&content, "application/pdf", &config)
+            .await
+            .expect("extraction should succeed");
+        let result = crate::extraction::derive::derive_extraction_result(
+            result,
+            false,
+            crate::core::config::OutputFormat::Plain,
+        );
+
+        let pages = result.pages.expect("pages must be present when extract_pages=true");
+        assert!(!pages.is_empty(), "must have at least one page");
+        for page in &pages {
+            assert_eq!(
+                page.is_blank,
+                Some(false),
+                "page {} has OCR content, is_blank must be Some(false) (issue #1095)",
+                page.page_number
+            );
+        }
     }
 
     /// ocr_inline_images=true on a text-only PDF (no embedded images) must succeed

@@ -53,7 +53,7 @@ pub(crate) fn extract_tables_native(doc: &mut OxideDocument) -> Result<Vec<Table
         let extracted = match doc.doc.extract_tables_with_config(page_idx, config.clone()) {
             Ok(tables) => tables,
             Err(e) => {
-                tracing::debug!(page = page_idx, "pdf_oxide extract_tables failed: {e}");
+                tracing::warn!(page = page_idx, "pdf_oxide extract_tables failed: {e}");
                 continue;
             }
         };
@@ -154,7 +154,7 @@ pub(crate) fn extract_tables_bordered(doc: &mut OxideDocument, skip_pages: &Hash
         let extracted = match doc.doc.extract_tables_with_config(page_idx, config.clone()) {
             Ok(tables) => tables,
             Err(e) => {
-                tracing::debug!(page = page_idx, "pdf_oxide bordered extract_tables failed: {e}");
+                tracing::warn!(page = page_idx, "pdf_oxide bordered extract_tables failed: {e}");
                 continue;
             }
         };

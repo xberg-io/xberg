@@ -14,16 +14,6 @@ pub use crate::pdf::metadata::PdfMetadata;
 use super::formats::ImagePreprocessingMetadata;
 use super::page::PageStructure;
 
-/// Wrapper for tree-sitter language pack code metadata (internal, not exposed in bindings).
-///
-/// Hides the external tree_sitter_language_pack::ProcessResult type from FFI/binding
-/// surface while preserving tree-sitter code analysis results for Rust consumers.
-#[cfg(feature = "tree-sitter")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[doc(hidden)]
-#[cfg_attr(alef, alef(skip))]
-pub struct CodeMetadataInner(pub tree_sitter_language_pack::ProcessResult);
-
 /// Custom serialization and deserialization for AHashMap<Cow<'static, str>, Value>.
 ///
 /// serde doesn't natively support serializing Cow keys, so we convert to/from
@@ -118,11 +108,10 @@ pub enum FormatMetadata {
     /// Metadata extracted from an audio or video file.
     #[cfg(feature = "transcription-types")]
     Audio(AudioMetadata),
-    /// Code metadata (tree-sitter analysis results).
+    /// Code (tree-sitter analyzable source). The structured analysis result is exposed
+    /// via `ExtractionResult::code_intelligence`; this variant only tags the format.
     #[cfg(feature = "tree-sitter")]
-    #[cfg_attr(alef, alef(skip))]
-    #[doc(hidden)]
-    Code(CodeMetadataInner),
+    Code,
 }
 
 impl Default for FormatMetadata {
@@ -178,7 +167,7 @@ impl std::fmt::Display for FormatMetadata {
             #[cfg(feature = "transcription-types")]
             Self::Audio(_) => f.write_str("audio"),
             #[cfg(feature = "tree-sitter")]
-            Self::Code(_) => f.write_str("code"),
+            Self::Code => f.write_str("code"),
         }
     }
 }

@@ -1693,6 +1693,7 @@ type-safe, clean metadata without nested optionals.
 | `Epub` | `epub` | Metadata extracted from an EPUB e-book. — Fields: `_0`: `EpubMetadata` |
 | `Pst` | `pst` | Metadata extracted from an Outlook PST archive. — Fields: `_0`: `PstMetadata` |
 | `Audio` | `audio` | Metadata extracted from an audio or video file. — Fields: `_0`: `AudioMetadata` |
+| `Code` | `code` | Code (tree-sitter analyzable source). The structured analysis result is exposed via `ExtractionResult.code_intelligence`; this variant only tags the format. |
 
 ---
 

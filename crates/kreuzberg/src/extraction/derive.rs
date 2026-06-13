@@ -633,23 +633,12 @@ pub fn derive_extraction_result(
         Some(doc.uris)
     };
 
-    // Extract code intelligence from FormatMetadata::Code if present.
-    // Serialised to serde_json::Value so that all language bindings receive a
-    // raw JSON object; the concrete ProcessResult type lives in an external crate
-    // that binding generators cannot resolve to a typed struct.
+    // FormatMetadata::Code is a unit variant — no tree-sitter ProcessResult payload
+    // attached. Code intelligence integration was removed because the upstream
+    // ProcessResult type lives in an external crate that binding generators cannot
+    // resolve to a typed struct across all targets.
     #[cfg(feature = "tree-sitter")]
-    let code_intelligence = match &doc.metadata.format {
-        Some(crate::types::metadata::FormatMetadata::Code(code_metadata)) => {
-            match serde_json::to_value(&code_metadata.0) {
-                Ok(v) => Some(v),
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to serialise code_intelligence; omitting field");
-                    None
-                }
-            }
-        }
-        _ => None,
-    };
+    let code_intelligence: Option<serde_json::Value> = None;
 
     let extraction_method = doc
         .metadata

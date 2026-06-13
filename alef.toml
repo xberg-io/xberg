@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.24.10"
+alef_version = "0.24.13"
 languages = [
   "python",
   "node",
@@ -547,6 +547,11 @@ exclude_functions = [
   "calculate_quality_score",
 ]
 
+[crates.jni]
+# JNI shim crate that emits Java_* symbols for all JNI functions and trait-bridge
+# registrations. Paired with kotlin_android backend to provide type-safe calling
+# interface from Kotlin to Rust core via JNI.
+
 [crates.swift]
 module_name = "Kreuzberg"
 package_name = "Kreuzberg"
@@ -578,6 +583,10 @@ exclude_functions = [
 
 [crates.r]
 package_name = "kreuzberg"
+# kreuzberg-libheif transitively links libheif via libheif-sys; R CMD INSTALL needs
+# the same `-lheif` so the dlopen at package load doesn't fail on `_heif_check_filetype`.
+extra_makevars_prelude = ["HEIF_LIBS = $(shell pkg-config --libs libheif 2>/dev/null || echo \"-lheif\")"]
+extra_pkg_libs = ["$(HEIF_LIBS)"]
 exclude_functions = [
   "calculate_quality_score",
   "embed_texts",
@@ -610,6 +619,7 @@ wasm = "crates/kreuzberg-wasm/src/"
 java = "packages/java/"
 csharp = "packages/csharp/src/"
 r = "packages/r/src/rust/src/"
+jni = "crates/kreuzberg-jni/src/"
 kotlin_android = "packages/kotlin-android/"
 swift = "packages/swift/Sources/Kreuzberg/"
 dart = "packages/dart/lib/src/"
@@ -784,7 +794,7 @@ e2e = "cd e2e/python && uv run --no-sync pytest tests/ -q"
 [crates.test.node]
 precondition = "command -v pnpm >/dev/null 2>&1"
 before = "cd crates/kreuzberg-node && pnpm install && CARGO_BUILD_JOBS=1 pnpm exec napi build --output-dir . --release --platform"
-e2e = "cd e2e/node && CI=true pnpm install && pnpm test"
+e2e = "cd e2e/node && pnpm install --frozen-lockfile=false && pnpm test"
 
 [crates.test.go]
 precondition = "command -v go >/dev/null 2>&1"
@@ -1078,6 +1088,7 @@ result_is_json_struct = true
 # instead of extractFile (path string). The file_path arg type generates readAsBytesSync().
 function = "extractBytes"
 arg_name_map = { path = "content" }
+options_type = "ExtractionConfig"
 
 [crates.e2e.calls.extract_file]
 function = "extract_file"
@@ -1119,6 +1130,9 @@ result_is_json_struct = true
 [crates.e2e.calls.extract_file.overrides.php]
 # PHP facade exposes the async variant under the bare name (`extractFile`);
 # the codegen emits it automatically — no override needed.
+
+[crates.e2e.calls.extract_file.overrides.r]
+options_type = "ExtractionConfig"
 
 [crates.e2e.calls.extract_bytes]
 function = "extract_bytes"
@@ -2815,7 +2829,7 @@ returns_result = true
 skip_languages = ["wasm"]
 options_type = "RerankerConfig"
 args = [
-  { name = "query", field = "input.query", type = "string" },
+  { name = "query", field = "input.query", type = "string", owned = true },
   { name = "documents", field = "input.documents", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]
@@ -2917,7 +2931,7 @@ returns_result = true
 skip_languages = ["wasm", "swift"]
 options_type = "RerankerConfig"
 args = [
-  { name = "query", field = "input.query", type = "string" },
+  { name = "query", field = "input.query", type = "string", owned = true },
   { name = "documents", field = "input.documents", type = "json_object", owned = true, element_type = "String" },
   { name = "config", field = "input.config", type = "json_object", optional = true },
 ]

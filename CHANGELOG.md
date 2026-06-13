@@ -78,6 +78,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implicit `Item` wrapper instead of falling back onto the bare `List`, which violated
   CommonMark's `List → Item-only` constraint and panicked in debug builds.
   ([#1096](https://github.com/kreuzberg-dev/kreuzberg/issues/1096))
+  
+- **pdf: `result.pages[*].isBlank` now reflects OCR content for scanned/rasterized PDFs.**
+  When OCR (including VLM) wrote text into existing `PageContent` entries, `is_blank` was
+  never recalculated — it retained the stale value from native text extraction, which is
+  always `Some(true)` for pages with no text layer. All four write sites in the OCR
+  page-assembly block now call `is_page_text_blank` after every content mutation.
+  ([#1095](https://github.com/kreuzberg-dev/kreuzberg/issues/1095))
 
 - **reranker: `RerankError` migrated to `thiserror`.** Matches the rest
   of the library and `rust-conventions`.
@@ -104,6 +111,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   production function ever changes.
 
 ### Fixed
+
+- **pdf: table extraction failures are now visible at `warn` log level.**
+  `extract_tables_native` and `extract_tables_bordered` silently caught
+  `pdf_oxide::extract_tables_with_config` errors at `tracing::debug!`,
+  making per-page failures invisible at the default log level. Promoted to
+  `tracing::warn!` to match the existing behaviour of the TATR and SLANeXT
+  inference paths. The three `unwrap_or_default()` call sites in
+  `extraction.rs` that silently swallowed function-level errors are also
+  replaced with `unwrap_or_else(|e| { tracing::warn!(...); Vec::new() })`
+  so that a `page_count()` failure is equally visible.
+  ([#1097](https://github.com/kreuzberg-dev/kreuzberg/issues/1097))
 
 - **publish.yaml `trigger-pubdev` job: explicit `permissions: actions: write`.** Since the `a8f8597e45` migration to the `kreuzberg-dev-publisher` App-token, the `gh workflow run publish-pubdev.yaml` step has 403'd with "Resource not accessible by integration" — the App's installation token didn't carry `actions: write`. Adding job-level `permissions: { actions: write, contents: read }` covers the case where GITHUB_TOKEN is used as a fallback, and documents that the App's permissions also need `actions: write` configured on github.com.
 

@@ -1,6 +1,4 @@
-// swift-format-ignore-file
 import RustBridgeC
-
 public func llmBackendDetect<GenericIntoRustString: IntoRustString>(_ client: LlmBackendRef, _ text: GenericIntoRustString, _ categories: RustVec<GenericIntoRustString>) throws -> RustVec<Entity> {
     try { let val = __swift_bridge__$llm_backend_detect(client.ptr, { let rustString = text.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), { let val = categories; val.isOwned = false; return val.ptr }()); if val.is_ok { return RustVec(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
@@ -22834,3 +22832,6 @@ func __swift_bridge__SwiftRendererBox__free (ptr: UnsafeMutableRawPointer) {
 func __swift_bridge__SwiftRerankerBackendBox__free (ptr: UnsafeMutableRawPointer) {
     let _ = Unmanaged<SwiftRerankerBackendBox>.fromOpaque(ptr).takeRetainedValue()
 }
+
+
+

@@ -6,6 +6,11 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Enable native asset resolution for P/Invoke. Detect platform at build time. -->
+    <UseRuntimeIdentifier>true</UseRuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))">osx-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))">linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))">win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,5 +21,20 @@
 
   <ItemGroup>
     <ProjectReference Include="../../packages/csharp/Kreuzberg/Kreuzberg.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../packages/csharp/Kreuzberg/runtimes/osx-arm64/native/*"
+          Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="%(Filename)%(Extension)" />
+    <None Include="../../packages/csharp/Kreuzberg/runtimes/linux-x64/native/*"
+          Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="%(Filename)%(Extension)" />
+    <None Include="../../packages/csharp/Kreuzberg/runtimes/win-x64/native/*"
+          Condition="$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

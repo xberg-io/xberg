@@ -8126,6 +8126,7 @@ const _: fn() = || {
         crate::FormatMetadata::Audio { field0 } => {
             let _: crate::AudioMetadata = field0;
         }
+        crate::FormatMetadata::Code => {}
     }
     {
         let FormattedBlock = None::<crate::FormattedBlock>.unwrap();
@@ -11771,6 +11772,9 @@ impl SseDecode for crate::FormatMetadata {
             19 => {
                 let mut var_field0 = <crate::AudioMetadata>::sse_decode(deserializer);
                 return crate::FormatMetadata::Audio { field0: var_field0 };
+            }
+            20 => {
+                return crate::FormatMetadata::Code;
             }
             _ => {
                 unimplemented!("");
@@ -18566,6 +18570,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::FormatMetadata> {
             crate::FormatMetadata::Audio { field0 } => {
                 [19.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
+            crate::FormatMetadata::Code => [20.into_dart()].into_dart(),
             _ => {
                 unimplemented!("");
             }
@@ -22963,6 +22968,9 @@ impl SseEncode for crate::FormatMetadata {
             crate::FormatMetadata::Audio { field0 } => {
                 <i32>::sse_encode(19, serializer);
                 <crate::AudioMetadata>::sse_encode(field0, serializer);
+            }
+            crate::FormatMetadata::Code => {
+                <i32>::sse_encode(20, serializer);
             }
             _ => {
                 unimplemented!("");

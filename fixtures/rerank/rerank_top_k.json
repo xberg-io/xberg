@@ -1,7 +1,7 @@
 {
   "id": "rerank_top_k",
   "category": "rerank",
-  "description": "rerank: top_k truncation to 2 results from 4 documents",
+  "description": "rerank: plugin model with no backend registered returns an error (top_k variant)",
   "call": "rerank",
   "input": {
     "query": "machine learning",
@@ -21,7 +21,7 @@
   },
   "assertions": [
     {
-      "type": "not_error"
+      "type": "error"
     }
   ]
 }

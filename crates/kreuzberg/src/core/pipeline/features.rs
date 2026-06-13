@@ -98,60 +98,11 @@ fn recompute_boundaries_from_pages(content: &str, pages: &[crate::types::PageCon
 /// those chunks already represent semantically meaningful code boundaries produced
 /// by tree-sitter. Using text-splitter would break these boundaries.
 #[cfg(feature = "tree-sitter")]
-fn try_code_chunks(result: &ExtractionResult) -> Option<Vec<crate::types::extraction::Chunk>> {
-    use crate::types::extraction::{Chunk, ChunkMetadata, ChunkType, HeadingContext, HeadingLevel};
-
-    let code_chunks = match &result.metadata.format {
-        Some(crate::types::metadata::FormatMetadata::Code(pr)) if !pr.0.chunks.is_empty() => &pr.0.chunks,
-        _ => return None,
-    };
-
-    let total_chunks = code_chunks.len();
-    let chunks: Vec<Chunk> = code_chunks
-        .iter()
-        .enumerate()
-        .map(|(i, cc)| {
-            // All code chunks are classified as CodeBlock regardless of node type.
-            let chunk_type = ChunkType::CodeBlock;
-
-            // Build heading context from context_path.
-            let heading_context = if cc.metadata.context_path.is_empty() {
-                None
-            } else {
-                Some(HeadingContext {
-                    headings: cc
-                        .metadata
-                        .context_path
-                        .iter()
-                        .enumerate()
-                        .map(|(depth, name)| HeadingLevel {
-                            level: (depth as u8).saturating_add(2).min(6),
-                            text: name.clone(),
-                        })
-                        .collect(),
-                })
-            };
-
-            Chunk {
-                content: cc.content.clone(),
-                chunk_type,
-                embedding: None,
-                metadata: ChunkMetadata {
-                    byte_start: cc.start_byte,
-                    byte_end: cc.end_byte,
-                    token_count: None,
-                    chunk_index: i,
-                    total_chunks,
-                    first_page: None,
-                    last_page: None,
-                    heading_context,
-                    image_indices: Vec::new(),
-                },
-            }
-        })
-        .collect();
-
-    Some(chunks)
+fn try_code_chunks(_result: &ExtractionResult) -> Option<Vec<crate::types::extraction::Chunk>> {
+    // FormatMetadata::Code is a unit variant — the structured ProcessResult payload
+    // is no longer attached. Code extractions fall back to standard text-based
+    // chunking via the default pipeline.
+    None
 }
 
 /// Execute chunking if configured.
