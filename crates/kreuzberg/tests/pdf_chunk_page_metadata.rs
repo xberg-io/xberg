@@ -1,5 +1,10 @@
 //! Integration tests verifying that chunk `first_page`/`last_page` are populated
-//! for all chunks when extracting multi-page PDFs with chunking enabled.
+//! for all chunks when extracting single-page and multi-page PDFs with chunking enabled.
+//!
+//! Fixtures required (relative to `test_documents/`):
+//! - `pdf/multi_page.pdf`  — any native-text PDF with ≥ 2 pages
+//! - `pdf/single_page.pdf` — any native-text PDF with exactly 1 page; place the
+//!   reporter's `single-page.pdf` from issue #1105 here to keep the regression locked
 
 #![cfg(all(feature = "pdf", feature = "chunking"))]
 
@@ -98,5 +103,58 @@ fn chunks_from_multi_page_pdf_have_monotonic_page_numbers() {
             );
             prev_first_page = first;
         }
+    }
+}
+
+/// Single-page PDFs must produce `chunks: Some([...])`, never `chunks: null`.
+///
+/// Regression test for issue #1105 (Problem 2): a one-page PDF with extracted text
+/// returned `chunks: null` instead of a populated chunk list when chunking was
+/// configured. The root cause was a `recomputed_boundaries = Some([])` (empty)
+/// result silently shadowing the `metadata.pages.boundaries` fallback path before
+/// the `.filter(|s| !s.is_empty())` guard was added.
+///
+/// Place the reporter's `single-page.pdf` from issue #1105 at
+/// `test_documents/pdf/single_page.pdf` to keep this regression locked in CI.
+#[test]
+fn chunks_from_single_page_pdf_are_not_null() {
+    if skip_if_missing("pdf/single_page.pdf") {
+        eprintln!("skipping: fixture pdf/single_page.pdf not found — add from issue #1105 to lock in regression");
+        return;
+    }
+
+    let config = ExtractionConfig {
+        chunking: Some(ChunkingConfig {
+            max_characters: 500,
+            overlap: 50,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = extract_file_sync(get_test_file_path("pdf/single_page.pdf"), None, &config)
+        .expect("single_page.pdf extraction should succeed");
+
+    // chunks must be Some(...) — null means chunking silently failed (see issue #1105).
+    let chunks = result
+        .chunks
+        .expect("chunks must be Some([...]) for a single-page PDF with chunking configured, not null");
+
+    assert!(
+        !chunks.is_empty(),
+        "single-page PDF with extracted text must produce at least one chunk"
+    );
+
+    for chunk in &chunks {
+        assert_eq!(
+            chunk.metadata.first_page,
+            Some(1),
+            "all chunks from a single-page PDF must have first_page = Some(1)"
+        );
+        assert_eq!(
+            chunk.metadata.last_page,
+            Some(1),
+            "all chunks from a single-page PDF must have last_page = Some(1)"
+        );
     }
 }

@@ -934,4 +934,61 @@ mod tests {
         let attributed = chunks.iter().filter(|c| c.metadata.first_page.is_some()).count();
         assert!(attributed > 0, "at least one chunk must be attributed to page 1");
     }
+
+    fn plain_chunking_config() -> crate::core::config::ExtractionConfig {
+        crate::core::config::ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Plain,
+            chunking: Some(crate::core::config::ChunkingConfig {
+                max_characters: 2000,
+                overlap: 0,
+                trim: true,
+                chunker_type: crate::chunking::ChunkerType::Text,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn chunk_page_provenance_single_page_plain_output() {
+        // Regression lock: plain branch must pass page_boundaries to the chunker even for
+        // single-page documents.  Do not gate this on "more than one page".
+        let p1 = "Single page plain text content for the document";
+        let config = plain_chunking_config();
+        let mut result = ExtractionResult {
+            content: p1.to_string(),
+            pages: Some(vec![make_page(1, p1)]),
+            mime_type: std::borrow::Cow::Borrowed("application/pdf"),
+            ..Default::default()
+        };
+
+        execute_chunking(&mut result, &config).unwrap();
+
+        let chunks = result.chunks.expect("chunks must be Some for plain single-page");
+        assert!(!chunks.is_empty());
+        for chunk in &chunks {
+            assert_eq!(chunk.metadata.first_page, Some(1));
+            assert_eq!(chunk.metadata.last_page, Some(1));
+        }
+    }
+
+    #[test]
+    fn chunk_page_provenance_single_page_plain_output_content_empty_produces_empty_chunks() {
+        // Empty content (scanned page without OCR) must yield Some([]), not None.
+        // chunks: null in the API always means chunking was not configured.
+        let config = plain_chunking_config();
+        let mut result = ExtractionResult {
+            content: String::new(),
+            pages: Some(vec![make_page(1, "")]),
+            mime_type: std::borrow::Cow::Borrowed("application/pdf"),
+            ..Default::default()
+        };
+
+        execute_chunking(&mut result, &config).unwrap();
+
+        let chunks = result
+            .chunks
+            .expect("chunks must be Some([]) not None for empty content");
+        assert!(chunks.is_empty());
+    }
 }

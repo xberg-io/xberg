@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   any field values not already present in the assembled text. Values already in the text
   (flattened PDFs where form content is rendered into the content stream) are skipped to
   prevent duplication. Values are appended in top-to-bottom page order (descending PDF Y).
+- **chunking: `chunks[*].firstPage` / `lastPage` now populated for `markdown` and `djot` output.**
+  Page boundaries were computed against `result.content` (plain text) and then unconditionally
+  dropped for non-plain output formats, because those offsets are invalid for the formatted string.
+  The pipeline now re-runs `recompute_boundaries_from_pages` against `formatted_content` directly —
+  page text substrings appear verbatim in markdown/djot output, so the substring search returns
+  valid byte offsets. Chunks therefore carry accurate `firstPage`/`lastPage` provenance whenever
+  `result.pages` is populated.
+  **Limitation:** `output_format = html` uses verbatim substring search on the HTML-escaped string.
+  Pages whose text contains `&`, `<`, or `>` will not match (e.g. `"AT&T"` becomes `"AT&amp;T"`)
+  and silently produce no provenance for that page.
+  ([#1105](https://github.com/kreuzberg-dev/kreuzberg/issues/1105))
 
 ## [5.0.0-rc.18] - 2026-06-16
 
