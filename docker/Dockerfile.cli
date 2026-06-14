@@ -21,10 +21,12 @@ WORKDIR /build
 # the download-binaries feature transparently — no Cargo feature changes needed.
 # Edge repos needed because onnxruntime depends on abseil-cpp/protobuf from edge/main.
 RUN apk add --no-cache \
-    curl gcc g++ musl-dev cmake make pkgconf \
+    curl musl-dev cmake make pkgconf \
     openssl-dev openssl-libs-static \
     perl linux-headers git file && \
-    apk add --no-cache onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev \
+    apk add --no-cache \
+        gcc g++ libstdc++ libstdc++-dev \
+        onnxruntime-dev libheif-dev libde265-dev aom-dev x265-dev dav1d-dev \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
@@ -69,8 +71,9 @@ FROM alpine:3.21
 # libheif 1.23 ships codec backends as separate "plugin" packages
 # (libheif-libde265, libheif-aom, libheif-dav1d, libheif-x265 — pulled in
 # explicitly so HEVC + AVIF decode works at runtime).
-RUN apk add --no-cache libstdc++ libgcc && \
+RUN apk add --no-cache libgcc && \
     apk add --no-cache \
+        libstdc++ \
         onnxruntime \
         libheif libheif-libde265 libheif-aom libheif-dav1d libheif-x265 \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
