@@ -114,17 +114,19 @@ runs:
       id: cache-libheif-windows
       uses: actions/cache@v5
       with:
-        # libheif vcpkg port + its built artifacts. Statically-linked port
-        # (x64-windows-static-md) keeps the MSVC C runtime dynamic so it
-        # matches cargo's default MSVC toolchain.
+        # Cache `installed/` as a whole — libheif-sys's build.rs uses the
+        # `vcpkg` crate which reads `installed/vcpkg/updates/` to enumerate
+        # installed packages. Caching only `installed/x64-windows-static-md`
+        # (the previous v1 key) restored the binaries but not the metadata
+        # dir, leading to `could not read status file updates dir: ... (os error 3)`.
         path: |
-          C:\vcpkg\installed\x64-windows-static-md
+          C:\vcpkg\installed
           C:\vcpkg\buildtrees\libheif
           C:\vcpkg\buildtrees\libde265
           C:\vcpkg\buildtrees\libaom
-        key: libheif-windows-${{ runner.arch }}-vcpkg-v1
+        key: libheif-windows-${{ runner.arch }}-vcpkg-v2
         restore-keys: |
-          libheif-windows-${{ runner.arch }}-vcpkg-
+          libheif-windows-${{ runner.arch }}-vcpkg-v2-
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'

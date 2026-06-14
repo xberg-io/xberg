@@ -1378,6 +1378,8 @@ jobs:
       - uses: kreuzberg-dev/actions/setup-rust@v1
         with:
           target: ${{ matrix.target }}
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
         with:
