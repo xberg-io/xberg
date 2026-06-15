@@ -422,6 +422,7 @@ formats = [
     "archives",
     "mdx",
     "svg",
+    "heic",
 ]
 # Text processing and analysis capabilities.
 analysis = ["language-detection", "chunking", "quality", "keywords", "diff"]
