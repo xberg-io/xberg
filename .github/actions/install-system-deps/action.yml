@@ -68,7 +68,7 @@ runs:
           /usr/local/lib/pkgconfig/libheif.pc
           /usr/local/include/libheif/
           /usr/local/share/libheif/
-        key: libheif-linux-${{ runner.arch }}-v1.23.0
+        key: libheif-linux-${{ runner.arch }}-v1.23.0-cache-v2
         restore-keys: |
           libheif-linux-${{ runner.arch }}-
 
