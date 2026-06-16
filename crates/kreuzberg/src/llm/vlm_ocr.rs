@@ -10,7 +10,8 @@ use std::borrow::Cow;
 
 use async_trait::async_trait;
 use base64::Engine;
-use liter_llm::{ChatCompletionRequest, ContentPart, ImageUrl, LlmClient, Message, UserContent, UserMessage};
+use liter_llm::types::ContentPart;
+use liter_llm::{ChatCompletionRequest, ImageUrl, LlmClient, Message, UserContent, UserMessage};
 
 use crate::core::config::LlmConfig;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
