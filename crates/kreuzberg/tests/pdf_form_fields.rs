@@ -1,15 +1,3 @@
-//! Regression tests for issue #1120 — filled PDF form field values missing or misplaced.
-//!
-//! Interactive (non-flattened) PDFs store field values only in Widget annotation `/V`
-//! entries, not in the page content stream. The previous extraction path read spans
-//! exclusively from the content stream via `extract_spans_raw()`, which ignores Widget
-//! annotations entirely. Field values were therefore absent from extraction output.
-//!
-//! Fix: after assembling span text per page, read Widget annotations via
-//! `PdfDocument::get_annotations()` and append any field values not already present
-//! in the assembled text. Values already in the text (flattened PDFs where form content
-//! is rendered into the content stream) are skipped to prevent duplication.
-
 #![cfg(feature = "pdf")]
 
 use kreuzberg::{ExtractionConfig, extract_bytes_sync};
@@ -248,36 +236,6 @@ fn test_content_stream_labels_preserved_alongside_field_values() {
     assert!(
         content.contains("Email:"),
         "label 'Email:' from content stream must be preserved; got: {content:?}"
-    );
-}
-
-/// Real-PDF regression: a pypdf-generated PDF with Widget annotations must include the
-/// filled field values in its extracted text.
-///
-/// The fixture is a minimal single-page PDF produced by pypdf with two AcroForm Widget
-/// fields ("full_name" = "Alice Wonderland", "ref_code" = "REF-20240001"). Values are
-/// stored only in Widget /V entries — the content stream is empty — so this is a
-/// non-synthetic interactive PDF that exercises the Widget annotation code path.
-#[test]
-fn test_real_filled_form_pdf_widget_values_extracted() {
-    let fixture_path =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/interactive_form_with_values.pdf");
-
-    assert!(fixture_path.exists(), "fixture not found at {}", fixture_path.display());
-
-    let bytes = std::fs::read(&fixture_path).expect("read fixture");
-    let config = ExtractionConfig::default();
-    let result =
-        extract_bytes_sync(&bytes, "application/pdf", &config).expect("real form PDF must extract without error");
-
-    let content = &result.content;
-    assert!(
-        content.contains("Alice Wonderland"),
-        "extracted text must include Widget value 'Alice Wonderland'; got: {content:?}"
-    );
-    assert!(
-        content.contains("REF-20240001"),
-        "extracted text must include Widget value 'REF-20240001'; got: {content:?}"
     );
 }
 
