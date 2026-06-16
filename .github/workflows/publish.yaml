@@ -475,7 +475,21 @@ jobs:
           # manylinux_2_28 (AlmaLinux 8) ships OpenSSL 1.1.1 — manylinux2014 ships 1.0.2k
           # which openssl-sys 0.9.115+ rejects. CARGO_TARGET_*_LINKER points cargo at the
           # in-image gcc instead of looking for triple-prefixed binaries that aren't there.
-          cibw-before-build-linux: "dnf install -y openssl-devel pkgconfig && pip install maturin uv && source ~/.cargo/env"
+          cibw-before-build-linux: |
+            set -euo pipefail
+            dnf install -y openssl-devel pkgconfig
+            pip install maturin uv
+            source ~/.cargo/env
+            # Prevent GCC 14+ from emitting C23-versioned glibc symbols (__isoc23_strtoll etc.)
+            # that require glibc ≥ 2.38. Fixes #588: ensures wheels work on Debian 12 (glibc 2.36),
+            # Ubuntu 22.04 LTS (2.35), and RHEL 8 (2.28).
+            export CFLAGS="-std=gnu11"
+            export CXXFLAGS="-std=gnu++17"
+            export CPPFLAGS="-std=gnu11"
+            export CMAKE_C_FLAGS="${CFLAGS}"
+            export CMAKE_CXX_FLAGS="${CXXFLAGS}"
+            export CC="gcc ${CFLAGS}"
+            export CXX="g++ ${CXXFLAGS}"
           cibw-environment: 'MATURIN_BUILD_ARGS="--compatibility manylinux_2_28" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++'
           # cibw's bundled rustup-init on Windows defaults host triple to gnu, and
           # rust-toolchain.toml channel="1.95" resolves against that gnu host. Install
