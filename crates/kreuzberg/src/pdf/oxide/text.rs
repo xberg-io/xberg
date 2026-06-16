@@ -198,6 +198,81 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
     Ok((content, Some(boundaries), page_contents))
 }
 
+/// Collect Widget annotation field values for the given page, sorted top-to-bottom.
+///
+/// Returns `(mid_y_pdf, value_text)` pairs. `mid_y_pdf` is the vertical midpoint of
+/// the Widget's bounding rectangle in PDF page coordinates (Y=0 at bottom of page,
+/// higher values are higher on the page). The list is sorted descending by Y so that
+/// entries nearer the top of the page come first, preserving visual reading order when
+/// the values are appended to the assembled span text.
+///
+/// Empty values and annotations without a `/V` entry are excluded. This function is
+/// intentionally infallible: a failed `get_annotations` call is logged at DEBUG level
+/// and returns an empty list so that the rest of the extraction path is unaffected.
+fn collect_widget_field_values(doc: &pdf_oxide::PdfDocument, page_index: usize) -> Vec<(f64, String)> {
+    let annotations = match doc.get_annotations(page_index) {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::debug!(
+                page = page_index,
+                "pdf_oxide: could not read annotations for widget values: {e}"
+            );
+            return Vec::new();
+        }
+    };
+
+    let mut widgets: Vec<(f64, String)> = annotations
+        .into_iter()
+        .filter(|a| a.subtype_enum == pdf_oxide::AnnotationSubtype::Widget)
+        .filter_map(|a| {
+            let value = a.field_value?.trim().to_string();
+            if value.is_empty() {
+                return None;
+            }
+            // Mid-Y in PDF coordinates: Y=0 at bottom, higher = upper on page.
+            let mid_y = a.rect.map_or(f64::NEG_INFINITY, |r| (r[1] + r[3]) / 2.0);
+            Some((mid_y, value))
+        })
+        .collect();
+
+    // Descending sort: highest PDF-Y (top of page) first.
+    widgets.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    widgets
+}
+
+/// Append Widget form-field values that are absent from `text`.
+///
+/// Handles interactive (non-flattened) PDFs where field values live only in Widget `/V`
+/// entries and are absent from the page content stream. Values already present in `text`
+/// (e.g. flattened PDFs where the appearance stream was rendered into the content stream)
+/// are skipped to prevent duplication.
+///
+/// Deduplication uses substring matching: if `value` appears anywhere in `text` the field
+/// is skipped. This is intentionally simple — the common case is a verbatim match between
+/// the rendered appearance text and the Widget `/V` string. It can produce false negatives
+/// when the field value is a substring of surrounding prose (e.g. value "Smith" suppressed
+/// when content already contains "John Smith"). This is an acceptable trade-off to avoid
+/// duplicating values in flattened PDFs; tighter word-boundary deduplication can be added
+/// when evidence of real-world false negatives is available.
+///
+/// Values are appended after all content-stream text, not interleaved at their bounding-box
+/// positions. This is the intended ordering for the initial implementation: interactive
+/// PDFs rarely have dense label+value proximity requirements, and span-level interleaving
+/// would require re-sorting the column-aware span list which is not guaranteed to be
+/// monotonically ordered by Y.
+///
+/// Appends in top-to-bottom page order (descending by annotation mid-Y).
+fn append_missing_widget_values(text: &mut String, widgets: &[(f64, String)]) {
+    for (_, value) in widgets {
+        if !text.contains(value.as_str()) {
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(value);
+        }
+    }
+}
+
 /// Returns true when `spans` exhibits the glyph-fragmentation signature (issue #962).
 ///
 /// See `crate::pdf::structure::constants` for the threshold values and their justification.
@@ -318,6 +393,11 @@ fn rebuild_text_from_fragmented_spans(spans: &[pdf_oxide::layout::TextSpan]) -> 
 /// events, which occur when ColumnAware ordering groups spans by y-level rather than
 /// reading order; repaired by re-sorting on position rather than relying on stream order.
 fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: usize) -> Result<String> {
+    // Collect Widget field values before the mutable borrow for text extraction.
+    // `get_annotations` takes `&self`, so the immutable borrow ends before the
+    // `&mut self` call to `extract_page_text_with_options` below.
+    let widgets = collect_widget_field_values(doc, page_index);
+
     let page_text_data = doc
         .extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
         .map_err(|e| {
@@ -332,7 +412,9 @@ fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: 
             span_count = page_text_data.spans.len(),
             "glyph fragmentation detected — rebuilding text from span positions (#962)"
         );
-        return Ok(rebuild_text_from_fragmented_spans(&page_text_data.spans));
+        let mut text = rebuild_text_from_fragmented_spans(&page_text_data.spans);
+        append_missing_widget_values(&mut text, &widgets);
+        return Ok(text);
     }
 
     // Compute median line height for paragraph break detection.
@@ -380,6 +462,8 @@ fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: 
         text.push_str(&span.text);
         prev_span = Some(span);
     }
+
+    append_missing_widget_values(&mut text, &widgets);
 
     Ok(text)
 }

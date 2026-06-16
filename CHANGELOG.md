@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **PDF: Widget annotation field values now included in extraction output (#1120).**
+  Interactive (non-flattened) PDFs store form field values only in Widget annotation
+  `/V` entries, not in the page content stream. The extraction path previously read spans
+  exclusively via `extract_spans_raw()`, which ignores Widget annotations, so filled form
+  values were entirely absent from the output. After assembling span text per page,
+  kreuzberg now reads Widget annotations via `PdfDocument::get_annotations()` and appends
+  any field values not already present in the assembled text. Values already in the text
+  (flattened PDFs where form content is rendered into the content stream) are skipped to
+  prevent duplication. Values are appended in top-to-bottom page order (descending PDF Y).
+
 ## [5.0.0-rc.18] - 2026-06-16
 
 ### Fixed
