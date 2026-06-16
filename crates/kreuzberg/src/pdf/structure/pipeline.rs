@@ -2513,6 +2513,27 @@ mod tests {
             1,
             "continuation paragraph split by font change should be merged on heuristic path"
         );
+        // text must be cleared so assembly uses the segment path to derive the full text.
+        assert!(
+            output[0].text.is_empty(),
+            "merged paragraph must have cleared text so assembly joins from segments"
+        );
+        // Both text fragments must be present in segments so assembly produces correct output.
+        let all_text: String = output[0]
+            .lines
+            .iter()
+            .flat_map(|l| l.segments.iter())
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            all_text.contains("een indicatie"),
+            "first fragment must survive in merged segments; got: {all_text:?}"
+        );
+        assert!(
+            all_text.contains("van toenemende merkbekendheid"),
+            "second fragment must survive in merged segments; got: {all_text:?}"
+        );
     }
 
     /// Heuristic path: a sentence-terminating paragraph followed by an

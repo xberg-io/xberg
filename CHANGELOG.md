@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **PDF heuristic path: merged continuation paragraphs now emit complete text.** `blocks_to_paragraphs` splits segments on font changes >1.5pt; when an embedded figure interrupts a paragraph the split left each fragment as a separate element. The struct-tree path already called `merge_continuation_paragraphs` to re-join these; the heuristic path did not. Fix applies the same merge after `blocks_to_paragraphs` and clears the pre-computed `text` field on merged paragraphs so assembly derives the full combined text from segments rather than returning only the first fragment.
 - **PDF: Widget annotation field values now included in extraction output (#1120).**
   Interactive (non-flattened) PDFs store form field values only in Widget annotation
   `/V` entries, not in the page content stream. The extraction path previously read spans
