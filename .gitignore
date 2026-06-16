@@ -68,6 +68,7 @@ packages/ruby/vendor/
 !vendor/rb-sys/build/
 !vendor/rb-sys/build/**
 *.Cache
+.yardoc/
 
 # PHP
 vendor/
