@@ -127,6 +127,9 @@ pub use structured::{
     PresetSpec, StructuredError, StructuredOptions, StructuredOutput, VisionCallCache, VisionConfig,
 };
 
+#[cfg(all(feature = "structured", not(target_arch = "wasm32")))]
+pub use structured::bindings::{extract_structured_json, split_and_extract_json};
+
 #[cfg(any(feature = "ocr", feature = "ocr-wasm"))]
 pub mod ocr;
 

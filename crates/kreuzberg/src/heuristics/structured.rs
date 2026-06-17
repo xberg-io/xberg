@@ -74,7 +74,8 @@ pub struct StructuredInput {
 ///     ..StructuredThresholds::default()
 /// };
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct StructuredThresholds {
     /// PDFs with `text_coverage` strictly below this are treated as scanned.
     ///

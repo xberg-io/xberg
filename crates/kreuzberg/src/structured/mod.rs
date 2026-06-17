@@ -25,6 +25,7 @@
 //! - [`prompt`] — build system/user prompts from a resolved preset.
 //! - [`cache`] — the [`VisionCallCache`] trait and an in-process Moka implementation.
 
+pub mod bindings;
 pub mod cache;
 pub mod chunker;
 pub mod citations;
@@ -72,7 +73,12 @@ pub struct PageImage {
 }
 
 /// How the extraction schema + prompt are supplied.
-#[derive(Debug, Clone)]
+///
+/// JSON shape (for the bindings layer):
+/// - `{"named": "invoice"}` → [`PresetSpec::Named`]
+/// - `{"inline": { ...full Preset JSON... }}` → [`PresetSpec::Inline`]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PresetSpec {
     /// Look the preset up by id in the global [`crate::presets::Registry`].
     Named(String),
@@ -81,7 +87,8 @@ pub enum PresetSpec {
 }
 
 /// Vision-call tuning. Defaults are conservative starting points; production callers override them.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct VisionConfig {
     /// Rasterization DPI for PDF pages.
     pub dpi: u32,
@@ -243,6 +250,9 @@ pub enum StructuredError {
     /// The document mime type cannot be structurally extracted.
     #[error("structured extraction is not supported for mime type: {0}")]
     UnsupportedMime(String),
+    /// A JSON argument could not be parsed (bindings layer).
+    #[error("invalid JSON argument: {0}")]
+    InvalidJson(String),
 }
 
 // ── Entry points ─────────────────────────────────────────────────────────────
