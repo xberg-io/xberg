@@ -374,7 +374,7 @@ OCR configuration.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `True` | Whether OCR is enabled. Setting `enabled: false` is a shorthand for `disable_ocr: true` on the parent `ExtractionConfig`. Images return metadata only; PDFs use native text extraction without OCR fallback. Defaults to `True`. When `False`, all other OCR settings are ignored. |
-| `backend` | `str` | — | OCR backend: `tesseract`, `paddle-ocr`, `easyocr`, `candle-trocr`, `candle-paddleocr-vl`, `candle-glm-ocr`, or `vlm`. !!! Info "Added in v5.0.0-rc.18" Candle-based backends (`candle-trocr`, `candle-paddleocr-vl`, `candle-glm-ocr`) are pure-Rust VLM and vision-transformer OCR engines. No ONNX Runtime required; GPU-accelerated on Metal (macOS) and CUDA (Linux). |
+| `backend` | `str` | — | OCR backend: `tesseract`, `paddle-ocr`, `easyocr`, `candle-trocr`, `candle-paddleocr-vl`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, `candle-hunyuan-ocr`, `candle-deepseek-ocr`, or `vlm`. The `candle-paddleocr-vl-15`, `candle-hunyuan-ocr`, and `candle-deepseek-ocr` backends were added in v5.0.0-rc.18. |
 | `language` | `str` | — | Language code (e.g., "eng", "deu") |
 | `tesseract_config` | `TesseractConfig \| None` | `None` | Tesseract-specific configuration (optional) |
 | `output_format` | `OutputFormat \| None` | `None` | Output format for OCR results (optional, for format conversion) |

@@ -243,6 +243,91 @@ Pure-Rust VLM OCR via the `candle-glm-ocr` feature. Wraps the zai-org/GLM-OCR 0.
 
 Configure via `--ocr-backend candle-glm-ocr` or `ocr.backend = "candle-glm-ocr"` in config. Set layout mode and device via `backend_options`: `{"layout_mode":"paired"}`, `{"layout_mode":"whole_page"}`, `{"device":"metal"}`, `{"device":"cuda"}`.
 
+### Candle Hunyuan-OCR
+
+!!! Info "Added in v5.0.0-rc.18"
+
+Pure-Rust VLM OCR via the `candle-hunyuan-ocr` feature. Tencent Hunyuan-OCR vision-language model with document layout understanding and multilingual support. No ONNX Runtime dependency.
+
+**Feature flag:** `candle-hunyuan-ocr`
+
+**Implies:** `candle-ocr`, `kreuzberg-candle-ocr/hunyuan-ocr`
+
+**Deployment:**
+
+- **CPU & Metal (macOS)** — Full support
+- **CUDA (Linux/Windows with NVIDIA GPU)** — Full support
+- **WASM** — Excluded (candle not available on WASM)
+- **Android x86_64 emulator** — Excluded (no prebuilt candle targets)
+
+**Model & performance:**
+
+- Model size: ~2 GB on first download; cached at `~/.cache/huggingface/`
+- Detects layout and text regions, outputs merged into reading-order markdown
+- CPU dtype: F32; CUDA dtype: F16
+
+Configure via `--ocr-backend candle-hunyuan-ocr` or `ocr.backend = "candle-hunyuan-ocr"` in config. Set device via `backend_options`: `{"device":"metal"}`, `{"device":"cuda"}`.
+
+**Attribution:** Model vendored from [jhqxxx/aha](https://github.com/jhqxxx/aha) (Apache-2.0). See [ATTRIBUTIONS.md](../ATTRIBUTIONS.md).
+
+### Candle DeepSeek-OCR
+
+!!! Info "Added in v5.0.0-rc.18"
+
+Pure-Rust VLM OCR via the `candle-deepseek-ocr` feature. DeepSeek-OCR vision-language model combining SAM, CLIP, Qwen2, and DeepSeek-V2 MoE architecture. Advanced document understanding with multilingual support. No ONNX Runtime dependency.
+
+**Feature flag:** `candle-deepseek-ocr`
+
+**Implies:** `candle-ocr`, `kreuzberg-candle-ocr/deepseek-ocr`
+
+**Deployment:**
+
+- **CPU & Metal (macOS)** — Full support
+- **CUDA (Linux/Windows with NVIDIA GPU)** — Full support
+- **WASM** — Excluded (candle not available on WASM)
+- **Android x86_64 emulator** — Excluded (no prebuilt candle targets)
+
+**Model & performance:**
+
+- Model size: ~3 GB+ on first download; cached at `~/.cache/huggingface/`
+- Fine-grained layout detection, table region recognition, text extraction with confidence scores
+- CPU dtype: F32; CUDA dtype: F16
+
+Configure via `--ocr-backend candle-deepseek-ocr` or `ocr.backend = "candle-deepseek-ocr"` in config. Set device via `backend_options`: `{"device":"metal"}`, `{"device":"cuda"}`.
+
+**Attribution:** Model vendored from [jhqxxx/aha](https://github.com/jhqxxx/aha) (Apache-2.0). See [ATTRIBUTIONS.md](../ATTRIBUTIONS.md).
+
+### Candle PaddleOCR-VL 1.5
+
+!!! Info "Added in v5.0.0-rc.18"
+
+Pure-Rust VLM OCR via the `candle-paddleocr-vl-15` feature. PaddleOCR-VL 1.5 vision-language model with SigLIP+Ernie integration. Fast multilingual document OCR with strong CJK support. No ONNX Runtime dependency.
+
+**Feature flag:** `candle-paddleocr-vl-15`
+
+**Implies:** `candle-ocr`, `kreuzberg-candle-ocr/paddleocr-vl-15`
+
+**Deployment:**
+
+- **CPU & Metal (macOS)** — Full support
+- **CUDA (Linux/Windows with NVIDIA GPU)** — Full support
+- **WASM** — Excluded (candle not available on WASM)
+- **Android x86_64 emulator** — Excluded (no prebuilt candle targets)
+
+**Model & performance:**
+
+- Model size: ~1 GB on first download; cached at `~/.cache/huggingface/`
+- Lightweight architecture optimized for speed and accuracy on scanned documents
+- CPU dtype: F32; CUDA dtype: F16
+
+Configure via `--ocr-backend candle-paddleocr-vl-15` or `ocr.backend = "candle-paddleocr-vl-15"` in config. Set device via `backend_options`: `{"device":"metal"}`, `{"device":"cuda"}`.
+
+**Attribution:** Model vendored from [jhqxxx/aha](https://github.com/jhqxxx/aha) (Apache-2.0). See [ATTRIBUTIONS.md](../ATTRIBUTIONS.md).
+
+### Candle VLM-OCR Umbrella
+
+The `candle-vlm-ocr` feature aggregates all Candle VLM-OCR backends: `candle-hunyuan-ocr`, `candle-deepseek-ocr`, `candle-paddleocr-vl-15`, `candle-glm-ocr`, and `candle-trocr`. Use this aggregate to enable all pure-Rust vision-language OCR options in a single feature flag.
+
 ---
 
 ## Processing Features

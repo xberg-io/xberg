@@ -6,16 +6,16 @@ Extract text from images and scanned PDFs. Kreuzberg automatically determines wh
 
 Six OCR backends — pick based on platform, accuracy needs, and language coverage.
 
-|                  | **Tesseract**        | **PaddleOCR**                       | **EasyOCR**         | **Candle GLM-OCR**    | **Candle TrOCR**      | **VLM**                  |
-| ---------------- | -------------------- | ----------------------------------- | ------------------- | --------------------- | --------------------- | ------------------------ |
-| **Speed**        | Fast                 | Very fast                           | Moderate            | Moderate              | Moderate              | Slow (API latency)       |
-| **Accuracy**     | Good                 | Excellent                           | Excellent           | Excellent             | Good                  | Highest                  |
-| **Languages**    | 100+                 | 80+ (11 script families)            | 80+                 | All                   | 100+                  | All (provider-dependent) |
-| **Installation** | System package       | Built-in (native) or Python package | Python package only | Cargo feature         | Cargo feature         | API key only             |
-| **Model size**   | ~10 MB               | Mobile ~8 MB, Server ~120 MB        | ~100 MB             | ~3 GB                 | ~250 MB               | None (cloud-hosted)      |
-| **GPU support**  | No                   | Yes                                 | Yes                 | Yes (Metal/CUDA)      | Yes (Metal/CUDA)      | N/A (server-side)        |
-| **Platform**     | All (including Wasm) | All except Wasm                     | Python only         | Native only           | Native only           | All                      |
-| **Cost**         | Free                 | Free                                | Free                | Free                  | Free                  | Per-token API cost       |
+|                  | **Tesseract**        | **PaddleOCR**                       | **EasyOCR**         | **Candle GLM-OCR**    | **Candle TrOCR**      | **Candle Hunyuan-OCR** | **Candle DeepSeek-OCR** | **Candle PaddleOCR-VL** | **VLM**                  |
+| ---------------- | -------------------- | ----------------------------------- | ------------------- | --------------------- | --------------------- | ---------------------- | ----------------------- | ----------------------- | ------------------------ |
+| **Speed**        | Fast                 | Very fast                           | Moderate            | Moderate              | Moderate              | Moderate               | Moderate                | Moderate                | Slow (API latency)       |
+| **Accuracy**     | Good                 | Excellent                           | Excellent           | Excellent             | Good                  | Excellent              | Excellent               | Excellent               | Highest                  |
+| **Languages**    | 100+                 | 80+ (11 script families)            | 80+                 | All                   | 100+                  | 20+ (CJK + Latin)      | 20+ (CJK + Latin)       | 20+ (CJK + Latin)       | All (provider-dependent) |
+| **Installation** | System package       | Built-in (native) or Python package | Python package only | Cargo feature         | Cargo feature         | Cargo feature          | Cargo feature           | Cargo feature           | API key only             |
+| **Model size**   | ~10 MB               | Mobile ~8 MB, Server ~120 MB        | ~100 MB             | ~3 GB                 | ~250 MB               | ~3.5 GB                | ~4 GB                   | ~2.5 GB                 | None (cloud-hosted)      |
+| **GPU support**  | No                   | Yes                                 | Yes                 | Yes (Metal/CUDA)      | Yes (Metal/CUDA)      | Yes (Metal/CUDA)       | Yes (Metal/CUDA)        | Yes (Metal/CUDA)        | N/A (server-side)        |
+| **Platform**     | All (including Wasm) | All except Wasm                     | Python only         | Native only           | Native only           | Native only            | Native only             | Native only             | All                      |
+| **Cost**         | Free                 | Free                                | Free                | Free                  | Free                  | Free                   | Free                    | Free                    | Per-token API cost       |
 
 **When to use which:**
 
@@ -24,6 +24,9 @@ Six OCR backends — pick based on platform, accuracy needs, and language covera
 - **EasyOCR** — Highest accuracy with deep learning models. Python-only, heavier dependency.
 - **Candle GLM-OCR** — Excellent accuracy with VLM-level reasoning on 0.9B-param GLM model. Pure Rust, GPU-accelerated (Metal on macOS, CUDA on Linux). Region-aware layout dispatch. First download ~3 GB.
 - **Candle TrOCR** — Smaller model footprint (~250 MB) with solid accuracy across languages. Pure Rust, GPU-accelerated. Good balance of speed and quality.
+- **Candle Hunyuan-OCR** — Tencent Hunyuan-OCR with comprehensive document parsing and multilingual support including CJK and Latin scripts. Pure Rust, GPU-accelerated. First download ~3.5 GB.
+- **Candle DeepSeek-OCR** — Deep learning-based OCR combining SAM + CLIP + Qwen2 + DeepSeek MoE. Multilingual with strong CJK coverage. Pure Rust, GPU-accelerated. First download ~4 GB.
+- **Candle PaddleOCR-VL** — SigLIP vision encoder + Ernie-4.5 text decoder. Lightweight multilingual model with CJK and Latin support. Pure Rust, GPU-accelerated. First download ~2.5 GB.
 - **VLM** — Best for handwritten text, poor scans, Arabic/Farsi, and complex layouts. Requires an API key and incurs per-token costs. See [LLM Integration](llm-integration.md) for full details.
 
 ## Installation
@@ -414,6 +417,270 @@ Candle GLM-OCR dispatches by detected layout region using PP-DocLayout-V3. Each 
 | `layout_mode` | `"paired"` (default), `"whole_page"` | Paired: dispatch per-region via PP-DocLayout-V3. Whole-page: single OCR pass on entire page. |
 | `task` | `"ocr"` (default), `"table"`, `"formula"`, `"chart"`, `"caption"` | Task prompt for whole-page mode only; ignored in paired mode where the region type determines the prompt. |
 | `device` | `"auto"` (default), `"cpu"`, `"metal"`, `"cuda"` | Device selection. Auto detects Metal on macOS, CUDA on Linux, CPU fallback. |
+
+### Candle Hunyuan-OCR
+
+!!! Info "Added in v5.0.0-rc.18"
+
+Tencent Hunyuan-OCR — vision-language model for comprehensive document parsing with markdown output and multilingual support.
+
+=== "Native bindings (Rust, Go, TypeScript, Node.js, Java, C#, Ruby, PHP, Elixir)"
+
+    Built in via the `candle-hunyuan-ocr` feature flag or the `candle-vlm-ocr` umbrella feature. The model downloads automatically on first use (~3.5 GB) and is cached at `~/.cache/huggingface/`.
+
+    ```toml title="Cargo.toml (Rust example)"
+    [dependencies]
+    kreuzberg = { version = "5", features = ["candle-hunyuan-ocr"] }
+    ```
+
+    **GPU support:**
+
+    - **Metal** (macOS) — Default, F32 dtype
+    - **CUDA** (Linux/Windows with NVIDIA GPU) — Auto-detected
+    - **CPU fallback** — Slowest, but always available
+
+### Using Candle Hunyuan-OCR
+
+!!! Info "Added in v5.0.0-rc.18"
+
+=== "Python"
+
+    ```python title="candle_hunyuan_ocr.py"
+    from kreuzberg import ExtractionConfig, OcrConfig, extract_file_sync
+
+    config = ExtractionConfig(
+        force_ocr=True,
+        ocr=OcrConfig(
+            backend="candle-hunyuan-ocr",
+            language="en",
+            backend_options={"device": "auto", "model_path": "~/.cache/huggingface/"},
+        ),
+    )
+    result = extract_file_sync("document.pdf", config=config)
+    print(result.content)
+    ```
+
+=== "TypeScript"
+
+    ```typescript title="candle-hunyuan-ocr.ts"
+    import { extractFileSync } from '@kreuzberg/node';
+
+    const result = extractFileSync('document.pdf', {
+      forceOcr: true,
+      ocr: {
+        backend: 'candle-hunyuan-ocr',
+        language: 'en',
+        backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+      },
+    });
+    console.log(result.content);
+    ```
+
+=== "Rust"
+
+    ```rust title="candle_hunyuan_ocr.rs"
+    use kreuzberg::{extract_file, ExtractionConfig, OcrConfig};
+    use serde_json::json;
+
+    let config = ExtractionConfig {
+        force_ocr: true,
+        ocr: Some(OcrConfig {
+            backend: "candle-hunyuan-ocr".into(),
+            language: "en".into(),
+            backend_options: Some(json!({"device": "auto", "model_path": "~/.cache/huggingface/"})),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result = extract_file("document.pdf", &config).await?;
+    println!("{}", result.content);
+    ```
+
+=== "CLI"
+
+    ```bash title="Terminal"
+    kreuzberg extract document.pdf --force-ocr true --ocr-backend candle-hunyuan-ocr --ocr-backend-options '{"device":"auto","model_path":"~/.cache/huggingface/"}'
+    ```
+
+**Supported languages:** English, Chinese, Japanese, Korean, French, German, Spanish, Italian, Portuguese, Russian, Arabic, Hindi, Thai, Vietnamese, and others.
+
+**Model source:** Download from [Hugging Face Hub](https://huggingface.co/models?search=hunyuan-ocr).
+
+### Candle DeepSeek-OCR
+
+!!! Info "Added in v5.0.0-rc.18"
+
+DeepSeek-OCR — combination of SAM + CLIP encoder fused with Qwen2 decoder and DeepSeek V2 MoE for comprehensive multilingual document understanding. Markdown output.
+
+=== "Native bindings (Rust, Go, TypeScript, Node.js, Java, C#, Ruby, PHP, Elixir)"
+
+    Built in via the `candle-deepseek-ocr` feature flag or the `candle-vlm-ocr` umbrella feature. The model downloads automatically on first use (~4 GB) and is cached at `~/.cache/huggingface/`.
+
+    ```toml title="Cargo.toml (Rust example)"
+    [dependencies]
+    kreuzberg = { version = "5", features = ["candle-deepseek-ocr"] }
+    ```
+
+    **GPU support:**
+
+    - **Metal** (macOS) — Default, F32 dtype
+    - **CUDA** (Linux/Windows with NVIDIA GPU) — Auto-detected
+    - **CPU fallback** — Slowest, but always available
+
+### Using Candle DeepSeek-OCR
+
+!!! Info "Added in v5.0.0-rc.18"
+
+=== "Python"
+
+    ```python title="candle_deepseek_ocr.py"
+    from kreuzberg import ExtractionConfig, OcrConfig, extract_file_sync
+
+    config = ExtractionConfig(
+        force_ocr=True,
+        ocr=OcrConfig(
+            backend="candle-deepseek-ocr",
+            language="en",
+            backend_options={"device": "auto", "model_path": "~/.cache/huggingface/"},
+        ),
+    )
+    result = extract_file_sync("document.pdf", config=config)
+    print(result.content)
+    ```
+
+=== "TypeScript"
+
+    ```typescript title="candle-deepseek-ocr.ts"
+    import { extractFileSync } from '@kreuzberg/node';
+
+    const result = extractFileSync('document.pdf', {
+      forceOcr: true,
+      ocr: {
+        backend: 'candle-deepseek-ocr',
+        language: 'en',
+        backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+      },
+    });
+    console.log(result.content);
+    ```
+
+=== "Rust"
+
+    ```rust title="candle_deepseek_ocr.rs"
+    use kreuzberg::{extract_file, ExtractionConfig, OcrConfig};
+    use serde_json::json;
+
+    let config = ExtractionConfig {
+        force_ocr: true,
+        ocr: Some(OcrConfig {
+            backend: "candle-deepseek-ocr".into(),
+            language: "en".into(),
+            backend_options: Some(json!({"device": "auto", "model_path": "~/.cache/huggingface/"})),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result = extract_file("document.pdf", &config).await?;
+    println!("{}", result.content);
+    ```
+
+=== "CLI"
+
+    ```bash title="Terminal"
+    kreuzberg extract document.pdf --force-ocr true --ocr-backend candle-deepseek-ocr --ocr-backend-options '{"device":"auto","model_path":"~/.cache/huggingface/"}'
+    ```
+
+**Supported languages:** English, Chinese, Japanese, Korean, French, German, Spanish, Italian, Portuguese, Russian, Arabic, Hindi, Thai, Vietnamese, and others.
+
+**Model source:** Download from [Hugging Face Hub](https://huggingface.co/models?search=deepseek-ocr).
+
+### Candle PaddleOCR-VL
+
+!!! Info "Added in v5.0.0-rc.18"
+
+PaddleOCR-VL 1.5 — SigLIP vision encoder + Ernie-4.5 text decoder for lightweight multilingual document understanding. Markdown output.
+
+=== "Native bindings (Rust, Go, TypeScript, Node.js, Java, C#, Ruby, PHP, Elixir)"
+
+    Built in via the `candle-paddleocr-vl-15` feature flag or the `candle-vlm-ocr` umbrella feature. The model downloads automatically on first use (~2.5 GB) and is cached at `~/.cache/huggingface/`.
+
+    ```toml title="Cargo.toml (Rust example)"
+    [dependencies]
+    kreuzberg = { version = "5", features = ["candle-paddleocr-vl-15"] }
+    ```
+
+    **GPU support:**
+
+    - **Metal** (macOS) — Default, F32 dtype
+    - **CUDA** (Linux/Windows with NVIDIA GPU) — Auto-detected
+    - **CPU fallback** — Slowest, but always available
+
+### Using Candle PaddleOCR-VL
+
+!!! Info "Added in v5.0.0-rc.18"
+
+=== "Python"
+
+    ```python title="candle_paddleocr_vl.py"
+    from kreuzberg import ExtractionConfig, OcrConfig, extract_file_sync
+
+    config = ExtractionConfig(
+        force_ocr=True,
+        ocr=OcrConfig(
+            backend="candle-paddleocr-vl-15",
+            language="en",
+            backend_options={"device": "auto", "model_path": "~/.cache/huggingface/"},
+        ),
+    )
+    result = extract_file_sync("document.pdf", config=config)
+    print(result.content)
+    ```
+
+=== "TypeScript"
+
+    ```typescript title="candle-paddleocr-vl.ts"
+    import { extractFileSync } from '@kreuzberg/node';
+
+    const result = extractFileSync('document.pdf', {
+      forceOcr: true,
+      ocr: {
+        backend: 'candle-paddleocr-vl-15',
+        language: 'en',
+        backendOptions: { device: 'auto', model_path: '~/.cache/huggingface/' },
+      },
+    });
+    console.log(result.content);
+    ```
+
+=== "Rust"
+
+    ```rust title="candle_paddleocr_vl.rs"
+    use kreuzberg::{extract_file, ExtractionConfig, OcrConfig};
+    use serde_json::json;
+
+    let config = ExtractionConfig {
+        force_ocr: true,
+        ocr: Some(OcrConfig {
+            backend: "candle-paddleocr-vl-15".into(),
+            language: "en".into(),
+            backend_options: Some(json!({"device": "auto", "model_path": "~/.cache/huggingface/"})),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result = extract_file("document.pdf", &config).await?;
+    println!("{}", result.content);
+    ```
+
+=== "CLI"
+
+    ```bash title="Terminal"
+    kreuzberg extract document.pdf --force-ocr true --ocr-backend candle-paddleocr-vl-15 --ocr-backend-options '{"device":"auto","model_path":"~/.cache/huggingface/"}'
+    ```
+
+**Supported languages:** English, Chinese, Japanese, Korean, French, German, Spanish, Italian, Portuguese, Russian, and others.
+
+**Model source:** Download from [PaddlePaddle Hub](https://github.com/PaddlePaddle/PaddleOCR).
 
 ### Using VLM OCR
 
