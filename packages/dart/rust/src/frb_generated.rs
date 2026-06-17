@@ -3865,6 +3865,9 @@ fn wire__crate__create_ocr_backend_dart_impl_impl(
             let api_supports_document_processing = decode_DartFn_Inputs__Output_bool_AnyhowException(
                 <flutter_rust_bridge::DartOpaque>::sse_decode(&mut deserializer),
             );
+            let api_emits_structured_markdown = decode_DartFn_Inputs__Output_bool_AnyhowException(
+                <flutter_rust_bridge::DartOpaque>::sse_decode(&mut deserializer),
+            );
             let api_process_document = decode_DartFn_Inputs_String_ocr_config_Output_extraction_result_AnyhowException(
                 <flutter_rust_bridge::DartOpaque>::sse_decode(&mut deserializer),
             );
@@ -3881,6 +3884,7 @@ fn wire__crate__create_ocr_backend_dart_impl_impl(
                         api_supported_languages,
                         api_supports_table_detection,
                         api_supports_document_processing,
+                        api_emits_structured_markdown,
                         api_process_document,
                     ))?;
                     Ok(output_ok)
@@ -13758,7 +13762,8 @@ impl SseDecode for crate::OcrBackendType {
             0 => crate::OcrBackendType::Tesseract,
             1 => crate::OcrBackendType::EasyOCR,
             2 => crate::OcrBackendType::PaddleOCR,
-            3 => crate::OcrBackendType::Custom,
+            3 => crate::OcrBackendType::Candle,
+            4 => crate::OcrBackendType::Custom,
             _ => unreachable!("Invalid variant for OcrBackendType: {}", inner),
         };
     }
@@ -19766,7 +19771,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::OcrBackendType> {
             crate::OcrBackendType::Tesseract => 0.into_dart(),
             crate::OcrBackendType::EasyOCR => 1.into_dart(),
             crate::OcrBackendType::PaddleOCR => 2.into_dart(),
-            crate::OcrBackendType::Custom => 3.into_dart(),
+            crate::OcrBackendType::Candle => 3.into_dart(),
+            crate::OcrBackendType::Custom => 4.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -24715,7 +24721,8 @@ impl SseEncode for crate::OcrBackendType {
                 crate::OcrBackendType::Tesseract => 0,
                 crate::OcrBackendType::EasyOCR => 1,
                 crate::OcrBackendType::PaddleOCR => 2,
-                crate::OcrBackendType::Custom => 3,
+                crate::OcrBackendType::Candle => 3,
+                crate::OcrBackendType::Custom => 4,
                 _ => {
                     unimplemented!("");
                 }

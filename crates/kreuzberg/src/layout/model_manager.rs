@@ -82,6 +82,14 @@ const MODELS: &[ModelDefinition] = &[
         sha256_checksum: "f02bf087e924dadfb109e3b7887d7d56dc961b80e08c64cacf1030f97345b3c3",
         size_bytes: 6_775_213,
     },
+    ModelDefinition {
+        model_type: "pp_doclayout_v3",
+        hf_repo_id: "PaddlePaddle/PP-DocLayoutV3",
+        remote_filename: "layout.onnx",
+        local_filename: "pp_doclayout_v3.onnx",
+        sha256_checksum: "", // To be determined after first download
+        size_bytes: 0,       // To be determined after first download
+    },
 ];
 
 /// Manages layout model downloading, caching, and path resolution.
@@ -169,6 +177,19 @@ impl LayoutModelManager {
     /// Ensure the table classifier model exists locally, downloading if needed.
     pub fn ensure_table_classifier(&self) -> Result<PathBuf, LayoutError> {
         self.ensure_model("table_classifier")
+    }
+
+    /// Ensure the PP-DocLayout-V3 layout detection model exists locally, downloading if needed.
+    pub fn ensure_pp_doclayout_v3_model(&self) -> Result<PathBuf, LayoutError> {
+        self.ensure_model("pp_doclayout_v3")
+    }
+
+    /// Check if the PP-DocLayout-V3 model is cached.
+    pub fn is_pp_doclayout_v3_cached(&self) -> bool {
+        self.cache_dir
+            .join("pp_doclayout_v3")
+            .join("pp_doclayout_v3.onnx")
+            .exists()
     }
 
     /// Get the cache directory path.

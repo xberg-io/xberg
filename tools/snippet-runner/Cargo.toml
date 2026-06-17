@@ -1,0 +1,27 @@
+[package]
+name = "snippet-runner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "snippet_runner"
+path = "src/lib.rs"
+
+[[bin]]
+name = "snippet-runner"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+walkdir = "2.5"
+which = "8"

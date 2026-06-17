@@ -1,0 +1,31 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"categories": {
+		"correctness": "error",
+		"suspicious": "warn",
+		"pedantic": "off",
+		"perf": "warn",
+		"style": "off",
+		"restriction": "off"
+	},
+	"plugins": ["typescript", "import"],
+	"env": {
+		"es6": true,
+		"node": true
+	},
+	"rules": {
+		"no-console": "warn",
+		"no-unused-vars": "warn",
+		"typescript/no-explicit-any": "warn"
+	},
+	"overrides": [
+		{
+			"files": ["**/tests/**", "**/*.test.ts", "**/*.spec.ts"],
+			"rules": {
+				"no-console": "off",
+				"no-unused-vars": "off",
+				"typescript/no-explicit-any": "off"
+			}
+		}
+	]
+}

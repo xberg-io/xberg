@@ -123,6 +123,9 @@ pub(crate) mod model_download;
 #[cfg(any(feature = "paddle-ocr", feature = "paddle-ocr-types"))]
 pub mod paddle_ocr;
 
+#[cfg(feature = "candle-ocr")]
+pub mod candle_ocr;
+
 #[cfg(feature = "auto-rotate-types")]
 pub mod doc_orientation;
 

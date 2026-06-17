@@ -71,6 +71,11 @@ public final class OcrBackendAdapter implements IOcrBackend {
     }
 
     @Override
+    public boolean emits_structured_markdown() throws Exception {
+        return impl.emits_structured_markdown();
+    }
+
+    @Override
     public ExtractionResult process_document(java.nio.file.Path _path, OcrConfig _config) throws Exception {
         return impl.process_document(_path, _config);
     }

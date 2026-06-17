@@ -28,8 +28,9 @@ public final class OcrBackendBridge implements AutoCloseable {
     private static final ConcurrentHashMap<String, OcrBackendBridge>
             OCR_BACKEND_BRIDGES = new ConcurrentHashMap<>();
 
-    // C vtable: 14 fields (4 plugin methods + 8 trait methods + free_string + free_user_data)
+    // C vtable: 15 fields (4 plugin methods + 9 trait methods + free_string + free_user_data)
     private static final MemoryLayout VTABLE_LAYOUT = MemoryLayout.structLayout(
+            ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
             ValueLayout.ADDRESS,
@@ -171,6 +172,13 @@ public final class OcrBackendBridge implements AutoCloseable {
             FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
             arena);
         vtable.set(ValueLayout.ADDRESS, offset, stubSupportsDocumentProcessing);
+        offset += ValueLayout.ADDRESS.byteSize();
+
+        var stubEmitsStructuredMarkdown = LINKER.upcallStub(LOOKUP.bind(this, "handleEmitsStructuredMarkdown",
+            MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class)),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+            arena);
+        vtable.set(ValueLayout.ADDRESS, offset, stubEmitsStructuredMarkdown);
         offset += ValueLayout.ADDRESS.byteSize();
 
         var stubProcessDocument = LINKER.upcallStub(LOOKUP.bind(this, "handleProcessDocument",
@@ -340,6 +348,19 @@ public final class OcrBackendBridge implements AutoCloseable {
     private int handleSupportsDocumentProcessing(MemorySegment userData, MemorySegment outResult, MemorySegment outError) {
         try {
             boolean result = impl.supports_document_processing();
+            String json = JSON.writeValueAsString(result);
+            MemorySegment jsonCs = arena.allocateFrom(json);
+            outResult.set(ValueLayout.ADDRESS, 0, jsonCs);
+            return 0;
+        } catch (Throwable e) {
+            writeError(outError, e);
+            return 1;
+        }
+    }
+
+    private int handleEmitsStructuredMarkdown(MemorySegment userData, MemorySegment outResult, MemorySegment outError) {
+        try {
+            boolean result = impl.emits_structured_markdown();
             String json = JSON.writeValueAsString(result);
             MemorySegment jsonCs = arena.allocateFrom(json);
             outResult.set(ValueLayout.ADDRESS, 0, jsonCs);

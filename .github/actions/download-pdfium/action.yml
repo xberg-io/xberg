@@ -1,0 +1,39 @@
+name: Download Pdfium Runtime
+description: Download Pdfium binaries for the current platform and expose the location via KREUZBERG_PDFIUM_PREBUILT
+inputs:
+  pdfium-version:
+    description: Pdfium version to download
+    required: true
+  platform-id:
+    description: Override platform id (linux|mac|win). Defaults to runner platform.
+    required: false
+    default: ""
+  arch-id:
+    description: Override arch id (x64|arm64). Defaults to runner architecture.
+    required: false
+    default: ""
+outputs:
+  pdfium-path:
+    description: Path to the extracted Pdfium runtime
+    value: ${{ steps.set-env.outputs.pdfium-path }}
+runs:
+  using: composite
+  steps:
+    - name: Detect Windows platform (PowerShell)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: scripts/ci/actions/download-pdfium/detect-windows.ps1
+
+    - name: Download Pdfium runtime
+      id: download
+      shell: bash
+      env:
+        PLATFORM_ID: ${{ inputs.platform-id }}
+        ARCH_ID: ${{ inputs.arch-id }}
+        PDFIUM_VERSION: ${{ inputs.pdfium-version }}
+      run: scripts/ci/actions/download-pdfium/download.sh
+
+    - name: Export Pdfium path
+      id: set-env
+      shell: bash
+      run: scripts/ci/actions/download-pdfium/export-path.sh "${{ steps.download.outputs.pdfium_path }}"

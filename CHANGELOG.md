@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **deps**: Pin `alloc-stdlib` to `0.2.2` to unify the `alloc-no-stdlib` v2/v3 split that broke `brotli-decompressor` compilation under `cargo check --workspace`. Drop brotli HTTP encoding from `tower-http` (`compression-full` → `compression-gzip,compression-deflate,compression-zstd`); clients negotiating brotli will fall back to gzip. Unblocks the prek `cargo-clippy` hook.
+- **benchmark-harness**: Handle the new `KreuzbergPipeline::CandleGlmOcr` variant in the kreuzberg adapter pipeline-args match — non-exhaustive arm left over from Phase 5 wiring.
+- **candle-ocr**: `TrocrBackend::process_image` now actually invokes the real `TrocrEngine` instead of returning a placeholder string. The engine code in `kreuzberg_candle_ocr::models::trocr` was already real, but the backend wrapper exposed to the OCR registry was the original Phase 3a stub. Runtime `backend_options.variant` now overrides the constructor-time default.
+- **candle-ocr**: `TrocrEngine` now uses `decoder_start_token_id` and `eos_token_id` from the loaded `config.json` instead of `trocr::TrOCRConfig::default()`. Prevents silent generation breakage if any checkpoint's defaults diverge from candle's.
+- **candle-ocr**: `PaddleOcrVlBackend` now reuses engines across calls via a process-wide pool keyed by `(PaddleOcrVlTask, DevicePreference)`. Eliminates the ~900 MB safetensors reload that previously fired on every request. The pool reuses the existing `DevicePreference` taxonomy rather than introducing a parallel `DeviceKind` enum.
+- **candle-ocr**: Backends now resolve their compute device via a shared `resolve_device_preference` helper that consumes the central `AccelerationConfig` (`OcrConfig.acceleration`). Precedence: `backend_options.device` override → `AccelerationConfig.provider` → `DevicePreference::Auto`. ORT-flavoured providers map to candle as: `CoreMl` → `Metal`, `TensorRt` → `Cuda`. This removes the device-parsing duplication that previously lived in each backend's `parse_options`.
+- **candle-ocr**: PaddleOCR-VL image normalization is now vectorised via candle tensor ops (`broadcast_sub` + `broadcast_div`) instead of a per-pixel triple loop, ~10-50× faster on CPU.
+- **candle-ocr**: PaddleOCR-VL BOS/EOS token ids resolved once at engine load time and cached on the engine, rather than name-looked-up on every decode step. Upstream `paddleocr_vl::Config` does not carry these fields directly.
+- **candle-ocr**: Fixed a typo in `TrocrEngine` weight loading (`from_mapped_safetensors` → `from_mmaped_safetensors`) that prevented the engine from compiling at all under the `trocr` sub-feature.
+- **candle-ocr**: TrOCR backend now pools engine instances across calls instead of re-loading weights every invocation.
+- **candle-ocr**: TrOCR + PaddleOCR-VL backends propagate the underlying `CandleOcrError` as the `source` of `KreuzbergError::Ocr` instead of dropping it.
+- **candle-glm-ocr**: MTP repetition penalty no longer doubles down on already-negative logits.
+- **candle-glm-ocr**: Nucleus sampling rejects NaN/inf-tainted probability vectors instead of silently sampling against them.
+- **candle-glm-ocr**: Decoder KV cache reset at the start of each generation call to prevent cross-call contamination.
+- **layout-detection**: PP-DocLayout-V3 returns `Ok(vec![])` for empty batches instead of panicking.
+- **qr**: `qr-codes` feature compiles again under `image` 0.25. `rqrr` 0.10 pins `image` 0.24 internally; passing the workspace `to_luma8()` buffer tripped a trait bound mismatch under `cargo check --workspace`. The extractor now feeds raw greyscale bytes through `PreparedImage::prepare_from_greyscale`, sidestepping the version split entirely.
+
+### Added
+
+- **ocr**: `candle-hunyuan-ocr` backend exposing Tencent Hunyuan-OCR through candle (vendored from jhqxxx/aha, Apache-2.0). Compact vision backbone + causal decoder with KV cache. Multilingual VLM with markdown output. Selectable via `--ocr-backend candle-hunyuan-ocr`; configure via `backend_options.model_path` and `backend_options.device`. Engine pool keyed by `(DevicePreference, DType)` shares weights across requests.
+- **ocr**: `candle-deepseek-ocr` backend exposing DeepSeek-OCR through candle (vendored from jhqxxx/aha, Apache-2.0). SAM-style vision encoder + CLIP embeddings fused with Qwen2 decoder and DeepSeek V2 MoE. Multilingual VLM with markdown output. Selectable via `--ocr-backend candle-deepseek-ocr`; configure via `backend_options.model_path` and `backend_options.device`. Greedy autoregressive decode with `max_new_tokens = 128`.
+- **ocr**: `candle-paddleocr-vl-15` backend exposing PaddleOCR-VL 1.5 through candle (vendored from jhqxxx/aha, Apache-2.0). SigLIP vision encoder + Ernie-4.5 text decoder. Multilingual VLM with markdown output. Selectable via `--ocr-backend candle-paddleocr-vl-15`; configure via `backend_options.model_path` and `backend_options.device`.
+- **ocr**: `candle-vlm-ocr` umbrella feature aggregating all candle VLM-OCR backends (`candle-hunyuan-ocr + candle-deepseek-ocr + candle-paddleocr-vl-15 + candle-glm-ocr + candle-trocr`). Use this to enable every pure-Rust VLM/transformer OCR engine in a single flag.
+- **cli**: `--ocr-backend-options <JSON>` flag for passing per-call backend options (e.g. `--ocr-backend-options '{"model_path":"/path/to/model","device":"metal"}'`). Replaces the previous hardwired `backend_options: None` path.
+- **benchmark-harness**: Candle VLM-OCR pipeline variants (`KreuzbergPipeline::CandleHunyuanOcr`, `CandleDeepseekOcr`, `CandlePaddleocrVl15`) wired into the harness with `task bench:candle-{hunyuan,deepseek,paddleocr-vl-15}` entries and a Python baseline scaffold under `tools/benchmark-harness/python_baselines/`.
+- **ocr**: `candle-trocr` feature enabling real BEiT+RoBERTa TrOCR inference (transformer-based printed/handwritten text recognition) via candle. Wires TrOCR encoder-decoder model behind the `candle-trocr` aggregate feature; backend selectable via `--ocr-backend candle-trocr`. Supports all four model variants (base/large × printed/handwritten) on CPU/CUDA/Metal. Sub-features on `kreuzberg-candle-ocr` for future VLM backends (GOT-OCR 2.0, GLM-OCR, PaddleOCR-VL).
+- **ocr**: `candle-paddleocr-vl` feature enabling PaddleOCR-VL 0.9B vision-language model (multi-task: OCR, tables, formulas, charts) via candle. Emits markdown directly from the VLM; extraction pipeline skips layout-reconstruction stages for VLM output. Supports 109+ languages. Selectable via `--ocr-backend candle-paddleocr-vl` with task selection via backend options (`{"task": "table"}`).
+- **cli**: `candle-ocr`, `candle-trocr`, `candle-paddleocr-vl` pass-through Cargo features on `kreuzberg-cli`. The `--ocr-backend` allowlist now accepts `candle-trocr` and `candle-paddleocr-vl`, and the CLI overrides route those names to the actual candle backend in the registry instead of silently falling back to tesseract.
+- **benchmark-harness**: Candle OCR pipeline variants (`candle-trocr`, `candle-paddleocr-vl`) wired into benchmark harness for comparative evaluation against tesseract and paddle baselines.
+- **benchmark-harness**: Dataset loaders for public structured-extraction corpora (CORD, SROIE, FUNSD, DocILE, VRDU) with manifest-based discovery and JSON-Schema validation via `datasets` module.
+- **benchmark-harness**: JSON-extraction quality metrics (`json_quality` module) including schema validity rate, field-level precision/recall/F1, type correctness, numeric tolerance matching, and exact-match comparison.
+- **ocr**: `candle-glm-ocr` backend exposing zai-org/GLM-OCR through candle. Selectable via `--ocr-backend candle-glm-ocr`. Default layout mode is `paired` (uses PP-DocLayout-V3 for per-region dispatch); set `backend_options.layout_mode = "whole_page"` to disable.
+
 ## [5.0.0-rc.19] - 2026-06-17
 
 ### Changed

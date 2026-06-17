@@ -21,6 +21,10 @@ path = "src/main.rs"
 default = []
 profiling = ["pprof"]
 memory-profiling = ["tikv-jemallocator", "tikv-jemalloc-ctl"]
+glm-ocr-bench = ["kreuzberg/candle-glm-ocr"]
+candle-hunyuan-ocr-bench = ["kreuzberg/candle-hunyuan-ocr"]
+candle-deepseek-ocr-bench = ["kreuzberg/candle-deepseek-ocr"]
+candle-paddleocr-vl-15-bench = ["kreuzberg/candle-paddleocr-vl"]
 
 [dependencies]
 

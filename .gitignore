@@ -68,9 +68,11 @@ packages/ruby/vendor/
 !vendor/rb-sys/build/
 !vendor/rb-sys/build/**
 *.Cache
+.yardoc/
 
 # PHP
 vendor/
+!crates/kreuzberg-candle-ocr/src/vendor/
 php-kreuzberg.ini
 packages/php/php-kreuzberg.ini
 packages/php/tests.xml

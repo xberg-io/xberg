@@ -23,6 +23,8 @@ pub enum OcrBackendType {
     EasyOCR,
     /// PaddleOCR (Python-based, via FFI)
     PaddleOCR,
+    /// Candle-based VLM OCR (TrOCR, PaddleOCR-VL).
+    Candle,
     /// Custom/third-party OCR backend
     Custom,
 }
@@ -278,6 +280,16 @@ pub trait OcrBackend: Plugin {
     ///
     /// Defaults to `false`. Override if the backend has optimized document processing.
     fn supports_document_processing(&self) -> bool {
+        false
+    }
+
+    /// Declare that this backend emits structured markdown directly (tables, headings, lists)
+    /// and downstream layout reconstruction should be skipped.
+    ///
+    /// Defaults to `false` — classical OCR backends (Tesseract, PaddleOCR classical) return
+    /// plain text per detected region. End-to-end VLM backends (PaddleOCR-VL, GOT-OCR 2.0)
+    /// emit markdown in one forward pass and should override this to `true`.
+    fn emits_structured_markdown(&self) -> bool {
         false
     }
 

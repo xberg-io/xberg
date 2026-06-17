@@ -1,0 +1,65 @@
+[package]
+name = "kreuzberg-candle-ocr"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+authors.workspace = true
+description = "Candle-based VLM OCR engines for Kreuzberg - pure-Rust transformer OCR (TrOCR, PaddleOCR-VL, GLM-OCR)"
+license = "MIT"
+repository.workspace = true
+homepage = "https://kreuzberg.dev"
+documentation = "https://docs.rs/kreuzberg-candle-ocr"
+readme = "README.md"
+keywords = ["candle", "ocr", "transformer", "vlm", "recognition"]
+categories = ["computer-vision", "text-processing"]
+exclude = ["tests/*", ".github/*"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "kreuzberg_candle_ocr"
+crate-type = ["lib"]
+
+[features]
+default = []
+
+# Per-model sub-features. None enabled by default.
+trocr = []
+paddleocr-vl = []
+glm-ocr = []
+hunyuan-ocr = []
+deepseek-ocr = []
+
+# Device acceleration pass-throughs to candle.
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers/mkl"]
+accelerate = [
+    "candle-core/accelerate",
+    "candle-nn/accelerate",
+    "candle-transformers/accelerate",
+]
+
+[dependencies]
+base64 = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg", "webp", "bmp", "tiff", "gif"] }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+tracing = { workspace = true }
+
+[target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32")))'.dependencies]
+hf-hub = { version = "0.5", default-features = false, features = ["ureq"] }
+
+[target.'cfg(all(target_os = "windows", not(target_arch = "wasm32")))'.dependencies]
+hf-hub = { version = "0.5", default-features = false, features = ["ureq"] }
+
+[lints]
+workspace = true

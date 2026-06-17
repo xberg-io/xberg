@@ -124,7 +124,20 @@ Install-Package Kreuzberg
 
 Extract text, metadata, and structure from any supported document format:
 
-<!-- snippet not found: getting-started/basic_usage.cs -->
+```cs
+using Kreuzberg;
+
+var config = new ExtractionConfig
+{
+    UseCache = true,
+    EnableQualityProcessing = true
+};
+
+var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
+
+Console.WriteLine(result.Content);
+Console.WriteLine($"MIME Type: {result.MimeType}");
+```
 
 ### Common Use Cases
 

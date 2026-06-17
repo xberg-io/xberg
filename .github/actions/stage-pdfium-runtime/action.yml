@@ -1,0 +1,18 @@
+name: Stage Pdfium Runtime
+description: Copies Pdfium runtime libraries to destination directory
+
+inputs:
+  destination:
+    description: Primary destination directory (e.g., crates/kreuzberg-node or packages/ruby)
+    required: true
+  additional-destinations:
+    description: Additional destination directories (newline-separated)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Stage Pdfium runtime artifacts
+      shell: bash
+      run: scripts/ci/actions/stage-pdfium-runtime/stage.sh "${{ inputs.destination }}" "${{ inputs.additional-destinations }}"

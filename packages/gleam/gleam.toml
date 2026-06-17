@@ -1,0 +1,11 @@
+name = "kreuzberg"
+version = "4.10.0-rc.15"
+description = "High-performance document intelligence library"
+licences = ["MIT"]
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

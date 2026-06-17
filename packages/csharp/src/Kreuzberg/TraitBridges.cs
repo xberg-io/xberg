@@ -48,6 +48,9 @@ public interface IOcrBackend {
     /// <summary>supports_document_processing</summary>
     bool SupportsDocumentProcessing { get; }
 
+    /// <summary>emits_structured_markdown</summary>
+    bool EmitsStructuredMarkdown { get; }
+
     /// <summary>process_document</summary>
     ExtractionResult ProcessDocument(string Path, OcrConfig Config);
 }
@@ -74,7 +77,7 @@ public sealed class OcrBackendBridge : IDisposable {
     internal static int _nextBridgeId = 1;
     internal static readonly object _registryLock = new();
 
-    // Vtable slot delegates (14)
+    // Vtable slot delegates (15)
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int NameFn(IntPtr userData, out IntPtr outName, out IntPtr outError);
@@ -110,6 +113,9 @@ public sealed class OcrBackendBridge : IDisposable {
     private delegate int SupportsDocumentProcessingFn(IntPtr userData);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int EmitsStructuredMarkdownFn(IntPtr userData);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate int ProcessDocumentFn(IntPtr userData, IntPtr path, IntPtr config, out IntPtr outResult, out IntPtr outError);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -125,7 +131,7 @@ public sealed class OcrBackendBridge : IDisposable {
         _implHandle = GCHandle.Alloc(impl, GCHandleType.Normal);
         // Delegate list roots all delegates by reference to prevent GC.
         // This avoids trying to pin an object array containing references, which .NET 10 forbids.
-        _delegateRoots = new List<object>(14);
+        _delegateRoots = new List<object>(15);
         _vtable = IntPtr.Zero;
         _disposed = false;
         // Allocate unique bridge ID for registry lookup during callbacks
@@ -137,7 +143,7 @@ public sealed class OcrBackendBridge : IDisposable {
 
     private void BuildVtable() {
         // Allocate unmanaged vtable struct (array of function pointers)
-        _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 14);
+        _vtable = global::System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size * 15);
 
         // Slot 0: name_fn
         var nameFn = new NameFn(NameFnCallback);
@@ -194,20 +200,25 @@ public sealed class OcrBackendBridge : IDisposable {
         _delegateRoots.Add(supportsDocumentProcessingFn);
         global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 80, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(supportsDocumentProcessingFn));
 
-        // Slot 11: process_document_fn
+        // Slot 11: emits_structured_markdown_fn
+        var emitsStructuredMarkdownFn = new EmitsStructuredMarkdownFn(EmitsStructuredMarkdownFnCallback);
+        _delegateRoots.Add(emitsStructuredMarkdownFn);
+        global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 88, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(emitsStructuredMarkdownFn));
+
+        // Slot 12: process_document_fn
         var processDocumentFn = new ProcessDocumentFn(ProcessDocumentFnCallback);
         _delegateRoots.Add(processDocumentFn);
-        global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 88, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(processDocumentFn));
+        global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 96, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(processDocumentFn));
 
-        // Slot 12: free_string
+        // Slot 13: free_string
         var freeStringFn = new FreeStringFn(FreeStringCallback);
         _delegateRoots.Add(freeStringFn);
-        global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 96, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(freeStringFn));
+        global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 104, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(freeStringFn));
 
-        // Slot 13: free_user_data
+        // Slot 14: free_user_data
         var freeFn = new FreeUserDataFn(FreeUserDataCallback);
         _delegateRoots.Add(freeFn);
-        global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 104, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(freeFn));
+        global::System.Runtime.InteropServices.Marshal.WriteIntPtr(_vtable, 112, global::System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(freeFn));
 
     }
 
@@ -597,6 +608,31 @@ public sealed class OcrBackendBridge : IDisposable {
         try {
             var bridge = _bridgeFromRegistry!;
             var methodResult = bridge._impl.SupportsDocumentProcessing;
+            return methodResult ? 1 : 0;
+        } catch (Exception) {
+            return 0;
+        } finally {
+            if (_bridgeFromRegistry != null) {
+                try { _bridgeFromRegistry.DecrementCallbackRef(); } catch { /* Bridge already removed from registry */ }
+            }
+        }
+    }
+
+    private int EmitsStructuredMarkdownFnCallback(IntPtr userData) {
+        OcrBackendBridge? _bridgeFromRegistry = null;
+        lock (OcrBackendBridge._registryLock) {
+            if (OcrBackendBridge._bridgeRegistry.TryGetValue(userData, out var bridgeFromRegistry)) {
+                _bridgeFromRegistry = bridgeFromRegistry;
+                // Increment callback refcount to prevent GC while callback executes
+                _bridgeFromRegistry.IncrementCallbackRef();
+            }
+        }
+        if (_bridgeFromRegistry == null) {
+            return 0;
+        }
+        try {
+            var bridge = _bridgeFromRegistry!;
+            var methodResult = bridge._impl.EmitsStructuredMarkdown;
             return methodResult ? 1 : 0;
         } catch (Exception) {
             return 0;

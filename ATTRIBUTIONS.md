@@ -327,6 +327,40 @@ extraction via `nom-exif` is pure Rust and works on every target.
 
 ---
 
-**Last Updated**: June 12, 2026
+## jhqxxx/aha
+
+Rust-native VLM-OCR backends vendored into `crates/kreuzberg-candle-ocr/`:
+
+- **Source**: <https://github.com/jhqxxx/aha>
+- **License**: Apache-2.0
+- **Author**: jhqxxx
+- **Vendored Version**: `e29ddc589d089042afd66ab8ea76409d8d33f701` (jhqxxx/aha @ HEAD on 2026-06-17)
+- **Location**: `crates/kreuzberg-candle-ocr/src/vendor/aha/` (shared infra), `crates/kreuzberg-candle-ocr/src/models/hunyuan_ocr/` (Hunyuan-OCR), `crates/kreuzberg-candle-ocr/src/models/deepseek_ocr/` (DeepSeek-OCR + Qwen2 decoder), `crates/kreuzberg-candle-ocr/src/models/paddleocr_vl/` (PaddleOCR-VL 1.5 upgrade)
+- **Purpose**: Rust-native VLM-OCR backends (Hunyuan-OCR, PaddleOCR-VL 1.5, DeepSeek-OCR) including their Qwen2 decoder dependency and shared SigLIP/CLIP/MRoPE infrastructure subsets.
+
+### Vendored Files
+
+| File | Source | Notes |
+| ---- | ------ | ----- |
+| (populated as Phases 3-4 land each file) | | |
+
+### Modifications
+
+- `anyhow::Result<T>` → `Result<T, CandleOcrError>` throughout
+- `assert!`/`assert_eq!`/`panic!`/`unwrap()` on user-controlled values → typed `CandleOcrError` returns
+- Candle 0.9.2 → Candle 0.10 API migration
+- Generation loop routed through `kreuzberg_candle_ocr::models::glm_ocr::mtp::generate_mrope` (with a new `forward_step_with_position_ids` trait extension per A3) — NOT aha's `common/generate.rs`
+- rustdoc on every `pub` item
+- Dead code blocks dropped (specific examples: aha `modules.rs:214-230, 265-266`)
+
+### License Compatibility
+
+Apache-2.0 is compatible with Kreuzberg's Elastic License 2.0 (ELv2). Original Apache-2.0 copyright headers are preserved at file-top in each vendored file.
+
+**Last Updated**: 2026-06-17
+
+---
+
+**Last Updated**: June 17, 2026
 **Pandoc Version Used**: 3.8.3
 **Baseline Generation Date**: December 6, 2025

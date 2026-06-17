@@ -126,6 +126,68 @@ impl OcrBackendRegistry {
                 tracing::warn!("Failed to register VLM OCR backend: {e}");
             });
         }
+
+        // Candle-based VLM OCR backends. Per-model sub-features on
+        // `kreuzberg-candle-ocr` (trocr / paddleocr-vl) gate the actual
+        // registrations.
+        #[cfg(feature = "candle-trocr")]
+        {
+            use crate::candle_ocr::TrocrBackend;
+            use kreuzberg_candle_ocr::models::TrocrVariant;
+            tracing::info!("Initializing TrOCR backend");
+            let backend = TrocrBackend::new(TrocrVariant::default());
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register TrOCR backend: {e}");
+            });
+            tracing::info!("TrOCR backend registered successfully");
+        }
+
+        #[cfg(feature = "candle-paddleocr-vl")]
+        {
+            use crate::candle_ocr::PaddleOcrVlBackend;
+            use kreuzberg_candle_ocr::models::PaddleOcrVlTask;
+            tracing::info!("Initializing PaddleOCR-VL backend");
+            let backend = PaddleOcrVlBackend::new(PaddleOcrVlTask::default());
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register PaddleOCR-VL backend: {e}");
+            });
+            tracing::info!("PaddleOCR-VL backend registered successfully");
+        }
+
+        #[cfg(feature = "candle-glm-ocr")]
+        {
+            use crate::candle_ocr::GlmOcrBackend;
+            use crate::candle_ocr::glm_ocr_backend::LayoutMode;
+            use kreuzberg_candle_ocr::models::glm_ocr::GlmOcrTask;
+            tracing::info!("Initializing GLM-OCR backend");
+            let backend = GlmOcrBackend::new(GlmOcrTask::default(), LayoutMode::default());
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register GLM-OCR backend: {e}");
+            });
+            tracing::info!("GLM-OCR backend registered successfully");
+        }
+
+        #[cfg(all(feature = "candle-hunyuan-ocr", not(target_arch = "wasm32")))]
+        {
+            use crate::candle_ocr::HunyuanOcrBackend;
+            tracing::info!("Initializing Hunyuan-OCR backend");
+            let backend = HunyuanOcrBackend::new();
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register Hunyuan-OCR backend: {e}");
+            });
+            tracing::info!("Hunyuan-OCR backend registered successfully");
+        }
+
+        #[cfg(all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32")))]
+        {
+            use crate::candle_ocr::DeepseekOcrBackend;
+            tracing::info!("Initializing DeepSeek-OCR backend");
+            let backend = DeepseekOcrBackend::new();
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register DeepSeek-OCR backend: {e}");
+            });
+            tracing::info!("DeepSeek-OCR backend registered successfully");
+        }
     }
 
     /// Create a new empty OCR backend registry without default backends.

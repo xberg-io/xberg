@@ -1,0 +1,19 @@
+{
+  "id": "embed_texts_async_preset_switch",
+  "category": "embeddings",
+  "description": "embed_texts_async: preset override",
+  "call": "embed_texts_async",
+  "input": {
+    "texts": [
+      "Text"
+    ],
+    "config": {
+      "embedding_model": "default"
+    }
+  },
+  "assertions": [
+    {
+      "type": "not_error"
+    }
+  ]
+}

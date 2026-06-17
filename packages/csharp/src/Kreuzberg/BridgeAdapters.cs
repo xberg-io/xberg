@@ -85,6 +85,9 @@ public sealed class _OcrBackendBridgeAdapter : IOcrBackend
     public bool SupportsDocumentProcessing => _impl.SupportsDocumentProcessing;
 
     /// <summary></summary>
+    public bool EmitsStructuredMarkdown => _impl.EmitsStructuredMarkdown;
+
+    /// <summary></summary>
     public ExtractionResult ProcessDocument(string Path, OcrConfig Config)
     {
         return _impl.ProcessDocument(Path, Config);

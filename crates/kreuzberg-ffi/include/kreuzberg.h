@@ -2056,6 +2056,15 @@ typedef struct KREUZBERGKreuzbergOcrBackendVTable {
    */
   int32_t (*supports_document_processing)(const void *user_data);
   /**
+   * Declare that this backend emits structured markdown directly (tables, headings, lists)
+   * and downstream layout reconstruction should be skipped.
+   *
+   * Defaults to `false` — classical OCR backends (Tesseract, PaddleOCR classical) return
+   * plain text per detected region. End-to-end VLM backends (PaddleOCR-VL, GOT-OCR 2.0)
+   * emit markdown in one forward pass and should override this to `true`.
+   */
+  int32_t (*emits_structured_markdown)(const void *user_data);
+  /**
    * Process a document file directly via OCR.
    *
    * Only called if `supports_document_processing` returns `true`.

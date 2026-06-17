@@ -79,6 +79,18 @@ pub enum Pipeline {
     PdfOxide,
     /// pdf_oxide backend + layout detection
     PdfOxideLayout,
+    /// Candle-based TrOCR (force_ocr, plain text)
+    CandleTrocr,
+    /// Candle-based PaddleOCR-VL (force_ocr, end-to-end markdown)
+    CandlePaddleocrVl,
+    /// Candle-based GLM-OCR vision-language backend (force_ocr)
+    CandleGlmOcr,
+    /// Candle-based Hunyuan-OCR vision-language backend (force_ocr)
+    CandleHunyuanOcr,
+    /// Candle-based DeepSeek-OCR vision-language backend (force_ocr)
+    CandleDeepseekOcr,
+    /// Candle-based PaddleOCR-VL 1.5 vision-language backend (force_ocr)
+    CandlePaddleocrVl15,
 }
 
 impl Pipeline {
@@ -103,6 +115,12 @@ impl Pipeline {
             Pipeline::LayoutSlanetAuto => "layout+slanet-auto",
             Pipeline::PdfOxide => "pdf-oxide",
             Pipeline::PdfOxideLayout => "pdf-oxide+layout",
+            Pipeline::CandleTrocr => "candle-trocr",
+            Pipeline::CandlePaddleocrVl => "candle-paddleocr-vl",
+            Pipeline::CandleGlmOcr => "candle-glm-ocr",
+            Pipeline::CandleHunyuanOcr => "candle-hunyuan-ocr",
+            Pipeline::CandleDeepseekOcr => "candle-deepseek-ocr",
+            Pipeline::CandlePaddleocrVl15 => "candle-paddleocr-vl-15",
         }
     }
 
@@ -131,11 +149,27 @@ impl Pipeline {
             }
             "pdf-oxide" | "pdf_oxide" | "oxide" => Some(Pipeline::PdfOxide),
             "pdf-oxide+layout" | "pdf-oxide-layout" | "oxide+layout" | "oxide-layout" => Some(Pipeline::PdfOxideLayout),
+            "candle-trocr" | "candle_trocr" | "trocr" => Some(Pipeline::CandleTrocr),
+            "candle-paddleocr-vl" | "candle_paddleocr_vl" | "paddleocr-vl" => Some(Pipeline::CandlePaddleocrVl),
+            "candle-glm-ocr" | "candle_glm_ocr" | "glm-ocr" => Some(Pipeline::CandleGlmOcr),
+            "candle-hunyuan-ocr" | "candle_hunyuan_ocr" | "hunyuan-ocr" => Some(Pipeline::CandleHunyuanOcr),
+            "candle-deepseek-ocr" | "candle_deepseek_ocr" | "deepseek-ocr" => Some(Pipeline::CandleDeepseekOcr),
+            "candle-paddleocr-vl-15" | "candle_paddleocr_vl_15" | "paddleocr-vl-15" => {
+                Some(Pipeline::CandlePaddleocrVl15)
+            }
             _ => None,
         }
     }
 
     /// All pipelines that use kreuzberg in-process extraction.
+    ///
+    /// `CandleTrocr`, `CandlePaddleocrVl`, and the new Candle VLM backends
+    /// (`CandleHunyuanOcr`, `CandleDeepseekOcr`, `CandlePaddleocrVl15`) are
+    /// deliberately omitted from `all_kreuzberg()`: they need large model
+    /// downloads from HuggingFace and only build with their own feature flags,
+    /// so default cross-pipeline runs do not include them.
+    /// `CandleGlmOcr` is included because the `glm-ocr-bench` feature gates
+    /// the entire harness build, making the inclusion safe.
     pub fn all_kreuzberg() -> Vec<Pipeline> {
         vec![
             Pipeline::Baseline,
@@ -148,6 +182,7 @@ impl Pipeline {
             Pipeline::PaddleServerLayout,
             Pipeline::PdfOxide,
             Pipeline::PdfOxideLayout,
+            Pipeline::CandleGlmOcr,
         ]
     }
 }
@@ -373,6 +408,60 @@ pub fn build_extraction_config(pipeline: Pipeline) -> kreuzberg::ExtractionConfi
             ocr: Some(kreuzberg::core::config::OcrConfig {
                 backend: "tesseract".to_string(),
                 language: "eng".to_string(),
+                ..Default::default()
+            }),
+            ..base
+        },
+        Pipeline::CandleTrocr => kreuzberg::ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(kreuzberg::core::config::OcrConfig {
+                backend: "candle-trocr".to_string(),
+                language: "eng".to_string(),
+                ..Default::default()
+            }),
+            ..base
+        },
+        Pipeline::CandlePaddleocrVl => kreuzberg::ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(kreuzberg::core::config::OcrConfig {
+                backend: "candle-paddleocr-vl".to_string(),
+                language: "eng".to_string(),
+                ..Default::default()
+            }),
+            ..base
+        },
+        Pipeline::CandleGlmOcr => kreuzberg::ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(kreuzberg::core::config::OcrConfig {
+                backend: "candle-glm-ocr".to_string(),
+                language: "en".to_string(),
+                ..Default::default()
+            }),
+            ..base
+        },
+        Pipeline::CandleHunyuanOcr => kreuzberg::ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(kreuzberg::core::config::OcrConfig {
+                backend: "candle-hunyuan-ocr".to_string(),
+                language: "en".to_string(),
+                ..Default::default()
+            }),
+            ..base
+        },
+        Pipeline::CandleDeepseekOcr => kreuzberg::ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(kreuzberg::core::config::OcrConfig {
+                backend: "candle-deepseek-ocr".to_string(),
+                language: "en".to_string(),
+                ..Default::default()
+            }),
+            ..base
+        },
+        Pipeline::CandlePaddleocrVl15 => kreuzberg::ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(kreuzberg::core::config::OcrConfig {
+                backend: "candle-paddleocr-vl".to_string(),
+                language: "en".to_string(),
                 ..Default::default()
             }),
             ..base
@@ -1289,6 +1378,12 @@ mod tests {
             "layout+slanet-auto",
             "pdf-oxide",
             "pdf-oxide+layout",
+            "candle-trocr",
+            "candle-paddleocr-vl",
+            "candle-glm-ocr",
+            "candle-hunyuan-ocr",
+            "candle-deepseek-ocr",
+            "candle-paddleocr-vl-15",
         ];
         for name in all_names {
             let pipeline = Pipeline::parse(name).unwrap_or_else(|| panic!("Failed to parse pipeline '{name}'"));

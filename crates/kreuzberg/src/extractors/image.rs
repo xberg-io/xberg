@@ -8,6 +8,27 @@ use crate::types::internal::InternalDocument;
 use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::metadata::Metadata;
 use async_trait::async_trait;
+/// Returns `true` when the OCR backend configured in `config` self-declares that it
+/// emits structured markdown directly. End-to-end VLM backends (PaddleOCR-VL,
+/// future GOT-OCR / GLM-OCR) emit markdown in one forward pass and should
+/// bypass the layout-detection + region-cropping + table-reconstruction stages.
+///
+/// Returns `false` when no OCR config is set, no backend is registered under the
+/// configured name, or the backend uses the default classical contract.
+#[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
+fn ocr_backend_emits_structured_markdown(config: &ExtractionConfig) -> bool {
+    let Some(ocr) = config.ocr.as_ref() else {
+        return false;
+    };
+    crate::plugins::ensure_ocr_backends_initialized();
+    let registry = crate::plugins::registry::get_ocr_backend_registry();
+    let registry = registry.read();
+    registry
+        .get(&ocr.backend)
+        .map(|b| b.emits_structured_markdown())
+        .unwrap_or(false)
+}
+
 #[cfg_attr(alef, alef(skip))]
 /// Image extractor for various image formats.
 ///
@@ -509,8 +530,13 @@ impl DocumentExtractor for ImageExtractor {
             // Layout-enhanced OCR: when both OCR and layout detection are configured,
             // run layout detection first, then OCR each detected region individually
             // and assemble into structured markdown.
+            //
+            // Bypass when the configured backend self-declares structured-markdown output
+            // (`OcrBackend::emits_structured_markdown`): end-to-end VLM backends emit
+            // markdown for the whole page in one forward pass and would lose context if
+            // fed cropped layout regions.
             #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
-            if config.layout.is_some() {
+            if config.layout.is_some() && !ocr_backend_emits_structured_markdown(config) {
                 match self.extract_with_layout_ocr(content, config).await {
                     Ok(mut doc) => {
                         doc.metadata.format = Some(crate::types::FormatMetadata::Image(image_metadata));

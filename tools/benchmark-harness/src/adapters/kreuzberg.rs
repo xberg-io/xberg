@@ -69,6 +69,54 @@ pub fn create_kreuzberg_adapter(
             args.push("--force-ocr".to_string());
             args.push("true".to_string());
         }
+        KreuzbergPipeline::CandleTrocr => {
+            args.push("--ocr".to_string());
+            args.push("true".to_string());
+            args.push("--ocr-backend".to_string());
+            args.push("candle-trocr".to_string());
+            args.push("--force-ocr".to_string());
+            args.push("true".to_string());
+        }
+        KreuzbergPipeline::CandlePaddleocrVl => {
+            args.push("--ocr".to_string());
+            args.push("true".to_string());
+            args.push("--ocr-backend".to_string());
+            args.push("candle-paddleocr-vl".to_string());
+            args.push("--force-ocr".to_string());
+            args.push("true".to_string());
+        }
+        KreuzbergPipeline::CandleGlmOcr => {
+            args.push("--ocr".to_string());
+            args.push("true".to_string());
+            args.push("--ocr-backend".to_string());
+            args.push("candle-glm-ocr".to_string());
+            args.push("--force-ocr".to_string());
+            args.push("true".to_string());
+        }
+        KreuzbergPipeline::CandleHunyuanOcr => {
+            args.push("--ocr".to_string());
+            args.push("true".to_string());
+            args.push("--ocr-backend".to_string());
+            args.push("candle-hunyuan-ocr".to_string());
+            args.push("--force-ocr".to_string());
+            args.push("true".to_string());
+        }
+        KreuzbergPipeline::CandleDeepseekOcr => {
+            args.push("--ocr".to_string());
+            args.push("true".to_string());
+            args.push("--ocr-backend".to_string());
+            args.push("candle-deepseek-ocr".to_string());
+            args.push("--force-ocr".to_string());
+            args.push("true".to_string());
+        }
+        KreuzbergPipeline::CandlePaddleocrVl15 => {
+            args.push("--ocr".to_string());
+            args.push("true".to_string());
+            args.push("--ocr-backend".to_string());
+            args.push("candle-paddleocr-vl".to_string());
+            args.push("--force-ocr".to_string());
+            args.push("true".to_string());
+        }
     }
 
     // Forward-compat marker: always specify pdf-backend

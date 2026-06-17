@@ -75,6 +75,14 @@ interface OcrBackend
     public function supports_document_processing(): mixed;
 
     /**
+     * Declare that this backend emits structured markdown directly (tables, headings, lists)
+     *
+
+     * @return mixed Return value from the plugin method
+     */
+    public function emits_structured_markdown(): mixed;
+
+    /**
      * Process a document file directly via OCR.
      *
 

@@ -1,0 +1,25 @@
+name: Gleam
+
+on:
+  workflow_dispatch:
+  # Gleam binding is alef-experimental (added v0.10.0). gleam.toml pins a
+  # gleam_stdlib that requires Gleam >= 1.14 while the workflow installs 1.4;
+  # version mismatch will be resolved when alef-backend-gleam matures.
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/gleam
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up BEAM (Erlang/Elixir)
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1.4"
+      - name: Build Gleam project
+        run: gleam build
+      - name: Run tests
+        run: gleam test

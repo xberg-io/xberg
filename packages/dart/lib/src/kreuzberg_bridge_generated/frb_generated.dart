@@ -709,6 +709,7 @@ abstract class RustLibApi extends BaseApi {
     required FutureOr<List<String>> Function() supportedLanguages,
     required FutureOr<bool> Function() supportsTableDetection,
     required FutureOr<bool> Function() supportsDocumentProcessing,
+    required FutureOr<bool> Function() emitsStructuredMarkdown,
     required FutureOr<ExtractionResult> Function(String, OcrConfig)
     processDocument,
   });
@@ -5493,6 +5494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required FutureOr<List<String>> Function() supportedLanguages,
     required FutureOr<bool> Function() supportsTableDetection,
     required FutureOr<bool> Function() supportsDocumentProcessing,
+    required FutureOr<bool> Function() emitsStructuredMarkdown,
     required FutureOr<ExtractionResult> Function(String, OcrConfig)
     processDocument,
   }) {
@@ -5530,6 +5532,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             supportsDocumentProcessing,
             serializer,
           );
+          sse_encode_DartFn_Inputs__Output_bool_AnyhowException(
+            emitsStructuredMarkdown,
+            serializer,
+          );
           sse_encode_DartFn_Inputs_String_ocr_config_Output_extraction_result_AnyhowException(
             processDocument,
             serializer,
@@ -5557,6 +5563,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           supportedLanguages,
           supportsTableDetection,
           supportsDocumentProcessing,
+          emitsStructuredMarkdown,
           processDocument,
         ],
         apiImpl: this,
@@ -5577,6 +5584,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "supportedLanguages",
           "supportsTableDetection",
           "supportsDocumentProcessing",
+          "emitsStructuredMarkdown",
           "processDocument",
         ],
       );

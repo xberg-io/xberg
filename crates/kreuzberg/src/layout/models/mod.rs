@@ -1,3 +1,5 @@
+/// PP-DocLayout-V3 layout detection model.
+pub mod pp_doclayout_v3;
 /// RT-DETR v2 layout detection model.
 pub mod rtdetr;
 /// SLANeXT table structure recognition model.

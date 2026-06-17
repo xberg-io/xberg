@@ -11,6 +11,7 @@ use image::RgbImage;
 use crate::layout::error::LayoutError;
 use crate::layout::model_manager::LayoutModelManager;
 use crate::layout::models::LayoutModel;
+use crate::layout::models::pp_doclayout_v3::PpDocLayoutV3Model;
 use crate::layout::models::rtdetr::RtDetrModel;
 use crate::layout::models::yolo::{YoloModel, YoloVariant};
 use crate::layout::postprocessing::heuristics;
@@ -23,6 +24,8 @@ pub enum ModelBackend {
     YoloDocLayNet,
     /// RT-DETR v2 (17 classes, 640x640 input, NMS-free).
     RtDetr,
+    /// PP-DocLayout-V3 (8 classes, 960x960 input).
+    PpDocLayoutV3,
     /// Custom model from a local file path.
     Custom {
         /// Filesystem path to the ONNX model file.
@@ -37,6 +40,8 @@ pub enum ModelBackend {
 pub enum CustomModelVariant {
     /// RT-DETR v2 model format.
     RtDetr,
+    /// PP-DocLayout-V3 model format.
+    PpDocLayoutV3,
     /// YOLO trained on DocLayNet (11 classes).
     YoloDocLayNet,
     /// DocLayout-YOLO trained on DocStructBench (10 classes).
@@ -123,11 +128,18 @@ impl LayoutEngine {
                 let path_str = model_path.to_string_lossy();
                 Box::new(RtDetrModel::from_file(&path_str, config.acceleration.as_ref())?)
             }
+            ModelBackend::PpDocLayoutV3 => {
+                let manager = LayoutModelManager::new(config.cache_dir.clone());
+                let model_path = manager.ensure_pp_doclayout_v3_model()?;
+                let path_str = model_path.to_string_lossy();
+                Box::new(PpDocLayoutV3Model::from_file(&path_str, config.acceleration.as_ref())?)
+            }
             ModelBackend::Custom { path, variant } => {
                 let path_str = path.to_string_lossy();
                 let accel = config.acceleration.as_ref();
                 match variant {
                     CustomModelVariant::RtDetr => Box::new(RtDetrModel::from_file(&path_str, accel)?),
+                    CustomModelVariant::PpDocLayoutV3 => Box::new(PpDocLayoutV3Model::from_file(&path_str, accel)?),
                     CustomModelVariant::YoloDocLayNet => Box::new(YoloModel::from_file(
                         &path_str,
                         YoloVariant::DocLayNet,

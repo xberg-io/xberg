@@ -107,3 +107,27 @@ tasks:
     cmds:
       - rm -rf "{{.BENCHMARK_RESULTS_DIR}}"
       - rm -rf "{{.FLAMEGRAPH_DIR}}"
+
+  candle-glm-ocr:
+    desc: "Build and run benchmark harness with candle-glm-ocr backend"
+    cmds:
+      - cargo build --locked -p benchmark-harness --features glm-ocr-bench --release
+      - cargo run --locked -p benchmark-harness --features glm-ocr-bench --release -- pipeline-benchmark --fixtures "{{.FIXTURES_DIR}}"
+
+  candle-hunyuan-ocr:
+    desc: "Build and run benchmark harness with candle-hunyuan-ocr backend"
+    cmds:
+      - cargo build --locked -p benchmark-harness --features candle-hunyuan-ocr-bench --release
+      - cargo run --locked -p benchmark-harness --features candle-hunyuan-ocr-bench --release -- pipeline-benchmark --fixtures "{{.FIXTURES_DIR}}"
+
+  candle-deepseek-ocr:
+    desc: "Build and run benchmark harness with candle-deepseek-ocr backend"
+    cmds:
+      - cargo build --locked -p benchmark-harness --features candle-deepseek-ocr-bench --release
+      - cargo run --locked -p benchmark-harness --features candle-deepseek-ocr-bench --release -- pipeline-benchmark --fixtures "{{.FIXTURES_DIR}}"
+
+  candle-paddleocr-vl-15:
+    desc: "Build and run benchmark harness with candle-paddleocr-vl-15 backend"
+    cmds:
+      - cargo build --locked -p benchmark-harness --features candle-paddleocr-vl-15-bench --release
+      - cargo run --locked -p benchmark-harness --features candle-paddleocr-vl-15-bench --release -- pipeline-benchmark --fixtures "{{.FIXTURES_DIR}}"

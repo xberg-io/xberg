@@ -54,7 +54,11 @@ pub fn detect_qr_codes(image_bytes: &[u8], _format_hint: Option<&str>) -> Vec<Qr
     };
 
     let luma = dynamic.to_luma8();
-    let mut prepared = rqrr::PreparedImage::prepare(luma);
+    let (width, height) = luma.dimensions();
+    let raw = luma.into_raw();
+    let mut prepared = rqrr::PreparedImage::prepare_from_greyscale(width as usize, height as usize, |x, y| {
+        raw[y * width as usize + x]
+    });
     let grids = prepared.detect_grids();
     if grids.is_empty() {
         return Vec::new();

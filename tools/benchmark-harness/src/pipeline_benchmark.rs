@@ -111,6 +111,18 @@ pub fn default_paths() -> Vec<Pipeline> {
     ]
 }
 
+/// Opt-in candle OCR suite — evaluates the candle backends against the
+/// baseline + layout paths on OCR-relevant fixtures. Used for Phase 6 model
+/// selection.
+pub fn candle_ocr_suite() -> Vec<Pipeline> {
+    vec![
+        Pipeline::Baseline,
+        Pipeline::Layout,
+        Pipeline::CandleTrocr,
+        Pipeline::CandlePaddleocrVl,
+    ]
+}
+
 async fn extract_and_score(
     pipeline: Pipeline,
     doc: &CorpusDocument,

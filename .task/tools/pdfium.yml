@@ -1,0 +1,24 @@
+version: "3"
+
+includes:
+  _cfg:
+    taskfile: ../config/vars.yml
+    internal: true
+
+tasks:
+  download:
+    desc: Download PDFium runtime
+    cmds:
+      - bash scripts/download_pdfium_runtime.sh
+
+  install:macos:
+    desc: Install system PDFium on macOS
+    platforms: [darwin]
+    cmds:
+      - brew install pdfium-core
+
+  install:linux:
+    desc: Install PDFium on Linux (downloads prebuilt)
+    platforms: [linux]
+    cmds:
+      - bash scripts/download_pdfium_runtime.sh

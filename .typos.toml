@@ -90,6 +90,11 @@ yor = "yor"
 ment = "ment"
 # PaddleOCR upstream naming
 cliper = "cliper"
+# candle-nn API function name (memory-mapped safetensors)
+mmaped = "mmaped"
+# Qwen2-VL / PaddleOCR-VL vision-encoder grid dimension order
+thw = "thw"
+THW = "THW"
 # PDFium upstream doc typos
 similarily = "similarily"
 execpt = "execpt"

@@ -302,6 +302,11 @@ func __swift_bridge__SwiftOcrBackendBox_alef_supports_document_processing (_ thi
     Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_supports_document_processing()
 }
 
+@_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_emits_structured_markdown")
+func __swift_bridge__SwiftOcrBackendBox_alef_emits_structured_markdown (_ this: UnsafeMutableRawPointer) -> Bool {
+    Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_emits_structured_markdown()
+}
+
 @_cdecl("__swift_bridge__$SwiftOcrBackendBox$alef_process_document")
 func __swift_bridge__SwiftOcrBackendBox_alef_process_document (_ this: UnsafeMutableRawPointer, _ path: UnsafeMutableRawPointer, _ config: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
     { let rustString = Unmanaged<SwiftOcrBackendBox>.fromOpaque(this).takeUnretainedValue().alef_process_document(path: RustString(ptr: path), config: RustString(ptr: config)).intoRustString(); rustString.isOwned = false; return rustString.ptr }()

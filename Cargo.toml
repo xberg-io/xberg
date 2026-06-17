@@ -6,6 +6,7 @@ members = [
     "crates/kreuzberg-jni",
     "crates/kreuzberg-libheif",
     "crates/kreuzberg-node",
+    "crates/kreuzberg-candle-ocr",
     "crates/kreuzberg-paddle-ocr",
     "crates/kreuzberg-php",
     "crates/kreuzberg-py",
@@ -47,6 +48,9 @@ async-trait = "0.1.89"
 base64 = "0.22.1"
 blake3 = "1"
 bytes = { version = "1", features = ["serde"] }
+candle-core = { version = "0.10", default-features = false }
+candle-nn = { version = "0.10", default-features = false }
+candle-transformers = { version = "0.10", default-features = false }
 cfb = "0.14"
 chrono = "0.4"
 clap = { version = "4.6", features = ["derive", "color", "suggestions"] }
@@ -57,7 +61,7 @@ dbase = "0.7"
 futures = "0.3"
 getrandom = { version = "0.4.2", features = ["wasm_js"] }
 hex = "0.4.3"
-html-to-markdown-rs = { version = "3.6.3", default-features = false }
+html-to-markdown-rs = { version = "3.6.9", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"
@@ -104,7 +108,7 @@ tokio = { version = "1.52.3", features = [
 ] }
 toml = "1.1.2"
 tracing = "0.1"
-tree-sitter-language-pack = { version = "1.9.0-rc.44", default-features = false, features = ["serde"] }
+tree-sitter-language-pack = { version = "1.9.0-rc.51", default-features = false, features = ["serde"] }
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
@@ -122,6 +126,7 @@ web-sys = { version = "0.3", features = [
 kreuzberg = { path = "crates/kreuzberg" }
 kreuzberg-tesseract = { path = "crates/kreuzberg-tesseract" }
 kreuzberg-paddle-ocr = { path = "crates/kreuzberg-paddle-ocr" }
+kreuzberg-candle-ocr = { path = "crates/kreuzberg-candle-ocr" }
 
 [profile.release]
 lto = "thin"

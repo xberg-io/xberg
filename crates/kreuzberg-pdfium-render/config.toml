@@ -1,0 +1,9 @@
+[env]
+# cargo test by default uses multiple threads to execute tests in parallel.
+# This creates problems with Pdfium, since Pdfium is single threaded.
+# We set the RUST_TEST_THREADS environment variable to force cargo to use a
+# single testing thread. This is equivalent to invoking cargo like this:
+
+# cargo test -- --test-threads 1
+
+RUST_TEST_THREADS = "1"
