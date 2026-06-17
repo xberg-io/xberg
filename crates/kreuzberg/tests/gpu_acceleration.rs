@@ -33,6 +33,7 @@ fn test_documents_dir() -> PathBuf {
         .join("test_documents")
 }
 
+#[cfg(feature = "paddle-ocr")]
 fn test_cache_dir() -> PathBuf {
     std::env::temp_dir().join("kreuzberg_gpu_test")
 }

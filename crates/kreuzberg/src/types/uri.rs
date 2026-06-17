@@ -107,7 +107,7 @@ impl ExtractedUri {
     }
 
     /// Set the page number.
-    #[cfg(test)]
+    #[cfg(all(test, any(feature = "pdf", feature = "xml", feature = "office")))]
     #[must_use]
     pub(crate) fn with_page(mut self, page: u32) -> Self {
         self.page = Some(page);

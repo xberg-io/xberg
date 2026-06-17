@@ -27,12 +27,15 @@ use kreuzberg::extract_file_sync;
 // ── Magic-byte helpers ───────────────────────────────────────────────────────
 
 /// PNG magic bytes: `\x89PNG\r\n\x1a\n`
+#[cfg(any(feature = "pdf", feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
 const PNG_MAGIC: &[u8] = b"\x89PNG\r\n\x1a\n";
 
 /// JPEG SOI marker: `\xFF\xD8\xFF`
+#[cfg(feature = "pdf")]
 const JPEG_MAGIC: &[u8] = b"\xFF\xD8\xFF";
 
 /// WebP container: `RIFF` at offset 0, `WEBP` at offset 8
+#[cfg(feature = "pdf")]
 fn is_webp(data: &[u8]) -> bool {
     data.len() >= 12 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP"
 }

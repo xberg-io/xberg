@@ -115,16 +115,14 @@ fn parse_options_glm_ocr_rejects_non_object_json_by_returning_defaults() {
     let backend = GlmOcrBackend::new(GlmOcrTask::default(), LayoutMode::default());
 
     // Array value: parse_options must not panic and the backend struct is valid.
-    let mut config = OcrConfig::default();
-    config.backend_options = Some(serde_json::json!([1, 2, 3]));
+    let _config = OcrConfig { backend_options: Some(serde_json::json!([1, 2, 3])), ..Default::default() };
 
     // Verify the backend is still functional (name/version accessible — no panic).
     use kreuzberg::plugins::Plugin as _;
     assert_eq!(backend.name(), "candle-glm-ocr");
 
     // Scalar value.
-    let mut config2 = OcrConfig::default();
-    config2.backend_options = Some(serde_json::json!("ocr"));
+    let _config2 = OcrConfig { backend_options: Some(serde_json::json!("ocr")), ..Default::default() };
     assert_eq!(
         backend.name(),
         "candle-glm-ocr",
@@ -197,8 +195,7 @@ fn parse_options_glm_ocr_accepts_empty_object_and_returns_defaults() {
 
     let backend = GlmOcrBackend::new(GlmOcrTask::default(), LayoutMode::default());
 
-    let mut config = OcrConfig::default();
-    config.backend_options = Some(serde_json::json!({}));
+    let _config = OcrConfig { backend_options: Some(serde_json::json!({})), ..Default::default() };
 
     // Backend remains properly identified after empty-object options.
     assert_eq!(backend.name(), "candle-glm-ocr");

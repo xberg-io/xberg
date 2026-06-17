@@ -1,3 +1,5 @@
+#![cfg(feature = "mcp")]
+
 use kreuzberg::mcp::BatchExtractFilesParams;
 use rmcp::schemars::schema_for;
 
