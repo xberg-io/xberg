@@ -312,6 +312,21 @@ pub struct ExtractionResult {
     #[serde(default)]
     pub redaction_report: Option<super::redaction::RedactionReport>,
 
+    /// Mathematical formulas recognized in the document.
+    ///
+    /// Populated by the layout-guided formula pipeline when the
+    /// `layout-detection` feature is enabled and the document contains regions
+    /// classified as formulas. Empty otherwise.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub formulas: Vec<super::formula::Formula>,
+
+    /// Form fields extracted from a PDF's AcroForm or XFA structure.
+    ///
+    /// Populated by the PDF extractor when `PdfConfig::extract_form_fields` is
+    /// enabled (default) and the document is a fillable form. Empty otherwise.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub form_fields: Vec<super::form_field::PdfFormField>,
+
     /// Pre-rendered content in the requested output format.
     ///
     /// Populated during `derive_extraction_result` before tree derivation consumes
@@ -536,6 +551,15 @@ pub struct ChunkMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub heading_context: Option<HeadingContext>,
+
+    /// Flattened heading trail from document root to this chunk's section.
+    ///
+    /// Each element is a heading's text, outermost first. Derived from
+    /// [`heading_context`](Self::heading_context) when present; empty otherwise.
+    /// Provides a binding-friendly, RAG-shaped breadcrumb without requiring
+    /// callers to walk the nested [`HeadingContext`] structure.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub heading_path: Vec<String>,
 
     /// Indices into `ExtractionResult.images` for images on pages covered by this chunk.
     ///

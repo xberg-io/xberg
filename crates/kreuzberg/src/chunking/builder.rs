@@ -104,6 +104,7 @@ where
                 first_page,
                 last_page,
                 heading_context: None,
+                heading_path: Vec::new(),
                 image_indices: Vec::new(),
             },
         });

@@ -67,6 +67,24 @@ pub struct PdfConfig {
     /// the whole extraction). Default: `false`.
     #[serde(default)]
     pub ocr_inline_images: bool,
+
+    /// Extract AcroForm and XFA form fields into `ExtractionResult.form_fields`.
+    ///
+    /// When `true` (default), reads the document's interactive form structure
+    /// (field names, types, values, widget geometry). Cheap and strictly
+    /// additive — non-form PDFs simply yield an empty list. Set to `false` to
+    /// skip the form pass entirely.
+    #[serde(default = "default_true")]
+    pub extract_form_fields: bool,
+
+    /// Reorder extracted text by layout-detected reading order.
+    ///
+    /// When `true`, projects text spans onto layout-detected regions, performs
+    /// column detection, and emits spans in natural reading order (important
+    /// for multi-column academic PDFs). Requires the `layout-detection`
+    /// feature; has no effect without it. Defaults to `false`.
+    #[serde(default)]
+    pub reading_order: bool,
 }
 
 /// Hierarchy extraction configuration for PDF text structure analysis.
@@ -114,6 +132,8 @@ impl Default for PdfConfig {
             bottom_margin_fraction: None,
             allow_single_column_tables: false,
             ocr_inline_images: false,
+            extract_form_fields: true,
+            reading_order: false,
         }
     }
 }
@@ -185,6 +205,8 @@ mod tests {
             bottom_margin_fraction: Some(0.08),
             allow_single_column_tables: false,
             ocr_inline_images: false,
+            extract_form_fields: true,
+            reading_order: false,
         };
         assert_eq!(config.top_margin_fraction, Some(0.10));
         assert_eq!(config.bottom_margin_fraction, Some(0.08));

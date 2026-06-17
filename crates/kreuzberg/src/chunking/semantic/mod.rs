@@ -132,6 +132,7 @@ pub(crate) fn chunk_semantic(
                 first_page,
                 last_page,
                 heading_context: heading_ctx,
+                heading_path: Vec::new(),
                 image_indices: Vec::new(),
             },
         });

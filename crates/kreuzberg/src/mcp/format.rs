@@ -314,6 +314,7 @@ mod tests {
                     first_page: None,
                     last_page: None,
                     heading_context: None,
+                    heading_path: Vec::new(),
                     image_indices: Vec::new(),
                 },
             }]),

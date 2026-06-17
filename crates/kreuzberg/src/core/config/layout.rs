@@ -87,6 +87,15 @@ pub struct LayoutDetectionConfig {
     /// is used for inference. Defaults to `None` (auto-select per platform).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acceleration: Option<super::acceleration::AccelerationConfig>,
+
+    /// Route regions classified as charts to the chart-understanding OCR task.
+    ///
+    /// When `true`, layout regions detected as charts are sent to the VLM
+    /// chart task (data-series/axis recovery) instead of being treated as
+    /// generic image regions. Defaults to `false` — chart understanding is
+    /// opt-in and has no effect on standard text/table extraction scores.
+    #[serde(default)]
+    pub enable_chart_understanding: bool,
 }
 
 impl Default for LayoutDetectionConfig {
@@ -96,6 +105,7 @@ impl Default for LayoutDetectionConfig {
             apply_heuristics: true,
             table_model: TableModel::default(),
             acceleration: None,
+            enable_chart_understanding: false,
         }
     }
 }
