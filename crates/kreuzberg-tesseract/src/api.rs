@@ -399,11 +399,12 @@ impl TesseractAPI {
     /// Returns `Ok(())` if recognition is successful, otherwise returns an error.
     pub fn recognize(&self) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: TessBaseAPIRecognize() is safe because:
-        // 1. *handle is a valid pointer to an initialized Tesseract engine with an image set
-        // 2. std::ptr::null_mut() is passed as the monitor parameter, which Tesseract accepts
-        //    to indicate no progress monitoring is needed
-        // 3. The mutex ensures exclusive access during the potentially long recognition process
+        // SAFETY: The handle is valid and mutex-protected. On native builds we route through
+        // the exception-barrier shim so that C++ exceptions are caught and converted to an
+        // error return code instead of propagating into Rust frames.
+        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+        let result = unsafe { shim::kreuzberg_tess_recognize(*handle) };
+        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
         let result = unsafe { TessBaseAPIRecognize(*handle, std::ptr::null_mut()) };
         if result != 0 {
             Err(TesseractError::OcrError)
@@ -423,12 +424,11 @@ impl TesseractAPI {
     /// Returns the HOCR text for the specified page as a string.
     pub fn get_hocr_text(&self, page: i32) -> Result<String> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: TessBaseAPIGetHOCRText() returns a pointer to an allocated C string.
-        // This is safe because:
-        // 1. *handle is a valid pointer to an initialized Tesseract engine
-        // 2. page is a valid page index
-        // 3. The returned pointer is either null or points to a null-terminated C string
-        //    allocated by Tesseract (must be freed with TessDeleteText)
+        // SAFETY: The handle is valid and mutex-protected. On native builds we route through
+        // the exception-barrier shim; null return indicates either OcrError or a caught exception.
+        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+        let text_ptr = unsafe { shim::kreuzberg_tess_get_hocr_text(*handle, page) };
+        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
         let text_ptr = unsafe { TessBaseAPIGetHOCRText(*handle, page) };
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
@@ -769,11 +769,21 @@ impl TesseractAPI {
         let mut orient_conf = 0.0;
         let mut script_name_ptr = std::ptr::null_mut();
         let mut script_conf = 0.0;
-        // SAFETY: TessBaseAPIDetectOrientationScript() is safe because:
-        // 1. *handle is a valid pointer to an initialized Tesseract engine
-        // 2. All mutable references (&mut ...) are valid local stack variables that outlive this call
-        // 3. The function writes output values into these mutable references
-        // 4. script_name_ptr may be returned as null (meaning no script detected) or as a valid pointer
+        // SAFETY: The handle is valid and mutex-protected. All output pointers are valid stack
+        // variables that outlive this call. On native builds we route through the exception-barrier
+        // shim so that C++ exceptions (e.g. from missing osd.traineddata) are caught and returned
+        // as 0 (failure) instead of propagating into Rust frames and aborting the process.
+        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+        let result = unsafe {
+            shim::kreuzberg_tess_detect_orientation_script(
+                *handle,
+                &mut orient_deg,
+                &mut orient_conf,
+                &mut script_name_ptr,
+                &mut script_conf,
+            )
+        };
+        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
         let result = unsafe {
             TessBaseAPIDetectOrientationScript(
                 *handle,
@@ -1194,12 +1204,16 @@ impl TesseractAPI {
     /// Returns `Ok(())` if clearing the OCR engine is successful, otherwise returns an error.
     pub fn clear(&self) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        // SAFETY: TessBaseAPIClear() is safe because:
-        // 1. *handle is a valid pointer to an initialized Tesseract engine
-        // 2. The function resets internal state
-        // 3. No pointer parameters are passed
-        // 4. The mutex ensures exclusive access
-        unsafe { TessBaseAPIClear(*handle) };
+        // SAFETY: The handle is valid and mutex-protected. On native builds we route through
+        // the exception-barrier shim so that any C++ exception during state reset is swallowed.
+        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+        unsafe {
+            shim::kreuzberg_tess_clear(*handle)
+        };
+        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
+        unsafe {
+            TessBaseAPIClear(*handle)
+        };
         Ok(())
     }
 
@@ -1574,10 +1588,11 @@ impl TesseractAPI {
             return Err(TesseractError::UninitializedError);
         }
 
-        // SAFETY: TessBaseAPIGetUTF8Text() returns a pointer to an allocated C string.
-        // This is safe because:
-        // 1. *handle is a valid pointer to an initialized Tesseract engine
-        // 2. The returned pointer is either null or a valid null-terminated C string
+        // SAFETY: The handle is valid and mutex-protected. On native builds we route through
+        // the exception-barrier shim; null return indicates either OcrError or a caught exception.
+        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+        let text_ptr = unsafe { shim::kreuzberg_tess_get_utf8_text(*handle) };
+        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
         let text_ptr = unsafe { TessBaseAPIGetUTF8Text(*handle) };
         if text_ptr.is_null() {
             return Err(TesseractError::OcrError);
@@ -2212,7 +2227,9 @@ ffi_extern! {
     fn TessBaseAPIGetDoubleVariable(handle: *mut c_void, name: *const c_char) -> c_double;
     fn TessBaseAPISetPageSegMode(handle: *mut c_void, mode: c_int);
     fn TessBaseAPIGetPageSegMode(handle: *mut c_void) -> c_int;
+    #[cfg(any(target_arch = "wasm32", not(feature = "build-tesseract")))]
     fn TessBaseAPIRecognize(handle: *mut c_void, monitor: *mut c_void) -> c_int;
+    #[cfg(any(target_arch = "wasm32", not(feature = "build-tesseract")))]
     fn TessBaseAPIGetHOCRText(handle: *mut c_void, page: c_int) -> *mut c_char;
 
     fn TessBaseAPIGetAltoText(handle: *mut c_void, page: c_int) -> *mut c_char;
@@ -2223,6 +2240,7 @@ ffi_extern! {
     fn TessBaseAPIGetUNLVText(handle: *mut c_void) -> *mut c_char;
     fn TessBaseAPIAllWordConfidences(handle: *mut c_void) -> *const c_int;
     fn TessBaseAPIAdaptToWordStr(handle: *mut c_void, mode: c_int, wordstr: *const c_char) -> c_int;
+    #[cfg(any(target_arch = "wasm32", not(feature = "build-tesseract")))]
     fn TessBaseAPIDetectOrientationScript(
         handle: *mut c_void,
         orient_deg: *mut c_int,
@@ -2298,7 +2316,9 @@ ffi_extern! {
     fn TessBaseAPISetImage2(handle: *mut c_void, pix: *mut c_void);
     fn TessBaseAPISetSourceResolution(handle: *mut c_void, ppi: c_int);
     fn TessBaseAPISetRectangle(handle: *mut c_void, left: c_int, top: c_int, width: c_int, height: c_int);
+    #[cfg(any(target_arch = "wasm32", not(feature = "build-tesseract")))]
     fn TessBaseAPIGetUTF8Text(handle: *mut c_void) -> *mut c_char;
+    #[cfg(any(target_arch = "wasm32", not(feature = "build-tesseract")))]
     fn TessBaseAPIClear(handle: *mut c_void);
     fn TessBaseAPIEnd(handle: *mut c_void);
     fn TessBaseAPIIsValidWord(handle: *mut c_void, word: *const c_char) -> c_int;
@@ -2349,4 +2369,27 @@ ffi_extern! {
     // boxaDestroy sets *pboxa to null after freeing, so we pass *mut *mut c_void.
     fn boxaDestroy(pboxa: *mut *mut c_void);
 
+}
+
+// Exception-barrier shims compiled from src/shim.cpp (native non-WASM builds only).
+// These wrap the five most dangerous Tesseract C API calls in try/catch (...) so that
+// C++ exceptions — including those originating in the C++ stdlib and propagating through
+// Tesseract frames built with -fno-exceptions — cannot reach Rust's extern "C-unwind"
+// frames and abort the process.
+#[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
+mod shim {
+    use std::os::raw::{c_char, c_float, c_int, c_void};
+    unsafe extern "C" {
+        pub(super) fn kreuzberg_tess_recognize(handle: *mut c_void) -> c_int;
+        pub(super) fn kreuzberg_tess_get_hocr_text(handle: *mut c_void, page: c_int) -> *mut c_char;
+        pub(super) fn kreuzberg_tess_get_utf8_text(handle: *mut c_void) -> *mut c_char;
+        pub(super) fn kreuzberg_tess_clear(handle: *mut c_void);
+        pub(super) fn kreuzberg_tess_detect_orientation_script(
+            handle: *mut c_void,
+            orient_deg: *mut c_int,
+            orient_conf: *mut c_float,
+            script_name: *mut *mut c_char,
+            script_conf: *mut c_float,
+        ) -> c_int;
+    }
 }

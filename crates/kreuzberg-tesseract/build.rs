@@ -719,9 +719,22 @@ mod build_tesseract {
         eprintln!("Bundled tessdata dir: {:?}", bundled_tessdata_dir);
 
         println!("cargo:rerun-if-changed=build.rs");
+        println!("cargo:rerun-if-changed=src/shim.cpp");
         println!("cargo:rerun-if-changed={}", third_party_dir.display());
         println!("cargo:rerun-if-changed={}", leptonica_dir.display());
         println!("cargo:rerun-if-changed={}", tesseract_dir.display());
+
+        // Compile the C++ exception-barrier shim (native builds only; `cc` is not
+        // available under build-tesseract-wasm). The shim must be compiled WITH
+        // exception support (no -fno-exceptions) so catch (...) is active. It wraps
+        // the dangerous Tesseract C API calls so C++ exceptions cannot propagate
+        // into Rust's extern "C-unwind" frames and abort the process.
+        #[cfg(feature = "build-tesseract")]
+        cc::Build::new()
+            .file("src/shim.cpp")
+            .cpp(true)
+            .include(tesseract_install_dir.join("include"))
+            .compile("kreuzberg_shim");
 
         println!("cargo:rustc-link-search=native={}", leptonica_lib_dir.display());
         println!(
