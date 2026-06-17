@@ -2,10 +2,13 @@
 pub mod pp_doclayout_v3;
 /// RT-DETR v2 layout detection model.
 pub mod rtdetr;
+#[cfg(feature = "pdf")]
 /// SLANeXT table structure recognition model.
 pub mod slanet;
+#[cfg(feature = "pdf")]
 /// Binary classifier for distinguishing wired vs wireless tables.
 pub mod table_classifier;
+#[cfg(feature = "pdf")]
 /// Table Transformer (TATR) table structure recognition model.
 pub mod tatr;
 /// YOLO-based layout detection models (DocLayNet, DocStructBench, YOLOX variants).

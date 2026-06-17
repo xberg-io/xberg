@@ -31,7 +31,7 @@ pub(crate) use string_utils::safe_decode;
 #[cfg(any(feature = "xml", feature = "office"))]
 pub(crate) use xml_utils::xml_tag_name;
 
-#[cfg(any(feature = "layout-detection", feature = "office"))]
+#[cfg(any(all(feature = "layout-detection", feature = "pdf"), feature = "office"))]
 use std::borrow::Cow;
 
 /// Escape `&`, `<`, and `>` in text destined for markdown/HTML output.
@@ -42,7 +42,7 @@ use std::borrow::Cow;
 ///
 /// Uses a single-pass scan: if no special characters are found, returns a
 /// borrowed `Cow` with no allocation.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 #[inline]
 pub(crate) fn escape_html_entities(text: &str) -> Cow<'_, str> {
     let needs_amp = text.contains('&');

@@ -42,7 +42,7 @@ pub mod error;
 /// Format-specific document extraction implementations and office metadata types.
 pub mod extraction;
 pub mod extractors;
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 pub mod model_cache;
 pub mod plugins;
 pub mod rendering;

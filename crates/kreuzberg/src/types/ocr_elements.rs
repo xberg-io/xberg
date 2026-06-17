@@ -64,7 +64,11 @@ impl OcrBoundingGeometry {
     /// # Returns
     ///
     /// Tuple of `(left, top, width, height)` in pixels.
-    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection", test))]
+    #[cfg(any(
+        feature = "paddle-ocr",
+        all(feature = "layout-detection", feature = "pdf"),
+        all(test, any(feature = "paddle-ocr", feature = "layout-detection", feature = "ocr"))
+    ))]
     pub(crate) fn to_aabb(&self) -> (u32, u32, u32, u32) {
         match self {
             Self::Rectangle {
@@ -84,7 +88,7 @@ impl OcrBoundingGeometry {
     }
 
     /// Get the center point of the bounding geometry.
-    #[cfg(feature = "layout-detection")]
+    #[cfg(any(all(feature = "layout-detection", feature = "pdf"), all(test, feature = "layout-detection")))]
     pub(crate) fn center(&self) -> (f64, f64) {
         let (left, top, width, height) = self.to_aabb();
         (left as f64 + width as f64 / 2.0, top as f64 + height as f64 / 2.0)
@@ -358,11 +362,11 @@ pub struct OcrElementConfig {
     pub build_hierarchy: bool,
 }
 
-#[cfg(all(test, feature = "ocr"))]
-mod tests {
+/// Geometry-only tests that do not require the `ocr` feature.
+#[cfg(all(test, any(feature = "paddle-ocr", feature = "layout-detection")))]
+mod geometry_tests {
     use super::*;
 
-    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection"))]
     #[test]
     fn test_rectangle_to_aabb() {
         let geom = OcrBoundingGeometry::Rectangle {
@@ -374,7 +378,6 @@ mod tests {
         assert_eq!(geom.to_aabb(), (10, 20, 100, 50));
     }
 
-    #[cfg(any(feature = "paddle-ocr", feature = "layout-detection"))]
     #[test]
     fn test_quadrilateral_to_aabb() {
         // Slightly rotated quad
@@ -387,6 +390,25 @@ mod tests {
         assert_eq!(width, 100);
         assert_eq!(height, 54);
     }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_geometry_center() {
+        let geom = OcrBoundingGeometry::Rectangle {
+            left: 0,
+            top: 0,
+            width: 100,
+            height: 50,
+        };
+        let (cx, cy) = geom.center();
+        assert!((cx - 50.0).abs() < 0.001);
+        assert!((cy - 25.0).abs() < 0.001);
+    }
+}
+
+#[cfg(all(test, feature = "ocr"))]
+mod tests {
+    use super::*;
 
     #[test]
     fn test_confidence_from_tesseract() {
@@ -483,20 +505,6 @@ mod tests {
 
         assert!(geom1.overlaps(&geom2));
         assert!(!geom1.overlaps(&geom3));
-    }
-
-    #[cfg(feature = "layout-detection")]
-    #[test]
-    fn test_geometry_center() {
-        let geom = OcrBoundingGeometry::Rectangle {
-            left: 0,
-            top: 0,
-            width: 100,
-            height: 50,
-        };
-        let (cx, cy) = geom.center();
-        assert!((cx - 50.0).abs() < 0.001);
-        assert!((cy - 25.0).abs() < 0.001);
     }
 
     #[cfg(feature = "paddle-ocr")]

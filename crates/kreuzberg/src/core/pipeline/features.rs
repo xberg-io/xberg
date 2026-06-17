@@ -97,7 +97,7 @@ pub(crate) fn recompute_boundaries_from_pages(content: &str, pages: &[crate::typ
 /// When the extraction result contains code intelligence with non-empty chunks,
 /// those chunks already represent semantically meaningful code boundaries produced
 /// by tree-sitter. Using text-splitter would break these boundaries.
-#[cfg(feature = "tree-sitter")]
+#[cfg(all(feature = "tree-sitter", feature = "chunking"))]
 fn try_code_chunks(_result: &ExtractionResult) -> Option<Vec<crate::types::extraction::Chunk>> {
     // FormatMetadata::Code is a unit variant — the structured ProcessResult payload
     // is no longer attached. Code extractions fall back to standard text-based

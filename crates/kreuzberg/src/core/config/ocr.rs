@@ -472,7 +472,7 @@ impl OcrConfig {
     }
 
     /// Returns the effective quality thresholds, using configured values or defaults.
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
     pub(crate) fn effective_thresholds(&self) -> OcrQualityThresholds {
         self.quality_thresholds.clone().unwrap_or_default()
     }
@@ -495,7 +495,7 @@ impl OcrConfig {
     ///
     /// Explicit non-default backend selections are honored as-is — a silent
     /// paddleocr fallback would mask errors from the chosen backend.
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
     pub(crate) fn effective_pipeline(&self) -> Option<OcrPipelineConfig> {
         // Rule 1: explicit pipeline always wins.
         if self.pipeline.is_some() {
@@ -571,7 +571,7 @@ impl OcrConfig {
     ///
     /// Extracted so the vlm_fallback paths can fall through cleanly without
     /// duplicating the paddle-ocr conditional compilation block.
-    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
     fn effective_pipeline_classical(&self) -> Option<OcrPipelineConfig> {
         #[cfg(feature = "paddle-ocr")]
         {

@@ -47,6 +47,9 @@ pub enum LayoutMode {
     Paired,
 }
 
+// The Default value is feature-conditional: Paired when layout-detection is
+// compiled in, WholePage otherwise. #[derive(Default)] cannot express this.
+#[allow(clippy::derivable_impls)]
 impl Default for LayoutMode {
     fn default() -> Self {
         // When layout-detection is compiled in, default to Paired so per-region
@@ -63,14 +66,20 @@ impl Default for LayoutMode {
     }
 }
 
+/// Pool type alias for the GLM-OCR engine pool keyed by `(DevicePreference, DType)`.
+type EnginePool = RwLock<AHashMap<(DevicePreference, DType), Arc<GlmOcrEngine>>>;
+
 /// Process-wide engine pool keyed by `(DevicePreference, DType)`.
 ///
 /// A single engine instance handles all tasks (OCR / Table / Formula / Chart /
 /// Caption) via `process_image_with_task`, so the pool key does not include the
 /// task. Two callers requesting the same device+dtype but different tasks will
 /// share one engine and avoid loading weights twice.
-static ENGINE_POOL: LazyLock<RwLock<AHashMap<(DevicePreference, DType), Arc<GlmOcrEngine>>>> =
-    LazyLock::new(|| RwLock::new(AHashMap::new()));
+static ENGINE_POOL: LazyLock<EnginePool> = LazyLock::new(|| RwLock::new(AHashMap::new()));
+
+/// Pool type alias for the layout model pool keyed by `(model_path, device_preference)`.
+#[cfg(feature = "layout-detection")]
+type LayoutPool = RwLock<AHashMap<(String, DevicePreference), Arc<Mutex<crate::layout::models::pp_doclayout_v3::PpDocLayoutV3Model>>>>;
 
 /// Process-wide layout model pool keyed by `(model_path, device_preference)`.
 ///
@@ -82,11 +91,7 @@ static ENGINE_POOL: LazyLock<RwLock<AHashMap<(DevicePreference, DType), Arc<GlmO
 ///
 /// Only available when `layout-detection` is enabled.
 #[cfg(feature = "layout-detection")]
-static LAYOUT_POOL: LazyLock<
-    RwLock<
-        AHashMap<(String, DevicePreference), Arc<Mutex<crate::layout::models::pp_doclayout_v3::PpDocLayoutV3Model>>>,
-    >,
-> = LazyLock::new(|| RwLock::new(AHashMap::new()));
+static LAYOUT_POOL: LazyLock<LayoutPool> = LazyLock::new(|| RwLock::new(AHashMap::new()));
 
 /// Generic double-checked-lock pool: get or initialize a value from cache.
 ///

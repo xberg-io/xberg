@@ -49,12 +49,12 @@ pub use models::rtdetr::RtDetrModel;
 #[cfg(feature = "layout-detection")]
 pub use models::yolo::{YoloModel, YoloVariant};
 
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 use std::sync::OnceLock;
 
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 use crate::core::config::layout::LayoutDetectionConfig;
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 use crate::model_cache::ModelCache;
 
 // ---------------------------------------------------------------------------
@@ -62,11 +62,14 @@ use crate::model_cache::ModelCache;
 // ---------------------------------------------------------------------------
 
 /// Global cached layout engine.
-#[cfg(feature = "layout-detection")]
+///
+/// Used by the image extractor (layout-detection + ocr/ocr-wasm) and the
+/// PDF extractor (layout-detection + pdf).
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 static CACHED_ENGINE: ModelCache<LayoutEngine> = ModelCache::new();
 
 /// Global cached TATR table structure recognition model.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static CACHED_TATR: ModelCache<models::tatr::TatrModel> = ModelCache::new();
 
 /// Tracks whether TATR loading has been attempted.
@@ -74,11 +77,11 @@ static CACHED_TATR: ModelCache<models::tatr::TatrModel> = ModelCache::new();
 /// `true` means loading succeeded at least once; `false` means it failed and
 /// we should not retry (avoids repeated model-download attempts and redundant
 /// warning logs on every document).
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static TATR_TRIED: OnceLock<bool> = OnceLock::new();
 
 /// Convert a [`LayoutDetectionConfig`] into a [`LayoutEngineConfig`].
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 pub(crate) fn config_from_extraction(layout_config: &LayoutDetectionConfig) -> LayoutEngineConfig {
     LayoutEngineConfig {
         backend: ModelBackend::RtDetr,
@@ -92,7 +95,7 @@ pub(crate) fn config_from_extraction(layout_config: &LayoutDetectionConfig) -> L
 /// Create a [`LayoutEngine`] from a [`LayoutDetectionConfig`].
 ///
 /// Ensures ORT is available, then creates the engine with model download.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 pub(crate) fn create_engine(layout_config: &LayoutDetectionConfig) -> Result<LayoutEngine, LayoutError> {
     crate::ort_discovery::ensure_ort_available();
     let config = config_from_extraction(layout_config);
@@ -104,13 +107,13 @@ pub(crate) fn create_engine(layout_config: &LayoutDetectionConfig) -> Result<Lay
 /// The caller owns the engine for the duration of its work and should
 /// return it via [`return_engine`] when done. This avoids holding the
 /// global mutex during inference.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 pub(crate) fn take_or_create_engine(layout_config: &LayoutDetectionConfig) -> Result<LayoutEngine, LayoutError> {
     CACHED_ENGINE.take_or_create(|| create_engine(layout_config))
 }
 
 /// Return a layout engine to the global cache for reuse by future extractions.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")))]
 pub(crate) fn return_engine(engine: LayoutEngine) {
     CACHED_ENGINE.put(engine);
 }
@@ -120,7 +123,7 @@ pub(crate) fn return_engine(engine: LayoutEngine) {
 /// Returns `None` if the model cannot be loaded. Once a load attempt fails,
 /// subsequent calls return `None` immediately without retrying, avoiding
 /// repeated download attempts and redundant warning logs.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn take_or_create_tatr(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
 ) -> Option<models::tatr::TatrModel> {
@@ -155,7 +158,7 @@ pub(crate) fn take_or_create_tatr(
 }
 
 /// Return a TATR model to the global cache for reuse.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn return_tatr(model: models::tatr::TatrModel) {
     CACHED_TATR.put(model);
 }
@@ -165,33 +168,33 @@ pub(crate) fn return_tatr(model: models::tatr::TatrModel) {
 // ---------------------------------------------------------------------------
 
 /// Global cached SLANeXT wired model.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static CACHED_SLANET_WIRED: ModelCache<models::slanet::SlanetModel> = ModelCache::new();
 
 /// Global cached SLANeXT wireless model.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static CACHED_SLANET_WIRELESS: ModelCache<models::slanet::SlanetModel> = ModelCache::new();
 
 /// Global cached SLANet-plus model.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static CACHED_SLANET_PLUS: ModelCache<models::slanet::SlanetModel> = ModelCache::new();
 
 /// Global cached table classifier model.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static CACHED_TABLE_CLASSIFIER: ModelCache<models::table_classifier::TableClassifier> = ModelCache::new();
 
 /// Tracks whether SLANeXT loading has been attempted per variant.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static SLANET_WIRED_TRIED: OnceLock<bool> = OnceLock::new();
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static SLANET_WIRELESS_TRIED: OnceLock<bool> = OnceLock::new();
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static SLANET_PLUS_TRIED: OnceLock<bool> = OnceLock::new();
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 static TABLE_CLASSIFIER_TRIED: OnceLock<bool> = OnceLock::new();
 
 /// Take a cached SLANeXT model for the given variant, or create a new one.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn take_or_create_slanet(
     variant: &str,
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
@@ -237,7 +240,7 @@ pub(crate) fn take_or_create_slanet(
 /// safe to use as a fail-fast guard before code paths that would otherwise be
 /// the first to attempt the load — without this, the check would always return
 /// `false` until some other call site tried to load.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn is_tatr_available() -> bool {
     if let Some(&result) = TATR_TRIED.get() {
         return result;
@@ -256,7 +259,7 @@ pub(crate) fn is_tatr_available() -> bool {
 /// load `slanet_wired` (the default variant) to populate the tried flag. Same
 /// rationale as [`is_tatr_available`]: without this, the check would always
 /// return `false` until some other call site tried to load.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn is_slanet_available() -> bool {
     if SLANET_WIRED_TRIED.get().is_none() && SLANET_WIRELESS_TRIED.get().is_none() && SLANET_PLUS_TRIED.get().is_none()
     {
@@ -270,7 +273,7 @@ pub(crate) fn is_slanet_available() -> bool {
 }
 
 /// Take a cached table classifier, or create a new one.
-#[cfg(feature = "layout-detection")]
+#[cfg(all(feature = "layout-detection", feature = "pdf"))]
 pub(crate) fn take_or_create_table_classifier(
     accel: Option<&crate::core::config::acceleration::AccelerationConfig>,
 ) -> Option<models::table_classifier::TableClassifier> {
