@@ -6,7 +6,7 @@ Extract text from images and scanned PDFs. Kreuzberg automatically determines wh
 
 Six OCR backends — pick based on platform, accuracy needs, and language coverage.
 
-|                  | **Tesseract**        | **PaddleOCR**                       | **EasyOCR**         | **Candle GLM-OCR**    | **Candle TrOCR**      | **Candle Hunyuan-OCR** | **Candle DeepSeek-OCR** | **Candle PaddleOCR-VL** | **VLM**                  |
+|                  | **Tesseract**        | **PaddleOCR**                       | **EasyOCR**         | **Candle GLM-OCR** <span class="version-badge new">v5.0</span> | **Candle TrOCR** <span class="version-badge new">v5.0</span> | **Candle Hunyuan-OCR** <span class="version-badge new">v5.0</span> | **Candle DeepSeek-OCR** <span class="version-badge new">v5.0</span> | **Candle PaddleOCR-VL** <span class="version-badge new">v5.0</span> | **VLM**                  |
 | ---------------- | -------------------- | ----------------------------------- | ------------------- | --------------------- | --------------------- | ---------------------- | ----------------------- | ----------------------- | ------------------------ |
 | **Speed**        | Fast                 | Very fast                           | Moderate            | Moderate              | Moderate              | Moderate               | Moderate                | Moderate                | Slow (API latency)       |
 | **Accuracy**     | Good                 | Excellent                           | Excellent           | Excellent             | Good                  | Excellent              | Excellent               | Excellent               | Highest                  |
@@ -22,11 +22,11 @@ Six OCR backends — pick based on platform, accuracy needs, and language covera
 - **Tesseract** — Default choice. Works everywhere, low overhead, broadest platform support.
 - **PaddleOCR** — Best speed-to-accuracy ratio. Preferred for CJK languages. Mobile tier is fast; server tier maximizes accuracy with GPU.
 - **EasyOCR** — Highest accuracy with deep learning models. Python-only, heavier dependency.
-- **Candle GLM-OCR** — Excellent accuracy with VLM-level reasoning on 0.9B-param GLM model. Pure Rust, GPU-accelerated (Metal on macOS, CUDA on Linux). Region-aware layout dispatch. First download ~3 GB.
-- **Candle TrOCR** — Smaller model footprint (~250 MB) with solid accuracy across languages. Pure Rust, GPU-accelerated. Good balance of speed and quality.
-- **Candle Hunyuan-OCR** — Tencent Hunyuan-OCR with comprehensive document parsing and multilingual support including CJK and Latin scripts. Pure Rust, GPU-accelerated. First download ~3.5 GB.
-- **Candle DeepSeek-OCR** — Deep learning-based OCR combining SAM + CLIP + Qwen2 + DeepSeek MoE. Multilingual with strong CJK coverage. Pure Rust, GPU-accelerated. First download ~4 GB.
-- **Candle PaddleOCR-VL** — SigLIP vision encoder + Ernie-4.5 text decoder. Lightweight multilingual model with CJK and Latin support. Pure Rust, GPU-accelerated. First download ~2.5 GB.
+- **Candle GLM-OCR** <span class="version-badge new">v5.0</span> — Excellent accuracy with VLM-level reasoning on 0.9B-param GLM model. Pure Rust, GPU-accelerated (Metal on macOS, CUDA on Linux). Region-aware layout dispatch. First download ~3 GB.
+- **Candle TrOCR** <span class="version-badge new">v5.0</span> — Smaller model footprint (~250 MB) with solid accuracy across languages. Pure Rust, GPU-accelerated. Good balance of speed and quality.
+- **Candle Hunyuan-OCR** <span class="version-badge new">v5.0</span> — Tencent Hunyuan-OCR with comprehensive document parsing and multilingual support including CJK and Latin scripts. Pure Rust, GPU-accelerated. First download ~3.5 GB.
+- **Candle DeepSeek-OCR** <span class="version-badge new">v5.0</span> — Deep learning-based OCR combining SAM + CLIP + Qwen2 + DeepSeek MoE. Multilingual with strong CJK coverage. Pure Rust, GPU-accelerated. First download ~4 GB.
+- **Candle PaddleOCR-VL** <span class="version-badge new">v5.0</span> — SigLIP vision encoder + Ernie-4.5 text decoder. Lightweight multilingual model with CJK and Latin support. Pure Rust, GPU-accelerated. First download ~2.5 GB.
 - **VLM** — Best for handwritten text, poor scans, Arabic/Farsi, and complex layouts. Requires an API key and incurs per-token costs. See [LLM Integration](llm-integration.md) for full details.
 
 ## Installation

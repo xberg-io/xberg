@@ -1,0 +1,473 @@
+# OCR Language Support
+
+Each OCR backend supports different sets of languages. Select the backend and language based on your document requirements.
+
+## Backend Language Coverage
+
+### Tesseract
+
+Default OCR backend with 100+ supported languages. Supports both ISO 639-3 (three-letter codes) and variant codes for historical and script-specific variants.
+
+| Language | Code | Status |
+|----------|------|--------|
+| Afrikaans | `afr` | Full |
+| Amharic | `amh` | Full |
+| Arabic | `ara` | Full |
+| Assamese | `asm` | Full |
+| Azerbaijani (Latin) | `aze` | Full |
+| Azerbaijani (Cyrillic) | `aze_cyrl` | Full |
+| Belarusian | `bel` | Full |
+| Bengali | `ben` | Full |
+| Tibetan | `bod` | Full |
+| Bosnian | `bos` | Full |
+| Breton | `bre` | Full |
+| Bulgarian | `bul` | Full |
+| Catalan | `cat` | Full |
+| Cebuano | `ceb` | Full |
+| Czech | `ces` | Full |
+| Chinese (Simplified) | `chi_sim` | Full |
+| Chinese (Traditional) | `chi_tra` | Full |
+| Cherokee | `chr` | Full |
+| Corsican | `cos` | Full |
+| Welsh | `cym` | Full |
+| Danish | `dan` | Full |
+| German | `deu` | Full |
+| Dhivehi | `div` | Full |
+| Dzongkha | `dzo` | Full |
+| Greek | `ell` | Full |
+| English | `eng` | Full |
+| Middle English | `enm` | Full |
+| Esperanto | `epo` | Full |
+| Equations | `equ` | Math formulas |
+| Estonian | `est` | Full |
+| Basque | `eus` | Full |
+| Faroese | `fao` | Full |
+| Persian | `fas` | Full |
+| Filipino | `fil` | Full |
+| Finnish | `fin` | Full |
+| French | `fra` | Full |
+| Frankish (Old German) | `frk` | Full |
+| Middle French | `frm` | Full |
+| Frisian | `fry` | Full |
+| Scottish Gaelic | `gla` | Full |
+| Irish | `gle` | Full |
+| Galician | `glg` | Full |
+| Ancient Greek | `grc` | Full |
+| Gujarati | `guj` | Full |
+| Haitian Creole | `hat` | Full |
+| Hebrew | `heb` | Full |
+| Hindi | `hin` | Full |
+| Croatian | `hrv` | Full |
+| Hungarian | `hun` | Full |
+| Armenian | `hye` | Full |
+| Inuktitut | `iku` | Full |
+| Indonesian | `ind` | Full |
+| Icelandic | `isl` | Full |
+| Italian | `ita` | Full |
+| Italian (Old) | `ita_old` | Full |
+| Javanese | `jav` | Full |
+| Japanese | `jpn` | Full |
+| Kannada | `kan` | Full |
+| Georgian | `kat` | Full |
+| Georgian (Old) | `kat_old` | Full |
+| Kazakh | `kaz` | Full |
+| Khmer | `khm` | Full |
+| Kyrgyz | `kir` | Full |
+| Kurmanji (Kurdish) | `kmr` | Full |
+| Korean | `kor` | Full |
+| Lao | `lao` | Full |
+| Latin | `lat` | Full |
+| Latvian | `lav` | Full |
+| Lithuanian | `lit` | Full |
+| Luxembourgish | `ltz` | Full |
+| Malayalam | `mal` | Full |
+| Marathi | `mar` | Full |
+| Macedonian | `mkd` | Full |
+| Maltese | `mlt` | Full |
+| Mongolian | `mon` | Full |
+| Māori | `mri` | Full |
+| Malay | `msa` | Full |
+| Burmese | `mya` | Full |
+| Nepali | `nep` | Full |
+| Dutch | `nld` | Full |
+| Norwegian | `nor` | Full |
+| Occitan | `oci` | Full |
+| Odia | `ori` | Full |
+| Orientation/Script detection | `osd` | Layout |
+| Punjabi | `pan` | Full |
+| Polish | `pol` | Full |
+| Portuguese | `por` | Full |
+| Pushto | `pus` | Full |
+| Quechua | `que` | Full |
+| Romanian | `ron` | Full |
+| Russian | `rus` | Full |
+| Sanskrit | `san` | Full |
+| Sinhala | `sin` | Full |
+| Slovak | `slk` | Full |
+| Slovenian | `slv` | Full |
+| Sindhi | `snd` | Full |
+| Spanish | `spa` | Full |
+| Spanish (Old) | `spa_old` | Full |
+| Albanian | `sqi` | Full |
+| Serbian | `srp` | Full |
+| Serbian (Latin) | `srp_latn` | Full |
+| Sundanese | `sun` | Full |
+| Swahili | `swa` | Full |
+| Swedish | `swe` | Full |
+| Syriac | `syr` | Full |
+| Tamil | `tam` | Full |
+| Tatar | `tat` | Full |
+| Telugu | `tel` | Full |
+| Tajik | `tgk` | Full |
+| Thai | `tha` | Full |
+| Tigrinya | `tir` | Full |
+| Tonga | `ton` | Full |
+| Turkish | `tur` | Full |
+| Uyghur | `uig` | Full |
+| Ukrainian | `ukr` | Full |
+| Urdu | `urd` | Full |
+| Uzbek | `uzb` | Full |
+| Uzbek (Cyrillic) | `uzb_cyrl` | Full |
+| Vietnamese | `vie` | Full |
+| Yiddish | `yid` | Full |
+| Yoruba | `yor` | Full |
+
+**Installation:** Tesseract language packs are installed via your OS package manager. Install the base Tesseract, then add individual language packs as needed. See the [OCR guide](../guides/ocr.md#tesseract) for installation steps by platform.
+
+**Selection:** Use `--ocr-language` flag with a single code (e.g., `--ocr-language eng`). For multiple languages, join with `+`: `--ocr-language eng+deu+fra`.
+
+### PaddleOCR
+
+Fast text detection and recognition for 80+ languages across 11 script families. Optimized for both mobile and server deployment.
+
+| Language | Code | Family |
+|----------|------|--------|
+| Afrikaans | `afr` | Latin |
+| Arabic | `ara` | Arabic |
+| Bulgarian | `bul` | Cyrillic |
+| Chinese (Simplified) | `ch_sim` / `zh_hans` | CJK |
+| Chinese (Traditional) | `ch_tra` / `zh_hant` | CJK |
+| Czech | `cs` | Latin |
+| Danish | `da` | Latin |
+| Dutch | `nl` | Latin |
+| English | `en` | Latin |
+| Estonian | `et` | Latin |
+| Finnish | `fi` | Latin |
+| French | `fr` | Latin |
+| German | `de` | Latin |
+| Greek | `el` | Greek |
+| Hungarian | `hu` | Latin |
+| Indonesian | `id` | Latin |
+| Italian | `it` | Latin |
+| Japanese | `ja` | CJK |
+| Korean | `ko` | CJK |
+| Latin | `la` | Latin |
+| Latvian | `lv` | Latin |
+| Lithuanian | `lt` | Latin |
+| Norwegian | `nb` | Latin |
+| Persian | `fa` | Arabic |
+| Polish | `pl` | Latin |
+| Portuguese | `pt` | Latin |
+| Romanian | `ro` | Latin |
+| Russian | `ru` | Cyrillic |
+| Slovak | `sk` | Latin |
+| Slovenian | `sl` | Latin |
+| Spanish | `es` | Latin |
+| Swedish | `sv` | Latin |
+| Tagalog | `tl` | Latin |
+| Turkish | `tr` | Latin |
+| Ukrainian | `uk` | Cyrillic |
+| Vietnamese | `vi` | Latin |
+
+**Installation:** Built into Kreuzberg via the `paddle-ocr` feature. Models download automatically on first use.
+
+**Selection:** Use `--ocr-language` or config `ocr.languages` with a single code or list. Join multiple codes with `+` for CLI: `--ocr-language en+de+zh_hans`.
+
+**Note:** PaddleOCR uses two-letter ISO 639-1 codes and script-specific variants (e.g., `zh_hans` for Simplified Chinese). Consult the [paddleocr-vl backend source](https://github.com/kreuzberg-dev/kreuzberg/blob/main/crates/kreuzberg/src/candle_ocr/paddleocr_vl_backend.rs) for the authoritative list.
+
+### EasyOCR
+
+High-accuracy deep learning models for 80+ languages. Python-only backend.
+
+EasyOCR supports the same 80+ languages as PaddleOCR plus additional variants. Refer to the [official EasyOCR language list](https://github.com/JaidedAI/EasyOCR?tab=readme-ov-file#supported-languages) for the complete set.
+
+**Installation:** `pip install "kreuzberg[easyocr]"`
+
+**Selection:** Use `--ocr-language` or config `ocr.languages` with language codes from the EasyOCR documentation.
+
+### Candle TrOCR <span class="version-badge new">v5.0</span>
+
+Lightweight line-level text recognition using Microsoft's TrOCR model. **Trained primarily for English.**
+
+| Language | Code |
+|----------|------|
+| English | `eng` / `en` |
+
+**Variants:** Four model sizes are available:
+- `base-printed` (default) — Optimized for printed text, ~250 MB
+- `large-printed` — Higher accuracy, ~400 MB
+- `base-handwritten` — Trained on handwritten text
+- `large-handwritten` — Large variant for handwriting
+
+**Limitation:** TrOCR is designed for single lines of text, not full pages. Pair with a layout detector to crop regions before OCR.
+
+**Installation:** Enabled via `candle-ocr` or `full` feature in Cargo.
+
+**Selection:** Configure via backend options:
+```json
+{
+  "ocr": {
+    "backend": "candle-trocr",
+    "backend_options": {
+      "variant": "base-printed"
+    }
+  }
+}
+```
+
+### Candle GLM-OCR <span class="version-badge new">v5.0</span>
+
+Multilingual vision-language model (0.9B) for full-page document parsing. Supports text, tables, formulas, and charts with region-aware layout dispatch.
+
+| Language | Code |
+|----------|------|
+| English | `eng` / `en` |
+| Chinese | `zho` / `zh` |
+| Japanese | `jpn` / `ja` |
+| Korean | `kor` / `ko` |
+| French | `fra` / `fr` |
+| German | `deu` / `de` |
+| Spanish | `spa` / `es` |
+| Italian | `ita` / `it` |
+| Portuguese | `por` / `pt` |
+| Russian | `rus` / `ru` |
+| Arabic | `ara` / `ar` |
+| Hindi | `hin` / `hi` |
+| Thai | `tha` / `th` |
+| Vietnamese | `vie` / `vi` |
+
+**Note:** GLM-OCR is trained on multilingual data and accepts any language code, falling back gracefully for unsupported languages.
+
+**Installation:** Enabled via `candle-ocr` or `full` feature.
+
+**Selection:** Use `--ocr-backend candle-glm-ocr` and optionally set `--ocr-language` from the list above.
+
+**Configuration:**
+```json
+{
+  "ocr": {
+    "backend": "candle-glm-ocr",
+    "backend_options": {
+      "task": "ocr",
+      "device": "auto",
+      "layout_mode": "whole_page"
+    }
+  }
+}
+```
+
+### Candle PaddleOCR-VL <span class="version-badge new">v5.0</span>
+
+Lightweight vision-language model for multilingual document parsing. Supports text, tables, formulas, and charts.
+
+| Language | Code |
+|----------|------|
+| English | `eng` / `en` |
+| Chinese | `zho` / `zh` |
+| Japanese | `jpn` / `ja` |
+| Korean | `kor` / `ko` |
+| French | `fra` / `fr` |
+| German | `deu` / `de` |
+| Spanish | `spa` / `es` |
+| Italian | `ita` / `it` |
+| Portuguese | `por` / `pt` |
+| Russian | `rus` / `ru` |
+| Arabic | `ara` / `ar` |
+| Hindi | `hin` / `hi` |
+| Thai | `tha` / `th` |
+| Vietnamese | `vie` / `vi` |
+
+**Note:** PaddleOCR-VL is trained on 109+ languages and accepts any language code.
+
+**Installation:** Enabled via `candle-ocr` or `full` feature.
+
+**Selection:** Use `--ocr-backend candle-paddleocr-vl` with optional `--ocr-language`.
+
+**Configuration:** Requires a local model path:
+```json
+{
+  "ocr": {
+    "backend": "candle-paddleocr-vl",
+    "backend_options": {
+      "task": "ocr",
+      "device": "auto",
+      "model_path": "/path/to/paddleocr-vl-model"
+    }
+  }
+}
+```
+
+### Candle DeepSeek-OCR <span class="version-badge new">v5.0</span>
+
+Vision-language model combining SAM vision encoder, ViT/Qwen2, CLIP, and language decoder. Supports multilingual document parsing.
+
+| Language | Code |
+|----------|------|
+| English | `eng` / `en` |
+| Chinese | `zho` / `zh` |
+| Japanese | `jpn` / `ja` |
+| Korean | `kor` / `ko` |
+| French | `fra` / `fr` |
+| German | `deu` / `de` |
+| Spanish | `spa` / `es` |
+| Italian | `ita` / `it` |
+| Portuguese | `por` / `pt` |
+| Russian | `rus` / `ru` |
+| Arabic | `ara` / `ar` |
+| Hindi | `hin` / `hi` |
+| Thai | `tha` / `th` |
+| Vietnamese | `vie` / `vi` |
+
+**Note:** DeepSeek-OCR is trained on multilingual data and accepts any language code.
+
+**Installation:** Enabled via `candle-ocr` or `full` feature.
+
+**Selection:** Use `--ocr-backend candle-deepseek-ocr` with optional `--ocr-language`.
+
+**Configuration:** Requires a local model path:
+```json
+{
+  "ocr": {
+    "backend": "candle-deepseek-ocr",
+    "backend_options": {
+      "device": "auto",
+      "model_path": "/path/to/deepseek-ocr-model",
+      "version": 2
+    }
+  }
+}
+```
+
+### Candle Hunyuan-OCR <span class="version-badge new">v5.0</span>
+
+Vision-language model for comprehensive document parsing. Supports CJK (Chinese, Japanese, Korean) and Latin scripts with multilingual capabilities.
+
+| Language | Code |
+|----------|------|
+| English | `eng` / `en` |
+| Chinese | `zho` / `zh` |
+| Japanese | `jpn` / `ja` |
+| Korean | `kor` / `ko` |
+| French | `fra` / `fr` |
+| German | `deu` / `de` |
+| Spanish | `spa` / `es` |
+| Italian | `ita` / `it` |
+| Portuguese | `por` / `pt` |
+| Russian | `rus` / `ru` |
+| Arabic | `ara` / `ar` |
+| Hindi | `hin` / `hi` |
+| Thai | `tha` / `th` |
+| Vietnamese | `vie` / `vi` |
+
+**Note:** Hunyuan-OCR is trained on multilingual data and accepts any language code.
+
+**Installation:** Enabled via `candle-ocr` or `full` feature.
+
+**Selection:** Use `--ocr-backend candle-hunyuan-ocr` with optional `--ocr-language`.
+
+**Configuration:** Requires a local model path:
+```json
+{
+  "ocr": {
+    "backend": "candle-hunyuan-ocr",
+    "backend_options": {
+      "device": "auto",
+      "model_path": "/path/to/hunyuan-ocr-model"
+    }
+  }
+}
+```
+
+## Selecting Languages
+
+### Configuration Precedence
+
+Language selection follows the configuration cascade (highest to lowest priority):
+
+1. **CLI flag:** `--ocr-language eng` or `--ocr-language eng+deu`
+2. **Inline JSON config:** `--config-json '{"ocr": {"languages": ["eng", "deu"]}}'`
+3. **Config file:** `kreuzberg.toml` or `kreuzberg.yaml`:
+   ```toml
+   [ocr]
+   backend = "tesseract"
+   languages = ["eng", "deu", "fra"]
+   ```
+4. **Default:** Uses backend's default language behavior (usually English or auto-detect)
+
+### Code Format
+
+- **Tesseract:** ISO 639-3 three-letter codes (e.g., `eng`, `deu`, `fra`)
+- **PaddleOCR:** ISO 639-1 two-letter codes or script-specific variants (e.g., `en`, `de`, `zh_hans`)
+- **Candle VLMs:** Accept major language codes (e.g., `eng`, `en`, `zho`, `zh`)
+
+### Multiple Languages
+
+Combine languages with `+` in CLI, or use arrays in config:
+
+=== "CLI"
+
+    ```bash
+    kreuzberg extract --ocr-language eng+deu+fra file.pdf
+    ```
+
+=== "TOML config"
+
+    ```toml
+    [ocr]
+    languages = ["eng", "deu", "fra"]
+    ```
+
+=== "JSON config"
+
+    ```json
+    {
+      "ocr": {
+        "languages": ["eng", "deu", "fra"]
+      }
+    }
+    ```
+
+## Fallback Strategy
+
+If a requested language is unavailable:
+
+- **Tesseract:** Fails with an error if the tessdata pack is not installed
+- **PaddleOCR:** Falls back to the model's training base or returns an error
+- **Candle VLMs:** Accept all language codes and attempt recognition (graceful degradation)
+- **EasyOCR:** Falls back to the EasyOCR model's default behavior or returns an error
+
+Install missing language packs for Tesseract via your OS package manager before OCR execution.
+
+## Language Detection
+
+Use the `language-detection` feature to auto-detect document language, then pass the detected language to OCR:
+
+```python
+from kreuzberg import Client
+
+client = Client()
+result = client.extract_file(
+    "document.pdf",
+    {
+        "language_detection": True,
+        "ocr": {"backend": "tesseract"}
+    }
+)
+print(f"Detected language: {result.metadata.language}")
+```
+
+## See Also
+
+- [OCR Guide](../guides/ocr.md) — Backend setup, configuration, and best practices
+- [Configuration Reference](./configuration.md) — Full list of extraction config options
+- [Supported Formats](./formats.md) — Document format support matrix

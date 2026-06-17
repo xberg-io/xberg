@@ -58,6 +58,85 @@ This is the main result type returned by all extraction functions.
 | `page_classifications` | `Vec<PageClassification>` | `vec!\[\]` | Per-page classifications produced by the page-classification post-processor. `None` when classification is not configured. |
 | `redaction_report` | `Option<RedactionReport>` | `Default::default()` | Audit report of redactions applied by the redaction post-processor. The redaction processor rewrites `content`, `formatted_content`, every chunk's text, and the textual fields of `entities` / `summary` / `translation` / `page_classifications` in place. This report describes what was found and how it was replaced. `None` when redaction is not configured. |
 | `formatted_content` | `Option<String>` | `Default::default()` | Pre-rendered content in the requested output format. Populated during `derive_extraction_result` before tree derivation consumes element data. `apply_output_format` swaps this into `content` at the end of the pipeline, after post-processors have operated on plain text. |
+| `formulas` | `Vec<Formula>` | `vec!\[\]` | <span class="version-badge new">v5.0</span> Mathematical formulas extracted from the document (populated under `layout-detection` when layout-guided formula extraction is enabled). Each formula carries raw LaTeX, bounding box, and page number. Empty for non-formula documents. |
+| `extraction_confidence` | `Option<ExtractionConfidence>` | `None` | <span class="version-badge new">v5.0</span> Confidence score on `[0, 1]` combining text coverage, OCR quality, and schema compliance (populated when `heuristics` feature is enabled). Useful for gating downstream processing or fallback decisions. `None` when confidence scoring is not configured. |
+| `form_fields` | `Vec<PdfFormField>` | `vec!\[\]` | <span class="version-badge new">v5.0</span> Form fields extracted from a PDF's AcroForm or XFA structure. Populated by the PDF extractor when `PdfConfig::extract_form_fields` is enabled (default `true`) and the document is a fillable form. Empty for non-form PDFs and non-PDF formats. |
+
+---
+
+#### Formula
+
+<span class="version-badge new">v5.0</span>
+
+A mathematical formula extracted from a document via layout-guided OCR.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `latex` | `String` | — | Raw LaTeX representation of the formula. |
+| `bbox` | `Option<BoundingBox>` | `None` | Bounding box of the formula on its page (if known). |
+| `page` | `Option<u32>` | `None` | 1-indexed page number the formula appears on (if known). |
+
+---
+
+#### PdfFormField
+
+<span class="version-badge new">v5.0</span>
+
+A form field extracted from a PDF's AcroForm or XFA structure.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `String` | — | Partial field name (the leaf name within the field hierarchy). |
+| `full_name` | `String` | — | Fully-qualified field name (dotted path from the form root). |
+| `field_type` | `FormFieldType` | — | Classified field type. |
+| `value` | `Option<String>` | `None` | Current field value, if any. |
+| `default_value` | `Option<String>` | `None` | Default field value, if any. |
+| `flags` | `u32` | `0` | Raw field-flags bitmask (read-only, required, multiline, …). |
+| `page` | `Option<u32>` | `None` | 1-indexed page the field's widget appears on, if known. |
+| `bbox` | `Option<BoundingBox>` | `None` | Widget bounding box on its page, if known. |
+| `max_length` | `Option<u32>` | `None` | Maximum input length for text fields, if specified. |
+| `tooltip` | `Option<String>` | `None` | Tooltip / alternate field description, if present. |
+
+#### FormFieldType
+
+<span class="version-badge new">v5.0</span>
+
+Kind of a PDF form field.
+
+| Variant | Description |
+|---------|-------------|
+| `Text` | Single- or multi-line text input. |
+| `Checkbox` | Checkbox (on/off toggle). |
+| `Radio` | Radio-button group member. |
+| `Choice` | Choice field (dropdown or list box). |
+| `Signature` | Digital-signature field. |
+| `Button` | Push button. |
+| `Unknown` | Field type that could not be classified. |
+
+#### ExtractionConfidence
+
+<span class="version-badge new">v5.0</span>
+
+Confidence score combining text coverage, OCR quality, and schema compliance.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text_coverage` | `f32` | Fraction of pages with a usable text layer (0.0..=1.0). |
+| `ocr_aggregate` | `Option<f32>` | Mean OCR per-element recognition confidence when OCR ran; `None` when it did not. |
+| `schema_compliance` | `SchemaCompliance` | Whether the merged output validates against the preset schema. |
+| `combined` | `f32` | Weighted blend in `[0, 1]`. The value compared against the fallback threshold. |
+
+#### SchemaCompliance
+
+<span class="version-badge new">v5.0</span>
+
+Schema-validation outcome surfaced as one of three buckets.
+
+| Variant | Description |
+|---------|-------------|
+| `AllValid` | Every batch validated against the schema. |
+| `PartialValid` | At least one batch validated; at least one did not. |
+| `AllInvalid` | No batch validated. |
 
 ---
 

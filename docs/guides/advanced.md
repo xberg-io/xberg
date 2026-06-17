@@ -75,11 +75,12 @@ Each chunk in `result.chunks` contains:
 | `metadata.chunk_index` / `total_chunks` | Position in sequence                             |
 | `metadata.token_count`                  | Token count (when embeddings enabled)            |
 | `metadata.heading_context`              | Active heading hierarchy (Markdown chunker only) |
+| `metadata.heading_path` <span class="version-badge new">v5.0</span> | Flattened RAG-shaped heading breadcrumb (e.g., `["Title", "Section", "Subsection"]`) for vector database retrieval and context. |
 | `embedding`                             | Embedding vector (when configured)               |
 
 Chunks can be sized by token count instead of characters — enable the `chunking-tokenizers` feature and set `sizing` to `token`.
 
-### RAG Pipeline Example
+### RAG Pipeline Example <span class="version-badge new">v5.0</span>
 
 === "Python"
 
@@ -507,6 +508,186 @@ Score ranges: `0.0–0.3` very low, `0.3–0.6` low, `0.6–0.8` moderate, `0.8�
 === "R"
 
     --8<-- "snippets/r/advanced/quality_processing_example.md"
+
+## PDF Form Fields
+
+<span class="version-badge new">v5.0</span>
+
+Extract form fields (text inputs, checkboxes, radio buttons, dropdowns, signature fields) from fillable PDFs via AcroForm metadata. Enabled by default via `PdfConfig.extract_form_fields`.
+
+### Overview
+
+Fillable PDFs store form structure in two ways:
+
+- **AcroForm** — Static form specification with field metadata. Fully supported.
+- **XFA** — XML-based dynamic forms. Currently returns empty results (use AcroForm as workaround).
+
+Extracted fields appear in `result.form_fields` as a list of `PdfFormField` structs, each carrying:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | string | Leaf field name in the hierarchy (e.g., `"line_total"`). |
+| `full_name` | string | Dotted path from root (e.g., `"invoice.line_items[0].line_total"`). |
+| `field_type` | enum | One of: `Text`, `Checkbox`, `Radio`, `Choice`, `Signature`, `Button`, `Unknown`. |
+| `value` | string | Current field value (if filled). |
+| `default_value` | string | Default value from the form template. |
+| `flags` | u32 | Bitmask: read-only, required, multiline, password, etc. |
+| `page` | u32 | 1-indexed page number the field appears on. |
+| `bbox` | `BoundingBox` | Widget location on the page (x, y, width, height). |
+| `max_length` | u32 | Maximum input length (text fields only). |
+| `tooltip` | string | Hover text or field description. |
+
+### Configuration
+
+Enable form field extraction (default):
+
+```toml title="kreuzberg.toml"
+[pdf]
+extract_form_fields = true
+```
+
+Disable (to skip form processing):
+
+```toml
+[pdf]
+extract_form_fields = false
+```
+
+### Processing Form Fields
+
+=== "Python"
+
+    ```python
+    from kreuzberg import extract_file, ExtractionConfig, PdfConfig
+    
+    config = ExtractionConfig(
+        pdf=PdfConfig(extract_form_fields=True)
+    )
+    result = extract_file("form.pdf", config=config)
+    
+    for field in result.form_fields:
+        print(f"Field: {field.full_name} = {field.value or '(empty)'}")
+        print(f"  Type: {field.field_type}, Page: {field.page}")
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { extractFile, ExtractionConfig } from "kreuzberg";
+    
+    const config: ExtractionConfig = {
+      pdf: { extract_form_fields: true }
+    };
+    const result = await extractFile("form.pdf", config);
+    
+    for (const field of result.form_fields) {
+      console.log(`Field: ${field.full_name} = ${field.value || "(empty)"}`);
+      console.log(`  Type: ${field.field_type}, Page: ${field.page}`);
+    }
+    ```
+
+=== "Rust"
+
+    ```rust
+    use kreuzberg::{extract_file, ExtractionConfig, PdfConfig};
+    
+    let config = ExtractionConfig {
+        pdf: Some(PdfConfig {
+            extract_form_fields: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    
+    let result = extract_file("form.pdf", None, &config).await?;
+    for field in &result.form_fields {
+        println!("Field: {} = {}", field.full_name, field.value.as_deref().unwrap_or("(empty)"));
+        println!("  Type: {:?}, Page: {:?}", field.field_type, field.page);
+    }
+    ```
+
+=== "Go"
+
+    ```go
+    package main
+    
+    import (
+        "fmt"
+        kreuzberg "github.com/kreuzberg-dev/kreuzberg/packages/go/v5"
+    )
+    
+    func main() {
+        config := kreuzberg.NewExtractionConfig()
+        config.Pdf.ExtractFormFields = true
+        
+        result, err := kreuzberg.ExtractFile("form.pdf", config)
+        if err != nil {
+            panic(err)
+        }
+        
+        for _, field := range result.FormFields {
+            value := ""
+            if field.Value != nil {
+                value = *field.Value
+            }
+            fmt.Printf("Field: %s = %s\n", field.FullName, value)
+            fmt.Printf("  Type: %v, Page: %v\n", field.FieldType, field.Page)
+        }
+    }
+    ```
+
+### Use Cases
+
+**Form Auto-Fill**
+
+Extract field values to populate templates or CRMs:
+
+```python
+result = extract_file("invoice_form.pdf")
+form_data = {f.full_name: f.value for f in result.form_fields if f.value}
+# Submit form_data to downstream system
+```
+
+**Form Validation**
+
+Check required fields and validate data before processing:
+
+```python
+required_fields = {f for f in result.form_fields if f.flags & 0x01}  # Check required bit
+unfilled = {f.full_name for f in required_fields if not f.value}
+if unfilled:
+    print(f"Missing required fields: {unfilled}")
+```
+
+**Form-to-Data Conversion**
+
+Convert fillable forms to structured JSON:
+
+```python
+form_json = {
+    f.full_name: {
+        "value": f.value,
+        "type": f.field_type,
+        "page": f.page,
+        "bbox": f.bbox
+    }
+    for f in result.form_fields
+}
+```
+
+### Limitations
+
+- **XFA forms** — Dynamic XML-based forms are not yet supported; `form_fields` will be empty. Use AcroForm-based templates instead.
+- **Flattened PDFs** — If form content is rendered into the PDF content stream (vs. stored as field metadata), the form structure is lost. Only editable/unfilled forms preserve field metadata.
+- **Appearance streams** — Custom visual styling (button backgrounds, text colors) is not extracted; field values and types only.
+
+### Best Practices
+
+1. **Check field types** — Use `field_type` to handle different input types (text vs. checkbox vs. dropdown).
+2. **Validate input** — Check `max_length` and format requirements before use.
+3. **Preserve layout** — Use `bbox` and `page` to reconstruct form layout programmatically.
+4. **Default values** — When a field has no `value`, consider using `default_value` as fallback.
+5. **Test on real forms** — Form structures vary; test your extraction logic on representative PDFs from your sources.
 
 ## Combining Features
 

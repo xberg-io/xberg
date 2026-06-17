@@ -32,6 +32,8 @@ nav = [
       { "Keyword Extraction" = "guides/keywords.md" },
       { "Layout Detection" = "guides/layout-detection.md" },
       { "Audio and Video Transcription" = "guides/transcription.md" },
+      { "Presets" = "guides/presets.md" },
+      { "Structured Extraction" = "guides/structured-extraction.md" },
       { "LLM Integration" = "guides/llm-integration.md" },
       { "Code Intelligence" = "guides/code-intelligence.md" },
       { "Named-Entity Recognition" = "guides/ner.md" },
@@ -93,6 +95,7 @@ nav = [
     { "Environment Variables" = "reference/environment-variables.md" },
     { "File Size Limits" = "reference/file-size-limits.md" },
     { "Format Support" = "reference/formats.md" },
+    { "OCR Languages" = "reference/ocr-languages.md" },
     { "Benchmarks" = "https://kreuzberg.dev/benchmarks" },
   ] },
 
