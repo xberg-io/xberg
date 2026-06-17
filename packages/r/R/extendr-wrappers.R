@@ -4218,13 +4218,6 @@ PSMMode  <- function() list() |> structure(class = "PSMMode")
 #' @return A PaddleLanguage enum value
 #' @export
 PaddleLanguage  <- function() list() |> structure(class = "PaddleLanguage")
-#' Create a LayoutMode enum value
-#'
-#' Returns the default LayoutMode variant.
-#'
-#' @return A LayoutMode enum value
-#' @export
-LayoutMode  <- function() list() |> structure(class = "LayoutMode")
 #' Create a LayoutClass enum value
 #'
 #' Returns the default LayoutClass variant.

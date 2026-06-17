@@ -11,6 +11,7 @@ use crate::error::Result;
 ///
 /// Manages image preprocessing pipeline and text tokenization for the model.
 /// Supports both cropped and non-cropped image processing modes.
+#[cfg_attr(alef, alef(skip))]
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct DeepseekOCRProcessor {

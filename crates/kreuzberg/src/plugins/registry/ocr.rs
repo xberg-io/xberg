@@ -166,6 +166,28 @@ impl OcrBackendRegistry {
             });
             tracing::info!("GLM-OCR backend registered successfully");
         }
+
+        #[cfg(all(feature = "candle-hunyuan-ocr", not(target_arch = "wasm32")))]
+        {
+            use crate::candle_ocr::HunyuanOcrBackend;
+            tracing::info!("Initializing Hunyuan-OCR backend");
+            let backend = HunyuanOcrBackend::new();
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register Hunyuan-OCR backend: {e}");
+            });
+            tracing::info!("Hunyuan-OCR backend registered successfully");
+        }
+
+        #[cfg(all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32")))]
+        {
+            use crate::candle_ocr::DeepseekOcrBackend;
+            tracing::info!("Initializing DeepSeek-OCR backend");
+            let backend = DeepseekOcrBackend::new();
+            self.register(Arc::new(backend)).unwrap_or_else(|e| {
+                tracing::warn!("Failed to register DeepSeek-OCR backend: {e}");
+            });
+            tracing::info!("DeepSeek-OCR backend registered successfully");
+        }
     }
 
     /// Create a new empty OCR backend registry without default backends.

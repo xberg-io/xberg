@@ -66,6 +66,15 @@ pub enum KreuzbergPipeline {
     /// Candle GLM-OCR: OCR with candle-based GLM-OCR vision-language backend
     #[serde(rename = "candle-glm-ocr")]
     CandleGlmOcr,
+    /// Candle Hunyuan-OCR: OCR with candle-based Hunyuan-OCR vision-language backend
+    #[serde(rename = "candle-hunyuan-ocr")]
+    CandleHunyuanOcr,
+    /// Candle DeepSeek-OCR: OCR with candle-based DeepSeek-OCR vision-language backend
+    #[serde(rename = "candle-deepseek-ocr")]
+    CandleDeepseekOcr,
+    /// Candle PaddleOCR-VL 1.5: OCR with candle-based PaddleOCR-VL 1.5 vision-language backend
+    #[serde(rename = "candle-paddleocr-vl-15")]
+    CandlePaddleocrVl15,
 }
 
 impl KreuzbergPipeline {
@@ -78,6 +87,9 @@ impl KreuzbergPipeline {
             KreuzbergPipeline::CandleTrocr => "candle-trocr",
             KreuzbergPipeline::CandlePaddleocrVl => "candle-paddleocr-vl",
             KreuzbergPipeline::CandleGlmOcr => "candle-glm-ocr",
+            KreuzbergPipeline::CandleHunyuanOcr => "candle-hunyuan-ocr",
+            KreuzbergPipeline::CandleDeepseekOcr => "candle-deepseek-ocr",
+            KreuzbergPipeline::CandlePaddleocrVl15 => "candle-paddleocr-vl-15",
         }
     }
 }
@@ -99,8 +111,11 @@ impl FromStr for KreuzbergPipeline {
             "candle-trocr" | "candle_trocr" | "trocr" => Ok(KreuzbergPipeline::CandleTrocr),
             "candle-paddleocr-vl" | "candle_paddleocr_vl" | "paddleocr-vl" => Ok(KreuzbergPipeline::CandlePaddleocrVl),
             "candle-glm-ocr" | "candle_glm_ocr" | "glm-ocr" => Ok(KreuzbergPipeline::CandleGlmOcr),
+            "candle-hunyuan-ocr" | "candle_hunyuan_ocr" | "hunyuan-ocr" => Ok(KreuzbergPipeline::CandleHunyuanOcr),
+            "candle-deepseek-ocr" | "candle_deepseek_ocr" | "deepseek-ocr" => Ok(KreuzbergPipeline::CandleDeepseekOcr),
+            "candle-paddleocr-vl-15" | "candle_paddleocr_vl_15" | "paddleocr-vl-15" => Ok(KreuzbergPipeline::CandlePaddleocrVl15),
             _ => Err(format!(
-                "unknown Kreuzberg pipeline: {}. Valid: baseline, layout, paddle-ocr, candle-trocr, candle-paddleocr-vl, candle-glm-ocr",
+                "unknown Kreuzberg pipeline: {}. Valid: baseline, layout, paddle-ocr, candle-trocr, candle-paddleocr-vl, candle-glm-ocr, candle-hunyuan-ocr, candle-deepseek-ocr, candle-paddleocr-vl-15",
                 s
             )),
         }

@@ -6,6 +6,7 @@
 /// DeepSeek V2 language decoder configuration.
 ///
 /// Configuration for the Mixture-of-Experts language model variant used in DeepSeek-OCR v2.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct DeepseekV2Config {
     /// BOS (beginning of sequence) token ID.
@@ -201,6 +202,7 @@ pub struct DeepseekOCRVisionConfig {
 ///
 /// DeepSeek-OCR v1 uses SAM + ViT for vision and DeepSeek V2 for language.
 /// DeepSeek-OCR v2 uses SAM + Qwen2 for vision and DeepSeek V2/Qwen2 for language.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct DeepseekOCRConfig {
     /// Language decoder configuration.

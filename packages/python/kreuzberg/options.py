@@ -433,14 +433,6 @@ class PaddleLanguage(str, Enum):
     telugu = "telugu"
 
 
-class LayoutMode(str, Enum):
-    """How the backend dispatches inference across a page image."""
-
-    whole_page = "whole_page"
-
-    paired = "paired"
-
-
 class LayoutClass(str, Enum):
     """The 17 canonical document layout classes."""
 

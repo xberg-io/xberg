@@ -20,6 +20,8 @@ const VALID_OCR_BACKENDS: &[&str] = &[
     "candle-trocr",
     "candle-paddleocr-vl",
     "candle-glm-ocr",
+    "candle-hunyuan-ocr",
+    "candle-deepseek-ocr",
 ];
 
 /// Hardware acceleration provider for ONNX Runtime models.

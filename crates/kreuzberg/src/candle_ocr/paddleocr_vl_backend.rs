@@ -1,52 +1,65 @@
 //! PaddleOCR-VL backend plugin for the Kreuzberg OCR pipeline.
 //!
-//! This module wraps the candle-based PaddleOCR-VL engine in the `OcrBackend` trait,
-//! making it available to the extraction pipeline.
+//! This module wraps the candle-based PaddleOCR-VL 1.5 engine in the `OcrBackend`
+//! trait, making it available to the extraction pipeline.
+//!
+//! # Engine pool design
+//!
+//! The pool key is `(task, DevicePreference)`. Engines are expensive to initialise
+//! (~900 MB of safetensors weights). The pool ensures each `(task, device)`
+//! combination is loaded at most once per process.
+//!
+//! `PaddleOcrVlEngine::process_image` takes `&mut self` (the model maintains KV
+//! cache state), so the pool stores engines wrapped in `parking_lot::Mutex` for
+//! interior mutability.
 
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::path::Path;
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::{Arc, LazyLock};
 
-#[cfg(not(target_arch = "wasm32"))]
 use ahash::AHashMap;
-#[cfg(not(target_arch = "wasm32"))]
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use crate::Result;
 use crate::core::config::OcrConfig;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractionResult;
-#[cfg(not(target_arch = "wasm32"))]
 use kreuzberg_candle_ocr::DType;
 use kreuzberg_candle_ocr::DevicePreference;
-#[cfg(not(target_arch = "wasm32"))]
 use kreuzberg_candle_ocr::models::PaddleOcrVlEngine;
 use kreuzberg_candle_ocr::models::PaddleOcrVlTask;
 
-/// Process-wide engine pool keyed by `(task, device_preference)`.
+/// Engine pool key: `(task, device_preference)`.
+type PoolKey = (PaddleOcrVlTask, DevicePreference);
+/// Pooled engine value: mutex-wrapped engine for interior mutability.
+type PooledEngine = Arc<Mutex<PaddleOcrVlEngine>>;
+
+/// Process-wide engine pool keyed by `(task, DevicePreference)`.
 ///
-/// Engines are expensive to initialise (~900 MB of safetensors weights, BF16→F32
-/// conversion). The pool ensures each `(task, device)` combination is loaded at
-/// most once per process.
+/// `DevicePreference::Auto` keeps its own slot because it resolves to whatever
+/// is available at runtime — collapsing it onto a concrete device would be wrong.
 ///
-/// `DevicePreference` already carries the canonical candle device taxonomy
-/// (`Auto | Cpu | Cuda | Metal`); we reuse it directly as the key rather than
-/// inventing a parallel enum. `DevicePreference::Auto` keeps its own slot
-/// because it resolves to whatever is available at runtime — collapsing it
-/// onto a concrete device would be wrong.
-#[cfg(not(target_arch = "wasm32"))]
-static ENGINE_POOL: LazyLock<RwLock<AHashMap<(PaddleOcrVlTask, DevicePreference), Arc<PaddleOcrVlEngine>>>> =
+/// Engines are wrapped in `Mutex` because `PaddleOcrVlEngine::process_image`
+/// takes `&mut self` (it manages an internal KV cache).
+static ENGINE_POOL: LazyLock<RwLock<AHashMap<PoolKey, PooledEngine>>> =
     LazyLock::new(|| RwLock::new(AHashMap::new()));
 
 /// Return a cached engine for `(task, preference)`, initialising one on first use.
 ///
 /// Uses a read → miss → write → double-check pattern so that two racing callers
 /// do not both pay the initialisation cost.
-#[cfg(not(target_arch = "wasm32"))]
-fn get_or_init_engine(task: PaddleOcrVlTask, preference: DevicePreference) -> crate::Result<Arc<PaddleOcrVlEngine>> {
-    let key = (task, preference);
+///
+/// # Errors
+///
+/// Returns [`crate::KreuzbergError::Ocr`] if device selection fails or the
+/// engine cannot be initialised from the model directory.
+fn get_or_init_engine(
+    model_path: &str,
+    task: PaddleOcrVlTask,
+    preference: DevicePreference,
+) -> crate::Result<PooledEngine> {
+    let key: PoolKey = (task, preference);
 
     // Fast path: engine already in pool.
     {
@@ -57,17 +70,24 @@ fn get_or_init_engine(task: PaddleOcrVlTask, preference: DevicePreference) -> cr
     }
 
     // Slow path: select the device and build the engine, then insert under write lock.
-    let device = preference.select().map_err(|e| crate::KreuzbergError::Ocr {
+    let candle_device = preference.select().map_err(|e| crate::KreuzbergError::Ocr {
         message: format!("Failed to select compute device: {e}"),
         source: Some(Box::new(e)),
     })?;
 
-    tracing::info!(task = ?task, preference = ?preference, "Initialising PaddleOCR-VL engine (cold start)");
-    let new_engine = PaddleOcrVlEngine::new(task, device, DType::F32).map_err(|e| crate::KreuzbergError::Ocr {
-        message: format!("PaddleOCR-VL engine initialisation failed: {e}"),
-        source: Some(Box::new(e)),
-    })?;
-    let new_engine = Arc::new(new_engine);
+    tracing::info!(
+        task = ?task,
+        preference = ?preference,
+        "Initialising PaddleOCR-VL engine (cold start)"
+    );
+    let new_engine =
+        PaddleOcrVlEngine::new(model_path, task, candle_device, DType::F32).map_err(|e| {
+            crate::KreuzbergError::Ocr {
+                message: format!("PaddleOCR-VL engine initialisation failed: {e}"),
+                source: Some(Box::new(e)),
+            }
+        })?;
+    let new_engine = Arc::new(Mutex::new(new_engine));
 
     let mut pool = ENGINE_POOL.write();
     // Double-check: another thread may have inserted while we were building.
@@ -78,25 +98,28 @@ fn get_or_init_engine(task: PaddleOcrVlTask, preference: DevicePreference) -> cr
     Ok(new_engine)
 }
 
-/// PaddleOCR-VL backend using candle transformers.
+/// PaddleOCR-VL backend using candle transformers (PaddleOCR-VL 1.5).
 ///
-/// A vision-language model for comprehensive document parsing. Supports text recognition,
-/// tables, formulas, and charts through a unified interface with markdown output.
+/// A vision-language model for comprehensive document parsing. Supports text
+/// recognition, tables, formulas, and charts through a unified interface with
+/// markdown output.
 ///
 /// Supports 109+ languages through the PaddlePaddle pretrained models.
 ///
 /// # Configuration
 ///
-/// PaddleOCR-VL accepts backend options for task selection:
+/// PaddleOCR-VL accepts backend options for task selection, device, and model path:
 /// ```json
 /// {
 ///   "task": "ocr",
-///   "device": "auto"
+///   "device": "auto",
+///   "model_path": "/path/to/paddleocr-vl-model"
 /// }
 /// ```
 ///
 /// - `task` (string): `"ocr"` (default), `"table"`, `"formula"`, `"chart"`
 /// - `device` (string): `"auto"`, `"cpu"`, `"cuda"`, `"metal"`
+/// - `model_path` (string): path to the local model directory (required for inference)
 #[cfg_attr(alef, alef(skip))]
 pub struct PaddleOcrVlBackend {
     task: PaddleOcrVlTask,
@@ -117,22 +140,28 @@ impl PaddleOcrVlBackend {
     ///
     /// Device selection is delegated to [`crate::candle_ocr::resolve_device_preference`]
     /// so the central `AccelerationConfig` is honoured.
-    fn parse_options(config: &OcrConfig) -> (PaddleOcrVlTask, DevicePreference) {
+    ///
+    /// Returns `(task, model_path, device_preference)`.
+    fn parse_options(config: &OcrConfig) -> (PaddleOcrVlTask, Option<String>, DevicePreference) {
         let mut task = PaddleOcrVlTask::default();
+        let mut model_path: Option<String> = None;
 
-        if let Some(opts) = &config.backend_options
-            && let Some(t) = opts.get("task").and_then(|v| v.as_str())
-        {
-            task = match t {
-                "table" => PaddleOcrVlTask::Table,
-                "formula" => PaddleOcrVlTask::Formula,
-                "chart" => PaddleOcrVlTask::Chart,
-                _ => PaddleOcrVlTask::Ocr, // default on unknown
-            };
+        if let Some(opts) = &config.backend_options {
+            if let Some(t) = opts.get("task").and_then(|v| v.as_str()) {
+                task = match t {
+                    "table" => PaddleOcrVlTask::Table,
+                    "formula" => PaddleOcrVlTask::Formula,
+                    "chart" => PaddleOcrVlTask::Chart,
+                    _ => PaddleOcrVlTask::Ocr,
+                };
+            }
+            if let Some(p) = opts.get("model_path").and_then(|v| v.as_str()) {
+                model_path = Some(p.to_string());
+            }
         }
 
         let device = super::resolve_device_preference(config);
-        (task, device)
+        (task, model_path, device)
     }
 }
 
@@ -157,9 +186,16 @@ impl Plugin for PaddleOcrVlBackend {
 
 #[async_trait]
 impl OcrBackend for PaddleOcrVlBackend {
+    /// Process an image using the PaddleOCR-VL engine.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::KreuzbergError::Validation`] if `image_bytes` is empty
+    /// or `model_path` is not provided in `backend_options`.
+    /// Returns [`crate::KreuzbergError::Ocr`] if device selection, engine
+    /// initialisation, or inference fails.
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
-        // Parse configuration
-        let (task, device) = Self::parse_options(config);
+        let (task, model_path, device) = Self::parse_options(config);
 
         // Validate image data
         if image_bytes.is_empty() {
@@ -169,21 +205,24 @@ impl OcrBackend for PaddleOcrVlBackend {
             });
         }
 
-        // Clone image bytes for async block
+        let model_path = model_path.ok_or_else(|| crate::KreuzbergError::Validation {
+            message: "PaddleOCR-VL requires `model_path` in backend_options pointing to the local model directory".to_string(),
+            source: None,
+        })?;
+
+        // Clone image bytes for the blocking task.
         let image_bytes = image_bytes.to_vec();
 
-        // Run inference in a blocking task to avoid blocking the async runtime
+        // Run inference in a blocking task to avoid blocking the async runtime.
         let content = tokio::task::spawn_blocking(move || {
-            // Retrieve a cached engine or initialise one on first use.
-            // Device selection happens inside get_or_init_engine on first call;
-            // subsequent calls for the same (task, device) reuse the pooled engine.
-            let engine = get_or_init_engine(task, device)?;
+            let engine = get_or_init_engine(&model_path, task, device)?;
 
-            // Process image through encoder-decoder pipeline
-            let output = engine
+            // Lock the engine for mutation (KV cache is managed internally).
+            let mut engine_guard = engine.lock();
+            let output = engine_guard
                 .process_image(&image_bytes)
                 .map_err(|e| crate::KreuzbergError::Ocr {
-                    message: format!("PaddleOCR-VL inference failed: {}", e),
+                    message: format!("PaddleOCR-VL inference failed: {e}"),
                     source: Some(Box::new(e)),
                 })?;
 
@@ -191,7 +230,7 @@ impl OcrBackend for PaddleOcrVlBackend {
         })
         .await
         .map_err(|e| crate::KreuzbergError::Ocr {
-            message: format!("PaddleOCR-VL task execution failed: {}", e),
+            message: format!("PaddleOCR-VL task execution failed: {e}"),
             source: None,
         })??;
 
@@ -202,6 +241,11 @@ impl OcrBackend for PaddleOcrVlBackend {
         })
     }
 
+    /// Process an image file using the PaddleOCR-VL engine.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or if inference fails.
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
         let bytes = crate::core::io::read_file_async(path).await?;
         self.process_image(&bytes, config).await
@@ -209,7 +253,7 @@ impl OcrBackend for PaddleOcrVlBackend {
 
     fn supports_language(&self, _lang: &str) -> bool {
         // PaddleOCR-VL supports 109+ languages as per the official model documentation.
-        // For simplicity, accept all language codes.
+        // Accept all language codes.
         true
     }
 
@@ -267,12 +311,10 @@ mod tests {
     #[test]
     fn test_paddleocr_vl_language_support() {
         let backend = PaddleOcrVlBackend::default_task();
-        // Should support common language codes
         assert!(backend.supports_language("eng"));
         assert!(backend.supports_language("zho"));
         assert!(backend.supports_language("jpn"));
         assert!(backend.supports_language("fra"));
-        // Should also support unknown codes (accept all)
         assert!(backend.supports_language("unknown"));
     }
 
@@ -288,8 +330,9 @@ mod tests {
     #[test]
     fn test_parse_options_defaults() {
         let config = OcrConfig::default();
-        let (task, device) = PaddleOcrVlBackend::parse_options(&config);
+        let (task, model_path, device) = PaddleOcrVlBackend::parse_options(&config);
         assert_eq!(task, PaddleOcrVlTask::Ocr);
+        assert!(model_path.is_none());
         assert_eq!(device, DevicePreference::Auto);
     }
 
@@ -299,7 +342,7 @@ mod tests {
         config.backend_options = Some(serde_json::json!({
             "task": "table"
         }));
-        let (task, _device) = PaddleOcrVlBackend::parse_options(&config);
+        let (task, _model_path, _device) = PaddleOcrVlBackend::parse_options(&config);
         assert_eq!(task, PaddleOcrVlTask::Table);
     }
 
@@ -309,8 +352,18 @@ mod tests {
         config.backend_options = Some(serde_json::json!({
             "device": "cpu"
         }));
-        let (_task, device) = PaddleOcrVlBackend::parse_options(&config);
+        let (_task, _model_path, device) = PaddleOcrVlBackend::parse_options(&config);
         assert_eq!(device, DevicePreference::Cpu);
+    }
+
+    #[test]
+    fn test_parse_options_model_path() {
+        let mut config = OcrConfig::default();
+        config.backend_options = Some(serde_json::json!({
+            "model_path": "/models/paddleocr-vl"
+        }));
+        let (_task, model_path, _device) = PaddleOcrVlBackend::parse_options(&config);
+        assert_eq!(model_path.as_deref(), Some("/models/paddleocr-vl"));
     }
 
     #[test]

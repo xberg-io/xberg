@@ -3452,26 +3452,6 @@ export interface LayoutDetectionConfig {
 }
 
 /**
- * How the backend dispatches inference across a page image.
- *
- * `WholePage` passes the raw page bytes to the engine as a single call — fast
- * and simple. `Paired` (compiled only when `layout-detection` is enabled) runs
- * PP-DocLayout-V3 first, crops individual regions, and dispatches each crop to
- * the task that best matches the detected layout class, merging results in
- * reading order.
- */
-export declare enum LayoutMode {
-  /** Feed the whole page to the model with the backend's default task. */
-  WholePage = "WholePage",
-  /**
-   * Detect layout regions first; dispatch each crop to the matching task.
-   *
-   * Only available when the `layout-detection` feature is enabled.
-   */
-  Paired = "Paired",
-}
-
-/**
  * A detected layout region on a page.
  *
  * When layout detection is enabled, each page may have layout regions

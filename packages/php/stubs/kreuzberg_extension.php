@@ -6250,12 +6250,6 @@ enum PaddleLanguage: string
     case Telugu = 'Telugu';
 }
 
-enum LayoutMode: string
-{
-    case WholePage = 'WholePage';
-    case Paired = 'Paired';
-}
-
 enum LayoutClass: string
 {
     case Caption = 'caption';

@@ -4,6 +4,7 @@ use candle_nn::Activation;
 use serde::{Deserialize, Serialize};
 
 /// Hunyuan-VL main model configuration.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HunYuanVLConfig {
     /// Enable bias in attention projections.
@@ -152,6 +153,7 @@ pub struct HunYuanVLVisionConfig {
 }
 
 /// Generation configuration for Hunyuan-OCR.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct HunyuanOCRGenerationConfig {
     /// Beginning-of-sequence token ID.

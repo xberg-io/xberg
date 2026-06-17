@@ -155,6 +155,18 @@ candle-trocr = ["candle-ocr", "kreuzberg-candle-ocr/trocr"]
 candle-paddleocr-vl = ["candle-ocr", "kreuzberg-candle-ocr/paddleocr-vl"]
 # GLM-OCR backend: aggregate feature enabling candle-ocr with glm-ocr sub-feature; requires layout-detection for paired dispatch
 candle-glm-ocr = ["candle-ocr", "kreuzberg-candle-ocr/glm-ocr", "layout-detection"]
+# Hunyuan-OCR backend: aggregate feature enabling candle-ocr with hunyuan-ocr sub-feature
+candle-hunyuan-ocr = ["candle-ocr", "kreuzberg-candle-ocr/hunyuan-ocr"]
+# DeepSeek-OCR backend: aggregate feature enabling candle-ocr with deepseek-ocr sub-feature
+candle-deepseek-ocr = ["candle-ocr", "kreuzberg-candle-ocr/deepseek-ocr"]
+# Umbrella aggregate for all candle VLM OCR backends (not in full/formats/wasm-target/android-target)
+candle-vlm-ocr = [
+    "candle-hunyuan-ocr",
+    "candle-deepseek-ocr",
+    "candle-paddleocr-vl",
+    "candle-glm-ocr",
+    "candle-trocr",
+]
 # Candle GPU acceleration pass-throughs. Enable alongside any candle-* backend
 # to compile the corresponding candle backend (CUDA / Metal / Accelerate /
 # MKL) — CPU decode of the larger VLM backends is impractically slow.

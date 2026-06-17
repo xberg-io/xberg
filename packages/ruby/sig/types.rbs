@@ -2017,10 +2017,6 @@ module Kreuzberg
     type value = :english | :chinese | :japanese | :korean | :german | :french | :latin | :cyrillic | :traditional_chinese | :thai | :greek | :east_slavic | :arabic | :devanagari | :tamil | :telugu
   end
 
-  class LayoutMode
-    type value = :whole_page | :paired
-  end
-
   class LayoutClass
     type value = :caption | :footnote | :formula | :list_item | :page_footer | :page_header | :picture | :section_header | :table | :text | :title | :document_index | :code | :checkbox_selected | :checkbox_unselected | :form | :key_value_region
   end

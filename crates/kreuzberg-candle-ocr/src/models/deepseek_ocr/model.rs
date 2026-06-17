@@ -1350,6 +1350,7 @@ pub enum VisionModel {
 }
 
 /// Complete DeepSeek-OCR model with vision+language fusion.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug)]
 pub struct DeepseekOCRModel {
     sam_model: ImageEncoderViT,

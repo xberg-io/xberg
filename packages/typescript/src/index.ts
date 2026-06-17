@@ -13,7 +13,6 @@ export {
   InlineType,
   KeywordAlgorithm,
   LayoutClass,
-  LayoutMode,
   LinkType,
   ListType,
   LlmBackend,

@@ -15,6 +15,12 @@ pub mod paddleocr_vl_backend;
 #[cfg(all(feature = "candle-glm-ocr", not(target_arch = "wasm32")))]
 pub mod glm_ocr_backend;
 
+#[cfg(all(feature = "candle-hunyuan-ocr", not(target_arch = "wasm32")))]
+pub mod hunyuan_ocr_backend;
+
+#[cfg(all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32")))]
+pub mod deepseek_ocr_backend;
+
 pub use config::{CandleModelId, CandleOcrConfig};
 
 #[cfg(feature = "candle-trocr")]
@@ -25,6 +31,12 @@ pub use paddleocr_vl_backend::PaddleOcrVlBackend;
 
 #[cfg(all(feature = "candle-glm-ocr", not(target_arch = "wasm32")))]
 pub use glm_ocr_backend::GlmOcrBackend;
+
+#[cfg(all(feature = "candle-hunyuan-ocr", not(target_arch = "wasm32")))]
+pub use hunyuan_ocr_backend::HunyuanOcrBackend;
+
+#[cfg(all(feature = "candle-deepseek-ocr", not(target_arch = "wasm32")))]
+pub use deepseek_ocr_backend::DeepseekOcrBackend;
 
 #[cfg(feature = "candle-ocr")]
 use crate::core::config::{AccelerationConfig, ExecutionProviderType, OcrConfig};

@@ -28,7 +28,7 @@ pub struct HunyuanVLProcessor {
     image_token_id: u32,
     image_token: String,
     placeholder_token: String,
-    process_cfg: HunyuanOCRPreprocessorConfig,
+    pub process_cfg: HunyuanOCRPreprocessorConfig,
     device: Device,
     dtype: DType,
 }

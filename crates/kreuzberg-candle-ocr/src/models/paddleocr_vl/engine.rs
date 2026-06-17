@@ -14,6 +14,7 @@ use super::model::PaddleOCRVLModel;
 use super::processor::PaddleOCRVLProcessor;
 
 /// PaddleOCR-VL task selection.
+#[cfg_attr(alef, alef(skip))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PaddleOcrVlTask {
@@ -53,6 +54,7 @@ impl std::fmt::Display for PaddleOcrVlTask {
 }
 
 /// PaddleOCR-VL inference engine.
+#[cfg_attr(alef, alef(skip))]
 #[allow(dead_code)]
 pub struct PaddleOcrVlEngine {
     model: PaddleOCRVLModel,
