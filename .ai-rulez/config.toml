@@ -13,3 +13,14 @@ name = 'kreuzberg-core'
 source = 'https://github.com/kreuzberg-dev/ai-rulez.git'
 path = 'modules/core'
 merge_strategy = 'local-override'
+
+[[marketplaces]]
+name = "basemind"
+source = "Goldziher/basemind"
+type = "github"
+
+[[plugins]]
+marketplace = "basemind"
+name = "basemind"
+scope = "project"
+enabled = true
