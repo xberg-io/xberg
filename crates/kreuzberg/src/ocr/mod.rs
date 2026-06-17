@@ -51,7 +51,7 @@ pub mod error;
 pub mod hocr_parser;
 /// Registry of Tesseract language codes and language-pack validation helpers.
 pub mod language_registry;
-#[cfg(all(feature = "layout-detection", feature = "pdf"))]
+#[cfg(all(feature = "layout-detection", feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 /// Assembles layout-detection bounding boxes with OCR word spans for region-level extraction.
 pub mod layout_assembly;
 #[cfg(feature = "ocr")]

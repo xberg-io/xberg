@@ -66,7 +66,7 @@ impl OcrBoundingGeometry {
     /// Tuple of `(left, top, width, height)` in pixels.
     #[cfg(any(
         feature = "paddle-ocr",
-        all(feature = "layout-detection", feature = "pdf"),
+        all(feature = "layout-detection", feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")),
         all(test, any(feature = "paddle-ocr", feature = "layout-detection", feature = "ocr"))
     ))]
     pub(crate) fn to_aabb(&self) -> (u32, u32, u32, u32) {
@@ -88,7 +88,10 @@ impl OcrBoundingGeometry {
     }
 
     /// Get the center point of the bounding geometry.
-    #[cfg(any(all(feature = "layout-detection", feature = "pdf"), all(test, feature = "layout-detection")))]
+    #[cfg(any(
+        all(feature = "layout-detection", feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")),
+        all(test, feature = "layout-detection")
+    ))]
     pub(crate) fn center(&self) -> (f64, f64) {
         let (left, top, width, height) = self.to_aabb();
         (left as f64 + width as f64 / 2.0, top as f64 + height as f64 / 2.0)
