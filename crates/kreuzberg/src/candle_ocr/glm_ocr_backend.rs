@@ -89,7 +89,7 @@ fn get_or_init_engine(preference: DevicePreference, dtype: DType) -> crate::Resu
     // Slow path: select the device and build the engine, then insert under write lock.
     let device = preference.select().map_err(|e| crate::KreuzbergError::Ocr {
         message: format!("Failed to select compute device: {e}"),
-        source: None,
+        source: Some(Box::new(e)),
     })?;
 
     tracing::info!(
