@@ -187,4 +187,29 @@ mod tests {
         assert_eq!(TableModel::SlanetWired.to_string(), "slanet_wired");
         assert_eq!(TableModel::Disabled.to_string(), "disabled");
     }
+
+    // ── backward-compat serde tests ──────────────────────────────────────────
+
+    #[test]
+    fn layout_detection_config_omitting_enable_chart_understanding_defaults_to_false() {
+        // enable_chart_understanding uses `#[serde(default)]`.
+        // Old stored configs that lack this field must deserialize to false.
+        let json = r#"{"apply_heuristics": true, "table_model": "tatr"}"#;
+        let config: LayoutDetectionConfig = serde_json::from_str(json).unwrap();
+        assert!(
+            !config.enable_chart_understanding,
+            "omitted enable_chart_understanding must default to false"
+        );
+    }
+
+    #[test]
+    fn layout_detection_config_enable_chart_understanding_round_trip() {
+        let config = LayoutDetectionConfig {
+            enable_chart_understanding: true,
+            ..LayoutDetectionConfig::default()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: LayoutDetectionConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.enable_chart_understanding);
+    }
 }

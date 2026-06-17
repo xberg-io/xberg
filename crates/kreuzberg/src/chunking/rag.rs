@@ -1,13 +1,22 @@
 //! RAG-shaped chunking composer.
 //!
 //! Provides [`chunk_for_rag`], a thin composer that delegates to the existing
-//! [`ChunkerType::Markdown`] pipeline and then ensures every chunk carries a
-//! populated [`heading_path`](crate::types::ChunkMetadata::heading_path) field.
+//! chunking pipeline and then derives the flat
+//! [`heading_path`](crate::types::ChunkMetadata::heading_path) breadcrumb from
+//! whatever `heading_context` the underlying chunker emits.
 //!
-//! The Markdown chunker already resolves `heading_context` for every chunk; this
-//! module derives the flat `heading_path` breadcrumb from that context so
-//! retrieval-augmented generation pipelines can filter or group chunks by section
-//! without traversing the nested `HeadingContext` structure.
+//! # `heading_path` population by chunker type
+//!
+//! | Chunker              | `heading_context` set? | `heading_path` populated? |
+//! |----------------------|------------------------|---------------------------|
+//! | `Text` (auto-upgraded) | yes (→ Markdown)     | yes                       |
+//! | `Markdown`           | yes                    | yes                       |
+//! | `Semantic`           | yes (uses Markdown internally) | yes             |
+//! | `Yaml`               | **no**                 | **always empty**          |
+//!
+//! The `Yaml` chunker splits on top-level YAML keys and does not have a concept
+//! of heading hierarchy, so `heading_path` will always be `[]` for every chunk
+//! produced by a `Yaml`-typed config.
 //!
 //! # Design
 //!
@@ -266,31 +275,94 @@ mod tests {
 
     #[test]
     fn chunk_for_rag_does_not_overwrite_existing_heading_path() {
-        // chunk_for_rag only fills heading_path when it is currently empty.
-        // This is an invariant check — the current implementation delegates
-        // entirely to chunk_text which leaves heading_path empty, so
-        // chunk_for_rag fills it.  Verify the "skip if non-empty" guard works.
-        let text = "# A\n\nContent A.\n\n## B\n\nContent B.";
-        let config = default_rag_config();
-        let mut result = chunk_for_rag(text, &config).unwrap();
+        // chunk_for_rag skips the post-hoc heading_path derivation for any chunk
+        // whose heading_path is already non-empty (e.g. filled by the Semantic
+        // chunker's own pass).  Verify end-to-end: call chunk_for_rag on a
+        // heading-bearing document and assert that the result carries a populated,
+        // correctly ordered heading_path on chunks that fall under headings.
+        let text = "# A\n\nContent under A.\n\n## B\n\nContent under B.";
+        let config = ChunkingConfig {
+            max_characters: 300,
+            overlap: 0,
+            trim: true,
+            chunker_type: ChunkerType::Markdown,
+            ..Default::default()
+        };
+        let result = chunk_for_rag(text, &config).unwrap();
+        assert!(!result.chunks.is_empty(), "expected at least one chunk");
 
-        // Manually pre-populate one chunk's heading_path.
-        if let Some(chunk) = result.chunks.first_mut() {
-            chunk.metadata.heading_path = vec!["manually-set".to_string()];
-        }
+        // At least one chunk must have a non-empty heading_path derived from context.
+        let has_path = result.chunks.iter().any(|c| !c.metadata.heading_path.is_empty());
+        assert!(has_path, "heading_path must be populated for chunks under headings");
 
-        // Re-running the post-process step (as chunk_for_rag does internally)
-        // should not overwrite the manually set path.
-        for chunk in &mut result.chunks {
-            if chunk.metadata.heading_path.is_empty() {
-                chunk.metadata.heading_path = heading_path_from_context(&chunk.metadata.heading_context);
+        // Every chunk whose heading_context is set must have a matching heading_path.
+        for chunk in &result.chunks {
+            if let Some(ref ctx) = chunk.metadata.heading_context {
+                let expected: Vec<String> = ctx.headings.iter().map(|h| h.text.clone()).collect();
+                assert_eq!(
+                    chunk.metadata.heading_path, expected,
+                    "heading_path must equal heading_context texts in order"
+                );
             }
         }
+    }
 
-        assert_eq!(
-            result.chunks[0].metadata.heading_path,
-            vec!["manually-set"],
-            "pre-populated heading_path must not be overwritten"
+    // ── Yaml chunker yields empty heading_path ───────────────────────────────
+
+    #[test]
+    fn chunk_for_rag_yaml_chunker_yields_empty_heading_path() {
+        // ChunkerType::Yaml splits on top-level YAML keys and has no heading
+        // hierarchy concept.  chunk_for_rag honours the caller's explicit Yaml
+        // choice, and heading_path is always empty for every produced chunk.
+        let yaml = "key1: value one\nkey2: value two\nkey3: value three\n";
+        let config = ChunkingConfig {
+            max_characters: 512,
+            overlap: 0,
+            trim: true,
+            chunker_type: ChunkerType::Yaml,
+            ..Default::default()
+        };
+        let result = chunk_for_rag(yaml, &config).unwrap();
+        for chunk in &result.chunks {
+            assert!(
+                chunk.metadata.heading_path.is_empty(),
+                "Yaml chunker must produce empty heading_path; got: {:?}",
+                chunk.metadata.heading_path
+            );
+        }
+    }
+
+    // ── Semantic chunker populates heading_path ──────────────────────────────
+
+    #[test]
+    fn chunk_for_rag_semantic_chunker_populates_heading_path() {
+        // ChunkerType::Semantic runs its own heading-resolution pass internally
+        // and stores heading_path directly on each chunk.  chunk_for_rag passes
+        // the config through unchanged (no Text→Markdown upgrade) and the
+        // is_empty guard preserves whatever Semantic already set.
+        let text = concat!(
+            "# Introduction\n\n",
+            "This section introduces the topic in enough detail ",
+            "that the semantic chunker will not merge it away.\n\n",
+            "## Background\n\n",
+            "Background context follows here, with sufficient content ",
+            "to form its own coherent semantic unit.\n\n",
+        );
+        let config = ChunkingConfig {
+            max_characters: 300,
+            overlap: 0,
+            trim: true,
+            chunker_type: ChunkerType::Semantic,
+            ..Default::default()
+        };
+        let result = chunk_for_rag(text, &config).unwrap();
+        assert!(!result.chunks.is_empty(), "semantic chunker should produce at least one chunk");
+
+        // At least one chunk must carry a non-empty heading_path.
+        let has_path = result.chunks.iter().any(|c| !c.metadata.heading_path.is_empty());
+        assert!(
+            has_path,
+            "Semantic chunker must populate heading_path on at least one chunk in a headed document"
         );
     }
 }
